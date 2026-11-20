@@ -361,7 +361,15 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    a folder, so one repository on two machines is two projects. `groupByProject` puts every session under exactly one
    project of its machine: a git session under its main checkout (`repoRoot`, also for a linked worktree), any other under
    the deepest opened folder around its own; a session that fits none opens that folder. A project with no sessions stays
-   until closed, and `closeProject` refuses while a session in it has not ended. The sidebar does not draw this list yet.
+   until closed, and `closeProject` refuses while a session in it has not ended. The window's one copy is
+   `useOpenedProjects()` (`features/workspace/useOpenedProjects.ts`, owned by `useWorkspaceState`): `opened`, `machines`
+   (the grouping), `selected` (the project last opened or picked, for the sidebar to show) and `open`/`select`; a listed
+   session's project is added and saved at once. **Open a project…** on a machine heading's `+` opens one with no session:
+   on this computer it is the Open a project dialog for the project alone, on another machine the folder picker on that
+   machine (`ProjectFolderPicker`). That machine's daemon reads the folder (`projectOfFolder`, through `loadFolderBranches`):
+   a folder in git opens its repository's main checkout, any other opens itself, and one the machine cannot read is refused
+   with its reason (in the dialog, or a toast over the picker, which stays) and nothing is added. A folder that is already
+   open, in any spelling, selects that project and adds nothing. The sidebar does not draw this list yet.
 
 ## Project-specific: usage and cost page (desktop)
 
@@ -628,6 +636,11 @@ A tab never changes weight when picked: its 2px rule and text colour say so.
 - **Progress and finish.** A clone shows "Cloning <owner/repo>", a bar with the daemon's real percent and the phase word.
   The dialog stays until it ends (a clone cannot be taken back). Then "**name** is ready in `path`" and the main button
   becomes **Start a session in name**, which opens the New session draft on that folder.
+- **The project alone.** Opened from a machine heading's `+` (**Open a project…**, `purpose` `project`), it starts on
+  **On this computer** and starts no session: a folder that is there (typed, browsed, found, or a GitHub repository already
+  on the disk) is opened as a project at once, and a finished clone's main button is **Open name**. While the folder is read
+  the button says "Opening…"; a folder that cannot be opened keeps the dialog with "Could not open the project" and the
+  reason.
 
 ## Project-specific: folder picker and loader
 

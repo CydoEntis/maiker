@@ -414,6 +414,21 @@ describe('a machine heading', () => {
     expect(onNewShell).toHaveBeenCalledWith(4)
   })
 
+  it('opens a project on its machine from its own +, this computer or another; the header\'s + does not offer it', async () => {
+    const user = userEvent.setup()
+    const onOpenProject = vi.fn()
+    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onOpenProject })
+    await user.click(screen.getByRole('button', { name: 'Add a session to This computer' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Open a project…' }))
+    expect(onOpenProject).toHaveBeenLastCalledWith(0)
+    await user.click(screen.getByRole('button', { name: 'Add a session to devbox' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Open a project…' }))
+    expect(onOpenProject).toHaveBeenLastCalledWith(4)
+    await user.click(screen.getByRole('button', { name: 'New session' }))
+    await screen.findByRole('menu', { name: 'Start' })
+    expect(screen.queryByRole('menuitem', { name: 'Open a project…' })).toBeNull()
+  })
+
   it('lists a connected saved machine with no sessions: its name, its own + and "No sessions yet"', () => {
     show([], { machines: [LOCAL_HEAD, DEVBOX] })
     expect(screen.getByRole('button', { name: /^devbox/ })).toBeTruthy()

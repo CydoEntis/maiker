@@ -85,7 +85,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
       ...sessionItems,
       ...projectItems,
       action('new-session', 'New session…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
-      action('open-project', 'Open a project…', () => { setOpenProject({ tab: 'url' }) }),
+      action('open-project', 'Open a project…', () => { setOpenProject({ kind: 'dialog', tab: 'url', purpose: 'session' }) }),
       action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),

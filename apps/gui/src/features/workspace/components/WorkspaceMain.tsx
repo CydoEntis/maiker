@@ -8,7 +8,7 @@ import { resolveStartFolder } from '../model/startFolder'
 import { useOpenProject } from '../useOpenProject'
 import { NewChatPage } from './NewChatPage'
 import { ShowSidebarButton } from './ShowSidebarButton'
-import { useFolderPick } from './useFolderPick'
+import { pickerMachinesOf, useFolderPick } from './useFolderPick'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { chatFindOf } from '@/features/chat/chatSearch'
@@ -36,9 +36,7 @@ export function WorkspaceMain() {
   if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
   const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
-  // The folder picker reads every machine the window knows, this computer and the others; one that is not up is listed with why.
-  const pickerMachines = sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
-  const folderPick = useFolderPick(pickerMachines)
+  const folderPick = useFolderPick(pickerMachinesOf(sidebarMachineHeads))
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   return (
     <div className="mx-main-wrap">

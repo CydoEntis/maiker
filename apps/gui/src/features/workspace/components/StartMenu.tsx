@@ -24,6 +24,8 @@ export type StartMenuProps = {
   onTerminal?: ((machine: number) => void) | undefined
   onAgent: (program: string, machine: number) => void
   onAddMachine: () => void
+  /** Opens a folder of the machine as a project, starting nothing; absent on a + that is not a machine's own. */
+  onOpenProject?: ((machine: number) => void) | undefined
   /** The + button. */
   children: ReactElement
 }
@@ -40,9 +42,9 @@ function firstPage(machine: number): Page {
 
 /**
  * The + menu: the one way to start anything. Its pages are the root (a terminal, an agent, a remote machine), the
- * machines, and one machine's own terminal and agents. Number keys start the agent with that number, Backspace
- * or the left arrow goes back a page, Esc closes it. It is the shared dropdown menu, so Radix keeps it in the window and moves
- * with the arrows.
+ * machines, and one machine's own terminal and agents; a machine's own + also opens a project on that machine. Number
+ * keys start the agent with that number, Backspace or the left arrow goes back a page, Esc closes it. It is the shared
+ * dropdown menu, so Radix keeps it in the window and moves with the arrows.
  */
 export function StartMenu({ open, onOpenChange, children, ...rest }: StartMenuProps) {
   const [own, setOwn] = useState(false)
@@ -69,7 +71,7 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
   const title = target === undefined ? 'This computer' : machineTitle(target)
   const agents = agentsOn(page.machine, props.installed)
   const startable = agents.filter((agent) => agent.here)
-  const { onTerminal } = props
+  const { onTerminal, onOpenProject } = props
 
   // The menu holds the keys only while one of its rows has focus, so the first row takes it whenever the page changes.
   useEffect(() => { body.current?.querySelector<HTMLElement>('[role="menuitem"]:not([data-disabled])')?.focus() }, [page])
@@ -112,6 +114,12 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
               <span className="mx-ctx-hint" aria-hidden={agent.here}>{agent.here ? String(startable.indexOf(agent) + 1) : 'not installed'}</span>
             </DropdownMenuItem>
           ))}
+          {onOpenProject !== undefined && (
+            <>
+              <DropdownMenuSeparator className="mx-ctx-sep" />
+              <DropdownMenuItem className="mx-ctx-item" onSelect={() => { onOpenProject(page.machine) }}><Icon name="folder" size={14} /><span className="mx-ctx-label">Open a project…</span></DropdownMenuItem>
+            </>
+          )}
         </>
       )}
       {page.view === 'root' && (

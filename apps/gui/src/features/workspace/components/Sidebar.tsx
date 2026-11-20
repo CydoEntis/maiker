@@ -53,6 +53,8 @@ export type SidebarProps = {
   /** Starts a plain terminal on a machine; absent in the Chat view, which makes none. */
   onNewShell?: ((machine: number) => void) | undefined
   onAddMachine: () => void
+  /** Opens a folder of a machine as a project, starting nothing: from the + in that machine's heading. */
+  onOpenProject?: ((machine: number) => void) | undefined
   onMachineSettings: () => void
   /** Fix on a machine that is not up: mends it in the Add a remote machine dialog. */
   onFixMachine: (head: MachineHead) => void
@@ -134,6 +136,8 @@ function sessionMenuEntries(props: SidebarProps, session: SessionView, closeHint
  * it follows `startMenu`; a machine's own + opens and closes itself.
  */
 function SidebarStartMenu({ sidebar, machine, windowOpens = false, children }: { sidebar: SidebarProps; machine: number; windowOpens?: boolean; children: ReactElement }) {
+  // Only a machine's own + opens a project: the header's + is the window's New session and belongs to no machine.
+  const onOpenProject = windowOpens ? undefined : sidebar.onOpenProject
   const focused = sidebar.focusedId === null ? undefined : sidebar.sessions.find((session) => session.id === sidebar.focusedId)
   const here = focused !== undefined && focused.machine === machine ? focused : undefined
   const { installedAgents, onAgent } = sidebar.start
@@ -149,6 +153,7 @@ function SidebarStartMenu({ sidebar, machine, windowOpens = false, children }: {
       onTerminal={sidebar.onNewShell}
       onAgent={onAgent}
       onAddMachine={sidebar.onAddMachine}
+      onOpenProject={onOpenProject}
     >
       {children}
     </StartMenu>

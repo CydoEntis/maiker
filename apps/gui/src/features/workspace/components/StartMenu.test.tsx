@@ -130,6 +130,31 @@ describe('the + menu', () => {
     expect(screen.queryByRole('menuitem', { name: /worktree/i })).toBeNull()
   })
 
+  it('offers Open a project on this computer\'s own +, and opens it there without starting anything', async () => {
+    const onOpenProject = vi.fn()
+    const calls = show({ onOpenProject })
+    const user = await open()
+    await user.click(screen.getByRole('menuitem', { name: 'Open a project…' }))
+    expect(onOpenProject).toHaveBeenCalledWith(0)
+    expect(calls.onAgent).not.toHaveBeenCalled()
+    expect(calls.onTerminal).not.toHaveBeenCalled()
+    expect(screen.queryByRole('menu', { name: 'Start' })).toBeNull()
+  })
+
+  it('offers Open a project on another machine\'s own +, for that machine', async () => {
+    const onOpenProject = vi.fn()
+    show({ machine: 4, onOpenProject })
+    const user = await open()
+    await user.click(screen.getByRole('menuitem', { name: 'Open a project…' }))
+    expect(onOpenProject).toHaveBeenCalledWith(4)
+  })
+
+  it('offers no Open a project on a + that is not a machine\'s own', async () => {
+    show()
+    await open()
+    expect(screen.queryByRole('menuitem', { name: 'Open a project…' })).toBeNull()
+  })
+
   it('is open when the window says so, with no click, as Get started leaves it', async () => {
     show({ open: true, onOpenChange: vi.fn() })
     expect(await screen.findByRole('menu', { name: 'Start' })).toBeInTheDocument()

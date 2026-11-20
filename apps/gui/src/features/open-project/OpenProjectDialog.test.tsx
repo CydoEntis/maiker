@@ -42,13 +42,14 @@ function listing(path: string, names: string[]): FolderListing {
   return { path, exists: true, entries: names.map((name) => ({ name, git: 'main', has_children: true })), truncated: false, can_create: false }
 }
 
-function show(tab: OpenProjectTab = 'url') {
+function show(tab: OpenProjectTab = 'url', purpose: 'session' | 'project' = 'session') {
   const onStartSession = vi.fn()
+  const onOpenProject = vi.fn<(folder: string) => Promise<void>>(() => Promise.resolve())
   const onClose = vi.fn()
   const chooseFolder = vi.fn<(current: string) => Promise<string | null>>(() => Promise.resolve(null))
   const folderExists = vi.fn<(path: string) => Promise<boolean>>(() => Promise.resolve(true))
-  render(<OpenProjectDialog tab={tab} home={HOME} chooseFolder={chooseFolder} folderExists={folderExists} onStartSession={onStartSession} onClose={onClose} />)
-  return { onStartSession, onClose, chooseFolder, folderExists, user: userEvent.setup() }
+  render(<OpenProjectDialog tab={tab} home={HOME} chooseFolder={chooseFolder} folderExists={folderExists} purpose={purpose === 'session' ? { kind: 'session', onStartSession } : { kind: 'project', onOpenProject }} onClose={onClose} />)
+  return { onStartSession, onOpenProject, onClose, chooseFolder, folderExists, user: userEvent.setup() }
 }
 
 beforeEach(() => {
@@ -202,6 +203,40 @@ describe('On this computer', () => {
     await user.type(screen.getByLabelText('Folder'), 'D:\\nope')
     await user.click(screen.getByRole('button', { name: 'Open' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('That folder is not there')
+  })
+})
+
+describe('opening a project without a session', () => {
+  it('opens a folder that is there as soon as it is confirmed, and starts no session', async () => {
+    const { user, onOpenProject, onStartSession, onClose } = show('folder', 'project')
+    await user.type(screen.getByLabelText('Folder'), 'D:\\work\\app')
+    await user.click(screen.getByRole('button', { name: 'Open' }))
+    await waitFor(() => { expect(onOpenProject).toHaveBeenCalledWith('D:\\work\\app') })
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
+    expect(onStartSession).not.toHaveBeenCalled()
+  })
+
+  it('offers to open a cloned repository, not to start a session in it', async () => {
+    api.clone.mockResolvedValue(`${HOME}/r`)
+    const { user, onOpenProject, onStartSession } = show('url', 'project')
+    await user.type(screen.getByLabelText('Repository URL'), 'https://github.com/o/r')
+    await user.click(screen.getByRole('button', { name: 'Clone' }))
+    expect(screen.queryByRole('button', { name: /Start a session/ })).toBeNull()
+    await user.click(await screen.findByRole('button', { name: 'Open r' }))
+    expect(onOpenProject).toHaveBeenCalledWith(`${HOME}/r`)
+    expect(onStartSession).not.toHaveBeenCalled()
+  })
+
+  it('stays open with the reason when the folder cannot be opened', async () => {
+    const { user, onOpenProject, onClose } = show('folder', 'project')
+    onOpenProject.mockRejectedValue(new Error('There is no folder D:/work/gone'))
+    await user.type(screen.getByLabelText('Folder'), 'D:\\work\\gone')
+    await user.click(screen.getByRole('button', { name: 'Open' }))
+    const note = await screen.findByRole('alert')
+    expect(note).toHaveTextContent('Could not open the project')
+    expect(note).toHaveTextContent('There is no folder D:/work/gone')
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Open' })).toBeEnabled()
   })
 })
 

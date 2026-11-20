@@ -1,7 +1,14 @@
 import { useCallback, useState, type ReactNode } from 'react'
 import { createFolder, listFolders } from '@/api/folders'
+import { LOCAL_MACHINE } from '@/api/machines'
 import type { PickedFolder } from '../model/folderPick'
+import type { MachineHead } from '../model/machines'
 import { PickFolderDialog, type PickerMachine } from './PickFolderDialog'
+
+/** The machines the folder picker reads: every machine the window knows, this computer and the others; one that is not up is listed with why. */
+export function pickerMachinesOf(heads: readonly MachineHead[]): PickerMachine[] {
+  return heads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
+}
 
 type Pending = { machine: number; answer: (picked: PickedFolder | null) => void }
 
