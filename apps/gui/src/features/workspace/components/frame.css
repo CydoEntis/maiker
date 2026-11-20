@@ -22,9 +22,8 @@
 .mx-sidebar .mx-head-button:not(:disabled):hover { background: var(--m-hover); }
 .mx-sidebar-list { gap: 6px; }
 .mx-sections { gap: 6px; }
-/* Groups are cards: an outline on the sidebar's own ground, never a darker well (the design has no inset fill). */
 /* Groups are cards. A status group's title and its count both take that status's colour (the count smaller, mono, faded). */
-.mx-section, .mx-machine { padding: 4px; background: none; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.mx-section, .mx-machine { padding: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
 .mx-section-head { gap: 7px; border-radius: var(--r-control); color: var(--dim); }
 .mx-section-head.is-terminals { color: var(--dim); }
 .mx-section-head.is-needs { color: var(--needs); }
@@ -43,7 +42,7 @@
 /* A row: the 16px tile, the name and its time, the project and machine under it. */
 .mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 7px 10px; border-radius: var(--r-control); }
 .mx-row:hover { background: var(--card-hover); }
-.mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-sel); box-shadow: none; }
+.mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-card-sel); box-shadow: none; }
 .mx-row .mx-row-icon { margin-top: 1px; }
 .mx-row-name { font-weight: 450; color: var(--fg2); }
 /* What needs you and what is working are bold, as the design's rows are; being picked changes the colour only, so clicking a row never re-sets its text. */
@@ -61,7 +60,7 @@
 .mx-row-sub:has(.mx-row-machine) .mx-row-folder { color: var(--accent-text); }
 /* A session that has not been sent anything is a quiet, italic "New session". */
 .mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--muted); }
-.mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; border: 1px solid var(--line); border-radius: var(--r-panel); }
+.mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
 .mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
