@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { explainKeyFailure, keyRunLine, keySetupCommand, readKeyScreen, stripAnsi } from './keyCommand'
+import { keySetupCommand, signInBanWords } from './keyCommand'
 
 describe("the command that puts this computer's key on a machine", () => {
   it('is ssh-copy-id and the target', () => {
@@ -32,53 +32,14 @@ describe("the command that puts this computer's key on a machine", () => {
   })
 })
 
-describe('the line that runs the key command in the terminal', () => {
-  it('writes the exit status after a marker, and leaves the shell open so the output can be read', () => {
-    expect(keyRunLine('ssh-copy-id me@box')).toBe('ssh-copy-id me@box; echo "MAIKER-KEY-EXIT:$?"')
-    expect(keyRunLine('ssh-copy-id me@box', true)).toBe("ssh-copy-id me@box; [Console]::WriteLine('MAIKER-KEY-EXIT:' + [int]$LASTEXITCODE)")
-  })
-})
-
-describe('reading the key terminal', () => {
-  const ESC = String.fromCharCode(27)
-  const echo = '$ ssh-copy-id me@box; echo "MAIKER-KEY-EXIT:$?"'
-
-  it('takes the escape sequences out of the daemon’s screen text', () => {
-    expect(stripAnsi(`${ESC}[0m${ESC}[2J${ESC}[H${ESC}[?25hhello${ESC}[1;31m red${ESC}]0;title${String.fromCharCode(7)}`)).toBe('hello red')
-  })
-
-  it('is not finished while only the typed line, which echoes the marker, is on screen', () => {
-    expect(readKeyScreen([echo, "me@box's password: "].join('\n'))).toEqual({ exit: null, lastLine: null })
-  })
-
-  it('is finished with the status the shell printed, and the last line the command said, never the password question', () => {
-    const screen = `${ESC}[0m${ESC}[2J${ESC}[H${[echo, "me@box's password: ", 'Permission denied, please try again.', 'MAIKER-KEY-EXIT:1', '$ '].join('\r\n')}`
-    expect(readKeyScreen(screen)).toEqual({ exit: 1, lastLine: 'Permission denied, please try again.' })
-  })
-
-  it('reads a status of 0 as a status', () => {
-    expect(readKeyScreen([echo, 'Number of key(s) added: 1', 'MAIKER-KEY-EXIT:0'].join('\n'))).toEqual({ exit: 0, lastLine: 'Number of key(s) added: 1' })
-  })
-
-  it('shows what the command said so far while it runs, without the typed line or the password question', () => {
-    expect(readKeyScreen([echo, '/usr/bin/ssh-copy-id: INFO: attempting', "me@box's password: "].join('\n')).lastLine).toBe('/usr/bin/ssh-copy-id: INFO: attempting')
-  })
-})
-
-describe('what is said back when the key did not go on', () => {
-
+describe('the reason a computer gives for refusing sign-ins', () => {
   it('says a refusing computer is refusing for a few minutes', () => {
     const said = 'This computer is refusing connections for a few minutes because of earlier failed sign-ins. Wait and try again.'
-    expect(explainKeyFailure('Connection closed by 10.0.0.1 port 22')).toBe(said)
-    expect(explainKeyFailure('Not allowed at this time')).toBe(said)
+    expect(signInBanWords('Connection closed by 10.0.0.1 port 22')).toBe(said)
+    expect(signInBanWords('Not allowed at this time')).toBe(said)
   })
 
-  it('says the password was wrong for Permission denied', () => {
-    expect(explainKeyFailure('Permission denied, please try again.')).toMatch(/password was not accepted/)
-  })
-
-  it('says it plainly when it is neither, or there was nothing to read', () => {
-    expect(explainKeyFailure('something odd')).toMatch(/could not sign in with it yet/)
-    expect(explainKeyFailure(null)).toMatch(/could not sign in with it yet/)
+  it('has nothing to add for any other reason', () => {
+    expect(signInBanWords('Permission denied (publickey).')).toBeNull()
   })
 })

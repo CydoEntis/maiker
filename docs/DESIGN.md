@@ -402,11 +402,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
   computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that
   needs the person is an amber step with one main fix: a new host ("First time connecting to <host>", `ED25519 · SHA256:…`,
-  **Trust and continue**; a changed key has no Trust), a key the machine did not accept (two plain sentences on what will happen, the exact command in a read-only
-  terminal-style well with a prompt (`CommandPreview`), **Run** as the one main button and a quiet **Copy**; Run opens the key
-  terminal in place of the well and runs the command, and the terminal stays open with ssh's own output; the card is taller
-  for this step so the terminal fits without scrolling; when the command ends (its exit marker is on screen) the step says
-  **Checking your key…** and goes on by itself, or says in plain words why not with the last line ssh printed and **Try again**), a host that does not answer ("<host> didn't answer", the address, the
+  **Trust and continue**; a changed key has no Trust), a machine that would not sign in ("Couldn't sign in to <user@host>": one plain paragraph saying SSH is set up
+  outside Maiker for now (run `ssh <user@host>` in a terminal until it logs in without a password), the host's own reason
+  when it gave one, a Copy line for the one-line key-copy command and **Try again**; no terminal, no command preview, no
+  password anywhere in Maiker), a host that does not answer ("<host> didn't answer", the address, the
   power and the SSH port, **Try again** and **Edit the address**). A missing helper is not a question: it installs as a step with a
   progress bar ("Not installed yet. Copying Maiker <version> to <name>…"). When the machine is in, the card is **Machine added**: a
   green "Connected. Its sessions show up in your sidebar under this name." line, a Name field (selected, so typing replaces it;

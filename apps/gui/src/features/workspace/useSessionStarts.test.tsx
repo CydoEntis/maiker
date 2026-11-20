@@ -20,7 +20,6 @@ const daemon = vi.hoisted(() => ({
   renameConversationOnDaemon: vi.fn<(session: { id: string }, name: string) => Promise<void>>(() => Promise.resolve()),
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
-  loadTerminalScreen: vi.fn(() => Promise.resolve('me@box:~$ ')),
   archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
 }))
 // Another machine: a session started there shows in its next list.
@@ -245,26 +244,6 @@ describe('what a start in the background says, and what it hides', () => {
     await starts({ setStartedFrom }).startNewChat(request({ message: 'open it' }))
     expect(seen[0]).toEqual(new Set(['old']))
     expect(seen.at(-1)).toBeNull()
-  })
-})
-
-describe('a terminal that lives inside a dialog', () => {
-  it('starts a shell in the home folder and types the line in it and presses Enter, with no pane for it', async () => {
-    const setLayout = vi.fn()
-    const session = await starts({ setLayout }).startKeyTerminal('ssh-copy-id me@box')
-    expect(session).toMatchObject({ id: '1' })
-    expect(daemon.startShellSession).toHaveBeenCalledWith('/home/me')
-    expect(daemon.sendTerminalInput).toHaveBeenCalledTimes(1)
-    expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: '1', generation: 0 }, 'ssh-copy-id me@box\r')
-    expect(setLayout).not.toHaveBeenCalled()
-  })
-
-  it('closes the shell for good when it is ended', async () => {
-    const hook = starts()
-    const session = await hook.startKeyTerminal('ssh-copy-id me@box')
-    if (session === null) throw new Error('the shell did not start')
-    await hook.endKeyTerminal(session)
-    expect(daemon.archiveConversationOnDaemon).toHaveBeenCalledWith(session, true)
   })
 })
 

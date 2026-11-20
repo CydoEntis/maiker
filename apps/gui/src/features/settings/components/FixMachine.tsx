@@ -44,7 +44,7 @@ function FixHostKey({ name, target, machines }: { name: string; target: string; 
   }, [inspect, name])
   if (look.state === 'loading') return <StepBody text={`Reaching ${name}…`} />
   if (look.state === 'failed') return <StepBody text={look.message}><Button variant="needs" onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
-  if (look.report.status === 'trusted') return <KeyStep name={name} target={target} port={null} machines={machines} />
+  if (look.report.status === 'trusted') return <KeyStep target={target} port={null} said={null} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} />
   const { report } = look
   const doTrust = () => {
     setTrusting(true)
@@ -61,7 +61,7 @@ function positionOf(live: MachineHead, name: string, machines: MachinesInfo): Po
   if (needsLogin && HOST_KEY_WORDS.test(live.said ?? '')) {
     return { at: 'host', state: 'needs', label: `Check ${name} is the right computer`, body: <FixHostKey name={name} target={live.target ?? ''} machines={machines} /> }
   }
-  if (needsLogin) return { at: 'key', state: 'needs', label: `${name} didn't accept your key`, body: <KeyStep name={name} target={live.target ?? ''} port={null} machines={machines} /> }
+  if (needsLogin) return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? name}`, body: <KeyStep target={live.target ?? name} port={null} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} /> }
   const body = <StepBody text={live.said ?? live.why ?? NO_REASON}><Button variant="needs" autoFocus onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
   return { at: 'reach', state: 'needs', label: `${name} is not connected`, body }
 }

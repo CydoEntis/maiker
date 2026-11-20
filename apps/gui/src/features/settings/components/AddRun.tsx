@@ -66,7 +66,7 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
       const text = stage.action === 'install' ? `Not installed yet. Copying Maiker${appVersion === null ? '' : ` ${appVersion}`} to ${request.name}…` : `Updating Maiker on ${request.name}…`
       return { at: 'helper', state: 'running', body: <HelperProgressBody text={text} percent={stage.percent} /> }
     }
-    case 'key': return { at: 'key', state: 'needs', label: `${stage.login.name} didn't accept your key`, body: <KeyStep name={stage.login.name} target={stage.login.target} port={request.port} machines={machines} /> }
+    case 'key': return { at: 'key', state: 'needs', label: `Couldn't sign in to ${stage.login.target}`, body: <KeyStep target={stage.login.target} port={request.port} said={stage.login.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.removeSaved(stage.login.name) }} /> }
     case 'helper': return helperPosition(stage, { request, machines, run, appVersion, onChangeAddress, onKept })
     case 'connected': return { at: 'connected', state: 'done' }
   }
@@ -95,7 +95,7 @@ function loginPosition(name: string, live: MachineHead, request: AddRequest, mac
   if (HOST_KEY_WORDS.test(live.said ?? '')) {
     return { at: 'host', state: 'needs', label: `Couldn't check ${request.host}'s identity`, body: <StepBody text={live.said ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
   }
-  return { at: 'key', state: 'needs', label: `${name} didn't accept your key`, body: <KeyStep name={name} target={live.target ?? request.target} port={request.port} machines={machines} /> }
+  return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? request.target}`, body: <KeyStep target={live.target ?? request.target} port={request.port} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.retrySaved(name) }} /> }
 }
 
 function helperPosition(stage: Extract<Stage, { kind: 'helper' }>, { machines, run, onKept }: Parts): Position {

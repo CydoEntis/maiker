@@ -139,7 +139,7 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
     setStage({ kind: 'removing', name })
     void machines.onRemove(name).then((removed) => {
       if (run !== ticket.current) return
-      if (removed) begin()
+      if (removed) { saved.current = null; begin() }
       else setStage({ kind: 'name-taken', name })
     })
   }

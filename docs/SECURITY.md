@@ -164,14 +164,10 @@ in the home folder of this computer or of the machine named, whose first command
 `GITHUB_SIGN_IN_COMMAND` (`gh auth login --web --git-protocol https`, in `maitty-desktop-client`). The
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
-password or token from it. The key step of Add a remote machine shows a plain shell of this computer inside the
-dialog with `ssh-copy-id` typed and run when the person presses **Run** (`keySetupCommand` refuses a target that is not
-one plain word; `keyRunLine` adds a line that prints the exit status after a marker); the password is typed into that terminal
-and travels as any terminal input to ssh, and the window reads, stores, logs and prefills none of it. The window does read
-the terminal's screen text while the command runs, only to find the exit marker and say the command's last line back when it
-fails (`readKeyScreen` drops any line that asks for a password or passphrase and strips escape sequences, ssh does not echo
-what is typed, and nothing is stored or logged). The shell
-is ended when the dialog goes.
+password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
+has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
+one-line key-copy command to copy and run in the person's own terminal (`keySetupCommand` refuses a target that is not one plain
+word).
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›

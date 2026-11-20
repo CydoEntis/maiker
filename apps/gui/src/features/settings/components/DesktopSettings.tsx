@@ -14,7 +14,6 @@ import { Switch } from '@/components/ui/switch'
 import { PerformanceSection } from './PerformanceSection'
 import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
-import type { KeyTerminalHost } from './KeyTerminal'
 import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
@@ -62,8 +61,6 @@ export type MachinesInfo = {
   onOpenLogin: (machine: number) => void
   /** Names a machine in the window (a local label; blank takes the name away). Nothing changes on the machine. */
   onRename: (name: string, nickname: string) => void
-  /** The terminal Add a machine shows for a key that was refused. Absent where none can be started, and the command is then offered to copy. */
-  keyTerminal?: KeyTerminalHost
   /** Looks at a machine's host key, and trusts the one that was shown. */
   hostKey: { inspect: (name: string) => Promise<HostKeyReport>; trust: (name: string, fingerprint: string) => Promise<void> }
   /** How many sessions the sidebar shows for a machine (by its number); without it a tile says it does not know. */

@@ -1,7 +1,6 @@
 import { toast } from '@/lib/toast'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { AddMachineFlow } from '@/features/settings/components/AddMachineFlow'
-import { KEY_TERMINAL_ATTRIBUTE } from '@/features/settings/components/KeyTerminal'
 import { FixMachine } from '@/features/settings/components/FixMachine'
 import type { MachineFacts } from '@/features/settings/model/addStage'
 import type { MachineHead } from '../model/machines'
@@ -33,8 +32,6 @@ export function AddMachineDialog({ machines, onClose, fixing = null, onOpenSetti
         // Mounted in the themed window, not the body: the corners (`--r-panel`, `--r-control`) and every role colour are tokens of `.mx-app`.
         container={windowRoot()}
         aria-describedby={undefined}
-        // Esc is the terminal's own key while it has focus (it is a shell's key too); anywhere else in the dialog it closes it.
-        onEscapeKeyDown={(event) => { if (event.target instanceof Element && event.target.closest(`[${KEY_TERMINAL_ATTRIBUTE}]`) !== null) event.preventDefault() }}
       >
         <div
           className="mx-rename mx-addmachine"
