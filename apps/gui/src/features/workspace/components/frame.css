@@ -45,7 +45,7 @@
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-card-sel); box-shadow: none; }
 .mx-row .mx-row-icon { margin-top: 1px; }
 /* The design's row: a 13.5px title on a 19px line over a 12px second line, in a row padded 9px 10px. */
-.mx-row-name { height: calc(19px * var(--sidebar-text, 1)); font-size: calc(13.5px * var(--sidebar-text, 1)); line-height: calc(19px * var(--sidebar-text, 1)); font-weight: 450; color: var(--fg2); }
+.mx-row-name { height: calc(19px * var(--sidebar-text, 1)); font-size: calc(13.5px * var(--sidebar-text, 1)); line-height: calc(19px * var(--sidebar-text, 1)); font-weight: 500; color: var(--fg); }
 /* What needs you and what is working are bold, as the design's rows are; being picked changes the colour only, so clicking a row never re-sets its text. */
 .mx-row:is(.is-needs, .is-working) .mx-row-name { font-weight: 600; color: var(--fg); }
 .mx-row.is-selected .mx-row-name { color: var(--fg); }
@@ -53,14 +53,15 @@
 /* Line 2 sits under the name: the status mark's 16px and the 8px gap are its indent. */
 .mx-row-sub { gap: 6px; padding-left: 24px; font-size: calc(12px * var(--sidebar-text, 1)); line-height: calc(16px * var(--sidebar-text, 1)); color: var(--dim); }
 /* Project and branch sit side by side, `maiker / gui-revive`: the project gives way first (never to less than 6 characters), the time keeps the right edge. */
-.mx-row-sub { color: var(--muted); }
+/* The second line is a clear step quieter than the name (the design's #767c81 under a near-white title). */
+.mx-row-sub { color: var(--dim); }
 .mx-row-sub .mx-row-project-name { flex: 0 1 auto; min-width: 6ch; max-width: 55%; }
 .mx-row-sub .mx-row-branch-name { flex: 0 1 auto; }
 /* The other machine's name, in the accent colour with its server icon: only a remote session has one. */
 .mx-row-machine { flex: none; max-width: 45%; font-weight: 500; color: var(--accent-text); }
 .mx-row-sub:has(.mx-row-machine) .mx-row-folder { color: var(--accent-text); }
 /* A session that has not been sent anything is a quiet, italic "New session". */
-.mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--fg2); }
+.mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--fg); }
 .mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
 .mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
 
