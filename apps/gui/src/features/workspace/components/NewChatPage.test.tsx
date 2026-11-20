@@ -260,7 +260,7 @@ describe('the New session draft', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Project: growth' }))
     await userEvent.type(screen.getByRole('textbox', { name: /^Find a project/ }), 'octo/private-thing')
     await userEvent.click(within(await lastPopup()).getAllByRole('radio')[0] as HTMLElement)
-    expect(await screen.findByText(/cannot sign you in to GitHub yet/)).toBeInTheDocument()
+    expect(await screen.findByText(/Sign in to GitHub in Open a project/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Open GitHub settings' }))
     expect(cloner.onOpenGitHubSettings).toHaveBeenCalledOnce()
   })

@@ -65,7 +65,7 @@ describe('what a failed clone says', () => {
   ])('says a repository that needs a sign-in plainly: %s', (said) => {
     const problem = explainCloneFailure(said)
     expect(problem.kind).toBe('auth')
-    expect(problem.message).toContain('cannot sign you in to GitHub yet')
+    expect(problem.message).toContain('Sign in to GitHub in Open a project')
     expect(problem.message).not.toContain('fatal')
   })
 

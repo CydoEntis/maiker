@@ -96,7 +96,7 @@ export function explainCloneFailure(raw: string): CloneProblem {
   }
   if (NO_FOLDER.test(said)) return { kind: 'no-folder', message: 'That folder does not exist. Pick another folder to clone into.' }
   if (BAD_ADDRESS.test(said)) return { kind: 'bad-address', message: 'That does not look like a repository link. Paste a github.com link, owner/name, or an https:// or ssh:// address.' }
-  if (AUTH.test(said)) return { kind: 'auth', message: 'The repository was not found, or it is private and git on that machine has no sign-in for it. Maiker cannot sign you in to GitHub yet: it uses the sign-in git already has there. Check the link, or open GitHub settings.' }
+  if (AUTH.test(said)) return { kind: 'auth', message: 'The repository was not found, or it is private and git on that machine has no sign-in for it. Sign in to GitHub in Open a project, or check the link.' }
   if (UNREACHABLE.test(said)) return { kind: 'unreachable', message: 'Could not reach the server. Check the connection and the link, then try again.' }
   return { kind: 'other', message: said === '' ? 'The repository was not cloned.' : said }
 }
