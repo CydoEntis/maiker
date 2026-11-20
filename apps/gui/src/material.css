@@ -140,11 +140,11 @@
   border: 1px solid var(--line2);
   box-shadow: none;
 }
-/* The message box (the chat's and the new-session draft's, one component) is a raised surface inside a visible hairline, a step
-   lighter than the pane (the design's `#202024` on `#151517`), so it stands off the chat in a dark theme and a light one alike. */
+/* The message box (the chat's and the new-session draft's, one component) is the same card as a sidebar group: the card step
+   on the pane inside the card's hairline, so the two read as one material. */
 .mx-app .mx-box {
-  background: var(--m-raise);
-  border: 1px solid var(--line2);
+  background: var(--m-card);
+  border: 1px solid var(--m-card-line);
   box-shadow: none;
 }
 
