@@ -589,12 +589,22 @@ key), which flips `appearance` and changes the whole screen at once.
 The preview shows built-in defaults; configured overrides still apply after saving.
 See [theme sources](theme-credits.md) for upstream palettes and local UI adaptations.
 
+## Project-specific: menus drawn to the handoff (desktop)
+
+Right-click and row menus (`MenuPopup`, `.mx-ctx`) are 190px at least with 4px of room and draw no heading; the name is only the
+accessible label. The + menu (`StartMenu`, `.mx-ctx.is-start`) is 300px: a ` Back` row on later pages, a context line with its
+machine mark over a hairline, rows of 32px, and each machine's address as its hint. The place chips' menus (branch, sync, folder)
+use `ChipMenu` variant `place` (298-300px, flat search, no counts, plain labels, `ruled` sections). Their picked row is a ground and
+bold, never a tick. `WorkspacePlaceActions` mounts the `PlaceActionsContext` that feeds the folder menu's projects and its
+Open folder and Clone rows. The model menu is 220px wide with rows of 30px.
+
 ## Project-specific: Open a project (desktop)
 
 **Open a project** (`features/open-project/OpenProjectDialog.tsx`; shown from the palette's "Open a project…" and from any
 part of the window through `useOpenProject()`, `features/workspace/useOpenProject.ts`) is the one dialog for bringing a
-project onto this computer: a 600px float in the shared `.mx-rename` frame, a `Segmented` row of three panels and one
-main button.
+project onto this computer: a 620px modal (`components/ui/modal.tsx`: a 52px head, a body with 20px of room, a foot with Cancel at the left and the
+main button at the right) in the shared `.mx-rename` frame, with the underlined `Tabs` of `components/ui/tabs.tsx` for the three panels.
+A tab never changes weight when picked: its 2px rule and text colour say so.
 
 - **Clone from URL** (`UrlPanel`). Accepts `https://host/owner/repo`, `git@host:owner/repo.git` and `host/owner/repo`
   (`repoUrl.ts` turns them into the https or ssh form the daemon takes; the daemon's own check is unchanged). A valid

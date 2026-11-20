@@ -35,7 +35,7 @@
 
 /* The session header, one thin line: the status mark, the machine tag (remote only), the whole path, the branch. Right:
    Changes, Files and the ⋯ menu. Its bottom edge is the status (`.mx-pane-status`), not a plain border. */
-.mx-pane-head { position: relative; flex: none; height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 12px; cursor: default; container: pane-head / inline-size; }
+.mx-pane-head { position: relative; flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
 .mx-pane-show-sidebar { flex: none; width: 28px; height: 28px; margin-left: -4px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-pane-show-sidebar:hover { background: var(--m-hover); color: var(--fg); }
@@ -59,9 +59,12 @@
 :root[data-window="inactive"] .mx-pane-status::after { animation-play-state: paused; }
 :root[data-reduced-motion="true"] .mx-pane-status::after { animation: none; opacity: 0; }
 /* The path reads right to left so a long one loses its start; its `<bdi>` keeps the path itself left to right. */
-.mx-pane-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font: 400 12.5px var(--mono); color: var(--fg); }
+.mx-pane-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font: 400 12.5px var(--mono); color: var(--fg2); }
 .mx-pane-mark { flex: none; display: inline-flex; }
-.mx-pane-machine { flex: none; }
+/* A plain shell's mark is the prompt, in the dim mono the terminal draws it in. */
+.mx-pane-prompt { width: 16px; text-align: center; font: 400 12px/1 var(--mono); color: var(--dim); }
+/* The machine a remote session runs on: a small chip on the selected ground, in the mono face. */
+.mx-pane-head .mx-pane-machine { flex: none; height: auto; padding: 1px 6px; border-radius: var(--r-badge); font: 500 11.5px var(--mono); color: var(--fg); background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); }
 
 /* The branch after the path. Its name goes first as the pane narrows, leaving its mark. */
 .mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
@@ -91,7 +94,7 @@
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
 
-.mx-pane-body { position: relative; flex: 1; min-height: 0; padding: 4px 10px 6px; font-family: var(--mono); line-height: 1.6; cursor: text; display: flex; }
+.mx-pane-body { position: relative; flex: 1; min-height: 0; padding: 10px 12px; font-family: var(--mono); line-height: 1.6; cursor: text; display: flex; }
 .mx-pane-body > * { flex: 1; min-width: 0; min-height: 0; }
 /* The terminal draws the theme's ground, so the whole terminal pane, header included, takes the same one: one
    surface, no band where the header ends. */

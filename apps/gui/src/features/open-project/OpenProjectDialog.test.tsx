@@ -212,7 +212,7 @@ describe('the tabs', () => {
     await user.type(screen.getByLabelText('Repository URL'), 'https://github.com/o/r')
     await user.click(screen.getByRole('button', { name: 'Clone' }))
     await screen.findByRole('button', { name: 'Start a session in r' })
-    await user.click(screen.getByRole('radio', { name: 'On this computer' }))
+    await user.click(screen.getByRole('tab', { name: 'On this computer' }))
     expect(screen.queryByText(/is ready in/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
   })

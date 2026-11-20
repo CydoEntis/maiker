@@ -1,0 +1,7 @@
+/* A modal window's frame and its three parts (modal.tsx). The frame is the shared dialog float (`.mx-rename`, workspace.css)
+   with no padding of its own, so the head and foot can be ruled off by hairlines. */
+.mx-rename.mx-modal { width: 620px; max-width: calc(100vw - 32px); max-height: calc(100vh - 48px); padding: 0; gap: 0; overflow: hidden; }
+.mx-modal-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 52px; padding: 0 12px 0 20px; border-bottom: 1px solid var(--line); }
+.mx-modal-head h2 { font-size: 15px; }
+.mx-modal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px; overflow-y: auto; }
+.mx-modal-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--line); }

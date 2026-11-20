@@ -36,9 +36,9 @@
 .mx-fb-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; font: 800 13px/18px var(--mono); color: var(--edge); }
 .mx-fb-mark .mx-status-icon.is-working { --working: var(--edge); }
 
-/* ---- toasts (the handoff's "Maiker Current", Toasts): bottom right (or top right, Settings › Notifications), 380px, newest above
+/* ---- toasts (the handoff's "Maiker Current", Toasts): bottom right, clear of the 26px status bar (or top right, Settings › Notifications), 380px, newest above
    the others. The floating surface with the panel radius and the status mark, no coloured edge; the status colour is the mark's. ---- */
-.mx-toaster { position: fixed; right: 18px; bottom: 18px; z-index: 85; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.mx-toaster { position: fixed; right: 18px; bottom: 40px; z-index: 85; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .mx-toast-slot { position: relative; isolation: isolate; pointer-events: none; }
 .mx-toast-slot[data-ghosts="1"] { margin-top: 9px; }
 .mx-toast-slot[data-ghosts="2"] { margin-top: 18px; }
@@ -66,7 +66,7 @@
 .mx-toast-ghost[data-depth="1"] { transform: translateY(-9px) scale(.96); }
 .mx-toast-ghost[data-depth="2"] { transform: translateY(-18px) scale(.92); }
 /* The position is a setting on <html> (usePreferenceEffects). */
-:root[data-toasts="top"] .mx-toaster { bottom: auto; top: 18px; }
+:root[data-toasts="top"] .mx-toaster { bottom: auto; top: 44px; }
 :root[data-toasts="top"] .mx-toast[data-float] { animation-name: mx-toast-drop; }
 :root[data-toasts="top"] .mx-toast-slot[data-ghosts="1"] { margin-top: 0; margin-bottom: 9px; }
 :root[data-toasts="top"] .mx-toast-slot[data-ghosts="2"] { margin-top: 0; margin-bottom: 18px; }

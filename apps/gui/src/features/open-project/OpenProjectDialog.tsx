@@ -1,8 +1,8 @@
 import { useState } from 'react'
-import { X } from 'lucide-react'
-import { Button, IconButton } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
-import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
+import { Tab, TabList, Tabs } from '@/components/ui/tabs'
 import type { GitHubRepo } from '@/api/githubRepos'
 import { FolderPanel } from './FolderPanel'
 import { GitHubPanel } from './GitHubPanel'
@@ -96,27 +96,27 @@ export function OpenProjectDialog({ tab: first, home, chooseFolder, folderExists
       <DialogContent unstyled asChild aria-describedby={undefined}>
         <div
           aria-label="Open a project"
-          className="mx-rename mx-op"
+          className="mx-rename mx-modal"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <div className="mx-op-head">
-            <DialogTitle asChild><h2>Open a project</h2></DialogTitle>
-            <IconButton label="Close" disabled={cloning} onClick={onClose}><X /></IconButton>
-          </div>
-          <Segmented aria-label="Where the project is" full value={tab} onValueChange={changeTab} disabled={cloning}>
-            {TABS.map((name) => <SegmentedItem key={name} value={name}>{TAB_LABELS[name]}</SegmentedItem>)}
-          </Segmented>
-          {tab === 'url' && <UrlPanel form={urlForm} disabled={cloning} onSubmit={primary.run} />}
-          {tab === 'github' && <GitHubTab disabled={cloning} folderOf={folderOf} onClone={(repo) => { project.clone(repo.name, repo.cloneUrl, parentForGitHub) }} onOpen={project.open} />}
-          {tab === 'folder' && <FolderPanel form={folderForm} found={found} disabled={cloning} onBrowse={chooseFolder} problem={folderProblem} onSubmit={primary.run} />}
-          <ProjectStatus state={state} onUseExisting={project.open} />
-          <div className="mx-rename-actions">
-            <Button variant="ghost" disabled={cloning} onClick={onClose}>Cancel</Button>
-            <Button variant="primary" disabled={primary.disabled} onClick={primary.run}>{primary.label}</Button>
-          </div>
+          <ModalHead title="Open a project" onClose={onClose} closeDisabled={cloning} />
+          <Tabs value={tab} onValueChange={changeTab}>
+            <TabList aria-label="Where the project is">
+              {TABS.map((name) => <Tab key={name} value={name} disabled={cloning}>{TAB_LABELS[name]}</Tab>)}
+            </TabList>
+          </Tabs>
+          <ModalBody>
+            {tab === 'url' && <UrlPanel form={urlForm} disabled={cloning} onSubmit={primary.run} />}
+            {tab === 'github' && <GitHubTab disabled={cloning} folderOf={folderOf} onClone={(repo) => { project.clone(repo.name, repo.cloneUrl, parentForGitHub) }} onOpen={project.open} />}
+            {tab === 'folder' && <FolderPanel form={folderForm} found={found} disabled={cloning} onBrowse={chooseFolder} problem={folderProblem} onSubmit={primary.run} />}
+            <ProjectStatus state={state} onUseExisting={project.open} />
+          </ModalBody>
+          <ModalFoot left={<Button variant="ghost" size="lg" disabled={cloning} onClick={onClose}>Cancel</Button>}>
+            <Button variant="primary" size="lg" disabled={primary.disabled} onClick={primary.run}>{primary.label}</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>

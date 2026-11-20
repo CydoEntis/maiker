@@ -10,7 +10,7 @@ import { PlaceHead } from './PlaceHead'
 import type { BranchPicking } from './picking'
 import { WorkInSwitch } from './WorkInSwitch'
 
-const WIDTH = 320
+const WIDTH = 300
 const NAME_MAX = 100
 
 type Props = {
@@ -95,7 +95,7 @@ export function BranchChip({ folder, machine, branch, project, worktreeName, pic
     key: `remote:${entry.name}`,
     label: entry.name,
     mono: true,
-    icon: <Icon name="branch" size={13} />,
+    icon: <Icon name="cloud" size={13} />,
     checked: false,
     disabled: busy,
     onPick: () => { if (picking !== undefined) { setOpen(false); picking.onPick(localNameOf(entry.name), false) } else go(`Could not check out ${entry.name}`, () => checkoutRemoteBranch(machine, folder, entry.name), (now) => `Checked out ${now}, tracking ${entry.name}`) },
@@ -104,7 +104,7 @@ export function BranchChip({ folder, machine, branch, project, worktreeName, pic
   const fromQuery = (query: string): ChipItem | null => (
     branchNameError(query) !== null || exists(query) || list === null
       ? null
-      : { key: 'create', label: `Create branch ${query}`, mono: true, icon: <Icon name="plus" size={13} />, checked: false, onPick: () => { create(query) } }
+      : { key: 'create', label: `Create branch “${query}”`, mono: true, icon: <Icon name="plus" size={13} />, checked: false, onPick: () => { create(query) } }
   )
   const sections = [
     ...(local.length === 0 ? [] : [{ heading: 'Local', items: local }]),
@@ -115,26 +115,31 @@ export function BranchChip({ folder, machine, branch, project, worktreeName, pic
       title={`Branch ${shown}`}
       summary={shown}
       chevron={false}
+      variant="place"
       triggerClass="mx-place-chip is-branch"
       width={WIDTH}
       open={open}
       onOpenChange={change}
       icon={<span className="mx-place-icon is-branch"><Icon name="branch" size={12} /></span>}
       label={<span className="mx-place-text is-mono">{shown}</span>}
-      header={<PlaceHead mono main={shown} sub={picking?.worktree === true ? `New worktree · ${project}` : worktreeName === null ? `Branch in ${project}` : `Worktree ${worktreeName} · ${project}`} />}
+      header={<PlaceHead mono main={shown} sub={picking?.worktree === true ? `New worktree · ${project}` : worktreeName === null ? `Main checkout · ${project}` : `Worktree ${worktreeName} · ${project}`} />}
       search="Find or switch branch"
       sections={sections}
       fromQuery={fromQuery}
       queryError={branchNameError}
       below={picking === undefined ? undefined : <WorkInSwitch worktree={picking.worktree} onWorktree={picking.onWorktree} />}
-      extra={read.kind === 'failed' ? <p role="alert" className="mx-chip-refused"><span>{read.why}</span></p> : open && read.kind === 'idle' ? <p className="mx-chip-none" role="status">Reading branches…</p> : undefined}
-      footer={naming ? (
+      extra={(
         <>
-          <InlineName value="" placeholder="new-branch-name" label="New branch name" maxLength={NAME_MAX} onCommit={commitName} onCancel={() => { setNaming(false); setNameError(null) }} />
-          {nameError !== null && <p role="alert" className="mx-chip-refused">{nameError}</p>}
+          {naming ? (
+            <>
+              <InlineName value="" placeholder="new-branch-name" label="New branch name" maxLength={NAME_MAX} onCommit={commitName} onCancel={() => { setNaming(false); setNameError(null) }} />
+              {nameError !== null && <p role="alert" className="mx-chip-refused">{nameError}</p>}
+            </>
+          ) : (
+            <button type="button" className="mx-chip-action" disabled={busy} onClick={() => { setNaming(true) }}><Icon name="plus" size={12} />New branch from {shown}…</button>
+          )}
+          {read.kind === 'failed' ? <p role="alert" className="mx-chip-refused"><span>{read.why}</span></p> : open && read.kind === 'idle' ? <p className="mx-chip-none" role="status">Reading branches…</p> : null}
         </>
-      ) : (
-        <button type="button" className="mx-chip-action" disabled={busy} onClick={() => { setNaming(true) }}><Icon name="plus" size={12} />New branch from <span className="mx-chip-mono">{shown}</span>…</button>
       )}
     />
   )

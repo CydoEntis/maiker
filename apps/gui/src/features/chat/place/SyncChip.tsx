@@ -10,7 +10,13 @@ const WIDTH = 300
 const FETCH_HINT = 'Ctrl Shift F'
 const DOING: Readonly<Record<SyncAction, string>> = { fetch: 'Fetching…', pull: 'Pulling…', push: 'Pushing…' }
 
-const commits = (count: number) => `${String(count)} commit${count === 1 ? '' : 's'}`
+/** `Pull 2 commits`, or just `Pull` while there is nothing to move. */
+const moveWords = (verb: string, count: number) => (count === 0 ? verb : `${verb} ${String(count)} commit${count === 1 ? '' : 's'}`)
+
+/** The menu's second line: what is waiting each way, then how old the last fetch is. */
+function standing(behind: number, ahead: number, fetchedAt: number | null): string {
+  return `${behind > 0 ? `${String(behind)} to pull` : 'Up to date'}${ahead > 0 ? ` · ${String(ahead)} to push` : ''} · ${fetchedLine(fetchedAt)}`
+}
 
 /** What the chip says: the move running, `Synced` when level, else the two counts. */
 function face(state: SessionSync): string {
@@ -29,20 +35,21 @@ export function SyncChip({ state, branch }: { state: SessionSync; branch: string
   const { sync, running, run } = state
   const { ahead, behind, upstream } = sync
   const items: ChipItem[] = [
-    { key: 'fetch', label: 'Fetch', right: <kbd className="mx-place-key">{FETCH_HINT}</kbd>, checked: false, onPick: () => { run('fetch') } },
-    { key: 'pull', label: `Pull ${commits(behind)}`, checked: false, disabled: behind === 0, onPick: () => { run('pull') } },
-    { key: 'push', label: `Push ${commits(ahead)}`, checked: false, disabled: ahead === 0, onPick: () => { run('push') } },
+    { key: 'fetch', label: 'Fetch', icon: <Icon name="refresh" size={13} />, right: <kbd className="mx-place-key">{FETCH_HINT}</kbd>, checked: false, onPick: () => { run('fetch') } },
+    { key: 'pull', icon: <Icon name="arrowDown" size={13} />, label: moveWords('Pull', behind), checked: false, disabled: behind === 0, onPick: () => { run('pull') } },
+    { key: 'push', icon: <Icon name="arrowUp" size={13} />, label: moveWords('Push', ahead), checked: false, disabled: ahead === 0, onPick: () => { run('push') } },
   ]
   return (
     <ChipMenu
       title="Sync with origin"
       summary={face(state)}
       chevron={false}
+      variant="place"
       triggerClass="mx-place-chip"
       width={WIDTH}
       icon={<span className={running === null ? 'mx-place-icon' : 'mx-place-icon is-spinning'}><Icon name="refresh" size={12} /></span>}
       label={<span className="mx-place-text">{face(state)}</span>}
-      header={<PlaceHead mono main={`${branch} ⇄ ${upstream ?? 'no upstream'}`} sub={`${String(behind)} to pull · ${String(ahead)} to push · ${fetchedLine(state.fetchedAt)}`} />}
+      header={<PlaceHead mono main={`${branch} ⇄ ${upstream ?? 'no upstream'}`} sub={standing(behind, ahead, state.fetchedAt)} />}
       sections={[{ heading: 'Remote', quiet: true, items }]}
     />
   )

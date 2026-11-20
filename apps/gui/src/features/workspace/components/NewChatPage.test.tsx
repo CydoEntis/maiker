@@ -406,7 +406,7 @@ describe('the New session draft', () => {
     dialog(onStart)
     await userEvent.click(await screen.findByRole('button', { name: 'Branch dev: dev' }))
     await userEvent.type(await screen.findByRole('textbox', { name: 'Find or switch branch' }), 'my-own')
-    await userEvent.click(screen.getByRole('radio', { name: 'Create branch my-own' }))
+    await userEvent.click(screen.getByRole('radio', { name: 'Create branch “my-own”' }))
     expect(screen.getByRole('button', { name: 'Branch my-own: my-own' })).toBeInTheDocument()
     await userEvent.type(box(), 'Fix the login bug')
     await userEvent.click(startButton())
@@ -909,7 +909,7 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     await userEvent.clear(within(list).getByRole('textbox', { name: 'Find or switch branch' }))
     await userEvent.type(within(list).getByRole('textbox', { name: 'Find or switch branch' }), 'feat/ok')
     expect(within(list).queryByRole('alert')).not.toBeInTheDocument()
-    expect(within(list).getByText('Create branch feat/ok')).toBeInTheDocument()
+    expect(within(list).getByText('Create branch “feat/ok”')).toBeInTheDocument()
   })
 
   it('offers Update first when the checkout is behind origin, and says when it is done', async () => {

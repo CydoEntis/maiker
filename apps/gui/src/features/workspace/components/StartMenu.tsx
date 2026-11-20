@@ -51,7 +51,7 @@ export function StartMenu({ open, onOpenChange, children, ...rest }: StartMenuPr
   return (
     <DropdownMenu open={shown} onOpenChange={change} modal={false}>
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
-      <DropdownMenuContent container={rest.portalContainer} aria-label="Start" aria-labelledby={undefined} loop side="bottom" align="start" sideOffset={4} collisionPadding={EDGE_PX} className="mx-ctx" style={{ position: 'static' }} onContextMenu={(event) => { event.preventDefault() }}>
+      <DropdownMenuContent container={rest.portalContainer} aria-label="Start" aria-labelledby={undefined} loop side="bottom" align="start" sideOffset={4} collisionPadding={EDGE_PX} className="mx-ctx is-start" style={{ position: 'static' }} onContextMenu={(event) => { event.preventDefault() }}>
         {/* Mounted only while the menu is open, so each opening starts on the first page. */}
         <StartPages {...rest} onClose={() => { change(false) }} />
       </DropdownMenuContent>
@@ -95,8 +95,8 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
 
   return (
     <div ref={body} className="mx-start-body" role="presentation" onKeyDown={onKeyDown}>
-      <DropdownMenuLabel className="mx-ctx-title">{contextLine(page, title, props.project)}</DropdownMenuLabel>
-      {!atBase && <DropdownMenuItem className="mx-ctx-item" onSelect={(event) => { event.preventDefault(); back() }}><span className="mx-ctx-label">Back</span><span className="mx-ctx-hint" aria-hidden="true">←</span></DropdownMenuItem>}
+      {!atBase && <DropdownMenuItem className="mx-ctx-item mx-ctx-back" onSelect={(event) => { event.preventDefault(); back() }}><span aria-hidden="true">‹</span>Back</DropdownMenuItem>}
+      <DropdownMenuLabel className="mx-ctx-context"><Icon name={page.machine === LOCAL_MACHINE && page.view !== 'remote' ? 'monitor' : 'server'} size={12} /><span>{contextLine(page, title, props.project)}</span></DropdownMenuLabel>
       {(page.view === 'root' || page.view === 'machine') && (
         <>
           {onTerminal !== undefined && (
@@ -125,7 +125,7 @@ function StartPages(props: Omit<StartMenuProps, 'open' | 'onOpenChange' | 'child
           {props.machines.filter((head) => head.name !== null).map((head) => (
             <DropdownMenuItem key={head.key} className="mx-ctx-item" disabled={head.down} onSelect={go({ view: 'machine', machine: head.machine })}>
               <Icon name="server" size={14} /><span className="mx-ctx-label">{machineTitle(head)}</span>
-              <span className="mx-ctx-hint" aria-hidden={!head.down}>{head.down ? 'offline' : '›'}</span>
+              <span className="mx-ctx-hint" aria-hidden={!head.down}>{head.down ? 'offline' : head.target ?? '›'}</span>
             </DropdownMenuItem>
           ))}
           <DropdownMenuSeparator className="mx-ctx-sep" />

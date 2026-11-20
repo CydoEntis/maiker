@@ -95,7 +95,7 @@ describe('the branch chip', () => {
     git.create.mockResolvedValue('fix/rounding')
     const user = await openBranch()
     await user.type(screen.getByRole('textbox', { name: 'Find or switch branch' }), 'fix/rounding')
-    expect(screen.getByRole('radio', { name: 'Create branch fix/rounding' })).toBeInTheDocument()
+    expect(screen.getByRole('radio', { name: 'Create branch “fix/rounding”' })).toBeInTheDocument()
     await user.keyboard('{Enter}')
     expect(git.create).toHaveBeenCalledWith(0, PLACE.folder, 'fix/rounding')
     await waitFor(() => { expect(titles()).toContain('Created fix/rounding and switched to it') })
@@ -172,8 +172,8 @@ describe('the sync chip', () => {
     git.syncState.mockResolvedValue({ ...SYNC, behind: 0, ahead: 0 })
     await openSync()
     expect(screen.getByRole('button', { name: 'Sync with origin: Synced' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Pull 0 commits/ })).toBeDisabled()
-    expect(screen.getByRole('radio', { name: /Push 0 commits/ })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: /^Pull/ })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: /^Push/ })).toBeDisabled()
   })
 
   it('does not force a pull that cannot fast-forward: it says so and runs nothing', async () => {
@@ -196,7 +196,7 @@ describe('the folder chip', () => {
   const openFolder = async (projects = [{ name: 'shop', folder: '/dev/shop' }], onNewSessionIn = vi.fn()) => {
     const user = userEvent.setup()
     render(
-      <PlaceActionsContext.Provider value={{ projects, onNewSessionIn }}>
+      <PlaceActionsContext.Provider value={{ projects, onNewSessionIn, onOpenFolder: vi.fn(), onClone: vi.fn() }}>
         <SessionBar place={PLACE} />
       </PlaceActionsContext.Provider>,
     )
@@ -228,10 +228,12 @@ describe('the folder chip', () => {
     expect(onNewSessionIn).toHaveBeenCalledWith('/dev/shop')
   })
 
-  it('does not offer to change the folder of a session that has started', async () => {
-    await openFolder()
-    expect(screen.queryByRole('radio', { name: /Open folder…/ })).toBeNull()
-    expect(screen.queryByRole('radio', { name: /Clone a repository…/ })).toBeNull()
+  it('offers no way to open or clone from a started session: the folder only changes before the first message', async () => {
+    const user = userEvent.setup()
+    render(<SessionBar place={PLACE} />)
+    await user.click(screen.getByRole('button', { name: FOLDER_NAME }))
+    expect(screen.queryByRole('radio', { name: /Open folder/ })).toBeNull()
+    expect(screen.queryByRole('radio', { name: /Clone a repository/ })).toBeNull()
   })
 
   it('leaves Show in Explorer out for a folder on another machine', async () => {

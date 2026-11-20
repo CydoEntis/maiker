@@ -28,6 +28,7 @@ const buttonVariants = cva(
       size: {
         sm: "h-6 px-2 text-xs",
         md: "h-[30px] px-3 text-[12.5px]",
+        lg: "h-9 px-[18px] text-[13.5px]",
         icon: "size-7 border-transparent px-0 text-(--muted) hover:enabled:text-(--fg) [&_svg:not([class*='size-'])]:size-[15px]",
       },
     },

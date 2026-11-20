@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { Tag } from '@/components/ui/tag'
+import { Icon } from '@/features/workspace/components/glyphs'
 import type { GitHubRepo } from '@/api/githubRepos'
 import { ago } from '@/features/inspect/format'
 import { copySignInCode, openSignInLink } from '@/features/signin/signInActions'
@@ -69,7 +70,10 @@ function Repos({ disabled, folderOf, onClone, onOpen }: Pick<Props, 'disabled' |
   return (
     <>
       <div className="mx-op-search">
-        <input aria-label="Search your repositories" placeholder="Search your repositories" value={typed} maxLength={MOST_SEARCH_CHARS} spellCheck={false} disabled={disabled} onChange={(event) => { setTyped(event.target.value) }} />
+        <label className="mx-op-find">
+          <Icon name="search" size={13} />
+          <input aria-label="Search your repositories" placeholder="Search your repositories" value={typed} maxLength={MOST_SEARCH_CHARS} spellCheck={false} disabled={disabled} onChange={(event) => { setTyped(event.target.value) }} />
+        </label>
         {owners.length > 1 && (
           <select aria-label="Owner" value={owner ?? owners[0]} disabled={disabled} onChange={(event) => { setOwner(event.target.value) }}>
             {owners.map((name) => <option key={name} value={name}>{name}</option>)}
@@ -127,7 +131,7 @@ export function GitHubPanel({ account, view, signIn, cancelSignIn, closeSignIn, 
       return (
         <div className="mx-op-panel">
           <div className="mx-op-account">
-            <span>Signed in as <strong>{account.login}</strong></span>
+            <span className="mx-op-who"><span className="mx-op-avatar" aria-hidden="true">{account.login.slice(0, 1).toUpperCase()}</span>Signed in as <strong>{account.login}</strong></span>
             <Button variant="ghost" size="sm" onClick={signOut}>Sign out</Button>
           </div>
           <Repos {...repos} />

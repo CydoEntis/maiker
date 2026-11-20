@@ -7,11 +7,17 @@ export type PlaceActions = {
   /** The projects the menu offers a new session in. */
   projects: readonly PlaceProject[]
   onNewSessionIn: (folder: string) => void
+  /** Opens the Open a project dialog on its folder tab. */
+  onOpenFolder: () => void
+  /** Opens the Open a project dialog on Clone from URL. */
+  onClone: () => void
 }
 
 const NOTHING: PlaceActions = {
   projects: [],
   onNewSessionIn: () => undefined,
+  onOpenFolder: () => undefined,
+  onClone: () => undefined,
 }
 
 /** The window provides it once; the row under the box reads it, so no prop crosses the chat's layers. */

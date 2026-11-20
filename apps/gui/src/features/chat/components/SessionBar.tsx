@@ -68,7 +68,7 @@ function Place({ place }: { place: SessionPlace }) {
       {place.machine !== null && <span className="mx-session-machine">{place.machine}</span>}
       {folder === '' && picking === undefined
         ? <span className="mx-place-chip is-folder"><span className="mx-place-text">{text}</span></span>
-        : <FolderChip folder={folder} text={text} machine={machine} projects={actions.projects} onNewSessionIn={actions.onNewSessionIn} picking={picking?.folder} />}
+        : <FolderChip folder={folder} text={text} machine={machine} machineName={place.machine} projects={actions.projects} onNewSessionIn={actions.onNewSessionIn} picking={picking?.folder} />}
       {branch !== null && <BranchChip folder={folder} machine={machine} branch={branch} project={place.project} worktreeName={place.worktreeName ?? null} picking={picking?.branch} />}
       {branch === null && picking?.noBranch != null && <NoBranchChip note={picking.noBranch} />}
       {sync !== null && branch !== null && picking?.sync !== false && <SyncChip state={sync} branch={branch} />}

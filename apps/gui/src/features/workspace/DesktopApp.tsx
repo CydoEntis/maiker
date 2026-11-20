@@ -9,6 +9,7 @@ import { WorkspaceContext } from './workspaceContext'
 import { WorkspaceSidebars } from './components/WorkspaceSidebars'
 import { WorkspaceMain } from './components/WorkspaceMain'
 import { WorkspaceDialogs } from './components/WorkspaceDialogs'
+import { WorkspacePlaceActions } from './components/WorkspacePlaceActions'
 import { AppTitleBar } from './components/AppTitleBar'
 import { WorkspaceSidePanel } from './components/WorkspaceSidePanel'
 import { WindowServiceStatus } from './components/WindowServiceStatus'
@@ -37,9 +38,11 @@ export function DesktopApp() {
         <div ref={setRoot} className={`mx-app${narrow ? ' is-narrow' : ''}`} style={rootStyle} data-motion={reducedMotion ? 'reduced' : 'full'} data-theme-kind={theme.light ? 'light' : 'dark'} data-side={preferences.sidebarSide}>
           <AppTitleBar />
           <div className="mx-window" role="application" aria-label={APP_NAME}>
-            <WorkspaceSidebars />
-            <WorkspaceMain />
-            <WorkspaceSidePanel />
+            <WorkspacePlaceActions>
+              <WorkspaceSidebars />
+              <WorkspaceMain />
+              <WorkspaceSidePanel />
+            </WorkspacePlaceActions>
             <WorkspaceDialogs />
             <WindowServiceStatus />
           </div>

@@ -1,6 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { InlineNote } from '@/components/ui/feedback'
 import { Progress } from '@/components/ui/progress'
+import { StatusIcon } from '@/components/ui/status-icon'
 import { PHASE_WORDS, type ProjectState } from './useCloneProject'
 
 /** What the clone is doing, and what it made: a progress bar while it runs, the folder when it is ready, the reason when it was not cloned. */
@@ -11,8 +12,8 @@ export function ProjectStatus({ state, onUseExisting }: { state: ProjectState; o
     case 'cloning': {
       const { progress } = state
       return (
-        <div className="mx-op-status" role="status">
-          <span>Cloning <strong>{state.label}</strong></span>
+        <div className="mx-op-status is-cloning" role="status">
+          <span className="mx-op-status-line"><StatusIcon status="working" />Cloning <strong>{state.label}</strong></span>
           <Progress label="Clone progress" {...(progress === null ? {} : { value: progress.percent })} />
           <span className="mx-op-phase">{progress === null ? 'Starting…' : `${PHASE_WORDS[progress.phase]} · ${String(progress.percent)}%`}</span>
         </div>
@@ -21,7 +22,7 @@ export function ProjectStatus({ state, onUseExisting }: { state: ProjectState; o
     case 'ready':
       return (
         <div className="mx-op-status is-ready" role="status">
-          <span><strong>{state.name}</strong> is ready in <code>{state.folder}</code></span>
+          <span className="mx-op-status-line"><StatusIcon status="done" /><span><strong>{state.name}</strong> is ready in <code>{state.folder}</code></span></span>
         </div>
       )
     case 'problem': {
