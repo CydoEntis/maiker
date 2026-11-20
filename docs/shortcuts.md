@@ -297,7 +297,7 @@ There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new sessi
 In the desktop app's New session draft, `Enter` starts the chat and opens it (so does `Ctrl+Enter`, `⌘Enter` on macOS), `Shift+Enter` is a new line, `Esc` discards the draft; `Ctrl+Shift+Enter` (`⇧⌘Enter`)
 starts it in the background, empties the message box and keeps the draft open for the next one.
 
-The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
+The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux (the chat view also takes plain Ctrl+K, W and O, and Fetch is Ctrl+Shift+F there; see the hotkeys list) or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
 
 ## A session wants to start helpers
 

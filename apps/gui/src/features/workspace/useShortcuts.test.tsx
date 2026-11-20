@@ -1,12 +1,13 @@
 import { renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides } from './model/shortcuts'
+import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, type ShortcutView } from './model/shortcuts'
 import { useShortcutKeys } from './useShortcuts'
 
-function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}, open: { addMachineOpen?: boolean; setAddMachineOpen?: () => void } = {}) {
+function listen(canUndoClose: boolean, keyOverrides: KeyOverrides = {}, open: { addMachineOpen?: boolean; setAddMachineOpen?: () => void; view?: ShortcutView } = {}) {
   const runShortcut = vi.fn()
   renderHook(() => {
     useShortcutKeys({
+      view: open.view ?? 'terminal',
       runShortcut,
       canUndoClose,
       dialogOpen: open.addMachineOpen === true,
@@ -98,5 +99,41 @@ describe('the Add a remote machine dialog', () => {
     expect(runShortcut).not.toHaveBeenCalled()
     document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
     expect(close).toHaveBeenCalledWith(false)
+  })
+})
+
+describe('the keys by view', () => {
+  afterEach(() => { document.body.replaceChildren() })
+
+  function pressIn(target: string, init: KeyboardEventInit) {
+    const field = document.createElement(target)
+    document.body.append(field)
+    field.focus()
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init })
+    field.dispatchEvent(event)
+    return event
+  }
+
+  it('takes plain Ctrl+K from a chat text box and keeps the box its own for Ctrl+A, C, V, X, Z and Backspace', () => {
+    const runShortcut = listen(false, {}, { view: 'chat' })
+    expect(pressIn('textarea', { key: 'k', ctrlKey: true }).defaultPrevented).toBe(true)
+    expect(runShortcut).toHaveBeenCalledWith('palette')
+    runShortcut.mockClear()
+    for (const key of ['a', 'c', 'v', 'x', 'z', 'Backspace']) expect(pressIn('textarea', { key, ctrlKey: true }).defaultPrevented, key).toBe(false)
+    expect(runShortcut).not.toHaveBeenCalled()
+  })
+
+  it('leaves plain Ctrl+K to the terminal in the terminal view and takes Ctrl+Shift+K', () => {
+    const runShortcut = listen(false, {}, { view: 'terminal' })
+    expect(pressIn('textarea', { key: 'k', ctrlKey: true }).defaultPrevented).toBe(false)
+    expect(runShortcut).not.toHaveBeenCalled()
+    pressIn('textarea', { key: 'K', ctrlKey: true, shiftKey: true })
+    expect(runShortcut).toHaveBeenCalledWith('palette')
+  })
+
+  it('still takes the Ctrl+Shift form in the chat view', () => {
+    const runShortcut = listen(false, {}, { view: 'chat' })
+    pressIn('textarea', { key: 'K', ctrlKey: true, shiftKey: true })
+    expect(runShortcut).toHaveBeenCalledWith('palette')
   })
 })

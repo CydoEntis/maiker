@@ -798,6 +798,17 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   too. A binding with `available: false` is registered but its key does nothing and the overlay
   hides it until the feature lands; none is off now (Undo close is on).
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
+- **Keys follow the view.** On Windows and Linux the view the focused session shows (`shortcutView` in
+  `useWorkspaceState`: the New session draft reads as chat, the terminal dock as terminal, otherwise the session's own
+  view, else Settings' Open sessions in) decides the chord. In the **chat view** nothing needs plain Ctrl+letter, so a
+  binding's `chat` list adds the plain forms: Ctrl+K Commands, Ctrl+W Close, Ctrl+O Open folder; the Ctrl+Shift forms keep
+  working there too. In the **terminal view** only Ctrl+Shift and Ctrl+Alt forms are taken and every plain Ctrl+letter
+  reaches the program. No other plain Ctrl+letter is ever taken in either view, so a chat box keeps Ctrl+A, C, V, X, Z
+  and Backspace. Fetch is Ctrl+Shift+F in the chat view; the terminal view keeps Ctrl+Shift+F for Find and fetches on
+  Ctrl+Alt+Shift+F (also taken in the chat view), and Find in the chat view moves to Ctrl+Alt+F. macOS is ⌘ in both
+  views. Every hint (`useShortcutText`, palette, menus, the overlay) writes the chord for the current view
+  (`ShortcutViewContext`); Settings › Hotkeys lists the terminal view's keys with the chat view's beside them where they
+  differ. A key chosen in Settings replaces the action's keys in both views and is refused when either view uses it.
 - **One app-wide view.** The pane header has no Chat | Terminal toggle: the whole app is in the chat view or the terminal
   view, picked in Settings › General › **How you work › Open sessions in**, and changing it moves every open session
   (an "All sessions now open in X" note with **Undo** shows under the row). In the chat view the chat covers the pane body while the terminal stays

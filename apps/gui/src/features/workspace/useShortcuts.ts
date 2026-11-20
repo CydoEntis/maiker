@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
-import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
+import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction, type ShortcutView } from './model/shortcuts'
 import { toast } from '@/lib/toast'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
@@ -9,10 +9,17 @@ import { discardDraft } from './model/newSessionDraft'
 import { activeArrangement, cycleFocus, type Layout, type SplitDirection, toggleBroadcast } from './model/layout'
 import type { SessionView } from './model/session'
 import { type EscLayer, topmostOpen } from './model/escLadder'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { syncRemote } from '@/features/inspect/api'
 import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you/model/needsYou'
 
+/** What the Open folder key calls; the Open a project dialog sits behind it. */
+export type OpenProject = (kind: 'folder') => void
+
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
-export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
+export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
+  /** The view the focused session shows: in the chat view plain Ctrl+key forms are taken, in the terminal view never. */
+  view: ShortcutView
   runShortcut: (action: ShortcutAction) => void
   canUndoClose: boolean
   dialogOpen: boolean
@@ -33,8 +40,8 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMach
   platform: Platform
   keyOverrides: KeyOverrides
 }) {
-  const shortcutState = useRef({ runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
-  useEffect(() => { shortcutState.current = { runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
+  const shortcutState = useRef({ view, runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
+  useEffect(() => { shortcutState.current = { view, runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
   useEffect(() => {
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
@@ -51,7 +58,7 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMach
       if (state.welcomeOpen) return
       // Settings › Hotkeys is taking down a new key: every key, Esc too, is the field's.
       if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
-      const match = matchShortcut(event, platform, state.keyOverrides)
+      const match = matchShortcut(event, platform, state.keyOverrides, state.view)
       if (state.shortcutsOpen) {
         // Only its own key closes it; Esc is the dialog's.
         if (match?.action === 'shortcuts') {
@@ -94,7 +101,8 @@ export function useShortcutKeys({ runShortcut, canUndoClose, dialogOpen, addMach
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+  openProject: OpenProject
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
@@ -195,6 +203,22 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
       case 'terminal':
         toggleTerminal()
         return
+      case 'open-folder':
+        openProject('folder')
+        return
+      case 'fetch': {
+        const local = focusedSession?.machine === LOCAL_MACHINE
+        if (focusedSession === undefined) flash('Nothing to fetch: no session is open.')
+        else if (local && focusedSession.repoRoot === null) flash('This session is not in a git repository.')
+        else {
+          flash('Fetching…')
+          // Another machine's checkout is found through the pane that runs there, as the Changes view does.
+          syncRemote(focusedSession.repoRoot ?? '', 'fetch', focusedSession.machine, local ? undefined : focusedSession.pane)
+            .then(flash)
+            .catch((error: unknown) => { toast.failed('Could not fetch', error) })
+        }
+        return
+      }
       case 'find':
         setFindOpen((open) => !open)
         return
@@ -214,6 +238,6 @@ export function useShortcutRunner({ newSession, focusedMachineNumber, newTermina
         }
         return
     }
-  }, [newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
+  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useMemo } from 'react'
-import { type Platform, type ShortcutAction, shortcutText } from './model/shortcuts'
+import { type Platform, type ShortcutAction, type ShortcutView, shortcutText } from './model/shortcuts'
 import type { MachineHead } from './model/machines'
 import { toast } from '@/lib/toast'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -13,11 +13,13 @@ import { THEMES } from './theme/themes'
 import { isChatSession } from './model/chatSession'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
-export function usePaletteItems({ openReadme, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen }: {
+export function usePaletteItems({ openReadme, paletteOpen, platform, view, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen }: {
   /** Opens the focused session's README, beside the chat or in the Files panel. */
   openReadme: (place: 'beside' | 'files') => void
   paletteOpen: boolean
   platform: Platform
+  /** The view the focused session shows: the hints name its keys. */
+  view: ShortcutView
   layout: Layout
   sessions: SessionView[]
   projectOf: Map<string, { name: string; key: string }>
@@ -51,7 +53,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
   const paletteItems: PaletteItem[] = useMemo(() => {
     // Thirty-odd items with closures, built only while the palette can show them.
     if (!paletteOpen) return []
-    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform, preferences.keyOverrides)
+    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform, preferences.keyOverrides, view)
     const action = (id: string, label: string, run: () => void, shortcut?: string): PaletteItem => ({ id, label, kind: 'Action', run, ...(shortcut ? { shortcut } : {}) })
     const showing = activeArrangement(layout)
     // Sessions first, most urgent first, then their projects, then actions: what the palette is mostly for is jumping.
@@ -76,7 +78,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
       ...sessionItems,
       ...projectItems,
       action('new-session', 'New session…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
-      action('open-folder', 'Open a folder…', openFolder),
+      action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
       action('new-terminal', 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
@@ -91,6 +93,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
       action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
+      action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),
       action('focus', 'Focus mode', () => { setFocusMode(true) }, keys('focus-mode')),
       action('settings', 'Open settings', () => { setSettingsSection('appearance') }, keys('settings')),
@@ -102,7 +105,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, openReadme])
+  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, view, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, openReadme])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)

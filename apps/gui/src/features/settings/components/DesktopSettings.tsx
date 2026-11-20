@@ -788,7 +788,8 @@ function withoutOverride(overrides: KeyOverrides, action: ShortcutAction): KeyOv
 function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platform; overrides: KeyOverrides; onOverrides: (next: KeyOverrides) => void }) {
   const [capturing, setCapturing] = useState<ShortcutAction | null>(null)
   const [refusal, setRefusal] = useState<{ action: ShortcutAction; reason: string } | null>(null)
-  const rows = hotkeyRows(platform, overrides)
+  // The terminal view's keys, with the chat view's beside them where they differ (Windows and Linux).
+  const rows = hotkeyRows(platform, overrides, 'terminal')
   const anyChanged = rows.some((row) => row.changed)
 
   const startCapture = (action: ShortcutAction) => { setRefusal(null); setCapturing(action) }
@@ -810,7 +811,7 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
   return (
     <Card
       title="Hotkeys"
-      meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Ctrl+Shift here, ⌘ on macOS'}</span>}
+      meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Chat view: Ctrl+key. Terminal view: Ctrl+Shift+key. ⌘ on macOS.'}</span>}
       foot={<>
         <span>In a focused pane, every other key goes straight to the shell.</span>
         {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
@@ -837,7 +838,15 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
                 >Press the new keys…</button>
               ) : (
                 <span className="mx-keys">
+                  {row.otherView.length > 0 && <span className="mx-or">Terminal view</span>}
                   {row.chords.map((chord, index) => (
+                    <Fragment key={chord.join('+')}>
+                      {index > 0 && <span className="mx-or">or</span>}
+                      <Keycaps chord={chord} className="mx-chord" labelled />
+                    </Fragment>
+                  ))}
+                  {row.otherView.length > 0 && <span className="mx-or">Chat view</span>}
+                  {row.otherView.map((chord, index) => (
                     <Fragment key={chord.join('+')}>
                       {index > 0 && <span className="mx-or">or</span>}
                       <Keycaps chord={chord} className="mx-chord" labelled />
