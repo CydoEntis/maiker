@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import maittyTokens from '@tokens/maitty-tokens.json'
 import themeManifest from '@tokens/themes.json'
-import { channelsOf, composite, contrastRatio, luminance, mixOklab, withAlpha } from './color'
+import { atLightnessOf, channelsOf, composite, contrastRatio, luminance, mixOklab, withAlpha } from './color'
 
 /** Every colour role the desktop app reads, set as CSS custom properties on the app root. */
 export type ThemeTokens = {
@@ -164,6 +164,9 @@ const MAIKER_DARK = maittyTheme(maittyTokens.dark, false)
 const MAIKER_LIGHT = maittyTheme(maittyTokens.light, true)
 
 const SHIFT_STEP = 2
+// The design's panel. Every generated dark theme sits its panel at this depth and keeps its own hue, so the surface steps
+// above and below it (window ground, card, hairline, selected row) land where the design's do in any theme.
+const DESIGN_PANEL = '#151517'
 
 /** Mixes a colour toward black (light themes) or white (dark themes) a step at a time until it reads as text on every ground. */
 function shiftUntilReadable(colour: string, grounds: readonly string[], toward: string): string {
@@ -175,7 +178,8 @@ function shiftUntilReadable(colour: string, grounds: readonly string[], toward: 
 
 /** Builds every token from a theme's six inputs, as the TUI themes import. */
 export function generateTheme(inputs: ThemeInputs): ThemeTokens {
-  const { bg, accent, mag, blue, green, light } = inputs
+  const { accent, mag, blue, green, light } = inputs
+  const bg = light ? inputs.bg : atLightnessOf(inputs.bg, DESIGN_PANEL)
   const towardFg = (percent: number) => mixOklab(bg, inputs.fg, percent)
   const windowBg = light ? towardFg(MIX.bgLight) : mixOklab(bg, '#000000', MIX.bgDark)
   // The foreground is lifted (or darkened) in place if a theme's own would fall short on the window ground (Tokyo Night Day).

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { contrastRatio, mixOklab, parseColor } from './color'
+import { atLightnessOf, contrastRatio, mixOklab, parseColor } from './color'
 import themeManifest from '@tokens/themes.json'
 import type { ThemeEntry } from './themes'
 import { findTheme, generateTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
@@ -78,15 +78,20 @@ describe('themes', () => {
     }
   })
 
-  it('derives tokens from six inputs the way color-mix in oklab does', () => {
+  it('derives tokens from six inputs the way color-mix in oklab does, from a panel at the design depth in the theme hue', () => {
     const tokens = generateTheme({ bg: '#282A36', fg: '#F8F8F2', accent: '#8BE9FD', mag: '#FF79C6', blue: '#BD93F9', green: '#50FA7B', light: false })
-    expect(tokens.main).toBe('#282A36')
-    expect(tokens.term).toBe('#282A36')
-    expect(tokens.sel).toBe(mixOklab('#282A36', '#F8F8F2', 10))
-    expect(tokens.pane).toBe('#282A36')
+    const panel = atLightnessOf('#282A36', '#151517')
+    expect(panel).toBe('#13151C')
+    expect(tokens.main).toBe(panel)
+    expect(tokens.term).toBe(panel)
+    expect(tokens.sel).toBe(mixOklab(panel, '#F8F8F2', 10))
+    expect(tokens.pane).toBe(panel)
     expect(tokens.accentSoft).toBe('rgba(139,233,253,0.13)')
-    expect(tokens.onAccent).toBe('#282A36')
     expect(tokens.ok).toBe('#50FA7B')
+  })
+
+  it('leaves a light theme on its own ground', () => {
+    expect(generateTheme({ bg: '#FFFFFF', fg: '#16181A', accent: '#0057D1', mag: '#A018FF', blue: '#0057D1', green: '#008B0C', light: true }).main).toBe('#FFFFFF')
   })
 
   it('mixes halfway between black and white to a mid grey in oklab', () => {
