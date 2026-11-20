@@ -10,7 +10,7 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const installedAgents = useInstalledAgents()
   const start = {
@@ -32,9 +32,9 @@ export function WorkspaceSidebars() {
       portalContainer={root}
       onToggleRail={onToggle}
       side={preferences.sidebarSide}
-      order={preferences.sidebarOrder}
-      grouping={preferences.sidebarGroup}
-      onGrouping={(sidebarGroup) => { setPreferences((current) => ({ ...current, sidebarGroup })) }}
+      projects={openedProjects.machines}
+      selectedProject={openedProjects.selected}
+      statusHeadings={preferences.sidebarStatusHeadings}
       onSearch={() => { afterPick(); setPaletteOpen(true) }}
       width={sidebarWidth}
       onResize={setLiveSidebarWidth}

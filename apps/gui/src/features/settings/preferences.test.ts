@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -181,6 +181,15 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
+  })
+
+  it('shows status headings in the sidebar unless they were turned off, as settings saved before it read', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({}))
+    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(true)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarStatusHeadings: false }))
+    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(false)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarStatusHeadings: 'no' }))
+    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(true)
   })
 
   it('opens sessions in the chat unless a view was chosen, and ignores nonsense', () => {

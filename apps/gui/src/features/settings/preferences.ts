@@ -111,6 +111,8 @@ export type SettingsPreferences = {
   sidebarSide: SidebarSide
   sidebarOrder: SidebarOrder
   sidebarGroup: SidebarGroup
+  /** Inside a project of three sessions or more, a heading over each status that has sessions. The order is the same either way. */
+  sidebarStatusHeadings: boolean
   terminalDock: TerminalDock
   iconSize: IconSize
   corners: CornersChoice
@@ -215,6 +217,7 @@ function defaults(): SettingsPreferences {
     sidebarSide: 'left',
     sidebarOrder: 'creation',
     sidebarGroup: 'status',
+    sidebarStatusHeadings: true,
     terminalDock: 'bottom',
     iconSize: 'medium',
     iconColor: 'color',
@@ -318,6 +321,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
       sidebarOrder: preferences.sidebarOrder === 'creation' || preferences.sidebarOrder === 'priority' ? preferences.sidebarOrder : fallback.sidebarOrder,
       sidebarGroup: preferences.sidebarGroup === 'status' || preferences.sidebarGroup === 'project' || preferences.sidebarGroup === 'machine' ? preferences.sidebarGroup : fallback.sidebarGroup,
+      sidebarStatusHeadings: bool(preferences.sidebarStatusHeadings, fallback.sidebarStatusHeadings),
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
       // Before the corner switch a window style was saved under `style`; its corners carry over.

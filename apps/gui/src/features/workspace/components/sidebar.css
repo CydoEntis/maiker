@@ -43,7 +43,6 @@
 .mx-section-head.is-done { color: var(--ok); }
 .mx-section-head.is-idle { color: var(--muted); }
 .mx-section-name { flex: none; }
-.mx-section-machine { flex: none; font-weight: 400; color: var(--muted); }
 .mx-section-count { flex: none; font-size: 11px; font-weight: 500; color: var(--dim); font-variant-numeric: tabular-nums; }
 .mx-section-hint { min-width: 0; font-weight: 400; color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
 .mx-folder-mark { flex: none; color: var(--muted-text); }
@@ -51,8 +50,6 @@
 .mx-section-caret { display: inline-flex; flex: none; transition: transform var(--t-fast) var(--ease); }
 .mx-section-caret:not(.is-open) { transform: rotate(-90deg); }
 /* Machines that need the app, under a list that has no machine headings to say so. */
-.mx-machine-notes { display: flex; flex-direction: column; gap: 2px; margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--pane-line); }
-.mx-machine-note { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 3px 0 10px; font-size: calc(12px * var(--sidebar-text, 1)); color: var(--muted); }
 .mx-row-machine { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-machine { display: flex; flex-direction: column; gap: 2px; }
 .mx-machine.is-away .mx-rows { opacity: .6; }
@@ -212,7 +209,6 @@
 
 /* A machine that is not up: a red dot, "Offline" and a Fix button; the reason is the tooltip. */
 .mx-machine-why { display: flex; align-items: center; gap: 6px; margin: 0 8px 4px 26px; font-size: 11.5px; color: var(--muted); }
-.mx-machine-note .mx-machine-why { margin: 0 0 0 auto; }
 .mx-machine-why-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--err); flex: none; }
 .mx-machine-why-word { flex: 1; min-width: 0; }
 .mx-machine-empty { margin: 0 8px 4px 26px; font-size: 11.5px; color: var(--muted); }

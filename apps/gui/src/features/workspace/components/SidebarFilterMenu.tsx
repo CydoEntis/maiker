@@ -11,11 +11,16 @@ export const PROJECT_ROWS_SHOWN = 6
 /** What the menu starts as: Reset puts these back. */
 export const DEFAULT_GROUPING: SidebarGrouping = 'status'
 
-type Props = {
+/** The Group and Sort rows. The sidebar's tree passes none: its order is fixed (MAITTY-501), so the menu keeps the project filter alone. */
+type Arrange = {
   grouping: SidebarGrouping
   onGrouping: (grouping: SidebarGrouping) => void
   sort: SidebarSort
   onSort: (sort: SidebarSort) => void
+}
+
+type Props = {
+  arrange?: Arrange | undefined
   /** Every project that has a session, the busiest first. */
   projects: readonly ProjectChoice[]
   /** The project the list is narrowed to, or null for all of them. */
@@ -35,13 +40,13 @@ function isSort(value: string): value is SidebarSort {
  * The sidebar's ≡ menu: how the headings group the rows, how rows sort, and which project shows. A choice applies at once
  * and the menu stays open; Reset appears when anything differs from the start. It grows from the button's bottom-left corner.
  */
-export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects, project, onProject }: Props) {
+export function SidebarFilterMenu({ arrange, projects, project, onProject }: Props) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const matching = projects.filter((choice) => needle === '' || choice.name.toLowerCase().includes(needle))
   // The button lights up for a narrowed or re-sorted list; a changed grouping is plain to see from the headings.
-  const narrowed = sort !== DEFAULT_SIDEBAR_SORT || project !== null
-  const dirty = narrowed || grouping !== DEFAULT_GROUPING
+  const narrowed = (arrange !== undefined && arrange.sort !== DEFAULT_SIDEBAR_SORT) || project !== null
+  const dirty = narrowed || (arrange !== undefined && arrange.grouping !== DEFAULT_GROUPING)
   const label = `Filter and group: ${project ?? 'All projects'}`
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
@@ -49,18 +54,22 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
         <button type="button" className={`mx-head-button${narrowed ? ' is-on' : ''}`} data-on={narrowed} aria-label={label} title="Filter and group"><Icon name="filter" /></button>
       </Popover.Trigger>
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Group, sort and filter" className="mx-grp-menu">
-        <div className="mx-grp-row">
-          <span className="mx-grp-label">Group</span>
-          <Segmented aria-label="Group" full value={grouping} onValueChange={(next) => { if (isGrouping(next)) onGrouping(next) }}>
-            {SIDEBAR_GROUPINGS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
-          </Segmented>
-        </div>
-        <div className="mx-grp-row">
-          <span className="mx-grp-label">Sort</span>
-          <Segmented aria-label="Sort" full value={sort} onValueChange={(next) => { if (isSort(next)) onSort(next) }}>
-            {SIDEBAR_SORTS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
-          </Segmented>
-        </div>
+        {arrange !== undefined && (
+          <>
+            <div className="mx-grp-row">
+              <span className="mx-grp-label">Group</span>
+              <Segmented aria-label="Group" full value={arrange.grouping} onValueChange={(next) => { if (isGrouping(next)) arrange.onGrouping(next) }}>
+                {SIDEBAR_GROUPINGS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
+              </Segmented>
+            </div>
+            <div className="mx-grp-row">
+              <span className="mx-grp-label">Sort</span>
+              <Segmented aria-label="Sort" full value={arrange.sort} onValueChange={(next) => { if (isSort(next)) arrange.onSort(next) }}>
+                {SIDEBAR_SORTS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
+              </Segmented>
+            </div>
+          </>
+        )}
         <label className="mx-grp-search">
           <Icon name="search" size={12} />
           <input value={query} onChange={(event) => { setQuery(event.target.value) }} placeholder={projects.length > PROJECT_ROWS_SHOWN ? `Find one of ${String(projects.length)} projects` : 'Filter projects'} aria-label="Filter projects" spellCheck={false} />
@@ -72,7 +81,7 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
         </div>
         {dirty && (
           <div className="mx-grp-foot">
-            <button type="button" className="mx-grp-reset" onClick={() => { onGrouping(DEFAULT_GROUPING); onSort(DEFAULT_SIDEBAR_SORT); onProject(null); setQuery('') }}>Reset</button>
+            <button type="button" className="mx-grp-reset" onClick={() => { arrange?.onGrouping(DEFAULT_GROUPING); arrange?.onSort(DEFAULT_SIDEBAR_SORT); onProject(null); setQuery('') }}>Reset</button>
           </div>
         )}
       </PopupContent>

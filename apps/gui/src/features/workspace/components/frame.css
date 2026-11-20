@@ -38,6 +38,22 @@
 .mx-machine-toggle .mx-caret-wrap, .mx-machine-toggle:hover .mx-caret-wrap { color: var(--dim); }
 .mx-machine-icon { color: var(--muted); }
 .mx-machine-count { font: 500 10.5px var(--mono); opacity: .7; }
+/* Inside a machine's card, each opened project: a folding heading with its folder mark, then its rows, under a quiet
+   heading per status when the project has enough sessions to need one. No card of its own: a card in a card is noise. */
+.mx-projects { display: flex; flex-direction: column; gap: 2px; }
+.mx-project { display: flex; flex-direction: column; }
+.mx-project-head { min-width: 0; height: calc(26px * var(--pad, 1)); display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--r-control); font-size: calc(12px * var(--sidebar-text, 1)); font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.mx-project-head:hover { background: var(--card-hover); }
+/* The project last opened or picked: the picked row's fill, so it reads as chosen on every theme. */
+.mx-project-head.is-selected, .mx-project-head.is-selected:hover { background: var(--m-card-sel); color: var(--fg); }
+.mx-project-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+/* A status heading lines up with the project's folder mark: the heading's 10px padding, the 12px caret and its 6px gap. */
+.mx-status-head { display: flex; align-items: center; gap: 6px; height: calc(22px * var(--pad, 1)); padding: 0 10px 0 28px; font-size: calc(11px * var(--sidebar-text, 1)); font-weight: 600; color: var(--muted); white-space: nowrap; }
+.mx-status-head.is-needs { color: var(--needs); }
+.mx-status-head.is-working { color: var(--working); }
+.mx-status-head.is-done { color: var(--done); }
+.mx-status-head.is-idle { color: var(--muted); }
+.mx-project-empty { padding: 2px 10px 4px 28px; font-size: calc(11.5px * var(--sidebar-text, 1)); color: var(--muted); }
 .mx-rows { gap: 2px; }
 /* A row: the 16px tile, the name and its time, the project and machine under it. */
 .mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 9px 10px; border-radius: var(--r-control); }

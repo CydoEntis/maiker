@@ -248,8 +248,8 @@ palette takes literal colours). Don't widen the exemptions to pass a change.
 `menuitemradio`, `listbox` or `option`, or a `createPortal` import, outside `components/ui/` is an
 error. There are no exempt files.
 
-**One segmented control.** Every row of choices with one picked (Chat | Terminal, the agent switch, Appearance, Group
-and Sort, the dock position) is `Segmented` / `SegmentedItem` from `components/ui/radio-group.tsx`, drawn by
+**One segmented control.** Every row of choices with one picked (Chat | Terminal, the agent switch, Appearance, the
+dock position) is `Segmented` / `SegmentedItem` from `components/ui/radio-group.tsx`, drawn by
 `components/ui/segmented.css` and by nothing else. A caller gives the choices and, as props, an `icon` (a mark before the
 word, or alone for an icon-only choice with an `aria-label`), `compact` (a choice shows its mark alone until it is
 picked) and `full` (the row fills the width it is given). It does not set a size, padding, colour or picked look; a
@@ -320,22 +320,30 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    expanding it opens the full sidebar as an overlay; under 800px panes stack in one
    column. The widths are constants in `features/workspace/model/windowSize.ts`; change
    them there and in DESIGN, nowhere else.
-2. The sidebar lists **agents and shells only**, grouped by **Group by** (`sidebarGroup`): Status (the default:
-   Needs you, Working, Finished, Idle), Project or Machine (this computer first), and in all three the terminals
+2. The sidebar lists **agents and shells only**, as one tree (`model/sidebarTree.ts`, drawn by `Sidebar.tsx`): every
+   machine (this computer first), under each its **opened projects** (item 5) in the order they were opened, one with no
+   session included, and under each project its sessions in the order Needs you, Working, Done, Idle (`statusSections`),
+   the latest change first within each. A project of `STATUS_HEADINGS_FROM` (3) sessions or more heads each status that
+   has sessions; one of one or two has none, as each row's mark says its status; Settings › Appearance › **Show status
+   headings** (`sidebarStatusHeadings`, on by default) turns the headings off everywhere and keeps the order. There is no
+   fourth level: a worktree's session is a row of its repository's project, `project / worktree` on its second line.
+   Machines and projects fold from their headings; which are folded is kept by name and folder in
+   `maiker.gui.sidebar-folds.v1` (`data/sidebarFolds.ts`), so a fold survives a restart, and a project heading is its own
+   component (`ProjectSection`) for the actions later added to it. The tree draws `useOpenedProjects().machines` and adds
+   nothing itself; when `selected` changes, that project and its machine unfold and the project's heading is marked. The header's filter button narrows the tree to one project
+   (its Group and Sort rows are not shown); Settings › Appearance still shows Group sessions by and Session order
+   (`sidebarGroup`, `sidebarOrder`), which the tree reads neither of. The terminals
    (no agent in them) are one **Terminals** section stuck at the bottom over the foot, at most a third of the height
    (`TerminalsSection`; its rows scroll inside), with a count and a fold (no `+`; the section is not drawn while no terminal is open, and the header's terminal button starts one); the 52px rail shows one
-   terminal glyph with the count instead. The section is outside the scrolling list, so it never scrolls away. In Status the session
-   on screen stays in the section it was picked in until another is picked (`statusSections`' `held`), so looking at a
+   terminal glyph with the count instead. The section is outside the scrolling list, so it never scrolls away. The session
+   on screen stays in the status it was picked in until another is picked (`statusSections`' `held`), so looking at a
    finished agent, which makes it idle, does not move its row from under the pointer. Until the daemon's first list
    arrives the sidebar says "Looking for your sessions…" and the main area the same, never "No agents running".
-   Within a machine the order is the **Session order** setting (`sidebarOrder`): `creation` (the default; the daemon's pane number) so a row
-   never moves when its state changes, or `priority`, where a session that needs you goes to the top and the rest keep
-   creation order (`model/sidebar.ts`, `bySidebarOrder`). The command palette still lists the most urgent first. A machine can
-   be grouped by project and folded. There are no fleets, ships, tabs or tab bar: choosing a session shows the layout it
+   The command palette still lists the most urgent first. There are no fleets, ships, tabs or tab bar: choosing a session shows the layout it
    is in (`model/layout.ts`), else one of its own. A session's **subagents** are the daemon's `TermInfo.subagent_activity`
    (`model/subagents.ts`), shown, while they run, in the dock above the chat's message box (`HelpersDock`, fed by the chat's own agents row and these activities; see DESIGN.md *The dock*); **Open its chat** on a helper's opened row in the dock or the record block (`OpenSubagentContext`, matched by title or task in `subagentNamed`), shows its own chat in the pane until you pick a session or **‹ Main session**.
    Maiker shows no workflow runs (ADR 0011). Rename is
-   a dialog from F2 or the row menu. Every row is two lines in every grouping (status mark, name, age; then monitor or server icon, another machine's name in the accent colour, `project / worktree`), has no × (Close session is in its right-click menu) and no agent icon; its activity is in the hover card. Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
+   a dialog from F2 or the row menu. Every row is two lines everywhere (status mark, name, age; then monitor or server icon, another machine's name in the accent colour where no machine heading is above it (under Put away), `project / worktree`), has no × (Close session is in its right-click menu) and no agent icon; its activity is in the hover card. Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
    window). Picking a session shows it at once, with no glide; panes that move (a split, a swap, a close) glide
    (`movePanes`). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
    session closes with a 6 second Undo. **Put away** (the daemon's flag; the row menu no longer offers it, and the window's `usePutAway` keeps the call) sets the pane's `archived` flag (`Command::ArchivePane`) with a 6 second Undo; it closes, stops and moves
@@ -369,7 +377,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    machine (`ProjectFolderPicker`). That machine's daemon reads the folder (`projectOfFolder`, through `loadFolderBranches`):
    a folder in git opens its repository's main checkout, any other opens itself, and one the machine cannot read is refused
    with its reason (in the dialog, or a toast over the picker, which stays) and nothing is added. A folder that is already
-   open, in any spelling, selects that project and adds nothing. The sidebar does not draw this list yet.
+   open, in any spelling, selects that project and adds nothing. The sidebar draws `machines` as its tree (item 2) and
+   unfolds and marks `selected`.
 
 ## Project-specific: usage and cost page (desktop)
 
@@ -1735,4 +1744,4 @@ Files tab on it) and **Open README beside the chat**.
 
 ## Chat and sidebar fidelity
 
-The sidebar, chat pane and message box follow the handoff as written in [DESIGN](DESIGN.md#chat-and-sidebar-fidelity-the-current-handoff): status cards (a saved empty machine keeps its card in every grouping), "New session" for an untouched agent, a blank empty chat, one plain model line and the context ring under the box. Rounded and Square both apply.
+The sidebar, chat pane and message box follow the handoff as written in [DESIGN](DESIGN.md#chat-and-sidebar-fidelity-the-current-handoff): machine cards holding their projects (a saved empty machine keeps its card), "New session" for an untouched agent, a blank empty chat, one plain model line and the context ring under the box. Rounded and Square both apply.

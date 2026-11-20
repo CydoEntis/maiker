@@ -756,6 +756,9 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
   return (
     <>
       <Card title="Sidebar">
+        <Row label="Show status headings" detail="In a project of three sessions or more, a heading over Needs you, Working, Done and Idle. Off, the sessions keep the same order under no heading.">
+          <Switch aria-label="Show status headings" checked={preferences.sidebarStatusHeadings} onCheckedChange={(value) => { update('sidebarStatusHeadings', value) }} />
+        </Row>
         <Row label="Group sessions by" detail="Status lists what needs you first, then what is working, finished and idle. Project and Machine put each under its own heading.">
           <SegmentedChoice label="Group sessions by" value={preferences.sidebarGroup} options={GROUP_OPTIONS} onChange={(value) => { update('sidebarGroup', value) }} />
         </Row>
