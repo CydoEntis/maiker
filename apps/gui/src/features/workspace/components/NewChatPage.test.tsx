@@ -30,7 +30,7 @@ vi.mock('@/api/daemon', () => ({
 
 import { NewChatPage, type NewChatRequest } from './NewChatPage'
 import type { BusyBranches } from '../model/newSession'
-import type { RepoCloner } from './NewChatPage'
+import type { NewChatSeed, RepoCloner } from './NewChatPage'
 import type { PickedFolder } from '../model/folderPick'
 import { discardDraft, parkedDraft } from '../model/newSessionDraft'
 
@@ -48,7 +48,8 @@ type Extra = {
   pickFolder?: (machine: number) => Promise<PickedFolder | null>
   defaultAgent?: 'claude' | 'codex' | 'gemini'
   bypassOff?: readonly ('claude' | 'codex' | 'gemini')[]
-  seed?: { folder: string; message: string }
+  seed?: NewChatSeed
+  onOpenProject?: () => void
   projects?: typeof PROJECTS
   onAddMachine?: () => void
   onOtherMachine?: (machine: number) => void
@@ -188,6 +189,19 @@ describe('the New session draft', () => {
     await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'My GitHub repos…' }))
     expect(cloner.open).toHaveBeenLastCalledWith({ start: 'repos' })
     await pickedProject('widgets')
+  })
+
+  it('offers Clone a repository… through the Open a project window, on this computer only', async () => {
+    const onOpenProject = vi.fn()
+    dialog(undefined, { onOpenProject })
+    await userEvent.click(await screen.findByRole('button', { name: 'Project: growth' }))
+    await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'Clone a repository…' }))
+    expect(onOpenProject).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens on the agent a seed asks for, over the last one used', async () => {
+    dialog(undefined, { seed: { folder: '/dev/growth', message: '', agent: 'codex' } })
+    expect(await screen.findByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
   })
 
   it('has no clone rows or folder picker when the window gives it none', async () => {
@@ -408,11 +422,11 @@ describe('the New session draft', () => {
   it('asks Where, What, Who in that order, with More options in a popover', async () => {
     dialog()
     await ready()
-    // Where is the line of chips in the header, What the box, Who the agent, the permission chip and More options in the box's foot.
+    // What is the box, Where the line of chips under it, Who the agent, the permission chip and More options in the box's foot.
     const where = screen.getByRole('group', { name: 'Where it works' })
     expect(within(where).getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual(['Machine: This computer', 'Project: growth', 'Branch: dev', 'Work in: This folder'])
     expect(within(where).getByRole('button', { name: 'Work in: This folder' })).toBeInTheDocument()
-    expect(where.compareDocumentPosition(box()) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    expect(box().compareDocumentPosition(where) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(box().compareDocumentPosition(screen.getByRole('button', { name: /^Agent, model and reasoning/ })) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     expect(screen.getByRole('status', { name: /^Permissions: / })).toBeInTheDocument()
     const more = screen.getByRole('button', { name: 'More options' })

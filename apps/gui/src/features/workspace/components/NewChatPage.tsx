@@ -49,6 +49,9 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
  */
 export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; name?: string; bypass?: boolean | undefined }
 
+/** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
+export type NewChatSeed = { folder: string; message: string; agent?: ChatAgent }
+
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
 export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
 
@@ -90,6 +93,8 @@ type Props = {
   pickFolder: ((machine: number) => Promise<PickedFolder | null>) | null
   /** Brings a repository onto this machine. Without it the project list has no clone rows. */
   cloner?: RepoCloner | null
+  /** Opens the Open a project window (clone from a link, a GitHub repository, a folder here); its pick comes back as a new seed. This computer only. */
+  onOpenProject?: (() => void) | undefined
   onStart: (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>
   /** Starts the session's agent while the first message is written (`useWarmAgent`); without it the agent starts on send. */
   onWarm?: WarmAgent
@@ -101,7 +106,7 @@ type Props = {
   /** Told the agent the session will start with, at first and on each change, so the sidebar's draft row shows it. */
   onAgentChange?: ((agent: ChatAgent) => void) | undefined
   /** A folder and first message to open with (a session continued from a full chat). */
-  seed?: { folder: string; message: string } | null
+  seed?: NewChatSeed | null
   /** Before the where chips: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
 }
@@ -148,7 +153,7 @@ function permissionWords(agent: ChatAgent, bypass: boolean): { text: string; dan
  * swaps in the session's pane in one update. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it
  * in the background and keeps the draft for the next one, Esc discards it. A plain shell is "New terminal", not here.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
   // On another machine the session is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -156,11 +161,11 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const targetDown = target?.down ?? null
   // The agent and the model and effort each was left at start as they were last used.
   const [last] = useState(readLastWho)
-  const [agent, setAgent] = useState<ChatAgent>(last?.agent ?? defaultAgent)
+  const [agent, setAgent] = useState<ChatAgent>(seed?.agent ?? last?.agent ?? defaultAgent)
   useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
   const bypassOn = (which: ChatAgent) => !bypassOff.includes(which)
   // Bypass Permissions starts Claude in Bypass permissions and Codex in Full access. One session's choice is kept until another agent is picked.
-  const [bypass, setBypass] = useState(() => bypassOn(last?.agent ?? defaultAgent))
+  const [bypass, setBypass] = useState(() => bypassOn(seed?.agent ?? last?.agent ?? defaultAgent))
   // Each agent keeps its own model and effort while the page is open, so going back to one finds what it was left at.
   const [choices, setChoices] = useState<Partial<Record<ChatAgent, AgentChoice>>>(() => last?.choices ?? {})
   const choice = choices[agent] ?? FIRST_CHOICE
@@ -523,6 +528,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
           <>
           <div className="mx-nc-menu-foot">
             {pickFolder !== null && <button type="button" className="mx-chip-action" onClick={openPicker}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="folder" size={12} /></span>Open folder…</button>}
+            {cloner === null && onOpenProject !== undefined && !remote && <button type="button" className="mx-chip-action" onClick={onOpenProject}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>Clone a repository…</button>}
             {cloner !== null && <button type="button" className="mx-chip-action" onClick={() => { openCloneWindow({ start: 'link' }) }}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>Clone from link…</button>}
             {cloner !== null && <button type="button" className="mx-chip-action" onClick={() => { openCloneWindow({ start: 'repos' }) }}><span className="mx-nsd-foot-mark" aria-hidden="true"><Icon name="repo" size={12} /></span>My GitHub repos…</button>}
           </div>
@@ -588,9 +594,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
       <div className="mx-nc-body">
       {sent === null ? (
         <div className="mx-nc-intro">
-          <h1 className="mx-nc-title">What should we build?</h1>
-          <p className="mx-nc-sub">{`${AGENT_LABEL[agent]} starts as soon as you send. You can rename the session any time.`}</p>
-          {where}
+          <h1 className="mx-nc-title">What are we building today?</h1>
+          <p className="mx-nc-sub">{`${AGENT_LABEL[agent]} starts when you send your first message.`}</p>
         </div>
       ) : (
         // The same card the session's chat draws until its agent reports in, so the swap to the real pane changes nothing the eye sees.
@@ -625,6 +630,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
               </button>
             </div>
           </div>
+          {sent === null && where}
           {agent === 'gemini' && <p className="mx-composer-note">{GEMINI_TERMINAL_LINE}</p>}
           <div className="mx-composer-note mx-nc-foot">
             <span className="mx-nc-works">{remote ? 'On another machine it starts and opens.' : folder === '' ? '' : `Works in ${folder}${branches === null ? '' : ` on ${branchLabel}`}`}</span>

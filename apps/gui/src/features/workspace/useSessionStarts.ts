@@ -19,7 +19,7 @@ import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
 import type { ChatAgent, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
-import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
+import type { NewChatRequest, NewChatSeed, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { bypasses } from '@/features/settings/preferences'
@@ -73,7 +73,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   setExpectedAgents: Dispatch<SetStateAction<Record<string, ChatAgent>>>
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   setNewChatMachine: Dispatch<SetStateAction<number>>
-  setNewChatSeed: Dispatch<SetStateAction<{ folder: string; message: string } | null>>
+  setNewChatSeed: Dispatch<SetStateAction<NewChatSeed | null>>
   home: string
   machinesRef: RefObject<ReadonlyMap<number, RemoteMachine>>
 }) {

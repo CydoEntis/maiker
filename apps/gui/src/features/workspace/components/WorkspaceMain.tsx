@@ -1,4 +1,14 @@
 import { Fragment, useState } from 'react'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { useTipWithKeys } from '@/features/shortcuts/platform'
+import { busyBranchesOf, machineProjects } from '../model/newSession'
+import { discardDraft } from '../model/newSessionDraft'
+import { rowTitle } from '../model/sidebar'
+import { resolveStartFolder } from '../model/startFolder'
+import { useOpenProject } from '../useOpenProject'
+import { NewChatPage } from './NewChatPage'
+import { ShowSidebarButton } from './ShowSidebarButton'
+import { useFolderPick } from './useFolderPick'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { chatFindOf } from '@/features/chat/chatSearch'
@@ -15,7 +25,9 @@ import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, openStartMenu, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView } = useWorkspace()
+  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, openStartMenu, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const tip = useTipWithKeys()
+  const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
   const reduced = useReducedMotion()
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
@@ -24,10 +36,36 @@ export function WorkspaceMain() {
   if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
   const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
+  // The folder picker reads every machine the window knows, this computer and the others; one that is not up is listed with why.
+  const pickerMachines = sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
+  const folderPick = useFolderPick(pickerMachines)
+  const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   return (
     <div className="mx-main-wrap">
+              {folderPick.dialog}
               <div className="mx-termwrap" data-dock={dock ?? undefined} data-leaving={terminal.leaving ? 'true' : undefined}>
               <main className="mx-main" aria-label="Terminals" onPointerDownCapture={() => { setDockFocused(false) }}>
+                {newChatOpen && (
+                  <NewChatPage
+                    key={`${newChatSeed?.folder ?? ''}|${newChatSeed?.agent ?? ''}`}
+                    leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
+                    seed={newChatSeed}
+                    machine={newChatMachine}
+                    machines={sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE, down: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok' ? null : head.why ?? head.chip?.word ?? 'not reachable' }))}
+                    onOtherMachine={setNewChatMachine}
+                    projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
+                    busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}
+                    defaultAgent={preferences.defaultAgent}
+                    bypassOff={preferences.bypassOff}
+                    pickFolder={folderPick.pick}
+                    onOpenProject={openProject.open}
+                    onStart={startNewChat}
+                    onWarm={warmNewChat}
+                    onAgentChange={setNewChatAgent}
+                    onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
+                    onCancel={() => { discardDraft(); setNewChatOpen(false); setNewChatSeed(null) }}
+                  />
+                )}
                 {findOpen && (
                   <FindBar
                     online={online}

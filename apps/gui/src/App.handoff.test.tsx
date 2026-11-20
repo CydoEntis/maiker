@@ -1405,8 +1405,8 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(screen.getByRole('menuitem', { name: /^Terminal/ })).toBeInTheDocument()
   })
 
-  it.each(['chat', 'terminal'])('starts Claude Code from the + menu in the %s view as an agent session, never typed into a shell', async (view) => {
-    setSettings({ openSessionsIn: view })
+  it('starts Claude Code from the + menu in the Terminal view at once, as an agent session, never typed into a shell', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
     const user = userEvent.setup()
     renderDesktopApp()
     await openStartMenuFromEmptyState(user)
@@ -1415,8 +1415,47 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await user.click(screen.getByRole('menuitem', { name: /^Claude Code/ }))
 
     await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
+    expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
     expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
+  })
+
+  it('opens the draft from the + menu in the Chat view and starts nothing until the first message is sent', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await openStartMenuFromEmptyState(user)
+
+    await user.click(screen.getByRole('menuitem', { name: /^Claude Code/ }))
+
+    const draft = await screen.findByRole('region', { name: 'New session' })
+    expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Claude/ })).toBeInTheDocument()
+    expect(within(draft).getByRole('button', { name: `Project: ${HOME.split('/').at(-1) ?? ''}` })).toBeInTheDocument()
+    expect(within(draft).queryByText(/Starting/)).not.toBeInTheDocument()
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+
+    daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
+    await user.type(within(draft).getByRole('textbox', { name: 'What should we work on?' }), 'fix the cart{Enter}')
+
+    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+  })
+
+  it('discards the draft opened from the + menu with Esc, starting nothing', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await openStartMenuFromEmptyState(user)
+    await user.click(screen.getByRole('menuitem', { name: /^Codex/ }))
+    const draft = await screen.findByRole('region', { name: 'New session' })
+    expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
+
+    await user.click(within(draft).getByRole('textbox', { name: 'What should we work on?' }))
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument() })
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
   })
 
   it('runs an agent without a chat, OpenCode, in a new shell, typed and entered', async () => {

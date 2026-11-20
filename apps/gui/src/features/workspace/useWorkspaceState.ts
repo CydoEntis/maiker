@@ -19,6 +19,7 @@ import { showSessionNotice } from '@/features/notifications/notify'
 import type { TerminalHandle } from '@/features/terminal/handle'
 import type { LookAt } from '@/features/inspect/FilesTab'
 import { connectAgentOnce } from './model/agentHooks'
+import type { NewChatSeed } from './components/NewChatPage'
 import { chatAvailability, chatSourceOf, effectiveView, type ChatAgent } from './model/chatView'
 import { useMachineActions, useRemoteMachines } from './useMachines'
 import { useKeyWait } from './useKeyWait'
@@ -150,7 +151,7 @@ export function useWorkspaceState() {
   /** The machine the New session draft starts its chat on. */
   const [newChatMachine, setNewChatMachine] = useState<number>(LOCAL_MACHINE)
   /** A folder and first message the New session draft opens with (a chat continued from a full one). */
-  const [newChatSeed, setNewChatSeed] = useState<{ folder: string; message: string } | null>(null)
+  const [newChatSeed, setNewChatSeed] = useState<NewChatSeed | null>(null)
   // The agent picked on the New session draft, for the sidebar's draft row; null until the page says.
   const [newChatAgent, setNewChatAgent] = useState<ChatAgent | null>(null)
   // The page a new agent chat starts from (agent, folder, model, effort), over the panes.
@@ -332,7 +333,12 @@ export function useWorkspaceState() {
   const ownsTerminals = useCallback((session: SessionView) => online && isDesktop() && session.machine === LOCAL_MACHINE, [online])
   // A terminal that was just started is shown in the dock, which opens for it, with its tab picked.
   const { terminalOpen, setTerminalOpen, terminalShown, canDock, dockFocused, setDockFocused, tabsOf, onTerminalAdded } = useTerminalDock({ agentTerminals, setActiveTerminals, sessionMap, focusedSession, ownsTerminals, showSessionById })
-  const { addAgentTerminal, closeAgentTerminal, startAgent } = useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onTerminalAdded, runStart, startRemoteShell, startNewChat, machineNameOf: (machine) => heads.find((head) => head.machine === machine)?.name ?? '', setLayout, focusedSession, setSettingsSection, preferences, home })
+  const openDraft = useCallback((machine: number, seed: NewChatSeed) => {
+    setNewChatMachine(machine)
+    setNewChatSeed(seed)
+    setNewChatOpen(true)
+  }, [])
+  const { addAgentTerminal, closeAgentTerminal, startAgent } = useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onTerminalAdded, runStart, startRemoteShell, startNewChat, openDraft, chatView, machineNameOf: (machine) => heads.find((head) => head.machine === machine)?.name ?? '', setLayout, focusedSession, setSettingsSection, preferences, home })
   // The one way the terminal dock opens and closes: the activity bar, the title bar and the key all call it. A session with no
   // terminal yet gets one, which opens the dock (`onTerminalAdded`).
   const toggleTerminal = useCallback(() => {
