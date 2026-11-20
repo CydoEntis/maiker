@@ -12,6 +12,7 @@ import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
 import { RepliesGallery } from './RepliesGallery'
 import { LiveTurnGallery } from './LiveTurnGallery'
 import { DocumentsGallery } from './DocumentsGallery'
+import { FlowPartsGallery } from './FlowPartsGallery'
 import { galleryParams, galleryHash } from './galleryParams'
 
 /*
@@ -171,6 +172,8 @@ export function Gallery() {
           </nav>
         </header>
         <Primitives />
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Checklist and setup parts</h2>
+        <FlowPartsGallery />
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Chat feed as the prototype draws it</h2>
         <div className="flex flex-wrap items-start gap-6">
           <div className="w-[780px] max-w-full" data-parity="wide"><ChatParity /></div>

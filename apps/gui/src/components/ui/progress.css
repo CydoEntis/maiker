@@ -1,0 +1,5 @@
+/* The unknown-length Progress: a light slides along the bar. With Reduce motion (or the OS setting) it holds still across the whole bar, so it still reads as busy. */
+@keyframes mx-progress-run { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+.mx-progress-run { animation: mx-progress-run 1.2s var(--ease) infinite; }
+@media (prefers-reduced-motion: reduce) { .mx-progress-run { animation: none; width: 100%; opacity: .5; } }
+:root[data-reduced-motion="true"] .mx-progress-run { animation: none; width: 100%; opacity: .5; }
