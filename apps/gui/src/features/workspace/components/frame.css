@@ -40,17 +40,18 @@
 .mx-machine-count { font: 500 10.5px var(--mono); opacity: .7; }
 .mx-rows { gap: 2px; }
 /* A row: the 16px tile, the name and its time, the project and machine under it. */
-.mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 7px 10px; border-radius: var(--r-control); }
+.mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 9px 10px; border-radius: var(--r-control); }
 .mx-row:hover { background: var(--card-hover); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-card-sel); box-shadow: none; }
 .mx-row .mx-row-icon { margin-top: 1px; }
-.mx-row-name { font-weight: 450; color: var(--fg2); }
+/* The design's row: a 13.5px title on a 19px line over a 12px second line, in a row padded 9px 10px. */
+.mx-row-name { height: calc(19px * var(--sidebar-text, 1)); font-size: calc(13.5px * var(--sidebar-text, 1)); line-height: calc(19px * var(--sidebar-text, 1)); font-weight: 450; color: var(--fg2); }
 /* What needs you and what is working are bold, as the design's rows are; being picked changes the colour only, so clicking a row never re-sets its text. */
 .mx-row:is(.is-needs, .is-working) .mx-row-name { font-weight: 600; color: var(--fg); }
 .mx-row.is-selected .mx-row-name { color: var(--fg); }
 .mx-row-when { font-family: var(--mono); color: var(--dim); }
 /* Line 2 sits under the name: the status mark's 16px and the 8px gap are its indent. */
-.mx-row-sub { gap: 6px; padding-left: 24px; font-size: calc(11.5px * var(--sidebar-text, 1)); line-height: calc(15px * var(--sidebar-text, 1)); color: var(--dim); }
+.mx-row-sub { gap: 6px; padding-left: 24px; font-size: calc(12px * var(--sidebar-text, 1)); line-height: calc(16px * var(--sidebar-text, 1)); color: var(--dim); }
 /* Project and branch sit side by side, `maiker / gui-revive`: the project gives way first (never to less than 6 characters), the time keeps the right edge. */
 .mx-row-sub { color: var(--muted); }
 .mx-row-sub .mx-row-project-name { flex: 0 1 auto; min-width: 6ch; max-width: 55%; }
