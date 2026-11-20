@@ -446,9 +446,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **Menus** (`components/MenuPopup.tsx`, `menu.css`). One look for every right-click and ⋯ menu: 228px or wider,
   5px inside, radius 12, a float like the cards, a dim 11px heading that names what it is for, 30px rows of 13px text with
   their key at the right in mono, separators between groups. Every menu and popover (right-click menus, dropdowns, pickers,
-  popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, on `--pop-bg` (the raised
-  surface nudged 8% toward `--fg`, so it reads one step off the window in a dark and a light theme) inside a 1px `--pop-ring`
-  (`--line2`); no blur, no gradient. A danger row is red; one that stops something running
+  popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, on `--pop-bg` (the card,
+  `--m-card`: the same surface as a sidebar group and the message box; its shadow lifts it) inside a 1px `--pop-ring`
+  (`--m-card-line`); no blur, no gradient. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). A danger row is red; one that stops something running
   is handled by the app, which asks in a dialog first (see Close ends the session). Arrow keys, Home and End move, Esc or a click outside closes and
   gives focus back. **Session**: Open, Open in split right, Open in split down (not for the one in front), Open
   terminal here (agents), Rename… (F2), Copy folder path, Get a file… (another machine's sessions), Show changes
@@ -908,7 +908,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   answer. Answering removes it, the box unlocks and the agent is working again (its row and the badge follow the
   daemon); the request then folds into one line in the feed (a hairline row: its mark, "Allowed for this session",
   and **Go to step ↑**). **2. The box**: flat
-  (`--pop-bg`, the raised surface nudged toward the text colour so it stands off the chat in dark and light themes, a `--line2` hairline, radius `--r-panel`; the new-session draft's box is this same component; focused, a `--focus` border and a 1px inset glow of the same colour), a two-line text box on top, and one bottom row: at the left the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
+  (the card, `--m-card` inside `--m-card-line`, the same as a sidebar group, radius `--r-panel`; the new-session draft's box is this same component; focused, a `--focus` border and a 1px inset glow of the same colour), a two-line text box on top, and one bottom row: at the left the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
   picked or the one its own file says, the effort) and the permissions button, at the right the paperclip (attach) and the 32px send button (radius `--r-control`), in the accent when it can send and grey while
   a question waits. While the agent works and nothing is typed, the send button is the Stop square, still (the line over the
   box says the agent is at work, so the button does not spin); just after a send, before there is a turn to stop, the

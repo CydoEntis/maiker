@@ -50,10 +50,10 @@ describe('the window material', () => {
   })
 
   // Menus and popovers are lifted off the window by one shared fill and ring, drawn from theme tokens so both kinds of theme get it.
-  it('draws every menu and popover on the one lifted fill with a ring, from theme tokens', () => {
+  it('draws every menu and popover on the card and its hairline, the same as a sidebar group', () => {
     const css = SHEETS['./material.css'] ?? ''
-    expect(css).toMatch(/--pop-bg:\s*color-mix\(in srgb, var\(--m-raise\)[^;]*var\(--fg\)\)/)
-    expect(css).toMatch(/--pop-ring:\s*var\(--line2\)/)
+    expect(css).toMatch(/--pop-bg:\s*var\(--m-card\)/)
+    expect(css).toMatch(/--pop-ring:\s*var\(--m-card-line\)/)
     expect(css).toMatch(/\[role="menu"\][^{]*\.mx-pop[^{]*\{\s*background-color: var\(--pop-bg\);\s*border-color: var\(--pop-ring\);/)
   })
 

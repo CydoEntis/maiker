@@ -42,10 +42,10 @@
   --m-card-line: var(--line);
   /* A dark theme's two steps are computed with the theme (`cardSteps` in themes.ts); the mixes here are a light theme's. */
   --m-card-sel: var(--card-sel-step, color-mix(in srgb, var(--m-sel) 97%, var(--fg)));
-  /* What a menu or popover is drawn on: the raised surface nudged toward the text colour, so it reads as one step lifted off the
-     window in a dark theme and a light one alike, with the stronger hairline as its ring. */
-  --pop-bg: color-mix(in srgb, var(--m-raise) 92%, var(--fg));
-  --pop-ring: var(--line2);
+  /* What a menu or popover is drawn on: the same card as a sidebar group and the message box, inside the card's hairline. Its
+     shadow, not a lighter fill, is what lifts it off the window. */
+  --pop-bg: var(--m-card);
+  --pop-ring: var(--m-card-line);
 }
 /* ---- component tokens ----
    The shared pieces every control reads, so one component serves every theme:
@@ -55,12 +55,13 @@
      --c-sw-* / --c-knob-*  the toggle switch
      --c-tile-ring  agent and shell icon tiles
      --c-head-bg  sticky headers
-   The one look is flat: hairline fields and tracks, the accent for a switch that is on. */
+   The one look is flat: fields and tracks are the card inside its hairline, a selected thing is the card's selected row, and
+   the accent marks a switch that is on. */
 .mx-app {
-  --c-sel-bg: var(--sel); --c-sel-sh: none;
-  --c-field-bg: var(--well); --c-field-sh: inset 0 0 0 1px var(--line2);
+  --c-sel-bg: var(--m-card-sel); --c-sel-sh: none;
+  --c-field-bg: var(--m-card); --c-field-sh: inset 0 0 0 1px var(--m-card-line);
   --c-tile-ring: inset 0 0 0 1px var(--line2); --c-head-bg: var(--main);
-  --c-track-bg: var(--well); --c-track-sh: inset 0 0 0 1px var(--line);
+  --c-track-bg: var(--m-card); --c-track-sh: inset 0 0 0 1px var(--m-card-line);
   --c-sw-on: var(--accent); --c-sw-off: var(--well); --c-sw-sh: inset 0 0 0 1px var(--line2);
   --c-knob: var(--muted); --c-knob-on: var(--on-accent); --c-knob-sh: none;
 }
