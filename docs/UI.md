@@ -356,6 +356,12 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    `useWorkspace()` (`workspaceContext.ts`). A part of the window reads what it needs from there and is not passed the
    window's state as props; a component used outside the window (`Sidebar`, `PaneCard`, a dialog) still takes props.
    New window state goes in a hook of its own that `useWorkspaceState` calls, not in `DesktopApp`.
+5. **Opened projects** are a saved list per machine (`model/openedProjects.ts`), kept by the window in
+   `maiker.gui.opened-projects.v1` (`data/openedProjects.ts`, by machine name; never the daemon's). A project is a machine and
+   a folder, so one repository on two machines is two projects. `groupByProject` puts every session under exactly one
+   project of its machine: a git session under its main checkout (`repoRoot`, also for a linked worktree), any other under
+   the deepest opened folder around its own; a session that fits none opens that folder. A project with no sessions stays
+   until closed, and `closeProject` refuses while a session in it has not ended. The sidebar does not draw this list yet.
 
 ## Project-specific: usage and cost page (desktop)
 
