@@ -9,7 +9,7 @@
 .mx-dialog-head { display: flex; align-items: center; gap: 12px; padding: 16px 14px 12px 22px; }
 .mx-dialog-title { flex: 1; margin: 0; font-size: 16px; font-weight: 600; }
 .mx-dialog-note { font-size: 12px; color: var(--dim); }
-.mx-dialog-close { width: 28px; height: 28px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.mx-dialog-close { width: 28px; height: 28px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .mx-dialog-close:hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
 .mx-dialog-foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--pane-line); }
 
@@ -20,7 +20,7 @@
 .mx-keys-row > span:first-child { flex: 1; min-width: 0; font-size: 13px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-keys-caps { display: flex; gap: 3px; }
 .mx-keys-caps kbd {
-  min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; padding: 0 6px; border-radius: 5px;
+  min-width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; padding: 0 6px; border-radius: var(--r-badge);
   font-family: var(--mono); font-size: 11px; color: var(--fg2);
 }
 
@@ -32,7 +32,7 @@
 .mx-chip-search input:focus-visible { outline: none; }
 
 .mx-ctxrow { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; padding: 4px 8px 0; font-size: 12.5px; color: var(--dim); }
-.mx-chip { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: 8px; font-size: 12.5px; color: var(--fg); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; outline: none; }
+.mx-chip { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); white-space: nowrap; outline: none; }
 .mx-chip:hover, .mx-chip[data-state="open"] { background: var(--m-hover); }
 .mx-chip:focus-visible { box-shadow: inset 0 0 0 1px var(--line), var(--focus-underline); }
 .mx-chip strong { font-weight: 600; }
@@ -44,13 +44,13 @@
 .mx-chip-menu.is-crumb { gap: 4px; padding: 4px; }
 .mx-chip-menu.is-crumb .mx-chip-row { min-height: 32px; padding: 6px 8px; font-size: 12.5px; }
 .mx-chip-menu.is-crumb .mx-chip-search { margin: 2px 4px; height: 30px; }
-.mx-chip-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 10px; color: var(--dim); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-chip-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r-panel); color: var(--dim); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
 .mx-chip-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 13px; color: var(--fg); }
 .mx-chip-count { font-size: 11.5px; color: var(--dim); }
 .mx-chip-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-x: hidden; overflow-y: auto; }
 .mx-chip-heading { display: flex; justify-content: space-between; margin: 8px 8px 2px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 /* A button sizes to its text unless told otherwise: each row is the menu's width, so a long line is cut, not scrolled. */
-.mx-chip-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; text-align: left; font-size: 13px; color: var(--fg2); }
+.mx-chip-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: var(--r-panel); text-align: left; font-size: 13px; color: var(--fg2); }
 .mx-chip-row:hover { background: var(--m-hover); }
 .mx-chip-row.is-checked { background: var(--m-sel); color: var(--fg); }
 .mx-chip-row.is-checked .mx-chip-row-label { font-weight: 700; }
@@ -58,11 +58,11 @@
 .mx-chip-row-label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines at most: what a choice does reads whole, and a long path still keeps to its row. */
 .mx-chip-row-sub { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; font-size: 11.5px; line-height: 1.35; color: var(--dim); }
-.mx-chip-badge { padding: 0 6px; border-radius: 6px; font-size: 10.5px; font-weight: 500; color: var(--dim); background: var(--m-well); }
+.mx-chip-badge { padding: 0 6px; border-radius: var(--r-control); font-size: 10.5px; font-weight: 500; color: var(--dim); background: var(--m-well); }
 .mx-chip-none { margin: 0; padding: 10px 8px; font-size: 12.5px; color: var(--dim); }
 .mx-chip-footer { display: flex; flex-direction: column; gap: 6px; padding-top: 6px; border-top: 1px solid var(--line); }
 .mx-chip-footer p { margin: 0; padding: 0 4px; font-size: 11.5px; color: var(--dim); }
-.mx-chip-action { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 8px; font-size: 13px; color: var(--fg2); }
+.mx-chip-action { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); }
 .mx-chip-action:hover { background: var(--m-hover); color: var(--fg); }
 .mx-chip-row:disabled { opacity: .5; cursor: default; }
 .mx-chip-row:disabled:hover { background: transparent; }

@@ -18,7 +18,7 @@ type ChoiceCard = {
 const RECOMMENDED_WORD = "Recommended for you"
 /** The one picked card: the accent on a faint wash of it, as every choice in the setup. */
 const PICKED = "data-[state=checked]:bg-[color-mix(in_oklab,var(--accent)_8%,transparent)] data-[state=checked]:shadow-[inset_0_0_0_1.5px_color-mix(in_oklab,var(--accent)_80%,transparent)]"
-const TAG = "ml-auto rounded-[10px] bg-[color-mix(in_oklab,var(--accent)_14%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-(--accent-text)"
+const TAG = "ml-auto rounded-xl bg-[color-mix(in_oklab,var(--accent)_14%,transparent)] px-2 py-0.5 text-[11px] font-semibold text-(--accent-text)"
 const CARD = "group cursor-pointer text-left text-(--fg) rounded-(--r-panel) bg-[color-mix(in_oklab,var(--fg)_2.5%,transparent)] shadow-[inset_0_0_0_1px_var(--line2)] transition-[background-color,box-shadow] duration-(--t-fast) hover:bg-[color-mix(in_oklab,var(--fg)_4.5%,transparent)]"
 
 /** An answer to a question: its mark, its title, one line under it. */

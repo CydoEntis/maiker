@@ -2,7 +2,7 @@
    grid column, so the dots and their words line up whatever N is; the track runs from the first dot's centre to the last's, filled
    up to the picked stop. Dots up to the picked one are lit; the picked one is the larger thumb. Words sit below, the picked one bold. */
 .mx-stops { --mx-stop-inset: calc(100% / (var(--stops) * 2)); position: relative; display: grid; grid-template-columns: repeat(var(--stops), 1fr); outline: none; user-select: none; }
-.mx-stops-line, .mx-stops-fill { position: absolute; top: 10px; left: var(--mx-stop-inset); height: 2px; border-radius: 2px; background: var(--line2); }
+.mx-stops-line, .mx-stops-fill { position: absolute; top: 10px; left: var(--mx-stop-inset); height: 2px; border-radius: var(--r-badge); background: var(--line2); }
 .mx-stops-line { right: var(--mx-stop-inset); }
 .mx-stops-fill { background: var(--fg2); width: calc((100% - 2 * var(--mx-stop-inset)) * var(--fill, 0)); }
 .mx-stop { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 0; font-size: 11.5px; color: var(--dim); outline: none; }

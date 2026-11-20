@@ -31,7 +31,7 @@
 }
 /* While a pane is dragged it dims, and the pane under the pointer says what letting go does. */
 .mx-pane.is-dragging { opacity: .6; }
-.mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: 10px; border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
+.mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: var(--r-panel); border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
 
 /* The session header, one thin line: the status mark, the machine tag (remote only), the whole path, the branch. Right:
    Changes, Files and the ⋯ menu. Its bottom edge is the status (`.mx-pane-status`), not a plain border. */
@@ -92,7 +92,7 @@
 
 .mx-tdock-docks { margin: 0 2px; }
 .mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-view-needs { width: 7px; height: 7px; border-radius: 2px; background: var(--needs); }
+.mx-view-needs { width: 7px; height: 7px; border-radius: var(--r-badge); background: var(--needs); }
 
 .mx-pane-body { position: relative; flex: 1; min-height: 0; padding: 10px 12px; font-family: var(--mono); line-height: 1.6; cursor: text; display: flex; }
 .mx-pane-body > * { flex: 1; min-width: 0; min-height: 0; }
@@ -128,7 +128,7 @@
 .mx-pane-cell.is-closing, .mx-pane-column.is-closing { pointer-events: none; }
 
 /* The label that follows the pointer while a pane or a sidebar session is dragged (dragSession.ts). */
-.mx-drag-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; max-width: 240px; padding: 6px 12px; border-radius: 10px; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); background: var(--main); border: 1px solid var(--accent-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .35); }
+.mx-drag-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; max-width: 240px; padding: 6px 12px; border-radius: var(--r-panel); font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--fg); background: var(--main); border: 1px solid var(--accent-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .35); }
 
 /* Panes that swap places glide there (`paneTransition.ts`): only the browser's pictures of them move, so the text never reflows on the way.
    The window itself does not cross-fade. */

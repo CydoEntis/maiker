@@ -95,7 +95,7 @@
 .mx-md-list > li::before { content: attr(data-bullet); flex: none; min-width: 12px; color: var(--dim); }
 .mx-md-list > li[data-task]::before { content: none; }
 /* A task: a flat 14px box in the 12px bullet slot's place; the unticked and the ticked box are the same size, so ticking moves nothing. */
-.mx-task-box { flex: none; box-sizing: border-box; width: 14px; height: 14px; margin-top: 5px; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--dim); border-radius: 4px; background: transparent; color: transparent; }
+.mx-task-box { flex: none; box-sizing: border-box; width: 14px; height: 14px; margin-top: 5px; display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--dim); border-radius: var(--r-badge); background: transparent; color: transparent; }
 .mx-task-box[data-checked] { border-color: var(--ok); background: var(--ok); color: var(--main, var(--bg)); }
 .mx-task-box[data-checked] + .mx-md-item { color: var(--dim); }
 .mx-task-tick { width: 10px; height: 10px; }
@@ -236,9 +236,9 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-divider.is-failed { color: var(--err); }
 /* Where the agent summarised the earlier conversation: a divider whose words open the summary. */
 .mx-summary { display: flex; min-width: 0; flex-direction: column; gap: 8px; }
-.mx-summary-toggle { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 8px; border-radius: 6px; font-size: 12px; color: var(--muted); }
+.mx-summary-toggle { flex: none; display: inline-flex; height: 24px; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); }
 .mx-summary-toggle:hover { color: var(--fg); background: rgba(var(--hl), calc(.05 * var(--hk))); }
-.mx-summary-body { max-height: 360px; overflow-y: auto; padding: 12px 14px; border-radius: 12px; border: 1px solid rgba(var(--hl), calc(.09 * var(--hk))); font-size: 12.5px; color: var(--fg2); animation: v7fade .2s ease-out; }
+.mx-summary-body { max-height: 360px; overflow-y: auto; padding: 12px 14px; border-radius: var(--r-panel); border: 1px solid rgba(var(--hl), calc(.09 * var(--hk))); font-size: 12.5px; color: var(--fg2); animation: v7fade .2s ease-out; }
 /* The turn's changed-files bar: a head-only card, icon, how many files, the turn's counts and Review at the end. */
 .mx-changed-title { font-size: 13px; font-weight: 600; color: var(--fg); }
 .mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 12px; font-weight: 500; }
@@ -271,8 +271,8 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-thought-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* The bar over text selected in the chat: Copy and Quote, just above where the mouse let go. */
-.mx-select-bar { position: fixed; z-index: var(--layer-pop); display: flex; gap: 2px; padding: 3px; border-radius: 9px; border: 1px solid var(--line2); background: var(--main); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
-.mx-select-action { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 9px; border-radius: 6px; font-size: 12.5px; color: var(--fg2); cursor: pointer; }
+.mx-select-bar { position: fixed; z-index: var(--layer-pop); display: flex; gap: 2px; padding: 3px; border-radius: var(--r-control); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
+.mx-select-action { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); cursor: pointer; }
 .mx-select-action:hover { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { .mx-select-bar { animation: none; } }
 
@@ -299,7 +299,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
   background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh);
   animation: mxRise .2s cubic-bezier(.2, .8, .2, 1) both;
 }
-.mx-waiting:not(.is-neutral) { border-color: var(--needs); border-radius: 12px; overflow: hidden; }
+.mx-waiting:not(.is-neutral) { border-color: var(--needs); border-radius: var(--r-panel); overflow: hidden; }
 .mx-waiting:not(.is-neutral) > .mx-waiting-head { background: color-mix(in oklab, var(--needs) 12%, transparent); border-bottom-color: color-mix(in oklab, var(--needs) 30%, transparent); }
 .mx-waiting:focus-visible { box-shadow: var(--pop-sh), var(--focus-underline); }
 .mx-waiting-bang { flex: none; width: 14px; text-align: center; font: 800 13px/1 var(--mono); color: var(--needs); }
@@ -409,7 +409,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-model-button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; outline: none; }
 .mx-model-button:hover { background: var(--m-hover); }
 .mx-model-icon { display: flex; }
-.mx-model-icon .mx-app-icon.size-14 { width: 16px; height: 16px; border-radius: 4px; box-shadow: none; }
+.mx-model-icon .mx-app-icon.size-14 { width: 16px; height: 16px; border-radius: var(--r-badge); box-shadow: none; }
 .mx-model-icon .mx-app-icon svg { width: 72%; height: 72%; }
 .mx-model-name { color: var(--fg); font-weight: 500; white-space: nowrap; }
 .mx-model-level { color: var(--muted); white-space: nowrap; }
@@ -451,7 +451,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-send.is-stop { background: var(--m-hover); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
 .mx-send.is-off:focus-visible { box-shadow: inset 0 0 0 1px var(--line), var(--focus-underline); }
 .mx-send.is-stop:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
-.mx-stop-square { width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
+.mx-stop-square { width: 10px; height: 10px; border-radius: var(--r-badge); background: currentColor; }
 /* Working: the stop square sits where the send arrow was, and nothing in the button moves; the line over the box is what
    says the agent is at work. Just after a send, before there is a turn to stop, the square is there and off. */
 .mx-send.is-stop.is-off { color: var(--dim); }

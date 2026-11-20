@@ -12,7 +12,7 @@ export function ChatSkeleton() {
   const shown = useAppearsAfter()
   return (
     <div role="status" aria-label="Reading the conversation" aria-busy="true" className={`${shown ? '' : 'invisible '}mx-auto flex w-full max-w-[760px] flex-1 flex-col gap-5 px-4 py-6`}>
-      <div className={`${BLOCK} ml-auto h-10 w-[42%] rounded-[16px_16px_5px_16px]`} />
+      <div className={`${BLOCK} ml-auto h-10 w-[42%] rounded-xl`} />
       <div className="flex gap-3">
         <div className={`${BLOCK} size-6 shrink-0`} />
         <div className="flex flex-1 flex-col gap-2">

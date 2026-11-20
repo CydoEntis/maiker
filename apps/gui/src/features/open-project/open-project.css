@@ -47,7 +47,7 @@
 .mx-op-status.is-ready { border-color: color-mix(in oklab, var(--done) 45%, transparent); background: color-mix(in oklab, var(--done) 8%, transparent); }
 .mx-op-phase { font-family: var(--mono); font-size: 11.5px; color: var(--dim); }
 /* The small outlined word after a private repository's name. */
-.mx-op-row-name [data-slot="tag"] { height: auto; padding: 1px 6px; border-radius: 9px; font: 500 10.5px var(--ui); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-op-row-name [data-slot="tag"] { height: auto; padding: 1px 6px; border-radius: var(--r-control); font: 500 10.5px var(--ui); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line2); }
 /* A line with its status mark: the clone running, or the folder that is ready. */
 .mx-op-status-line { display: flex; align-items: center; gap: 10px; }
 .mx-op-status.is-cloning { border-color: color-mix(in oklab, var(--working) 28%, transparent); background: color-mix(in oklab, var(--working) 6%, transparent); }

@@ -6,8 +6,8 @@
 /* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
 .mx-usage-fill { stroke: var(--fg2); }
 /* The bar: 4px, in the same track and fill roles as the ring, graded the same way. */
-.mx-usage-bar { flex: none; display: block; width: 36px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--line2); }
-.mx-usage-bar i { display: block; height: 100%; border-radius: 2px; background: var(--fg2); }
+.mx-usage-bar { flex: none; display: block; width: 36px; height: 4px; border-radius: var(--r-badge); overflow: hidden; background: var(--line2); }
+.mx-usage-bar i { display: block; height: 100%; border-radius: var(--r-badge); background: var(--fg2); }
 .mx-usage-item.is-warn .mx-usage-bar i, .mx-context-meter.is-warn .mx-usage-bar i { background: var(--needs); }
 .mx-usage-item.is-hot .mx-usage-bar i, .mx-context-meter.is-hot .mx-usage-bar i { background: var(--danger); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
