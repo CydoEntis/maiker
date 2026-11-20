@@ -330,7 +330,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    Machines and projects fold from their headings; which are folded is kept by name and folder in
    `maiker.gui.sidebar-folds.v1` (`data/sidebarFolds.ts`), so a fold survives a restart, and a project heading is its own
    component (`ProjectSection`) for the actions later added to it. The tree draws `useOpenedProjects().machines` and adds
-   nothing itself; when `selected` changes, that project and its machine unfold and the project's heading is marked. The header's filter button narrows the tree to one project
+   nothing itself; when `selected` changes, that project and its machine unfold and the project's heading is marked. Above the tree and outside its scrolling list, the **Needs you strip** (`NeedsYouStrip`, from `waitingSessions`) lists every session waiting on you on every machine and in every project, whatever is folded and whatever the project filter, the latest to start waiting first, each with its machine and project; a click opens the session and unfolds its machine and project (dropping a filter on another project), and the session stays in its project too. With none waiting the strip is not drawn. The header's filter button narrows the tree to one project
    (its Group and Sort rows are not shown); Settings › Appearance still shows Group sessions by and Session order
    (`sidebarGroup`, `sidebarOrder`), which the tree reads neither of. The terminals
    (no agent in them) are one **Terminals** section stuck at the bottom over the foot, at most a third of the height

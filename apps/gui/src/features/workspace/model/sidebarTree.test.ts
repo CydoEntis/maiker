@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { machineFoldKey, projectFoldKey, projectName, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, withSessionsOnly } from './sidebarTree'
+import { machineFoldKey, projectFoldKey, projectName, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 
@@ -64,5 +64,35 @@ describe('the sidebar tree', () => {
     const tree = sidebarTree([LOCAL_HEAD], groupByProject(sessions, []).machines, all, null)
     expect(treePlacement(tree, true)).toBe(treePlacement(sidebarTree([LOCAL_HEAD], groupByProject([...sessions], []).machines, all, null), true))
     expect(treePlacement(tree, true)).not.toBe(treePlacement(tree, false))
+  })
+})
+
+describe('the sessions that wait on you', () => {
+  const NOW = Math.floor(Date.now() / 1000)
+  const since = (ago: number) => ({ details: { since: NOW - ago } as NonNullable<Conversation['details']> })
+  /** A last command that failed: an agent with it stopped, a shell with it exited. */
+  const failed = (ago: number) => ({ details: { since: NOW - ago, exit: { code: 1, at: NOW - ago } } as NonNullable<Conversation['details']> })
+
+  it('lists the asking and the stopped on every machine, the one that started waiting last first, each with its machine and project', () => {
+    const sessions = [
+      session(1, '/home/me/shop', { status: 'needs-you', ...since(300) }),
+      session(2, '/srv/api', { machine: 4, machineName: 'devbox', status: 'needs-you', ...since(30) }),
+      session(3, '/home/me/shop', { status: 'working', ...since(10) }),
+      session(4, '/home/me/docs', { status: 'done', ...failed(120) }),
+    ]
+    const waiting = waitingSessions([LOCAL_HEAD, DEVBOX], groupByProject(sessions, []).machines)
+    expect(waiting.map(({ session: row, machine, project }) => [row.id, machine.key, project.name])).toEqual([
+      ['t2', 'machine-4', 'api'],
+      ['t4', 'machine-0', 'docs'],
+      ['t1', 'machine-0', 'shop'],
+    ])
+  })
+
+  it('leaves out a session held by its plan limit, which waits on the limit, and a shell that exited', () => {
+    const held = session(1, '/home/me/shop', { status: 'done', details: { since: NOW, resumeAt: NOW + 3600 } as NonNullable<Conversation['details']> })
+    const exited = session(2, '/home/me/shop', { agent: null, ...failed(5) })
+    expect([held.status, exited.status]).toEqual(['limited', 'error'])
+    expect([held, exited].map(waitsOnYou)).toEqual([false, false])
+    expect(waitingSessions([LOCAL_HEAD], groupByProject([held, exited], []).machines)).toEqual([])
   })
 })

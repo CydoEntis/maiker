@@ -713,6 +713,72 @@ describe('the tree of machine, project and status', () => {
   })
 })
 
+describe('the Needs you strip', () => {
+  const NOW = Math.floor(Date.now() / 1000)
+  const changed = (ago: number) => ({ details: { since: NOW - ago } as NonNullable<Conversation['details']> })
+  /** Two sessions asking on different machines, in two projects, and one at work. */
+  const asking = () => [
+    session(1, { agent: 'claude', named: true, title: 'Older ask', status: 'needs-you', cwd: '/home/me/shop', folder: '/home/me/shop', ...changed(600) }),
+    session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'Newer ask', status: 'needs-you', cwd: '/srv/api', folder: '/srv/api', ...changed(20) }),
+    session(3, { agent: 'claude', named: true, title: 'Busy', status: 'working', cwd: '/home/me/shop', folder: '/home/me/shop', ...changed(5) }),
+  ]
+  const strip = () => screen.getByRole('region', { name: 'Needs you' })
+  const stripRows = () => within(strip()).getAllByRole('button')
+
+  it('lists every session that needs you, the latest first, with its name, machine and project, whatever is folded', async () => {
+    const user = userEvent.setup()
+    show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
+    await user.click(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(screen.getByRole('button', { name: /^devbox/, expanded: true }))
+    expect(stripRows().map((row) => row.getAttribute('aria-label'))).toEqual(['Newer ask on devbox in api', 'Older ask on This computer in shop'])
+    expect(stripRows().map((row) => row.querySelector('.mx-row-sub')?.textContent)).toEqual(['devbox·api', 'This computer·shop'])
+    expect(within(strip()).getByText('2')).toBeTruthy()
+  })
+
+  it('opens a session from the strip and unfolds its machine and project', async () => {
+    const user = userEvent.setup()
+    const onShowSession = vi.fn()
+    show(asking(), { machines: [LOCAL_HEAD, DEVBOX], onShowSession })
+    await user.click(screen.getByRole('button', { name: 'api', expanded: true }))
+    await user.click(screen.getByRole('button', { name: /^devbox/, expanded: true }))
+    await user.click(within(strip()).getByRole('button', { name: 'Newer ask on devbox in api' }))
+    expect(onShowSession).toHaveBeenCalledWith('t2')
+    expect(screen.getByRole('button', { name: /^devbox/ })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: 'api' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('drops the project filter when it picks a session of another project, so its project is there to unfold', async () => {
+    const user = userEvent.setup()
+    show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
+    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^shop/ }))
+    expect(screen.queryByRole('button', { name: 'api', expanded: true })).toBeNull()
+    expect(stripRows()).toHaveLength(2)
+    await user.click(within(strip()).getByRole('button', { name: 'Newer ask on devbox in api' }))
+    expect(screen.getByRole('button', { name: 'api', expanded: true })).toBeTruthy()
+  })
+
+  it('is not drawn and takes no room while nothing needs you', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Busy', status: 'working' }), session(2, { agent: 'claude', named: true, title: 'Finished', status: 'done' })])
+    expect(screen.queryByRole('region', { name: 'Needs you' })).toBeNull()
+    expect(document.querySelector('.mx-needs-strip')).toBeNull()
+  })
+
+  it('leaves a waiting session in its own project too', () => {
+    show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
+    const api = screen.getByRole('list', { name: 'api' })
+    expect(within(api).getByRole('button', { name: /^Newer ask,/ })).toBeTruthy()
+    expect(within(strip()).getByRole('button', { name: /^Newer ask on/ })).toBeTruthy()
+  })
+
+  it('sits above the tree and outside its scrolling list, so it stays in view while the tree scrolls', () => {
+    show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
+    const list = document.querySelector('.mx-sidebar-list')
+    expect(list?.contains(strip())).toBe(false)
+    expect(strip().nextElementSibling).toBe(list)
+  })
+})
+
 describe('the top of the sidebar', () => {
   it('opens the start menu from New session, and the search from Search', async () => {
     const user = userEvent.setup()

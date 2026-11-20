@@ -23,7 +23,14 @@
 .mx-sidebar-list { gap: 6px; }
 .mx-sections { gap: 6px; }
 /* Groups are cards. A status group's title and its count both take that status's colour (the count smaller, mono, faded). */
-.mx-section, .mx-machine { padding: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
+.mx-section, .mx-machine, .mx-needs-strip { padding: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
+/* The Needs you strip: a card pinned between the header and the tree, never scrolled with it. It takes at most a third
+   of the sidebar, so the tree is always there below it, and scrolls its own rows past that. */
+.mx-needs-strip { flex: none; display: flex; flex-direction: column; max-height: 33%; margin: 0 8px 6px; }
+.mx-needs-head { flex: none; display: flex; align-items: center; gap: 7px; height: calc(28px * var(--pad, 1)); padding: 0 10px; font-size: calc(12px * var(--sidebar-text, 1)); font-weight: 600; color: var(--needs); white-space: nowrap; }
+.mx-needs-rows { display: flex; flex-direction: column; min-height: 0; overflow-y: auto; }
+/* This computer's name on a strip row: said plainly, as only another machine takes the accent. */
+.mx-row-here { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; }
 .mx-section-head { gap: 7px; border-radius: var(--r-control); color: var(--dim); }
 .mx-section-head.is-terminals { color: var(--dim); }
 .mx-section-head.is-needs { color: var(--needs); }

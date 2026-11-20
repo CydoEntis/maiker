@@ -3,7 +3,7 @@ import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from 
 import { folderNameOf, STATUS_WORD, type SessionView } from '../model/session'
 import { DEFAULT_SIDEBAR_SORT, inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
-import { machineFoldKey, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, withSessionsOnly, type MachineNode, type ProjectNode } from '../model/sidebarTree'
+import { machineFoldKey, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
 import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
@@ -16,6 +16,7 @@ import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
 import { StartMenu } from './StartMenu'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
+import { NeedsYouStrip } from './NeedsYouStrip'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
 import { flipKey } from './flipKey'
@@ -178,10 +179,17 @@ export function Sidebar(props: SidebarProps) {
 
 const PUT_AWAY_SECTION = 'put-away'
 
+/** `folded` with `project` and its machine unfolded; the same set when neither was folded, so nothing is stored again. */
+function unfolding(folded: ReadonlySet<string>, project: OpenedProject): ReadonlySet<string> {
+  const shown = [machineFoldKey(project.machineName), projectFoldKey(project)]
+  return shown.some((key) => folded.has(key)) ? new Set([...folded].filter((key) => !shown.includes(key))) : folded
+}
+
 /**
  * Which machine and project headings are folded, by their fold keys; kept in this window's storage, so a fold survives a
  * restart. A newly `selected` project is unfolded, with its machine, so the project just opened is never out of sight.
- * `listed` is the tree's own entry for it: the fold keys are spelled as the tree spells the folder.
+ * `listed` is the tree's own entry for it: the fold keys are spelled as the tree spells the folder, and so must a project
+ * given to `reveal` be.
  */
 function useFolds(selected: OpenedProject | null, listed: OpenedProject | null) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set(readSidebarFolds()))
@@ -189,8 +197,8 @@ function useFolds(selected: OpenedProject | null, listed: OpenedProject | null) 
   // Adjusted while rendering, as it follows from the selection: the fold opens in the same frame the project is marked.
   if (selected !== revealed) {
     setRevealed(selected)
-    const shown = listed === null ? [] : [machineFoldKey(listed.machineName), projectFoldKey(listed)]
-    if (shown.some((key) => folded.has(key))) setFolded(new Set([...folded].filter((key) => !shown.includes(key))))
+    const next = listed === null ? folded : unfolding(folded, listed)
+    if (next !== folded) setFolded(next)
   }
   const kept = useRef(folded)
   useEffect(() => {
@@ -202,6 +210,8 @@ function useFolds(selected: OpenedProject | null, listed: OpenedProject | null) 
     /** Which headings are folded: what `flipKey` reads. */
     signature: [...folded].join(','),
     isOpen: (key: string) => !folded.has(key),
+    /** Unfolds a project of the tree and its machine. */
+    reveal: (project: OpenedProject) => { setFolded((current) => unfolding(current, project)) },
     toggle: (key: string) => {
       const next = new Set(folded)
       if (!next.delete(key)) next.add(key)
@@ -244,6 +254,14 @@ function Expanded(props: SidebarProps) {
   // Narrowed to one project, the tree drops what has nothing of it, as the list did before it was a tree.
   const tree = project === null ? whole : withSessionsOnly(whole, (head) => draft?.machine === head.machine)
   const localMachine = props.machines[0]?.machine ?? 0
+  // Every machine and project, whatever the filter: what waits on you is never narrowed out of sight.
+  const waiting = waitingSessions(props.machines, props.projects)
+  const openWaiting = ({ session, project: place }: WaitingSession) => {
+    // A filter on another project would keep the session's project out of the tree it is unfolded in.
+    if (project !== null && projectOf(session) !== project) setPickedProject(null)
+    views.reveal(place.project)
+    props.onShowSession(session.id)
+  }
   // Where each row sits, so a row that changes section because focus moved (`held`) still animates, while a focus change that moves nothing leaves the key alone and `useFlip` reads no layout.
   useFlip(list, reduced, flipKey(props.sessions, putAwayOpen, views.signature, draft !== null, treePlacement(tree, props.statusHeadings)))
   const openMenu = (event: MouseEvent, title: string, items: MenuEntry[]) => {
@@ -329,6 +347,8 @@ function Expanded(props: SidebarProps) {
           <button type="button" className="mx-head-button" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart}><Icon name="plus" size={15} /></button>
         </SidebarStartMenu>
       </div>
+      {/* Outside the scrolling list, so it stays in view while the tree scrolls. */}
+      <NeedsYouStrip waiting={waiting} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         <section aria-label="Agents" className="mx-machines">
           {tree.map(machineSection)}

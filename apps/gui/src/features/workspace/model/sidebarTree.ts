@@ -2,7 +2,7 @@ import { baseName } from './folderPick'
 import type { MachineHead } from './machines'
 import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
 import type { SessionView } from './session'
-import { statusSections, type HeldRow, type StatusSection } from './sidebar'
+import { sectionOf, sortedBy, statusSections, type HeldRow, type StatusSection } from './sidebar'
 
 /**
  * A project with fewer sessions than this lists them under no status heading: with one or two rows the dot on each row
@@ -93,4 +93,28 @@ export function withSessionsOnly(tree: readonly MachineNode[], keep: (head: Mach
   return tree
     .map((machine) => ({ ...machine, projects: machine.projects.filter((project) => project.count > 0) }))
     .filter((machine) => machine.projects.length > 0 || keep(machine.head))
+}
+
+/** A session that waits on the person, with the machine and the project the tree lists it under. */
+export type WaitingSession = { readonly session: SessionView; readonly machine: MachineHead; readonly project: ProjectNode }
+
+/**
+ * Whether a session waits on the person: what the tree lists under Needs you (it asks, or an agent stopped), except one held
+ * by its plan limit, which waits on the limit and not on the person, so nothing that says "needs you" counts it but the tree.
+ */
+export function waitsOnYou(session: SessionView): boolean {
+  return sectionOf(session) === 'needs' && session.status !== 'limited'
+}
+
+/**
+ * Every session that waits on the person, on every machine and in every project, the one that started waiting last first
+ * (`statusSince`, when its status last changed). Each keeps its place in the tree, so a pick can unfold it there.
+ */
+export function waitingSessions(heads: readonly MachineHead[], machines: readonly MachineProjects[]): WaitingSession[] {
+  const placed = new Map(sidebarTree(heads, machines, waitsOnYou, null).flatMap((machine) => machine.projects.flatMap((project) =>
+    project.sections.flatMap((section) => section.sessions.map((session) => [session.id, { session, machine: machine.head, project }] as const)))))
+  return sortedBy([...placed.values()].map((entry) => entry.session), 'recent').flatMap((session) => {
+    const entry = placed.get(session.id)
+    return entry === undefined ? [] : [entry]
+  })
 }
