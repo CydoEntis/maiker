@@ -1,0 +1,22 @@
+/* The row under the message box: folder, branch and sync as plain text (no ground, no border), never wider than the box.
+   The folder gives way first: it shrinks a hundred times faster than the branch, and the sync chip and the meters never. */
+.mx-session-bar { min-width: 0; overflow: hidden; }
+.mx-session-place { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 2px; height: 28px; white-space: nowrap; }
+.mx-session-machine { flex: none; padding: 0 6px; font: 400 11.5px var(--mono); color: var(--dim); }
+.mx-place-chip { min-width: 0; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px; border-radius: 8px; font-size: 12.5px; color: var(--muted); background: none; box-shadow: none; }
+button.mx-place-chip:hover, button.mx-place-chip[data-state="open"] { background: var(--m-hover); color: var(--fg); }
+button.mx-place-chip:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-place-chip.is-folder { flex: 0 100 auto; }
+.mx-place-chip.is-branch { flex: 0 1 auto; }
+.mx-place-chip:not(.is-folder, .is-branch) { flex: none; }
+.mx-place-icon { flex: none; display: inline-flex; }
+.mx-place-icon.is-spinning { animation: spin 1s linear infinite; }
+.mx-place-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-place-text.is-mono { font: 400 12px var(--mono); }
+.mx-place-head { display: flex; flex-direction: column; gap: 2px; padding: 4px 8px 6px; border-bottom: 1px solid var(--line); }
+.mx-place-head-main { font-size: 12.5px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
+.mx-place-head-main.is-mono { font: 600 12px var(--mono); }
+.mx-place-head-sub { font-size: 11.5px; color: var(--dim); }
+.mx-place-key { flex: none; font: 400 11px var(--mono); color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { .mx-place-icon.is-spinning { animation: none; } }
+:root[data-reduced-motion="true"] .mx-place-icon.is-spinning { animation: none; }

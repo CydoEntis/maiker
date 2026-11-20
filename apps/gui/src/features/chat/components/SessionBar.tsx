@@ -1,10 +1,15 @@
 import type { ReactNode } from 'react'
-import { Monitor } from 'lucide-react'
-import { Icon } from '@/features/workspace/components/glyphs'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { BranchChip } from '../place/BranchChip'
+import { FolderChip } from '../place/FolderChip'
+import { usePlaceActions, type OpenProjectTab } from '../place/placeActions'
+import { SyncChip } from '../place/SyncChip'
+import { useSessionSync } from '../place/useSessionSync'
+import '../place/place-chips.css'
 
 /** Where a session runs, as the session list already knows it. The view never reads git for it. */
 export type SessionPlace = {
-  /** The machine's name when it is not this computer; null on this computer, where only the icon shows. */
+  /** The machine's name when it is not this computer; null on this computer, where nothing shows. */
   machine: string | null
   /** The project (repository) name, or the folder's when there is no repository. */
   project: string
@@ -12,52 +17,55 @@ export type SessionPlace = {
   branch: string | null
   /** The session works in a linked worktree. */
   worktree: boolean
-  /** The full folder path, for the hover tooltip. */
+  /** The full folder path, for the hover tooltip and the folder menu. */
   folder?: string | undefined
+  /** The number of the machine the session lives on; 0 for this computer. */
+  machineId?: number | undefined
+  /** The session's pane, which names its checkout on another machine. */
+  pane?: number | undefined
+  /** The linked worktree's folder name, when the session is in one. */
+  worktreeName?: string | null | undefined
 }
 
 type Props = {
   /** Without it (the place is not known) the row holds the controls alone. */
   place?: SessionPlace | undefined
-  /** The controls at the right (usage meters, model, permissions): the chat and the terminal each bring their own. */
+  /** The controls at the right (usage meters): the chat and the terminal each bring their own. */
   children?: ReactNode
+  /** The folder menu's Open folder… and Clone a repository…; the window's own handler (`PlaceActionsContext`) when absent. */
+  onOpenProject?: ((tab: OpenProjectTab) => void) | undefined
 }
 
 /**
- * The one row under a session's input: machine, project and branch at the left, the session's controls at the right.
- * It knows nothing of chat or terminal internals, so both views draw the same row (docs/DESIGN.md, Under the box).
+ * The one row under a session's input, as plain text: folder, branch and sync at the left, the session's controls at the
+ * right. It is never wider than the box, and the folder's text gives way first (its full path is on hover). It knows
+ * nothing of chat or terminal internals, so both views draw the same row (docs/DESIGN.md, Under the box).
  */
-export function SessionBar({ place, children }: Props) {
+export function SessionBar({ place, children, onOpenProject }: Props) {
   return (
     <div className="mx-session-bar" data-screen-label="Under the box">
-      {place !== undefined && <Place place={place} />}
+      {place !== undefined && <Place place={place} onOpenProject={onOpenProject} />}
       <span className="mx-spacer" />
       {children}
     </div>
   )
 }
 
-function Place({ place }: { place: SessionPlace }) {
+function Place({ place, onOpenProject }: { place: SessionPlace; onOpenProject: ((tab: OpenProjectTab) => void) | undefined }) {
+  const actions = usePlaceActions()
+  const machine = place.machineId ?? LOCAL_MACHINE
+  const folder = place.folder ?? ''
+  const branch = folder === '' ? null : place.branch
+  const sync = useSessionSync({ folder, machine, term: place.pane ?? 0, project: place.project, readable: machine === LOCAL_MACHINE && branch !== null, branch })
+  const text = place.worktreeName == null ? place.project : `${place.project} / ${place.worktreeName}`
   return (
-    <span className="mx-session-place" role="group" aria-label="Session location" title={place.folder}>
-      <span className="mx-session-machine">
-        <Monitor size={13} strokeWidth={1.8} aria-hidden="true" />
-        {place.machine !== null && <span>{place.machine}</span>}
-      </span>
-      <span className="mx-session-project">
-        <Icon name="folderPlain" size={13} />
-        <span className="mx-session-project-name">{place.project}</span>
-      </span>
-      {place.branch !== null && (
-        <>
-          <span className="mx-session-sep" aria-hidden="true">/</span>
-          <span className="mx-session-branch">
-            <Icon name="branch" size={12} />
-            <span className="mx-session-branch-name">{place.branch}</span>
-            {place.worktree && <span className="mx-session-tag">worktree</span>}
-          </span>
-        </>
-      )}
+    <span className="mx-session-place" role="group" aria-label="Session location">
+      {place.machine !== null && <span className="mx-session-machine">{place.machine}</span>}
+      {folder === ''
+        ? <span className="mx-place-chip is-folder"><span className="mx-place-text">{text}</span></span>
+        : <FolderChip folder={folder} text={text} machine={machine} projects={actions.projects} onNewSessionIn={actions.onNewSessionIn} onOpenProject={onOpenProject ?? actions.onOpenProject} />}
+      {branch !== null && <BranchChip folder={folder} machine={machine} branch={branch} project={place.project} worktreeName={place.worktreeName ?? null} />}
+      {sync !== null && branch !== null && <SyncChip state={sync} branch={branch} />}
     </span>
   )
 }

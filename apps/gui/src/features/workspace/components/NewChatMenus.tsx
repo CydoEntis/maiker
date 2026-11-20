@@ -6,7 +6,8 @@ import { Icon } from './glyphs'
 
 /** One row of a chip's list: a name, what is under it, and what sits at its right. */
 export type ChipItem = { key: string; label: string; sub?: string; icon?: ReactNode; badge?: string; /** The name is a branch or a path: set in the mono face. */ mono?: boolean; right?: ReactNode; checked: boolean; disabled?: boolean; onPick: () => void }
-export type ChipSection = { heading: string; items: readonly ChipItem[] }
+/** `quiet`: no heading over the rows (a short menu of actions that needs none). */
+export type ChipSection = { heading: string; quiet?: boolean; items: readonly ChipItem[] }
 
 type Props = {
   /** What the chip says (the choice made). */
@@ -33,6 +34,10 @@ type Props = {
   variant?: 'chip' | 'crumb' | 'token'
   /** A small heading over the list, in place of the section headings (`Branch in shop`). */
   heading?: string
+  /** Above everything, the menu's own head: what it is about, in lines of its own (a path and where the session runs). */
+  header?: ReactNode
+  /** The chip is plain text with no chevron: the row under the message box. `triggerClass` gives its look. */
+  chevron?: boolean
   /** The token's list head: what it is a list of, and a dim word at its right (`Project`, `on devbox`). */
   hint?: string
   /** The trigger's own class, for the token's look. */
@@ -47,7 +52,7 @@ type Props = {
 }
 
 /** One fact of the context row over the message box, as a small chip that opens a searchable list above it. */
-export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading, hint, triggerClass, queryError, searchEnd, open: openFromOutside, onOpenChange }: Props) {
+export function ChipMenu({ label, summary, title, icon, search, sections, footer, extra, below, fromQuery, width = 340, side = 'top', variant = 'chip', heading, header, chevron = true, hint, triggerClass, queryError, searchEnd, open: openFromOutside, onOpenChange }: Props) {
   const [openInside, setOpenInside] = useState(false)
   const open = openFromOutside ?? openInside
   const setOpen = (next: boolean) => { setOpenInside(next); onOpenChange?.(next) }
@@ -63,10 +68,11 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
   return (
     <Popover.Root open={open} onOpenChange={(next) => { setOpen(next); if (!next) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className={triggerClass ?? (variant === 'crumb' ? 'mx-crumb' : 'mx-chip')} title={title} {...(variant === 'token' ? { 'aria-haspopup': 'listbox' as const } : {})} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}{variant === 'token' ? <Icon name="chevronDown" size={9} /> : <Icon name="chevronDown" />}</button>
+        <button type="button" className={triggerClass ?? (variant === 'crumb' ? 'mx-crumb' : 'mx-chip')} title={title} {...(variant === 'token' ? { 'aria-haspopup': 'listbox' as const } : {})} aria-label={`${title}: ${summary ?? (typeof label === 'string' ? label : '')}`}>{icon}{label}{!chevron ? null : variant === 'token' ? <Icon name="chevronDown" size={9} /> : <Icon name="chevronDown" />}</button>
       </Popover.Trigger>
       <PopupContent side={side} align="start" aria-label={title} {...(variant === 'token' ? { sideOffset: 4 } : {})} className={`mx-chip-menu${variant === 'crumb' ? ' is-crumb' : ''}${variant === 'token' ? ' is-token' : ''}`} style={{ width: `min(${String(width)}px, calc(100vw - 32px))` }}>
         {variant === 'token' && <div className="mx-token-head"><span>{title}</span><span>{hint}</span></div>}
+        {header}
         {heading !== undefined && <h3 className="mx-chip-title">{heading}</h3>}
         {search !== undefined && (
           <label className="mx-chip-search">
@@ -83,7 +89,7 @@ export function ChipMenu({ label, summary, title, icon, search, sections, footer
           {made && <ChipRow item={made} onPick={pick} />}
           {kept.map((section) => (
             <div key={section.heading} role="group" aria-label={section.heading}>
-              {heading === undefined && <h3 className="mx-chip-heading"><span>{section.heading}</span><span>{section.items.length}</span></h3>}
+              {heading === undefined && section.quiet !== true && <h3 className="mx-chip-heading"><span>{section.heading}</span><span>{section.items.length}</span></h3>}
               {section.items.map((item) => <ChipRow key={item.key} item={item} onPick={pick} />)}
             </div>
           ))}

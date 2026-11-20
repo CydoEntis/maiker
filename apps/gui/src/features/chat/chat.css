@@ -578,14 +578,6 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-box-controls { display: flex; min-width: 0; align-items: center; gap: 2px; }
 .mx-box.is-ended { display: none; }
 .mx-session-bar { width: 100%; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 6px 2px 0 6px; font-size: 12.5px; color: var(--muted); }
-.mx-session-place { flex: 0 3 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; height: 28px; padding-right: 4px; overflow: hidden; white-space: nowrap; }
-.mx-session-machine, .mx-session-project, .mx-session-branch { display: inline-flex; align-items: center; gap: 5px; min-width: 0; }
-.mx-session-machine { flex: none; margin-right: 6px; }
-.mx-session-project { flex: 0 0 auto; max-width: 180px; }
-.mx-session-project-name, .mx-session-branch-name { overflow: hidden; text-overflow: ellipsis; }
-.mx-session-branch-name { font: 400 12px var(--mono); }
-.mx-session-sep { flex: none; color: var(--line2); }
-.mx-session-tag { flex: none; padding: 0 5px; font-size: 10.5px; line-height: 16px; color: var(--dim); border: 1px solid var(--line2); }
 .mx-mode-warn { font: 800 10px var(--mono); }
 .mx-mode-name { white-space: nowrap; }
 /* The ended line stands where the box was: the same well the prototype draws, so the chat reads as closed. */

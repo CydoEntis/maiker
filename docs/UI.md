@@ -1155,8 +1155,8 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
 ## Project-specific: desktop chat view
 
 The message box's controls (model and effort, permissions, attach, send) are one row inside the box (`Composer.tsx`); the
-session's place (machine, project, branch) and the usage meters live in one row under it, drawn by
-`features/chat/components/SessionBar.tsx`. It takes `place` and its controls as props and
+session's place (folder, branch, sync chips: `features/chat/place/`) and the usage meters live in one row under it, drawn by
+`features/chat/components/SessionBar.tsx`. It takes `place`, its controls and `onOpenProject(tab: 'clone' | 'folder')` (else the window's `PlaceActionsContext`) as props and
 imports nothing from the chat, so the terminal view reuses it; the place is built from the session list
 (`features/chat/sessionPlace.ts`), never by running git in the view. An ended session shows the read-only line with Resume
 and New session here (`EndedActions` on `Composer`) in place of the box; see DESIGN.md, *The message box*.

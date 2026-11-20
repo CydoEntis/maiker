@@ -17,23 +17,23 @@ afterEach(() => { cleanup(); forgetChatFeeds(); forgetComposers() })
 const PLACE: SessionPlace = { machine: null, project: 'maiker', branch: 'ui-changes', worktree: false, folder: '/dev/maiker' }
 
 describe('SessionBar', () => {
-  it('names the project and branch, and leaves the machine name out on this computer', () => {
+  it('names the project and branch as chips, with the full folder on hover and no machine name on this computer', () => {
     render(<SessionBar place={PLACE} />)
     const place = screen.getByRole('group', { name: 'Session location' })
-    expect(place).toHaveTextContent('maiker/ui-changes')
-    expect(place).toHaveAttribute('title', '/dev/maiker')
-    expect(place).not.toHaveTextContent('worktree')
+    expect(within(place).getByRole('button', { name: '/dev/maiker: maiker' })).toHaveAttribute('title', '/dev/maiker')
+    expect(within(place).getByRole('button', { name: 'Branch ui-changes: ui-changes' })).toBeInTheDocument()
+    expect(place).not.toHaveTextContent('build-box')
   })
 
-  it('names another machine and tags a worktree', () => {
-    render(<SessionBar place={{ ...PLACE, machine: 'build-box', worktree: true }} />)
-    expect(screen.getByRole('group', { name: 'Session location' })).toHaveTextContent('build-boxmaiker/ui-changesworktree')
+  it('names another machine and the worktree after the project', () => {
+    render(<SessionBar place={{ ...PLACE, machine: 'build-box', worktree: true, worktreeName: 'amber-fox' }} />)
+    expect(screen.getByRole('group', { name: 'Session location' })).toHaveTextContent('build-boxmaiker / amber-foxui-changes')
   })
 
   it('leaves out the branch outside git and draws the controls it is given', () => {
     render(<SessionBar place={{ ...PLACE, branch: null }}><button type="button">Model</button></SessionBar>)
     expect(screen.getByRole('group', { name: 'Session location' })).toHaveTextContent('maiker')
-    expect(screen.getByRole('group', { name: 'Session location' })).not.toHaveTextContent('/')
+    expect(screen.queryByRole('button', { name: /^Branch/ })).toBeNull()
     expect(screen.getByRole('button', { name: 'Model' })).toBeInTheDocument()
   })
 })
