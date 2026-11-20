@@ -1,10 +1,11 @@
 import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
+import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
+import { snoozeChoices } from '../model/snooze'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
-import { AppIcon, Icon } from './glyphs'
+import { AppIcon, Icon, MachineIcon } from './glyphs'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
@@ -96,28 +97,34 @@ export type DraftChat = { machine: number; process: string; /** Opens the draft 
 
 type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[] }
 
-/** A session's right-click menu, the same in the full list and in the rail. */
-function sessionMenuEntries(props: SidebarProps, session: SessionView): MenuEntry[] {
+/**
+ * A session's right-click menu, the same in the full list and in the rail. The design's four come first (Rename, Open in a new
+ * pane, Copy folder path, and after a divider Close session); the rest of what a session can do follows a second divider.
+ */
+function sessionMenuEntries(props: SidebarProps, session: SessionView, closeHint: string): MenuEntry[] {
   const agent = !isShell(session)
   const other = session.id !== props.focusedId
   return [
-    { label: 'Open', run: () => { props.onShowSession(session.id) } },
-    ...(other ? [{ label: 'Open in split right', run: () => { props.onSplitSession(session.id, 'right') } }, { label: 'Open in split down', run: () => { props.onSplitSession(session.id, 'down') } }] : []),
-    ...(agent ? [{ label: 'Show changes', run: () => { props.onShowChanges(session.id) } }] : []),
-    'separator',
-    { label: 'Rename…', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
+    { label: 'Rename', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
+    { label: 'Open in a new pane', disabled: !other, run: () => { props.onSplitSession(session.id, 'right') } },
     { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
+    'separator',
+    // Closing an agent stops it; a plain shell has nothing running to lose.
+    { label: agent ? 'Close session' : 'Close shell', hint: closeHint, danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
+    'separator',
+    { label: 'Open', run: () => { props.onShowSession(session.id) } },
+    ...(other ? [{ label: 'Open in split down', run: () => { props.onSplitSession(session.id, 'down') } }] : []),
+    ...(agent ? [{ label: 'Show changes', run: () => { props.onShowChanges(session.id) } }] : []),
     // A worktree is made from a repository, so a session that has not gone into one yet cannot start it; the worktrees are this computer's.
     ...(props.onNewWorktree === undefined ? [] : [{ label: 'New worktree…', disabled: !props.online || session.machineName !== null || session.branch === null, run: () => { props.onNewWorktree?.(session.id) } }]),
     ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
     ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
     // A finished agent waits under Done until you look; this files it under Idle without opening it.
     ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
+    ...(canPutAway(session) ? [{ label: 'Put away', disabled: !props.online, run: () => { props.onPutAway(session.id) } }] : []),
+    ...(canSnooze(session) ? snoozeChoices(Date.now(), session.resumeAt).map((choice) => ({ label: choice.label, disabled: !props.online, run: () => { props.onSnooze(session.id, choice.until) } })) : []),
     ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
     ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
-    'separator',
-    // Stopping an agent asks a second click; a plain shell has nothing running to lose.
-    { label: agent ? 'Stop session' : 'Close shell', danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
   ]
 }
 
@@ -192,7 +199,7 @@ function Expanded(props: SidebarProps) {
     setMenu({ title, at: { x: event.clientX, y: event.clientY }, items })
   }
 
-  const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session)
+  const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session, shortcutText('close'))
 
   const machineMenu = (head: MachineHead): MenuEntry[] => {
     const open = views.isOpen(head.key)
@@ -211,7 +218,7 @@ function Expanded(props: SidebarProps) {
     ]
   }
 
-  const renderRow = (session: SessionView, showProject: boolean, showMachine = false) => {
+  const renderRow = (session: SessionView, showProject: boolean) => {
     const selected = session.id === props.focusedId
     return (
       <div key={session.id} className="mx-row-wrap" role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
@@ -219,7 +226,7 @@ function Expanded(props: SidebarProps) {
           session={session}
           selected={selected}
           showProject={showProject}
-          machine={showMachine ? session.machineName : null}
+          machine={session.machineName}
           onShow={() => { props.onShowSession(session.id) }}
           onRename={() => { props.onRenameSession(session.id) }}
           onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}
@@ -245,7 +252,7 @@ function Expanded(props: SidebarProps) {
             {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
             {props.grouping === 'status' && statusSections(sessions, held, sort).map((section) => (
               <ListSection key={section.key} id={`status:${section.key}`} tone={section.key} name={section.name} count={section.sessions.length} label={section.name} open={views.isOpen(`status:${section.key}`)} onToggle={() => { views.toggle(`status:${section.key}`) }}>
-                {section.sessions.map((session) => renderRow(session, true, true))}
+                {section.sessions.map((session) => renderRow(session, true))}
               </ListSection>
             ))}
             {props.grouping === 'project' && projectSections(sessions, props.machines, sort).map((section) => (
@@ -281,7 +288,7 @@ function Expanded(props: SidebarProps) {
         {putAway.length > 0 && (
           <section aria-label="Put away sessions" className="mx-sections">
             <ListSection id={PUT_AWAY_SECTION} name="Put away" count={putAway.length} label="Put away" open={putAwayOpen} onToggle={() => { setPutAwayOpen(!putAwayOpen) }}>
-              {putAway.map((session) => renderRow(session, true, true))}
+              {putAway.map((session) => renderRow(session, true))}
             </ListSection>
           </section>
         )}
@@ -319,12 +326,12 @@ type ListSectionProps = {
 function ListSection({ id, name, label, count, open, onToggle, children, tone, color, machine = null, needs = 0 }: ListSectionProps) {
   return (
     <div className="mx-section" data-section={id}>
-      <button type="button" className={`mx-section-head${tone === undefined ? '' : ` is-${tone}`}`} data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
+      <button type="button" className={`mx-section-head${tone === undefined ? '' : ` is-${tone}`}`} data-tone={tone} data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
         {color !== undefined && <span className="mx-project-square" style={{ background: color }} aria-hidden="true">{name.charAt(0).toUpperCase()}</span>}
         <span className="mx-section-name">{name}</span>
         {machine !== null && <span className="mx-section-machine">· {machineTitle(machine)}</span>}
         {machine !== null && <span className={`mx-machine-dot${machine.down ? ' is-offline' : ''}`} role="img" aria-label={machine.down ? `${machineTitle(machine)} is ${machine.chip?.word ?? 'not reachable'}` : `${machineTitle(machine)} is connected`} />}
-        {color === undefined && <span className="mx-section-count mono">{count}</span>}
+        {color === undefined && <span className="mx-section-count mono" data-tone={tone}>{count}</span>}
         {needs > 0 && <span className="mx-project-needs" aria-label={`${String(needs)} need you`}>{needs}</span>}
         <span className="mx-spacer" />
         {color !== undefined && <span className={`mx-section-caret${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="chevronDown" size={12} /></span>}
@@ -349,7 +356,7 @@ function MachineNotes({ heads, progress, onUpdate, onFix }: { heads: readonly Ma
         const done = progress?.[name]
         return (
           <div key={head.key} className="mx-machine-note">
-            <span className="mx-machine-icon" aria-hidden="true"><Icon name="server" size={13} /></span>
+            <span className="mx-machine-icon" aria-hidden="true"><MachineIcon remote /></span>
             <span className="mx-machine-name">{machineTitle(head)}</span>
             {done !== undefined
               ? <span className="mx-machine-pct mono">{String(done)}%</span>
@@ -403,13 +410,14 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
       <div className="mx-machine-head" data-flip={`machine:${head.key}`}>
         <button type="button" className="mx-machine-toggle" aria-expanded={open} onClick={onToggle} onContextMenu={onContextMenu}>
           <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>
-          <span className="mx-machine-icon" aria-hidden="true"><Icon name={head.name === null ? 'laptop' : 'server'} size={13} /></span>
+          <span className="mx-machine-icon" aria-hidden="true"><MachineIcon remote={head.name !== null} /></span>
           <span className="mx-machine-name">{title}</span>
           <span className="mx-machine-count">{sessions.length}</span>
         </button>
         {progress !== undefined
           ? <span className="mx-machine-pct mono">{String(progress)}%</span>
           : head.name !== null && head.updateAction !== null && <UpdateButton name={head.name} action={head.updateAction} onUpdate={onUpdate} />}
+        <button type="button" className="mx-head-button is-small mx-machine-add" aria-label={`Add a session to ${title}`} title={`New session on ${title}`} disabled={!canStart || head.down} onClick={() => { onNewSession(head.machine) }}><Icon name="plus" size={13} /></button>
         <span className={`mx-machine-dot${head.updateAction !== null ? ' is-warn' : head.down ? ' is-offline' : ''}`} role="img" aria-label={head.down ? `${title} is ${head.chip?.word ?? 'not reachable'}` : `${title} is connected`} title={head.why ?? (head.down ? head.chip?.word ?? 'not reachable' : `${title} is connected`)} />
       </div>
       {progress !== undefined && head.name !== null && (
@@ -465,6 +473,7 @@ function UpdateButton({ name, action, onUpdate }: { name: string; action: Update
  */
 function Rail(props: SidebarProps) {
   const tip = useTipWithKeys()
+  const shortcutText = useShortcutText()
   const hover = useHoverController()
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
@@ -491,7 +500,7 @@ function Rail(props: SidebarProps) {
                   aria-label={`${rowTitle(session)} · ${STATUS_WORD[session.status]}`}
                   aria-current={session.id === props.focusedId ? 'page' : undefined}
                   onClick={() => { endHover(); props.onShowSession(session.id) }}
-                  onContextMenu={(event) => { event.preventDefault(); endHover(); setMenu({ title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenuEntries(props, session) }) }}
+                  onContextMenu={(event) => { event.preventDefault(); endHover(); setMenu({ title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenuEntries(props, session, shortcutText('close')) }) }}
                   onPointerEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }}
                   onPointerLeave={() => { endHover(); props.onHoverSession?.(null) }}
                   onFocus={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }}

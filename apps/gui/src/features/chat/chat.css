@@ -467,23 +467,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-model-button.is-locked { cursor: not-allowed; opacity: .6; }
 .mx-model-button.is-locked:hover { background: none; }
 
-/* What the agent has used, at the right of the box's bottom row: a name, a ring and the figure for each, in the theme's meter colours. */
-.mx-usage { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px 0 8px; font: 500 11px/12px var(--mono); font-variant-numeric: tabular-nums; }
-.mx-usage-ring { flex: none; display: block; overflow: visible; }
-.mx-usage-ring path { fill: none; stroke-width: 2; }
-.mx-usage-track { stroke: var(--line2); }
-/* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
-.mx-usage-fill { stroke: var(--fg2); }
-.mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
-/* The ring follows the corners: a square path under Square, a circle under Rounded. */
-.mx-usage-round { display: none; }
-:root[data-corners="rounded"] .mx-usage-round { display: inline; }
-:root[data-corners="rounded"] .mx-usage-sq { display: none; }
-/* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
-.mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
-button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-underline); }
-/* The short names go first on a narrow window; the rings and figures stay. */
-@media (max-width: 1180px) { .mx-usage-name { display: none; } }
 /* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
 .mx-mode-button { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px 0 7px; border-radius: var(--r-control); color: var(--muted); white-space: nowrap; }
 .mx-mode-button:not(.is-static, .is-locked):hover { background: var(--m-hover); color: var(--fg); }
@@ -493,7 +476,6 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* Plan mode, said inside the box while it is on. */
 .mx-plan-strip { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
 .mx-plan-strip-name { font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ansi-blue); }
-.mx-usage-figure { color: var(--muted); }
 
 /* A subagent's own chat: the bar that names it and leads back. */
 .mx-sub-bar { flex: none; display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; margin: 10px 20px 0; padding: 0 6px 0 10px; border: 1px solid var(--line); background: var(--m-well); font-size: 12.5px; color: var(--muted); }

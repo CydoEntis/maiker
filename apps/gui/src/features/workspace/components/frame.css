@@ -22,11 +22,16 @@
 .mx-sidebar .mx-head-button:not(:disabled):hover { background: var(--m-hover); }
 .mx-sidebar-list { gap: 6px; }
 .mx-sections { gap: 6px; }
-/* Group headings: the name and a count; Needs you alone in the needs colour. */
+/* Groups are cards. A status group's title and its count both take that status's colour (the count smaller, mono, faded). */
+.mx-section, .mx-machine { padding: 4px; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); }
 .mx-section-head { gap: 7px; border-radius: var(--r-control); color: var(--dim); }
-.mx-section-head.is-working, .mx-section-head.is-done, .mx-section-head.is-idle, .mx-section-head.is-terminals { color: var(--dim); }
+.mx-section-head.is-terminals { color: var(--dim); }
 .mx-section-head.is-needs { color: var(--needs); }
+.mx-section-head.is-working { color: var(--working); }
+.mx-section-head.is-done { color: var(--done); }
+.mx-section-head.is-idle { color: var(--muted); }
 .mx-section-head:hover { background: var(--m-hover); }
+.mx-section-count { font: 500 10.5px var(--mono); opacity: .7; }
 .mx-rows { gap: 2px; }
 /* A row: the 16px tile, the name and its time, the project and machine under it. */
 .mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 7px 10px; border-radius: var(--r-control); }
@@ -38,14 +43,14 @@
 .mx-row.is-needs .mx-row-name { font-weight: 600; color: var(--fg); }
 .mx-row.is-selected .mx-row-name { color: var(--fg); }
 .mx-row-when { font-family: var(--mono); color: var(--dim); }
-.mx-row-sub { gap: 6px; font-size: calc(11.5px * var(--sidebar-text, 1)); line-height: calc(15px * var(--sidebar-text, 1)); color: var(--dim); }
+/* Line 2 sits under the name: the status mark's 16px and the 8px gap are its indent. */
+.mx-row-sub { gap: 6px; padding-left: 24px; font-size: calc(11.5px * var(--sidebar-text, 1)); line-height: calc(15px * var(--sidebar-text, 1)); color: var(--dim); }
 /* Project and branch sit side by side, `maiker / gui-revive`: the project gives way first (never to less than 6 characters), the time keeps the right edge. */
 .mx-row-sub { color: var(--muted); }
 .mx-row-sub .mx-row-project-name { flex: 0 1 auto; min-width: 6ch; max-width: 55%; }
 .mx-row-sub .mx-row-branch-name { flex: 0 1 auto; }
-.mx-row-machine { flex: none; max-width: 45%; }
-.mx-row-close { top: 7px; bottom: auto; right: 8px; border-radius: var(--r-control); background: transparent; }
-.mx-row-close:hover:not(:disabled) { color: var(--err); background: color-mix(in srgb, var(--err) 14%, transparent); }
+/* The other machine's name, in the accent colour: only a remote session has one. */
+.mx-row-machine { flex: none; max-width: 45%; color: var(--accent-text); }
 .mx-sidebar-foot { border-top-color: var(--line); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }

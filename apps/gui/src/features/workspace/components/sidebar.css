@@ -18,6 +18,8 @@
 .mx-head-button.is-small { width: 26px; height: 26px; }
 .mx-head-button:not(:disabled):hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
 .mx-head-button:disabled { opacity: .4; }
+/* The filter button while the list is narrowed or re-sorted. */
+.mx-head-button.is-on, .mx-head-button.is-on:not(:disabled):hover { color: var(--accent-text); }
 .mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
 .mx-settings-button { width: auto; height: 26px; padding: 0 8px; }
 .mx-sidebar .mx-head-button.mx-add-machine { width: auto; flex: none; gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
@@ -113,14 +115,6 @@
 @media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
 :root[data-reduced-motion="true"] .mx-hover-card { animation: none; }
 .mx-row-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
-/* The close button sits at the right of the row's first line and only shows while the row is hovered or has the keys. */
-.mx-row-close { position: absolute; bottom: 5px; right: 6px; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 6px; color: var(--muted); background: var(--main); opacity: 0; pointer-events: none; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
-/* The × shows at once under the pointer (and on focus); the slot is the row's own, so nothing moves. */
-.mx-row-wrap:hover > .mx-row-close { opacity: 1; pointer-events: auto; }
-.mx-row-close:focus-visible { opacity: 1; pointer-events: auto; }
-.mx-row-close:hover:not(:disabled) { color: var(--danger); background: var(--m-hover); }
-.mx-row-close.is-bring-back:hover:not(:disabled) { color: var(--fg); }
-.mx-row-close:disabled { cursor: default; }
 .mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: calc(40px * var(--pad, 1)); padding: 4px 6px 4px 10px; border-radius: 8px; text-align: left; transition: background-color var(--t-fast) var(--ease); }
 .mx-row:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
@@ -132,10 +126,6 @@
 .mx-row-folder { display: inline-flex; flex: none; color: var(--dim); }
 .mx-row-slash { flex: none; color: var(--line2); }
 .mx-row-sub .mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
-.mx-row-sub .mx-row-machine { margin-left: auto; padding-left: 8px; flex: none; font-family: var(--mono); }
-.mx-row-agent { display: inline-flex; flex: none; margin-top: 2px; }
-.mx-row-sub .mx-row-when { margin-left: auto; padding-left: 8px; }
-.mx-row-title .mx-row-status { flex: none; align-self: center; transition: opacity var(--t-fast) var(--ease); }
 .mx-row.is-idle .mx-row-name, .mx-row.is-idle .mx-row-sub { opacity: .7; }
 .mx-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-row-name { height: calc(18px * var(--sidebar-text, 1)); font-size: calc(13px * var(--sidebar-text, 1)); line-height: calc(18px * var(--sidebar-text, 1)); font-weight: 400; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -145,7 +135,8 @@
 .mx-row-project { display: inline-flex; align-items: center; gap: 5px; flex: 0 .2 auto; min-width: 7ch; }
 .mx-row-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* The name and, at its right, the time or the word for how it stopped. */
-.mx-row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.mx-row-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.mx-row-status { flex: none; }
 .mx-row-title > .mx-row-name { flex: 1; min-width: 0; }
 .mx-row-square { width: 6px; height: 6px; border-radius: 2px; }
 /* The icon and the name share one line: the name alone gives way when the row is narrow. */
@@ -158,8 +149,6 @@
 .mx-row-branch.is-worktree svg { flex: none; }
 .mx-row-word { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--danger); }
 .mx-row-when { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); transition: opacity var(--t-fast) var(--ease); }
-/* The close button takes this corner on hover and focus. */
-.mx-row-wrap:hover .mx-row-status, .mx-row-wrap:focus-within .mx-row-status { opacity: 0; }
 
 
 /* The Terminals section: pinned over the foot, with a share of the height at most, past which it scrolls on its own. */

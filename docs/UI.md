@@ -1,4 +1,4 @@
-MISS: Needs you, Working, Finished, Idle), Project MISSCUT:    Folded is the default corner style and needs two drawings # UI
+MISS: Needs you, Working, Done, Idle; each a card whose title and count take the status colour), Project MISSCUT:    Folded is the default corner style and needs two drawings # UI
 
 This doc covers how the user interface is structured and built.
 `AGENTS.md` is the operating contract; this doc holds the UI practices in depth.
@@ -328,7 +328,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    is in (`model/layout.ts`), else one of its own. A session's **subagents** are the daemon's `TermInfo.subagent_activity`
    (`model/subagents.ts`), shown, while they run, in the dock above the chat's message box (`HelpersDock`, fed by the chat's own agents row and these activities; see DESIGN.md *The dock*); **Open its chat** on a helper's opened row in the dock or the record block (`OpenSubagentContext`, matched by title or task in `subagentNamed`), shows its own chat in the pane until you pick a session or **‹ Main session**.
    Maiker shows no workflow runs (ADR 0011). Rename is
-   in place (double-click, F2 or the menu). Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
+   a dialog from F2 or the row menu. Every row is two lines in every grouping (status mark, name, age; then monitor or server icon, another machine's name in the accent colour, `project / worktree`), has no × (Close session is in its right-click menu) and no agent icon; its activity is in the hover card. Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
    window). Picking a session shows it at once, with no glide; panes that move (a split, a swap, a close) glide
    (`movePanes`). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
    session closes with a 6 second Undo. **Put away** (the row menu of a finished or idle session in a daemon terminal,
@@ -475,6 +475,27 @@ says so instead.
 ## Project-specific: pane focus
 
 Only the area with the keyboard is lit: the focused pane's whole border, or the open sheet. Unfocused panes fade by the Dim setting (off, light, normal or heavy; normal by default, and an older config's "subtle", "30%" and "60%" read as light, normal and heavy). Do not reserve a full-width bottom row for global hints; the mode bar is the one exception. The pane has no status line: its branch is in the sidebar's folder header.
+
+## Project-specific: window chrome (desktop)
+
+The desktop window, unlike the terminal interface above, has one full-width foot: the status bar. Three parts, all in
+`apps/gui/src/features/workspace/components/` (look in [DESIGN](DESIGN.md#desktop-app)).
+
+- **Pane header** (`PaneHeadId`, shared by the terminal and the chat view): the status mark (`StatusIcon`), a machine tag for a
+  session on another machine only, the whole path cut from its start (`<bdi>` in a right-to-left box keeps the folder it ends in
+  in view), the branch crumb, then the `···` menu. The agent's icon and the `~`-shortened path are not in the header.
+- **Agent pane foot** (`PaneFooter`, terminal view of an agent only): the agent's mark and name at the left, its context meter at
+  the far right once the agent has said how full it is. The model is not shown: a terminal pane does not read it.
+- **Status bar** (`StatusBar`, one row under the cards): `Maiker <version>` and the update button (`UpdateSlot`, variant `bar`) at
+  the left; at the right one meter per agent that has reported a limit, then the commands key (`useShortcutText('palette')`) and
+  **Commands**. A meter shows that agent's tightest limit (`agentUsages`), plan-aware: Claude **Max** has no 5-hour window, so only
+  the weekly one counts (the plan is read once with `loadAgentAuth`; a failed read keeps the limits as sent). The meter turns amber
+  from 70% and red from 90% (`levelOf`); the focused session's agent is lit. A click opens `UsagePopover`: every limit of every
+  agent with its reset, in a list that scrolls and carries no sticky note. An agent that has reported no limit has no meter: usage
+  is provider-reported only ([ADR 0009](adr/0009-usage-is-provider-reported-never-estimated.md)). The meters and the popover come
+  from `Snapshot.limits` as it reaches each session; nothing new crosses the protocol.
+
+The chat box's usage row and the status bar draw the same `UsageMeter` and `ContextRing` (`features/usage/`).
 
 ## Project-specific: UI conventions
 

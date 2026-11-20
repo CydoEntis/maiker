@@ -50,11 +50,19 @@ describe('the sidebar', () => {
     expect(screen.getByRole('button', { name: /^This computer/, expanded: true })).toHaveTextContent('1')
   })
 
-  it('leaves the machine off a row under its own machine heading', () => {
-    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'app2', branch: 'feat/remote-branch' })], { machines: [LOCAL_HEAD, DEVBOX] })
-    const text = screen.getByRole('button', { name: /^There,/ }).querySelector('.mx-row-text')?.textContent ?? ''
-    expect(text).toMatch(/^There/)
-    expect(text).not.toContain('devbox')
+  it('names a remote session\'s machine in line 2 behind a server icon, and this computer\'s behind a monitor with no name', () => {
+    show([
+      session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'app2' }),
+      session(1, { agent: 'claude', named: true, title: 'Here', repo: 'app1' }),
+    ], { machines: [LOCAL_HEAD, DEVBOX] })
+    const there = screen.getByRole('button', { name: /^There,/ }).querySelector('.mx-row-sub')
+    const here = screen.getByRole('button', { name: /^Here,/ }).querySelector('.mx-row-sub')
+    expect(there?.querySelector('.mx-row-machine')?.textContent).toBe('devbox')
+    expect(there?.textContent).toBe('devboxapp2')
+    expect(there?.querySelectorAll('svg rect')).toHaveLength(2)
+    expect(here?.querySelector('.mx-row-machine')).toBeNull()
+    expect(here?.querySelectorAll('svg rect')).toHaveLength(1)
+    expect(here?.textContent).toBe('app1')
   })
 
   const MIXED = () => [
@@ -91,13 +99,27 @@ describe('the sidebar', () => {
     expect(names()).toEqual(['Asking', 'Exited shell', 'Idle agent', 'Working', 'Finished'])
   })
 
-  it('puts the name first and the folder, project and branch under it', () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Growth', repo: 'AeVoxGrowth', branch: 'agent/grow-025', folder: '/home/me/AeVoxGrowth', cwd: '/home/me/AeVoxGrowth' }), session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' })])
+  it('puts the status mark, the name and the age on line 1, and the project and worktree on line 2', () => {
+    const since = Math.floor(Date.now() / 1000) - 180
+    show([
+      session(1, { agent: 'claude', named: true, title: 'Growth', repo: 'AeVoxGrowth', branch: 'agent/grow-025', linked: true, folder: '/home/me/AeVoxGrowth', cwd: '/home/me/AeVoxGrowth', details: { since } as NonNullable<Conversation['details']> }),
+      session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' }),
+    ])
     const growth = screen.getByRole('button', { name: /^Growth,/ })
-    expect(growth.querySelector('.mx-row-name')?.textContent).toBe('Growth')
-    expect(growth.querySelector('.mx-row-project-name')?.textContent).toBe('AeVoxGrowth')
-    expect(growth.querySelector('.mx-row-branch-name')?.textContent).toBe('agent/grow-025')
+    const first = growth.querySelector('.mx-row-title')
+    expect(first?.firstElementChild?.getAttribute('data-slot')).toBe('status-icon')
+    expect(first?.querySelector('.mx-row-name')?.textContent).toBe('Growth')
+    expect(first?.querySelector('.mx-row-when')).toHaveTextContent('3m')
+    const second = growth.querySelector('.mx-row-sub')
+    expect(second?.querySelector('.mx-row-project-name')?.textContent).toBe('AeVoxGrowth')
+    expect(second?.querySelector('.mx-row-branch-name')?.textContent).toBe('agent/grow-025')
+    expect(growth.querySelector('.mx-app-icon')).toBeNull()
     expect(screen.getByRole('button', { name: /^dev, shell/ })).toBeTruthy()
+  })
+
+  it('leaves the branch off a session that is not in a worktree', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Plain', repo: 'app', branch: 'main' })])
+    expect(screen.getByRole('button', { name: /^Plain,/ }).querySelector('.mx-row-branch-name')).toBeNull()
   })
 
   it('has no group-by-project toggle on a machine: one list, and no such entry in its menu', () => {
@@ -186,12 +208,12 @@ describe('a machine that needs maiker installed or updated', () => {
 })
 
 describe('a session row', () => {
-  it('puts the status icon at the right of the name and, under it, how long the agent has been in its state at the right of the place', () => {
+  it('shows a live age on line 1 for an agent', () => {
     const since = Math.floor(Date.now() / 1000) - 180
     show([session(1, { agent: 'claude', named: true, title: 'Timed', details: { since } as NonNullable<Conversation['details']> })])
     const row = screen.getByRole('button', { name: /^Timed,/ })
-    expect(row.querySelector('.mx-row-title .mx-row-status')).not.toBeNull()
-    expect(row.querySelector('.mx-row-sub .mx-row-when')).toHaveTextContent('3m')
+    expect(row.querySelector('.mx-row-title .mx-row-when')).toHaveTextContent('3m')
+    expect(row.querySelector('.mx-row-sub .mx-row-when')).toBeNull()
   })
 
   it('offers Mark as done on a finished agent only, and asks for that session', async () => {
@@ -285,7 +307,7 @@ describe('a session row', () => {
     expect(onRenameSession).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: 'Rename…' }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Rename/ }))
     expect(onRenameSession).toHaveBeenCalledWith('t1')
   })
 
@@ -328,15 +350,38 @@ describe('a session row', () => {
     }
   })
 
-  it('offers the session menu on right-click, and hands Stop session to the app, which asks first', async () => {
+  it('offers the session menu on right-click, with the design\'s items first and the rest after a divider, and hands Close session to the app, which asks first', async () => {
     const user = userEvent.setup()
     const onEndSession = vi.fn()
     show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2)], { focusedId: 't2', onEndSession })
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
     const menu = screen.getByRole('menu', { name: 'Growth' })
-    expect(within(menu).getAllByRole('menuitem').map((item) => item.textContent)).toEqual(['Open', 'Open in split right', 'Open in split down', 'Show changes', 'Rename…F2', 'Copy folder path', 'Stop session'])
-    await user.click(within(menu).getByRole('menuitem', { name: 'Stop session' }))
+    const items = within(menu).getAllByRole('menuitem').map((item) => item.textContent)
+    expect(items.slice(0, 4)).toEqual(['RenameF2', 'Open in a new pane', 'Copy folder path', expect.stringMatching(/^Close session/)])
+    expect(items.slice(4)).toEqual(expect.arrayContaining(['Open', 'Open in split down', 'Show changes', 'Put away']))
+    expect(within(menu).getAllByRole('separator')).toHaveLength(2)
+    await user.click(within(menu).getByRole('menuitem', { name: /^Close session/ }))
     expect(onEndSession).toHaveBeenCalledWith('t1')
+  })
+
+  it('opens a session in a new pane beside the focused one from its menu', async () => {
+    const onSplitSession = vi.fn()
+    show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2)], { focusedId: 't2', onSplitSession })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Open in a new pane' }))
+    expect(onSplitSession).toHaveBeenCalledWith('t1', 'right')
+  })
+
+  it('keeps Put away and Snooze in the menu of a finished agent', async () => {
+    const onPutAway = vi.fn()
+    const onSnooze = vi.fn()
+    show([session(1, { agent: 'claude', named: true, title: 'Finished', status: 'done' })], { onPutAway, onSnooze })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Put away' }))
+    expect(onPutAway).toHaveBeenCalledWith('t1')
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^Finished,/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Snooze 1 hour' }))
+    expect(onSnooze).toHaveBeenCalledWith('t1', expect.any(Number))
   })
 
   it('offers Close shell, not Stop, for a shell', () => {
@@ -384,12 +429,12 @@ describe('a machine heading', () => {
 })
 
 describe('closing a session', () => {
-  it('has no close button on a row: it is in the right-click menu, where a shell says Close and an agent Stop', async () => {
+  it('has no close button on a row: it is in the right-click menu, where a shell says Close shell and an agent Close session', async () => {
     const onEndSession = vi.fn()
     show([session(1, { agent: 'claude', named: true, title: 'Growth' }), session(2, { named: true, title: 'Shell' })], { onEndSession })
     expect(screen.queryByRole('button', { name: /^(Stop|Close) / })).toBeNull()
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Growth,/ }))
-    await userEvent.click(screen.getByRole('menuitem', { name: /^Stop session/ }))
+    await userEvent.click(screen.getByRole('menuitem', { name: /^Close session/ }))
     expect(onEndSession).toHaveBeenLastCalledWith('t1')
     fireEvent.contextMenu(screen.getByRole('button', { name: /^Shell,/ }))
     await userEvent.click(screen.getByRole('menuitem', { name: /^Close shell/ }))
@@ -729,5 +774,52 @@ describe('hovering a row', () => {
     expect(onHoverSession).toHaveBeenLastCalledWith(null)
     act(() => { row.focus() })
     expect(onHoverSession).toHaveBeenLastCalledWith('t1')
+  })
+})
+
+describe('the group cards', () => {
+  it('colours a status group\'s title and its count by that status', () => {
+    show([
+      session(1, { agent: 'claude', named: true, title: 'Asking', status: 'needs-you' }),
+      session(2, { agent: 'claude', named: true, title: 'Busy', status: 'working' }),
+      session(3, { agent: 'claude', named: true, title: 'Finished', status: 'done' }),
+      session(4, { agent: 'claude', named: true, title: 'Resting' }),
+    ], { grouping: 'status' })
+    for (const [name, tone] of [['Needs you', 'needs'], ['Working', 'working'], ['Done', 'done'], ['Idle', 'idle']] as const) {
+      const head = screen.getByRole('button', { name: new RegExp(`^${name}`) })
+      expect(head).toHaveAttribute('data-tone', tone)
+      expect(head.querySelector('.mx-section-count')).toHaveAttribute('data-tone', tone)
+      expect(head.querySelector('.mx-section-count')).toHaveTextContent('1')
+    }
+  })
+
+  it('gives a machine group a monitor or server icon and its own plus that starts a session there', async () => {
+    const onNewSession = vi.fn()
+    show([session(1, { agent: 'claude', named: true, title: 'Here' })], { machines: [LOCAL_HEAD, DEVBOX], onNewSession })
+    await userEvent.click(screen.getByRole('button', { name: 'Add a session to devbox' }))
+    expect(onNewSession).toHaveBeenCalledWith(4)
+    expect(screen.getByRole('button', { name: 'Add a session to This computer' })).toBeInTheDocument()
+  })
+})
+
+describe('the filter button', () => {
+  it('stays plain on the default sort and filter, and turns to the accent once a project is picked', async () => {
+    const user = userEvent.setup()
+    show([session(1, { agent: 'claude', named: true, title: 'A', repo: 'alpha' }), session(2, { agent: 'claude', named: true, title: 'B', repo: 'beta' })])
+    const button = () => screen.getByRole('button', { name: /^Filter and group/ })
+    expect(button()).toHaveAttribute('data-on', 'false')
+    await user.click(button())
+    await user.click(screen.getByRole('button', { name: /^alpha/ }))
+    expect(button()).toHaveAttribute('data-on', 'true')
+    await user.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(button()).toHaveAttribute('data-on', 'false')
+  })
+
+  it('turns to the accent when the sort is not the default', async () => {
+    const user = userEvent.setup()
+    show([session(1, { agent: 'claude', named: true, title: 'A' })])
+    await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
+    await user.click(screen.getByRole('radio', { name: 'A–Z' }))
+    expect(screen.getByRole('button', { name: /^Filter and group/ })).toHaveAttribute('data-on', 'true')
   })
 })

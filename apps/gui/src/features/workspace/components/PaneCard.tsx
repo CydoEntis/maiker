@@ -1,17 +1,16 @@
 import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
-import { machineLabel } from '@/data/machineNicknames'
-import { STATUS_WORD, type SessionView } from '../model/session'
-import { shellProgram } from '../model/paneHeader'
+import type { SessionView } from '../model/session'
 import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
 import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
-import { AppIcon, Icon } from './glyphs'
+import { Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
 import type { PaneView } from '../model/chatView'
-import { agentName } from '../model/agentMessage'
 import { SecretAskBar } from './SecretAskBar'
+import { PaneHeadId } from './PaneHeadId'
+import { PaneFooter } from './PaneFooter'
 import { useShortcutText } from '@/features/shortcuts/platform'
 
 export type PaneCardProps = {
@@ -119,13 +118,8 @@ export function PaneCard(props: PaneCardProps) {
         }}
       >
         {props.leading}
-        <div className={`mx-pane-id${shell ? ' is-shell' : ''}`}>
-          <span className="mx-pane-icon" role="img" aria-label={`${agentName(session.process)} · ${STATUS_WORD[session.status]}`}>
-            <AppIcon process={session.process} size={14} />
-          </span>
-          <span className="mx-pane-title">
-            <span className="mx-pane-name">{shell ? `${session.name ?? shellProgram(session)} · ${session.cwdLabel}` : session.name ?? session.cwdLabel}</span>
-          </span>
+        <div className="mx-pane-id">
+          <PaneHeadId session={session} />
           {!shell && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
@@ -163,6 +157,7 @@ export function PaneCard(props: PaneCardProps) {
         {shown === 'chat' && props.chat}
         {props.overlay}
       </div>
+      {shown === 'terminal' && !shell && <PaneFooter session={session} />}
       {session.helperAsk.length > 0 && props.onAnswerHelpers && (
         <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants to start helpers">
           <span className="mx-pane-ended-text">
@@ -191,9 +186,8 @@ export function PaneCard(props: PaneCardProps) {
 }
 
 /**
- * The header's second line: the folder (locked when the chat has a worktree of its own), its project, `/`, its branch,
- * which a session on this computer can switch from here, and the other machine it runs on. The pane's width decides how
- * much shows (`pane.css`).
+ * The header's branch: its name and mark, which a session on this computer can switch from here (locked when the chat has a
+ * worktree of its own). The pane's width decides how much shows (`pane.css`).
  */
 function PaneCrumbs({ session, branchMenu }: { session: SessionView; branchMenu: BranchMenuSpec | undefined }) {
   const project = projectOf(session)
@@ -209,12 +203,6 @@ function PaneCrumbs({ session, branchMenu }: { session: SessionView; branchMenu:
               <span className={`mx-crumb-branch${session.worktree ? ' is-worktree' : ''}`}>{session.branch}</span>
             </span>
           )}
-        </>
-      )}
-      {session.machineName !== null && (
-        <>
-          <span className="mx-crumb-dot" aria-hidden="true">·</span>
-          <span className="mx-crumb-machine">{machineLabel(session.machineName)}</span>
         </>
       )}
     </nav>

@@ -12,6 +12,7 @@ import { WorkspaceDialogs } from './components/WorkspaceDialogs'
 import { AppTitleBar } from './components/AppTitleBar'
 import { WorkspaceSidePanel } from './components/WorkspaceSidePanel'
 import { WindowServiceStatus } from './components/WindowServiceStatus'
+import { WorkspaceStatusBar } from './components/WorkspaceStatusBar'
 import { useCloseGuard } from './useCloseGuard'
 import './workspace.css'
 import './components/sidebar.css'
@@ -41,6 +42,7 @@ export function DesktopApp() {
             <WorkspaceDialogs />
             <WindowServiceStatus />
           </div>
+          <WorkspaceStatusBar />
           <Toaster />
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>

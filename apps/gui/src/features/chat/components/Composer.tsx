@@ -28,6 +28,7 @@ import { CODEX_COMMANDS } from '../codexCommands'
 import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
 import { METER_SHOWN_FROM, usageItems, type SessionUsage } from '../usageStrip'
+import { UsageMeter } from '@/features/usage/UsageMeter'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { useKeepTyping } from '../useKeepTyping'
 import { agentLabel } from '@/features/workspace/model/session'
@@ -136,7 +137,6 @@ const DOCK_CLOSED: DockState = { open: null, set: () => undefined }
 
 const NO_CHANGE = () => undefined
 const NO_MESSAGES: readonly string[] = []
-const PERCENT = 100
 
 /** What in the question tray takes the focus when it opens: its first field, else its first button. */
 // Only a question that takes keys gets the focus: a card answered only by a click (trusting a folder) must not be
@@ -504,13 +504,6 @@ function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>):
   return facts.modeLocked ?? facts.agentChips?.locked ?? 'Not available for this chat'
 }
 
-/** The short name a meter wears beside its figure. */
-const usageName = (item: { window: string | null }): string => (item.window === null ? 'Context' : item.window === 'week' ? 'Week' : item.window)
-/** The meter's ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
-const METER_PATH = 'M6 1H11V11H1V1H6'
-/** The same ring under Rounded corners: a circle from the same start point. */
-const METER_ROUND = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
-
 /**
  * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
  * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. A meter shows once it is
@@ -521,29 +514,11 @@ function UsageMeters({ usage, onOpen }: { usage: SessionUsage; onOpen: (() => vo
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
-      {items.map((item) => {
-        const used = item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
-        const meter = (
-          <>
-            <span className="mx-usage-name">{usageName(item)}</span>
-            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
-              <path d={METER_PATH} className="mx-usage-track mx-usage-sq" />
-              <path d={METER_PATH} className="mx-usage-fill mx-usage-sq" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
-              <path d={METER_ROUND} className="mx-usage-track mx-usage-round" />
-              <path d={METER_ROUND} className="mx-usage-fill mx-usage-round" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
-            </svg>
-            <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
-          </>
-        )
-        return onOpen === undefined
-          ? <span key={item.key} className={`mx-usage-item is-${item.tone}`} title={used}>{meter}</span>
-          : <button key={item.key} type="button" className={`mx-usage-item is-${item.tone}`} title={`${used} · Open Usage & cost`} onClick={onOpen}>{meter}</button>
-      })}
+      {items.map((item) => <UsageMeter key={item.key} item={item} onOpen={onOpen} />)}
     </span>
   )
 }
 
-/** The permissions button's face: a shield, a warning mark when the mode asks about nothing, the mode's name, and a chevron when it opens. */
 function ModeFace({ facts, chevron = false }: { facts: ComposerFacts; chevron?: boolean }) {
   return (
     <>

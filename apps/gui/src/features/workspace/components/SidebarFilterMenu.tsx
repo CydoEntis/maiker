@@ -39,12 +39,14 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const matching = projects.filter((choice) => needle === '' || choice.name.toLowerCase().includes(needle))
-  const dirty = grouping !== DEFAULT_GROUPING || sort !== DEFAULT_SIDEBAR_SORT || project !== null
+  // The button lights up for a narrowed or re-sorted list; a changed grouping is plain to see from the headings.
+  const narrowed = sort !== DEFAULT_SIDEBAR_SORT || project !== null
+  const dirty = narrowed || grouping !== DEFAULT_GROUPING
   const label = `Filter and group: ${project ?? 'All projects'}`
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className="mx-head-button" aria-label={label} title="Filter and group"><Icon name="filter" /></button>
+        <button type="button" className={`mx-head-button${narrowed ? ' is-on' : ''}`} data-on={narrowed} aria-label={label} title="Filter and group"><Icon name="filter" /></button>
       </Popover.Trigger>
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Group, sort and filter" className="mx-grp-menu">
         <div className="mx-grp-row">

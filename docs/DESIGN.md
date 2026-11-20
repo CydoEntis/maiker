@@ -462,24 +462,24 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then four 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu**
   (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner. **Group** Status | Project | Machine and **Sort** Recent | Oldest | A–Z
   as segmented toggles; then a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows
-  before it scrolls, **All projects** first while the search is empty; **Reset** appears when anything differs from Status, Recent and All projects.
+  before it scrolls, **All projects** first while the search is empty; **Reset** appears when anything differs from Status, Recent and All projects. The ≡ button itself turns `--accent-text` (`data-on`) while the sort is not Recent or a project is picked; a changed grouping does not light it, the headings show that.
   A choice applies at once and the menu stays open. Recent puts the session whose state changed last first, Oldest is creation order; the sort is the sidebar's own and is not remembered), **New terminal** (the terminal glyph; a plain shell in the start folder, the same action as New terminal and its key, shown in the tooltip) and **New session** `+` (opens the draft chat on this computer; a right-click offers New session,
   New terminal and Add a remote machine…). The grouping is `sidebarGroup`, also Settings › Appearance › Group sessions by.
-  **By status** (`statusSections`): **Needs you** (in `--needs`; an agent that stopped is here too, and so is one held
-  by its plan limit), **Working**, **Done**, **Idle** (a session the daemon cannot read is here) each a heading
-  with its count that folds it on a click; a section with nothing in it is not listed, and rows follow the Sort within one. A terminal that asks is under Needs you.
+  **By status** (`statusSections`): **Needs you**, **Working**, **Done**, **Idle** (an agent that stopped is under Needs you, and so is one held
+  by its plan limit; a session the daemon cannot read is under Idle). Each group is a **card** (`--m-well`, a `--line` hairline, `--r-panel`) whose heading, a title and a count, folds it on a click.
+  The title **and its count** take the status's colour (`--needs`, `--working`, `--done`, `--muted`); the count is 10.5px mono at .7 opacity (`data-tone` on both says which); a section with nothing in it is not listed, and rows follow the Sort within one. A terminal that asks is under Needs you.
   **Terminals** are not one of these headings: under every grouping, the sessions with no agent in them (a shell, a
   program running in one, a shell that exited, the shell an agent left behind) are one **Terminals** section stuck
   over the foot (`TerminalsSection`, `splitTerminals`): it never scrolls away with the list, takes at most a third of the
   sidebar's height and scrolls its own rows past that, shows its count, folds from its heading, and has its own **+**
-  (New terminal), so a new terminal's row appears beside the button that made it. Each row keeps its × on hover to close it.
+  (New terminal), so a new terminal's row appears beside the button that made it.
   A terminal that asks stays with Needs you, and a chat session is never listed here. In the 52px rail the section is
   one terminal glyph over the foot with its count; each press opens the next terminal after the one on screen. A row
-  of another machine names the machine after its project (the nickname given to it, else its name); a row of this computer names no machine. **By project** (`projectSections`): one heading per project
+  is the same in every grouping (below). **By project** (`projectSections`): one heading per project
   by name, with its colour square, count and needs-you count; a project on another machine gets its own heading,
   `name · machine` with the line's dot. In both, a machine that needs the app, or is not up, is listed under the rows: its **↑ Update** (or Install) button or percentage, or that it is down (a red dot, "Offline" and a **Fix** button that opens the Add a remote machine dialog on that machine; the word never follows the line's retries, and the host's reason is the tooltip), since no machine heading carries it, and a draft chat is the
-  first row of the list. **By machine**, this computer first: an uppercase 10.5px heading with a 12px caret (`--accent`; a project's caret is `--ansi-blue`), a laptop or server mark, the count and
-  the line's 5px dot (its tooltip gives the reason when the machine is down; a right-click opens the full menu); clicking the heading's name folds the group. A machine that is down shows a red dot, "Offline" and **Fix** under its heading, always the same words whatever its line is doing, with the reason as the tooltip, and Fix opens the dialog on that machine; one that is up ends its sessions with **New session on <name>** (also in its right-click menu). There is no `+` in the heading and no group-by-project toggle. Within a
+  first row of the list. **By machine**, this computer first: an uppercase 10.5px heading with a 12px caret (`--accent`; a project's caret is `--ansi-blue`), a monitor (this computer) or server mark, the count, a **+** of its own (a session on that machine) and
+  the line's 5px dot (its tooltip gives the reason when the machine is down; a right-click opens the full menu); clicking the heading's name folds the group. A machine that is down shows a red dot, "Offline" and **Fix** under its heading, always the same words whatever its line is doing, with the reason as the tooltip, and Fix opens the dialog on that machine; one that is up ends its sessions with **New session on <name>** (also in its right-click menu). There is no group-by-project toggle. Within a
   machine the rows are in the **Session order** setting (`sidebarOrder`): as created, or with what needs you first.
   While the new-chat page is open, a draft row (**New session** in italics, a dim `draft` tag and the agent's tile at
   .75 opacity) is listed first (last on this computer when grouped by machine),
@@ -490,12 +490,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   status changes: its badge says the new status, and a flash on every finished turn read as noise.
   **Put away** (`splitPutAway`) is the last heading of the scrolling list in every grouping, folded until opened, with
   its count and "still running": the sessions put away from their menu, terminals included, as created. A row there has
-  an arrow (**Bring back**) in place of the hover ×; a put-away session that needs you is listed under Needs you instead.
+  **Bring back** in its menu; a put-away session that needs you is listed under Needs you instead.
   The rail leaves put-away sessions out.
-  A **row** (padding 7px 10px, radius `--r-control`) is the 16px flat app tile, dimmed while idle or unknown, with a
-  9px status badge at its corner (`!` needs you, pulsing; the spinner; `✓` done; `×` stopped; `‖` limited; a dashed
-  square for unknown; none while idle), the name with how long it has been in its state at the right, and the project
-  (and another machine) under it.
+  A **row** (padding 7px 10px, radius `--r-control`), one design in every grouping, has two lines. **Line 1** is the status mark (`StatusIcon`, the one shared mark; there is no failed state) at the left, the name, a word when it stopped or is held by its plan limit, and how long it has been in its state (always shown for an agent). **Line 2**, indented under the name, is a monitor (this computer) or a server (another machine), the other machine's name in `--accent-text` (only another machine has one), then `project / worktree`: the worktree is the branch of a session in a worktree of its own, mono, and a session that is not in one shows the project alone. The agent's own app icon is not on the row, and what the agent is doing is the hover card's. There is no × on a row: closing is in its right-click menu.
+  A row's **right-click menu** reads Rename (F2), Open in a new pane, Copy folder path, a divider, Close session (a shell says Close shell), a second divider, then the rest: Open, Open in split down, Show changes, New worktree, Rename machine, Get a file, Mark as done, Put away, Snooze, Unsnooze and Bring back, each where it applies.
   A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 300px, its top 4px above the row (a row in the lower half of the window stands the card on its
   bottom instead, so it grows up) and kept inside the window, fading in by opacity with a one-pixel ring and no blurred
   shadow; while it is warm, moving to another row within 250ms shows it there at once, with no 450ms wait and no fade;
@@ -1138,6 +1136,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   about it (see *Errors*, chat problem): which agent and the command that brings it back
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
+- **Pane header, pane foot and status bar.** The header is one 32px line: the status mark, a machine tag (remote only), the whole
+  path in mono cut from its start, the branch crumb, `···`. An agent's terminal pane ends in a 28px foot: its mark and name, and the
+  context ring with its figure at the far right. The window ends in a 26px status bar on the window ground: `Maiker 0.80.0` and the
+  update button (the dot and its words) at the left; at the right one meter per agent (mark, window name, ring, figure) at its
+  tightest limit, the focused session's agent on a selected ground, amber (`--needs`) from 70% and red (`--danger`) from 90%,
+  then the commands key as a keycap and **Commands**. A meter opens the usage popover (300px, scrolls, no sticky note).
+  Rules: [UI](UI.md#project-specific-window-chrome-desktop).
 - **Usage and cost (⌘⇧U / Ctrl+Shift+U).** Settings › Workspace › **Usage & cost** (key U), above Notifications,
   drawn as one Settings card; the shortcut and the palette open Settings on that page, and Esc closes Settings.
   There is no usage button in the sidebar footer and no full-screen view.

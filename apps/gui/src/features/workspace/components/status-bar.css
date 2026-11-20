@@ -1,0 +1,12 @@
+/* The window's foot, under the cards: one row on the window ground. */
+.mx-status-bar { flex: none; height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 14px; font-size: 11.5px; color: var(--dim); white-space: nowrap; background: var(--bg); }
+.mx-status-version { font: 400 11px var(--mono); }
+.mx-status-fill { flex: 1; }
+.mx-status-meters { display: inline-flex; align-items: center; gap: 4px; }
+.mx-status-meter { height: 20px; padding: 0 6px; border-radius: var(--r-control); gap: 6px; cursor: pointer; }
+.mx-status-meter:hover { background: var(--m-hover); }
+.mx-status-meter.is-current { background: var(--m-sel); }
+.mx-status-commands { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px; border-radius: var(--r-control); color: var(--muted); }
+.mx-status-commands:hover { background: var(--m-hover); color: var(--fg); }
+.mx-status-commands:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-status-commands kbd { font: 500 10.5px var(--mono); color: var(--fg2); padding: 0 4px; border-radius: var(--r-badge); box-shadow: inset 0 0 0 1px var(--line2); }

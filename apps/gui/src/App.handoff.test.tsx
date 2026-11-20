@@ -238,14 +238,15 @@ describe('desktop terminal multiplexer', () => {
     }
   })
 
-  it('draws each known agent\'s mark on its own tile', async () => {
+  it('leads a row with its status mark and draws no agent icon on it', async () => {
     const agents = ['claude', 'codex', 'deepseek', 'gemini', 'opencode']
     daemon.loadConversations.mockResolvedValue(agents.map((agent, index) => term(index + 2, `${HOME}/code/${agent}`, { agent })))
     renderDesktopApp()
 
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     await within(sidebar).findByRole('button', { name: /, claude, / })
-    for (const agent of agents) expect(sidebar.querySelector(`.mx-app-icon.is-${agent} svg`)).not.toBeNull()
+    expect(sidebar.querySelectorAll('.mx-row .mx-row-title > [data-slot="status-icon"]')).toHaveLength(agents.length)
+    expect(sidebar.querySelector('.mx-row .mx-app-icon')).toBeNull()
   })
 
   it('names each session after the agent or program it is using', async () => {
@@ -262,13 +263,13 @@ describe('desktop terminal multiplexer', () => {
     expect(within(sidebar).getByRole('button', { name: /, shell, / })).toBeInTheDocument()
   })
 
-  it('shows a pane its status as the header\'s bottom edge, with no chip in a corner', async () => {
+  it('shows a pane its status as the header\'s mark and bottom edge, with no chip in a corner', async () => {
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'working', agent: 'codex' })])
     renderDesktopApp()
 
     const pane = await screen.findByRole('region', { name: /^Terminal 1: / })
     expect(pane.querySelector('.mx-pane-head .mx-pane-status[data-status="working"]')).not.toBeNull()
-    expect(pane.querySelector('.mx-pane-id [data-slot="status-icon"]')).toBeNull()
+    expect(pane.querySelector('.mx-pane-id .mx-pane-mark [data-slot="status-icon"][data-status="working"]')).not.toBeNull()
     expect(screen.queryByRole('button', { name: /^Status:/ })).not.toBeInTheDocument()
   })
 
@@ -314,7 +315,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /, shell, / }))
-    await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
+    await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
 
     // The name is asked for in a dialog ; nothing on the row turns into a field.
     const dialog = await screen.findByRole('dialog', { name: 'Rename session' })
@@ -327,7 +328,6 @@ describe('desktop terminal multiplexer', () => {
 
     await waitFor(() => { expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: 't2' }, 'Login fix') })
     await within(sidebar).findByRole('button', { name: /^Login fix, shell, / })
-    expect(document.querySelector('.mx-pane-name')).toHaveTextContent('Login fix')
   })
 
   it('cancels the rename dialog and sends nothing, and an empty name clears it', async () => {
@@ -336,7 +336,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /^Login fix, shell, / }))
-    await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
+    await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
     const field = await within(await screen.findByRole('dialog', { name: 'Rename session' })).findByRole('textbox', { name: 'Session name' })
     expect(field).toHaveValue('Login fix')
     await waitFor(() => { expect(field).toHaveFocus() })
@@ -346,7 +346,7 @@ describe('desktop terminal multiplexer', () => {
     expect(daemon.renameConversationOnDaemon).not.toHaveBeenCalled()
 
     fireEvent.contextMenu(within(sidebar).getByRole('button', { name: /^Login fix, shell, / }))
-    await user.click(await screen.findByRole('menuitem', { name: /^Rename…/ }))
+    await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
     await user.clear(await screen.findByRole('textbox', { name: 'Session name' }))
     await user.keyboard('{Enter}')
     await waitFor(() => { expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: 't2' }, '') })
@@ -385,22 +385,23 @@ describe('desktop terminal multiplexer', () => {
     const row = await screen.findByRole('button', { name: 'a, shell, idle' })
     row.focus()
     fireEvent.contextMenu(row)
-    const open = await screen.findByRole('menuitem', { name: 'Open' })
-    expect(open).toHaveFocus()
+    const rename = await screen.findByRole('menuitem', { name: /^Rename/ })
+    expect(rename).toHaveFocus()
 
+    // The one pane on screen is this session, so Open in a new pane is greyed and the arrow skips it.
     await user.keyboard('{ArrowDown}')
-    expect(screen.getByRole('menuitem', { name: /^Rename…/ })).toHaveFocus()
-    await user.keyboard('{ArrowUp}{ArrowUp}')
-    expect(screen.getByRole('menuitem', { name: 'Close shell' })).toHaveFocus()
-    await user.keyboard('{Home}')
-    expect(open).toHaveFocus()
+    expect(screen.getByRole('menuitem', { name: 'Copy folder path' })).toHaveFocus()
+    await user.keyboard('{ArrowUp}')
+    expect(rename).toHaveFocus()
+    await user.keyboard('{ArrowDown}{Home}')
+    expect(rename).toHaveFocus()
 
     await user.keyboard('{Escape}')
-    await waitFor(() => { expect(screen.queryByRole('menuitem', { name: 'Open' })).not.toBeInTheDocument() })
+    await waitFor(() => { expect(screen.queryByRole('menuitem', { name: /^Rename/ })).not.toBeInTheDocument() })
     expect(row).toHaveFocus()
   })
 
-  it('shows the branch on a row but no diff counts or folder badge, and leaves "working" to the status icon', async () => {
+  it('shows the project on a row but no branch, diff counts or folder badge, and leaves "working" to the status icon', async () => {
     daemon.loadConversations.mockResolvedValue([inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker`, { agent: 'claude', status: 'working', branch: 'agent/grow-028', diffAdded: 104, diffRemoved: 61 })])
     renderDesktopApp()
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
@@ -408,7 +409,8 @@ describe('desktop terminal multiplexer', () => {
     const row = await within(sidebar).findByRole('button', { name: /, claude, working/ })
 
     expect(row).toHaveTextContent('maiker')
-    expect(row).toHaveTextContent('agent/grow-028')
+    // A branch that is not a worktree is the pane's to show; a row names a worktree only.
+    expect(row).not.toHaveTextContent('agent/grow-028')
     expect(row).not.toHaveTextContent('+104')
     expect(row).not.toHaveTextContent('−61')
     expect(row).not.toHaveTextContent('working')
@@ -680,13 +682,13 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await waitFor(() => { expect(daemon.closeSessionWithUndo).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' })) })
   })
 
-  it('asks before the row menu’s Stop session stops an agent', async () => {
+  it('asks before the row menu’s Close session stops an agent', async () => {
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { agent: 'claude', status: 'idle' })])
     renderDesktopApp()
     const row = await screen.findByRole('button', { name: /^a, claude, / })
 
     fireEvent.contextMenu(row)
-    fireEvent.click(await screen.findByRole('menuitem', { name: 'Stop session' }))
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Close session' }))
     expect(daemon.closeSessionWithUndo).not.toHaveBeenCalled()
     fireEvent.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Stop claude' }))
 

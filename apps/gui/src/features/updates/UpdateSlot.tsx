@@ -15,7 +15,8 @@ const CARD_CLOSE_DELAY_MS = 120
 const LIGHT_SIZE_PX = 12
 
 type Props = {
-  variant: 'footer' | 'rail'
+  /** `bar` is the status bar's: the same button with its words beside the icon. */
+  variant: 'footer' | 'rail' | 'bar'
   state: UpdaterState
   /** The running version, named on the card. It is never shown in the sidebar itself: the version lives in Settings. */
   version: string | null
@@ -133,6 +134,7 @@ export function UpdateSlot({ variant, state, version, skipped, portalContainer, 
           {...(click === undefined ? { 'aria-disabled': true } : { onClick: click })}
         >
           {icon}
+          {variant === 'bar' && <span className="mx-upd-label">{label}</span>}
           {offer.status === 'available' && <span className="mx-upd-dot" aria-hidden="true" />}
         </button>
       </HoverCard.Trigger>

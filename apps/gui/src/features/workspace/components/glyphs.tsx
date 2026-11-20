@@ -72,6 +72,8 @@ const ICON_DRAWINGS = {
   history: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Svg>,
   references: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1Z" /></Svg>,
   laptop: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="4.5" y="5" width="15" height="10.5" rx="1.8" /><path d="M2.5 19h19" /></Svg>,
+  /** This computer, in a sidebar row and a machine group. */
+  monitor: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="11.5" rx="1.8" /><path d="M9 20h6M12 16v4" /></Svg>,
   server: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3.5" y="4" width="17" height="6.5" rx="1.8" /><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8" /><path d="M7 7.25h.01M7 16.75h.01" /></Svg>,
   search: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Svg>,
   pin: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></Svg>,
@@ -120,6 +122,11 @@ export type IconName = keyof typeof ICON_DRAWINGS
 /** The design's line icons, drawn at the sizes and stroke widths the prototype uses. */
 export function Icon({ name, ...props }: IconProps & { name: IconName }) {
   return ICON_DRAWINGS[name](props)
+}
+
+/** Where a session or a group runs: a server for another machine, a monitor for this computer. Hidden from a screen reader, the name beside it says it. */
+export function MachineIcon({ remote, size = 13 }: { remote: boolean; size?: number }) {
+  return <Icon name={remote ? 'server' : 'monitor'} size={size} />
 }
 
 type IconKind = { kind: 'shell' | 'codex' | 'claude' | 'deepseek' | 'gemini' | 'opencode' | 'rust'; glyph: ReactNode }
