@@ -60,10 +60,13 @@ export function describeWork(events: readonly ChatEvent[], root: string | null):
 /**
  * How many of the person's messages hold these words, so a message just sent can be told from the same words said
  * before. Held, not equal: an agent can take two sends as one message (the first left unsent in its box), and the
- * second is still said.
+ * second is still said. Whitespace does not count: a pasted message (tabs, runs of spaces, CRLF) comes back from the
+ * history with other spacing, and the echo of it would otherwise stay under the message it was already read as.
  */
 export function countUserMessages(events: readonly ChatEvent[], text: string): number {
-  const wanted = text.trim()
+  const wanted = squeezeSpace(text)
   if (wanted === '') return 0
-  return events.filter((event) => event.kind === 'message' && event.role === 'user' && event.text.includes(wanted)).length
+  return events.filter((event) => event.kind === 'message' && event.role === 'user' && squeezeSpace(event.text).includes(wanted)).length
 }
+
+const squeezeSpace = (text: string): string => text.replace(/\s+/g, ' ').trim()

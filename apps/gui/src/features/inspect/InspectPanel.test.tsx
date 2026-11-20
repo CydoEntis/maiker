@@ -377,7 +377,7 @@ describe('Inspect panel', () => {
 describe('Inspect history', () => {
   const history = {
     Log: [{ hash: 'abcdef0123456789', subject: 'first commit', author: 'Test', time: NOW - 100 }],
-    Snapshots: [{ commit: 'feed1234', at: NOW - 10, why: "before claude's turn" }],
+    Snapshots: [{ commit: 'feed1234', at: NOW - 10, why: "before Claude's turn" }],
     DiffRange: { files: [{ path: 'a.txt', additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+hello\n' }], additions: 1, deletions: 0, total_files: 1, truncated: false },
   }
 
@@ -420,7 +420,7 @@ describe('Inspect history', () => {
 
     fireEvent.click(await screen.findByLabelText(/Compare/))
     fireEvent.click(screen.getByRole('button', { name: /first commit/ }))
-    fireEvent.click(screen.getByRole('button', { name: /before claude's turn/ }))
+    fireEvent.click(screen.getByRole('button', { name: /before Claude's turn/ }))
 
     expect(await screen.findByLabelText('Comparison')).toBeTruthy()
     await waitFor(() => { expect(screen.getByLabelText('Diff').textContent).toContain('+hello') })

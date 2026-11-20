@@ -1,6 +1,5 @@
 /* The one segmented control (Segmented in radio-group.tsx): a 28px frame on the well with a 1px edge and 2px of room,
-   22px choices, the picked one raised. Nothing outside this file styles it; a caller may only place it. The Folded
-   corners cut its frame and its first and last choice in material.css, keyed on `[role="radiogroup"][data-fold]`. */
+   22px choices, the picked one raised. Nothing outside this file styles it; a caller may only place it. */
 .mx-segmented { display: inline-flex; align-items: center; flex: none; box-sizing: border-box; height: 28px; gap: 0; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
 .mx-segmented.is-full { display: flex; flex: 1 1 auto; min-width: 0; }
 .mx-segmented > button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-control); font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); background: transparent; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
@@ -13,7 +12,6 @@
 .mx-seg-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 14px; height: 14px; }
 .mx-seg-mark > svg { width: 14px; height: 14px; }
 /* An agent's mark is the mark alone, in its own colour (Claude's orange, the others in the text colour): no tile behind it. */
-.mx-segmented .mx-seg-mark .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; color: var(--fg2); }
-.mx-segmented .mx-seg-mark .mx-app-icon.is-claude { color: var(--agent-claude); }
+.mx-segmented .mx-seg-mark .mx-app-icon:is(.is-claude, .is-codex, .is-gemini, .is-deepseek, .is-opencode, .is-rust, .is-shell, .is-tinted, .is-flat) { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-segmented .mx-seg-mark .mx-app-icon.is-shell { color: var(--dim); }
 .mx-segmented .mx-seg-mark .mx-app-icon svg { width: 100%; height: 100%; }

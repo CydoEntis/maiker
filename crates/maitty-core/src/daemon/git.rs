@@ -6,6 +6,8 @@ use anyhow::{Context, Result, bail};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Output};
 
+use super::worktree_path;
+
 const MAX_DIFF_FILES: usize = 100;
 const MAX_DIFF_BYTES: usize = 2 * 1024 * 1024;
 const MAX_UNTRACKED_FILE_BYTES: u64 = 256 * 1024;
@@ -131,18 +133,6 @@ pub fn list_worktrees(dir: &Path) -> Result<Vec<WorktreeEntry>> {
     Ok(list)
 }
 
-fn sanitize_branch(b: &str) -> String {
-    b.chars()
-        .map(|c| {
-            if c.is_alphanumeric() || matches!(c, '-' | '_' | '.') {
-                c
-            } else {
-                '-'
-            }
-        })
-        .collect()
-}
-
 /// Create a worktree for `branch` (new from `base`/HEAD, or the existing local / remote
 /// branch). Returns (path, repo name).
 /// What a new branch should start from, for a repository whose main checkout is at `root`: the
@@ -171,6 +161,25 @@ pub fn create_worktree(
     base: Option<&str>,
     template: &str,
 ) -> Result<(PathBuf, String)> {
+    // A test that reaches here with the default template would leave folders in the real home; it must pass its own
+    // template, or call `create_worktree_in` with a temporary home.
+    #[cfg(test)]
+    assert!(
+        !template.contains("{home}"),
+        "a test must not create a worktree under the real home folder: set `worktree.dir` or use `create_worktree_in`"
+    );
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    create_worktree_in(dir, branch, base, template, home.as_deref())
+}
+
+/// `create_worktree` with the home folder `{home}` stands for given, so a test can use its own.
+fn create_worktree_in(
+    dir: &Path,
+    branch: &str,
+    base: Option<&str>,
+    template: &str,
+    home: Option<&Path>,
+) -> Result<(PathBuf, String)> {
     let branch = branch.trim();
     if branch.is_empty() || branch.starts_with('-') || branch.contains(char::is_whitespace) {
         bail!("`{branch}` is not a branch name that can be used: it must not be empty, start with `-` or hold spaces.");
@@ -184,14 +193,9 @@ pub fn create_worktree(
         .file_name()
         .map(|n| n.to_string_lossy().into_owned())
         .unwrap_or_else(|| "repo".into());
-    let parent = root.parent().unwrap_or(&root);
-    let path = PathBuf::from(
-        template
-            .replace("{repo_parent}", &parent.to_string_lossy())
-            .replace("{repo}", &repo)
-            .replace("{branch}", &sanitize_branch(branch))
-            .replace('/', std::path::MAIN_SEPARATOR_STR),
-    );
+    let placed = worktree_path::place(template, &root, home, branch)?;
+    let project_dir = placed.project_dir;
+    let path = placed.path;
     let path = crate::daemon::clean_path(path);
     if path.exists() {
         bail!(
@@ -210,6 +214,9 @@ pub fn create_worktree(
         bail!(
             "this repository has no commits yet, so there is nothing to start a worktree from; make a first commit and it will work"
         );
+    }
+    if let Some(project_dir) = &project_dir {
+        worktree_path::claim(project_dir, &root)?;
     }
     if let Some(p) = path.parent() {
         std::fs::create_dir_all(p)?;
@@ -287,23 +294,25 @@ pub fn ahead_of(dir: &Path, base: &str) -> u32 {
         .unwrap_or(0)
 }
 
-/// Lines added and removed in the working tree against HEAD, for the sidebar's `+N -N`.
-/// Untracked files are not counted, as with any `git diff`. `None`: not a repository, or no
-/// commit to compare with.
-pub fn diff_counts(dir: &Path) -> Option<(u32, u32)> {
+/// Lines added, lines removed and files changed in the working tree against HEAD, for the
+/// sidebar's `+N -N` and the pane's `changes N`. Untracked files are not counted, as with any
+/// `git diff`. `None`: not a repository, or no commit to compare with.
+pub fn diff_counts(dir: &Path) -> Option<(u32, u32, u32)> {
     git(dir, &["diff", "--numstat", "--no-ext-diff", "HEAD", "--"])
         .ok()
         .map(|out| parse_numstat(&out))
 }
 
-/// Sum `git diff --numstat` lines. A binary file shows `-` for both counts and adds nothing.
-fn parse_numstat(out: &str) -> (u32, u32) {
-    out.lines().fold((0, 0), |(added, removed), line| {
+/// Sum `git diff --numstat` lines. A binary file shows `-` for both counts and adds no lines,
+/// but is still a changed file.
+fn parse_numstat(out: &str) -> (u32, u32, u32) {
+    out.lines().filter(|line| !line.is_empty()).fold((0, 0, 0), |(added, removed, files), line| {
         let mut cols = line.split('\t');
         let count = |c: Option<&str>| c.and_then(|c| c.parse::<u32>().ok()).unwrap_or(0);
         (
             added.saturating_add(count(cols.next())),
             removed.saturating_add(count(cols.next())),
+            files.saturating_add(1),
         )
     })
 }
@@ -822,9 +831,10 @@ pub fn remove_worktree(path: &Path, force: bool, delete_branch: bool) -> Result<
     for _ in 0..10 {
         match git(&root, &args) {
             Ok(_) => {
-                // Tidy the `<repo>-worktrees` folder once its last worktree is gone.
+                // Tidy the folder that held it (`<project>`, or the old `<repo>-worktrees`) once its
+                // last worktree is gone.
                 if let Some(parent) = path.parent() {
-                    let _ = std::fs::remove_dir(parent);
+                    worktree_path::tidy(parent);
                 }
                 if delete_branch && let Some(b) = branch {
                     git(&root, &["branch", "-D", &b])?;
@@ -847,9 +857,9 @@ mod tests {
 
     #[test]
     fn numstat_lines_add_up_and_a_binary_file_counts_for_nothing() {
-        assert_eq!(parse_numstat(""), (0, 0));
-        assert_eq!(parse_numstat("3\t1\tsrc/a.rs\n10\t0\tb.rs"), (13, 1));
-        assert_eq!(parse_numstat("-\t-\timage.png\n2\t2\tc.rs"), (2, 2));
+        assert_eq!(parse_numstat(""), (0, 0, 0));
+        assert_eq!(parse_numstat("3\t1\tsrc/a.rs\n10\t0\tb.rs"), (13, 1, 2));
+        assert_eq!(parse_numstat("-\t-\timage.png\n2\t2\tc.rs"), (2, 2, 2));
     }
 
     fn git_at(dir: &Path, args: &[&str]) {
@@ -880,11 +890,11 @@ mod tests {
         std::fs::write(repository.path().join("a.txt"), "one\ntwo\n").expect("file");
         git_at(repository.path(), &["add", "--all"]);
         git_at(repository.path(), &["commit", "--quiet", "-m", "baseline"]);
-        assert_eq!(diff_counts(repository.path()), Some((0, 0)));
+        assert_eq!(diff_counts(repository.path()), Some((0, 0, 0)));
 
         std::fs::write(repository.path().join("a.txt"), "one\nthree\nfour\n").expect("edit");
         std::fs::write(repository.path().join("untracked.txt"), "x\n").expect("untracked");
-        assert_eq!(diff_counts(repository.path()), Some((2, 1)));
+        assert_eq!(diff_counts(repository.path()), Some((2, 1, 1)));
     }
 
     #[test]
@@ -1075,6 +1085,74 @@ two
 
         let (fresh, _) = create_worktree(&repo, "swift-lynx", Some("HEAD"), template).expect("worktree");
         assert_eq!(head_of(&fresh), new, "a base: a new branch from the current checkout");
+    }
+}
+
+#[cfg(test)]
+mod central_worktrees {
+    use super::*;
+
+    const CENTRAL: &str = "{home}/.maiker/worktrees/{project}/{branch}";
+
+    fn repo_named(parent: &Path, name: &str) -> PathBuf {
+        let repo = parent.join(name);
+        std::fs::create_dir_all(&repo).expect("repository directory");
+        for args in [
+            vec!["init", "--quiet"],
+            vec!["config", "user.name", "Test User"],
+            vec!["config", "user.email", "test@example.invalid"],
+            vec!["commit", "--quiet", "--allow-empty", "-m", "first"],
+        ] {
+            let out = Command::new("git").arg("-C").arg(&repo).args(&args).output().expect("git should run");
+            assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        }
+        repo
+    }
+
+    #[test]
+    fn a_worktree_is_made_under_home_by_project_and_removed_with_its_folder() {
+        let tmp = crate::daemon::persist::scratch_dir();
+        let home = tmp.path().join("home");
+        let repo = repo_named(&tmp.path().join("code"), "shop");
+
+        let (path, name) = create_worktree_in(&repo, "fix-login", None, CENTRAL, Some(&home)).expect("worktree");
+        assert_eq!(name, "shop");
+        assert_eq!(path, home.join(".maiker").join("worktrees").join("shop").join("fix-login"));
+        assert!(path.join(".git").exists(), "a real checkout");
+        assert!(
+            list_worktrees(&repo).expect("list").iter().any(|w| w.path.canonicalize().ok() == path.canonicalize().ok()),
+            "git lists it, so merge, remove and tidy find it"
+        );
+
+        remove_worktree(&path, false, true).expect("remove");
+        assert!(!home.join(".maiker").join("worktrees").join("shop").exists(), "the project folder goes with its last worktree");
+    }
+
+    #[test]
+    fn two_repositories_with_one_folder_name_keep_separate_project_folders() {
+        let tmp = crate::daemon::persist::scratch_dir();
+        let home = tmp.path().join("home");
+        let first = repo_named(&tmp.path().join("a"), "shop");
+        let second = repo_named(&tmp.path().join("b"), "shop");
+
+        let (one, _) = create_worktree_in(&first, "x", None, CENTRAL, Some(&home)).expect("first");
+        let (two, _) = create_worktree_in(&second, "x", None, CENTRAL, Some(&home)).expect("second");
+        assert_ne!(one.parent(), two.parent(), "{one:?} {two:?}");
+        assert!(two.parent().and_then(Path::file_name).is_some_and(|n| n.to_string_lossy().starts_with("shop-")));
+        let (again, _) = create_worktree_in(&first, "y", None, CENTRAL, Some(&home)).expect("first again");
+        assert_eq!(again.parent(), one.parent(), "the first repository keeps its folder");
+    }
+
+    #[test]
+    fn a_worktree_made_next_to_the_repository_is_still_listed_and_removed() {
+        let tmp = crate::daemon::persist::scratch_dir();
+        let repo = repo_named(tmp.path(), "shop");
+        let (old, _) = create_worktree_in(&repo, "old-one", None, "{repo_parent}/{repo}-worktrees/{branch}", None).expect("worktree");
+        // Compared as resolved paths: Windows may hand the temp folder back in its short 8.3 form.
+        assert_eq!(old.canonicalize().ok(), tmp.path().join("shop-worktrees").join("old-one").canonicalize().ok());
+        assert!(list_worktrees(&repo).expect("list").iter().any(|w| w.path.canonicalize().ok() == old.canonicalize().ok()));
+        remove_worktree(&old, false, true).expect("remove");
+        assert!(!tmp.path().join("shop-worktrees").exists());
     }
 }
 

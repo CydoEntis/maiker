@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { ACTIVE_POLL_MS, forgetChatFeeds, IDLE_POLL_MS, RETRY_READ_MS } from '../useChatFeed'
@@ -74,7 +74,7 @@ describe('the chat history', () => {
     await settle()
     await settle()
 
-    const list = screen.getByRole('region', { name: 'Conversation with claude' })
+    const list = screen.getByRole('region', { name: 'Conversation with Claude' })
     // 1,500 items are in the conversation; only a screenful and its overscan are in the page.
     expect(list.querySelectorAll('[data-key]').length).toBeLessThan(40)
     expect(within(list).getByText('message 1499')).toBeInTheDocument()
@@ -127,7 +127,7 @@ describe('the chat history', () => {
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
 
-    expect(screen.getAllByText(/claude is working/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Claude is working/).length).toBeGreaterThan(0)
   })
 
   it('tries a failed read again at once, and says nothing when that one works', async () => {
@@ -143,6 +143,21 @@ describe('the chat history', () => {
     await settle(RETRY_READ_MS)
 
     expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
+    expect(screen.getByText('message 1')).toBeInTheDocument()
+    warn.mockRestore()
+  })
+
+  it('leaves a lost service to the window to say, not the chat as well', async () => {
+    const daemon = conversation(2)
+    render(<ChatSession link={link()} agent="claude" online={false} />)
+    await settle()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+
+    daemon.failure = new Error(`${DAEMON_NAME} is not running`)
+    await settle(IDLE_POLL_MS)
+    await settle(RETRY_READ_MS)
+
+    expect(screen.queryByText(/Reconnecting to this chat…/)).not.toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
     warn.mockRestore()
   })
@@ -208,8 +223,8 @@ describe('the chat history', () => {
     await settle()
 
     const announcer = screen.getAllByRole('status').find((node) => node.getAttribute('aria-live') === 'polite')
-    expect(announcer).toHaveTextContent('codex is working')
-    expect(screen.getByRole('region', { name: 'Conversation with codex' })).not.toHaveAttribute('aria-live')
+    expect(announcer).toHaveTextContent('Codex is working')
+    expect(screen.getByRole('region', { name: 'Conversation with Codex' })).not.toHaveAttribute('aria-live')
   })
 
   it('shows an item the history cannot describe as unavailable, not as an invented diff', async () => {
@@ -218,9 +233,7 @@ describe('the chat history', () => {
     daemon.upsert({ source: { conversation: FAKE_CONVERSATION, turn: 't1', item: 'e' }, content: { Tool: { kind: 'commandExecution', label: 'Edit ', output: '' } }, state: 'Completed' })
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
-    // Steps start folded: open it as the person would.
-    fireEvent.click(within(screen.getByRole('group', { name: /^Edit/ })).getByRole('button', { expanded: false }))
-
+    // An edit on its own starts open.
     expect(screen.getByText(/didn.t keep this diff/)).toBeInTheDocument()
   })
 })
@@ -241,7 +254,7 @@ describe('a subagent’s own chat', () => {
     const log = screen.getByRole('log', { name: 'Subagent Write drafts tests' })
     expect(within(log).getByText('Write drafts tests for the routes.')).toBeInTheDocument()
     expect(within(log).getByText('Wrote 12 tests.')).toBeInTheDocument()
-    expect(screen.queryByRole('region', { name: 'Conversation with claude' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Conversation with Claude' })).not.toBeInTheDocument()
   })
 
   it('goes back to the main session from its bar', async () => {
@@ -252,5 +265,31 @@ describe('a subagent’s own chat', () => {
 
     act(() => { screen.getByRole('button', { name: 'Back to main session' }).click() })
     expect(onBackToMain).toHaveBeenCalled()
+  })
+})
+
+describe('a chat kept out of sight', () => {
+  it('shows what it had, reads nothing while paused, and reads at once when shown again', async () => {
+    const daemon = conversation(2)
+    const reads = vi.spyOn(daemon, 'read')
+    const { rerender } = render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    rerender(<ChatSession link={link()} agent="claude" online paused />)
+    reads.mockClear()
+
+    daemon.upsert(daemon.message('t1', 'm2', 'Assistant', 'said while away'))
+    await settle(IDLE_POLL_MS * 3)
+
+    expect(reads).not.toHaveBeenCalled()
+    expect(screen.getByText('message 1')).toBeInTheDocument()
+    expect(screen.queryByText('said while away')).not.toBeInTheDocument()
+
+    rerender(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    await settle(1500)
+
+    expect(reads).toHaveBeenCalled()
+    expect(screen.getByText('said while away')).toBeInTheDocument()
+    expect(screen.getAllByText('message 1')).toHaveLength(1)
   })
 })

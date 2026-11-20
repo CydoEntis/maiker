@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DraftAttachment } from '@/features/chat/composerStore'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { revokePreviews } from '@/features/chat/useAttachmentIntake'
-import { explainError, type ExplainedError } from '@/lib/error-message'
+import { explainStartFailure, type ExplainedError } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
-import type { NewChatRequest, NewChatStartOptions } from './components/NewSessionDialog'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import { nameFromMessage } from './model/newSession'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** What a start in the background took out of the message box, given back as it was when the start fails. */
 export type StartDraft = { text: string; attachments: readonly DraftAttachment[] }
@@ -20,10 +21,10 @@ export type FailedStart = { key: number; group: number; name: string; agent: str
 
 /** How a failed start is named: by the words its session would have been named with, and its agent when one prompt went to several. */
 export const failedStartLabel = ({ name, agent }: Pick<FailedStart, 'name' | 'agent'>): string =>
-  `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agent}`}`
+  `${name === '' ? 'the empty chat' : `“${name}”`}${agent === null ? '' : ` with ${agentLabel(agent)}`}`
 
 /**
- * The New session dialog's starts in the background: each runs on its own while the dialog is written in again. `pending`
+ * The New session draft's starts in the background: each runs on its own while the dialog is written in again. `pending`
  * counts the ones still starting; a failed one is kept in `failed` until it is taken back or dismissed, and is a toast
  * instead once the page is gone.
  */
@@ -73,7 +74,7 @@ export function useBackgroundStarts(onStart: (request: NewChatRequest, options?:
             toast.failed(action, failure)
             return
           }
-          const error = explainError(failure, action)
+          const error = explainStartFailure(failure, action, request.branch)
           lastKey.current += 1
           const key = lastKey.current
           // Once another start of the prompt put it back, the box holds the draft: this one has nothing to give back.

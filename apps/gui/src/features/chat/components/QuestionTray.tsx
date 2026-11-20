@@ -8,7 +8,7 @@ import { alwaysAllowChoices } from '../alwaysAllow'
 import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { KEY_ESCAPE } from '../terminalKeys'
-import { keysToPick, type ScreenMenu } from '../screenMenu'
+import { keysToPick, parseChoiceMenu, typeEach, type ScreenMenu } from '../screenMenu'
 import type { TrustPrompt } from '../trustPrompt'
 import type { ApprovalActions } from './ApprovalCard'
 import { FileBadge } from './cardParts'
@@ -17,6 +17,7 @@ import { Markdown } from './Markdown'
 import { UserInputForm } from './UserInputForm'
 import { TerminalPrompt } from './TerminalPrompt'
 import { WaitingCard } from './WaitingCard'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** The number keys that pick a choice: 1 to 9. */
 const MAX_DIGIT_KEYS = 9
@@ -61,8 +62,8 @@ export function ScreenMenuTray({ agent, menu, send }: { agent: string; menu: Scr
   const pick = (index: number) => { RUN(() => send(keysToPick(menu, index)), setBusy) }
   return (
     <WaitingCard
-      label={`${agent} is asking`}
-      title={`${agent} is asking`}
+      label={`${agentLabel(agent)} is asking`}
+      title={`${agentLabel(agent)} is asking`}
       foot={menu.options.map((option, index) => (
         <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'soft'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
       ))}
@@ -91,10 +92,10 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
         </>
       )}
     >
-      <p className="mx-waiting-text">{agent} was started in a folder it has not seen before:</p>
+      <p className="mx-waiting-text">{agentLabel(agent)} was started in a folder it has not seen before:</p>
       <pre className="mx-waiting-command">{trust.folder}</pre>
       <p className="mx-waiting-text">
-        Trusting it lets {agent} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
+        Trusting it lets {agentLabel(agent)} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
       </p>
     </WaitingCard>
   )
@@ -116,11 +117,11 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
   const label = `Approval: ${TITLE[event.approvalKind]}`
   if (event.approvalKind === 'UserInput') {
     return (
-      <WaitingCard label={label} title={agent === undefined ? TITLE.UserInput : `${agent} needs your input`}>
+      <WaitingCard label={label} title={agent === undefined ? TITLE.UserInput : `${agentLabel(agent)} needs your input`}>
         {reason}
         {actions !== null && event.questions.length > 0
           ? <UserInputForm questions={event.questions} busy={actions.busy} onSubmit={(answers) => { actions.answerInput(event.requestId, answers) }} />
-          : <p className="mx-waiting-note">Answer it in the terminal.</p>}
+          : <p className="mx-waiting-note">Only the agent's terminal can take this answer.</p>}
       </WaitingCard>
     )
   }
@@ -130,10 +131,10 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
     <WaitingCard
       label={label}
       title={event.approvalKind === 'FileChange' && event.changes.length > 0 ? `Wants to change ${String(event.changes.length)} ${event.changes.length === 1 ? 'file' : 'files'}` : TITLE[event.approvalKind]}
-      aside={agent}
+      aside={agent === undefined ? undefined : agentLabel(agent)}
       flush={hasCommand && reason === null}
       onEnter={main}
-      foot={actions === null ? <span className="mx-waiting-note">Answer it in the terminal.</span> : (
+      foot={actions === null ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : (
         <>
           {answerable.map((choice) => <AnswerButton key={choice} decision={choice} busy={actions.busy} onAnswer={() => { actions.answer(event.requestId, choice) }} />)}
           <span className="mx-spacer" />
@@ -147,6 +148,36 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
     >
       {reason}
       <RequestDetail event={event} />
+    </WaitingCard>
+  )
+}
+
+/**
+ * A numbered menu the agent draws on its own screen with no hook behind it (Claude's "Switch model?"): its words, a
+ * button and a number key per choice, and Cancel for Esc. Each pick moves the terminal's cursor to the choice and presses
+ * Enter, as a person's keys would. The terminal itself stays one click away under "Show terminal".
+ */
+export function ChoiceMenuTray({ label, title, aside, menu, send, sendKeys, readScreen }: { label: string; title: string; aside: string; menu: ScreenMenu; send: (keys: readonly string[]) => Promise<void>; sendKeys: (keys: string) => Promise<void>; readScreen: (() => Promise<string>) | undefined }) {
+  const [busy, setBusy] = useState(false)
+  const [terminal, setTerminal] = useState(false)
+  return (
+    <WaitingCard
+      label={label}
+      title={title}
+      aside={aside}
+      foot={(
+        <>
+          <Button variant="soft" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
+          <span className="mx-spacer" />
+          <Button variant="ghost" size="sm" aria-expanded={terminal} onClick={() => { setTerminal((now) => !now) }}>{terminal ? 'Hide terminal' : 'Show terminal'}</Button>
+        </>
+      )}
+    >
+      {menu.question !== '' && <p className="mx-waiting-text is-pre">{menu.question}</p>}
+      <div className="mx-waiting-options" role="group" aria-label={`${aside} choices`}>
+        {menu.options.map((option, index) => <Choice key={`${String(index)}-${option}`} label={option} index={index} picked={false} busy={busy} onPick={() => { RUN(() => send(keysToPick(menu, index)), setBusy) }} />)}
+      </div>
+      {terminal && <TerminalPrompt readScreen={readScreen} sendKeys={sendKeys} />}
     </WaitingCard>
   )
 }
@@ -340,11 +371,11 @@ const sendAllAside = (questions: readonly AskedQuestion[]) => `${String(question
 
 /** Claude's plan, formatted as a reply would be, for the person to approve or send back. */
 function PlanBody({ plan }: { plan: AskedPlan | null }) {
-  if (plan === null) return <p className="mx-waiting-note">The plan is in the terminal.</p>
+  if (plan === null) return <p className="mx-waiting-note">The plan is only in the agent's terminal.</p>
   return (
     <>
       <Markdown className="mx-waiting-plan" text={plan.text} />
-      {plan.cut && <p className="mx-waiting-note">The history kept only the start of this plan. Read the rest in the terminal.</p>}
+      {plan.cut && <p className="mx-waiting-note">The history kept only the start of this plan. The rest is in the agent's terminal.</p>}
     </>
   )
 }
@@ -366,7 +397,7 @@ function PlanTray({ label, plan, asking, send, readScreen }: { label: string; pl
       title="Approve this plan?"
       aside="Plan mode"
       foot={press === undefined
-        ? (send === undefined ? <span className="mx-waiting-note">Answer in the terminal.</span> : null)
+        ? (send === undefined ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : null)
         : <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
     >
       <PlanBody plan={plan} />
@@ -395,7 +426,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
   const sendAll = questions.length > 0 && online ? pickAll : undefined
   const canAnswer = ask !== null && ask.answerable && online && answer !== undefined
   const isQuestion = ask?.tool === QUESTION_TOOL
-  const label = `${agent} needs your permission`
+  const label = `${agentLabel(agent)} needs your permission`
   const mirror = sendKeys !== undefined && online ? sendKeys : undefined
   // Claude's own "don't ask again" choices, read off its menu; never offered for a question or from another agent.
   const always = canAnswer && pick !== undefined && agent === 'claude' && !isQuestion ? alwaysAllowChoices(asking) : []
@@ -424,13 +455,19 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
     )
   }
 
-  const title = ask === null ? `${agentName(agent)} is waiting for you` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
+  const title = ask === null ? `${agentName(agent)} is waiting ${mirror === undefined ? 'for you' : 'in its own menu'}` : isQuestion ? `${agentName(agent)} has a question for you` : ask.tool === 'Bash' ? 'Wants to run a command' : `Wants to use ${ask.tool}`
   const detail = ask !== null && ask.detail !== '' ? ask.detail : null
   const shownDetail = detail === null ? null : isQuestion ? <p className="mx-waiting-text">{detail}</p> : <pre className="mx-waiting-command">{detail}</pre>
 
+  // The hook reported no question, so the screen is all there is: a clean numbered menu gets buttons, anything else the terminal.
+  const screenMenu = ask === null && mirror !== undefined ? parseChoiceMenu(asking) : null
+  if (screenMenu !== null && mirror !== undefined) {
+    return <ChoiceMenuTray label={label} title={title} aside={agent} menu={screenMenu} send={typeEach(mirror)} sendKeys={mirror} readScreen={readScreen} />
+  }
+
   if (!canAnswer && mirror !== undefined) {
     return (
-      <WaitingCard label={label} title={title} aside={agent} flush>
+      <WaitingCard label={label} title={title} aside={agentLabel(agent)} flush>
         {shownDetail}
         <TerminalPrompt readScreen={readScreen} sendKeys={mirror} />
       </WaitingCard>
@@ -455,7 +492,7 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
             </Button>
           ))}
         </>
-      ) : <span className="mx-waiting-note">Answer in the terminal.</span>}
+      ) : <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span>}
     >
       {shownDetail}
     </WaitingCard>

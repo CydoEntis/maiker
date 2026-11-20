@@ -440,7 +440,9 @@ impl Daemon {
         let Some(resume) = self.agent_resume_cmd(p, None) else {
             return self.saved_cmd(p);
         };
-        if resuming.insert((cwd.to_path_buf(), resume)) {
+        // A session started fresh has the same command as any other, so its id keeps them apart.
+        let key = format!("{resume}\0{}", p.session.as_deref().unwrap_or_default());
+        if resuming.insert((cwd.to_path_buf(), key)) {
             return self.agent_resume_cmd(p, Some(&p.runs_with));
         }
         tracing::warn!(
@@ -473,14 +475,48 @@ impl Daemon {
                     .map(|a| self.cfg.as_account(a, &cmd))
                     .unwrap_or(cmd)
             };
-            if let (Some(tpl), Some(id)) = (&def.resume, &p.session) {
-                return Some(as_account(tpl.replace("{session}", id)));
-            }
-            if let Some(tpl) = &def.resume_last {
-                return Some(as_account(tpl.clone()));
-            }
+            return self
+                .resume_base(def, p.session.as_deref(), p.account.as_deref(), p.cwd.as_deref())
+                .map(as_account);
         }
         None
+    }
+
+    /// An agent's resume command before model, bypass and account are applied. A Claude session
+    /// with no conversation on disk (it never got a message) starts the agent fresh instead:
+    /// `claude --resume` of it only prints an error, and `--continue` would pick another conversation.
+    fn resume_base(
+        &self,
+        def: &CompiledAgent,
+        session: Option<&str>,
+        account: Option<&str>,
+        cwd: Option<&Path>,
+    ) -> Option<String> {
+        if let (Some(tpl), Some(id)) = (&def.resume, session) {
+            if def.name == "claude" && !self.claude_has_conversation(account, cwd, id) {
+                tracing::info!("restore: saved claude session {id} has no conversation; starting it fresh");
+                return Some(self.plain_agent_cmd(&def.name));
+            }
+            return Some(tpl.replace("{session}", id));
+        }
+        def.resume_last.clone()
+    }
+
+    /// The agent's start command with no task, as the config defines it.
+    fn plain_agent_cmd(&self, agent: &str) -> String {
+        self.cfg
+            .quick
+            .agents
+            .iter()
+            .find(|a| a.name == agent)
+            .map_or_else(|| agent.to_string(), |a| a.command.replace("{prompt}", "").trim().to_string())
+    }
+
+    /// Whether the config folder `account` runs Claude with holds `session`'s conversation for `cwd`.
+    fn claude_has_conversation(&self, account: Option<&str>, cwd: Option<&Path>, session: &str) -> bool {
+        let account_env = account.and_then(|a| self.cfg.account(a)).map(|a| &a.env);
+        let folder = hook_repair::folder_at_spawn(account_env, &self.cfg.env).or_else(|| self.claude_folder.clone());
+        super::claude_transcript::has_conversation(folder.as_deref(), cwd, session)
     }
 
     fn saved_cmd(&self, p: &persist::SavedPane) -> Option<String> {
@@ -759,10 +795,7 @@ impl Daemon {
             .agent
             .as_ref()
             .and_then(|n| self.agents.iter().find(|a| &a.name == n))?;
-        let resume = match (&def.resume, &t.session) {
-            (Some(tpl), Some(id)) => Some(tpl.replace("{session}", id)),
-            _ => def.resume_last.clone(),
-        };
+        let resume = self.resume_base(def, t.session.as_deref(), t.account.as_deref(), Some(&t.cwd));
         // Under the account it was started as: its conversation is in that account's folder.
         resume
             .map(|cmd| self.running_as(cmd, &def.name, &t.runs_with))

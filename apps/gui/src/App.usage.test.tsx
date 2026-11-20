@@ -85,7 +85,7 @@ function report(): UsageReport {
 }
 
 function renderDesktopApp() {
-  window.localStorage.setItem('maitty.gui.welcomed.v1', '1')
+  window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
 }
@@ -94,6 +94,7 @@ describe('usage and cost in the desktop app', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
+    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([term(5)])
     daemon.suggestProjectFolders.mockResolvedValue([])
@@ -157,7 +158,7 @@ describe('usage and cost in the desktop app', () => {
     await user.type(screen.getByRole('textbox', { name: /Monthly budget/ }), '40')
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
-    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('maitty.gui.settings.v1') ?? '{}')).toMatchObject({ monthlyBudget: 40 }) })
+    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ monthlyBudget: 40 }) })
     expect(screen.getByText('$40.00 monthly budget')).toBeInTheDocument()
   })
 })

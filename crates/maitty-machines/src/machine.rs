@@ -142,7 +142,7 @@ impl Machine {
     }
 
     fn named_by(def: &MachineDef, ssh: &[String]) -> Machine {
-        let argv = ssh.iter().chain(def.ssh_args.iter()).cloned().collect();
+        let argv = ssh.iter().cloned().chain(def.ssh_arguments()).collect();
         let remote_cmd = def.remote_cmd.as_deref().unwrap_or(APP_COMMAND);
         Machine {
             name: def.name.clone(),
@@ -207,6 +207,13 @@ impl Machine {
     pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
+    }
+
+    /// A login that runs `true` with ssh's own debug lines on stderr, to read which key signed in.
+    /// It never asks anyone anything.
+    pub fn key_argv(&self) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_key(&route.ssh, &route.target)?)
     }
 
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
@@ -387,6 +394,19 @@ impl Machine {
 
     pub fn name(&self) -> &str {
         &self.name
+    }
+
+    /// The ssh destination (`user@host`, a host, or an alias) of a machine reached over ssh.
+    pub fn target(&self) -> Option<&str> {
+        self.ssh_route().ok().map(|route| route.target.as_str())
+    }
+
+    /// The ssh program with its leading arguments and the target, for a look at the machine
+    /// that is not a dial (its host key). None for this computer and for a custom transport.
+    pub fn ssh_parts(&self) -> Option<(&[String], &str)> {
+        self.ssh_route()
+            .ok()
+            .map(|route| (route.ssh.as_slice(), route.target.as_str()))
     }
 
     /// The name to show for a remote machine; nothing for this one.
@@ -1091,7 +1111,7 @@ mod tests {
         let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
         assert_eq!(
             crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Login
+            crate::link_failure::FailureClass::Login("box: Permission denied".into())
         );
     }
 

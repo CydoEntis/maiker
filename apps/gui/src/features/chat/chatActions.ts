@@ -13,6 +13,8 @@ export type ChatActions = {
   readonly jump: (text: string, from: string) => void
   /** Opens the reply tray for the agent message `row`, on its questions, with the one named by `focus` (or the first) ready. */
   readonly reply: (row: string, who: string, asked: readonly Askable[], focus: string | null) => void
+  /** Sends `text` as a new message: Retry on a finished turn asks the same again. */
+  readonly retry: (text: string) => void
   /** Whether a reply can be sent now: the message box can take a message (it may queue it). */
   readonly canReply: boolean
 }

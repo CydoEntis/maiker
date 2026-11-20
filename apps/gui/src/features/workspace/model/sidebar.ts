@@ -1,6 +1,6 @@
 import { isChatSession } from './chatSession'
 import type { MachineHead } from './machines'
-import { folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView } from './session'
+import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
 
 /**
  * The most urgent first: what needs you, an agent that stopped, one held by its plan limit, what is
@@ -31,6 +31,22 @@ export function projectOf(session: SessionView): string {
   return session.repoName ?? folderNameOf(session)
 }
 
+/** Where a session works: `project / branch`, with `· worktree` when it has a checkout of its own. */
+export function placeLine(session: SessionView): string {
+  const where = session.branch === null ? projectOf(session) : `${projectOf(session)} / ${session.branch}`
+  return session.worktree ? `${where} · worktree` : where
+}
+
+/**
+ * What a toast about one session says: its name as the sidebar calls it (a shell by its path, which is its name) and, under
+ * it, where it works. The second line is left out when it would only say the name again.
+ */
+export function sessionWords(session: SessionView): { title: string; description?: string } {
+  const title = isShell(session) ? displayName(session) : rowTitle(session)
+  const place = placeLine(session)
+  return place === title ? { title } : { title, description: place }
+}
+
 /**
  * The square before a project's name: one of five colours, chosen from its name so a project is
  * always the same colour. They are CSS variables (`--proj-1` to `--proj-5`), never amber or red.
@@ -57,14 +73,27 @@ export function isShell(session: Pick<SessionView, 'process'>): boolean {
   return session.process === SHELL_PROCESS
 }
 
+/** What a row calls an agent session that has no name and has not been sent a message: nothing in it says more. */
+export const NEW_SESSION = 'New session'
+
+const LINE_BREAK = /\r?\n/
+const firstLine = (text: string): string => text.split(LINE_BREAK, 1)[0]?.trim() ?? ''
+
+/** An agent session with no name, no prompt and nothing happening: its row reads "New session", quietly. */
+export function isFreshSession(session: Pick<SessionView, 'name' | 'conversation' | 'lastPrompt' | 'status'>): boolean {
+  return session.name === null && Boolean(session.conversation.agent) && session.status === 'idle' && firstLine(session.lastPrompt) === ''
+}
+
 /**
- * What a row and a pane header call a session: the name you gave it, else the agent the daemon
- * detected, else the folder. A program running in a shell (`node`, `vim`) is not a name: it comes
- * and goes with each command, and a title that followed it would change under you.
+ * What a row and a pane header call a session: the name you gave it, else (for an agent) the start of what it was last asked,
+ * else "New session" while it has done nothing, else the folder it was made in, which is also a shell's name. Neither the agent
+ * nor a program running in a shell (`node`, `vim`) is a name: the agent is the mark beside it, a program comes and goes with each
+ * command, and a title that followed either would change under you.
  */
 export function rowTitle(session: SessionView): string {
   if (session.name !== null) return session.name
-  return session.conversation.agent ? session.process : folderNameOf(session)
+  if (!session.conversation.agent) return folderNameOf(session)
+  return firstLine(session.lastPrompt) || (isFreshSession(session) ? NEW_SESSION : folderNameOf(session))
 }
 
 /** The words at the right of a row: only a stopped agent, an exited shell or a session held by its plan limit says anything. */
@@ -72,9 +101,10 @@ export function rowWord(session: SessionView, now: number = Date.now()): string 
   if (session.snoozedUntil !== null) return untilWord(session.snoozedUntil, now)
   if (session.status === 'limited') return limitedWord(session.resumeAt, now)
   // Its machine or the daemon is out of reach, or the list just missed it: the last status is not known to be true.
-  if (session.status === 'unknown') return 'offline'
+  if (session.status === 'unknown') return STATUS_WORD.unknown
   if (session.status !== 'error') return ''
-  return isShell(session) ? 'exited' : 'stopped'
+  // A shell that ended did not stop on a failure, so it says it exited.
+  return isShell(session) ? 'exited' : STATUS_WORD.error
 }
 
 /** How the rows within a heading are ordered: the latest change of state first, the oldest session first, or by name. */
@@ -121,41 +151,25 @@ export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>
   return !session.conversation.agent && session.status !== 'needs'
 }
 
-/**
- * A row of the Terminals section: a terminal that is not a chat. It sits in that one section under every grouping, so a shell
- * an agent left behind (or one the person opened) never mixes in with the agents' rows.
- */
-export function inTerminals(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
-  return isTerminal(session) && !isChatSession(session.conversation)
-}
-
-/** The terminals in creation order (a new one lands last, so nothing moves), and the sessions the grouping lists. */
-export function splitTerminals(sessions: readonly SessionView[]): { terminals: SessionView[]; others: SessionView[] } {
-  return { terminals: inCreationOrder(sessions.filter(inTerminals)), others: sessions.filter((session) => !inTerminals(session)) }
-}
-
 export function isSidebarGrouping(value: unknown): value is SidebarGrouping {
   return SIDEBAR_GROUPINGS.some(([grouping]) => grouping === value)
 }
 
-export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle' | 'terminals'
+export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle'
 
 /** The status sections in the order they are listed, each with the few words that say what it means. */
 const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint: string }> = [
   { key: 'needs', name: 'Needs you', hint: 'waiting on you' },
   { key: 'working', name: 'Working', hint: 'running now' },
-  { key: 'done', name: 'Finished', hint: 'ready to review' },
+  { key: 'done', name: 'Done', hint: 'ready to review' },
   { key: 'idle', name: 'Idle', hint: 'nothing to do' },
-  { key: 'terminals', name: 'Terminals', hint: 'shells and programs, no agent' },
 ]
 
 /** The section a session is listed in. An agent that stopped, or one held by its plan limit, is yours to look at, so it sits with what needs you. */
 export function sectionOf(session: SessionView): StatusSectionKey {
-  // A terminal with nothing to ask sits in its own section, whatever its shell is doing.
-  if (isTerminal(session)) return 'terminals'
   switch (session.status) {
     case 'needs': return 'needs'
-    // A shell that exited is a terminal (above); only an agent that stopped lands here.
+    // A shell that exited is just idle; only an agent that stopped needs a look.
     case 'error': return session.conversation.agent ? 'needs' : 'idle'
     case 'limited': return 'needs'
     case 'working': return 'working'
@@ -170,15 +184,21 @@ export type StatusSection = { key: StatusSectionKey; name: string; hint: string;
 /** A session kept in the section it was in when it was picked, whatever its status says since. */
 export type HeldRow = { readonly id: string; readonly section: StatusSectionKey }
 
+/** The two sections a row moves between when the person looks at it: a finished agent turns idle. */
+const stays = (section: StatusSectionKey): boolean => section === 'done' || section === 'idle'
+
 /**
- * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. Terminals
- * (no agent, nothing asking) are the last section. The `held` row stays where it was picked: looking at a finished agent makes it
+ * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. The `held` row stays where it was picked: looking at a finished agent makes it
  * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
- * mark still shows its status.
+ * mark still shows its status. Only that shift between finished and idle is held: a row that starts working, or asks, goes
+ * to its own section at once, or an agent at work would be listed as idle until the person looked away.
  */
 export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null, sort: SidebarSort = 'oldest'): StatusSection[] {
   const ordered = sortedBy(sessions, sort)
-  const placed = (session: SessionView): StatusSectionKey => (session.id === held?.id ? held.section : sectionOf(session))
+  const placed = (session: SessionView): StatusSectionKey => {
+    const actual = sectionOf(session)
+    return session.id === held?.id && stays(held.section) && stays(actual) ? held.section : actual
+  }
   return STATUS_SECTIONS
     .map((section) => ({ ...section, sessions: ordered.filter((session) => placed(session) === section.key) }))
     .filter((section) => section.sessions.length > 0)
@@ -200,24 +220,6 @@ export function splitPutAway(sessions: readonly SessionView[]): { listed: Sessio
     listed: sessions.filter((session) => !isPutAway(session)),
     putAway: inCreationOrder(sessions.filter(isPutAway)),
   }
-}
-
-/**
- * A finished or idle session in a terminal the daemon owns can be put away. A chat cannot: its daemon archive is how
- * a chat is closed, which stops its agent.
- */
-export function canPutAway(session: SessionView): boolean {
-  return !session.archived && session.snoozedUntil === null && !session.ended && (session.status === 'done' || session.status === 'idle') && !isChatSession(session.conversation)
-}
-
-/**
- * Snoozing (`TermInfo.snoozed_until`) puts a session away until a time. A finished, idle or limited session in a terminal the
- * daemon owns can be snoozed, once; one that works, asks or failed is not out of the way yet, and a chat cannot (the daemon
- * refuses it). The daemon wakes it by itself, and also when it comes to need you.
- */
-export function canSnooze(session: SessionView): boolean {
-  const resting = session.status === 'done' || session.status === 'idle' || session.status === 'limited'
-  return resting && !session.archived && session.snoozedUntil === null && !session.ended && !isChatSession(session.conversation)
 }
 
 export type ProjectChoice = { name: string; color: string; count: number }

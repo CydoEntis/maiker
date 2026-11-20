@@ -1,6 +1,6 @@
 import type { SessionPermissions } from '@/api/daemon'
 
-const STORAGE_KEY = 'maitty.gui.permissions.v1'
+const STORAGE_KEY = 'maiker.gui.permissions.v1'
 
 export const PERMISSION_LABELS: Record<SessionPermissions, string> = {
   'read-only': 'Read only',

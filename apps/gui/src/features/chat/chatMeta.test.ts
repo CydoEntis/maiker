@@ -1,5 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { modeFromScreen, modeLabel, modelLabel } from './chatMeta'
+import { modeFromScreen, modeLabel, modeShortLabel, modelLabel } from './chatMeta'
+
+describe('modeShortLabel', () => {
+  it('shortens Bypass permissions for the box and leaves other names whole', () => {
+    expect(modeShortLabel('Bypass permissions')).toBe('Bypass')
+    expect(modeShortLabel('Ask before edits')).toBe('Ask before edits')
+    expect(modeShortLabel(null)).toBeNull()
+  })
+})
 
 describe('the mode and model in plain words', () => {
   it('names Claude\'s permission modes', () => {

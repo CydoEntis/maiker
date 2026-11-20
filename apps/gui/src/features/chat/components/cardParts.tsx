@@ -1,5 +1,4 @@
 import type { ReactNode } from 'react'
-import { fileTag } from '@/features/inspect/fileTag'
 import { FileBadge as UiFileBadge, Tag } from '@/components/ui/tag'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { StatusIcon } from '@/components/ui/status-icon'
@@ -74,17 +73,19 @@ type FileBadgeProps = {
   onOpen?: (() => void) | undefined
 }
 
-/** A file in the chat (`FileBadge`): its type tag, or a folder icon for a folder, then its path shortened from the front. */
+/** A file in the chat (`FileBadge`): its path shortened from the front, with no type icon (the extension is in the name); a folder keeps its folder icon. */
 export function FileBadge({ path, line = null, onOpen }: FileBadgeProps) {
-  const name = path.replace(/\\/g, '/').replace(/\/$/, '').split('/').pop() ?? path
-  const tag = path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : fileTag(name) ?? undefined
+  const tag = path.endsWith('/') ? <span className="flex w-[22px] flex-none justify-center text-(--dim)"><Icon name="files" size={FOLDER_ICON_SIZE} /></span> : undefined
   return <UiFileBadge path={path} tag={tag} line={line} onOpen={onOpen} />
 }
 
 const CHANGE_TAG = { add: { word: 'Added', tone: 'done' }, update: { word: 'Modified', tone: 'neutral' }, delete: { word: 'Deleted', tone: 'err' } } as const
 
-/** What happened to a file, where the history says: a Write does not say whether the file was new. */
-export function ChangePill({ change }: { change: FileChangeKind }) {
-  if (change === 'unknown') return null
+/**
+ * What happened to a file, where the history says: a Write does not say whether the file was new. After the verb Edit,
+ * "Modified" only repeats it, so `edited` leaves it out and only Added or Deleted shows.
+ */
+export function ChangePill({ change, edited = false }: { change: FileChangeKind; edited?: boolean }) {
+  if (change === 'unknown' || (edited && change === 'update')) return null
   return <Tag tone={CHANGE_TAG[change].tone}>{CHANGE_TAG[change].word}</Tag>
 }

@@ -12,6 +12,7 @@ mod check;
 pub use check::first_failing_line;
 mod check_source;
 mod check_stale;
+mod claude_transcript;
 mod closed_sessions;
 mod clone;
 mod commit;
@@ -19,15 +20,18 @@ mod commands;
 mod contain;
 mod conversation;
 mod extensions;
+mod folder_git;
 mod folders;
 mod git;
 mod git_identity;
 mod git_rule;
 mod github;
 mod helpers;
+pub mod hook_repair;
 mod identity;
 mod last_lines;
 mod leftover_tickets;
+mod machine_facts;
 mod machine_updates;
 mod pane_terminal;
 mod permission_ask;
@@ -53,6 +57,7 @@ mod terminal_sends;
 mod usage;
 mod usage_store;
 mod warm;
+mod worktree_path;
 mod worktrees;
 
 use crate::brand::APP_COMMAND;
@@ -142,6 +147,8 @@ pub enum Ev {
     },
     /// A background read of a followed pane's transcript finished (ADR 0003).
     FollowRead(Box<conversation::follow::Done>),
+    /// A background look at a Claude pane's config folder finished (`hook_repair`).
+    HookFolderChecked(Box<hook_repair::Checked>),
     ConversationStorage {
         id: crate::conversation::ConversationId,
         revision: Option<u64>,
@@ -175,7 +182,7 @@ pub enum Ev {
     Scan(Vec<scan::Found>),
     Git(Vec<(WsId, Option<GitInfo>)>),
     /// Lines added and removed per checkout, read beside the git poll.
-    Diffs(HashMap<PathBuf, (u32, u32)>),
+    Diffs(HashMap<PathBuf, (u32, u32, u32)>),
     Prs(Vec<(pr::Place, pr::Read)>),
     WorktreeCreated {
         client: ClientId,
@@ -255,6 +262,13 @@ pub enum Ev {
         client: ClientId,
         tag: u64,
         outcome: Result<String, String>,
+    },
+    /// A clone got a step further.
+    CloneProgress {
+        client: ClientId,
+        tag: u64,
+        phase: crate::protocol::ClonePhase,
+        percent: u8,
     },
     GitHubAccountsReady {
         client: ClientId,
@@ -431,6 +445,9 @@ impl Client {
 struct Daemon {
     cfg: Config,
     agents: Vec<CompiledAgent>,
+    /// Claude's config folder when no account or config names another; `None` skips the check
+    /// that a saved session has a conversation.
+    claude_folder: Option<PathBuf>,
     terms: HashMap<TermId, Term>,
     workspaces: Vec<WorkspaceInfo>,
     active_ws: Option<WsId>,
@@ -458,7 +475,7 @@ struct Daemon {
     last_secret_files: Instant,
     git_busy: bool,
     /// Lines added and removed against HEAD, by checkout (`git::diff_counts`).
-    diff_counts: HashMap<PathBuf, (u32, u32)>,
+    diff_counts: HashMap<PathBuf, (u32, u32, u32)>,
     last_git: Instant,
     last_save: Instant,
     last_output_save: Instant,
@@ -1293,6 +1310,7 @@ impl Daemon {
         Daemon {
             cfg,
             agents,
+            claude_folder: hook_repair::default_claude_folder(),
             terms: HashMap::new(),
             workspaces: Vec::new(),
             active_ws: None,
@@ -1435,6 +1453,7 @@ impl Daemon {
                     self.poll_codex();
                     self.poll_effort();
                     self.follow_tick();
+                    self.hook_watch_tick();
                     self.deliver_queued();
                     self.usage_store.save_if_due(term::unix_now());
                     self.poll_git();
@@ -1808,7 +1827,7 @@ impl Daemon {
                 }
             }
             let _ = tx.blocking_send(Ev::Git(res));
-            let diffs: HashMap<PathBuf, (u32, u32)> = checkouts
+            let diffs: HashMap<PathBuf, (u32, u32, u32)> = checkouts
                 .into_iter()
                 .filter_map(|dir| git::diff_counts(&dir).map(|counts| (dir, counts)))
                 .collect();
@@ -1973,6 +1992,7 @@ impl Daemon {
                 self.conversation_save_completed(barrier, result);
             }
             Ev::FollowRead(done) => self.follow_read_done(*done),
+            Ev::HookFolderChecked(done) => self.hook_checked(*done),
             Ev::ConversationStorage {
                 id,
                 revision,
@@ -2103,6 +2123,9 @@ impl Daemon {
                     if t.process != f.process && !f.process.is_empty() {
                         t.process = f.process;
                         self.dirty = true;
+                    }
+                    if f.claude_dir.is_some() && t.claude_dir != f.claude_dir {
+                        t.claude_dir = f.claude_dir.clone();
                     }
                     if t.remote != f.remote {
                         t.remote = f.remote;
@@ -2477,6 +2500,15 @@ impl Daemon {
                 tag,
                 outcome,
             } => self.send(client, ServerMsg::Reply(Reply::Cloned { tag, outcome })),
+            Ev::CloneProgress {
+                client,
+                tag,
+                phase,
+                percent,
+            } => self.send(
+                client,
+                ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent }),
+            ),
             Ev::GitHubAccountsReady {
                 client,
                 tag,
@@ -3189,6 +3221,13 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can sign an agent in".into())
                     }
+                    Query::FolderGit { .. } | Query::MachineFacts { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can ask about a folder's branches or the machine".into())
+                    }
                     Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
@@ -3291,11 +3330,23 @@ impl Daemon {
                         });
                         return;
                     }
+                    Query::AgentSignIn { agent: SignInAgent::Github, request: SignInRequest::SignOut, tag } => {
+                        // A login still waiting for its code is over once the person signs out.
+                        self.sign_ins.cancel(SignInAgent::Github);
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let reply = Reply::AgentSignIn { tag, agent: SignInAgent::Github, state: github::sign_out() };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
                     Query::AgentSignIn { agent, request, tag } => {
                         let state = match request {
                             SignInRequest::Start => self.sign_ins.start(agent, agent_sign_in::cli_for(agent)),
                             SignInRequest::Cancel => self.sign_ins.cancel(agent),
                             SignInRequest::Read => self.sign_ins.read(agent),
+                            // Only GitHub has a sign-out to run (answered above).
+                            SignInRequest::SignOut => SignInState::Failed(SignInFailure::Unsupported),
                         };
                         ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state })
                     }
@@ -3323,8 +3374,28 @@ impl Daemon {
                         let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
                         let tx = self.tx.clone();
                         tokio::task::spawn_blocking(move || {
-                            let outcome = clone::clone(&address, &parent, home.as_deref(), clone::CLONE_LIMIT);
+                            let progress = tx.clone();
+                            let outcome = clone::clone(&address, &parent, home.as_deref(), clone::CLONE_LIMIT, |phase, percent| {
+                                let _ = progress.blocking_send(Ev::CloneProgress { client, tag, phase, percent });
+                            });
                             let _ = tx.blocking_send(Ev::CloneReady { client, tag, outcome });
+                        });
+                        return;
+                    }
+                    Query::FolderGit { folder, request, tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let outcome = folder_git::answer(&folder, &request, home.as_deref());
+                            let _ = tx.blocking_send(Ev::Answered { client, reply: Reply::FolderGit { tag, outcome } });
+                        });
+                        return;
+                    }
+                    Query::MachineFacts { tag } => {
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let facts = machine_facts::collect();
+                            let _ = tx.blocking_send(Ev::Answered { client, reply: Reply::MachineFacts { tag, facts } });
                         });
                         return;
                     }
@@ -3627,13 +3698,14 @@ impl Daemon {
         snap
     }
 
-    /// Lines added and removed in the checkout `t` is in; zero outside git or before the first read.
-    fn diff_of(&self, t: &Term) -> (u32, u32) {
+    /// Lines added, lines removed and files changed in the checkout `t` is in; zero outside git or
+    /// before the first read.
+    fn diff_of(&self, t: &Term) -> (u32, u32, u32) {
         t.head
             .as_ref()
             .and_then(|h| self.diff_counts.get(&h.top))
             .copied()
-            .unwrap_or((0, 0))
+            .unwrap_or((0, 0, 0))
     }
 
     fn snapshot(&self) -> Snapshot {
@@ -3655,6 +3727,7 @@ impl Daemon {
                         popup: t.popup,
                         agent: t.agent.clone(),
                         hooked: t.hooked,
+                        hook_problem: t.hook_problem.clone(),
                         // Asking for helpers needs you, whatever the agent's own hooks say meanwhile.
                         status: if t.helpers.asked.is_empty() {
                             t.status
@@ -3681,6 +3754,7 @@ impl Daemon {
                         last_lines: t.last_lines.clone(),
                         branch: t.head.as_ref().map(|h| h.branch.clone()),
                         diff_added: self.diff_of(t).0,
+                        diff_files: self.diff_of(t).2,
                         diff_removed: self.diff_of(t).1,
                         linked: t.head.as_ref().is_some_and(|h| h.linked),
                         root: t.head.as_ref().map(|h| h.main_root.clone()),
@@ -3940,8 +4014,13 @@ impl Daemon {
             self.tx.clone(),
         )?;
         t.account = account;
-        t.began_as_agent = self.agent_in_cmd(inner).is_some();
+        let agent_here = self.agent_in_cmd(inner);
+        t.began_as_agent = agent_here.is_some();
         self.terms.insert(id, t);
+        if agent_here.as_deref() == Some("claude") {
+            let account = self.terms.get(&id).and_then(|t| t.account.clone());
+            self.repair_hooks_for_spawn(id, account.as_deref());
+        }
         self.had_terms = true;
         // Its worktree is looked at for a repo checks file with the git poll.
         self.poll_git_soon();
@@ -4195,11 +4274,18 @@ mod tests {
     #[test]
     fn an_older_client_is_not_sent_what_it_cannot_read_and_a_newer_ones_unknown_request_is_skipped()
     {
-        use super::{ClientMsg, PROTOCOL_VERSION, ServerMsg, client_reads, skips_unreadable};
+        use super::{ClientMsg, PROTOCOL_VERSION, Reply, ServerMsg, client_reads, skips_unreadable};
         let msg = ServerMsg::Bye;
         assert!(client_reads(&msg, PROTOCOL_VERSION));
         assert!(client_reads(&msg, msg.introduced_in()));
         assert!(!client_reads(&msg, msg.introduced_in() - 1));
+
+        // A client of the version before clone progress existed waits for the clone's own answer alone.
+        let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: crate::protocol::ClonePhase::Receiving, percent: 1 });
+        assert!(!client_reads(&progress, PROTOCOL_VERSION - 1));
+        assert!(client_reads(&progress, PROTOCOL_VERSION));
+        let cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
+        assert!(client_reads(&cloned, PROTOCOL_VERSION - 1));
 
         let unreadable = crate::protocol::decode::<ClientMsg>(&[0xc1]).unwrap_err();
         assert!(skips_unreadable(PROTOCOL_VERSION + 1, &unreadable));

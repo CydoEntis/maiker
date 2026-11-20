@@ -45,7 +45,6 @@
 .mx-chip-menu.is-crumb .mx-chip-row { min-height: 32px; padding: 6px 8px; font-size: 12.5px; }
 .mx-chip-menu.is-crumb .mx-chip-search { margin: 2px 4px; height: 30px; }
 .mx-chip-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: 10px; color: var(--dim); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-chip-search:focus-within { box-shadow: inset 0 0 0 1px var(--line), var(--focus-underline); }
 .mx-chip-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 13px; color: var(--fg); }
 .mx-chip-count { font-size: 11.5px; color: var(--dim); }
 .mx-chip-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-x: hidden; overflow-y: auto; }
@@ -54,6 +53,7 @@
 .mx-chip-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; text-align: left; font-size: 13px; color: var(--fg2); }
 .mx-chip-row:hover { background: var(--m-hover); }
 .mx-chip-row.is-checked { background: var(--m-sel); color: var(--fg); }
+.mx-chip-row.is-checked .mx-chip-row-label { font-weight: 700; }
 .mx-chip-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-chip-row-label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines at most: what a choice does reads whole, and a long path still keeps to its row. */

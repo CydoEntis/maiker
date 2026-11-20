@@ -5,9 +5,19 @@
  * The contract (v18 B.8, owner decision 2026-11-04): a pane's terminal owns every plain Ctrl+letter
  * on Windows and Linux (Ctrl+C, D, W, L, R, J ...), so the window uses Ctrl+Shift there. On macOS
  * the window uses Cmd and leaves Ctrl to the terminal.
+ *
+ * The view refines it (owner decision 2026-11-19): in the chat view nothing needs plain Ctrl+letter, so
+ * a few window keys also work as plain Ctrl+key there (a binding's `chat` list). In the terminal view only the
+ * Ctrl+Shift and Ctrl+Alt forms are taken and plain Ctrl+letter always reaches the program. Only the keys
+ * a `chat` list names are ever taken: Ctrl+A, C, V, X, Z and Backspace stay the text box's. macOS is the
+ * same in both views, since Cmd is the window's there.
  */
+import type { PaneView } from './chatView'
 
 export type Platform = 'mac' | 'windows' | 'linux'
+
+/** The view the keys are read for: the one the focused session shows (`PaneView`). */
+export type ShortcutView = PaneView
 
 export function detectPlatform(userAgent: string): Platform {
   if (/Macintosh|Mac OS X/i.test(userAgent)) return 'mac'
@@ -23,13 +33,12 @@ export function isMacPlatform(userAgent: string): boolean {
  * that leave for another session work from it. The ones that act on the pane it covers do not.
  */
 export const NEW_CHAT_PAGE_ACTIONS: ReadonlySet<ShortcutAction> = new Set<ShortcutAction>([
-  'palette', 'jump-needs', 'focus-previous', 'focus-next', 'new-terminal', 'toggle-sidebar', 'usage', 'performance', 'settings', 'text-larger', 'text-smaller', 'shortcuts',
+  'palette', 'jump-needs', 'focus-previous', 'focus-next', 'new-terminal', 'open-folder', 'toggle-sidebar', 'usage', 'performance', 'settings', 'text-larger', 'text-smaller', 'shortcuts',
 ])
 
 export type ShortcutAction =
   | 'new-session'
   | 'new-terminal'
-  | 'new-agent-chat'
   | 'split-right'
   | 'split-down'
   | 'focus-previous'
@@ -43,6 +52,8 @@ export type ShortcutAction =
   | 'inspect'
   | 'find'
   | 'new-worktree'
+  | 'open-folder'
+  | 'fetch'
   | 'broadcast'
   | 'focus-mode'
   | 'shortcuts'
@@ -50,7 +61,6 @@ export type ShortcutAction =
   | 'text-smaller'
   | 'usage'
   | 'performance'
-  | 'chat-toggle'
   | 'terminal'
 
 /** The sections of the shortcut overlay, in the order it shows them. */
@@ -77,12 +87,18 @@ export type Binding = {
   mac: readonly Combo[]
   /** Windows and Linux share one column. Empty: no key on those platforms (the feature is still reachable by menu or palette). */
   other: readonly Combo[]
+  /**
+   * Windows and Linux in the chat view: these in place of `other` (so they list the Ctrl+Shift form too when it keeps working).
+   * Absent: the chat view uses `other`.
+   */
+  chat?: readonly Combo[]
   /** False until the feature behind it exists. The window ignores the key and the overlay hides it. */
   available: boolean
 }
 
 const cmd = (key: string, ...more: Modifier[]): Combo => ({ mods: ['cmd', ...more], key })
 const ctrlShift = (key: string, ...more: Modifier[]): Combo => ({ mods: ['ctrl', ...more, 'shift'], key })
+const ctrl = (key: string, ...more: Modifier[]): Combo => ({ mods: ['ctrl', ...more], key })
 
 /**
  * Where two actions need the same letter on Windows and Linux, the second takes Ctrl+Alt+Shift
@@ -91,26 +107,28 @@ const ctrlShift = (key: string, ...more: Modifier[]): Combo => ({ mods: ['ctrl',
  */
 export const BINDINGS: readonly Binding[] = [
   { action: 'new-session', label: 'New session', group: 'Sessions', mac: [cmd('T')], other: [ctrlShift('T')], available: true },
-  { action: 'new-terminal', label: 'New shell', group: 'Sessions', mac: [cmd('T', 'shift')], other: [{ mods: ['ctrl', 'alt'], key: 'T' }, ctrlShift('T', 'alt')], available: true },
+  { action: 'new-terminal', label: 'New terminal', group: 'Sessions', mac: [cmd('T', 'shift')], other: [{ mods: ['ctrl', 'alt'], key: 'T' }, ctrlShift('T', 'alt')], available: true },
   // A chat with the default agent in the current fleet, without the New session modal.
-  { action: 'new-agent-chat', label: 'New agent chat', group: 'Sessions', mac: [cmd('A', 'shift')], other: [ctrlShift('A')], available: true },
   // Ctrl+Shift+N stays "new worktree" until brain dump (v18 C.6), which takes this key, is built.
   { action: 'new-worktree', label: 'New worktree', group: 'Sessions', mac: [cmd('N', 'shift')], other: [ctrlShift('N')], available: true },
+  // Opens the Open a project dialog on its folder tab. Plain Ctrl+O is the chat view's; the terminal's own Ctrl+O stays the terminal's.
+  { action: 'open-folder', label: 'Open a folder', group: 'Sessions', mac: [cmd('O')], other: [ctrlShift('O')], chat: [ctrl('O'), ctrlShift('O')], available: true },
+  // Fetches the focused session's repository. Ctrl+Shift+F is Find in the terminal view, so there fetch takes Ctrl+Alt+Shift+F.
+  { action: 'fetch', label: 'Fetch the repository', group: 'Sessions', mac: [cmd('F', 'shift')], other: [ctrlShift('F', 'alt')], chat: [ctrlShift('F'), ctrlShift('F', 'alt')], available: true },
   { action: 'split-right', label: 'Split right', group: 'Panes', mac: [cmd('D')], other: [ctrlShift('D')], available: true },
   { action: 'split-down', label: 'Split down', group: 'Panes', mac: [cmd('D', 'shift')], other: [ctrlShift('D', 'alt')], available: true },
   { action: 'focus-previous', label: 'Previous pane', group: 'Panes', mac: [cmd('[')], other: [{ mods: ['ctrl'], key: '[' }], available: true },
   { action: 'focus-next', label: 'Next pane', group: 'Panes', mac: [cmd(']')], other: [{ mods: ['ctrl'], key: ']' }], available: true },
-  { action: 'close', label: 'Close pane or session', group: 'Panes', mac: [cmd('W')], other: [ctrlShift('W')], available: true },
+  { action: 'close', label: 'Close pane or session', group: 'Panes', mac: [cmd('W')], other: [ctrlShift('W')], chat: [ctrl('W'), ctrlShift('W')], available: true },
   // Closing ends the session after a short window; this key brings back the last one closed inside it.
   { action: 'undo-close', label: 'Undo close', group: 'Panes', mac: [cmd('Z')], other: [ctrlShift('Z')], available: true },
   { action: 'broadcast', label: 'Broadcast to the layout', group: 'Panes', mac: [cmd('B', 'shift')], other: [ctrlShift('B', 'alt')], available: true },
-  { action: 'palette', label: 'Command palette', group: 'Find & jump', mac: [cmd('K')], other: [ctrlShift('K')], available: true },
+  { action: 'palette', label: 'Command palette', group: 'Find & jump', mac: [cmd('K')], other: [ctrlShift('K')], chat: [ctrl('K'), ctrlShift('K')], available: true },
   // Plain Ctrl+J is a line feed in a terminal, so Windows and Linux add Shift (the contract above).
   { action: 'jump-needs', label: 'Jump to the next session that needs you', group: 'Find & jump', mac: [cmd('J')], other: [ctrlShift('J')], available: true },
   { action: 'inspect', label: 'Inspect the repository', group: 'Find & jump', mac: [cmd('I')], other: [ctrlShift('I')], available: true },
-  { action: 'find', label: 'Find in the pane or every session', group: 'Find & jump', mac: [cmd('F')], other: [ctrlShift('F')], available: true },
+  { action: 'find', label: 'Find in the pane or every session', group: 'Find & jump', mac: [cmd('F')], other: [ctrlShift('F')], chat: [ctrl('F', 'alt')], available: true },
   { action: 'toggle-sidebar', label: 'Collapse sidebar', group: 'Window', mac: [cmd('B')], other: [ctrlShift('B')], available: true },
-  { action: 'chat-toggle', label: 'Terminal or chat', group: 'Window', mac: [cmd('E', 'shift')], other: [ctrlShift('E')], available: true },
   // The terminal dock. ⌃` is the usual terminal key on macOS, where Ctrl is not the shell's; elsewhere Shift joins it (the contract above).
   { action: 'terminal', label: 'Show or hide the terminal', group: 'Window', mac: [{ mods: ['ctrl'], key: '`' }], other: [ctrlShift('`')], available: true },
   { action: 'usage', label: 'Usage and cost', group: 'Window', mac: [cmd('U', 'shift')], other: [ctrlShift('U')], available: true },
@@ -138,11 +156,12 @@ const EVENT_KEYS: Readonly<Record<string, readonly string[]>> = { '−': ['-'], 
 export type KeyOverrides = Partial<Record<ShortcutAction, Combo>>
 export const NO_OVERRIDES: KeyOverrides = {}
 
-/** The combinations that do the action here: the chosen one, else the action's own for the platform. */
-function combosOf(binding: Binding, platform: Platform, overrides: KeyOverrides): readonly Combo[] {
+/** The combinations that do the action here: the chosen one, else the action's own for the platform and view. */
+function combosOf(binding: Binding, platform: Platform, overrides: KeyOverrides, view: ShortcutView): readonly Combo[] {
   const chosen = overrides[binding.action]
   if (chosen) return [chosen]
-  return platform === 'mac' ? binding.mac : binding.other
+  if (platform === 'mac') return binding.mac
+  return view === 'chat' ? binding.chat ?? binding.other : binding.other
 }
 
 export function bindingFor(action: ShortcutAction): Binding {
@@ -165,8 +184,8 @@ export function comboChord(combo: Combo, platform: Platform): Chord {
 }
 
 /** Every key combination that does the action on this platform; empty when it has none or is not built. */
-export function shortcutChords(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): Chord[] {
-  return combosOf(binding, platform, overrides).map((combo) => comboChord(combo, platform))
+export function shortcutChords(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES, view: ShortcutView = 'terminal'): Chord[] {
+  return combosOf(binding, platform, overrides, view).map((combo) => comboChord(combo, platform))
 }
 
 /** A chord written as one string: `⌘⇧D` on macOS, `Ctrl+Shift+D` elsewhere. */
@@ -175,14 +194,14 @@ export function writeChord(chord: Chord, platform: Platform): string {
 }
 
 /** The binding's first key combination as text, or '' when the platform has none. */
-export function formatShortcut(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): string {
-  const [first] = shortcutChords(binding, platform, overrides)
+export function formatShortcut(binding: Binding, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES, view: ShortcutView = 'terminal'): string {
+  const [first] = shortcutChords(binding, platform, overrides, view)
   return first ? writeChord(first, platform) : ''
 }
 
 /** What a tooltip or menu hint shows for an action on this platform. */
-export function shortcutText(action: ShortcutAction, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): string {
-  return formatShortcut(bindingFor(action), platform, overrides)
+export function shortcutText(action: ShortcutAction, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES, view: ShortcutView = 'terminal'): string {
+  return formatShortcut(bindingFor(action), platform, overrides, view)
 }
 
 type KeyInput = Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>
@@ -204,10 +223,10 @@ function matches(combo: Combo, event: KeyInput, platform: Platform): boolean {
  * exactly, so Ctrl+T on Windows or Linux (a shell's own key) is never taken. Features not built yet
  * return null too, so their keys still reach the terminal.
  */
-export function matchShortcut(event: KeyInput, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): ShortcutMatch | null {
+export function matchShortcut(event: KeyInput, platform: Platform, overrides: KeyOverrides = NO_OVERRIDES, view: ShortcutView = 'terminal'): ShortcutMatch | null {
   for (const binding of BINDINGS) {
     if (!binding.available) continue
-    for (const combo of combosOf(binding, platform, overrides)) {
+    for (const combo of combosOf(binding, platform, overrides, view)) {
       if (!matches(combo, event, platform)) continue
       return { action: binding.action }
     }
@@ -218,8 +237,10 @@ export function matchShortcut(event: KeyInput, platform: Platform, overrides: Ke
 export type HotkeyRow = {
   action: string
   group: HotkeyGroup
-  /** Alternatives: any one of these does it. */
+  /** Alternatives in the view asked for: any one of these does it. */
   chords: Chord[]
+  /** Keys that do it only in the other view (Windows and Linux), so Settings can name both. */
+  otherView: Chord[]
   /** The action, for a row Settings can change; null for a key that is the terminal's. */
   id: ShortcutAction | null
   /** Its keys were chosen in Settings, not the action's own. */
@@ -231,12 +252,18 @@ const MODIFIER_SYMBOLS: ReadonlySet<string> = new Set(['⌘', '⇧', '⌃', '⌥
 export const isModifierSymbol = (key: string): boolean => MODIFIER_SYMBOLS.has(key)
 
 /** The Hotkeys list, in the words the window uses. Actions without a key here, or not built yet, are left out. */
-export function hotkeyRows(platform: Platform, overrides: KeyOverrides = NO_OVERRIDES): HotkeyRow[] {
+export function hotkeyRows(platform: Platform, overrides: KeyOverrides = NO_OVERRIDES, view: ShortcutView = 'terminal'): HotkeyRow[] {
+  const elsewhere: ShortcutView = view === 'chat' ? 'terminal' : 'chat'
   const rows: HotkeyRow[] = BINDINGS.filter((binding) => binding.available)
-    .map((binding) => ({ action: binding.label, group: binding.group, chords: shortcutChords(binding, platform, overrides), id: binding.action, changed: overrides[binding.action] !== undefined }))
+    .map((binding) => {
+      const chords = shortcutChords(binding, platform, overrides, view)
+      const written = new Set(chords.map((chord) => chord.join('+')))
+      const otherView = shortcutChords(binding, platform, overrides, elsewhere).filter((chord) => !written.has(chord.join('+')))
+      return { action: binding.label, group: binding.group, chords, otherView, id: binding.action, changed: overrides[binding.action] !== undefined }
+    })
     .filter((row) => row.chords.length > 0)
   const ctrl = platform === 'mac' ? MAC_GLYPH.ctrl : WORD.ctrl
-  for (const key of TERMINAL_KEYS) rows.push({ action: key.label, group: key.group, chords: [[ctrl, key.letter]], id: null, changed: false })
+  for (const key of TERMINAL_KEYS) rows.push({ action: key.label, group: key.group, chords: [[ctrl, key.letter]], otherView: [], id: null, changed: false })
   return rows
 }
 
@@ -285,14 +312,20 @@ function pressOf(combo: Combo, platform: Platform): KeyInput {
 
 /** The other action this combination already does, if any, with the chosen keys in place. */
 export function takenBy(combo: Combo, action: ShortcutAction, platform: Platform, overrides: KeyOverrides): Binding | null {
-  const match = matchShortcut(pressOf(combo, platform), platform, overrides)
-  return match === null || match.action === action ? null : bindingFor(match.action)
+  const press = pressOf(combo, platform)
+  const views: readonly ShortcutView[] = ['terminal', 'chat']
+  for (const view of views) {
+    const match = matchShortcut(press, platform, overrides, view)
+    if (match !== null && match.action !== action) return bindingFor(match.action)
+  }
+  return null
 }
 
 /** Whether the combination is one of the action's own keys here, so choosing it is the same as resetting. */
 export function isOwnKey(combo: Combo, action: ShortcutAction, platform: Platform): boolean {
   const binding = bindingFor(action)
-  return (platform === 'mac' ? binding.mac : binding.other).some((own) => matches(own, pressOf(combo, platform), platform))
+  const own = platform === 'mac' ? binding.mac : [...binding.other, ...(binding.chat ?? [])]
+  return own.some((candidate) => matches(candidate, pressOf(combo, platform), platform))
 }
 
 function isModifier(value: unknown): value is Modifier {

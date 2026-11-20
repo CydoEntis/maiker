@@ -3,7 +3,6 @@ import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
 import { ChoiceItem, ChoiceList } from '@/components/ui/choice-list'
 import { findTheme, THEMES, type ThemeEntry } from '@/features/workspace/theme/themes'
-import { Icon } from '@/features/workspace/components/glyphs'
 
 type Props = {
   kind: 'dark' | 'light'
@@ -82,7 +81,7 @@ export function ThemePicker({ kind, value, inUse, dimmed, onPick, onPreview }: P
             <ChoiceItem
               key={theme.name}
               value={theme.name}
-              className="mx-theme-card"
+              className="mx-theme-card mx-menu-row"
               onMouseEnter={() => { if (inUse) onPreview(theme.name) }}
               onFocus={() => { if (inUse) onPreview(theme.name) }}
               onPick={() => { onPick(theme.name); change(false) }}
@@ -92,7 +91,6 @@ export function ThemePicker({ kind, value, inUse, dimmed, onPick, onPreview }: P
                 <span className="mx-theme-name">{theme.name}</span>
                 <span className="mx-theme-sub">{theme.family}</span>
               </span>
-              {theme.name === value && <Icon name="check" size={14} stroke="var(--accent)" strokeWidth={2.5} />}
             </ChoiceItem>
           ))}
           {shown.length === 0 && <span className="mx-picker-empty">No themes match.</span>}

@@ -37,6 +37,14 @@ const turn = (outcome: TurnEvent['outcome'], timed: boolean): TurnEvent => ({ ki
 
 const writtenDoc = (id: string) => editEvent(id, { tool: 'Write', file: '/home/me/Downloads/plan.md', status: 'completed', change: 'add', diff: { status: 'available', hunks: [{ header: '@@ -0,0 +1,2 @@', lines: [{ kind: 'add', text: '# Plan' }, { kind: 'add', text: 'Do it.' }] }], added: 2, removed: 0, truncated: false } })
 
+describe('a turn footer row', () => {
+  it('carries how many steps the turn took, what the agent wrote and what the person asked', () => {
+    const rows = buildRows([message('u1', 'user', 'Fix it'), toolEvent('s1'), command('c1'), message('a1', 'agent', 'Fixed.'), message('a2', 'agent', 'Done.'), turn('completed', true)], false)
+
+    expect(rows.at(-1)).toMatchObject({ kind: 'divider', steps: 2, reply: 'Fixed.\n\nDone.', prompt: 'Fix it' })
+  })
+})
+
 describe('buildRows', () => {
   it('shows a slash command as the person typed it with its output beneath, and no "Finished in 0s" after it', () => {
     const note = { ...message('o1', 'agent', ''), kind: 'note' as const, text: 'Set model to Haiku 5.5' }
@@ -154,6 +162,11 @@ describe('paragraphs and the lead sentence', () => {
     expect(splitLead(['I fixed it. The test passes now.', 'Details follow.'])).toEqual({ lead: 'I fixed it.', rest: ['The test passes now.', 'Details follow.'] })
     expect(splitLead(['No full stop here'])).toEqual({ lead: 'No full stop here', rest: [] })
     expect(splitLead([])).toEqual({ lead: '', rest: [] })
+    // A full stop after an abbreviation is not the end of the sentence.
+    expect(splitLead(['Use a tool, e.g. grep, for this. Then stop.'])).toEqual({ lead: 'Use a tool, e.g. grep, for this.', rest: ['Then stop.'] })
+    // A cut inside bold or code would leave a bare mark, so the paragraph stays whole.
+    expect(splitLead(['**Cause found. It was the config.**'])).toEqual({ lead: '**Cause found. It was the config.**', rest: [] })
+    expect(splitLead(['Run `a. b` now. Then stop.', 'More.'])).toEqual({ lead: 'Run `a. b` now. Then stop.', rest: ['More.'] })
     // A table with no outer pipes is not a sentence either.
     const table = 'a | b\n--- | ---\n1 | 2'
     expect(splitLead([table, 'After.'])).toEqual({ lead: '', rest: [table, 'After.'] })

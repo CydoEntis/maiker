@@ -8,7 +8,6 @@ import { wasClosed } from './closedSessions'
 import { confirmGone, confirmGoneOnMachines, heldView, LINGER_SLACK_MS, nextCheckAt, trackMissing, type MachineList, type Missing } from './model/lingering'
 import { markConversationsDisconnected } from '@/data/connection'
 import { rememberSessions, withEnded } from './model/ended'
-import { isListedChatSession } from './model/chatSession'
 import { remoteTerminals } from './model/machines'
 import type { ChatAgent } from './model/chatView'
 import type { Layout } from './model/layout'
@@ -17,8 +16,8 @@ import { keepLabels, nextResumeAt, type SessionView, toSessionView } from './mod
 /** The longest wait a browser timer takes (a signed 32-bit count of milliseconds); a longer one fires at once. */
 const MAX_TIMER_MS = 2_147_483_647
 
-/** Terminal sessions, and the chat sessions the daemon owns that are not put away (ADR 0003). */
-const isInSidebar = (item: Conversation): boolean => item.kind === 'terminal' || isListedChatSession(item)
+/** Terminal sessions only. The terminal experiment has no chat view, so a chat the daemon owns stays running but is not listed. */
+const isInSidebar = (item: Conversation): boolean => item.kind === 'terminal'
 
 /** This window closed the session, or the daemon said why it left: its row goes at once. */
 const leftWithReason = (id: string): boolean => wasClosed(id) || daemonSaidRemoved(id)

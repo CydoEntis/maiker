@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 118;
+pub const PROTOCOL_VERSION: u32 = 119;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -253,6 +253,9 @@ pub enum SignInAgent {
     Codex,
     /// Named so the answer can say plainly that its command line has no sign-in to run.
     Gemini,
+    /// GitHub's own command line (`gh auth login --web`), so a window shows the code instead of a terminal.
+    /// `gh` keeps the token; the daemon never reads it (ADR 0006).
+    Github,
 }
 
 /// What a client asks of an agent's sign-in.
@@ -266,6 +269,9 @@ pub enum SignInRequest {
     Cancel,
     /// Say where the sign-in stands, changing nothing.
     Read,
+    /// Sign the account out with the program's own command. Only GitHub has one here: the answer is
+    /// `SignedIn` when an account is still signed in afterwards, `Idle` when none is.
+    SignOut,
 }
 
 /// Why a sign-in did not end signed in.
@@ -300,6 +306,106 @@ pub enum SignInState {
     /// The agent's own status command says it is signed in.
     SignedIn,
     Failed(SignInFailure),
+}
+
+/// Which part of a clone git is in, as its own progress lines name them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClonePhase {
+    /// The remote counts what to send ("Counting objects").
+    Counting,
+    Compressing,
+    /// Objects arrive: the long part of most clones ("Receiving objects").
+    Receiving,
+    Resolving,
+    /// The files are written ("Updating files").
+    CheckingOut,
+}
+
+/// The most branches of each kind (local, then remote-tracking) one folder listing carries.
+pub const FOLDER_BRANCHES_MAX: usize = 500;
+/// The most worktrees one folder listing carries.
+pub const FOLDER_WORKTREES_MAX: usize = 100;
+/// How long the daemon gives one command of a `Query::FolderGit`.
+pub const FOLDER_GIT_LIMIT_SECS: u64 = 15;
+
+/// What a `Query::FolderGit` does in a folder of this daemon's computer.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FolderGitRequest {
+    /// The local and remote-tracking branches, and the worktrees.
+    Branches,
+    /// Switch to an existing local branch.
+    Switch { branch: String },
+    /// Make a branch from where the checkout is and switch to it.
+    Create { branch: String },
+    /// Switch to a local branch that follows a remote-tracking one: `remote_branch` is as listed,
+    /// `origin/feature`, and the local branch is named `feature`. Refused when that name is taken.
+    CheckoutRemote { remote_branch: String },
+}
+
+/// One branch of a folder's repository.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderBranch {
+    /// A local branch's name, or a remote-tracking branch's with its remote in front (`origin/main`).
+    pub name: String,
+    pub current: bool,
+    /// Unix seconds of its last commit.
+    pub when: Option<i64>,
+    /// A remote-tracking branch: what was last fetched, not a branch to commit to.
+    pub remote: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderWorktree {
+    pub path: String,
+    pub branch: Option<String>,
+    pub main: bool,
+    pub when: Option<i64>,
+}
+
+/// A folder's branches and worktrees: local branches first, then remote-tracking ones, each newest first.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FolderBranches {
+    pub current: Option<String>,
+    pub branches: Vec<FolderBranch>,
+    pub worktrees: Vec<FolderWorktree>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum FolderGitAnswer {
+    /// The folder is not inside a git repository.
+    NotARepo,
+    Branches(FolderBranches),
+    /// The checkout is now on this local branch.
+    Switched { branch: String },
+}
+
+/// The most agents `MachineFacts` names.
+pub const MACHINE_FACTS_AGENTS_MAX: usize = 16;
+
+/// An agent program found on a machine's PATH.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AgentFact {
+    /// The program's name (`claude`, `codex`).
+    pub name: String,
+    /// What its `--version` printed, when that held a version number.
+    pub version: Option<String>,
+}
+
+/// What a machine's daemon says about the computer it runs on. Nothing here is a secret: no
+/// paths, no environment, no logins.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MachineFacts {
+    /// The name the computer gives itself, when it has one.
+    pub host_name: Option<String>,
+    /// `windows`, `macos` or `linux`, as Rust names them.
+    pub os: String,
+    /// The system's own words for its version ("Windows 11 Home 24H2"), when it gives one.
+    pub os_version: Option<String>,
+    /// `x86_64` or `aarch64`, as Rust names them.
+    pub arch: String,
+    pub cpu_cores: u32,
+    pub agents: Vec<AgentFact>,
 }
 
 /// How long a daemon lets one clone run before it stops it, in seconds. A client waits a little
@@ -339,6 +445,15 @@ pub const BYPASS_SETTING_SINCE: u32 = 118;
 /// The first version whose daemon keeps `[updates] machines` (`SettingKey::UpdateMachines`); an older one
 /// cannot read the key, so it is not sent there.
 pub const UPDATE_MACHINES_SINCE: u32 = 118;
+/// The first version whose daemon sends `Reply::CloneProgress` while it clones. Only a client at least this new is
+/// sent it (`ServerMsg::introduced_in`); an older one waits for `Reply::Cloned` alone, as it always did.
+pub const CLONE_PROGRESS_SINCE: u32 = 119;
+/// The first version that reads `Query::FolderGit`: branches of a folder, switched or made on a machine's own daemon.
+pub const FOLDER_GIT_SINCE: u32 = 119;
+/// The first version that reads `Query::MachineFacts`.
+pub const MACHINE_FACTS_SINCE: u32 = 119;
+/// The first version whose daemon signs in to GitHub itself (`SignInAgent::Github`, `SignInRequest::SignOut`).
+pub const GITHUB_SIGN_IN_SINCE: u32 = 119;
 
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
@@ -1179,6 +1294,19 @@ pub enum Query {
         parent: String,
         tag: u64,
     },
+    /// Read or change the branches of `folder` on this daemon's computer (human clients only).
+    /// `folder` is absolute or starts with `~`. Unlike `Query::Git` it needs no pane. The answer is
+    /// `Reply::FolderGit` with the same `tag`.
+    FolderGit {
+        folder: String,
+        request: FolderGitRequest,
+        tag: u64,
+    },
+    /// What this daemon's computer is: system, cores, host name and the agents installed (human
+    /// clients only). The answer is `Reply::MachineFacts` with the same `tag`.
+    MachineFacts {
+        tag: u64,
+    },
     /// Start, stop or read an agent's sign-in on this daemon's computer (human clients only).
     /// The answer is `Reply::AgentSignIn` with the same `tag`.
     AgentSignIn {
@@ -1508,6 +1636,22 @@ pub enum Reply {
     Cloned {
         tag: u64,
         outcome: Result<String, String>,
+    },
+    /// Where a `Query::CloneRepo` has got to, sent any number of times before its `Cloned`. Only a
+    /// client at least `CLONE_PROGRESS_SINCE` is sent it. `percent` is of `phase`, 0 to 100.
+    CloneProgress {
+        tag: u64,
+        phase: ClonePhase,
+        percent: u8,
+    },
+    /// How a `Query::FolderGit` ended: what it found or did, or one line saying why it did not.
+    FolderGit {
+        tag: u64,
+        outcome: Result<FolderGitAnswer, String>,
+    },
+    MachineFacts {
+        tag: u64,
+        facts: MachineFacts,
     },
     AgentSignIn {
         tag: u64,
@@ -2019,6 +2163,17 @@ pub struct TabInfo {
     pub focus: TermId,
 }
 
+/// What is wrong with the hooks of an agent that never reports in: its settings file, in words.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct HookProblem {
+    /// The settings file whose hooks are wrong; its folder is the agent's config folder.
+    pub file: PathBuf,
+    pub why: String,
+    /// The daemon pointed them at this build already: only a restart of the agent loads the fix.
+    #[serde(default)]
+    pub repaired: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TermInfo {
     #[serde(default)]
@@ -2042,6 +2197,10 @@ pub struct TermInfo {
     /// hooks were installed never does, which is what `Command::ReloadAgent` is for.
     #[serde(default)]
     pub hooked: bool,
+    /// Why an agent's hooks never report, when the daemon looked and knows. An older daemon sends
+    /// none, which reads as nothing known.
+    #[serde(default)]
+    pub hook_problem: Option<HookProblem>,
     pub status: Status,
     pub cwd: PathBuf,
     /// What the agent is on: the last prompt it was given (one line), if known.
@@ -2088,6 +2247,9 @@ pub struct TermInfo {
     pub diff_added: u32,
     #[serde(default)]
     pub diff_removed: u32,
+    /// Files changed in that checkout against HEAD (the number on the pane's `changes` chip).
+    #[serde(default)]
+    pub diff_files: u32,
     /// Subagents running right now (their kinds).
     pub subagents: Vec<String>,
     /// Persistent lifecycle records reported by the runtime.
@@ -2479,10 +2641,13 @@ impl ServerMsg {
     /// a client older than that. A message added while `COMPATIBLE_SINCE` stays behind gets its
     /// own arm here; everything else is as old as the window.
     pub fn introduced_in(&self) -> u32 {
-        // Nothing is newer than the window yet. A message added while `COMPATIBLE_SINCE` stays
-        // behind gets an arm here, with a `match self`.
-        let _ = self;
-        COMPATIBLE_SINCE
+        match self {
+            ServerMsg::Reply(Reply::CloneProgress { .. }) => CLONE_PROGRESS_SINCE,
+            ServerMsg::Reply(Reply::FolderGit { .. }) => FOLDER_GIT_SINCE,
+            ServerMsg::Reply(Reply::MachineFacts { .. }) => MACHINE_FACTS_SINCE,
+            ServerMsg::Reply(Reply::AgentSignIn { agent: SignInAgent::Github, .. }) => GITHUB_SIGN_IN_SINCE,
+            _ => COMPATIBLE_SINCE,
+        }
     }
 }
 
@@ -2492,6 +2657,10 @@ impl ClientMsg {
     pub fn introduced_in(&self) -> u32 {
         match self {
             ClientMsg::Query(Query::CreateFolder { .. }) => FOLDER_CREATE_SINCE,
+            ClientMsg::Query(Query::FolderGit { .. }) => FOLDER_GIT_SINCE,
+            ClientMsg::Query(Query::MachineFacts { .. }) => MACHINE_FACTS_SINCE,
+            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Github, .. })
+            | ClientMsg::Query(Query::AgentSignIn { request: SignInRequest::SignOut, .. }) => GITHUB_SIGN_IN_SINCE,
             ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::BypassOff, .. }) => BYPASS_SETTING_SINCE,
             ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::UpdateMachines, .. }) => UPDATE_MACHINES_SINCE,
             ClientMsg::Command(Command::SaveFile { .. })
@@ -2920,7 +3089,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 118);
+        assert_eq!(PROTOCOL_VERSION, 119);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3411,7 +3580,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 118);
+        assert_eq!(PROTOCOL_VERSION, 119);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3543,6 +3712,9 @@ mod tests {
         assert_eq!((old.diff_added, old.diff_removed), (0, 0));
         let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
         assert_eq!((new.diff_added, new.diff_removed), (7, 2));
+        assert_eq!(old.diff_files, 0, "a peer from before the file count sends none");
+        let counted = pane_from(serde_json::json!({"diff_files": 3}));
+        assert_eq!(counted.diff_files, 3);
     }
 
     /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is
@@ -4665,5 +4837,65 @@ mod tests {
         let waiting = SignInState::Waiting { link: Some("https://auth.example/device".into()), code: Some("AB-12".into()) };
         let back: ServerMsg = decode(&encode(&ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state: waiting.clone() })).unwrap()).unwrap();
         assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));
+    }
+
+    /// Version 119 added messages and two values inside one that already existed; none of them
+    /// is sent to a peer that cannot read it, so `COMPATIBLE_SINCE` did not have to move.
+    #[test]
+    fn what_119_added_is_asked_and_sent_only_where_it_is_read() {
+        use super::{ClonePhase, FolderGitAnswer, FolderGitRequest, MachineFacts, SignInAgent, SignInRequest, SignInState};
+        const { assert!(COMPATIBLE_SINCE < 119, "119 added messages an older peer is never sent, so the window stays open") };
+        let facts = MachineFacts { host_name: None, os: "linux".into(), os_version: None, arch: "x86_64".into(), cpu_cores: 4, agents: Vec::new() };
+        let new_replies = [
+            ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: ClonePhase::Receiving, percent: 5 }),
+            ServerMsg::Reply(Reply::FolderGit { tag: 1, outcome: Ok(FolderGitAnswer::NotARepo) }),
+            ServerMsg::Reply(Reply::MachineFacts { tag: 1, facts }),
+            ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Github, state: SignInState::Idle }),
+        ];
+        for reply in &new_replies {
+            assert_eq!(reply.introduced_in(), 119, "{reply:?}");
+        }
+        let new_asks = [
+            ClientMsg::Query(Query::FolderGit { folder: "~/x".into(), request: FolderGitRequest::Branches, tag: 1 }),
+            ClientMsg::Query(Query::MachineFacts { tag: 1 }),
+            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Github, request: SignInRequest::Start, tag: 1 }),
+            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Claude, request: SignInRequest::SignOut, tag: 1 }),
+        ];
+        for ask in &new_asks {
+            assert_eq!(ask.introduced_in(), 119, "{ask:?}");
+            let back: ClientMsg = decode(&encode(ask).unwrap()).unwrap();
+            assert_eq!(back.introduced_in(), 119);
+        }
+        // What an older peer sends and is sent about the same subjects is as old as the window.
+        let old_claude = ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Claude, request: SignInRequest::Start, tag: 1 });
+        assert_eq!(old_claude.introduced_in(), COMPATIBLE_SINCE);
+        let old_cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
+        assert_eq!(old_cloned.introduced_in(), COMPATIBLE_SINCE);
+    }
+
+    /// The shapes version 118 wrote for what 119 still reads, as a peer of that version encodes them.
+    #[test]
+    fn what_118_sent_about_clones_and_sign_in_still_decodes() {
+        let sent = |value: serde_json::Value| rmp_serde::to_vec_named(&value).unwrap();
+        let ask: ClientMsg = decode(&sent(serde_json::json!({"Query": {"CloneRepo": {"address": "https://h/o/r.git", "parent": "~", "tag": 3}}}))).unwrap();
+        assert!(matches!(ask, ClientMsg::Query(Query::CloneRepo { tag: 3, .. })));
+        let sign_in: ClientMsg = decode(&sent(serde_json::json!({"Query": {"AgentSignIn": {"agent": "codex", "request": "cancel", "tag": 4}}}))).unwrap();
+        assert!(matches!(sign_in, ClientMsg::Query(Query::AgentSignIn { agent: super::SignInAgent::Codex, request: super::SignInRequest::Cancel, tag: 4 })));
+        let answer: ServerMsg = decode(&sent(serde_json::json!({"Reply": {"Cloned": {"tag": 3, "outcome": {"Ok": "/home/me/r"}}}}))).unwrap();
+        assert!(matches!(answer, ServerMsg::Reply(Reply::Cloned { tag: 3, outcome: Ok(_) })));
+        let state: ServerMsg = decode(&sent(serde_json::json!({"Reply": {"AgentSignIn": {"tag": 4, "agent": "claude", "state": {"Waiting": {"link": null, "code": "A-1"}}}}}))).unwrap();
+        assert!(matches!(state, ServerMsg::Reply(Reply::AgentSignIn { agent: super::SignInAgent::Claude, .. })));
+    }
+
+    #[test]
+    fn the_new_folder_and_machine_messages_survive_the_wire() {
+        use super::{FolderBranch, FolderBranches, FolderGitAnswer, FolderGitRequest};
+        let ask = ClientMsg::Query(Query::FolderGit { folder: "~/shop".into(), request: FolderGitRequest::CheckoutRemote { remote_branch: "origin/x".into() }, tag: 8 });
+        let back: ClientMsg = decode(&encode(&ask).unwrap()).unwrap();
+        assert!(matches!(back, ClientMsg::Query(Query::FolderGit { request: FolderGitRequest::CheckoutRemote { remote_branch }, tag: 8, .. }) if remote_branch == "origin/x"));
+        let listing = FolderBranches { current: Some("main".into()), branches: vec![FolderBranch { name: "origin/x".into(), current: false, when: Some(5), remote: true }], worktrees: Vec::new() };
+        let answer = ServerMsg::Reply(Reply::FolderGit { tag: 8, outcome: Ok(FolderGitAnswer::Branches(listing.clone())) });
+        let back: ServerMsg = decode(&encode(&answer).unwrap()).unwrap();
+        assert!(matches!(back, ServerMsg::Reply(Reply::FolderGit { outcome: Ok(FolderGitAnswer::Branches(read)), .. }) if read == listing));
     }
 }

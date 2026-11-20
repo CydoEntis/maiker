@@ -41,7 +41,7 @@ describe('the status card', () => {
   })
 
   it('says the daemon is offline rather than idle', () => {
-    expect(statusCard({ ...facts, online: false })).toContain('the daemon is offline')
+    expect(statusCard({ ...facts, online: false })).toContain('the Maiker service is offline')
   })
 })
 

@@ -53,8 +53,14 @@ export type SessionView = {
   interrupted: TerminalDetails['interrupted']
   /** The agent's own conversation id; null when unknown. */
   agentSession?: string | null
+  /** The agent's own hooks have reported in (the daemon's `TermInfo.hooked`); absent for a session that is not a terminal. */
+  hooked?: boolean
+  /** Why the agent's hooks never report (the daemon's `TermInfo.hook_problem`); null when it found nothing. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
   agentEffort?: string | null
+  /** The model its agent answers with, short; empty when it has not said. */
+  agentModel: string
   /** When the status last changed, in milliseconds, as the daemon says; null when it did not say. */
   statusSince: number | null
   /** What set the status, in the daemon's own words (`hook: Stop`); empty when it gave no reason. */
@@ -99,6 +105,28 @@ const MS_PER_SECOND = 1000
 /** What leads the name of a session on another machine, so it is never taken for one here. */
 export function machinePrefix(machineName: string | null | undefined): string {
   return machineName ? `${machineLabel(machineName)} · ` : ''
+}
+
+/** The agents a person knows by name, as they write them; the process name is how the system writes them. */
+const AGENT_NAMES: Readonly<Record<string, string>> = { claude: 'Claude', codex: 'Codex', gemini: 'Gemini', opencode: 'OpenCode' }
+
+/** An agent's name as a person writes it ("Claude", not the process's "claude"); another program keeps its own. */
+export function agentLabel(process: string): string {
+  return AGENT_NAMES[process.toLowerCase()] ?? process
+}
+
+/** What each of the agent's own tools does, as the plain verb a permission ask is said with. */
+const ASK_VERB: Readonly<Record<string, string>> = { Bash: 'run', Edit: 'edit', MultiEdit: 'edit', Write: 'write', NotebookEdit: 'edit', Read: 'read', WebFetch: 'open' }
+
+/**
+ * A permission ask in plain words: "Wants to run npm test", "Wants to edit src/a.ts". A tool with no plain verb is named,
+ * as the agent names it, so nothing is hidden.
+ */
+export function askWords(ask: Pick<PermissionAsk, 'tool' | 'detail'>): string {
+  const verb = ASK_VERB[ask.tool]
+  const detail = ask.detail.trim()
+  if (verb !== undefined) return detail === '' ? `Wants to ${verb} something` : `Wants to ${verb} ${detail}`
+  return detail === '' ? `Wants to use ${ask.tool}` : `Wants to use ${ask.tool}: ${detail}`
 }
 
 /** What a row calls a session: the name you gave it, else where it is, led by its machine when it is not this computer. */
@@ -187,14 +215,19 @@ export function nextResumeAt(sessions: readonly Pick<SessionView, 'resumeAt'>[])
   return times.length === 0 ? null : Math.min(...times)
 }
 
+/**
+ * The one word for each status, wherever a session's status is said: its row, its hover card, its notice and what a
+ * screen reader hears. `unknown` is a session whose machine or service is out of reach, so its last status is not known
+ * to be true.
+ */
 export const STATUS_WORD: Record<SessionStatus, string> = {
   working: 'working',
   needs: 'needs you',
   limited: 'limited',
   done: 'done',
-  error: 'exited',
+  error: 'stopped',
   idle: 'idle',
-  unknown: 'unknown',
+  unknown: 'offline',
 }
 
 const CLOCK_DIGITS = 2
@@ -300,7 +333,10 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     ask: conversation.details?.ask ?? null,
     interrupted: conversation.details?.interrupted ?? null,
     agentSession: conversation.details?.agentSession ?? null,
+    ...(conversation.details?.hooked === undefined ? {} : { hooked: conversation.details.hooked }),
+    hookProblem: conversation.details?.hookProblem ?? null,
     agentEffort: conversation.details?.agentEffort ?? null,
+    agentModel: conversation.details?.agentModel ?? '',
     statusSince: (conversation.details?.since ?? 0) > 0 ? (conversation.details?.since ?? 0) * MS_PER_SECOND : null,
     statusWhy: conversation.details?.statusWhy ?? '',
     resumeAt,
@@ -332,7 +368,7 @@ export function statusText(session: SessionView, now: number = Date.now()): stri
     case 'limited':
       return limitedWord(session.resumeAt, now)
     case 'done':
-      return 'finished'
+      return 'done'
     case 'error':
       return 'exited with error'
     case 'unknown':

@@ -19,8 +19,14 @@ export type TerminalDetails = {
   interrupted: { agent: string; resume: string } | null
   /** The agent's own conversation id, for resuming it elsewhere; null when the daemon did not say. */
   agentSession?: string | null
+  /** The agent's own hooks have reported in: without them the daemon has no session or transcript to follow, so no chat. */
+  hooked?: boolean
+  /** Why the agent's hooks never report, from the daemon's own look at its settings file; null or absent when it found nothing. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
   agentEffort?: string | null
+  /** The model its agent answers with, short (the daemon's `TermInfo.model`); empty or absent when it has not said. */
+  agentModel?: string
   /** When the status last changed, in unix seconds (the daemon's `TermInfo.since`); absent or 0 when it did not say. */
   since?: number
   /** What set the status, in the daemon's own words (`TermInfo.status_why`: `hook: Stop`); absent or empty when it gave no reason. */

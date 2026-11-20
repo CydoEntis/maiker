@@ -92,12 +92,29 @@ pub(in crate::daemon) fn config_root_of(transcript: &Path) -> Option<PathBuf> {
     projects.parent().map(Path::to_path_buf)
 }
 
-/// The `claude` this daemon would start, from the login PATH: the program a terminal pane runs.
+/// The Claude Code program file: the Windows installer's `claude.exe`; a script wrapper is not started.
+const CLAUDE_PROGRAM: &str = if cfg!(windows) { "claude.exe" } else { "claude" };
+
+/// The `claude` this daemon would start: from the login PATH, the program a terminal pane runs, or
+/// else where Claude Code's own installers put it.
 pub(in crate::daemon) fn claude_on_path() -> Option<PathBuf> {
-    let search = crate::login_path::effective_path().or_else(|| std::env::var_os("PATH"))?;
-    // The Windows installer puts claude.exe on PATH; a script wrapper is not started.
-    let name = if cfg!(windows) { "claude.exe" } else { "claude" };
-    crate::shim::find_on_path(name, &search, Path::new(""), &[])
+    let search = crate::login_path::effective_path().or_else(|| std::env::var_os("PATH")).unwrap_or_default();
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    claude_from(&search, home.as_deref())
+}
+
+/// `claude` on `search`, else in the installers' folders under `home`. A pane's shell can find it where
+/// this service cannot: the service may have started before the installer added its folder to PATH
+/// (on Windows, until the next sign-in), and a shell profile can add a folder no login PATH has.
+fn claude_from(search: &std::ffi::OsStr, home: Option<&Path>) -> Option<PathBuf> {
+    crate::shim::find_on_path(CLAUDE_PROGRAM, search, Path::new(""), &[]).or_else(|| {
+        let home = home?;
+        // The native installer's folder, then the older "local" install's.
+        [home.join(".local").join("bin"), home.join(".claude").join("local")]
+            .into_iter()
+            .map(|folder| folder.join(CLAUDE_PROGRAM))
+            .find(|file| file.is_file())
+    })
 }
 
 /// The arguments for `ask`: a question gets no tools and no MCP servers, so the copy can only talk;
@@ -233,7 +250,7 @@ impl crate::daemon::Daemon {
             }
             let (session, transcript, model) = follower.side_parts();
             let cwd = self.terms.get(&follower.term).map(|t| t.cwd.clone()).ok_or_else(no_such)?;
-            let executable = claude_on_path().ok_or_else(|| failed("Claude Code was not found on PATH"))?;
+            let executable = claude_on_path().ok_or_else(|| failed("Could not find Claude Code for a side question. Install it with its own installer, or put the folder that has claude on PATH and restart Maiker"))?;
             return checked(Target {
                 executable,
                 cwd,
@@ -284,6 +301,30 @@ mod tests {
 
     fn strings(args: Vec<OsString>) -> Vec<String> {
         args.into_iter().map(|a| a.to_string_lossy().into_owned()).collect()
+    }
+
+    #[test]
+    fn claude_is_found_in_the_installers_folder_when_path_lacks_it() {
+        let home = std::env::temp_dir().join(format!("side-claude-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let empty = std::ffi::OsString::new();
+        assert_eq!(claude_from(&empty, Some(&home)), None, "nothing installed, nothing found");
+
+        let legacy = home.join(".claude").join("local");
+        std::fs::create_dir_all(&legacy).unwrap();
+        std::fs::write(legacy.join(CLAUDE_PROGRAM), b"").unwrap();
+        assert_eq!(claude_from(&empty, Some(&home)), Some(legacy.join(CLAUDE_PROGRAM)));
+
+        let native = home.join(".local").join("bin");
+        std::fs::create_dir_all(&native).unwrap();
+        std::fs::write(native.join(CLAUDE_PROGRAM), b"").unwrap();
+        assert_eq!(claude_from(&empty, Some(&home)), Some(native.join(CLAUDE_PROGRAM)), "the native install comes first");
+
+        let on_path = home.join("tools");
+        std::fs::create_dir_all(&on_path).unwrap();
+        std::fs::write(on_path.join(CLAUDE_PROGRAM), b"").unwrap();
+        assert_eq!(claude_from(on_path.as_os_str(), Some(&home)), Some(on_path.join(CLAUDE_PROGRAM)), "PATH wins");
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

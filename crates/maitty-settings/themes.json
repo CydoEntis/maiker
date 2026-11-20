@@ -82,7 +82,7 @@
    }
   },
   {
-   "id": "maitty-dark",
+   "id": "maiker-dark",
    "name": "Maiker Dark",
    "family": "Maiker",
    "light": false,
@@ -92,37 +92,37 @@
     "mMid": "#e8c25a",
     "mOr": "#f0964a",
     "mHi": "#ef5350",
-    "bg": "#0c0d0f",
-    "main": "#18191c",
-    "raise": "#18191c",
-    "hover": "#1f2024",
-    "sel": "#26282d",
-    "line": "#2c2e33",
-    "line2": "#45474e",
-    "well": "#111214",
-    "term": "#111214",
-    "fg": "#e6e6e3",
-    "fg2": "#c8c8c6",
-    "muted": "#a9a9ae",
-    "dim": "#94949a",
+    "bg": "#0c0c0d",
+    "main": "#151517",
+    "raise": "#202024",
+    "hover": "#1f1f22",
+    "sel": "#242428",
+    "line": "#2a2a2e",
+    "line2": "#3a3a3f",
+    "well": "#111113",
+    "term": "#151517",
+    "fg": "#ececea",
+    "fg2": "#bdbdba",
+    "muted": "#9d9da3",
+    "dim": "#808087",
     "accent": "#d39a2a",
     "accentText": "#e0ab45",
-    "onAccent": "#121212",
+    "onAccent": "#0c0c0d",
     "accentLine": "rgba(211,154,42,.5)",
     "working": "#3dd6c6",
-    "warn": "#ff7a5c",
-    "onWarn": "#121212",
+    "warn": "#d9a032",
+    "onWarn": "#0c0c0d",
     "danger": "#F07F78",
     "ok": "#7fd99a",
     "blue": "#82AAFF",
     "mag": "#C3A6F2",
-    "paneLine": "rgba(230,230,227,.09)",
+    "paneLine": "rgba(255,255,255,.06)",
     "hk": ".7",
     "sk": ".6"
    }
   },
   {
-   "id": "maitty-light",
+   "id": "maiker-light",
    "name": "Maiker Light",
    "family": "Maiker",
    "light": true,
@@ -162,7 +162,7 @@
    }
   },
   {
-   "id": "maitty-abyss",
+   "id": "maiker-abyss",
    "name": "Abyss",
    "family": "Maiker",
    "light": false,
@@ -201,7 +201,7 @@
    }
   },
   {
-   "id": "maitty-ember",
+   "id": "maiker-ember",
    "name": "Ember",
    "family": "Maiker",
    "light": false,
@@ -240,7 +240,7 @@
    }
   },
   {
-   "id": "maitty-moss",
+   "id": "maiker-moss",
    "name": "Moss",
    "family": "Maiker",
    "light": false,
@@ -279,7 +279,7 @@
    }
   },
   {
-   "id": "maitty-dusk",
+   "id": "maiker-dusk",
    "name": "Dusk",
    "family": "Maiker",
    "light": false,
@@ -318,7 +318,7 @@
    }
   },
   {
-   "id": "maitty-paper",
+   "id": "maiker-paper",
    "name": "Paper",
    "family": "Maiker",
    "light": true,
@@ -357,7 +357,7 @@
    }
   },
   {
-   "id": "maitty-retro-dark",
+   "id": "maiker-retro-dark",
    "name": "Maiker Retro Dark",
    "family": "Maiker",
    "light": false,
@@ -369,7 +369,7 @@
    "green": "#A7F070"
   },
   {
-   "id": "maitty-retro-light",
+   "id": "maiker-retro-light",
    "name": "Maiker Retro Light",
    "family": "Maiker",
    "light": true,

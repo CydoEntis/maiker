@@ -9,7 +9,7 @@ import { guardDrafts, inPane, ofSessions } from '@/features/documents/draftGuard
 import { runsProgram } from './components/runsProgram'
 import { type Layout, removePane, removeSessions, showSession } from './model/layout'
 import { displayName, type SessionView } from './model/session'
-import { keepsRunningUnseen } from './model/sidebar'
+import { keepsRunningUnseen, sessionWords } from './model/sidebar'
 import { makeId } from './makeId'
 import type { AgentTerminals } from '@/data/agentTerminals'
 
@@ -87,8 +87,10 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
         movePanes(() => { setLayout(after) })
         // Named for what was asked to close: an agent's terminals went with it, they are not further sessions.
         const named = terminals.filter((session) => asked.has(session.id))
-        const label = named.length === 1 && named[0] ? displayName(named[0]) : `${String(named.length)} sessions`
-        const toastId = toast.info(`Closed ${label}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow } })
+        const only = named.length === 1 ? named[0] : undefined
+        const words = only ? sessionWords(only) : { title: `${String(named.length)} sessions` }
+        // The title is what the sidebar calls it; the line under it says where it worked.
+        const toastId = toast.info(`Closed ${words.title}`, { duration: UNDO_CLOSE_MS, action: { label: 'Undo', onClick: undoNow }, ...(words.description === undefined ? {} : { description: words.description }) })
         setLastClose({ toastId, sessions: terminals, before, after })
         window.setTimeout(() => { setLastClose((current) => (current?.toastId === toastId ? null : current)) }, UNDO_CLOSE_MS)
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })

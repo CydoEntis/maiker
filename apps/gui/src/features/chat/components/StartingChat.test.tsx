@@ -18,7 +18,7 @@ beforeEach(() => { forgetFirstMessages() })
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
 const noop = () => undefined
-const open = () => render(<StartingChat agent="codex" sessionId="s1" onBackToTerminal={noop} />)
+const open = () => render(<StartingChat agent="codex" sessionId="s1" onShowLog={noop} />)
 
 describe('the chat of a session that is still starting', () => {
   it('restarts the agent after connecting it, so it loads the hooks', async () => {
@@ -28,22 +28,77 @@ describe('the chat of a session that is still starting', () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     open()
     act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    await user.click(screen.getByRole('button', { name: 'Connect codex' }))
+    await user.click(screen.getByRole('button', { name: 'Connect Codex' }))
     await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
     expect(daemon.connectAgent).toHaveBeenCalledWith('codex')
   })
 
+  it('says so, and offers the terminal, when it has waited long and the hooks never reported in', () => {
+    vi.useFakeTimers()
+    open()
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/status hooks are not connected/)
+    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Connect Codex' })).toBeInTheDocument()
+    expect(screen.getByText(/No conversation to show yet/)).toBeInTheDocument()
+    expect(screen.queryByText(/Type below: it is sent as soon as/)).not.toBeInTheDocument()
+  })
+
+  it('names the settings file whose hooks are wrong and repairs that folder, not the app\'s own', async () => {
+    daemon.connectAgent.mockResolvedValue(undefined)
+    daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const problem = { file: '/srv/agents/claude-home/settings.json', why: 'its hooks run another program (/old/path/program)', repaired: false }
+    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked={false} hookProblem={problem} />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent('/srv/agents/claude-home/settings.json')
+    await user.click(screen.getByRole('button', { name: 'Repair Claude hooks' }))
+    await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
+    expect(daemon.connectAgent).toHaveBeenCalledWith('claude', '/srv/agents/claude-home')
+  })
+
+  it('only restarts the agent when the daemon already fixed its hooks', async () => {
+    daemon.connectAgent.mockClear()
+    daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const problem = { file: '/home/me/.claude-work/settings.json', why: 'x; now fixed', repaired: true }
+    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked={false} hookProblem={problem} />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/only loads them when it starts/)
+    await user.click(screen.getByRole('button', { name: 'Restart Claude' }))
+    await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
+    expect(daemon.connectAgent).not.toHaveBeenCalled()
+  })
+
+  it('does not blame the hooks when they have reported in but the conversation was not found', () => {
+    vi.useFakeTimers()
+    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked />)
+    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
+    expect(screen.getByRole('note')).toHaveTextContent(/is reporting in, but Maiker has not found its conversation/)
+    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Connect claude' })).not.toBeInTheDocument()
+  })
+
+  it('shows a calm empty chat the moment the session exists, never a blank screen or a raw terminal', () => {
+    open()
+    const card = screen.getByRole('status')
+    expect(card).toHaveTextContent('What are we building today?')
+    expect(document.querySelector('.mx-terminal, .xterm')).toBeNull()
+  })
+
   it('is there at once, with a message box for the agent that was chosen', () => {
     open()
-    expect(screen.getByText(/Type below: it is sent as soon as codex is ready/)).toBeInTheDocument()
+    expect(screen.getByText('What are we building today?')).toBeInTheDocument()
     expect(screen.queryByText('Starting codex…')).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message codex' })).toBeEnabled()
+    expect(screen.getByRole('textbox', { name: 'Message Codex' })).toBeEnabled()
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
   })
 
   it('draws the Codex permission button while Codex starts, greyed, so it is already there when the chat takes over', () => {
     holdStartChoice('s1', { model: 'default', reasoning: 'default', mode: 'codexReadOnly' })
-    render(<StartingChat agent="codex" sessionId="s1" onBackToTerminal={noop} typeInto={() => Promise.resolve()} />)
+    render(<StartingChat agent="codex" sessionId="s1" onShowLog={noop} typeInto={() => Promise.resolve()} />)
 
     const button = screen.getByRole('button', { name: /^Permission mode: Read only\. Codex is starting/ })
     expect(button).toHaveAttribute('aria-disabled', 'true')
@@ -56,7 +111,7 @@ describe('the chat of a session that is still starting', () => {
     open()
     await user.click(screen.getByRole('button', { name: 'Attach files' }))
     expect(await screen.findByText('errors.log')).toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Message codex' }), 'why does this fail?{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Codex' }), 'why does this fail?{Enter}')
 
     expect(heldFirstMessage('s1')).toContain('/data/attachments/attach-1-errors.log')
     expect(screen.getByLabelText('Sending')).toHaveTextContent('why does this fail?')
@@ -67,19 +122,19 @@ describe('the chat of a session that is still starting', () => {
   it('holds a message sent now and shows it in the conversation, where it stays when the chat takes over', async () => {
     const user = userEvent.setup()
     open()
-    await user.type(screen.getByRole('textbox', { name: 'Message codex' }), 'fix the build{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Codex' }), 'fix the build{Enter}')
 
     expect(heldFirstMessage('s1')).toBe('fix the build')
     expect(screen.queryByRole('list', { name: 'Queued messages' })).not.toBeInTheDocument()
     expect(screen.getByLabelText('Sending')).toHaveTextContent('fix the build')
-    expect(screen.getByText('codex is starting…')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message codex' })).toHaveValue('')
+    expect(screen.getByText('Working…')).toBeInTheDocument()
+    expect(screen.getByRole('textbox', { name: 'Message Codex' })).toHaveValue('')
   })
 
   it('carries a half-typed message over to the chat that replaces it', async () => {
     const user = userEvent.setup()
     open()
-    await user.type(screen.getByRole('textbox', { name: 'Message codex' }), 'half a thou')
+    await user.type(screen.getByRole('textbox', { name: 'Message Codex' }), 'half a thou')
 
     expect(takeCarriedDraft('s1')).toBe('half a thou')
   })
@@ -96,20 +151,20 @@ describe('the chat of a session that is still starting', () => {
   })
 
   it('says the agent is waiting in the terminal at once when the daemon says it needs you, without blaming the hooks', () => {
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" onBackToTerminal={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" onShowLog={noop} />)
     expect(screen.getByRole('note')).toHaveTextContent(/waiting for you in the terminal.*trust this folder/)
     expect(screen.queryByRole('button', { name: /^Connect/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open terminal' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
   })
 
   it('shows a question on the agent’s screen with its choices, and answers it by moving the cursor and pressing Enter', async () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = 'Quick safety check: do you trust this folder?\n❯ 1. No, exit\n2. Yes, I trust this folder'
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onBackToTerminal={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
     expect(screen.getByText(/do you trust this folder/)).toBeInTheDocument()
     // The question sits over the message box, as every other one does, and is the only notice: it can be answered here.
-    expect(screen.getByRole('region', { name: 'claude is asking' }).closest('.mx-composer')).not.toBeNull()
+    expect(screen.getByRole('region', { name: 'Claude is asking' }).closest('.mx-composer')).not.toBeNull()
     expect(screen.queryByRole('note')).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Yes, I trust this folder' }))
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
@@ -119,7 +174,7 @@ describe('the chat of a session that is still starting', () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = 'Accessing workspace:\n\n/home/vox/app\n\nQuick safety check: do you trust this folder?\n\n❯ 1. No, exit\n2. Yes, I trust this folder'
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onBackToTerminal={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
     const card = screen.getByRole('region', { name: 'Trust this folder?' })
     expect(card).toHaveTextContent('/home/vox/app')
     expect(card).toHaveTextContent(/run commands/)
@@ -135,7 +190,7 @@ describe('the chat of a session that is still starting', () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = '> You are in /home/vox/app\n\nDo you trust the contents of this directory?\n\n1. Yes, continue\n2. No, quit'
-    render(<StartingChat agent="codex" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onBackToTerminal={noop} />)
+    render(<StartingChat agent="codex" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
     await user.click(screen.getByRole('button', { name: 'Don’t trust' }))
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
   })
@@ -158,7 +213,7 @@ describe('the chat of a session that is still starting', () => {
 })
 
 describe('the chips of a Claude chat that is still starting', () => {
-  const openClaude = () => render(<StartingChat agent="claude" sessionId="s1" onBackToTerminal={noop} />)
+  const openClaude = () => render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} />)
 
   it('draws the model, effort and mode that were picked, greyed out, where the real chat will have them', () => {
     holdStartChoice('s1', { model: 'opus', reasoning: 'high', mode: 'plan' })
@@ -182,11 +237,11 @@ describe('the chips of a Claude chat that is still starting', () => {
     const user = userEvent.setup()
     openClaude()
     expect(screen.getByRole('button', { name: 'Send message' })).toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'hello{Enter}')
 
-    expect(screen.getByRole('button', { name: 'claude is working' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Claude is working' })).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Send message' })).not.toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'and another{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'and another{Enter}')
     expect(heldFirstMessage('s1')).toBe('hello')
   })
 })

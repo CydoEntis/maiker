@@ -15,6 +15,12 @@ function titleCase(text: string): string {
  */
 export function modelName(agent: ChatAgent, picked: ModelOption | undefined, current: string | null): string {
   if (picked !== undefined && picked.id !== DEFAULT_PICK) return `${AGENT_LABEL[agent]} ${picked.label}`
-  const said = modelLabel(current)
-  return said === null ? AGENT_LABEL[agent] : `${AGENT_LABEL[agent]} ${titleCase(said)}`
+  const said = modelWords(current)
+  return said === null ? AGENT_LABEL[agent] : `${AGENT_LABEL[agent]} ${said}`
+}
+
+/** The model as words (`Sonnet 5.5`) from what the agent said; null when it said none. */
+export function modelWords(current: string | null): string | null {
+  const said = modelLabel(current === '' ? null : current)
+  return said === null ? null : titleCase(said)
 }

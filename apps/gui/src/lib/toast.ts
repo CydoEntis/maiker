@@ -7,7 +7,7 @@ import { saysNotConnected } from '@/lib/serviceLine'
  * failure you can see stays where it happened (its row, its field, its chat). Every toast goes through `toast` below and
  * is drawn by `Toaster` (`components/ui/toaster.tsx`).
  *
- * - `success` and `info` hide after 4 seconds; `error`, `warning`, `needs` and `progress` stay until dismissed or replaced.
+ * - `success` and `info` hide after 5 seconds; `error`, `warning`, `needs` and `progress` stay until dismissed or replaced.
  * - A second failure of the same kind updates the first, with a count, instead of stacking (`merge`, and by default every
  *   error with the same title).
  * - While the window has no line to its service the toasts are held back (`holdToasts`) and come back when it returns.
@@ -23,6 +23,8 @@ export type ToastAction = {
 export type ToastOptions = {
   /** A toast with this id is replaced in place (a progress toast becoming its outcome). */
   id?: string | number | undefined
+  /** Where it happened: the project or the machine, one muted line under the title. */
+  context?: string | undefined
   /** Why, in one plain sentence (or a small picture such as a progress bar). It clamps at three lines. */
   description?: ReactNode | undefined
   /** The raw text (an error's own words) behind Copy details; never shown in the toast itself. */
@@ -47,18 +49,21 @@ export type ToastItem = {
   readonly count: number
   /** True when `title` already says the count, so the toast does not add one. */
   readonly countInTitle: boolean
+  readonly context?: string
   readonly description?: ReactNode
   readonly details?: string
   readonly action?: ToastAction
   readonly secondary?: ToastAction
   readonly closeButton: boolean
   readonly mergeKey: string | null
+  /** Milliseconds until it hides itself, or null when it stays; the countdown line runs for this long. */
+  readonly hideAfter: number | null
 }
 
 /** How long a success or a plain note stays. */
-export const TOAST_HIDE_MS = 4000
-/** The most toasts shown at once; the others wait their turn. */
-export const MOST_TOASTS = 3
+export const TOAST_HIDE_MS = 5000
+/** From this many toasts on, the stack shows the newest and a "N more" line; the pointer or the keys on it open the rest. */
+export const COLLAPSE_AT = 3
 
 const STAYS = Infinity
 const HIDES: Readonly<Record<ToastKind, number>> = { success: TOAST_HIDE_MS, info: TOAST_HIDE_MS, error: STAYS, warning: STAYS, needs: STAYS, progress: STAYS }
@@ -121,12 +126,14 @@ function show(kind: ToastKind, title: string, options: ToastOptions = {}): strin
   const mergeKey = options.merge?.key ?? (kind === 'error' ? `error:${title}` : null)
   const content = {
     kind,
+    ...(options.context === undefined || options.context === '' ? {} : { context: options.context }),
     ...(options.description === undefined || options.description === null ? {} : { description: options.description }),
     ...(options.details === undefined || options.details === '' ? {} : { details: options.details }),
     ...(options.action === undefined ? {} : { action: options.action }),
     ...(options.secondary === undefined ? {} : { secondary: options.secondary }),
     closeButton: options.closeButton !== false,
     mergeKey,
+    hideAfter: Number.isFinite(duration) ? duration : null,
   }
   const items = snapshot.items
   const replaced = options.id === undefined ? undefined : items.find((item) => item.id === String(options.id))
@@ -182,9 +189,9 @@ function showFailure(what: string, error: unknown, options: ToastOptions = {}): 
 }
 
 export const toast = {
-  /** Something you asked for is done and nothing on screen shows it. Hides after 4s. */
+  /** Something you asked for is done and nothing on screen shows it. Hides after 5s. */
   success: (title: string, options?: ToastOptions) => show('success', title, options),
-  /** A plain note (an Undo, a hint). Hides after 4s. */
+  /** A plain note (an Undo, a hint). Hides after 5s. */
   info: (title: string, options?: ToastOptions) => show('info', title, options),
   /** Something failed where you are not looking. Stays until dismissed. */
   error: showError,

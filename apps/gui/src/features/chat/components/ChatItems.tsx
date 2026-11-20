@@ -1,13 +1,16 @@
-import { memo, useContext, useMemo, type ReactNode } from 'react'
+import { memo, useContext, useEffect, useMemo, type ReactNode } from 'react'
 import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { dividerText, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
+import { paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
+import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
+import { useTypedText } from '../useTypedText'
 import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
+import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
 import { parseQuoteMessage } from '../quoteMessage'
 import { askablesOf, type Askable } from '../plainQuestions'
@@ -22,9 +25,9 @@ import { compactionOf, type Compaction } from '../compaction'
 import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
-import { FileBadge } from './cardParts'
 import { StepView } from './StepCards'
 import { ThoughtRow } from './ThoughtRow'
+import { TurnFooter } from './TurnFooter'
 import { WorkCard } from './WorkCard'
 import { MessageMenu } from './MessageMenu'
 import { stripRestoreNote, type EditFromHere } from '../editFromHere'
@@ -34,11 +37,6 @@ import { stripRestoreNote, type EditFromHere } from '../editFromHere'
  * not carry is said to be unavailable, never guessed. Colours are theme tokens; only a step that is
  * running animates, so a long conversation costs nothing at rest.
  */
-
-/** The character a turn's footer starts with, by how the turn ended. */
-const DIVIDER_MARK = { completed: '✓', failed: '×', interrupted: '■' } as const
-/** How many changed files a turn's row names; the rest are counted. */
-const CHANGED_CHIPS = 8
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -97,10 +95,11 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
       return b.kind === 'echo' && a.text === b.text
     case 'report':
       return b.kind === 'report' && a.text === b.text
+    case 'divider':
+      return b.kind === 'divider' && a.event === b.event && a.steps === b.steps && a.reply === b.reply && a.prompt === b.prompt
     case 'user':
     case 'step':
     case 'summary':
-    case 'divider':
       return 'event' in b && a.event === b.event
   }
 }
@@ -110,18 +109,26 @@ function sameProps(a: RowProps, b: RowProps): boolean {
 }
 
 /**
- * An agent's reply, drawn as fast as the history brings it: a reply still arriving grows in place. It is read in its
- * finished form (`streamingParagraphs`), so a half-written mark or table does not flash; each block is parsed and drawn
- * again only when its own text changed (`Markdown`).
+ * An agent's reply. One that arrives while the person is looking is typed in a few words at a time (`useTypedText`), so
+ * a reply the history brings whole still appears the way a streamed one does; one that was already there shows whole. What
+ * shows is read in its finished form (`streamingParagraphs`), so a half-written mark or table does not flash; each block is
+ * parsed and drawn again only when its own text changed (`Markdown`).
  */
 function AgentMessage({ rowKey, paragraphs, status, agent }: { rowKey: string; paragraphs: readonly string[]; status: ItemStatus; agent: ChatAgent }) {
   const actions = useContext(ChatActionsContext)
+  const reduced = useContext(ReducedMotionContext)
+  const known = useContext(KnownRowsContext)
   const running = status === 'running'
-  const shown = running ? streamingParagraphs(paragraphs) : paragraphs
+  const finished = running ? streamingParagraphs(paragraphs) : paragraphs
+  const target = finished.join('\n\n')
+  const typed = useTypedText(target, !reduced, known !== null && !known.has(rowKey))
+  // Typed once: drawn again, this row shows whole.
+  useEffect(() => { known?.add(rowKey) }, [known, rowKey])
+  const shown = typed === target ? finished : streamingParagraphs(paragraphsOf(typed))
   const { lead, rest } = splitLead(shown)
   const empty = shown.join('').trim() === ''
-  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is still written.
-  const whole = !running && actions !== null && actions.canReply
+  // Questions asked in plain words are offered a Reply only once the message is whole: never while it is still written or typed in.
+  const whole = !running && typed === target && actions !== null && actions.canReply
   const restText = rest.join('\n\n')
   const leadAsked = useMemo(() => (whole ? askablesOf(lead).map((one): Askable => ({ ...one, key: `lead.${one.key}` })) : []), [whole, lead])
   const restAsked = useMemo(() => (whole ? askablesOf(restText) : []), [whole, restText])
@@ -255,24 +262,22 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'approval':
       return <Frame><ApprovalCard event={row.event} actions={approval} step={row.step} onGoToStep={goToStep} /></Frame>
     case 'divider':
-      // The turn's footer (design): a quiet line with how it ended, no rules. ✓ finished, × failed, ■ stopped.
-      return (
-        <div className={`mx-chat-row mx-divider${row.event.outcome === 'failed' ? ' is-failed' : ''}`} role="separator" aria-label={dividerText(row.event, clock)}>
-          <span className="mx-divider-text"><span aria-hidden="true">{DIVIDER_MARK[row.event.outcome]} </span>{dividerText(row.event, clock)}</span>
-        </div>
-      )
+      return <TurnFooter row={row} clock={clock} />
     case 'changes': {
-      // The files the turn changed as chips (design: file chips); choosing one opens what this turn changed in the side panel.
-      const shown = row.files.slice(0, CHANGED_CHIPS)
-      const more = row.files.length - shown.length
+      // The turn's changed-files bar (design: ChangedFilesBar): how many files and lines, and Review, which opens what this
+      // turn changed in the side panel. The files themselves are listed there.
+      const count = row.files.length
+      const first = row.files[0]
       return (
         <Frame>
-          <div className="mx-changed" role="group" aria-label={`${String(row.files.length)} changed ${row.files.length === 1 ? 'file' : 'files'}`}>
-            {shown.map((file) => (openDiff === null
-              ? <span key={file} className="mx-file-chip" title={file}><FileBadge path={file} /></span>
-              : <button key={file} type="button" className="mx-file-chip" title={`Show what this turn changed in ${file}`} onClick={() => { openDiff(file, row.turn) }}><FileBadge path={file} /></button>))}
-            {more > 0 && <span className="mx-file-chip is-more">+{more} more</span>}
-            {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
+          <div className="mx-block mx-changed" role="group" aria-label={`${String(count)} changed ${count === 1 ? 'file' : 'files'}`}>
+            <div className="mx-block-head is-static">
+              <Icon name="toolEdit" />
+              <span className="mx-changed-title">{count} changed {count === 1 ? 'file' : 'files'}</span>
+              {row.lines !== null && <span className="mx-changed-counts"><span className="is-add">+{row.lines.added}</span><span className="is-remove">−{row.lines.removed}</span></span>}
+              <span className="mx-spacer" />
+              {openDiff !== null && first !== undefined && <button type="button" className="mx-changed-review" title="Show what this turn changed in the side panel" onClick={() => { openDiff(first, row.turn) }}>Review</button>}
+            </div>
           </div>
         </Frame>
       )

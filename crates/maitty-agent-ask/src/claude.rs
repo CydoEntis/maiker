@@ -16,7 +16,7 @@ use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
 const ASK_TIMEOUT: Duration = Duration::from_secs(20);
 /// The reply also lists every slash command and agent; anything past this is not that reply.
 const MAX_REPLY_BYTES: usize = 8 * 1024 * 1024;
-const REQUEST_ID: &str = "maitty-models";
+const REQUEST_ID: &str = "maiker-models";
 const ARGUMENTS: &[&str] = &[
     "-p",
     "--input-format",
@@ -183,7 +183,7 @@ mod tests {
     use super::{commands, listed, reply_in, Listed, DESCRIPTION_MAX_CHARS};
     use maitty_shared::agent_commands::AgentCommand;
 
-    const REPLY: &str = r#"{"type":"control_response","response":{"request_id":"maitty-models","subtype":"success","response":{"models":[
+    const REPLY: &str = r#"{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success","response":{"models":[
         {"value":"default","resolvedModel":"claude-fable-5-2","displayName":"Default (recommended)","description":"Fable 5.2","supportsEffort":true,"supportedEffortLevels":["low","medium","high","xhigh","max"]},
         {"value":"opus","resolvedModel":"claude-opus-5-5","displayName":"Opus 5.5","description":"For complex work","supportsEffort":true,"supportedEffortLevels":["low","medium","high","max"]},
         {"value":"claude-haiku-4-5-20251001","resolvedModel":"claude-haiku-4-5-20251001","displayName":"Haiku 4.5","description":"Fastest"},
@@ -213,7 +213,7 @@ mod tests {
         assert!(reply_in(r#"{"type":"system","subtype":"hook_started"}"#).is_none());
         assert!(reply_in("not json").is_none());
         assert!(reply_in(r#"{"type":"control_response","response":{"request_id":"someone-else","subtype":"success"}}"#).is_none());
-        let refused = r#"{"type":"control_response","response":{"request_id":"maitty-models","subtype":"error","error":"no"}}"#;
+        let refused = r#"{"type":"control_response","response":{"request_id":"maiker-models","subtype":"error","error":"no"}}"#;
         assert!(reply_in(refused).unwrap().is_err());
     }
 
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn a_reply_with_no_models_lists_none() {
-        let reply = reply_in(r#"{"type":"control_response","response":{"request_id":"maitty-models","subtype":"success"}}"#).unwrap().unwrap();
+        let reply = reply_in(r#"{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success"}}"#).unwrap().unwrap();
         assert!(listed(&reply).is_empty());
     }
 }

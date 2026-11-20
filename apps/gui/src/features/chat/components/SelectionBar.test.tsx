@@ -55,7 +55,7 @@ async function open() {
   render(<ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1 }} agent="claude" online />)
   await settle()
   const said = screen.getByText('The lockfile was out of date.')
-  return { user, said, box: screen.getByRole('textbox', { name: 'Message claude' }) }
+  return { user, said, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
 describe('text selected in the chat', () => {

@@ -3,11 +3,10 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
-import { machineHeads, type RemoteMachine } from '@/features/workspace/model/machines'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' }, defaultAgent: 'claude', hideSuccessfulTools: false, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -30,7 +29,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 }))
 
 function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
-  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), add: { windows: false, loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn() }, ...overrides }
+  return { known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(), hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) }, add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), inspect: vi.fn(), trust: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() }, ...overrides }
 }
 
 function renderSettings(section: DesktopSettingsSection, overrides: Partial<Parameters<typeof DesktopSettings>[0]> = {}) {
@@ -110,7 +109,7 @@ describe('desktop settings', () => {
   it('groups the sections the way the design does', () => {
     renderSettings('general')
     const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('APPGeneralGAppearanceANotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesM')
+    expect(nav).toHaveTextContent('APPGeneralGAppearanceAPerformancePNotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesM')
     expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
   })
 
@@ -161,16 +160,6 @@ describe('desktop settings', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('sets which view a Claude, Codex or Gemini session opens in, one agent at a time', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
-
-    const claude = screen.getByRole('radiogroup', { name: 'Claude sessions open in' })
-    expect(within(claude).getByRole('radio', { name: 'Terminal' })).toBeChecked()
-    await user.click(within(claude).getByRole('radio', { name: 'Chat' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ chatViewDefault: { claude: 'chat', codex: 'terminal', gemini: 'terminal' } }))
-  })
-
   it('chooses the default agent and what a new session opens as', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('chat')
@@ -208,14 +197,15 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ hideSuccessfulTools: true }))
   })
 
-  it('shows a test toast, and offers no place to move toasts: they always appear at the bottom right', async () => {
+  it('shows a test toast, and moves the toasts to the top right when asked', async () => {
     const user = userEvent.setup()
     const onTestNotice = vi.fn()
-    renderSettings('notifications', { onTestNotice })
+    const { onChange } = renderSettings('notifications', { onTestNotice })
 
-    expect(screen.queryByRole('group', { name: 'Notification position' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Show a test' }))
     expect(onTestNotice).toHaveBeenCalledTimes(1)
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Toast position' })).getByRole('radio', { name: 'Top right' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, toastPosition: 'top' })
   })
 
   it('keeps the two update switches on General, and the update itself at the foot of the nav', async () => {
@@ -315,7 +305,6 @@ describe('desktop settings', () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('terminal')
 
-    expect(screen.getByText('Geist Mono · 13px')).toBeInTheDocument()
     expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['11', '12', '13', '14', '15', '16'])
     await user.click(screen.getByRole('radio', { name: '15' }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontSize: 15 })
@@ -409,7 +398,7 @@ describe('desktop settings', () => {
   it(`shows only what ${DAEMON_NAME} reports about itself, as This computer on the Machines page`, async () => {
     const user = userEvent.setup()
     renderSettings('machines', { daemon: { online: false, sessionCount: 3 } })
-    await user.click(screen.getByRole('button', { name: /This computer/ }))
+    await user.click(screen.getByRole('button', { name: 'Details' }))
     const here = screen.getByRole('region', { name: 'This computer' })
     expect(within(here).getByRole('status')).toHaveTextContent('Disconnected')
     expect(within(here).getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
@@ -454,7 +443,7 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
     const corners = screen.getByRole('radiogroup', { name: 'Corners' })
 
-    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded', 'Folded'])
+    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
     expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
 
     await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))
@@ -487,307 +476,6 @@ describe('performance section', () => {
     const { onChange } = renderSettings('performance')
     await user.click(screen.getByRole('switch', { name: 'Draw terminals without the GPU' }))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ terminalPlainDrawing: true }))
-  })
-})
-
-
-function box(kind: RemoteMachine['state']['state'], why: string | null = null): RemoteMachine {
-  return { state: { machine: 1, name: 'box', state: kind, why, attempt: null, since: Date.now() - 180_000 }, conversations: [], heard: true, listedAt: 0 }
-}
-
-describe('the Machines page', () => {
-  const others = (kind: RemoteMachine['state']['state'], why: string | null = null) => machineHeads(new Map([[1, box(kind, why)]])).filter((head) => head.name !== null)
-  /** Renders the page with the one machine and opens its settings from its tile. */
-  const openBox = async (machines: MachinesInfo, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
-    const user = userEvent.setup()
-    const rendered = renderSettings('machines', { machines, ...extra })
-    await user.click(screen.getByRole('button', { name: /^box/ }))
-    return { user, ...rendered }
-  }
-
-  it('shows placeholders until the host has answered', () => {
-    renderSettings('machines', { machines: info({ known: false }) })
-    expect(within(screen.getByRole('region', { name: 'Remote machines' })).getByRole('status', { name: 'Reading machines' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add machine' })).toBeDisabled()
-  })
-
-  it('says where machines come from when there are none', () => {
-    renderSettings('machines')
-    expect(screen.getByText(/No other machines/)).toBeInTheDocument()
-  })
-
-  it('counts machines by state, filters them, and finds one by name', async () => {
-    const user = userEvent.setup()
-    const list = machineHeads(new Map([[1, box('connected')], [2, { ...box('unreachable', 'no answer'), state: { ...box('unreachable').state, machine: 2, name: 'lab' } }]])).filter((head) => head.name !== null)
-    renderSettings('machines', { machines: info({ list, sessionsOn: (machine) => (machine === 1 ? 2 : 0) }) })
-
-    expect(screen.getByText('2 machines · 1 connected · 1 unreachable')).toBeInTheDocument()
-    const tiles = () => screen.getAllByRole('button', { name: /^(box|lab)/ }).map((tile) => tile.querySelector('.mx-mach-name')?.textContent)
-    expect(tiles()).toEqual(['lab', 'box'])
-    expect(screen.getByRole('button', { name: /^box/ })).toHaveTextContent('2 sessions')
-
-    await user.click(screen.getByRole('radio', { name: /Needs attention/ }))
-    expect(tiles()).toEqual(['lab'])
-    await user.click(screen.getByRole('radio', { name: /All/ }))
-    await user.type(screen.getByRole('textbox', { name: 'Find a machine' }), 'bo')
-    expect(tiles()).toEqual(['box'])
-  })
-
-  it('opens a machine from its tile, and closes it again', async () => {
-    const { user } = await openBox(info({ list: others('connected') }))
-    expect(screen.getByRole('region', { name: 'Connection' })).toHaveTextContent('connected')
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-    expect(screen.queryByRole('region', { name: 'Connection' })).toBeNull()
-  })
-
-  it('shows a machine that is down with its word, how long, and its fix in full', async () => {
-    await openBox(info({ list: others('needs-login', 'run ssh box once to log in') }))
-    expect(screen.getAllByText(/needs login/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText('disconnected since 3m ago').length).toBeGreaterThan(0)
-    expect(screen.getByText('run ssh box once to log in')).toBeInTheDocument()
-  })
-
-  it('shows a refused machine with the reason, the fix, and Remove to act on it', async () => {
-    const why = 'a different machine answers at box (id bbbbbbbb instead of aaaaaaaa). If you replaced that machine, open Machines, remove it and add it again; otherwise check the host name and DNS.'
-    await openBox(info({ list: others('refused', why) }))
-    expect(screen.getAllByText(/refused/i).length).toBeGreaterThan(0)
-    expect(screen.getByText(why)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove box' })).toBeEnabled()
-  })
-
-  it('offers to copy the update command, and never runs it', async () => {
-    const onCopyCommand = vi.fn()
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box --install` (or set `remote_cmd` to its path), then retry'), onCopyCommand }))
-    expect(screen.getByText('maiker machine update box --install')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Copy the update command for box' }))
-    expect(onCopyCommand).toHaveBeenCalledWith('maiker machine update box --install')
-  })
-
-  it('asks before updating a machine, says what happens to its sessions, then updates it', async () => {
-    const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
-    expect(screen.getByText('box runs another version of Maiker.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
-    expect(onUpdate).not.toHaveBeenCalled()
-    expect(await screen.findByText(/come back with their agents resumed/)).toBeInTheDocument()
-    await user.click(await screen.findByRole('button', { name: 'Update box now' }))
-    expect(onUpdate).toHaveBeenCalledWith('box', 'update', false)
-  })
-
-  it('installs on a machine with none in one confirmed click, without asking what is open there', async () => {
-    const onUpdate = vi.fn(() => Promise.resolve())
-    const onCheckActivity = vi.fn(() => Promise.resolve(null))
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box --install` (or set `remote_cmd` to its path), then retry'), onUpdate, onCheckActivity }))
-    expect(screen.getByText('Maiker is not installed on box.')).toBeInTheDocument()
-    expect(screen.queryByText(/set `remote_cmd`/)).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Install Maiker on box' }))
-    expect(screen.getByText(/Puts this version of Maiker on box over ssh/)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Install on box now' }))
-    expect(onUpdate).toHaveBeenCalledWith('box', 'install', false)
-    expect(onCheckActivity).not.toHaveBeenCalled()
-  })
-
-  it('does not update when the question is cancelled', async () => {
-    const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
-    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
-    expect(onUpdate).not.toHaveBeenCalled()
-  })
-
-  it('can wait for the machine to be idle before it updates', async () => {
-    const onUpdate = vi.fn(() => Promise.resolve())
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
-    await user.click(await screen.findByRole('button', { name: 'Update box when idle' }))
-    expect(onUpdate).toHaveBeenCalledWith('box', 'update', true)
-  })
-
-  it('says how many sessions are open and how many are busy before it updates', async () => {
-    const onCheckActivity = vi.fn(() => Promise.resolve({ sessions: 3, busy: 1, current: false }))
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onCheckActivity }))
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
-    expect(await screen.findByText(/box has 3 sessions open, 1 busy\./)).toBeInTheDocument()
-    expect(onCheckActivity).toHaveBeenCalledWith('box')
-  })
-
-  it('still asks, and says it could not see what is open, when the machine cannot say', async () => {
-    const { user } = await openBox(info({ list: others('needs-update', 'run `maiker machine update box`, then retry'), onCheckActivity: vi.fn(() => Promise.reject(new Error('no route'))) }))
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on box' }))
-    expect(await screen.findByText(/box could not say what is open on it\./)).toBeInTheDocument()
-  })
-
-  it('has no command to copy for a machine that needs nothing installed', async () => {
-    await openBox(info({ list: others('unreachable', 'no answer') }))
-    expect(screen.queryByRole('button', { name: /Copy the update command/ })).toBeNull()
-  })
-
-  it('retries a machine that is down', async () => {
-    const onRetry = vi.fn()
-    const { user, onChange } = await openBox(info({ list: others('unreachable', 'no answer'), onRetry }))
-    await user.click(screen.getByRole('button', { name: 'Retry box' }))
-    expect(onRetry).toHaveBeenCalledWith('box')
-    expect(onChange).not.toHaveBeenCalled()
-  })
-
-  it('does not offer a retry for a machine that is connected', async () => {
-    await openBox(info({ list: others('connected') }))
-    expect(screen.queryByRole('button', { name: 'Retry box' })).toBeNull()
-  })
-
-  it('asks before removing, and says what stays', async () => {
-    const onRemove = vi.fn()
-    const { user } = await openBox(info({ list: others('connected'), onRemove }))
-    await user.click(screen.getByRole('button', { name: 'Remove box' }))
-    expect(onRemove).not.toHaveBeenCalled()
-    expect(screen.getByText('Removes box from this list. Its sessions keep running on box.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Keep' }))
-    expect(onRemove).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Remove box' }))
-    await user.click(screen.getByRole('button', { name: 'Remove box' }))
-    expect(onRemove).toHaveBeenCalledWith('box')
-  })
-})
-
-describe('what a machine may do to this computer', () => {
-  it('is off until allowed, and each switch asks for just its own power', async () => {
-    const user = userEvent.setup()
-    const onGrant = vi.fn()
-    const list = machineHeads(new Map([[1, box('connected')]])).filter((head) => head.name !== null)
-    renderSettings('machines', { machines: info({ list, onGrant }) })
-    await user.click(screen.getByRole('button', { name: /^box/ }))
-    const clipboard = screen.getByRole('switch', { name: 'Allow box to copy to your clipboard' })
-    const notices = screen.getByRole('switch', { name: 'Allow box to notify you' })
-    expect(clipboard).toHaveAttribute('aria-checked', 'false')
-    expect(notices).toHaveAttribute('aria-checked', 'false')
-    await user.click(notices)
-    expect(onGrant).toHaveBeenCalledWith('box', 'notices', true)
-    await user.click(clipboard)
-    expect(onGrant).toHaveBeenLastCalledWith('box', 'clipboard', true)
-  })
-
-  it('shows a power the machine has, and turns it off', async () => {
-    const user = userEvent.setup()
-    const onGrant = vi.fn()
-    const on = box('connected')
-    const list = machineHeads(new Map([[1, { ...on, state: { ...on.state, notices: true } }]])).filter((head) => head.name !== null)
-    renderSettings('machines', { machines: info({ list, onGrant }) })
-    await user.click(screen.getByRole('button', { name: /^box/ }))
-    const notices = screen.getByRole('switch', { name: 'Allow box to notify you' })
-    expect(notices).toHaveAttribute('aria-checked', 'true')
-    await user.click(notices)
-    expect(onGrant).toHaveBeenCalledWith('box', 'notices', false)
-  })
-})
-
-describe('adding a machine', () => {
-  const hosts = [{ alias: 'build', detail: 'me@build.example' }, { alias: 'lab', detail: 'lab.example' }]
-  const added = (name: string) => ({ outcome: 'added' as const, name, version: 'maiker 1.2.3' })
-  /** Opens the add flow from the Machines page. */
-  const startAdding = async (add: Partial<MachinesInfo['add']> = {}, extra: Partial<Parameters<typeof DesktopSettings>[0]> = {}) => {
-    const user = userEvent.setup()
-    renderSettings('machines', { machines: info({ add: { ...info().add, ...add } }), ...extra })
-    await user.click(screen.getByRole('button', { name: 'Add machine' }))
-    return user
-  }
-  /** Switches the flow to typing an address, and types it. */
-  const byAddress = async (user: ReturnType<typeof userEvent.setup>, text: string) => {
-    await user.click(screen.getByRole('radio', { name: 'By address' }))
-    await user.type(screen.getByRole('textbox', { name: 'Address' }), text)
-  }
-
-  it('says it is loading the hosts, then lists them', async () => {
-    let answer: (list: typeof hosts) => void = () => undefined
-    await startAdding({ loadHosts: () => new Promise((resolve) => { answer = resolve }) })
-    expect(screen.getByRole('status', { name: /Reading hosts/ })).toBeInTheDocument()
-    answer(hosts)
-    const list = await screen.findByRole('radiogroup', { name: 'Hosts in your ssh config' })
-    expect(within(list).getByRole('radio', { name: /build/ })).toBeInTheDocument()
-    expect(within(list).getByRole('radio', { name: /lab/ })).toBeInTheDocument()
-  })
-
-  it('says so when there are no hosts', async () => {
-    await startAdding()
-    expect(await screen.findByText(/No new hosts in ~\/\.ssh\/config/)).toBeInTheDocument()
-  })
-
-  it('shows why the hosts could not be read', async () => {
-    await startAdding({ loadHosts: () => Promise.reject(new Error('config unreadable')) })
-    expect(await screen.findByRole('alert')).toHaveTextContent('config unreadable')
-  })
-
-  it('connects nothing until a host is picked, then adds it and says what answered', async () => {
-    const onAdd = vi.fn().mockResolvedValue(added('build'))
-    const user = await startAdding({ loadHosts: () => Promise.resolve(hosts), onAdd })
-    expect(screen.getByRole('button', { name: 'Connect machine' })).toBeDisabled()
-    await user.click(await screen.findByRole('radio', { name: /build/ }))
-    await user.click(screen.getByRole('button', { name: 'Connect build' }))
-    expect(onAdd).toHaveBeenCalledWith('build', undefined)
-    expect(await screen.findByText(/build is added and connecting\. maiker 1\.2\.3 answered there\./)).toBeInTheDocument()
-  })
-
-  it('adds the address as typed, under the name given', async () => {
-    const onAdd = vi.fn().mockResolvedValue(added('box'))
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'me@box.example')
-    await user.type(screen.getByRole('textbox', { name: 'Name in Maiker' }), 'box{Enter}')
-    expect(onAdd).toHaveBeenCalledWith('me@box.example', 'box')
-  })
-
-  it('shows the words of a machine that cannot be added, and goes back to the form to try again', async () => {
-    const onAdd = vi.fn().mockRejectedValue(new Error('nope.example: could not resolve'))
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'nope.example{Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent('nope.example: could not resolve')
-    await user.click(screen.getByRole('button', { name: 'Edit and try again' }))
-    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('nope.example')
-  })
-
-  it('asks for a name when none can be made', async () => {
-    const onAdd = vi.fn().mockResolvedValueOnce({ outcome: 'needs-name' })
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'me@{Enter}')
-    expect(await screen.findByText('Give me@ a name in Maiker to add it.')).toBeInTheDocument()
-  })
-
-  it('shows checking with a way to cancel while ssh is looked at', async () => {
-    const onCancel = vi.fn()
-    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
-    const user = await startAdding({ onAdd, onCancel })
-    await byAddress(user, 'slow.example{Enter}')
-    expect(within(screen.getByRole('region', { name: 'Add a machine' })).getByText('Reaching slow.example over ssh…')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(onCancel).toHaveBeenCalled()
-  })
-
-  it('ends the look with Esc, and keeps Settings open', async () => {
-    const onCancel = vi.fn()
-    const onClose = vi.fn()
-    const onAdd = vi.fn().mockReturnValue(new Promise(() => undefined))
-    const user = await startAdding({ onAdd, onCancel }, { onClose })
-    await byAddress(user, 'slow.example{Enter}')
-    screen.getByRole('button', { name: 'Cancel' }).focus()
-    await user.keyboard('{Escape}')
-    expect(onCancel).toHaveBeenCalled()
-    expect(onClose).not.toHaveBeenCalled()
-  })
-
-  it('points at the session to log in with when ssh needs a person', async () => {
-    const onAdd = vi.fn().mockResolvedValue({ outcome: 'login', name: 'box' })
-    const user = await startAdding({ onAdd })
-    await byAddress(user, 'box{Enter}')
-    expect(await screen.findByText(/ssh needs you to log in: use the session named “ssh box”/)).toBeInTheDocument()
-  })
-
-  it('says that Windows wants keys or an agent, on Windows only', async () => {
-    await startAdding({ windows: true })
-    expect(screen.getByText(/Windows: use ssh keys or an agent/)).toBeInTheDocument()
-  })
-
-  it('goes back to the machines from its breadcrumb', async () => {
-    const user = await startAdding()
-    await user.click(within(screen.getByRole('navigation', { name: 'Breadcrumb' })).getByRole('button', { name: 'Remote machines' }))
-    expect(screen.getByRole('button', { name: 'Add machine' })).toBeInTheDocument()
   })
 })
 

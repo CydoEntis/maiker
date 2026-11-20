@@ -629,7 +629,9 @@ impl Hub {
                 .or_default()
                 .awaiting(Instant::now());
         let vetted = vet(&opts, asked, &name, msg)?;
-        if !listed && matches!(vetted, ServerMsg::Reply(_) | ServerMsg::Error(_)) {
+        // Progress of a clone is not its answer: that is still to come.
+        let progress = matches!(vetted, ServerMsg::Reply(Reply::CloneProgress { .. }));
+        if !listed && !progress && matches!(vetted, ServerMsg::Reply(_) | ServerMsg::Error(_)) {
             lock(&self.handle.shared.allowance)
                 .entry(machine)
                 .or_default()
@@ -655,6 +657,12 @@ pub struct MachineState {
     pub name: String,
     pub state: &'static str,
     pub why: Option<String>,
+    /// On needs-login: ssh's own last line, so the window can show why it could not log in.
+    pub said: Option<String>,
+    /// On needs-login: the line to run in a terminal to log in by hand (`ssh -p 2222 me@box ...`).
+    pub login_command: Option<String>,
+    /// How the machine is reached over ssh (`user@host`, a host, or an alias), so the user it connects as is never hidden.
+    pub target: Option<String>,
     /// Which dial a reconnect is on.
     pub attempt: Option<u32>,
     /// On connecting: how many keystrokes the machine could not take while it was down.
@@ -674,8 +682,12 @@ fn fix_for(why: &str, name: &str) -> String {
 }
 
 pub fn describe(machine: MachineId, name: &str, state: &ConnectionState) -> MachineState {
+    let said = match state {
+        ConnectionState::NeedsLogin { said, .. } => Some(said.clone()).filter(|said| !said.is_empty()),
+        _ => None,
+    };
     let (why, attempt) = match state {
-        ConnectionState::NeedsLogin { why }
+        ConnectionState::NeedsLogin { why, .. }
         | ConnectionState::NeedsUpdate { why }
         | ConnectionState::Unreachable { why, .. } => (Some(fix_for(why, name)), None),
         ConnectionState::Reconnecting { attempt, .. } => (None, Some(*attempt)),
@@ -686,6 +698,9 @@ pub fn describe(machine: MachineId, name: &str, state: &ConnectionState) -> Mach
         name: name.to_owned(),
         state: state.kind(),
         why,
+        said,
+        login_command: None,
+        target: None,
         attempt,
         unsent: None,
         since: None,

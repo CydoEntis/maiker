@@ -19,8 +19,9 @@ function pressOf(text: string, platform: Platform): Key {
 const TABLE: readonly [ShortcutAction, string, string][] = [
   ['new-session', '⌘T', 'Ctrl+Shift+T'],
   ['new-terminal', '⌘⇧T', 'Ctrl+Alt+T'],
-  ['new-agent-chat', '⌘⇧A', 'Ctrl+Shift+A'],
   ['new-worktree', '⌘⇧N', 'Ctrl+Shift+N'],
+  ['open-folder', '⌘O', 'Ctrl+Shift+O'],
+  ['fetch', '⌘⇧F', 'Ctrl+Alt+Shift+F'],
   ['split-right', '⌘D', 'Ctrl+Shift+D'],
   ['split-down', '⌘⇧D', 'Ctrl+Alt+Shift+D'],
   ['focus-previous', '⌘[', 'Ctrl+['],
@@ -33,7 +34,6 @@ const TABLE: readonly [ShortcutAction, string, string][] = [
   ['inspect', '⌘I', 'Ctrl+Shift+I'],
   ['find', '⌘F', 'Ctrl+Shift+F'],
   ['toggle-sidebar', '⌘B', 'Ctrl+Shift+B'],
-  ['chat-toggle', '⌘⇧E', 'Ctrl+Shift+E'],
   ['terminal', '⌃`', 'Ctrl+Shift+`'],
   ['usage', '⌘⇧U', 'Ctrl+Shift+U'],
   ['performance', '⌘⇧P', 'Ctrl+Shift+P'],
@@ -99,7 +99,7 @@ describe('matching a key press', () => {
     }
   })
 
-  it('claims no bare Ctrl+letter in its table on Windows or Linux', () => {
+  it('claims no bare Ctrl+letter in the terminal view on Windows or Linux', () => {
     for (const binding of BINDINGS) {
       for (const combo of binding.other) {
         const bare = combo.mods.length === 1 && combo.mods[0] === 'ctrl'
@@ -123,8 +123,8 @@ describe('matching a key press', () => {
 
   it('needs the modifiers exactly, so Ctrl+Shift+T is a new session and Ctrl+Alt+T (or Ctrl+Alt+Shift+T) a new shell', () => {
     expect(matchShortcut({ key: 't', ctrlKey: true, metaKey: false, shiftKey: false, altKey: true }, 'linux')).toEqual({ action: 'new-terminal' })
-    expect(matchShortcut({ key: 'A', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toEqual({ action: 'new-agent-chat' })
-    expect(matchShortcut({ key: 'A', ctrlKey: false, metaKey: true, shiftKey: true, altKey: false }, 'mac')).toEqual({ action: 'new-agent-chat' })
+    // There is no second way in: Ctrl+Shift+A no longer starts an agent without the dialog.
+    expect(matchShortcut({ key: 'A', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toBeNull()
     expect(matchShortcut({ key: 'T', ctrlKey: true, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toEqual({ action: 'new-session' })
     expect(matchShortcut({ key: 'T', ctrlKey: true, metaKey: false, shiftKey: true, altKey: true }, 'linux')).toEqual({ action: 'new-terminal' })
     expect(matchShortcut({ key: 't', ctrlKey: false, metaKey: false, shiftKey: true, altKey: false }, 'linux')).toBeNull()
@@ -159,8 +159,8 @@ describe('matching a key press', () => {
 
 describe('the shortcut lists', () => {
   it('lists the hotkeys in the platform’s words', () => {
-    expect(hotkeyRows('mac').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['⌘', '⇧', 'D']], id: 'split-down', changed: false })
-    expect(hotkeyRows('windows').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['Ctrl', 'Alt', 'Shift', 'D']], id: 'split-down', changed: false })
+    expect(hotkeyRows('mac').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['⌘', '⇧', 'D']], id: 'split-down', changed: false, otherView: [] })
+    expect(hotkeyRows('windows').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['Ctrl', 'Alt', 'Shift', 'D']], id: 'split-down', changed: false, otherView: [] })
   })
 
   it('shows the terminal’s own keys as the terminal’s', () => {
@@ -249,5 +249,68 @@ describe('keys chosen in Settings', () => {
     expect(readKeyOverrides({ palette: { mods: ['ctrl', 'alt'], key: 'P' }, nope: { mods: ['ctrl'], key: 'X' }, find: { mods: ['hyper'], key: 'F' }, usage: { mods: ['ctrl'], key: '' } })).toEqual(chosen)
     expect(readKeyOverrides('junk')).toEqual({})
     expect(readKeyOverrides(undefined)).toEqual({})
+  })
+})
+
+describe('the keys by view', () => {
+  const press = (key: string, mods: { shift?: boolean; alt?: boolean } = {}): Key => ({ key, ctrlKey: true, metaKey: false, shiftKey: mods.shift === true, altKey: mods.alt === true })
+  const CHAT_PLAIN: readonly [string, ShortcutAction][] = [['k', 'palette'], ['w', 'close'], ['o', 'open-folder']]
+
+  it.each(CHAT_PLAIN)('takes plain Ctrl+%s as %s in the chat view and passes it to the terminal in the terminal view', (letter, action) => {
+    for (const platform of ['windows', 'linux'] as const) {
+      expect(matchShortcut(press(letter), platform, {}, 'chat')).toEqual({ action })
+      expect(matchShortcut(press(letter), platform, {}, 'terminal')).toBeNull()
+      expect(matchShortcut(press(letter.toUpperCase(), { shift: true }), platform, {}, 'terminal')).toEqual({ action })
+      expect(matchShortcut(press(letter.toUpperCase(), { shift: true }), platform, {}, 'chat')).toEqual({ action })
+    }
+  })
+
+  it('takes no other plain Ctrl+letter in either view, so a chat text box keeps Ctrl+A, C, V, X and Z', () => {
+    const taken = new Set(CHAT_PLAIN.map(([letter]) => letter))
+    for (const view of ['chat', 'terminal'] as const) {
+      for (const letter of 'abcdefghijklmnopqrstuvwxyz') {
+        if (view === 'chat' && taken.has(letter)) continue
+        expect(matchShortcut(press(letter), 'windows', {}, view), `${view} Ctrl+${letter}`).toBeNull()
+      }
+      expect(matchShortcut(press('Backspace'), 'windows', {}, view)).toBeNull()
+    }
+  })
+
+  it('makes Ctrl+Shift+F fetch in the chat view and Find in the terminal view, with fetch on Ctrl+Alt+Shift+F there', () => {
+    expect(matchShortcut(press('F', { shift: true }), 'linux', {}, 'chat')).toEqual({ action: 'fetch' })
+    expect(matchShortcut(press('F', { shift: true }), 'linux', {}, 'terminal')).toEqual({ action: 'find' })
+    expect(matchShortcut(press('F', { shift: true, alt: true }), 'linux', {}, 'terminal')).toEqual({ action: 'fetch' })
+    expect(matchShortcut(press('F', { shift: true, alt: true }), 'linux', {}, 'chat')).toEqual({ action: 'fetch' })
+    expect(matchShortcut(press('f', { alt: true }), 'linux', {}, 'chat')).toEqual({ action: 'find' })
+  })
+
+  it('does not change macOS between the views', () => {
+    const cmdO = { key: 'o', ctrlKey: false, metaKey: true, shiftKey: false, altKey: false }
+    expect(matchShortcut(cmdO, 'mac', {}, 'chat')).toEqual({ action: 'open-folder' })
+    expect(matchShortcut(cmdO, 'mac', {}, 'terminal')).toEqual({ action: 'open-folder' })
+    expect(shortcutText('palette', 'mac', {}, 'chat')).toBe('⌘K')
+  })
+
+  it('writes the hint for the view it is in', () => {
+    expect(shortcutText('palette', 'windows', {}, 'chat')).toBe('Ctrl+K')
+    expect(shortcutText('palette', 'windows', {}, 'terminal')).toBe('Ctrl+Shift+K')
+    expect(shortcutText('open-folder', 'linux', {}, 'chat')).toBe('Ctrl+O')
+    expect(shortcutText('open-folder', 'linux', {}, 'terminal')).toBe('Ctrl+Shift+O')
+    expect(shortcutText('fetch', 'linux', {}, 'chat')).toBe('Ctrl+Shift+F')
+    expect(shortcutText('fetch', 'linux', {}, 'terminal')).toBe('Ctrl+Alt+Shift+F')
+    expect(shortcutText('settings', 'linux', {}, 'chat')).toBe('Ctrl+,')
+  })
+
+  it('lists both views in Settings > Hotkeys', () => {
+    const row = hotkeyRows('windows', {}, 'terminal').find((candidate) => candidate.id === 'palette')
+    expect(row?.chords).toEqual([['Ctrl', 'Shift', 'K']])
+    expect(row?.otherView).toEqual([['Ctrl', 'K']])
+    expect(hotkeyRows('windows', {}, 'chat').find((candidate) => candidate.id === 'palette')?.chords).toEqual([['Ctrl', 'K'], ['Ctrl', 'Shift', 'K']])
+    expect(hotkeyRows('mac', {}, 'chat').find((candidate) => candidate.id === 'palette')?.otherView).toEqual([])
+  })
+
+  it('refuses a chosen key that is another action in either view', () => {
+    expect(takenBy({ mods: ['ctrl'], key: 'K' }, 'settings', 'windows', {})?.action).toBe('palette')
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'F' }, 'find', 'windows', {})?.action).toBe('fetch')
   })
 })

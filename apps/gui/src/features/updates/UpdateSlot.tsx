@@ -15,7 +15,6 @@ const CARD_CLOSE_DELAY_MS = 120
 const LIGHT_SIZE_PX = 12
 
 type Props = {
-  variant: 'footer' | 'rail'
   state: UpdaterState
   /** The running version, named on the card. It is never shown in the sidebar itself: the version lives in Settings. */
   version: string | null
@@ -41,11 +40,11 @@ function offerOf(state: UpdaterState, skipped: string | null): Offer | null {
 const vee = (version: string) => `v${version.replace(/^v/, '')}`
 
 /**
- * The sidebar foot's update button (design: Update button): a download icon with an accent dot, then a running light while
+ * The status bar's update button (design: Update button): a download icon with an accent dot, then a running light while
  * the update comes down, then a restart icon once it needs one. A card beside it says what is ready and what is new; the
  * click does the next step. With nothing to do it draws nothing, because the version number lives only in Settings.
  */
-export function UpdateSlot({ variant, state, version, skipped, portalContainer, onInstall, onRestartNow, onCheck, onSkip }: Props) {
+export function UpdateSlot({ state, version, skipped, portalContainer, onInstall, onRestartNow, onCheck, onSkip }: Props) {
   const offer = offerOf(state, skipped)
   if (!offer) return null
 
@@ -127,12 +126,13 @@ export function UpdateSlot({ variant, state, version, skipped, portalContainer, 
       <HoverCard.Trigger asChild>
         <button
           type="button"
-          className={`mx-upd-button is-${offer.status} is-${variant}`}
+          className={`mx-upd-button is-${offer.status}`}
           aria-label={label}
           aria-describedby={describedBy}
           {...(click === undefined ? { 'aria-disabled': true } : { onClick: click })}
         >
           {icon}
+          <span className="mx-upd-label">{label}</span>
           {offer.status === 'available' && <span className="mx-upd-dot" aria-hidden="true" />}
         </button>
       </HoverCard.Trigger>

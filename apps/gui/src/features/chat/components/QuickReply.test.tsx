@@ -56,7 +56,7 @@ async function open(setup: (daemon: FakeDaemonHistory) => void, reduced = false)
   )
   await settle()
   await settle()
-  return { user, box: screen.getByRole('textbox', { name: 'Message claude' }) }
+  return { user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
 const asking = (daemon: FakeDaemonHistory) => { daemon.upsert(daemon.message('t1', 'a1', 'Assistant', ASKED)) }
@@ -202,7 +202,7 @@ describe('quotes', () => {
       for (let index = 0; index < 7; index += 1) daemon.upsert(daemon.message('t1', `a${String(index)}`, 'Assistant', `Note number ${String(index)}.`))
     })
 
-    const note = (index: number) => within(screen.getByRole('region', { name: 'Conversation with claude' })).getByText(`Note number ${String(index)}.`)
+    const note = (index: number) => within(screen.getByRole('region', { name: 'Conversation with Claude' })).getByText(`Note number ${String(index)}.`)
     await quoteSelection(user, note(0))
     await quoteSelection(user, note(0))
     expect(within(screen.getByRole('group', { name: 'Quotes for your next message' })).getAllByRole('listitem')).toHaveLength(1)

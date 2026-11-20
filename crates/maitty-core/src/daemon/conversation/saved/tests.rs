@@ -163,6 +163,11 @@ fn claude_names_a_working_folder_as_it_does_on_disk() {
 }
 
 #[test]
+fn claude_names_a_canonicalized_windows_folder_like_the_plain_one() {
+    assert_eq!(claude_folder_name(Path::new(r"\\?\C:\dev\app")), claude_folder_name(Path::new(r"C:\dev\app")));
+}
+
+#[test]
 fn an_id_that_starts_like_a_flag_is_never_listed() {
     let root = scratch("flag-ids");
     let app = project();

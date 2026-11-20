@@ -23,10 +23,10 @@ describe('open conversation tabs', () => {
     const warning = vi
       .spyOn(console, 'warn')
       .mockImplementation(() => undefined)
-    localStorage.setItem('maitty.gui.tabs.v4', 'null')
+    localStorage.setItem('maiker.gui.tabs.v4', 'null')
     expect(readOpenConversationTabs()).toEqual([])
 
-    localStorage.setItem('maitty.gui.tabs.v4', '["first","first",""]')
+    localStorage.setItem('maiker.gui.tabs.v4', '["first","first",""]')
     expect(readOpenConversationTabs()).toEqual(['first'])
     expect(warning).toHaveBeenCalledOnce()
   })

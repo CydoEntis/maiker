@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { CLONE_ANSWER_MS, cloneRepository } from './cloneRepository'
+import { CLONE_ANSWER_MS, cloneRepository, type CloneProgress } from './cloneRepository'
 
 const shell = vi.hoisted(() => ({
   invoke: vi.fn<(command: string, args: { tag: number }) => Promise<unknown>>(),
-  handler: null as null | ((event: { payload: unknown }) => void),
+  handlers: new Map<string, (event: { payload: unknown }) => void>(),
 }))
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: shell.invoke }))
 vi.mock('@tauri-apps/api/event', () => ({
-  listen: (_name: string, handler: (event: { payload: unknown }) => void) => {
-    shell.handler = handler
-    return Promise.resolve(() => undefined)
+  listen: (name: string, handler: (event: { payload: unknown }) => void) => {
+    shell.handlers.set(name, handler)
+    return Promise.resolve(() => { shell.handlers.delete(name) })
   },
 }))
 
@@ -24,7 +24,11 @@ function lastTag(): number {
 }
 
 function answer(payload: unknown) {
-  shell.handler?.({ payload })
+  shell.handlers.get('repository-cloned')?.({ payload })
+}
+
+function progress(payload: unknown) {
+  shell.handlers.get('clone-progress')?.({ payload })
 }
 
 beforeEach(() => {
@@ -62,6 +66,31 @@ describe('cloning a repository on a machine', () => {
   it('passes on the words the host refuses with', async () => {
     shell.invoke.mockRejectedValue('kingdom is not connected')
     await expect(cloneRepository(3, ADDRESS, '~')).rejects.toThrow('kingdom is not connected')
+  })
+
+  it('tells the steps git reports to the clone that asked and to no other', async () => {
+    const heard: CloneProgress[] = []
+    const cloned = cloneRepository(3, ADDRESS, '~', (step) => { heard.push(step) })
+    await vi.waitFor(() => { expect(shell.invoke).toHaveBeenCalledOnce() })
+    const tag = lastTag()
+    progress({ machine: 3, tag, phase: 'receiving', percent: 40 })
+    progress({ machine: 3, tag: tag + 1, phase: 'receiving', percent: 99 })
+    progress({ machine: 0, tag, phase: 'receiving', percent: 98 })
+    progress({ machine: 3, tag, phase: 'receiving', percent: 400 })
+    progress({ machine: 3, tag, phase: 'nonsense', percent: 5 })
+    progress({ machine: 3, tag, phase: 'checking-out', percent: 100 })
+    answer({ machine: 3, tag, folder: '/home/dev/widgets', refused: null })
+    await expect(cloned).resolves.toBe('/home/dev/widgets')
+    expect(heard).toEqual([{ phase: 'receiving', percent: 40 }, { phase: 'checking-out', percent: 100 }])
+    expect(shell.handlers.has('clone-progress')).toBe(false)
+  })
+
+  it('listens for no progress when nobody asked for it', async () => {
+    const cloned = cloneRepository(0, ADDRESS, '~')
+    await vi.waitFor(() => { expect(shell.invoke).toHaveBeenCalledOnce() })
+    expect(shell.handlers.has('clone-progress')).toBe(false)
+    answer({ machine: 0, tag: lastTag(), folder: '/x', refused: null })
+    await cloned
   })
 
   it('gives up when the machine never says how it ended', async () => {

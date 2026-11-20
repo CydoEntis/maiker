@@ -6,7 +6,7 @@
 use crate::proc::{Ran, RunError, run_within};
 use crate::protocol::{
     GITHUB_ACCOUNTS_MAX, GITHUB_DESCRIPTION_MAX_CHARS, GITHUB_LIST_LIMIT_SECS, GITHUB_OWNERS_MAX, GITHUB_REPOS_MAX, GitHubAccount,
-    GitHubAnswer, GitHubRepo, GitHubRepoList, GitHubReport,
+    GitHubAnswer, GitHubRepo, GitHubRepoList, GitHubReport, SignInFailure, SignInState,
 };
 use maitty_shared::github::{clone_address, is_login, is_time};
 use maitty_shared::hidden::sanitize;
@@ -68,6 +68,38 @@ fn accounts_from(program: &OsStr, limit: Duration) -> GitHubReport {
         // A gh too old to answer in JSON says so on its error stream.
         None => problem(first_line(&ran.stderr).unwrap_or("gh did not say who is signed in").to_owned()),
     }
+}
+
+/// Signs the active account out of GitHub on this machine with `gh auth logout`, and answers where
+/// that leaves the sign-in: `Idle` when nobody is signed in any more, `SignedIn` when another
+/// account still is. Only the active account goes, never the others. Blocks while `gh` runs.
+pub(super) fn sign_out() -> SignInState {
+    sign_out_from(OsStr::new("gh"), ASK_LIMIT)
+}
+
+fn sign_out_from(program: &OsStr, limit: Duration) -> SignInState {
+    let report = accounts_from(program, limit);
+    if !report.installed {
+        return SignInState::Failed(SignInFailure::NotInstalled);
+    }
+    if report.problem.is_some() {
+        return SignInState::Failed(SignInFailure::Ended);
+    }
+    // The login was checked by `parse_status`, so it is no option on `gh`'s command line.
+    let Some(active) = report.accounts.first() else {
+        return SignInState::Idle;
+    };
+    let mut command = gh(program);
+    command.args(["auth", "logout", "--hostname", HOST, "--user", &active.login]);
+    match run_within(&mut command, limit) {
+        Ok(ran) if ran.success => {}
+        Ok(_) => return SignInState::Failed(SignInFailure::Ended),
+        Err(RunError::Missing) => return SignInState::Failed(SignInFailure::NotInstalled),
+        Err(RunError::Start(_)) => return SignInState::Failed(SignInFailure::CouldNotStart),
+        Err(RunError::TimedOut) => return SignInState::Failed(SignInFailure::TimedOut),
+    }
+    let after = accounts_from(program, limit);
+    if after.problem.is_none() && after.accounts.is_empty() { SignInState::Idle } else { SignInState::SignedIn }
 }
 
 fn problem(why: String) -> GitHubReport {
@@ -286,6 +318,30 @@ mod tests {
     /// What the pretend `gh` was last asked, apart from its sign-in.
     fn asked(root: &Path) -> String {
         std::fs::read_to_string(root.join("args.txt")).unwrap_or_default().replace('"', "").trim().to_owned()
+    }
+
+    #[test]
+    fn signing_out_with_nobody_signed_in_has_nothing_to_do() {
+        let root = crate::daemon::persist::scratch_dir();
+        let program = fake_gh(root.path(), Says(NOBODY, 1), Says("", 0));
+
+        assert_eq!(sign_out_from(program.as_os_str(), ASK_LIMIT), SignInState::Idle);
+    }
+
+    #[test]
+    fn signing_out_says_so_when_another_account_is_still_signed_in() {
+        let root = crate::daemon::persist::scratch_dir();
+        // The pretend `gh` answers every `auth` the same way, so the account is still there afterwards.
+        let program = fake_gh(root.path(), Says(TWO_ACCOUNTS, 0), Says("", 0));
+
+        assert_eq!(sign_out_from(program.as_os_str(), ASK_LIMIT), SignInState::SignedIn);
+    }
+
+    #[test]
+    fn signing_out_without_gh_says_it_is_not_installed() {
+        let root = crate::daemon::persist::scratch_dir();
+
+        assert_eq!(sign_out_from(root.path().join("nope").as_os_str(), ASK_LIMIT), SignInState::Failed(SignInFailure::NotInstalled));
     }
 
     #[test]

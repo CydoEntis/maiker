@@ -1,5 +1,5 @@
 import { type Dispatch, type SetStateAction, useCallback, useMemo } from 'react'
-import { type Platform, type ShortcutAction, shortcutText } from './model/shortcuts'
+import { type Platform, type ShortcutAction, type ShortcutView, shortcutText } from './model/shortcuts'
 import type { MachineHead } from './model/machines'
 import { toast } from '@/lib/toast'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -11,19 +11,25 @@ import { outputSnippet, type PaletteItem } from './model/palette'
 import type { SearchHit } from '@/features/find/api'
 import { THEMES } from './theme/themes'
 import { isChatSession } from './model/chatSession'
+import { SETUP_AGENTS } from '@/features/welcome/setup'
+import type { OpenProjectRequest } from './useOpenProject'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
-export function usePaletteItems({ openReadme, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen }: {
+export function usePaletteItems({ openReadme, paletteOpen, platform, view, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, openStartMenu, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
   /** Opens the focused session's README, beside the chat or in the Files panel. */
   openReadme: (place: 'beside' | 'files') => void
   paletteOpen: boolean
   platform: Platform
+  /** The view the focused session shows: the hints name its keys. */
+  view: ShortcutView
   layout: Layout
   sessions: SessionView[]
   projectOf: Map<string, { name: string; key: string }>
   showSessionById: (sessionId: string) => void
   home: string
   newSession: (machine?: number) => void
+  /** The whole app is in the Chat view: a terminal is the dock under a chat, never a shell of its own. */
+  chatView: boolean
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
   focusedSession: SessionView | undefined
@@ -35,6 +41,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
   split: (paneId: string | null, direction: SplitDirection) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
+  setAddMachineOpen: (open: boolean) => void
   inspectRefusal: string | null
   setInspectOpen: Dispatch<SetStateAction<boolean>>
   setFindOpen: Dispatch<SetStateAction<boolean>>
@@ -42,15 +49,18 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
   setLayout: Dispatch<SetStateAction<Layout>>
   startAgent: (program: string) => void
+  /** Opens the sidebar's + menu for a machine. */
+  openStartMenu: (machine: number) => void
   setRecentOpen: Dispatch<SetStateAction<boolean>>
-  /** Picks a folder in the system's dialog and opens the New session dialog on it. */
+  /** Picks a folder in the system's dialog and opens the New session draft on it. */
   openFolder: () => void
   setSavedOpen: Dispatch<SetStateAction<boolean>>
+  setOpenProject: (request: OpenProjectRequest) => void
 }) {
   const paletteItems: PaletteItem[] = useMemo(() => {
     // Thirty-odd items with closures, built only while the palette can show them.
     if (!paletteOpen) return []
-    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform, preferences.keyOverrides)
+    const keys = (shortcut: ShortcutAction) => shortcutText(shortcut, platform, preferences.keyOverrides, view)
     const action = (id: string, label: string, run: () => void, shortcut?: string): PaletteItem => ({ id, label, kind: 'Action', run, ...(shortcut ? { shortcut } : {}) })
     const showing = activeArrangement(layout)
     // Sessions first, most urgent first, then their projects, then actions: what the palette is mostly for is jumping.
@@ -74,14 +84,17 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
     const items: PaletteItem[] = [
       ...sessionItems,
       ...projectItems,
-      action('new-session', 'New agent chat…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
-      action('open-folder', 'Open a folder…', openFolder),
+      action('new-session', 'New session…', () => { newSession(focusedMachineNumber) }, keys('new-session')),
+      action('open-project', 'Open a project…', () => { setOpenProject({ tab: 'url' }) }),
+      action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
-      action('new-terminal', 'New shell', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
+      action('new-terminal', chatView ? 'Show or hide the terminal under the chat' : 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
       ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this agent', () => { addAgentTerminal(focusedSession.id) })] : []),
-      action('new-agent-chat', 'New agent chat', () => { runShortcut('new-agent-chat') }, keys('new-agent-chat')),
-      ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).map((head) => action(`new-on-${head.key}`, `New shell on ${head.label}…`, () => { newTerminal(head.machine) })),
+      ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).flatMap((head) => [
+        action(`new-on-${head.key}`, `New session on ${head.label}…`, () => { openStartMenu(head.machine) }),
+        ...(chatView ? [] : [action(`new-terminal-on-${head.key}`, `New terminal on ${head.label}…`, () => { newTerminal(head.machine) })]),
+      ]),
       action('sidebar-side', preferences.sidebarSide === 'left' ? 'Move sidebar to the right' : 'Move sidebar to the left', () => { setPreferences((current) => ({ ...current, sidebarSide: current.sidebarSide === 'left' ? 'right' : 'left' })) }),
       ...(focusedSession && focusedSession.machineName === null ? [action('open-readme', 'Open README', () => { openReadme('files') }), action('open-readme-beside', 'Open README beside the chat', () => { openReadme('beside') })] : []),
       action('split-right', 'Split right', () => { split(null, 'right') }, keys('split-right')),
@@ -91,18 +104,19 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, layout, ses
       action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
+      action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),
       action('focus', 'Focus mode', () => { setFocusMode(true) }, keys('focus-mode')),
       action('settings', 'Open settings', () => { setSettingsSection('appearance') }, keys('settings')),
       action('performance', 'Open performance', () => { setSettingsSection('performance') }, keys('performance')),
-      action('machines', 'Add a remote machine…', () => { setSettingsSection('machines') }),
+      action('machines', 'Add a remote machine…', () => { setAddMachineOpen(true) }),
       action('shortcuts', 'Keyboard shortcuts', () => { setShortcutsOpen(true) }, keys('shortcuts')),
       ...(showing?.widths ? [action('reset-widths', 'Reset pane widths', () => { setLayout((current) => setColumnWidths(current, showing.id, null)) })] : []),
-      action('start-codex', 'Start codex', () => { startAgent('codex') }),
+      ...SETUP_AGENTS.map(({ program, label }) => ({ ...action(`start-${program}`, `Start ${label}`, () => { startAgent(program) }), needsQuery: true })),
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, openReadme])
+  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, view, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, openStartMenu, setRecentOpen, openFolder, setSavedOpen, setOpenProject, openReadme])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)

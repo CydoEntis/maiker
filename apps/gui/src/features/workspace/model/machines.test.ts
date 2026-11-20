@@ -3,7 +3,7 @@ import { conversationsFromSnapshot } from '@/api/daemon'
 import { forgetMachines, parseSessionId, registerMachine, type MachineKind, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import type { Layout } from './layout'
-import { idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, type MachineHead, type RemoteMachine } from './machines'
+import { idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
 import { folderNameOf, toSessionView } from './session'
 
 afterEach(() => { forgetMachines() })
@@ -194,6 +194,31 @@ describe('machine headers', () => {
     const down = machineOf(1, 'box', [], 'needs-update')
     const heads = machineHeads(new Map([[1, { ...down, state: { ...down.state, why: 'run maiker machine update box --install' } }]]))
     expect(heads[1]?.why).toBe('run maiker machine update box --install')
+  })
+})
+
+describe('a machine the config names but the host never reported', () => {
+  it('is listed, so it can be seen and removed', () => {
+    const heads = machineHeads(withUnconnected(new Map(), ['kingdom']))
+    expect(heads.map((head) => head.name)).toEqual([null, 'kingdom'])
+    expect(heads[1]?.chip?.tone).toBe('bad')
+  })
+
+  it('is not listed twice when the host reported it, whatever the case', () => {
+    const reported = new Map([[1, machineOf(1, 'Kingdom', [])]])
+    expect(withUnconnected(reported, ['kingdom'])).toBe(reported)
+  })
+
+  it('gives each placeholder its own number, also when added in two rounds', () => {
+    const once = withUnconnected(new Map(), ['a'])
+    const twice = withUnconnected(once, ['b'])
+    expect(new Set(twice.keys())).toEqual(new Set([-1, -2]))
+  })
+
+  it('goes once the host reports the machine or it is removed', () => {
+    const listed = withUnconnected(new Map([[1, machineOf(1, 'box', [])]]), ['kingdom'])
+    expect(withoutUnconnected(listed, 'KINGDOM').size).toBe(1)
+    expect(withoutUnconnected(listed, 'box')).toBe(listed)
   })
 })
 

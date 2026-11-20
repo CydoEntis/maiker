@@ -1,11 +1,12 @@
 # Builds and runs the CURRENT worktree, so what you look at is never an old install.
 #   .\scripts\dev.ps1 tui    build the terminal app and run it from target\debug (nothing is installed)
 #   .\scripts\dev.ps1 gui    start the desktop app (Vite and the Rust host rebuild from this folder)
+#   add -Stop to end a build of this worktree that is still running (its sessions end with it) instead of refusing
 # Both print the commit and when the binary was built first; compare it with what you expect.
 # Both run their own service (<PREFIX>_SOCKET=dev-<folder> unless you set one), so a debug build never
 # takes over the service your installed app and its agents use. The desktop app also gets its own data,
 # config and install folders under %LOCALAPPDATA%\maiker-dev\<folder>, so it starts empty and shares nothing.
-param([Parameter(Mandatory = $true)][ValidateSet('tui', 'gui')][string]$App)
+param([Parameter(Mandatory = $true)][ValidateSet('tui', 'gui')][string]$App, [switch]$Stop)
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
@@ -26,8 +27,14 @@ Write-Host "worktree: $root  commit: $commit$dirty" -ForegroundColor Cyan
 # Windows will not replace a program that is running, so say so instead of failing halfway.
 # The desktop app starts its own service (the daemon name, then the target), which outlives the window and locks its file, so it counts too.
 $running = Get-Process "$command*", "$daemon*" -ErrorAction SilentlyContinue | Where-Object { $_.Path -like "$root*" }
+if ($running -and $Stop) {
+    $running | ForEach-Object { Write-Host "stopping $($_.Name) (pid $($_.Id))" -ForegroundColor Yellow }
+    $running | Stop-Process -Force
+    Start-Sleep -Seconds 1
+    $running = $null
+}
 if ($running) {
-    Write-Host 'A build from this worktree is still running; stop it first (Stop-Process -Id <pid>):' -ForegroundColor Yellow
+    Write-Host 'A build from this worktree is still running; stop it first (Stop-Process -Id <pid>), or run this again with -Stop:' -ForegroundColor Yellow
     $running | ForEach-Object { Write-Host "  $($_.Name) (pid $($_.Id))" }
     exit 1
 }

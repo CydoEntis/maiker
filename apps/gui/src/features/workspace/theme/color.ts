@@ -91,6 +91,25 @@ export function mixOklab(from: string, to: string, percent: number): string {
   return formatColor(fromOklab({ L: a.L + (b.L - a.L) * t, a: a.a + (b.a - a.a) * t, b: a.b + (b.b - a.b) * t }, 1))
 }
 
+/** How far a colour is from grey (OKLab chroma): 0 for a pure grey. */
+export function chromaOf(colour: string): number {
+  const { a, b } = toOklab(parseColor(colour))
+  return Math.hypot(a, b)
+}
+
+/** The grey of the same lightness. */
+export function greyOf(colour: string): string {
+  return formatColor(fromOklab({ L: toOklab(parseColor(colour)).L, a: 0, b: 0 }, 1))
+}
+
+/** `colour` moved to the lightness of `like`, keeping its hue; its chroma scales with the lightness so a tint stays a tint. */
+export function atLightnessOf(colour: string, like: string): string {
+  const from = toOklab(parseColor(colour))
+  const { L } = toOklab(parseColor(like))
+  const scale = from.L === 0 ? 0 : Math.min(1, L / from.L)
+  return formatColor(fromOklab({ L, a: from.a * scale, b: from.b * scale }, 1))
+}
+
 /** CSS `color-mix(in oklab, color <percent>%, transparent)`: the same colour at that opacity. */
 export function withAlpha(color: string, percent: number): string {
   const parsed = parseColor(color)

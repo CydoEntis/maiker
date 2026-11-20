@@ -21,7 +21,12 @@ fn own_data_folder() {
 fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
     let (tx, rx) = mpsc::channel(4096);
-    let mut d = Daemon::new(Config::default(), tx, || {});
+    let mut cfg = Config::default();
+    // Never the real home folder, which is where the default puts worktrees.
+    cfg.worktree.dir = worktree_path::SIBLING_TEMPLATE.into();
+    let mut d = Daemon::new(cfg, tx, || {});
+    // Not this machine's Claude folder: tests never depend on its saved conversations.
+    d.claude_folder = None;
     // Its own folder (made only if something is written to it), so tests never share check tails.
     d.check_dir = persist::scratch_dir().path().to_path_buf();
     (d, rx)
@@ -870,6 +875,8 @@ fn a_pane_started_as_an_agent_keeps_its_name_while_the_agent_starts() {
         agent: None,
         cwd: None,
         agent_cwd: None,
+        agent_pid: None,
+        claude_dir: None,
         mem: 0,
         cpu: 0.0,
         remote: None,
@@ -921,6 +928,8 @@ fn process_scan_cannot_erase_a_native_conversations_provider_identity() {
         agent: None,
         cwd: None,
         agent_cwd: None,
+        agent_pid: None,
+        claude_dir: None,
         mem: 0,
         cpu: 0.0,
         remote: None,
@@ -3484,6 +3493,8 @@ fn follow_ups_queued_for_an_agent_go_with_it() {
         agent: Some("codex".into()),
         cwd: None,
         agent_cwd: None,
+        agent_pid: None,
+        claude_dir: None,
         mem: 0,
         cpu: 0.0,
         remote: None,
@@ -4552,6 +4563,8 @@ fn native_hooks_cannot_keep_an_exited_agent_working_or_hide_its_replacement() {
         agent: agent.map(str::to_string),
         cwd: None,
         agent_cwd: None,
+        agent_pid: None,
+        claude_dir: None,
         mem: 0,
         cpu: 0.0,
         remote: None,
@@ -8221,6 +8234,64 @@ fn a_resumed_claude_runs_the_model_and_effort_it_last_said() {
 }
 
 #[test]
+fn a_claude_session_with_no_conversation_comes_back_fresh_not_resumed() {
+    let (mut d, _rx) = daemon();
+    let claude = persist::scratch_dir();
+    let folder = std::env::temp_dir();
+    let saved = |session: &str| persist::SavedPane {
+        agent: Some("claude".into()),
+        session: Some(session.into()),
+        cwd: Some(folder.clone()),
+        ..Default::default()
+    };
+    let transcript = claude
+        .path()
+        .join("projects")
+        .join(super::claude_transcript::folder_slug(&folder))
+        .join("kept.jsonl");
+    std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+    std::fs::write(&transcript, "{}\n").unwrap();
+
+    // Without a known Claude folder nothing can be disproved: the resume stays.
+    assert_eq!(d.restore_cmd(&saved("never-sent")).as_deref(), Some("claude --resume never-sent"));
+
+    d.claude_folder = Some(claude.path().to_path_buf());
+    assert_eq!(d.restore_cmd(&saved("kept")).as_deref(), Some("claude --resume kept"));
+    assert_eq!(d.restore_cmd(&saved("never-sent")).as_deref(), Some("claude"));
+    // Another agent's resume rules are untouched.
+    let codex = persist::SavedPane { agent: Some("codex".into()), ..saved("never-sent") };
+    assert!(d.restore_cmd(&codex).is_some_and(|c| c.contains("never-sent")));
+}
+
+#[test]
+fn a_claude_account_is_checked_in_its_own_config_folder() {
+    let (mut d, _rx) = daemon();
+    let default = persist::scratch_dir();
+    let work = persist::scratch_dir();
+    let folder = std::env::temp_dir();
+    for root in [default.path(), work.path()] {
+        std::fs::create_dir_all(root.join("projects")).unwrap();
+    }
+    d.claude_folder = Some(default.path().to_path_buf());
+    d.cfg.quick.agents.push(crate::config::QuickAgent {
+        name: "claude work".into(),
+        command: "claude {prompt}".into(),
+        env: [("CLAUDE_CONFIG_DIR".to_string(), work.path().display().to_string())].into(),
+        ..Default::default()
+    });
+    let saved = persist::SavedPane {
+        agent: Some("claude".into()),
+        session: Some("abc".into()),
+        account: Some("claude work".into()),
+        cwd: Some(folder),
+        ..Default::default()
+    };
+    let cmd = d.restore_cmd(&saved).expect("the agent comes back");
+    assert!(!cmd.contains("--resume"), "{cmd}");
+    assert!(cmd.contains(" account "), "keeps its account: {cmd}");
+}
+
+#[test]
 fn a_conversation_comes_back_in_one_pane_only() {
     let (d, _rx) = daemon();
     let folder = std::env::temp_dir();
@@ -10343,6 +10414,8 @@ fn scan_finds_only_a_shell(d: &mut Daemon, term: TermId) {
             agent: None,
             cwd: None,
             agent_cwd: None,
+            agent_pid: None,
+            claude_dir: None,
             mem: 0,
             cpu: 0.0,
             remote: None,

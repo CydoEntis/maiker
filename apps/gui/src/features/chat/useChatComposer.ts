@@ -20,8 +20,8 @@ import { withRestoreNote } from './editFromHere'
 import { heldAgain, letGoOf, NO_LET_GO, oneLeft, shownQueued, stillLetGo, type LetGo } from './letGo'
 
 export const PENDING_APPROVAL_NOTE = 'Answer the request above first'
-export const READ_ONLY_NOTE = 'Read-only: talk to the agent in the terminal'
-export const OFFLINE_NOTE = 'The daemon is offline'
+export const READ_ONLY_NOTE = 'Read-only: this chat follows the terminal agent'
+export const OFFLINE_NOTE = 'The Maiker service is offline'
 /** Why a chat that types into the agent's terminal is off while the agent is busy or asking. */
 export const TYPING_BUSY_NOTE = 'The agent is working. Stop it to send something else'
 /** Sent to the terminal around a message, so a multi-line message is one paste and not several Enters. */

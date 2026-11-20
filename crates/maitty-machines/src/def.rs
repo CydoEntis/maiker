@@ -20,6 +20,9 @@ pub struct MachineDef {
     pub target: String,
     /// Extra arguments for ssh, one list entry each (`["-p", "2222"]`); never split on spaces.
     pub ssh_args: Vec<String>,
+    /// A private key file for ssh to sign in with (`-i`). Only its path is kept here: the file is
+    /// never read by this app. Unset, ssh uses its own config and agent.
+    pub identity_file: Option<String>,
     /// The app's command on the far side; unset, the app's own name from the remote PATH.
     pub remote_cmd: Option<String>,
     /// A command that carries stdin and stdout unchanged in place of ssh (`["fly", "ssh",
@@ -46,6 +49,7 @@ impl Default for MachineDef {
             name: String::new(),
             target: String::new(),
             ssh_args: Vec::new(),
+            identity_file: None,
             remote_cmd: None,
             via: None,
             clipboard: true,
@@ -53,6 +57,18 @@ impl Default for MachineDef {
             sounds: false,
             mcp: false,
         }
+    }
+}
+
+impl MachineDef {
+    /// The arguments ssh is given for this entry, in order: `ssh_args`, then `-i <identity_file>`.
+    /// Each is one argv entry, so a path with spaces needs no quoting.
+    pub fn ssh_arguments(&self) -> Vec<String> {
+        let mut args = self.ssh_args.clone();
+        if let Some(file) = &self.identity_file {
+            args.extend(["-i".to_string(), file.clone()]);
+        }
+        args
     }
 }
 
@@ -164,6 +180,16 @@ fn validate_machine_route(name: &str, m: &MachineDef) -> Result<()> {
             "[[machines]] `{name}`: each `ssh_args` entry is one non-empty argument without control characters (got {arg:?})"
         );
     }
+    if let Some(file) = &m.identity_file {
+        anyhow::ensure!(
+            !file.trim().is_empty() && !file.starts_with('-') && !file.chars().any(char::is_control),
+            "[[machines]] `{name}`: `identity_file` is empty, starts with `-` or has a control character; give the path of a key file, or remove the key"
+        );
+        anyhow::ensure!(
+            m.via.is_none(),
+            "[[machines]] `{name}`: `identity_file` has no effect with `via` (it is not ssh); remove one of them"
+        );
+    }
     if let Some(cmd) = &m.remote_cmd {
         anyhow::ensure!(
             !cmd.trim().is_empty() && !cmd.chars().any(char::is_control),
@@ -218,6 +244,37 @@ mod tests {
                 .unwrap();
         assert_eq!(m.ssh_args, ["-p", "2222", "-i", "my key"]);
         validate_machines(&[m]).unwrap();
+    }
+
+    #[test]
+    fn an_entry_written_before_key_files_still_loads_and_adds_no_ssh_arguments() {
+        let old: MachineDef =
+            toml::from_str("name = 'box'\ntarget = 'me@box'\nssh_args = ['-p', '2222']").unwrap();
+        assert_eq!(old.identity_file, None);
+        assert_eq!(old.ssh_arguments(), ["-p", "2222"]);
+    }
+
+    #[test]
+    fn a_key_file_becomes_one_dash_i_pair_after_the_other_arguments() {
+        let m: MachineDef = toml::from_str(
+            "name = 'b'\ntarget = 'h'\nssh_args = ['-p', '2222']\nidentity_file = 'C:\\Users\\me\\my key'",
+        )
+        .unwrap();
+        assert_eq!(m.ssh_arguments(), ["-p", "2222", "-i", "C:\\Users\\me\\my key"]);
+        validate_machines(&[m]).unwrap();
+    }
+
+    #[test]
+    fn a_key_file_that_ssh_could_read_as_an_option_or_with_via_is_refused() {
+        for bad in ["", "  ", "-oProxyCommand=x", "a\nb"] {
+            let mut m = machine("box", "h");
+            m.identity_file = Some(bad.into());
+            assert!(validate_machines(&[m]).is_err(), "{bad:?}");
+        }
+        let mut m = machine("box", "h");
+        m.identity_file = Some("/k".into());
+        m.via = Some(vec!["fly".into()]);
+        assert!(validate_machines_on(&[m], false).is_err());
     }
 
     #[test]

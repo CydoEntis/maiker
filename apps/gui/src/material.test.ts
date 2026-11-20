@@ -37,8 +37,29 @@ describe('the window material', () => {
     expect(offenders).toEqual([])
   })
 
-  it('has one finish, so no rule asks which finish is on and nothing blurs what is behind it', () => {
-    const offenders = Object.entries(SHEETS).filter(([, css]) => /data-finish|backdrop-filter/.test(css)).map(([path]) => path)
+  it('has only the Square and Rounded corners, so no rule is keyed on the removed Folded ones', () => {
+    const offenders = Object.entries(SHEETS).filter(([, css]) => /data-corners="folded"/.test(css)).map(([path]) => path)
     expect(offenders).toEqual([])
+  })
+
+  // The first-run veil is the one place that blurs what is behind it: it is on screen once, over a still app, and the owner asked for the design's blur.
+  const BLURS = ['./features/welcome/onboarding.css']
+  it('has one finish, so no rule asks which finish is on and nothing blurs what is behind it but the first-run veil', () => {
+    const offenders = Object.entries(SHEETS).filter(([path, css]) => /data-finish/.test(css) || (/backdrop-filter/.test(css) && !BLURS.includes(path))).map(([path]) => path)
+    expect(offenders).toEqual([])
+  })
+
+  // Menus and popovers are lifted off the window by one shared fill and ring, drawn from theme tokens so both kinds of theme get it.
+  it('draws every menu and popover on the one lifted fill with a ring, from theme tokens', () => {
+    const css = SHEETS['./material.css'] ?? ''
+    expect(css).toMatch(/--pop-bg:\s*color-mix\(in srgb, var\(--m-raise\)[^;]*var\(--fg\)\)/)
+    expect(css).toMatch(/--pop-ring:\s*var\(--line2\)/)
+    expect(css).toMatch(/\[role="menu"\][^{]*\.mx-pop[^{]*\{\s*background-color: var\(--pop-bg\);\s*border-color: var\(--pop-ring\);/)
+  })
+
+  it('draws the folder mark in a text colour, not a coloured tile', () => {
+    const css = SHEETS['./features/workspace/components/sidebar.css'] ?? ''
+    expect(css).toMatch(/\.mx-folder-mark\s*\{[^}]*color: var\(--muted-text\)/)
+    expect(css).not.toMatch(/mx-project-square|mx-grp-square/)
   })
 })

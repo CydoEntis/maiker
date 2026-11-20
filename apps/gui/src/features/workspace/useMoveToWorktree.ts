@@ -3,6 +3,7 @@ import { useCallback, useEffect, useRef } from 'react'
 import { addWorktree, folderBranches } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import { typeMessage } from '@/features/chat/useChatComposer'
+import { sessionTask } from './model/worktreeName'
 import { EXIT_POLL_MS, EXIT_WAIT_MS, moveRefusal, resumeLine, worktreeBranch } from './model/moveToWorktree'
 import { isShell } from './model/sidebar'
 import type { SessionView } from './model/session'
@@ -23,7 +24,7 @@ export function useMoveToWorktree({ sessionMap, sendTo }: {
   const latest = useRef(sessionMap)
   useEffect(() => { latest.current = sessionMap }, [sessionMap])
 
-  return useCallback(async (session: SessionView) => {
+  return useCallback(async (session: SessionView, chosen?: string) => {
     const refusal = moveRefusal(session)
     if (refusal !== null) { toast.error(refusal); return }
     const agent = session.process === 'codex' ? 'codex' : 'claude'
@@ -31,7 +32,7 @@ export function useMoveToWorktree({ sessionMap, sendTo }: {
     try {
       const known = await folderBranches(session.cwd)
       const taken = [...(known?.branches.map((b) => b.name) ?? []), ...(known?.worktrees.flatMap((w) => (w.branch === null ? [] : [w.branch])) ?? [])]
-      const folder = await addWorktree(session.cwd, worktreeBranch(taken))
+      const folder = await addWorktree(session.cwd, chosen ?? worktreeBranch(taken, sessionTask(session)))
       const line = resumeLine(agent, id, folder, IS_WINDOWS, startedBypassed(session.id))
       if (line === null) throw new Error('The new worktree folder has a name that cannot be typed safely. It was made, but the chat was not moved.')
       await typeMessage((text) => sendTo(session, text), agent, '/exit')

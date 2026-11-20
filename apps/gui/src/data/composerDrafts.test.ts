@@ -19,9 +19,9 @@ describe('kept message drafts', () => {
   })
 
   it('ignore storage that is not theirs', () => {
-    localStorage.setItem('maitty.gui.composer-drafts.v1', '{"x": {"text": 1}, "4": "nope", "5": {"text": "ok", "at": 1800000000000}}')
+    localStorage.setItem('maiker.gui.composer-drafts.v1', '{"x": {"text": 1}, "4": "nope", "5": {"text": "ok", "at": 1800000000000}}')
     expect([...readComposerDrafts(NOW).entries()]).toEqual([[5, { text: 'ok', at: NOW }]])
-    localStorage.setItem('maitty.gui.composer-drafts.v1', 'not json')
+    localStorage.setItem('maiker.gui.composer-drafts.v1', 'not json')
     expect(readComposerDrafts(NOW).size).toBe(0)
   })
 })

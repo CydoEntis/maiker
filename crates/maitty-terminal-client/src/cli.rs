@@ -2700,9 +2700,21 @@ fn broken_hooks_in(
 
 /// Where Claude Code keeps its MCP servers (yours, for every project).
 fn claude_json() -> PathBuf {
-    directories::BaseDirs::new()
-        .map(|d| d.home_dir().join(".claude.json"))
-        .unwrap_or_default()
+    claude_json_in(None)
+}
+
+/// Claude Code's own file (its MCP servers among others): inside its config folder when it runs
+/// with `CLAUDE_CONFIG_DIR` (named, or `None` for this process's own), else in the home folder.
+fn claude_json_in(config_dir: Option<&std::path::Path>) -> PathBuf {
+    match config_dir {
+        Some(dir) => dir.join(".claude.json"),
+        None => match std::env::var_os("CLAUDE_CONFIG_DIR").filter(|dir| !dir.is_empty()) {
+            Some(dir) => PathBuf::from(dir).join(".claude.json"),
+            None => directories::BaseDirs::new()
+                .map(|d| d.home_dir().join(".claude.json"))
+                .unwrap_or_default(),
+        },
+    }
 }
 
 /// The MCP servers in Claude's `root` that are this app under an old name: Claude shows the
@@ -2733,15 +2745,16 @@ fn old_mcp_names(root: &Value) -> Vec<String> {
 }
 
 /// Runs Claude Code's own CLI (a `.cmd` shim on Windows).
-fn run_claude(args: &[&str]) -> std::io::Result<std::process::ExitStatus> {
-    std::process::Command::new(if cfg!(windows) {
-        "claude.cmd"
-    } else {
-        "claude"
-    })
-    .args(args)
-    .status()
-    .or_else(|_| std::process::Command::new("claude").args(args).status())
+fn run_claude(args: &[&str], config_dir: Option<&std::path::Path>) -> std::io::Result<std::process::ExitStatus> {
+    let run = |program: &str| {
+        let mut command = std::process::Command::new(program);
+        command.args(args);
+        if let Some(dir) = config_dir {
+            command.env("CLAUDE_CONFIG_DIR", dir);
+        }
+        command.status()
+    };
+    run(if cfg!(windows) { "claude.cmd" } else { "claude" }).or_else(|_| run("claude"))
 }
 
 /// The Claude settings files whose hooks run here: yours, and this folder's project ones.
@@ -3076,13 +3089,118 @@ fn shell_line(line: &str) -> std::process::Command {
 
 /// Add (or with `uninstall`, remove) the app's hooks in Claude Code's settings.
 fn claude_hooks(uninstall: bool) -> Result<PathBuf> {
-    json_hooks(
-        &claude_settings(),
-        "claude",
-        maitty_provider_claude::STATUS_EVENTS,
-        5,
-        uninstall,
-    )
+    let path = claude_hooks_at(&claude_settings(), uninstall)?;
+    if !uninstall {
+        for other in stale_sibling_claude_settings() {
+            match claude_hooks_at(&other, false) {
+                Ok(p) => tracing::info!("pointed the Claude hooks in {} at this {APP_COMMAND}", p.display()),
+                Err(e) => tracing::warn!("couldn't update the Claude hooks in {}: {e:#}", other.display()),
+            }
+        }
+    }
+    Ok(path)
+}
+
+fn claude_hooks_at(path: &std::path::Path, uninstall: bool) -> Result<PathBuf> {
+    json_hooks(path, "claude", maitty_provider_claude::STATUS_EVENTS, 5, uninstall)
+}
+
+/// Why the hooks in Claude config folder `folder` do not send to this build: none, running
+/// another program (an older install, or the program an older name had), or the file unreadable.
+/// `None` when they are right, or when hooks are not this build's to manage (a side server or a
+/// source build). Reads a file: call it off the UI thread.
+pub fn claude_hook_problem(folder: &std::path::Path) -> Result<Option<String>, String> {
+    if !hooks_belong_to_this_build() {
+        return Ok(None);
+    }
+    let file = folder.join("settings.json");
+    let text = match std::fs::read_to_string(&file) {
+        Ok(text) => text,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(folder.is_dir().then(|| "has no settings file, so no hooks".to_string()));
+        }
+        Err(e) => return Err(e.to_string()),
+    };
+    let root = jsonc::parse_value(&text).ok_or("it is not valid JSON")?;
+    let exe = this_exe().map_err(|e| e.to_string())?;
+    let want = maitty_provider_claude::command_line(&exe, "hook claude", claude_hook_shell());
+    Ok(claude_hook_problem_in(&text, &root, &want))
+}
+
+fn claude_hook_problem_in(text: &str, root: &Value, want: &str) -> Option<String> {
+    if !text.contains("hook claude") {
+        return Some("has no Maiker hooks".to_string());
+    }
+    stale_in(root, want)
+        .first()
+        .map(|other| format!("its hooks run another program ({other})"))
+}
+
+/// Points the hooks in Claude config folder `folder` at this build.
+pub fn repair_claude_hooks_in(folder: &std::path::Path) -> Result<(), String> {
+    // The check already says nothing for a side server or a source build; this keeps the write itself from ever
+    // pointing a real config folder's hooks at a binary inside a checkout, whoever calls it.
+    if !hooks_belong_to_this_build() {
+        return Ok(());
+    }
+    write_claude_hooks_in(folder)
+}
+
+fn write_claude_hooks_in(folder: &std::path::Path) -> Result<(), String> {
+    claude_hooks_at(&folder.join("settings.json"), false)
+        .map(drop)
+        .map_err(|e| format!("{e:#}"))?;
+    rename_old_mcp_in(Some(folder));
+    Ok(())
+}
+
+/// Registers the MCP server under this app's name where Claude (the one that runs with `config_dir`)
+/// still has it under an old name. Quiet when there is nothing to rename; a failure is logged.
+fn rename_old_mcp_in(config_dir: Option<&std::path::Path>) {
+    let Ok(text) = std::fs::read_to_string(claude_json_in(config_dir)) else {
+        return;
+    };
+    let old = serde_json::from_str::<Value>(&text).map(|root| old_mcp_names(&root)).unwrap_or_default();
+    if old.is_empty() {
+        return;
+    }
+    match this_exe().map_err(|e| e.to_string()).and_then(|exe| claude_mcp_in(config_dir, &exe, false).map_err(|e| format!("{e:#}"))) {
+        Ok(done) => tracing::info!("renamed the old MCP server entry `{}` in Claude's config: {done}", old.join("`, `")),
+        Err(e) => tracing::warn!("could not rename the MCP server entry `{}` in Claude's config: {e}", old.join("`, `")),
+    }
+}
+
+/// Other Claude config folders (`~/.claude-personal`, `~/.claude-work`, ...) whose settings still
+/// run another copy of the app's hook. The server and the desktop app do not run with the
+/// `CLAUDE_CONFIG_DIR` the user's shell gives their agents, so an update that only repaired
+/// `claude_settings()` left those panes reporting to an older app: no hook ever reached the
+/// server, and the pane never counted as hooked.
+fn stale_sibling_claude_settings() -> Vec<PathBuf> {
+    let (Ok(exe), Some(dirs)) = (this_exe(), directories::BaseDirs::new()) else {
+        return Vec::new();
+    };
+    let want = maitty_provider_claude::command_line(&exe, "hook claude", claude_hook_shell());
+    stale_claude_settings_in(dirs.home_dir(), &claude_settings(), &want)
+}
+
+fn stale_claude_settings_in(home: &std::path::Path, own: &std::path::Path, want: &str) -> Vec<PathBuf> {
+    let Ok(entries) = std::fs::read_dir(home) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = entries
+        .flatten()
+        .filter(|e| e.file_name().to_string_lossy().starts_with(".claude"))
+        .map(|e| e.path().join("settings.json"))
+        .filter(|settings| settings != own)
+        .filter(|settings| {
+            std::fs::read_to_string(settings)
+                .ok()
+                .and_then(|text| jsonc::parse_value(&text))
+                .is_some_and(|root| !stale_in(&root, want).is_empty())
+        })
+        .collect();
+    found.sort();
+    found
 }
 
 /// Add (or remove) the app's hooks in a Claude-style settings.json (Claude Code, Gemini CLI,
@@ -3252,7 +3370,8 @@ pub fn refresh_claude_hooks() {
     if !hooks_belong_to_this_build() {
         return;
     }
-    if !stale_claude_hooks().is_empty() || needs_statusline() {
+    rename_old_mcp_in(None);
+    if !stale_claude_hooks().is_empty() || needs_statusline() || !stale_sibling_claude_settings().is_empty() {
         match claude_hooks(false) {
             Ok(p) => tracing::info!(
                 concat!(
@@ -3427,8 +3546,8 @@ fn integrate_mcp(exe: &str, uninstall: bool) -> Result<()> {
 }
 
 /// Runs `claude <args>`: whether it succeeded, or `None` when Claude Code isn't installed.
-fn claude_cli(args: &[&str]) -> Result<Option<bool>> {
-    match run_claude(args) {
+fn claude_cli(args: &[&str], config_dir: Option<&std::path::Path>) -> Result<Option<bool>> {
+    match run_claude(args, config_dir) {
         Ok(status) => Ok(Some(status.success())),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(e) => Err(e).context("run claude"),
@@ -3438,8 +3557,13 @@ fn claude_cli(args: &[&str]) -> Result<Option<bool>> {
 /// Claude Code keeps its servers in `~/.claude.json`, which it rewrites itself, so its own CLI
 /// makes the change (user scope: every project).
 fn claude_mcp(exe: &str, uninstall: bool) -> Result<String> {
+    claude_mcp_in(None, exe, uninstall)
+}
+
+/// `claude_mcp` for the Claude that runs with config folder `config_dir` (`None`: this process's own).
+fn claude_mcp_in(config_dir: Option<&std::path::Path>, exe: &str, uninstall: bool) -> Result<String> {
     const SKIPPED: &str = "skipped (not installed)";
-    let path = claude_json();
+    let path = claude_json_in(config_dir);
     let root = match std::fs::read_to_string(&path) {
         Ok(text) => serde_json::from_str::<Value>(&text)
             .with_context(|| format!("{} isn't valid JSON", path.display()))?,
@@ -3456,7 +3580,7 @@ fn claude_mcp(exe: &str, uninstall: bool) -> Result<String> {
         return Ok("not registered".into());
     }
     for name in &remove {
-        match claude_cli(&["mcp", "remove", "--scope", "user", name])? {
+        match claude_cli(&["mcp", "remove", "--scope", "user", name], config_dir)? {
             Some(true) => {}
             Some(false) => println!("Claude Code: run  claude mcp remove --scope user {name}"),
             None => return Ok(SKIPPED.into()),
@@ -3477,7 +3601,7 @@ fn claude_mcp(exe: &str, uninstall: bool) -> Result<String> {
         "--",
         exe,
         "mcp",
-    ])? {
+    ], config_dir)? {
         Some(true) => Ok("registered (all projects)".into()),
         Some(false) => bail!(
             "`claude mcp add` failed; run  claude mcp add --scope user {APP_COMMAND} -- \"{exe}\" mcp"
@@ -5322,6 +5446,80 @@ mod tests {
             !super::runs_our_hook("hydra-lint check"),
             "only the app's own hook"
         );
+    }
+
+    #[test]
+    fn another_claude_config_folder_with_an_old_hook_is_found() {
+        let home = std::env::temp_dir().join(format!("{}-siblings-{}", env!("APP_COMMAND"), std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let want = concat!("\"/home/me/.local/bin/", env!("APP_COMMAND"), "\" hook claude");
+        let old = "\"/home/me/.cargo/bin/".to_string() + env!("APP_COMMAND") + "\" hook claude";
+        let write = |dir: &str, cmd: &str| {
+            let folder = home.join(dir);
+            std::fs::create_dir_all(&folder).unwrap();
+            let json = serde_json::json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": cmd }] }] } });
+            std::fs::write(folder.join("settings.json"), json.to_string()).unwrap();
+        };
+        write(".claude", &old);
+        write(".claude-personal", &old);
+        write(".claude-work", want);
+        write(".other", &old);
+        let own = home.join(".claude").join("settings.json");
+        let found = super::stale_claude_settings_in(&home, &own, want);
+        let _ = std::fs::remove_dir_all(&home);
+        assert_eq!(found, vec![home.join(".claude-personal").join("settings.json")]);
+    }
+
+    #[test]
+    fn claudes_own_file_is_in_the_folder_it_runs_with() {
+        let folder = std::path::Path::new("/srv/agents/claude-home");
+        assert_eq!(super::claude_json_in(Some(folder)), folder.join(".claude.json"));
+    }
+
+    #[test]
+    fn a_hook_still_running_the_old_maitty_program_is_a_problem() {
+        let want = concat!("\"/home/me/.local/bin/", env!("APP_COMMAND"), "\" hook claude");
+        let old = concat!("\"/home/me/.local/share/maitty/", env!("APP_DAEMON"), "\" hook claude");
+        let settings = |cmd: &str| serde_json::json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": cmd }] }] } });
+        let text = settings(old).to_string();
+        let why = super::claude_hook_problem_in(&text, &settings(old), want).expect("the old program is stale");
+        assert!(why.contains(concat!("maitty/", env!("APP_DAEMON"))), "{why}");
+        let right = settings(want);
+        assert_eq!(super::claude_hook_problem_in(&right.to_string(), &right, want), None);
+        let none = serde_json::json!({});
+        assert!(super::claude_hook_problem_in("{}", &none, want).is_some_and(|why| why.contains("no Maiker hooks")));
+    }
+
+    #[test]
+    fn a_source_build_never_rewrites_a_config_folders_hooks_to_itself() {
+        // The test binary runs from target/debug, as a dev daemon does.
+        assert!(!super::hooks_belong_to_this_build());
+        let folder = std::env::temp_dir().join(format!("{}-guard-{}", env!("APP_COMMAND"), std::process::id()));
+        std::fs::create_dir_all(&folder).unwrap();
+        let written = concat!("{\"hooks\":{\"Stop\":[{\"hooks\":[{\"type\":\"command\",\"command\":\"/home/me/.local/bin/", env!("APP_COMMAND"), " hook claude\"}]}]}}");
+        std::fs::write(folder.join("settings.json"), written).unwrap();
+        let problem = super::claude_hook_problem(&folder);
+        let repaired = super::repair_claude_hooks_in(&folder);
+        let after = std::fs::read_to_string(folder.join("settings.json")).unwrap();
+        let _ = std::fs::remove_dir_all(&folder);
+        assert_eq!(problem, Ok(None));
+        assert_eq!(repaired, Ok(()));
+        assert_eq!(after, written);
+    }
+
+    #[test]
+    fn a_config_folder_outside_dot_claude_is_repaired_by_its_own_path() {
+        let folder = std::env::temp_dir().join(format!("{}-custom-{}", env!("APP_COMMAND"), std::process::id())).join("agent-home");
+        std::fs::create_dir_all(&folder).unwrap();
+        let old = concat!("\"/home/me/.local/share/maitty/", env!("APP_DAEMON"), "\" hook claude");
+        let before = serde_json::json!({ "hooks": { "Stop": [{ "hooks": [{ "type": "command", "command": old }] }] } });
+        std::fs::write(folder.join("settings.json"), before.to_string()).unwrap();
+        let result = super::write_claude_hooks_in(&folder);
+        let after = std::fs::read_to_string(folder.join("settings.json")).unwrap();
+        let _ = std::fs::remove_dir_all(folder.parent().unwrap());
+        result.expect("repairs the folder it is given");
+        assert!(!after.contains(concat!("maitty/", env!("APP_DAEMON"))), "the old program is gone: {after}");
+        assert!(after.contains("hook claude"), "this build's hook is there: {after}");
     }
 
     #[test]

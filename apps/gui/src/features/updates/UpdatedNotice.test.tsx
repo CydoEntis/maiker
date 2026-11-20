@@ -17,7 +17,7 @@ describe('updated notice', () => {
     return onDone
   }
 
-  it('says so in a success toast that goes after four seconds, as every success does', () => {
+  it('says so in a success toast that goes after five seconds, as every success does', () => {
     const onDone = show()
     expect(screen.getByRole('status')).toHaveTextContent('Updated to 0.65.0')
 
@@ -57,7 +57,7 @@ describe('update memory across a relaunch', () => {
   })
 
   it('reads the plain version an older launch stored', () => {
-    localStorage.setItem('maitty.gui.update.restarted', '0.63.0')
+    localStorage.setItem('maiker.gui.update.restarted', '0.63.0')
     expect(takeRestarted()).toEqual({ version: '0.63.0', previous: null, notes: '', automatic: false })
   })
 })

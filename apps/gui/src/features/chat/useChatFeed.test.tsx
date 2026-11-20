@@ -1,7 +1,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from './fakeDaemonHistory'
-import { ACTIVE_POLL_MS, forgetChatFeeds, NEWS_READ_GAP_MS, TOLD_ACTIVE_POLL_MS, useChatFeed } from './useChatFeed'
+import { ACTIVE_POLL_MS, forgetChatFeeds, NEWS_READ_GAP_MS, peekChatFeed, TOLD_ACTIVE_POLL_MS, useChatFeed, warmChatFeed } from './useChatFeed'
 
 const fake = vi.hoisted(() => ({
   history: null as null | { read: (cursor: never) => Promise<unknown> },
@@ -139,5 +139,63 @@ describe('a chat the daemon tells of changes', () => {
     await settle()
 
     expect(fake.told.size).toBe(0)
+  })
+})
+
+describe('a chat opened again from the cache', () => {
+  it('paints its messages on the very first render, with no loading frame and nothing awaited', async () => {
+    working()
+    const first = open()
+    await settle()
+    expect(first.result.current.feed.loaded).toBe(true)
+    first.unmount()
+
+    // Nothing is settled: no timer has run and no read has been answered when the first frame is drawn.
+    const again = open()
+    expect(again.result.current.feed.loaded).toBe(true)
+    expect(again.result.current.events.length).toBeGreaterThan(0)
+  })
+
+  it('shows the loading state only for a conversation that was never read', () => {
+    working()
+    const cold = open()
+    expect(cold.result.current.feed.loaded).toBe(false)
+    expect(cold.result.current.events).toHaveLength(0)
+  })
+})
+
+describe('reading a chat ahead of a click', () => {
+  it('fills the cache once, and a chat opened after it paints from memory', async () => {
+    const history = working()
+    const read = (cursor: unknown) => history.read(cursor as never)
+    expect(peekChatFeed(FAKE_CONVERSATION)).toBeUndefined()
+    await expect(warmChatFeed(FAKE_CONVERSATION, 1, 'codex', read as never)).resolves.toBe(true)
+    const reads = history.reads.length
+    expect(peekChatFeed(FAKE_CONVERSATION)?.loaded).toBe(true)
+
+    const opened = open()
+    expect(opened.result.current.feed.loaded).toBe(true)
+    await expect(warmChatFeed(FAKE_CONVERSATION, 1, 'codex', read as never)).resolves.toBe(false)
+    expect(history.reads.length).toBeGreaterThanOrEqual(reads)
+  })
+
+  it('reads nothing for a chat that is already cached', async () => {
+    const history = working()
+    open()
+    await settle()
+    const reads = history.reads.length
+    await expect(warmChatFeed(FAKE_CONVERSATION, 1, 'codex', ((cursor: unknown) => history.read(cursor as never)))).resolves.toBe(false)
+    expect(history.reads.length).toBe(reads)
+  })
+
+  it('runs one read at a time: a second hover while one is reading is dropped', async () => {
+    const history = working()
+    let release: () => void = () => undefined
+    const gate = new Promise<void>((resolve) => { release = resolve })
+    const slow = async (cursor: unknown) => { await gate; return history.read(cursor as never) }
+    const first = warmChatFeed(FAKE_CONVERSATION, 1, 'codex', slow)
+    await expect(warmChatFeed(FAKE_CONVERSATION + 1, 1, 'codex', slow as never)).resolves.toBe(false)
+    release()
+    await expect(first).resolves.toBe(true)
   })
 })

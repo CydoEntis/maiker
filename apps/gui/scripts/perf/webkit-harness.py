@@ -55,7 +55,7 @@ threading.Thread(target=httpd.serve_forever, daemon=True).start()
 ucm = WebKit2.UserContentManager()
 pre = f"""
 window.__SCENARIO = {json.dumps({'sessions': SESSIONS[args.scenario], 'bytesPerSec': 20000, 'tickMs': args.tick})};
-try {{ localStorage.setItem('maitty.gui.welcomed.v1','1'); localStorage.setItem('maitty.gui.settings.v1', {json.dumps(json.dumps(json.loads(args.settings)))}); localStorage.setItem('maitty.gui.layout.v1', {json.dumps(json.dumps(layout))}); }} catch (e) {{}}
+try {{ localStorage.setItem('maiker.gui.welcomed.v1','1'); localStorage.setItem('maiker.gui.settings.v1', {json.dumps(json.dumps(json.loads(args.settings)))}); localStorage.setItem('maiker.gui.layout.v1', {json.dumps(json.dumps(layout))}); }} catch (e) {{}}
 """
 with open(os.path.join(HERE, 'mock-tauri.js')) as f:
     mock = f.read()

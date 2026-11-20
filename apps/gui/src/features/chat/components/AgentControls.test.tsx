@@ -57,7 +57,7 @@ function WithPaneQueue({ agent, typeInto }: { agent: 'claude' | 'codex'; typeInt
   return (
     <>
       <ChatSession link={{ conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }} agent={agent} online typeInto={typeInto} paneQueue={paneQueue} sessionId="s1" />
-      <output aria-label="The daemon holds">{paneQueue.queued.join(' | ')}</output>
+      <output aria-label="The Maiker service holds">{paneQueue.queued.join(' | ')}</output>
     </>
   )
 }
@@ -88,7 +88,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
-    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })
@@ -141,21 +141,18 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto).toHaveBeenCalledWith('\u001b[Z')
   })
 
-  it('sends a model and an effort picked while the agent works at once, as typing them in the terminal does', async () => {
+  it('locks the model and effort while the agent works, and says when they unlock', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const typeInto = open('claude', 'Working')
     await settle(IDLE_POLL_MS)
 
     const model = screen.getByRole('button', { name: /^Agent, model and reasoning/ })
-    expect(model).not.toHaveAttribute('aria-disabled', 'true')
+    expect(model).toHaveAttribute('aria-disabled', 'true')
+    expect(model).toHaveAttribute('title', 'Claude is working. You can change the model and effort when it finishes, or after Esc.')
     await user.click(model)
-    await user.click(await screen.findByRole('radio', { name: /^Opus 5\.5/ }))
-    await user.click(screen.getByRole('radio', { name: 'High' }))
-
-    // Nothing waits for the turn to end, nothing is left in the queue, and the two commands do not interleave.
+    expect(screen.queryByRole('radio', { name: /^Opus 5\.5/ })).not.toBeInTheDocument()
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
-    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '/effort high', '\r'])
-    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(typeInto).not.toHaveBeenCalled()
   })
 
   it('names what the agent says it runs, whether it was picked here or typed in the terminal', async () => {
@@ -172,7 +169,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     // Picked here: shown at once, and the agent's files then say the same.
     await user.click(button())
-    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(button()).toHaveAccessibleName(/· High/)
     rerender(chat('high'))
@@ -184,12 +181,12 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     await settle(IDLE_POLL_MS)
     expect(button()).toHaveAccessibleName(/Opus 5.5 · Low/)
     // No pick of its own is kept, so nothing can later disagree with the terminal.
-    expect(window.localStorage.getItem('maitty.gui.agentChoice.v1')).toBeNull()
+    expect(window.localStorage.getItem('maiker.gui.agentChoice.v1')).toBeNull()
   })
 
   it('ignores a pick this window kept for an earlier chat of the same number', async () => {
     // Numbers start again when the daemon restarts; the earlier chat's agent had said what this one says.
-    window.localStorage.setItem('maitty.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
+    window.localStorage.setItem('maiker.gui.agentChoice.v1', JSON.stringify({ [String(FAKE_CONVERSATION)]: { model: 'claude-opus-5-5', reasoning: 'max', saidModel: 'claude-sonnet-5-5', saidEffort: 'medium' } }))
     const daemon = new FakeDaemonHistory()
     daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
     fake.current = daemon

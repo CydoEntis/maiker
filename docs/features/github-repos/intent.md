@@ -57,6 +57,10 @@ tab, Settings).
 - GitLab, Bitbucket and other hosts in the repository picker (a pasted address from any host
   still clones).
 - Installing `git` or `gh`.
+- Reading or storing a GitHub token: signing in and out inside the app is the daemon running `gh auth login
+  --web` and `gh auth logout`, showing the one-time code and address `gh` prints; `gh` keeps the token
+  ([ADR 0006](../../adr/0006-secrets-never-enter-chat.md); [SECURITY](../../SECURITY.md)). A machine other than this
+  computer still signs in through a terminal session on it.
 - Files, Find and Branches for a session on another machine (Plane MAITTY-139).
 - Merging, rebasing and resolving conflicts.
 

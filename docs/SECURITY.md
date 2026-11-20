@@ -164,10 +164,13 @@ in the home folder of this computer or of the machine named, whose first command
 `GITHUB_SIGN_IN_COMMAND` (`gh auth login --web --git-protocol https`, in `maitty-desktop-client`). The
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
-password or token from it.
+password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
+has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
+one-line key-copy command to copy and run in the person's own terminal (`keySetupCommand` refuses a target that is not one plain
+word).
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
-`maitty-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
+`maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
 Daemon › Service log). The webview supplies nothing: the log, the folder and the name are the
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
@@ -207,7 +210,8 @@ outside a pane or a structured chat: for the chat's `/btw` and the commands that
 daemon starts it (ADR 0001); the webview and the host name only the conversation and the ask. The session id is the
 daemon's own record (the hook's for a followed pane, the binding's for a structured chat) and must be a UUID; the
 folder is the pane's or the binding's; the program is the binding's, or for a pane `claude` (`claude.exe` on Windows)
-found on the login PATH; the model is one the transcript named, kept only if it is a plain model name. The arguments
+found on the login PATH, or else in the installers' own folders under the user's home (`~/.local/bin`, then
+`~/.claude/local`), never a script wrapper; the model is one the transcript named, kept only if it is a plain model name. The arguments
 are an array, never a shell line, and the ask goes on standard input, so a question that starts with a dash is never
 read as an option. A question runs with no tools and no MCP servers (`--tools "" --strict-mcp-config`), so the copy can
 only answer; a command keeps the session's tools and servers, which it reports on, and is one of a fixed list that
@@ -577,8 +581,11 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   pull request's must be exactly `https://github.com/<owner>/<repo>/pull/<number>`
   (`maitty_shared::github::is_pull_request_address`), so a machine cannot hand the window any other
   address to show. Any other answer is dropped.
-- **No install or restart.** A machine that needs the app shows the command to run; the desktop app never
-  installs, updates or restarts anything on it.
+- **Install and restart only on a click or a step the person chose.** The owner approved installing the
+  helper from the app: adding a machine whose app is missing runs the same `maiker machine update <name>
+  --install` as the Fix flow, as a step of the add flow (`install_helper`), with the fixed install script
+  and the checks above. The window asks for it by passing `installHelper`; nothing else installs, updates or
+  restarts anything on a machine.
 - **A different daemon at a known name** is refused (the shared daemon-id store) and says so; Remove then
   adding the machine again is the way out.
 
@@ -818,7 +825,8 @@ The agent runs with the user's permissions, so the window's start path is narrow
   sends the choice explicitly: a labelled checkbox with a warning, ticked at first because **Bypass Permissions** is on
   by default (Settings › Permissions, one switch per agent, `[permissions.bypass]`), and unticked for one chat or for
   good by turning the agent's switch off. It is fixed for the session: Maiker never widens a running session, and a
-  chat started with it shows a visible Bypass permissions tag. The same switch adds the agent's own flag
+  chat started with it always shows that it is: the message box's shield turns red in a mode that asks about nothing,
+  and a chat whose shield does not show its mode carries a visible Bypass permissions tag instead. The same switch adds the agent's own flag
   (`AgentDef.bypass_flag`) to every agent the daemon or either app starts in a terminal: new sessions, branch agents,
   MCP `maiker_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch
   is still on (`restore::keeping_bypass`); a flag that is not a plain `-`option is ignored. Typing an agent's name in
@@ -843,19 +851,36 @@ The agent runs with the user's permissions, so the window's start path is narrow
 
 ## Project-specific: cloning a repository from the desktop
 
-The New session dialog's Clone from GitHub runs `git clone` in the desktop host (`git_clone`, `src-tauri/src/clone.rs`),
-off the UI thread, with the user's permissions. What was pasted never reaches git as typed:
+The New session draft's project list (a pasted link, **Clone from link…**, **My GitHub repos…**) clones through the
+daemon (`Query::CloneRepo`, `crates/maitty-core/src/daemon/clone.rs`), on this computer or the chosen machine, off the
+UI thread, with the user's permissions. The desktop host has no clone of its own. What was pasted never reaches git as
+typed:
 
-- It is read as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
-  `git@github.com:`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most 100 characters, not
-  starting with `-` or `.`. Anything else, including another host, a user or token in the address, `file://` or
-  `ext::`, is refused.
-- The address git is given is built again from the two checked names, after `--`, so no option or transport can
-  reach the command line.
-- The target is a new folder named after the repository inside an absolute folder that exists; an existing folder
-  is never written into.
-- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses
-  the credentials git already has. Maiker stores no GitHub token.
+- The window reads it as a GitHub owner and repository name (owner/repo, a github.com page or HTTPS address, or
+  `git@github.com:`; `model/repoAddress.ts`). Each name is checked: ASCII letters, digits, `-`, `_` and `.`, at most
+  100 characters, not starting with `-` or `.`. Anything else, including another host, `file://` or `ext::`, is
+  refused. An address carrying a user name or token is refused with a plain line, never cloned and never shown back.
+- The address handed on is built again from the two checked names, so a pasted secret is dropped, not carried into a
+  command line, a URL or a log. The daemon checks the address again (https, ssh or git, no spaces or leading dash,
+  length limit) and passes it after `--`.
+- The target is a new folder named after the repository inside an existing absolute folder; an existing folder is
+  never written into. The one exception is the default `~/Projects` (the user's home plus `Projects`), which is made
+  on first use; any other missing folder is refused.
+- Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses the
+  credentials git already has on that machine (`gh`'s, once the person has signed in through Open a project's GitHub
+  tab). Maiker stores no GitHub token; the window says so when git needs a sign-in. Git's own words are matched to a
+  plain sentence and shown without the address.
+
+The **Open a project** dialog (`features/open-project/`) is the desktop's other way in, on this computer only:
+
+- Its URL tab accepts any host, not only GitHub. `repoUrl.ts` reads `https://host/owner/repo`, `git@host:owner/repo.git` and
+  `host/owner/repo`, requires a dotted host name and path parts in the same safe characters as above, and builds the
+  https or ssh address again from them (a user name or token is refused, never carried on). The daemon's check on the
+  address is unchanged and is the one that decides.
+- GitHub sign-in is `gh auth login --web`, run by the daemon (`agentSignIn('github', …)`). The window shows the one-time
+  code and an https link and never asks for, receives or displays a token; `gh` keeps it. Sign-out is `gh auth logout`.
+- On this computer, the git projects offered come from `listFolders` on home and a fixed shortlist of folders under it,
+  one level deep, each with a timeout; no walk of the disk.
 
 ## Project-specific: signing an agent in from the desktop
 
@@ -878,6 +903,60 @@ person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
   computer's output can never put a link in this window.
 - Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
   in a text box (ADR 0006).
+- **GitHub** is one more `SignInAgent` (`Github`): the daemon runs the constant line `gh auth login --web
+  --hostname github.com --git-protocol https` with nothing on its input and `GH_PROMPT_DISABLED=1`, so `gh` prints
+  the one-time code and the `https://github.com/login/device` address instead of waiting for Enter and opening a
+  browser. The same scan keeps that code (the text after the colon on the line that names it) and that address
+  under the same checks, and drops everything else the command prints. `gh` keeps the token in its own store (the
+  system keyring, or its hosts file); the daemon never reads it, never asks for it and never logs the code. `SignedIn`
+  is the exit status of `gh auth status --hostname github.com`; its text, which names accounts and token sources,
+  is not read. Who is signed in stays `Query::GitHubAccounts` (logins only).
+- **GitHub sign-out** (`SignInRequest::SignOut`, GitHub only) runs `gh auth logout --hostname github.com --user
+  <login>` for the active account only, the login being one `gh` itself reported and `is_login` checked, so it can
+  never be an option on `gh`'s command line. It runs off the event loop with a 15-second limit and answers `Idle`, or
+  `SignedIn` when another account remains. A login still waiting is cancelled first.
+
+## Project-specific: a folder's branches and what a machine is
+
+`Query::FolderGit` (`daemon/folder_git.rs`) and `Query::MachineFacts` (`daemon/machine_facts.rs`) are human-client
+only; an agent's connection is refused. A reply from another machine is vetted like every other: names, paths and
+lines cleaned and capped (`remote_policy`), and an answer to nothing asked is dropped.
+
+- The folder is an absolute path or starts with `~`, at most 4 KiB, and must exist. Git runs as a program with
+  arguments, never through a shell, with `GIT_TERMINAL_PROMPT=0`, and each command is stopped after 15 seconds.
+- A branch name is checked before git sees it (`maitty_shared::repo::is_branch_name`): plain ref characters, no
+  leading dash, no `..`, no `@{`, at most 200 bytes. A remote branch to check out must also be a ref git has already
+  fetched (`refs/remotes/<name>` verifies); its local name is the part after the first `/` and is checked as well.
+  Nothing fetches, pushes or deletes, and a switch over uncommitted changes is git's own refusal, shown as it says it.
+- Machine facts are the system, architecture, core count, host name and, for each agent program on the login PATH,
+  what its `--version` printed on the first line (kept only when it is version-like). No path, environment, account
+  or token is read or sent. Each program runs once with a 5-second limit.
+
+## Project-specific: installing an agent from the desktop
+
+`install_agent` (`apps/gui/src-tauri/src/agent_install.rs`) runs an agent's own documented install on this
+computer. The owner approved installing agents from the app; this replaces the earlier rule that the desktop
+app installs nothing. Running a downloaded script is running remote code as the person, so:
+
+- **An allowlist in code, not input.** The window sends only the agent's name (`claude`, `codex`, `gemini`
+  or `opencode`; anything else is refused). The command comes from a table in the file: a script at an
+  `https://` address on `claude.ai`, `chatgpt.com` or `opencode.ai` (no port, user name, query or fragment),
+  or `npm install -g` of one of two fixed packages. The table is checked against the allowlist again before
+  anything starts. A new agent or host needs a code change and a line here.
+- **Shown before it runs.** `agent_install_command` returns the exact command for this system, and the
+  window shows it before asking. The vendor pages the commands come from are listed in the file.
+- **No shell line is built.** A script is `curl -fsSL <url>` with its output piped to `bash` or `sh` as
+  two programs (on Windows, `powershell -NoProfile -Command "irm <url> | iex"` with a constant line). Nothing
+  from the window or from the download is ever interpolated.
+- **Never elevated.** It runs as the person who runs the app, never with `sudo`, `runas` or an administrator
+  prompt. An install that needs more fails and says so.
+- **Bounded and visible.** One install at a time, stopped after 10 minutes, no input. Its output is cleaned
+  (control characters dropped, lines cut at 400 characters) and streamed to the window as `install-progress`;
+  nothing it prints is run or stored. The version is read afterwards with `<agent> --version`, stopped after
+  2 seconds.
+- **No Copilot.** It is not a supported agent here (ADR 0005), so it has no row and no command.
+- **Limits that remain.** The vendors' scripts are trusted as much as their domains; there is no checksum
+  of the script here. npm and curl come from this computer's PATH.
 
 ## Project-specific: the message the daemon sends by itself
 
@@ -1053,3 +1132,45 @@ is what the panes show, so the rules are those of a credential:
 - **No silent overwrite.** The window sends no version only after the person pressed Overwrite on a `ChangedOnDisk` answer.
 - Not covered: a change made in the instant between the daemon's last version check and the rename is not caught (no lock is
   held on files an agent edits).
+
+## Project-specific: remote machine logins from the desktop
+
+The Settings > Remote machines screens (`apps/gui/src-tauri/src/machine_access.rs`, `add_machine.rs`;
+logic in `crates/maitty-machines/src/{host_key,key_login,machine_target}.rs`) let a person fix a
+machine that will not log in without a terminal. They run ssh tools on this computer on input from
+the window, so each is bounded as follows.
+
+| Command | What it takes | Rule |
+| --- | --- | --- |
+| `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
+| `add_machine` key file | a path | Optional `identity_file` on the entry, passed as `-i <path>` (one argv entry). It must be an absolute path (a leading `~/` is expanded), exist and be a file; a path that starts with `-`, has a control character or ends in `.pub` is refused. The file is never opened by Maiker (only ssh reads it) and a path with `via` is refused. Entries without it still load. |
+| `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
+| `inspect_new_host`, `trust_new_host` | target, port, fingerprint | The same checks as `inspect_host_key` and `trust_host_key`, for a host that is not a machine yet, so a new host is trusted before anything is written. Nothing is saved when the person cancels. |
+| `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
+| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. |
+| `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |
+
+Key login with a password once (`key_login`):
+
+- **The password.** It arrives as one argument, is moved into a `Secret` (no `Debug`, `Clone` or
+  `Serialize`; its bytes are overwritten on drop), and lives only for that call. It is not written
+  to disk, config, logs, ssh arguments or events, never sent to the daemon, and never returned to the
+  window. It reaches ssh only through `SSH_ASKPASS` with `SSH_ASKPASS_REQUIRE=force`: a helper script
+  with no secret in it, in a mode-0700 folder that is removed afterwards, prints it from an
+  environment variable set on that one short-lived ssh process. Every text shown from ssh is scrubbed
+  of the password first. Limits that remain: the window's webview and the IPC string cannot be wiped,
+  and the environment of the ssh child (readable by the same user while it runs) holds it briefly.
+- **Where it can be used.** Never before the machine's host key is trusted: the steps run with
+  `StrictHostKeyChecking=yes`, and the command refuses when the key is not on record. Not offered when
+  this computer is Windows (the helper is a shell script); the card says so and offers the terminal.
+- **What is installed.** Only the public key. A key with a passphrase stops the flow. A new key
+  (ed25519, no passphrase) is made only after the person agrees, only where no key file exists.
+- **The far side.** OpenSSH on Linux and macOS: `~/.ssh` 700, `authorized_keys` 600, no duplicate.
+  Windows: an administrator's key goes to `ProgramData\ssh\administrators_authorized_keys` with
+  only Administrators and SYSTEM allowed; anyone else's to their own `.ssh\authorized_keys`. The
+  system is told with fixed commands (`uname -s`, then one fixed `cmd` line); when it cannot be told,
+  or the machine does not confirm, the exact steps are shown and nothing is guessed.
+- **Attempts.** One password prompt per ssh run, a wrong password stops at once, and three wrong
+  passwords for a machine in a row stop further tries until Maiker restarts.
+- **After.** The key is checked by a `BatchMode` login with passwords off; the machine is dialled
+  again only on success.

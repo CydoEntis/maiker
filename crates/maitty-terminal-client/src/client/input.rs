@@ -3,6 +3,8 @@
 use super::*;
 
 /// One line this long, arriving in a single burst, was pasted: nobody types it that fast.
+/// Lines a wheel notch moves the Changes diff.
+const WHEEL_ROWS: u16 = 3;
 const PASTE_MIN_CHARS: usize = 16;
 
 /// What shortcut mode says when a key does nothing, and how often at most.
@@ -305,6 +307,10 @@ impl App {
         if k.code == KeyCode::Esc && !matches!(self.mode, Mode::Copy(_)) {
             self.dismiss_notice();
         }
+        // Esc puts the toast away and goes no further: it was meant for the toast, not for the agent.
+        if k.code == KeyCode::Esc && self.toast_dismiss() {
+            return;
+        }
         // Esc while a pane is dragged by its title: it stays where it was.
         if k.code == KeyCode::Esc && matches!(self.screen.drag, Some(screen::Drag::Pane { .. })) {
             self.screen.drag = None;
@@ -389,7 +395,7 @@ impl App {
                     self.act(a);
                 } else if self.view_has_keys() {
                     self.on_view_key(&k);
-                } else if self.scroll_key(&k) {
+                } else if self.on_stopped_key(&k) || self.scroll_key(&k) {
                 } else {
                     self.forward_key(&k);
                 }
@@ -749,7 +755,7 @@ impl App {
         }
         self.screen_fresh();
         // Ctrl+click opens a link; double-click copies a word (or a path, or a link).
-        let on_toast = self.screen.toast_rect.contains(pos);
+        let on_toast = self.screen.toast_rect.contains(pos) || self.screen.toast_box.contains(pos);
         if m.kind == MouseEventKind::Down(MouseButton::Left)
             && !self.splash
             && !on_toast
@@ -1115,6 +1121,14 @@ impl App {
                     ));
                     return;
                 }
+                if self.screen.sheet_rect.contains(pos)
+                    && let Some(View::Changes(v)) = &mut self.view
+                    && let Some(r) = v.review.as_mut()
+                {
+                    r.scroll = if up { r.scroll.saturating_sub(WHEEL_ROWS) } else { r.scroll.saturating_add(WHEEL_ROWS) };
+                    self.dirty = true;
+                    return;
+                }
                 if self.screen.preview_rect.contains(pos)
                     && let Some(View::Files(v)) = &mut self.view
                 {
@@ -1409,6 +1423,10 @@ impl App {
                     self.on_view_key(&KeyEvent::new(code, KeyModifiers::NONE));
                 }
                 Btn::ViewChord(code, mods) => self.on_view_key(&KeyEvent::new(code, mods)),
+                Btn::Tick(i) => {
+                    self.on_button(Hit::Button(Btn::Row(i)), false);
+                    self.on_view_key(&KeyEvent::new(KeyCode::Char(' '), KeyModifiers::NONE));
+                }
                 Btn::Row(i) => match &mut self.view {
                     Some(View::Changes(v)) => {
                         let rows = v.rows();

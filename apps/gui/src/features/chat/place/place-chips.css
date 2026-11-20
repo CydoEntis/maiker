@@ -1,0 +1,43 @@
+/* The row under the message box: folder, branch and sync as plain text (no ground, no border), never wider than the box.
+   The folder gives way first: it shrinks a hundred times faster than the branch, and the sync chip and the meters never. */
+.mx-session-bar { min-width: 0; overflow: hidden; }
+.mx-session-place { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; gap: 2px; height: 28px; white-space: nowrap; }
+.mx-session-machine { flex: none; padding: 0 6px; font: 400 11.5px var(--mono); color: var(--dim); }
+.mx-place-chip { min-width: 0; display: inline-flex; align-items: center; gap: 5px; height: 26px; padding: 0 6px; border-radius: 8px; font-size: 12.5px; color: var(--muted); background: none; box-shadow: none; }
+button.mx-place-chip:hover, button.mx-place-chip[data-state="open"] { background: var(--m-hover); color: var(--fg); }
+button.mx-place-chip:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-place-chip.is-folder { flex: 0 100 auto; }
+.mx-place-chip.is-branch { flex: 0 1 auto; }
+.mx-place-chip:not(.is-folder, .is-branch) { flex: none; }
+.mx-place-icon { flex: none; display: inline-flex; }
+.mx-place-icon.is-spinning { animation: spin 1s linear infinite; }
+.mx-place-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-place-text.is-mono { font: 400 12px var(--mono); }
+.mx-place-head { display: flex; flex-direction: column; gap: 2px; padding: 7px 9px 8px; margin-bottom: 3px; border-bottom: 1px solid var(--line); }
+.mx-place-head-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--fg); }
+.mx-place-head-main.is-mono { font: 500 12.5px var(--mono); }
+.mx-place-head-sub { font-size: 12px; color: var(--dim); }
+.mx-place-key { flex: none; font: 400 11px var(--mono); color: var(--dim); }
+@media (prefers-reduced-motion: reduce) { .mx-place-icon.is-spinning { animation: none; } }
+:root[data-reduced-motion="true"] .mx-place-icon.is-spinning { animation: none; }
+/* A draft's chips: the machine chip is its icon alone on this computer; a branch that cannot be picked says why, quietly. */
+.mx-place-chip.is-machine { flex: none; }
+.mx-place-chip.is-down { color: var(--warn); }
+button.mx-place-chip.is-quiet { color: var(--dim); cursor: default; }
+button.mx-place-chip.is-quiet:hover { background: none; color: var(--dim); }
+
+/* The menus of the three chips (folder, branch, sync), as the design's chip menu draws them: 300px, a head, a flat search row,
+   30px rows with the mark in a 16px slot, small labels over the groups. The rows are the shared chip rows (dialogs.css). */
+.mx-chip-menu.is-place { gap: 2px; padding: 5px; border-radius: var(--r-panel); }
+.mx-chip-menu.is-place .mx-chip-search { flex: none; height: 32px; margin-bottom: 3px; padding: 0 10px; border-radius: 0; background: none; box-shadow: none; border-bottom: 1px solid var(--line); font-size: 13px; }
+.mx-chip-menu.is-place .mx-chip-count { display: none; }
+.mx-chip-menu.is-place .mx-chip-list { gap: 0; max-height: 320px; }
+.mx-chip-menu.is-place .mx-chip-heading { margin: 0; padding: 8px 9px 3px; font-size: 11px; letter-spacing: 0; text-transform: none; }
+.mx-chip-menu.is-place .mx-chip-heading span:last-child { display: none; }
+.mx-chip-menu.is-place .is-ruled { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); }
+.mx-chip-menu.is-place :is(.mx-chip-row, .mx-chip-action) { min-height: 30px; padding: 0 9px; gap: 9px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); }
+.mx-chip-menu.is-place .mx-chip-row-label { font-weight: 400; color: inherit; }
+.mx-chip-menu.is-place .mx-chip-row-label.is-mono { font: 400 12.5px var(--mono); }
+.mx-chip-menu.is-place .mx-chip-row:hover { color: var(--fg); }
+.mx-chip-menu.is-place .mx-chip-row.is-checked .mx-chip-row-label { font-weight: 700; color: var(--fg); }
+.mx-chip-menu.is-place :is(.mx-chip-row, .mx-chip-action) > svg { flex: none; margin: 0 1.5px; color: var(--dim); stroke: currentColor; }

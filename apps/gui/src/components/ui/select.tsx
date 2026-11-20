@@ -1,7 +1,8 @@
 import * as React from "react"
 import { Select as SelectPrimitive } from "radix-ui"
-import { CheckIcon, ChevronDownIcon } from "lucide-react"
+import { ChevronDownIcon } from "lucide-react"
 import { cn } from "@/lib/utils"
+import "./menu-row.css"
 
 /** The dropdown that picks one value. Radix gives it the listbox roles, the arrow keys, Home and End, typing to jump and Esc. */
 function Select(props: React.ComponentProps<typeof SelectPrimitive.Root>) {
@@ -57,14 +58,11 @@ function SelectItem({ className, children, text, ...props }: React.ComponentProp
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn("relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 pr-8 pl-1.5 text-[12.5px] outline-hidden select-none focus:bg-hover data-[state=checked]:bg-accent-soft", className)}
+      className={cn("mx-menu-row relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 px-1.5 text-[12.5px] outline-hidden select-none focus:bg-hover", className)}
       {...props}
     >
       <SelectPrimitive.ItemText className="sr-only">{text ?? ""}</SelectPrimitive.ItemText>
       {children}
-      <SelectPrimitive.ItemIndicator className="absolute right-2 text-brand">
-        <CheckIcon className="size-4" aria-hidden="true" />
-      </SelectPrimitive.ItemIndicator>
     </SelectPrimitive.Item>
   )
 }

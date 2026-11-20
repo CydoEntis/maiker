@@ -10,7 +10,7 @@ export type NoticeAction = {
 
 /** What a toast about something you are not looking at says: who it is about, what happened, and what you can do. */
 export type Notice = {
-  /** needs: waits on you (stays); done: finished (hides after 4s); error: failed (stays); info: a plain note. */
+  /** needs: waits on you (stays); done: finished (hides after 5s); error: failed (stays); info: a plain note. */
   kind: 'needs' | 'done' | 'error' | 'info'
   /** Who it is about: a session's name. */
   title: string

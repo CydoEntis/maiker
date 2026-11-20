@@ -1,10 +1,9 @@
 import { OpenSubagentContext, subagentNamed, type OpenSubagent } from '@/features/chat/openSubagent'
 import { movePanes } from './paneTransition'
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { TerminalView } from '@/TerminalView'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
-import { chatAvailability, type PaneView } from '../model/chatView'
 import { toast } from '@/lib/toast'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
 import { isChatSession } from '../model/chatSession'
@@ -20,36 +19,32 @@ import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
 import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
-import { moveRefusal } from '../model/moveToWorktree'
-import { startsBypassed, withBypass } from '../model/newChatHost'
-import { bypasses } from '@/features/settings/preferences'
-import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
 import { ShowSidebarButton } from './ShowSidebarButton'
-import { checksNeedingYou } from '@/features/inspect/checks'
-import type { InspectView } from '@/features/inspect/InspectPanel'
-
-/** Whether a session can show a chat at all: an agent the app reads. A shell or another program has none, so it gets no switch. */
-function hasChat(availability: ReturnType<typeof chatAvailability>): boolean {
-  return availability.kind === 'ready' || availability.kind === 'no-events'
-}
+import { placeOf } from '@/features/chat/sessionPlace'
+import type { EndedActions } from '@/features/chat/components/Composer'
+import { endedResume } from '../model/recentSessions'
 
 /** Ctrl+L: a shell clears its screen and keeps what was typed. */
 const CLEAR_SCREEN = '\x0c'
 
 /**
  * One pane of the layout: its header, and the session's terminal with its chat over it when the chat shows.
- * A pane of a tab kept out of sight keeps only its terminal, paused: no chat reads, takes keys or answers for it.
+ * A pane of a tab kept out of sight keeps its terminal and its chat mounted, both paused: neither reads, takes keys or
+ * answers for it, so going back to the tab shows both at once.
  */
 export function WorkspacePane({ shown, pane, kept }: {
   shown: Arrangement
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, paneViews, showChanges, online, setOpenSubagent, togglePanel, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, startChatHere, handoffSession, inspectOpen, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , moveToWorktree, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode, inspectView, diffStat, terminalShown, canDock, toggleTerminal } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setWorktreeFrom, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
+  // The session whose terminal log is shown over its chat. The app's view is one setting for every session; this is only
+  // the way to read the log when the chat cannot carry on (it crashed, the agent stopped, it never reports in).
+  const [logOf, setLogOf] = useState<string | null>(null)
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
   const session = paneSessions.get(pane.sessionId)
@@ -68,8 +63,11 @@ export function WorkspacePane({ shown, pane, kept }: {
     add: (text: string, first: boolean, operation: number) => queueFollowUp(session, text, first, operation),
     drop: (index: number, text: string) => dropQueuedFollowUp(session, index, text),
   }
-  const showTerminal = () => {
-    paneViews.choose(session.id, 'terminal')
+  const logShown = !chatOnly && logOf === session.id
+  const view = logShown ? 'terminal' : chat.view
+  const showLog = () => {
+    if (chatOnly) return
+    setLogOf(session.id)
     void carryDraftToTerminal(session).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
   }
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
@@ -80,12 +78,18 @@ export function WorkspacePane({ shown, pane, kept }: {
   const problem: ChatProblem | null = head?.down === true && head.name !== null
     ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
     : session.status === 'error' && !session.ended && !isShell(session)
-      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: () => { showTerminal() }, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
+      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: chatOnly ? null : showLog, onRestart: chatOnly ? null : () => { setLogOf(null); restartPane(pane.id) } }
       : interrupted !== null
         ? { kind: 'interrupted', agent: interrupted.agent, resume: interrupted.resume, onRestart: () => { resumeInterrupted(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
         : fullPercent !== null && typeInto !== undefined
           ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.failed('Could not compact', error) }) } }
           : null
+  // An ended chat is read-only: it offers to reopen its conversation or to start a fresh session in the same folder.
+  const resumeRefusal = endedResume(session)
+  const endedActions: EndedActions = {
+    ...(resumeRefusal.kind === 'request' ? { onResume: () => { resumeEnded(session) } } : { resumeWhy: resumeRefusal.why }),
+    onNewSession: () => { newChatWithSummary(session, '') },
+  }
   const terminals = ownsTerminals(session)
   // Restoring reads and writes the checkout, so it is this computer's only, like Inspect.
   const rewindTerm = repoPaneOf(session)
@@ -96,9 +100,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   // A shell is a terminal already: its menu keeps Clear and Copy folder path in place of New terminal.
   const shell = isShell(session)
   // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
-  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { void moveToWorktree(session) }, ...(moveRefusal(session) === null ? {} : { newWorktreeBlocked: moveRefusal(session) ?? '' }) }
-  // The panel has something for this pane: its repository. A pane of another machine keeps the button, which says why not.
-  const hasPanel = session.machine !== LOCAL_MACHINE || repoPaneOf(session) !== null
+  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { setWorktreeFrom(session) } }
   const openHelperChat: OpenSubagent = (title, asked) => {
     const found = subagentNamed(session.subagents, title, asked)
     return found === null ? null : () => { showSubagent(session.id, found.id) }
@@ -116,10 +118,10 @@ export function WorkspacePane({ shown, pane, kept }: {
       dropTarget={dropId === pane.id && dragId !== pane.id}
       dragging={dragId === pane.id}
       dropWord={dragId === null ? 'Drop to show it here' : 'Drop to swap'}
-      view={chat.view}
-      {...(chatOnly || !hasChat(chat.availability) ? {} : { onViewChange: (view: PaneView) => { if (view === 'terminal') showTerminal(); else paneViews.choose(session.id, view) } })}
-      chat={chat.view === 'chat' && !kept ? (
-        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal', run: showTerminal }}>
+      view={view}
+      {...(logShown ? { onHideLog: () => { setLogOf(null) } } : {})}
+      chat={view === 'chat' ? (
+        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal log', run: showLog }}>
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
@@ -133,38 +135,29 @@ export function WorkspacePane({ shown, pane, kept }: {
           asking={session.asking}
           sessionId={session.id}
           problem={problem}
+          place={placeOf(session)}
+          ended={session.ended ? endedActions : undefined}
           effort={session.agentEffort ?? null}
           rewind={rewind}
           {...(fileSearch === null ? {} : { fileSearch })}
           paneStatus={session.status}
+          {...(session.hooked === undefined ? {} : { hooked: session.hooked })}
+          hookProblem={session.hookProblem ?? null}
           helpersOnly={session.helpersOnly}
           usage={{ context: session.usage.context, limits: session.limits }}
           process={session.process}
           online={online}
+          paused={kept}
           subagent={subagent ?? null}
           subagents={helpers}
           onBackToMain={() => { setOpenSubagent(null) }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
-          onBackToTerminal={showTerminal}
-          onStartAgent={(agent) => {
-            paneViews.choose(session.id, 'terminal')
-            const words = withBypass(agent, [], bypasses(preferences, agent))
-            if (startsBypassed(agent, words)) rememberBypassSession(session.id)
-            void sendTerminalInput({ id: session.id, generation: session.conversation.generation ?? 0 }, `${[agent, ...words].join(' ')}\r`).catch((error: unknown) => { toast.failed(`Could not start ${agent}`, error) })
-          }}
+          onShowLog={showLog}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
-          onStartChat={(agent, fullAccess) => { startChatHere(session, agent, fullAccess) }}
-          fullAccessDefault={bypasses(preferences, 'claude') && bypasses(preferences, 'codex')}
         />
         </OpenSubagentContext.Provider>
         </PaneErrorBoundary>
       ) : undefined}
-      panelView={inspectOpen && focused ? inspectView : null}
-      {...(hasPanel ? { onPanel: (view: InspectView) => { togglePanel(pane.id, session.id, view) } } : {})}
-      changedFiles={focused ? (diffStat.data?.files ?? 0) : 0}
-      failingChecks={checksNeedingYou(session.checks)}
-      {...(canDock && focused ? { onToggleTerminal: toggleTerminal } : {})}
-      terminalShown={terminalShown}
       {...(terminals && !shell ? { onNewTerminal: () => { addAgentTerminal(session.id) } } : {})}
       online={online}
       portalContainer={root}
@@ -178,8 +171,8 @@ export function WorkspacePane({ shown, pane, kept }: {
           label={`Shell in ${session.cwdLabel}`}
           inputDisabled={!online}
           ended={session.ended}
-          focused={focused && !modalOpen && chat.view === 'terminal' && !dockFocused}
-          paused={kept || chat.view === 'chat'}
+          focused={focused && !modalOpen && view === 'terminal' && !dockFocused}
+          paused={kept || view === 'chat'}
           onInput={(data) => { mirrorInput(session.id, data) }}
           onOpenPath={(path, line) => { openPath(session, path, line) }}
           onPasteImage={(image) => { pasteImage(session.id, image) }}
@@ -199,9 +192,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.failed('Could not clear the screen', error) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
-      onSaveName={(name) => { saveName(session.id, name) }}
       branchMenu={branchMenu}
-      onHandoff={(agent) => { void handoffSession(session, agent) }}
       onRestart={restartPane}
       onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }}
     />

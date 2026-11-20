@@ -70,8 +70,11 @@ fn claude(root: &Path, folder: &Path) -> Vec<SavedConversation> {
 /// digit becomes `-` (`C:\dev\app` is `C--dev-app`). Two folders can share a name, so each
 /// transcript's own `cwd` is checked too.
 pub(super) fn claude_folder_name(folder: &Path) -> String {
+    let folder = folder.to_string_lossy();
+    // Claude names the folder from the plain path it runs in. A canonicalized Windows path starts
+    // with `\\?\`, which would name a folder Claude never made.
+    let folder = folder.strip_prefix(r"\\?\").unwrap_or(&folder);
     folder
-        .to_string_lossy()
         .trim_end_matches(['/', '\\'])
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })

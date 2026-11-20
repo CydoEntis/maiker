@@ -19,7 +19,7 @@
 .mx-docview-page { max-width: 78ch; margin-inline: auto; }
 .mx-docview-source { flex: 1 1 0; min-width: 0; margin: 0; padding: 12px 14px; overflow: auto; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; tab-size: 4; white-space: pre; color: var(--fg); background: transparent; }
 .mx-docview-editor { flex: 1 1 0; min-width: 0; resize: none; margin: 0; padding: 12px 14px; border: 0; border-radius: 0; font-family: var(--mono); font-size: 12.5px; line-height: 1.6; tab-size: 4; color: var(--fg); background: var(--m-well); outline: none; }
-.mx-docview-editor:focus-visible { box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); }
+.mx-docview-editor:focus-visible { box-shadow: var(--focus-underline, inset 0 -1px 0 var(--ring)); }
 .mx-docview-body.is-beside > .mx-docview-editor { border-inline-end: 1px solid var(--pane-line); }
 .mx-docview-preview { border-inline-start: 0; }
-.mx-docview-source:focus-visible, .mx-docview-drawn:focus-visible { outline: none; box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); }
+.mx-docview-source:focus-visible, .mx-docview-drawn:focus-visible { outline: none; box-shadow: var(--focus-underline, inset 0 -1px 0 var(--ring)); }

@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.tabs.v4'
+const STORAGE_KEY = 'maiker.gui.tabs.v4'
 
 export type ClosedConversationTab = {
   tabIds: string[]

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, canPutAway, canSnooze, inProject, machineGroups, projectChoices, projectColor, projectGroups, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, splitTerminals, statusSections } from './sidebar'
+import { byUrgency, inProject, isFreshSession, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -31,11 +31,28 @@ describe('the sidebar’s order', () => {
 })
 
 describe('a row', () => {
-  it('names a session by its name, a shell by its folder, an agent by its program', () => {
+  it('says where a session works for a toast: project, branch and a worktree', () => {
+    const plain = session(1, { repo: 'maiker', branch: 'gui-revive' })
+    expect(placeLine(plain)).toBe('maiker / gui-revive')
+    expect(placeLine({ ...plain, worktree: true })).toBe('maiker / gui-revive · worktree')
+    expect(placeLine({ ...plain, branch: null })).toBe('maiker')
+  })
+
+  it('names a session by its name, else by the folder it was made in, a program included', () => {
     expect(rowTitle(session(1, { named: true, title: 'Growth' }))).toBe('Growth')
     expect(rowTitle(session(2, { cwd: '/home/me/dev', folder: '/home/me/dev' }))).toBe('dev')
-    expect(rowTitle(session(3, { agent: 'codex' }))).toBe('codex')
+    expect(rowTitle(session(3, { agent: 'codex', status: 'working' }))).toBe('app3')
     expect(rowTitle(session(4, { cwd: '/home/me/dev', folder: '/home/me/dev', process: 'node-mainthread' }))).toBe('dev')
+  })
+
+  it('names an agent that has been asked something by that, and one that has done nothing "New session"', () => {
+    expect(rowTitle(session(1, { agent: 'claude', summary: 'Fix the cart total\nthen run the tests' }))).toBe('Fix the cart total')
+    const fresh = session(2, { agent: 'claude' })
+    expect(rowTitle(fresh)).toBe('New session')
+    expect(isFreshSession(fresh)).toBe(true)
+    expect(isFreshSession(session(3, { agent: 'claude', status: 'working' }))).toBe(false)
+    expect(isFreshSession(session(4))).toBe(false)
+    expect(isFreshSession(session(5, { agent: 'claude', named: true, title: 'Growth' }))).toBe(false)
   })
 
   it('says stopped for an agent and exited for a shell, and nothing otherwise', () => {
@@ -81,20 +98,6 @@ describe('a snoozed session', () => {
     expect(splitPutAway([snoozed(1, { status: 'needs-you' })]).putAway).toEqual([])
   })
 
-  it('can be snoozed only when finished, idle or held by its plan limit, and not already away', () => {
-    expect(canSnooze(session(1, { agent: 'claude', status: 'done' }))).toBe(true)
-    expect(canSnooze(session(2, { agent: 'claude' }))).toBe(true)
-    expect(canSnooze(limited(3))).toBe(true)
-    expect(canSnooze(session(4, { agent: 'claude', status: 'working' }))).toBe(false)
-    expect(canSnooze(session(5, { agent: 'claude', status: 'needs-you' }))).toBe(false)
-    expect(canSnooze(session(6, { agent: 'claude', details: exited }))).toBe(false)
-    expect(canSnooze(session(7, { agent: 'claude', archived: true }))).toBe(false)
-    expect(canSnooze(snoozed(8))).toBe(false)
-    expect(canPutAway(snoozed(8))).toBe(false)
-    const terminal = session(9, { agent: 'claude', status: 'done' })
-    const chat = Object.fromEntries(Object.entries(terminal.conversation).filter(([key]) => key !== 'kind')) as Conversation
-    expect(canSnooze({ ...terminal, conversation: { ...chat, execution: 'Structured', chat: { conversation: 1, generation: 1 } } })).toBe(false)
-  })
 })
 
 describe('machine groups', () => {
@@ -119,7 +122,7 @@ describe('machine groups', () => {
 describe('status sections', () => {
   it('lists needs you, working, finished and idle in that order, and leaves out a status nothing has', () => {
     const sections = statusSections([session(1, { agent: 'codex' }), session(2, { agent: 'claude', status: 'done' }), session(3, { agent: 'claude', status: 'needs-you' })])
-    expect(sections.map((section) => [section.name, section.sessions.map((item) => item.id)])).toEqual([['Needs you', ['t3']], ['Finished', ['t2']], ['Idle', ['t1']]])
+    expect(sections.map((section) => [section.name, section.sessions.map((item) => item.id)])).toEqual([['Needs you', ['t3']], ['Done', ['t2']], ['Idle', ['t1']]])
   })
 
   it('puts an agent that stopped with what needs you', () => {
@@ -132,6 +135,12 @@ describe('status sections', () => {
     expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t2']], ['working', ['t1']]])
   })
 
+  it('lists a held row that starts working under Working, not where it was picked', () => {
+    const sessions = [session(1, { agent: 'claude', status: 'working' }), session(2, { agent: 'claude', status: 'idle' })]
+    const sections = statusSections(sessions, { id: 't1', section: 'idle' })
+    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['working', ['t1']], ['idle', ['t2']]])
+  })
+
   it('keeps the held row in the section it was picked in, and moves the others', () => {
     const sessions = [session(1, { agent: 'claude', status: 'idle' }), session(2, { agent: 'claude', status: 'idle' })]
     const sections = statusSections(sessions, { id: 't1', section: 'done' })
@@ -140,28 +149,15 @@ describe('status sections', () => {
 })
 
 describe('shells', () => {
-  it('are the Terminals section of the status list, and ordinary rows of the project sections, as created', () => {
+  it('are ordinary rows: listed by status with the agents, and in the project sections, as created', () => {
     const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited })]
-    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t2']], ['terminals', ['t1', 't3', 't4']]])
+    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t1', 't2', 't3', 't4']]])
     expect(projectSections(all, [LOCAL_HEAD]).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't2', 't3', 't4'])
-  })
-
-  it('are split out of what the grouping lists, in creation order, whatever else the daemon says of them', () => {
-    const chat = session(5, { kind: 'claude', execution: 'Structured', chat: { conversation: 5, generation: 0 }, agent: 'claude' } as unknown as Partial<Conversation>)
-    const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited }), chat]
-    const { terminals, others } = splitTerminals(all)
-    expect(terminals.map((item) => item.id)).toEqual(['t1', 't3', 't4'])
-    expect(others.map((item) => item.id)).toEqual(['t2', 't5'])
-  })
-
-  it('stay out of the Terminals section while they ask, so what needs you is never folded away', () => {
-    const { terminals, others } = splitTerminals([session(1, { status: 'needs-you' }), session(2)])
-    expect([terminals.map((item) => item.id), others.map((item) => item.id)]).toEqual([['t2'], ['t1']])
   })
 
   it('sit with what needs you while they ask', () => {
     const all = [session(1, { status: 'needs-you' }), session(2)]
-    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t1']], ['terminals', ['t2']]])
+    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t1']], ['idle', ['t2']]])
   })
 })
 
@@ -207,14 +203,6 @@ describe('putting a session away', () => {
     expect(putAway.map((item) => item.id)).toEqual(['t2'])
   })
 
-  it('offers Put away for a finished or idle session that is not put away already', () => {
-    expect([session(1, { status: 'done' }), session(2), session(3, { status: 'working' }), session(4, { status: 'needs-you' }), away(5)].map(canPutAway)).toEqual([true, true, false, false, false])
-  })
-
-  it('does not offer Put away for a chat session, whose daemon archive closes it', () => {
-    const chat: Conversation = { id: '1', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', branch: '', provider: 'Claude', status: 'done', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, execution: 'Structured', chat: { conversation: 1, generation: 1 } }
-    expect(canPutAway(toSessionView(chat, '/home/me'))).toBe(false)
-  })
 })
 
 describe('sorting a heading’s rows', () => {

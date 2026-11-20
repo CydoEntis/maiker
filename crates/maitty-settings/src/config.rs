@@ -329,7 +329,9 @@ pub struct Restore {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Worktree {
-    /// Where new worktrees go. `{repo}`, `{repo_parent}`, `{branch}` are substituted.
+    /// Where new worktrees go. `{home}`, `{project}` (the repository's folder name, with a short
+    /// hash added when another repository has the same name), `{repo}`, `{repo_parent}` and
+    /// `{branch}` are substituted.
     pub dir: String,
     /// Command to start in a new worktree's first pane (e.g. "claude"). Empty = a shell.
     pub command: String,
@@ -407,10 +409,15 @@ impl Default for Restore {
     }
 }
 
+/// Every worktree under one folder in the home directory, grouped by project (ADR 0015).
+fn default_worktree_dir() -> String {
+    format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
+}
+
 impl Default for Worktree {
     fn default() -> Self {
         Worktree {
-            dir: "{repo_parent}/{repo}-worktrees/{branch}".into(),
+            dir: default_worktree_dir(),
             command: String::new(),
             per_agent: true,
             delete_with_last: true,
@@ -731,7 +738,7 @@ impl Serialize for Rounding {
 
 impl Rounding {
     /// Settings' choices, in its order.
-    pub const NAMES: &[&str] = &["full", "corners", "off"];
+    pub const NAMES: &[&str] = &["off", "corners", "full"];
 
     /// Cards draw `╭╮╰╯`.
     pub fn corners(self) -> bool {
@@ -867,9 +874,9 @@ impl Ui {
 
     /// Convert older padding, gap, dim and glyph-set names to the values Settings now offers.
     pub fn fold_legacy_sizes(&mut self) {
-        // Only Unicode is supported: the ASCII and Nerd sets, and `auto`, read as dots.
+        // Only Unicode is supported: the ASCII and Nerd sets, and `auto`, read as the Unicode shapes.
         if matches!(self.glyphs.as_str(), "ascii" | "nerd" | "auto") {
-            self.glyphs = "dots".into();
+            self.glyphs = "unicode".into();
         }
         match self.cursor.as_str() {
             "terminal" => self.cursor = "block".into(),
@@ -905,6 +912,8 @@ impl Ui {
 pub const BARS_FRAMES: &[&str] = &["⣰⡄", "⣼⡀", "⣶⡆", "⣧⡇", "⣆⡆", "⣤⡄", "⣸⡆", "⣴⡇", "⣇⡄", "⣦⡀"];
 
 pub const SPINNERS: &[(&str, &[&str])] = &[
+    // The TUI design's default: four quarter blocks turning round one cell.
+    ("Blocks", &["▖", "▘", "▝", "▗"]),
     ("Braille", &["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"]),
     ("Dots", &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]),
     ("Line (ASCII)", &["|", "/", "-", "\\"]),
@@ -921,7 +930,7 @@ pub const SPINNERS: &[(&str, &[&str])] = &[
     ("Moon", &["◓", "◑", "◒", "◐"]),
     ("Star", &["✶", "✷", "✸", "✹"]),
     (
-        "Blocks",
+        "Rise",
         &[
             "▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▂",
         ],
@@ -948,14 +957,14 @@ impl Default for Ui {
             splash_animation: "cold start".into(),
             update_check: true,
             motion: true,
-            alt_arrows: true,
-            alt_keys: true,
+            alt_arrows: false,
+            alt_keys: false,
             start_dir: String::new(),
             sidebar_tabs: "all".into(),
             layout: String::new(),
             background: "solid".into(),
             panes: "floating".into(),
-            glyphs: "auto".into(),
+            glyphs: "unicode".into(),
             gap: "small".into(),
             padding: "medium".into(),
             dim: "normal".into(),
@@ -1041,7 +1050,7 @@ mod tests {
         assert_eq!(ui.padding, "medium");
         assert_eq!(ui.gap, "small");
         assert_eq!(ui.dim, "normal");
-        assert_eq!(ui.spinner.first().map(String::as_str), Some("⣾"));
+        assert_eq!(ui.spinner.first().map(String::as_str), Some("▖"));
     }
 
     #[test]
@@ -1183,7 +1192,10 @@ mod tests {
         );
 
         let worktree = Worktree::default();
-        assert_eq!(worktree.dir, "{repo_parent}/{repo}-worktrees/{branch}");
+        assert_eq!(
+            worktree.dir,
+            format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
+        );
         assert!(worktree.per_agent && worktree.delete_with_last);
         assert!(worktree.command.is_empty() && worktree.prewarm.is_empty());
         assert_eq!(worktree.inactive_days, 14);

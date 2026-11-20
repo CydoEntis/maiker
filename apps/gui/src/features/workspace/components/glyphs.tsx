@@ -1,31 +1,22 @@
-import { useEffect, useRef, type ReactNode } from 'react'
-import { TreePine } from 'lucide-react'
-import { attachSpinner, currentGlyph, isWebSpinner, isWideSpinner, spinnerFrames, useSpinnerStyle } from '@/lib/spinner-clock'
-import { WebSpinner } from '@/components/WebSpinner'
-import { SHELL_PROCESS, type SessionStatus } from '../model/session'
-import { CLAUDE_MARK, CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
+import type { ReactNode } from 'react'
+import { Folder, TreePine } from 'lucide-react'
+import { StatusIcon } from '@/components/ui/status-icon'
+import { SHELL_PROCESS } from '../model/session'
+import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
 import { FOLDER_PATH } from './paths'
-import { useReducedMotion } from './motion'
 
-/** The working spinner: the Maiker TUI's text frames or a web SVG spinner, whichever was picked in Settings. */
-export function Spinner({ className = 'mx-spin', frozen = false }: { className?: string; frozen?: boolean }) {
-  const reduced = useReducedMotion()
-  const style = useSpinnerStyle()
-  const still = reduced || frozen
-  if (isWebSpinner(style)) return <WebSpinner kind={style} className={className} still={still} />
-  return <TextSpinner className={className} still={still} />
+/** The mark of a project or folder group (sidebar heading, filter list, project chip): a plain folder in the muted colour, never a coloured tile. */
+export function FolderMark({ size = 14 }: { size?: number }) {
+  return <Folder className="mx-folder-mark" size={size} strokeWidth={1.9} aria-hidden="true" />
 }
 
-/** The shared clock writes each frame into the element itself, so a tick never re-renders React. */
-function TextSpinner({ className, still }: { className: string; still: boolean }) {
-  const element = useRef<HTMLSpanElement>(null)
-  useEffect(() => {
-    if (still || !element.current) return
-    return attachSpinner(element.current)
-  }, [still])
-  const classes = [className, isWideSpinner() && 'is-wide'].filter(Boolean).join(' ')
-  return <span ref={element} className={classes} aria-hidden="true">{still ? spinnerFrames()[0] : currentGlyph()}</span>
+/** The one working spinner: a ring with a lit arc running round it, round or square with the corners (more can be added later). */
+export function Spinner({ className = 'mx-spin' }: { className?: string; frozen?: boolean }) {
+  return <StatusIcon status="working" size={SPINNER_PX} className={className} />
 }
+
+/** The one spinner's size beside text. */
+const SPINNER_PX = 12
 
 type SvgProps = { size: number; strokeWidth?: number; children: ReactNode; className?: string; fill?: string; stroke?: string }
 
@@ -43,6 +34,7 @@ const ICON_DRAWINGS = {
   collapse: () => <Svg size={15} strokeWidth={1.8}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16M15 10l-2 2 2 2" /></Svg>,
   expand: () => <Svg size={16} strokeWidth={1.8}><rect x="3" y="4" width="18" height="16" rx="2.5" /><path d="M9 4v16M13 10l2 2-2 2" /></Svg>,
   plus: ({ size = 15 }: IconProps) => <Svg size={size}><path d="M12 5v14M5 12h14" /></Svg>,
+  paperclip: ({ size = 15 }: IconProps) => <Svg size={size}><path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48" /></Svg>,
   arrowUp: ({ size = 14, strokeWidth = 2 }: IconProps) => <Svg size={size} strokeWidth={strokeWidth}><path d="M12 19V5M6 11l6-6 6 6" /></Svg>,
   arrowDown: ({ size = 14, strokeWidth = 2 }: IconProps) => <Svg size={size} strokeWidth={strokeWidth}><path d="M12 5v14M6 13l6 6 6-6" /></Svg>,
   close: ({ size = 13, strokeWidth = 2 }: IconProps) => <Svg size={size} strokeWidth={strokeWidth}><path d="M6 6l12 12M18 6 6 18" /></Svg>,
@@ -61,6 +53,9 @@ const ICON_DRAWINGS = {
   modules: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" /></Svg>,
   cycle: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 12a8 8 0 1 1-3-6.2M20 4v5h-5" /></Svg>,
   milestone: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 21V4l13 4-13 5" /></Svg>,
+  copy: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><rect x="9" y="9" width="11" height="11" rx="2" /><path d="M5 15V6a2 2 0 0 1 2-2h9" /></Svg>,
+  arrowUpRight: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M7 17 17 7M8 7h9v9" /></Svg>,
+  cloud: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M7 18a4.5 4.5 0 0 1-.6-8.96A6 6 0 0 1 18 10.5 3.75 3.75 0 0 1 17.5 18Z" /></Svg>,
   refresh: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M20 11a8 8 0 1 0-2.3 5.7M20 4v7h-7" /></Svg>,
   splitRight: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M12 4.5v15" /></Svg>,
   splitDown: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M3 12h18" /></Svg>,
@@ -85,6 +80,8 @@ const ICON_DRAWINGS = {
   history: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Svg>,
   references: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1Z" /></Svg>,
   laptop: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="4.5" y="5" width="15" height="10.5" rx="1.8" /><path d="M2.5 19h19" /></Svg>,
+  /** This computer, in a sidebar row and a machine group. */
+  monitor: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="11.5" rx="1.8" /><path d="M9 20h6M12 16v4" /></Svg>,
   server: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3.5" y="4" width="17" height="6.5" rx="1.8" /><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8" /><path d="M7 7.25h.01M7 16.75h.01" /></Svg>,
   search: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Svg>,
   pin: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></Svg>,
@@ -135,6 +132,11 @@ export function Icon({ name, ...props }: IconProps & { name: IconName }) {
   return ICON_DRAWINGS[name](props)
 }
 
+/** Where a session or a group runs: a server for another machine, a monitor for this computer. Hidden from a screen reader, the name beside it says it. */
+export function MachineIcon({ remote, size = 13 }: { remote: boolean; size?: number }) {
+  return <Icon name={remote ? 'server' : 'monitor'} size={size} />
+}
+
 type IconKind = { kind: 'shell' | 'codex' | 'claude' | 'deepseek' | 'gemini' | 'opencode' | 'rust'; glyph: ReactNode }
 
 const MARK_SIZE = '100%'
@@ -145,8 +147,17 @@ function Mark({ d }: { d: string }) {
   )
 }
 
+/** Claude Code's pixel crab on a 16 by 10 grid: body, two eye gaps, arms out to the sides, four legs. It takes the icon's colour. */
+function ClaudeCrab() {
+  return (
+    <svg viewBox="0 0 16 10" width={MARK_SIZE} height={MARK_SIZE} fill="currentColor" shapeRendering="crispEdges" aria-hidden="true" focusable="false">
+      <path d="M2 0h12v2H2zM2 2h2v2H2zM5 2h6v2H5zM12 2h2v2h-2zM0 4h16v2H0zM2 6h12v2H2zM3 8h1v2H3zM5 8h1v2H5zM10 8h1v2h-1zM12 8h1v2h-1z" />
+    </svg>
+  )
+}
+
 const ICONS: Record<string, IconKind> = {
-  claude: { kind: 'claude', glyph: <Mark d={CLAUDE_MARK} /> },
+  claude: { kind: 'claude', glyph: <ClaudeCrab /> },
   codex: { kind: 'codex', glyph: <Mark d={CODEX_MARK} /> },
   deepseek: { kind: 'deepseek', glyph: <Mark d={DEEPSEEK_MARK} /> },
   gemini: { kind: 'gemini', glyph: <Mark d={GEMINI_MARK} /> },
@@ -169,28 +180,4 @@ export function AppIcon({ process, size, dimmed = false }: { process: string; si
   if (icon) return <span className={`${className} is-${icon.kind}`} aria-hidden="true">{icon.glyph}</span>
   // Any other agent or program: its first letter, flat.
   return <span className={`${className} is-tinted`} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
-}
-
-/**
- * The 9px badge on an agent's tile: a square per status with its own glyph, so colour is never the only signal (needs
- * you `!` on the needs colour, done `✓`, failed `×`, held by the plan limit `‖`, working the spinner Settings picked).
- * An idle session has none; its tile dims instead.
- */
-export function StatusBadge({ status }: { status: SessionStatus }) {
-  switch (status) {
-    case 'working':
-      return <span className="mx-badge is-working" aria-hidden="true"><Spinner className="" /></span>
-    case 'needs':
-      return <span className="mx-badge is-needs" aria-hidden="true">!</span>
-    case 'limited':
-      return <span className="mx-badge is-limited" aria-hidden="true">‖</span>
-    case 'done':
-      return <span className="mx-badge is-done" aria-hidden="true">✓</span>
-    case 'error':
-      return <span className="mx-badge is-error" aria-hidden="true">×</span>
-    case 'unknown':
-      return <span className="mx-badge is-unknown" aria-hidden="true" />
-    case 'idle':
-      return null
-  }
 }

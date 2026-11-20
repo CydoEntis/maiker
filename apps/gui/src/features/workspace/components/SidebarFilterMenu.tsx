@@ -3,7 +3,7 @@ import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { DEFAULT_SIDEBAR_SORT, SIDEBAR_GROUPINGS, SIDEBAR_SORTS, type ProjectChoice, type SidebarGrouping, type SidebarSort } from '../model/sidebar'
-import { Icon } from './glyphs'
+import { FolderMark, Icon } from './glyphs'
 
 /** The project list shows this many rows before it scrolls; with more projects than this the search box says how many. */
 export const PROJECT_ROWS_SHOWN = 6
@@ -39,12 +39,14 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const matching = projects.filter((choice) => needle === '' || choice.name.toLowerCase().includes(needle))
-  const dirty = grouping !== DEFAULT_GROUPING || sort !== DEFAULT_SIDEBAR_SORT || project !== null
+  // The button lights up for a narrowed or re-sorted list; a changed grouping is plain to see from the headings.
+  const narrowed = sort !== DEFAULT_SIDEBAR_SORT || project !== null
+  const dirty = narrowed || grouping !== DEFAULT_GROUPING
   const label = `Filter and group: ${project ?? 'All projects'}`
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className="mx-head-button" aria-label={label} title="Filter and group"><Icon name="filter" /></button>
+        <button type="button" className={`mx-head-button${narrowed ? ' is-on' : ''}`} data-on={narrowed} aria-label={label} title="Filter and group"><Icon name="filter" /></button>
       </Popover.Trigger>
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Group, sort and filter" className="mx-grp-menu">
         <div className="mx-grp-row">
@@ -65,7 +67,7 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
         </label>
         <div className="mx-grp-projects" role="group" aria-label="Show projects">
           {needle === '' && <ProjectButton name="All projects" count={projects.reduce((total, choice) => total + choice.count, 0)} on={project === null} onPick={() => { onProject(null) }} />}
-          {matching.map((choice) => <ProjectButton key={choice.name} name={choice.name} color={choice.color} count={choice.count} on={project === choice.name} onPick={() => { onProject(choice.name); setQuery('') }} />)}
+          {matching.map((choice) => <ProjectButton key={choice.name} name={choice.name} count={choice.count} on={project === choice.name} onPick={() => { onProject(choice.name); setQuery('') }} />)}
           {matching.length === 0 && needle !== '' && <div className="mx-grp-none">No project matches.</div>}
         </div>
         {dirty && (
@@ -78,10 +80,10 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
   )
 }
 
-function ProjectButton({ name, color, count, on, onPick }: { name: string; color?: string; count: number; on: boolean; onPick: () => void }) {
+function ProjectButton({ name, count, on, onPick }: { name: string; count: number; on: boolean; onPick: () => void }) {
   return (
     <button type="button" className={`mx-grp-project${on ? ' is-on' : ''}`} aria-pressed={on} onClick={onPick}>
-      <span className="mx-grp-square" style={color === undefined ? undefined : { background: color }} aria-hidden="true" />
+      <FolderMark size={13} />
       <span className="mx-grp-name">{name}</span>
       <span className="mx-grp-count">{count}</span>
     </button>

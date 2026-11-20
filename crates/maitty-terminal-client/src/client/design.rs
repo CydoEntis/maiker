@@ -429,522 +429,6 @@ pub(super) fn diff_line(t: &Theme, l: &str, old: &mut u32, new: &mut u32) -> Vec
     ]
 }
 
-pub(super) fn draw_changes(
-    app: &mut App,
-    buf: &mut Buffer,
-    area: Rect,
-    t: &Theme,
-    v: &super::views::ChangesView,
-) {
-    use super::views::ChangesRow;
-    fill(buf, area, t.bg);
-    let (green, red, yellow) = (t.done, t.err, Color::Rgb(0xe8, 0xc5, 0x65));
-    // The tab strip says "Changes" and the sheet has the ✕: this line is the summary.
-    let mut left: Vec<Seg> = Vec::new();
-    let right: Vec<Seg> = Vec::new();
-    if let Some(r) = &v.review {
-        let added: i64 = r.files.iter().map(|f| f.added).sum();
-        let removed: i64 = r.files.iter().map(|f| f.removed).sum();
-        let agent = if v.agent.is_empty() {
-            String::new()
-        } else {
-            format!("{} · ", v.agent)
-        };
-        // The branch in violet, then `2 files · +38 −4`, as the redesign says it.
-        left.push(seg(
-            r.task.branch.clone(),
-            Style::default().fg(t.violet()).add_modifier(Modifier::BOLD),
-        ));
-        if let Some(remote) = &v.extra.remote {
-            left.push(seg(format!(" on {}", remote.machine), Style::default().fg(t.strong)));
-        }
-        left.push(seg(
-            format!("   {agent}{} files · ", r.files.len()),
-            Style::default().fg(t.muted),
-        ));
-        left.push(seg(format!("+{added}"), Style::default().fg(green)));
-        left.push(seg(format!(" −{removed}"), Style::default().fg(red)));
-        if !v.reviewed.is_empty() {
-            let all = v.reviewed.len() == r.files.len();
-            left.push(seg(
-                format!(" · {} of {} reviewed", v.reviewed.len(), r.files.len()),
-                Style::default().fg(if all { t.done } else { t.muted }),
-            ));
-        }
-        if !v.extra.ticked.is_empty() {
-            left.push(seg(
-                format!(" · ☑ {}", v.extra.ticked.len()),
-                Style::default().fg(t.accent),
-            ));
-        }
-        if !v.extra.comments.is_empty() {
-            left.push(seg(
-                format!(" · ✎ {}", v.extra.comments.len()),
-                Style::default().fg(t.accent),
-            ));
-        }
-    }
-    title_bar(buf, area, t, &left, &right, true);
-
-    let body = Rect {
-        y: area.y + 1,
-        height: area.height.saturating_sub(2),
-        ..area
-    };
-    let Some(r) = &v.review else {
-        let msg = v.error.clone().unwrap_or_else(|| match &v.extra.remote {
-            Some(remote) => format!("reading the changes on {}…", remote.machine),
-            None => "reading changes…".into(),
-        });
-        put(
-            buf,
-            body.x + 2,
-            body.y + 1,
-            &[seg(msg, Style::default().fg(t.muted))],
-            body.right(),
-        );
-        return;
-    };
-    let fw: u16 = 34.min(body.width / 2);
-    // File tree
-    let rows = v.rows();
-    let mut y = body.y + 1;
-    for (i, row) in rows.iter().enumerate() {
-        if y >= body.bottom().saturating_sub(8) {
-            break;
-        }
-        let rr = Rect {
-            x: body.x + 1,
-            y,
-            width: fw - 1,
-            height: 1,
-        };
-        let sel = matches!(row, ChangesRow::File(fi, _) if *fi == r.sel);
-        if sel {
-            fill(buf, rr, t.sel_on(t.bg));
-            put(
-                buf,
-                body.x + 1,
-                y,
-                &[seg(
-                    "▎",
-                    Style::default()
-                        .fg(t.accent)
-                        .bg(t.sel_on(t.bg))
-                        .add_modifier(Modifier::BOLD),
-                )],
-                body.right(),
-            );
-        }
-        let bg = if sel { t.sel_on(t.bg) } else { t.bg };
-        let s = Style::default().bg(bg);
-        match row {
-            ChangesRow::Reviewed(n) => {
-                put(
-                    buf,
-                    body.x + 2,
-                    y,
-                    &[seg(
-                        format!("REVIEWED · {n}"),
-                        s.fg(t.muted).add_modifier(Modifier::BOLD),
-                    )],
-                    body.x + fw,
-                );
-            }
-            ChangesRow::Dir(name, depth) => {
-                put(
-                    buf,
-                    body.x + 2,
-                    y,
-                    &[seg(
-                        format!("{}▾ {name}", "  ".repeat(*depth)),
-                        s.fg(t.text),
-                    )],
-                    body.x + fw,
-                );
-            }
-            ChangesRow::File(fi, depth) => {
-                let f = &r.files[*fi];
-                let done = v.reviewed.contains(&f.path);
-                let name = Path::new(&f.path)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default();
-                let name = if done { format!("✓ {name}") } else { name };
-                let name = if v.extra.ticked.contains(&f.path) {
-                    format!("☑ {name}")
-                } else {
-                    name
-                };
-                let mut ns = s.fg(if sel {
-                    t.strong
-                } else if done {
-                    t.muted
-                } else {
-                    t.fg
-                });
-                if sel {
-                    ns = ns.add_modifier(Modifier::BOLD);
-                }
-                put(
-                    buf,
-                    body.x + 2,
-                    y,
-                    &[
-                        seg(format!("{}  ", "  ".repeat(*depth)), s.fg(t.muted)),
-                        seg(name, ns),
-                    ],
-                    body.x + fw - 10,
-                );
-                let counts = if f.untracked {
-                    format!("+{}", f.added)
-                } else {
-                    format!("+{} −{}", f.added, f.removed)
-                };
-                let (letter, lc) = if f.untracked {
-                    ("A", green)
-                } else {
-                    ("M", yellow)
-                };
-                let mark = vec![
-                    seg(counts, s.fg(t.muted)),
-                    seg(format!(" {letter}"), s.fg(lc).add_modifier(Modifier::BOLD)),
-                ];
-                let mw = segs_width(&mark);
-                put(buf, body.x + fw - mw - 1, y, &mark, body.x + fw);
-            }
-        }
-        app.hits.push((rr, Hit::Button(super::Btn::Row(i))));
-        y += 1;
-    }
-    if r.files.is_empty() {
-        put(
-            buf,
-            body.x + 2,
-            body.y + 1,
-            &[seg("No changes yet.", Style::default().fg(t.muted))],
-            body.x + fw,
-        );
-    }
-    // What the agent said about it.
-    if !v.said.is_empty() {
-        let mut sy = y + 1;
-        let who = if v.agent.is_empty() {
-            "AGENT".to_string()
-        } else {
-            v.agent.to_uppercase()
-        };
-        put(
-            buf,
-            body.x + 2,
-            sy,
-            &[seg(
-                format!("{who} SAYS"),
-                Style::default().fg(t.muted).add_modifier(Modifier::BOLD),
-            )],
-            body.x + fw,
-        );
-        sy += 1;
-        for line in super::views::wrap(&v.said, (fw - 3) as usize) {
-            if sy >= body.bottom() {
-                break;
-            }
-            put(
-                buf,
-                body.x + 2,
-                sy,
-                &[seg(line, Style::default().fg(t.text))],
-                body.x + fw,
-            );
-            sy += 1;
-        }
-    }
-    for yy in body.top()..body.bottom() {
-        if let Some(px) = buf.cell_mut((body.x + fw, yy)) {
-            px.set_symbol("│")
-                .set_style(Style::default().fg(t.line).bg(t.bg));
-        }
-    }
-    // Diff of the selected file
-    let dx = body.x + fw + 3;
-    if let Some(f) = r.files.get(r.sel) {
-        let header = vec![
-            seg(
-                f.path.clone(),
-                Style::default().fg(t.strong).add_modifier(Modifier::BOLD),
-            ),
-            seg(
-                if f.untracked {
-                    format!("   +{} new", f.added)
-                } else {
-                    format!("   +{} −{}", f.added, f.removed)
-                },
-                Style::default().fg(t.muted),
-            ),
-        ];
-        put(buf, dx, body.y + 1, &header, body.right());
-    }
-    let (mut old, mut new) = (1u32, 1u32);
-    // Each diff line, then the comments written on it: (its index, or None for a comment).
-    let path = r.files.get(r.sel).map(|f| f.path.as_str()).unwrap_or("");
-    let mut lines: Vec<(Option<usize>, Vec<Seg>)> = Vec::new();
-    for (k, l) in r.diff.iter().enumerate() {
-        lines.push((Some(k), diff_line(t, l, &mut old, &mut new)));
-        for c in v.extra.comments.iter().filter(|c| c.path == path && c.index == k) {
-            lines.push((
-                None,
-                vec![
-                    seg("        ✎ ", Style::default().fg(t.accent)),
-                    seg(c.comment.clone(), Style::default().fg(t.strong)),
-                ],
-            ));
-        }
-    }
-    let rows = usize::from(body.bottom().saturating_sub(body.y + 3 + 2));
-    let mut start = lines
-        .iter()
-        .position(|(k, _)| k.is_some_and(|k| k >= usize::from(r.scroll)))
-        .unwrap_or(0);
-    // The cursor stays in view.
-    if let Some(at) = v.extra.line.and_then(|line| lines.iter().position(|(k, _)| *k == Some(line))) {
-        if at < start {
-            start = at;
-        } else if rows > 0 && at >= start + rows {
-            start = at + 1 - rows;
-        }
-    }
-    for (k, (index, l)) in lines.iter().skip(start).enumerate() {
-        let yy = body.y + 3 + k as u16;
-        if yy >= body.bottom() {
-            break;
-        }
-        let on = index.is_some() && *index == v.extra.line;
-        if on {
-            let row = Rect { x: dx, y: yy, width: body.right().saturating_sub(dx + 1), height: 1 };
-            fill(buf, row, t.sel_on(t.bg));
-            put(buf, dx.saturating_sub(2), yy, &[seg("▶", Style::default().fg(t.accent).add_modifier(Modifier::BOLD))], dx);
-            let lit: Vec<Seg> = l.iter().map(|(s, st)| (s.clone(), st.bg(t.sel_on(t.bg)))).collect();
-            put(buf, dx, yy, &lit, body.right().saturating_sub(1));
-        } else {
-            put(buf, dx, yy, l, body.right().saturating_sub(1));
-        }
-    }
-    // Actions
-    let who = if v.agent.is_empty() {
-        "agent".to_string()
-    } else {
-        v.agent.clone()
-    };
-    let reply = format!("Reply to {who}");
-    let base = r.task.base.clone();
-    let merge = format!("Merge into {base}");
-    // Writing a commit message or a comment: the box above the row, its two buttons on it.
-    let typing = match (&v.extra.message, &v.extra.commenting) {
-        (Some(m), _) => {
-            let n = if v.extra.ticked.is_empty() { r.files.len() } else { v.extra.ticked.len() };
-            let what = if v.extra.ticked.is_empty() {
-                format!("Commit all {n} file{} on {}", if n == 1 { "" } else { "s" }, r.task.branch)
-            } else {
-                format!("Commit {n} ticked file{} on {}", if n == 1 { "" } else { "s" }, r.task.branch)
-            };
-            Some((what, m.clone(), "Commit"))
-        }
-        (None, Some(c)) => {
-            let at = v
-                .extra
-                .line
-                .and_then(|i| super::changes_more::line_numbers(&r.diff).get(i).copied().flatten())
-                .map_or(String::new(), |(n, _)| format!(", line {n}"));
-            Some((format!("Comment for {who} on {path}{at}"), c.clone(), "Keep"))
-        }
-        _ => None,
-    };
-    if let Some((what, text, yes)) = typing {
-        let y = area.bottom().saturating_sub(3);
-        put(buf, area.x + 2, y, &[seg(what, Style::default().fg(t.muted).add_modifier(Modifier::BOLD))], area.right());
-        let field = Rect { x: area.x + 1, y: y + 1, width: area.width.saturating_sub(2), height: 1 };
-        fill(buf, field, t.card2);
-        let fs = Style::default().bg(t.card2);
-        put(
-            buf,
-            field.x + 1,
-            field.y,
-            &[seg("› ", fs.fg(t.accent).add_modifier(Modifier::BOLD)), seg(text, fs.fg(t.strong)), seg("█", fs.fg(t.accent))],
-            field.right(),
-        );
-        action_row(
-            app,
-            buf,
-            area,
-            t,
-            &[
-                (yes, "Enter", BtnKind::Primary, Hit::Button(super::Btn::ViewKey('\n'))),
-                ("Cancel", "Esc", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('\x1b'))),
-            ],
-            &[],
-        );
-        return;
-    }
-    if v.confirm.is_none() && v.extra.remote.is_some() {
-        action_row(
-            app,
-            buf,
-            area,
-            t,
-            &[
-                ("Commit", "c", BtnKind::Primary, Hit::Button(super::Btn::ViewKey('c'))),
-                ("Tick", "t", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('t'))),
-                ("Open PR", "p", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('p'))),
-                ("Fetch", "f", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('f'))),
-                ("Pull", "u", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('u'))),
-                ("Push", "P", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('P'))),
-                (&reply, "r", BtnKind::Normal, Hit::Button(super::Btn::ViewKey('r'))),
-            ],
-            &[seg("Esc close", Style::default().fg(t.muted))],
-        );
-        return;
-    }
-    if let Some((q, _)) = &v.confirm {
-        action_row(
-            app,
-            buf,
-            area,
-            t,
-            &[
-                (
-                    "Yes",
-                    "y",
-                    BtnKind::Primary,
-                    Hit::Button(super::Btn::ViewKey('y')),
-                ),
-                (
-                    "No",
-                    "n",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('n')),
-                ),
-            ],
-            &[seg(
-                q.clone(),
-                Style::default().fg(t.strong).add_modifier(Modifier::BOLD),
-            )],
-        );
-    } else if v.linked {
-        action_row(
-            app,
-            buf,
-            area,
-            t,
-            &[
-                (
-                    "Commit",
-                    "c",
-                    BtnKind::Primary,
-                    Hit::Button(super::Btn::ViewKey('c')),
-                ),
-                (
-                    &merge,
-                    "m",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('m')),
-                ),
-                (
-                    "Open PR",
-                    "p",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('p')),
-                ),
-                (
-                    "Merge PR",
-                    "M",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('M')),
-                ),
-                (
-                    "Editor",
-                    "e",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('e')),
-                ),
-                (
-                    "Reviewed",
-                    "x",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('x')),
-                ),
-                (
-                    &reply,
-                    "r",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('r')),
-                ),
-            ],
-            &[
-                seg(
-                    "d",
-                    Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
-                ),
-                seg(" discard", Style::default().fg(t.err)),
-            ],
-        );
-        app.hits.push((
-            Rect {
-                x: area.right().saturating_sub(1),
-                y: area.bottom() - 1,
-                width: 1,
-                height: 1,
-            },
-            Hit::Button(super::Btn::ViewKey('d')),
-        ));
-    } else {
-        action_row(
-            app,
-            buf,
-            area,
-            t,
-            &[
-                (
-                    "Commit",
-                    "c",
-                    BtnKind::Primary,
-                    Hit::Button(super::Btn::ViewKey('c')),
-                ),
-                (
-                    "Open PR",
-                    "p",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('p')),
-                ),
-                (
-                    "Merge PR",
-                    "M",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('M')),
-                ),
-                (
-                    "Editor",
-                    "e",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('e')),
-                ),
-                (
-                    "Reviewed",
-                    "x",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('x')),
-                ),
-                (
-                    &reply,
-                    "r",
-                    BtnKind::Normal,
-                    Hit::Button(super::Btn::ViewKey('r')),
-                ),
-            ],
-            &[seg("Esc close", Style::default().fg(t.muted))],
-        );
-    }
-}
-
 /// Files: the tree beside the selected file. `one_side` (a narrow panel) shows the tree, or
 /// the file you opened with a `‹` back to the tree.
 /// Files' tree column beside the open file at its narrowest, as the redesign draws it.
@@ -1373,7 +857,7 @@ fn draw_files_tree(
     v: &super::views::FilesTree,
     one_side: bool,
 ) {
-    let (green, yellow) = (t.done, Color::Rgb(0xe8, 0xc5, 0x65));
+    let (green, yellow) = (t.done, t.warning);
     let rows = v.visible();
     let list_h = body.height.saturating_sub(4) as usize;
     let start = v.sel.saturating_sub(list_h.saturating_sub(1));
@@ -1614,9 +1098,11 @@ pub(super) enum SRow {
     },
     /// A line of the Agents page that is not a setting: what the app can tell about an agent.
     Agent(AgentRow),
-    /// General's UPDATES: which version this is, whether it is current, and the way to check
+    /// About's version line: which version this is, whether it is current, and the way to check
     /// again or install what was found.
     Version,
+    /// A line of the Machines page: a configured machine by name, or `None` for this computer.
+    Machine(Option<String>),
 }
 
 /// The AGENT STATUS rows of Settings > Agents.
@@ -1666,7 +1152,9 @@ impl AgentRow {
 }
 
 /// The settings' headings in the order they come, each tab's in turn.
-const GROUP_ORDER: [&str; 20] = [
+/// The design's own rows come first, under no heading.
+const GROUP_ORDER: [&str; 21] = [
+    "",
     "UPDATES",
     "STARTUP",
     "INPUT",
@@ -1689,9 +1177,37 @@ const GROUP_ORDER: [&str; 20] = [
     "AGENTS TALKING TO AGENTS",
 ];
 
+/// The settings the design lists on its pages, in its order. They lead their page under no
+/// heading; every other setting follows under the heading it had.
+const FEATURED: [&str; 8] = [
+    "worktree.per_agent",
+    "restore.enabled",
+    "sessions.agent",
+    "appearance",
+    "ui.rounded",
+    "ui.spinner",
+    "ui.motion",
+    "ui.mouse",
+];
+
+/// Where a row stands among the design's own rows (`usize::MAX` for any other).
+fn featured_rank(row: &SRow) -> usize {
+    match row {
+        SRow::Setting(s) => FEATURED.iter().position(|p| *p == s.path),
+        SRow::Agent(AgentRow::Claude) => Some(FEATURED.len()),
+        SRow::Agent(AgentRow::Codex) => Some(FEATURED.len() + 1),
+        _ => None,
+    }
+    .unwrap_or(usize::MAX)
+}
+
 /// The small caps heading a settings row sits under.
 pub(super) fn settings_group(row: &SRow) -> &'static str {
+    if featured_rank(row) != usize::MAX {
+        return "";
+    }
     match row {
+        SRow::Machine(_) => "",
         SRow::Bind { direct: true, .. } => DIRECT_GROUP,
         SRow::Bind { label, .. } => key_rows()
             .into_iter()
@@ -1700,7 +1216,7 @@ pub(super) fn settings_group(row: &SRow) -> &'static str {
             .unwrap_or("KEYS"),
         SRow::Agent(AgentRow::Approved) => PERMISSIONS_GROUP,
         SRow::Agent(_) => AGENT_STATUS_GROUP,
-        SRow::Version => "UPDATES",
+        SRow::Version => "",
         SRow::Setting(s) => match s.path {
             "ui.update_check" | "updates.machines" => "UPDATES",
             "ui.splash" | "ui.splash_animation" => "STARTUP",
@@ -1748,18 +1264,18 @@ pub(super) fn settings_rows(cat: super::modal::Cat) -> Vec<SRow> {
     if cat == super::modal::Cat::Agents {
         rows.extend([AgentRow::Claude, AgentRow::Codex, AgentRow::SetUp, AgentRow::Approved].map(SRow::Agent));
     }
-    // Updates first, so a waiting one is in your face: the version row heads General.
-    if cat == super::modal::Cat::General {
+    if cat == super::modal::Cat::About {
         rows.push(SRow::Version);
     }
     rows.extend(super::modal::in_cat(cat).into_iter().map(SRow::Setting));
     // Grouped under their headings, in `GROUP_ORDER` (a heading not there goes last); rows keep
     // their order within a group.
     rows.sort_by_key(|r| {
-        GROUP_ORDER
+        let group = GROUP_ORDER
             .iter()
             .position(|g| *g == settings_group(r))
-            .unwrap_or(usize::MAX)
+            .unwrap_or(usize::MAX);
+        (group, featured_rank(r))
     });
     if cat == super::modal::Cat::Keys {
         for (_, items) in key_rows() {
@@ -1792,6 +1308,8 @@ pub(crate) struct SettingsView {
     /// Waiting for a key: the leader, or a new key for this row's action.
     pub capturing: bool,
     pub scroll: u16,
+    /// The keys are in the page's rows; false while they are on the list of pages.
+    pub in_rows: bool,
 }
 
 pub(super) fn control(
@@ -1827,6 +1345,8 @@ pub(super) fn control(
         }
         SRow::Agent(row) => agent_control(app, t, *row),
         SRow::Version => version_control(app, t),
+        // The Machines page draws its own rows (screen/settings_page.rs).
+        SRow::Machine(_) => Vec::new(),
         SRow::Setting(s) => {
             if super::modal::is_theme_row(s.path) {
                 let name = if s.path == "theme_light" {
@@ -1863,25 +1383,7 @@ pub(super) fn control(
                     ),
                     seg("←→ change  Enter browse", Style::default().fg(t.accent)),
                 ],
-                Kind::Bool => {
-                    if cur.and_then(|v| v.as_bool()).unwrap_or(false) {
-                        super::screen::chip(
-                            "● on ",
-                            Style::default()
-                                .bg(t.accent)
-                                .fg(t.acc_ink)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    } else {
-                        super::screen::chip(
-                            "○ off",
-                            Style::default()
-                                .bg(t.btn)
-                                .fg(t.muted)
-                                .add_modifier(Modifier::BOLD),
-                        )
-                    }
-                }
+                Kind::Bool | Kind::BoolOff => switch(t, super::modal::is_on(cfg, s)),
                 Kind::Number { min, max, .. } => {
                     let val = cur.and_then(|v| v.as_float()).unwrap_or(min);
                     let filled = (((val - min) / (max - min)) * 10.0).round() as usize;
@@ -1929,6 +1431,33 @@ pub(super) fn control(
     }
 }
 
+/// A switch: `━━● on` in the strong text colour, or `●━━ off` dim.
+pub(super) fn switch(t: &Theme, on: bool) -> Vec<Seg> {
+    if on {
+        vec![seg("━━● on ", Style::default().fg(t.strong).add_modifier(Modifier::BOLD))]
+    } else {
+        vec![seg("●━━ off", Style::default().fg(t.muted))]
+    }
+}
+
+/// Choices side by side: the chosen one filled with the border colour and bold, the rest plain.
+pub(super) fn segmented(t: &Theme, opts: &[String], chosen: Option<usize>) -> Vec<Seg> {
+    opts.iter()
+        .enumerate()
+        .map(|(i, o)| {
+            let style = if Some(i) == chosen {
+                Style::default()
+                    .bg(t.border)
+                    .fg(t.strong)
+                    .add_modifier(Modifier::BOLD)
+            } else {
+                Style::default().fg(t.text)
+            };
+            seg(format!(" {o} "), style)
+        })
+        .collect()
+}
+
 /// The Version row's value: this version, then what was found and Update now, or `up to date`
 /// and `u check now`; the daemon's version when it differs from this window's.
 fn version_control(app: &App, t: &Theme) -> Vec<Seg> {
@@ -1945,17 +1474,19 @@ fn version_control(app: &App, t: &Theme) -> Vec<Seg> {
         seg("  ·  ", dot),
     ];
     match (&app.update_available, app.updating, app.update_checking) {
-        (Some(new), updating, _) => {
-            out.push(seg(format!("{new} is out"), accent));
+        _ if app.restart_needed() => {
+            out.push(seg("restart to finish", accent));
             out.push(seg("  ·  ", dot));
-            out.push(seg(
-                if updating {
-                    "updating…"
-                } else {
-                    "Enter to update"
-                },
-                accent,
-            ));
+            out.extend([seg("r", accent), seg(" restart", dot)]);
+        }
+        (Some(new), updating, _) => {
+            out.push(seg(format!("{new} is ready"), accent));
+            out.push(seg("  ·  ", dot));
+            if updating {
+                out.push(seg("updating…", accent));
+            } else {
+                out.extend([seg("i", accent), seg(" install", dot)]);
+            }
         }
         (None, _, true) => out.push(seg("checking…", dot)),
         (None, ..) => {

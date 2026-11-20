@@ -247,7 +247,10 @@ fn closing_a_project_counts_its_put_away_sessions_which_keep_running() {
 #[test]
 fn a_machine_that_is_down_is_offered_neither_and_nothing_is_claimed() {
     let (mut app, mut rx) = app_with_outbox();
-    app.service = super::service::Service::Down { next_at: Instant::now() };
+    app.service_lost();
+    if let super::service::Service::Away(a) = &mut app.service {
+        a.since = Instant::now() - std::time::Duration::from_secs(10);
+    }
     assert!(!app.can_put_away(FOX));
     daemon_sets(&mut app, FOX, true);
     let rows = app.put_away_rows();

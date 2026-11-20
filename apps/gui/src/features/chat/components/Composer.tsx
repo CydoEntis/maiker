@@ -13,8 +13,9 @@ import { DraftAttachments } from './Attachments'
 import { QuoteStrip } from './QuoteStubs'
 import { AgentPicker } from './AgentPicker'
 import { modelName } from '../modelName'
-import { PLAN_MODE } from '../chatMeta'
+import { modeShortLabel, PLAN_MODE } from '../chatMeta'
 import { PermissionMenu } from './PermissionMenu'
+import { SessionBar, type SessionPlace } from './SessionBar'
 import { QueuedMessages } from './QueuedMessages'
 import { MAX_SHOWN, SlashPicker } from './SlashPicker'
 import { FilePicker } from './FilePicker'
@@ -26,9 +27,11 @@ import { terminalOnlyNote, typedCommand, windowRouteOf, withWindowRoutes, type W
 import { CODEX_COMMANDS } from '../codexCommands'
 import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from '../geminiCommands'
 import { isBangLine, namedCommand } from '../slashCommands'
-import { usageItems, type SessionUsage } from '../usageStrip'
+import { METER_SHOWN_FROM, usageItems, type SessionUsage } from '../usageStrip'
+import { UsageMeter } from '@/features/usage/UsageMeter'
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { useKeepTyping } from '../useKeepTyping'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** A key with nothing stored under it, for a composer whose view holds its own draft. */
 const NO_CONVERSATION = -1
@@ -76,6 +79,9 @@ export type ComposerFacts = {
     readonly start?: AgentChoice
     /** The chat runs on another machine: this computer's model list says nothing of what it has. */
     readonly remote?: boolean
+    /** Given by a draft (a session not started), whose picks are kept for its start: the picker changes the choice and the agent. */
+    readonly onChange?: (change: Partial<AgentChoice>) => void
+    readonly onAgent?: (agent: ChatAgent) => void
   } | undefined
 }
 
@@ -112,6 +118,21 @@ type Props = {
   dock?: DockState
   /** A quiet line under the queue, for a session that stopped or failed with messages still waiting. */
   queueNote?: string | null
+  /** Where the session runs, for the row under the box; without it the row holds the controls alone. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the box gives way to a read-only line with these ways on. */
+  ended?: EndedActions | undefined
+  /** What the empty box says; a draft asks for the task, a started chat for a message. */
+  hint?: string | undefined
+}
+
+/** What an ended session offers in place of the box. */
+export type EndedActions = {
+  /** Reopens the conversation; absent when it cannot be reopened from here, with `resumeWhy` saying why. */
+  onResume?: (() => void) | undefined
+  resumeWhy?: string | undefined
+  /** Starts a new session in the same folder. */
+  onNewSession: () => void
 }
 
 /** The dock above the box has one thing open at a time: the helpers list or the queue's list. */
@@ -121,7 +142,6 @@ const DOCK_CLOSED: DockState = { open: null, set: () => undefined }
 
 const NO_CHANGE = () => undefined
 const NO_MESSAGES: readonly string[] = []
-const PERCENT = 100
 
 /** What in the question tray takes the focus when it opens: its first field, else its first button. */
 // Only a question that takes keys gets the focus: a card answered only by a click (trusting a folder) must not be
@@ -129,13 +149,13 @@ const PERCENT = 100
 const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
 
 /**
- * The message box (layout 2h): the question tray when the agent asks, then one box: the text with attach at its top
- * right, and under it the model, the permission mode, the usage meters and send. Enter sends, Shift+Enter
+ * The message box (layout 2h): the question tray when the agent asks, then one box: the text, and one row under it with
+ * the model, effort and permission mode at the left and attach and send at the right. The usage meters sit in the row under the box. Enter sends, Shift+Enter
  * adds a line, Esc interrupts the running turn. While the agent works, sending queues the message;
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
  */
-export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null }: Props) {
+export function Composer({ agent, composer, conversation, commandsFrom, problem = null, question = null, facts, waiting = false, files, sent = NO_MESSAGES, helpers = null, dock = DOCK_CLOSED, queueNote = null, place, ended, hint = 'Reply…' }: Props) {
   const { setDraft, attachments, attach, readOnly, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow, sendingNow, submit, stop, running, sending, disabledReason, draftable, error } = composer
   const storedDraft = useComposerDraft(composer.conversationKey ?? NO_CONVERSATION)
   const restoreNote = useComposerSlice(composer.conversationKey ?? NO_CONVERSATION, (state) => state.note)
@@ -186,7 +206,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   }
   const attachLabel = off ? `Attach files: ${disabledReason}` : 'Attach files'
   const planning = facts.modeKey === PLAN_MODE
-  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agent} finishes` : planning ? 'Reply to the plan…' : 'Message the agent, or type / for commands')
+  const placeholder = disabledReason ?? (running ? `Queue a message for when ${agentLabel(agent)} finishes` : planning ? 'Reply to the plan…' : hint)
   const empty = draft.trim() === '' && attachments.length === 0
   // With nothing typed while a turn runs, the round button stops the agent instead of sending.
   const stopping = running && empty && !off
@@ -248,7 +268,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
       return
     }
     if (route.kind === 'confirm' && running) {
-      toast.info(`${agent} is working. Run ${typed} when it finishes.`)
+      toast.info(`${agentLabel(agent)} is working. Run ${typed} when it finishes.`)
       return
     }
     setDraft('')
@@ -269,7 +289,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
     if (command.terminal === true && inTerminal !== undefined) {
       // Its menu is the terminal's to show, and its keys would land in a running turn.
       if (running) {
-        toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
+        toast.info(`${agentLabel(agent)} is working. Run /${command.name} when it finishes.`)
         return
       }
       setDraft('')
@@ -300,7 +320,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
       return
     }
     if (running && !runsMidTurn(commandsFrom?.agent, typed)) {
-      toast.info(`${agent} is working. Run /${command.name} when it finishes.`)
+      toast.info(`${agentLabel(agent)} is working. Run /${command.name} when it finishes.`)
       return
     }
     setDraft('')
@@ -379,7 +399,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
           note={queueNote}
         />
         <QuoteStrip quotes={quotes} onRemove={(id) => { removeQuote(composer.conversationKey ?? NO_CONVERSATION, id) }} onClear={() => { clearQuotes(composer.conversationKey ?? NO_CONVERSATION) }} />
-        <div className={`mx-box${off ? ' is-locked' : ''}`}>
+        <div className={`mx-box${off ? ' is-locked' : ''}${ended === undefined ? '' : ' is-ended'}`}>
           {picking && (
             <SlashPicker agent={agent} typed={draft.trim()} matches={matches} active={active} loading={slash.loading} error={slash.error} onPick={run} onHover={(index) => { setCursor({ query, index }) }} />
           )}
@@ -389,7 +409,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
           <DraftAttachments attachments={attachments} onRemove={attach.remove} />
           <textarea
             ref={text}
-            aria-label={`Message ${agent}`}
+            aria-label={`Message ${agentLabel(agent)}`}
             {...(picking && matches.length > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-slash-list', 'aria-activedescendant': `mx-slash-${String(active)}` } : {})}
             {...(mention.open && (mention.found?.paths.length ?? 0) > 0 ? { role: 'combobox', 'aria-expanded': true, 'aria-controls': 'mx-file-list', 'aria-activedescendant': `mx-file-${String(mention.active)}` } : {})}
             rows={2}
@@ -402,12 +422,6 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             onKeyDown={onKeyDown}
             onPaste={onPaste}
           />
-          {(composer.attachable ?? !readOnly) && (
-            // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
-            <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
-              <Icon name="plus" size={16} />
-            </button>
-          )}
           {planning && (
             <p className="mx-plan-strip">
               <span className="mx-plan-strip-name">Plan mode</span>
@@ -415,24 +429,21 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             </p>
           )}
           <div className="mx-box-row">
-            {facts.agentChips !== undefined ? (
-              conversation !== undefined
-                ? <ModelPicker remote={facts.agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
-                : <AgentPicker agent={agent} choice={facts.agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={facts.agentChips.locked ?? undefined} />
-            ) : (
-              <>
-                {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
-                {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
-              </>
-            )}
-            <ModeControl facts={facts} />
+            <div className="mx-box-controls" role="group" aria-label="Model and permissions">
+              <AgentControls agent={agent} conversation={conversation} facts={facts} readOnly={readOnly} lockedWhileWorking={running ? `${agentLabel(agent)} is working. You can change the model and effort when it finishes, or after Esc.` : null} />
+            </div>
             <span className="mx-spacer" />
-            {facts.usage !== undefined && <UsageMeters usage={facts.usage} always={agent === 'claude' || agent === 'codex'} onOpen={facts.onOpenUsage} />}
+            {(composer.attachable ?? !readOnly) && (
+              // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
+              <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
+                <Icon name="paperclip" size={16} />
+              </button>
+            )}
             {stopping ? (
-              <button type="button" className="mx-send is-stop" aria-label={`Stop ${agent}`} title={`${agent} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
+              <button type="button" className="mx-send is-stop" aria-label={`Stop ${agentLabel(agent)}`} title={`${agentLabel(agent)} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
               // Sent, and not yet a turn to stop: the same square, off until there is one.
-              <button type="button" className="mx-send is-stop is-off is-busy" aria-label={`${agent} is working`} aria-busy="true" title={`${agent} is working`} disabled><span className="mx-stop-square" aria-hidden="true" /></button>
+              <button type="button" className="mx-send is-stop is-off is-busy" aria-label={`${agentLabel(agent)} is working`} aria-busy="true" title={`${agentLabel(agent)} is working`} disabled><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : (
               <button type="button" className={`mx-send${off || empty ? ' is-off' : ''}`} aria-label={running ? 'Queue message' : 'Send message'} disabled={off || sending || empty} onClick={send}>
                 <Icon name="arrowUp" size={15} strokeWidth={2.2} />
@@ -440,10 +451,14 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             )}
           </div>
         </div>
-        {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Open the terminal to answer anything it asks.</p>}
+        {ended !== undefined && <EndedLine ended={ended} />}
+        <SessionBar place={place}>
+          {ended === undefined && facts.usage !== undefined && <UsageMeters usage={facts.usage} agent={agent} onOpen={facts.onOpenUsage} />}
+        </SessionBar>
+        {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Anything it asks can only be answered there.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
           <p className="mx-composer-note">
-            Your next message starts with a line telling {agent} the files were restored.{' '}
+            Your next message starts with a line telling {agentLabel(agent)} the files were restored.{' '}
             <button type="button" className="mx-composer-note-action" onClick={() => { updateComposer(composer.conversationKey ?? NO_CONVERSATION, (state) => ({ ...state, note: null })) }}>Leave it out</button>
           </p>
         )}
@@ -453,53 +468,76 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   )
 }
 
-function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>): string {
-  return facts.modeLocked ?? facts.agentChips?.locked ?? 'Not available for this chat'
-}
-
-/** The short name a meter wears beside its figure. */
-const usageName = (item: { window: string | null }): string => (item.window === null ? 'Ctx' : item.window === 'week' ? 'Wk' : item.window)
-/** The meter's ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
-const METER_PATH = 'M6 1H11V11H1V1H6'
-/** The same ring under Rounded corners: a circle from the same start point. */
-const METER_ROUND = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
-
-/**
- * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
- * used, each a short name, a square ring and the figure, in the theme's meter colour for its quarter. For an agent that
- * reports its context (`always`) the context shows from the start, 0% before its first turn; a plan limit shows once
- * the agent has reported it (`usageItems`). A click opens Usage & cost.
- */
-function UsageMeters({ usage, always, onOpen }: { usage: SessionUsage; always: boolean; onOpen: (() => void) | undefined }) {
-  const items = usageItems(usage, nowSeconds(), always)
-  if (items.length === 0) return null
+/** The read-only line an ended session shows where the box was, with the two ways on. */
+function EndedLine({ ended }: { ended: EndedActions }) {
+  const resumable = ended.onResume !== undefined
   return (
-    <span className="mx-usage" role="group" aria-label="Usage">
-      {items.map((item) => {
-        const used = item.window === null ? `How much of this chat's memory is used: ${String(item.percent)}%` : item.resetsIn === null ? `${item.label}: ${String(item.percent)}% used` : `${item.label}: ${String(item.percent)}% used · resets in ${item.resetsIn}`
-        const meter = (
-          <>
-            <span className="mx-usage-name">{usageName(item)}</span>
-            <svg className="mx-usage-ring" role="meter" aria-label={item.label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={item.percent} width="12" height="12" viewBox="0 0 12 12">
-              <path d={METER_PATH} className="mx-usage-track mx-usage-sq" />
-              <path d={METER_PATH} className="mx-usage-fill mx-usage-sq" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
-              <path d={METER_ROUND} className="mx-usage-track mx-usage-round" />
-              <path d={METER_ROUND} className="mx-usage-fill mx-usage-round" pathLength={PERCENT} strokeDasharray={`${String(item.percent)} ${String(PERCENT)}`} />
-            </svg>
-            <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
-          </>
-        )
-        return onOpen === undefined
-          ? <span key={item.key} className={`mx-usage-item is-${item.tone}`} title={used}>{meter}</span>
-          : <button key={item.key} type="button" className={`mx-usage-item is-${item.tone}`} title={`${used} · Open Usage & cost`} onClick={onOpen}>{meter}</button>
-      })}
-    </span>
+    <div className="mx-ended-line" role="status">
+      <span className="mx-ended-text">This session has ended. The chat is read-only.</span>
+      {/* aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point. */}
+      <button type="button" className="mx-ended-button is-primary" aria-disabled={!resumable} title={resumable ? 'Open this conversation again' : ended.resumeWhy} onClick={resumable ? ended.onResume : undefined}>Resume</button>
+      <button type="button" className="mx-ended-button" onClick={ended.onNewSession}>New session here</button>
+    </div>
   )
 }
 
 /**
- * The permission mode, as a shield and a chevron in the box's bottom row: the mode's name is in its tooltip, and the
- * shield turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
+ * The left of the box's bottom row: the agent's mark with its model and effort (the menu with the slider), then the
+ * permission mode. The model and effort lock while the agent works; `lockedWhileWorking` says why.
+ */
+function AgentControls({ agent, conversation, facts, readOnly, lockedWhileWorking }: { agent: ChatAgent; conversation: number | undefined; facts: ComposerFacts; readOnly: boolean; lockedWhileWorking: string | null }) {
+  const { agentChips } = facts
+  const live = readOnly ? facts.onCommand : undefined
+  return (
+    <>
+      {agentChips !== undefined ? (
+        conversation !== undefined
+          ? <ModelPicker remote={agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={(agentChips.pickerLocked === undefined ? agentChips.locked : agentChips.pickerLocked) ?? lockedWhileWorking} />
+          : <AgentPicker fixedModels={agentChips.remote === true} agent={agent} choice={agentChips.start ?? defaultChoice()} onChange={agentChips.onChange ?? NO_CHANGE} {...(agentChips.onAgent === undefined ? {} : { onAgent: agentChips.onAgent })} locked={agentChips.locked ?? undefined} />
+      ) : (
+        <>
+          {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={lockedWhileWorking} />}
+          {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
+        </>
+      )}
+      <ModeControl facts={facts} />
+    </>
+  )
+}
+
+function modeLockedWhy(facts: Pick<ComposerFacts, 'modeLocked' | 'agentChips'>): string {
+  return facts.modeLocked ?? facts.agentChips?.locked ?? 'Not available for this chat'
+}
+
+/**
+ * The meters at the right of the box: how full the session's context is and how much of each of the plan's limits is
+ * used, each a ring and the figure (a limit also a short name). The context shows from the start; a limit shows once it is
+ * at least half used (`METER_SHOWN_FROM`), when it is worth a look; below that Usage & cost has it. A click opens it.
+ */
+function UsageMeters({ usage, agent, onOpen }: { usage: SessionUsage; agent: ChatAgent; onOpen: (() => void) | undefined }) {
+  // An agent that reports its context (the chat agents) has its ring from the start, a new chat reading 0%; a plan limit waits until it is worth a look.
+  const items = usageItems(usage, nowSeconds(), abilitiesOf(agent).structuredChat).filter((item) => item.window === null || item.percent >= METER_SHOWN_FROM)
+  if (items.length === 0) return null
+  return (
+    <span className="mx-usage" role="group" aria-label="Usage">
+      {items.map((item) => <UsageMeter key={item.key} item={item} onOpen={onOpen} bar />)}
+    </span>
+  )
+}
+
+function ModeFace({ facts }: { facts: ComposerFacts }) {
+  return (
+    <>
+      <Icon name="shield" size={13} />
+      <span className="mx-mode-name">{modeShortLabel(facts.mode) ?? 'Permissions'}</span>
+      {facts.modeDanger && <span className="mx-mode-dot" aria-hidden="true" />}
+    </>
+  )
+}
+
+/**
+ * The permission mode, as a shield and its name in the box's bottom row, with no chevron: the shield
+ * turns red in a mode that asks about nothing. It opens the agent's modes when they can be picked from here.
  */
 function ModeControl({ facts }: { facts: ComposerFacts }) {
   const name = facts.mode ?? 'not reported yet'
@@ -508,14 +546,14 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
     // aria-disabled, not disabled: a disabled button gets no tooltip, and the reason is the point.
     return (
       <button type="button" aria-disabled="true" className={`mx-mode-button is-locked${danger}`} title={`Permissions: ${name}. ${modeLockedWhy(facts)}`} aria-label={`Permission mode: ${name}. ${modeLockedWhy(facts)}`}>
-        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+        <ModeFace facts={facts} />
       </button>
     )
   }
   if (facts.onPickMode === undefined) {
     return (
       <span className={`mx-mode-button is-static${danger}`} role="img" aria-label={`Permission mode: ${name}`} title={facts.mode === null ? 'Permissions: not reported by the agent yet' : `Permissions: ${name}. Cycle it in the terminal with Shift+Tab.`}>
-        <Icon name="shield" size={13} />
+        <ModeFace facts={facts} />
       </span>
     )
   }
@@ -529,7 +567,7 @@ function ModeControl({ facts }: { facts: ComposerFacts }) {
       bypassOff={facts.bypassAllowed === true ? undefined : { note: 'needs a new session', why: 'Claude only allows this when it starts with Bypass Permissions on (Settings › Permissions). This session started without it: turn the setting on and start a new session.' }}
     >
       <button type="button" className={`mx-mode-button${danger}`} title={`Permissions: ${name}`} aria-label={`Permission mode: ${name}. Pick another.`}>
-        <Icon name="shield" size={13} /><Icon name="chevronDown" size={10} />
+        <ModeFace facts={facts} />
       </button>
     </PermissionMenu>
   )
@@ -558,7 +596,7 @@ function ModelLabel({ agent, model, onOpenMenu, locked }: { agent: ChatAgent; mo
       className={`mx-model-button${locked === null ? '' : ' is-locked'}`}
       aria-disabled={locked === null ? undefined : 'true'}
       aria-label={`Model: ${name}. Open its menu.${locked === null ? '' : ` ${locked}`}`}
-      title={locked ?? `The model, from the agent's own file. Opens ${agent}'s /model menu here.`}
+      title={locked ?? `The model, from the agent's own file. Opens ${agentLabel(agent)}'s /model menu here.`}
       onClick={locked === null ? onOpenMenu : undefined}
     >
       {face}

@@ -3,8 +3,9 @@ import { closedSessions, reopenClosedSession, type ClosedSession } from '@/api/d
 import { errorMessage } from '@/lib/error-message'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { DEFAULT_PICK } from '@/features/chat/agentChoice'
-import type { NewChatRequest } from '../components/NewSessionDialog'
+import type { NewChatRequest } from '../components/NewChatPage'
 import { resumeWords } from './moveToWorktree'
+import type { SessionView } from './session'
 
 /** What the Recent sessions list knows: nothing yet, the list, or why there is none. */
 export type RecentRead = { kind: 'loading' } | { kind: 'listed'; list: readonly ClosedSession[] } | { kind: 'older' } | { kind: 'failed' }
@@ -39,6 +40,19 @@ export function reopenRequest(closed: ClosedSession): NewChatRequest | null {
   const agent = resumableAgent(closed.agent)
   if (agent === null || !closed.folder_present || reopenRefusal(closed) !== null) return null
   return { folder: closed.cwd, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: closed.session }
+}
+
+/**
+ * The start that resumes an ended session's own conversation in its folder, or why it cannot be: only Claude and Codex
+ * resume, only from this computer, and only with the conversation id the daemon reported before the session ended.
+ */
+export function endedResume(session: Pick<SessionView, 'process' | 'machine' | 'cwd' | 'agentSession'>): { kind: 'request'; request: NewChatRequest } | { kind: 'refused'; why: string } {
+  if (session.machine !== LOCAL_MACHINE) return { kind: 'refused', why: 'A session of another machine cannot be resumed from here' }
+  const agent = resumableAgent(session.process)
+  if (agent === null) return { kind: 'refused', why: 'This agent cannot be resumed from here' }
+  const id = session.agentSession ?? null
+  if (id === null || resumeWords(agent, id) === null) return { kind: 'refused', why: 'No conversation was saved to resume' }
+  return { kind: 'request', request: { folder: session.cwd, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: id } }
 }
 
 /** This computer's closed sessions, read off the UI thread when the list opens; `retry` asks again. */

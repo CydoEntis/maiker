@@ -5,7 +5,6 @@
 //! focused pane's, is in the accent. The program's own output is drawn as it is: an agent's pane
 //! is its own terminal.
 
-use super::chips::{Chip, chip};
 use super::side::display_name;
 use super::status_mark::State;
 use super::*;
@@ -170,9 +169,9 @@ pub(super) fn pane_state(app: &App, info: &TermInfo, term: ClientTerm) -> State 
     State::of(info.status, failed, app.machine_down(term.machine))
 }
 
-/// The border of a pane's box: red while a close asks about it, the accent (or the setting's
-/// colour) when it has the keys, sky in shortcut mode, else the quiet line; just landed on, it
-/// flares and settles.
+/// The border of a pane's box: red while a close asks about it, the bright neutral (or the setting's
+/// colour) when it has the keys, the KEYS orange in shortcut mode, else the quiet line; just landed on, it
+/// flares and settles. The accent is not a focus colour: it only marks an update.
 fn border_of(app: &mut App, term: ClientTerm, focused: bool, t: &Theme) -> Color {
     let border = if closing(app, term) {
         t.err
@@ -185,7 +184,7 @@ fn border_of(app: &mut App, term: ClientTerm, focused: bool, t: &Theme) -> Color
         match app.cfg.ui.focus_border.as_str() {
             "bright" => t.strong,
             "none" => t.line,
-            _ => t.accent,
+            _ => t.text,
         }
     };
     let on = app.motion_on();
@@ -234,7 +233,7 @@ pub(in crate::client) fn draw_pane(
     }
     let inside = card(app, f.buffer_mut(), r, &c, t);
     if r.width >= 12 {
-        let chips_x = draw_right_chips(app, f.buffer_mut(), r, term, t);
+        let chips_x = draw_right_chips(app, f.buffer_mut(), r, (term, &info, focused), t);
         let lit = focused && border != t.line;
         let title = title_segs(app, model, term, &info, lit, t);
         let start = r.x + 2;
@@ -243,7 +242,7 @@ pub(in crate::client) fn draw_pane(
         app.hits.push((Rect { x: start, y: r.y, width: room, height: 1 }, Hit::Pane(term)));
         // Where the program runs: its folder and branch, on the bottom border.
         let at = Rect { x: start, y: r.bottom().saturating_sub(1), width: r.width.saturating_sub(4), height: 1 };
-        let place = where_segs(app, &info, border, t);
+        let place = where_segs(&info, t);
         put(f.buffer_mut(), at.x, at.y, &fit(place, at.width), at.right());
         hit(app, at, ScreenHit::PaneProject(term));
     }
@@ -266,43 +265,60 @@ pub(in crate::client) fn draw_pane(
         terminal_bg,
         t,
     );
+    if !super::stopped::draw_stopped(app, f.buffer_mut(), (r, inner), term, terminal_bg, t) {
+        draw_context_bar(app, f.buffer_mut(), r, (term, &info), terminal_bg, t);
+    }
 }
 
-/// The title chip: the status mark and name, lit (the accent) while the pane has the keys.
+/// How full the context is, in percent, from which the pane carries a caution.
+const CONTEXT_WARN_AT: f32 = 85.0;
+
+/// A one-line caution along the bottom of a pane whose agent's context is nearly full. It is the same in every agent;
+/// a click sends the agent its own `/compact`.
+fn draw_context_bar(app: &mut App, buf: &mut Buffer, r: Rect, (term, info): (ClientTerm, &TermInfo), ground: Color, t: &Theme) {
+    let Some(used) = info.usage.context.filter(|c| *c >= CONTEXT_WARN_AT) else {
+        return;
+    };
+    if info.agent.is_none() || r.height < 8 || r.width < 30 {
+        return;
+    }
+    let y = r.bottom().saturating_sub(2);
+    let (x, end) = (r.x + 2, r.right().saturating_sub(2));
+    let bar = Rect { x, y, width: end.saturating_sub(x), height: 1 };
+    fill(buf, bar, ground);
+    let base = Style::default().bg(ground).fg(t.warning);
+    let text = format!("▲ Context almost full · {}% used. Compact to keep the important parts.", used.round() as u32);
+    put_cut(buf, x, y, vec![seg(text, base.add_modifier(Modifier::BOLD))], end);
+    let hint = "/compact or click";
+    let hw = hint.width() as u16;
+    if bar.width > hw + 40 {
+        put(buf, end - hw, y, &[seg(hint, base)], end);
+    }
+    hit(app, bar, ScreenHit::Compact(term));
+}
+
+/// The title on the top border: the status mark and the name as plain text, bold while the pane has the keys.
 fn title_segs(app: &App, model: &[Proj], term: ClientTerm, info: &TermInfo, lit: bool, t: &Theme) -> Vec<Seg> {
-    let look = Look::of(&app.cfg.ui);
-    let (ground, ink) = if lit { (t.accent, t.acc_ink) } else { (t.btn, t.strong) };
-    let base = Style::default().bg(ground);
+    let base = Style::default().bg(t.bg);
     let mark = app.state_mark(pane_state(app, info, term), t);
-    pill(
-        look,
-        vec![
-            seg(mark.glyph, base.fg(if lit { t.acc_ink } else { mark.color }).add_modifier(Modifier::BOLD)),
-            seg(" ", base),
-            seg(pane_title(app, model, term), base.fg(ink).add_modifier(Modifier::BOLD)),
-        ],
-        ground,
-        t.bg,
-    )
+    let name = if lit {
+        base.fg(t.strong).add_modifier(Modifier::BOLD)
+    } else {
+        base.fg(t.text)
+    };
+    vec![
+        seg(" ", base),
+        seg(mark.glyph, base.fg(mark.color)),
+        seg(" ", base),
+        seg(pane_title(app, model, term), name),
+        seg(" ", base),
+    ]
 }
 
-/// The folder and then the branch, as quiet chips a cell of border apart. A narrow pane cuts from
-/// the right, so the folder outlasts the branch.
-fn where_segs(app: &App, info: &TermInfo, border: Color, t: &Theme) -> Vec<Seg> {
-    let look = Look::of(&app.cfg.ui);
-    let quiet = Style::default().bg(t.btn);
-    let mut chips = vec![(tilde(&info.cwd), t.muted)];
-    if let Some(b) = info.branch.as_deref().filter(|b| !b.is_empty()) {
-        chips.push((b.to_string(), t.violet()));
-    }
-    let mut out = Vec::new();
-    for (i, (text, colour)) in chips.into_iter().enumerate() {
-        if i > 0 {
-            out.push(seg("─", Style::default().fg(border).bg(t.bg)));
-        }
-        out.extend(pill(look, vec![seg(text, quiet.fg(colour))], t.btn, t.bg));
-    }
-    out
+/// The folder the program runs in, dim, on the bottom border. The branch is on the sidebar row.
+fn where_segs(info: &TermInfo, t: &Theme) -> Vec<Seg> {
+    let quiet = Style::default().bg(t.bg).fg(t.muted);
+    vec![seg(format!(" {} ", tilde(&info.cwd)), quiet)]
 }
 
 /// `segs` cut to `room` cells: the last piece that does not fit ends in `…` and a cell of its
@@ -327,16 +343,33 @@ fn fit(segs: Vec<Seg>, room: u16) -> Vec<Seg> {
     out
 }
 
-/// `×` at the right of the top border; returns where it starts.
-fn draw_right_chips(app: &mut App, buf: &mut Buffer, r: Rect, term: ClientTerm, t: &Theme) -> u16 {
-    let segs = chip(app, "×", Chip::Title { focused: false }, t.bg, t);
-    let w = segs_width(&segs);
-    let x = r.right().saturating_sub(2 + w);
-    if x < r.x + w + 4 {
+/// `± changes N` and `×` at the right of the top border, as plain text; returns where they start.
+/// The changes button shows only where the checkout has changes.
+fn draw_right_chips(
+    app: &mut App,
+    buf: &mut Buffer,
+    r: Rect,
+    (term, info, focused): (ClientTerm, &TermInfo, bool),
+    t: &Theme,
+) -> u16 {
+    let base = Style::default().bg(t.bg);
+    let ink = if focused { t.text } else { t.muted };
+    let close = vec![seg(" × ", base.fg(ink))];
+    let close_w = segs_width(&close);
+    let changes = (info.diff_files > 0).then(|| vec![seg(format!(" ± changes {} ", info.diff_files), base.fg(ink))]);
+    let changes_w = changes.as_ref().map_or(0, |c| segs_width(c));
+    let total = close_w + changes_w;
+    let x = r.right().saturating_sub(2 + total);
+    if x < r.x + total + 4 {
         return r.right().saturating_sub(1);
     }
-    put(buf, x, r.y, &segs, x + w);
-    hit(app, Rect { x, y: r.y, width: w, height: 1 }, ScreenHit::CloseSplit(term));
+    if let Some(changes) = changes {
+        put(buf, x, r.y, &changes, x + changes_w);
+        hit(app, Rect { x, y: r.y, width: changes_w, height: 1 }, ScreenHit::PaneChanges(term));
+    }
+    let close_x = x + changes_w;
+    put(buf, close_x, r.y, &close, close_x + close_w);
+    hit(app, Rect { x: close_x, y: r.y, width: close_w, height: 1 }, ScreenHit::CloseSplit(term));
     x
 }
 

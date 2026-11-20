@@ -28,7 +28,7 @@ describe('session notice', () => {
   it('says what a Claude permission prompt asks from its hook, and offers Allow for it', () => {
     const ask = { tool: 'Write', detail: 'src/notes.txt', answerable: true }
     const notice = sessionNoticeFor(session('needs', '', { process: 'claude', ask }), project, { open: vi.fn(), allow: vi.fn() })
-    expect(notice?.body).toBe('Wants to run Write · src/notes.txt')
+    expect(notice?.body).toBe('Wants to write src/notes.txt')
     expect(notice?.actions?.map((action) => action.label)).toEqual(['Allow', 'Open session'])
   })
 
@@ -43,7 +43,7 @@ describe('session notice', () => {
   it('never shows Claude\'s screen text, and offers no Allow for a question that is not a permission prompt', () => {
     const banner = 'Claude Code v2.1.294 Sonnet 5.5 /home/vox Using Sonnet 5.5 ask me a question in 2 seconds'
     const notice = sessionNoticeFor(session('needs', banner, { process: 'claude' }), project, { open: vi.fn(), allow: vi.fn() })
-    expect(notice?.body).toBe('claude is waiting on you')
+    expect(notice?.body).toBe('Claude is waiting on you')
     expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
   })
 

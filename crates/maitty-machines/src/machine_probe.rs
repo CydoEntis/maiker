@@ -20,6 +20,7 @@ const POLL: Duration = Duration::from_millis(25);
 const OUTPUT_GRACE: Duration = Duration::from_secs(1);
 const MOST_OUTPUT_BYTES: u64 = 64 * 1024;
 const MOST_VERSION_CHARS: usize = 60;
+const MOST_KEY_NAME_CHARS: usize = 64;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Probe {
@@ -68,6 +69,48 @@ pub fn locate(machine: &Machine, limit: Duration, cancel: &AtomicBool) -> Locate
         Err(Stopped::Cancelled) => Located::Cancelled,
         Err(Stopped::Failed(class)) => Located::Failed(class),
     }
+}
+
+/// The file name (never the folder, never the contents) of the private key ssh signed in with, read
+/// from a second login's debug lines. `None` when a password or an agent key was used, the machine
+/// did not answer, or ssh said it in words this does not know.
+pub fn signed_in_key(machine: &Machine, limit: Duration, cancel: &AtomicBool) -> Option<String> {
+    let argv = machine.key_argv().ok()?;
+    let ended = collect(&argv, limit, cancel).ok()?;
+    let said = ended.err.recv_timeout(OUTPUT_GRACE).ok()?;
+    key_from_debug(&said)
+}
+
+/// The key file of the last `Offering public key:` line before ssh says a public key login worked.
+fn key_from_debug(debug: &str) -> Option<String> {
+    const OFFERING: &str = "debug1: Offering public key: ";
+    const SUCCEEDED: &str = "debug1: Authentication succeeded (publickey)";
+    let mut offered = None;
+    for line in debug.lines().map(str::trim) {
+        if let Some(rest) = line.strip_prefix(OFFERING) {
+            offered = key_file_name(rest);
+        } else if line.starts_with(SUCCEEDED) {
+            return offered;
+        }
+    }
+    None
+}
+
+/// `/home/me/.ssh/id_ed25519 ED25519 SHA256:abc explicit` -> `id_ed25519`. A key from an agent is
+/// named by its comment, which is not a path: it gives none.
+fn key_file_name(offer: &str) -> Option<String> {
+    let before_fingerprint = offer.split(" SHA256:").next()?;
+    let (path, _key_type) = before_fingerprint.rsplit_once(' ')?;
+    if !path.contains(['/', '\\']) {
+        return None;
+    }
+    let name = path.rsplit(['/', '\\']).next()?;
+    let clean = !name.is_empty()
+        && name.chars().count() <= MOST_KEY_NAME_CHARS
+        && name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '_' | '-' | '@' | '+' | ' '));
+    clean.then(|| name.to_string())
 }
 
 /// Why a line did not run to its end.
@@ -249,11 +292,11 @@ mod tests {
     fn a_login_ssh_could_not_do_is_needs_login() {
         assert_eq!(
             finished(Some(255), "", "box: Permission denied (publickey).\n"),
-            Probe::Failed(FailureClass::Login)
+            Probe::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
         );
         assert_eq!(
             finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::Login)
+            Probe::Failed(FailureClass::Login("Host key verification failed.".into()))
         );
     }
 
@@ -279,7 +322,7 @@ mod tests {
         assert_eq!(path, "/bin/[31mmaitty");
         assert_eq!(
             located_from(Some(255), "", "box: Permission denied (publickey).\n"),
-            Located::Failed(FailureClass::Login)
+            Located::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
         );
     }
 
@@ -309,6 +352,36 @@ mod tests {
             panic!("unreachable");
         };
         assert_eq!(why, "[2Jconnect failed");
+    }
+
+    #[test]
+    fn the_key_that_signed_in_is_the_last_one_offered_before_success() {
+        let said = "debug1: Offering public key: /home/me/.ssh/id_rsa RSA SHA256:aaa explicit\n\
+                    debug1: Offering public key: /home/me/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
+                    debug1: Server accepts key: /home/me/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
+                    Authenticated to box ([10.0.0.2]:22) using \"publickey\".\n\
+                    debug1: Authentication succeeded (publickey).\n";
+        assert_eq!(key_from_debug(said), Some("id_ed25519".into()));
+    }
+
+    #[test]
+    fn a_windows_path_with_a_space_gives_the_file_name_only() {
+        let said = "debug1: Offering public key: C:\\Users\\Jo Smith/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
+                    debug1: Authentication succeeded (publickey).\n";
+        assert_eq!(key_from_debug(said), Some("id_ed25519".into()));
+    }
+
+    #[test]
+    fn no_key_name_for_a_password_an_agent_comment_or_a_failed_login() {
+        let password = "debug1: Offering public key: /h/.ssh/id_rsa RSA SHA256:a explicit\n\
+                        debug1: Authentication succeeded (password).\n";
+        assert_eq!(key_from_debug(password), None);
+        let agent = "debug1: Offering public key: me@laptop ED25519 SHA256:a agent\n\
+                     debug1: Authentication succeeded (publickey).\n";
+        assert_eq!(key_from_debug(agent), None);
+        let failed = "debug1: Offering public key: /h/.ssh/id_rsa RSA SHA256:a explicit\n";
+        assert_eq!(key_from_debug(failed), None);
+        assert_eq!(key_file_name("/h/.ssh/id;rm ED25519 SHA256:a explicit"), None);
     }
 
     #[test]

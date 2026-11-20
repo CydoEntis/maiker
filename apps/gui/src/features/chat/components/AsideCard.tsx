@@ -1,6 +1,5 @@
 import { X } from 'lucide-react'
-import { toast } from '@/lib/toast'
-import { copyText } from '@/lib/clipboard'
+import { useCopied } from '@/lib/useCopied'
 import { Button, IconButton } from '@/components/ui/button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import type { Aside } from '../useAside'
@@ -13,12 +12,7 @@ import { Markdown } from './Markdown'
  */
 export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Aside; onClose: () => void; onAskInConversation: (question: string) => void }) {
   const { state, question } = aside
-  const copy = (text: string) => {
-    copyText(text).then(
-      () => { toast.info('Copied') },
-      () => { toast.error('Could not copy the answer') },
-    )
-  }
+  const { copied, copy } = useCopied('Could not copy the answer')
   return (
     <Card role="region" aria-label={aside.title} tone={state.kind === 'failed' ? 'err' : 'none'} className={`mx-aside${question === undefined ? '' : ' is-side'}`} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
       <CardHead>
@@ -35,7 +29,7 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
       </CardBody>
       {(state.kind === 'answered' || question !== undefined) && (
         <CardFoot>
-          {state.kind === 'answered' && <Button variant="soft" size="sm" onClick={() => { copy(state.text) }}>Copy</Button>}
+          {state.kind === 'answered' && <Button variant="soft" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
           {question !== undefined && state.kind !== 'asking' && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
         </CardFoot>
       )}

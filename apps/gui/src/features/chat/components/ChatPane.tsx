@@ -1,7 +1,5 @@
-import { Switch } from '@/components/ui/switch'
-import { useState } from 'react'
 import { MessageSquare } from 'lucide-react'
-import { CHAT_AGENTS, noChatReason, type ChatAgent, type ChatAvailability } from '@/features/workspace/model/chatView'
+import { noChatReason, type ChatAvailability } from '@/features/workspace/model/chatView'
 import { Button } from '@/components/ui/button'
 import type { OpenFile } from '../openFile'
 import type { ChatItemContext } from './ChatItems'
@@ -9,9 +7,9 @@ import type { PermissionAsk } from '@/data/preview'
 import type { SessionStatus } from '@/features/workspace/model/session'
 import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
-import { FULL_ACCESS_LABEL, FULL_ACCESS_WARNING } from '../fullAccess'
-import { AGENT_LABEL } from '../modelName'
 import { ChatSession, type WindowActions } from './ChatSession'
+import type { SessionPlace } from './SessionBar'
+import type { EndedActions } from './Composer'
 import type { SessionUsage } from '../usageStrip'
 import type { ChatProblem } from '../problem'
 import { StartingChat } from './StartingChat'
@@ -38,23 +36,22 @@ export type ChatPaneProps = {
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
   paneStatus?: SessionStatus
+  /** Whether the agent's hooks have reported in, so a chat that never starts can say whether it is the hooks or something after them. */
+  hooked?: boolean
+  /** Why the agent's hooks never report, with the settings file involved. */
+  hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** Helpers keeping the session working after the agent's own turn ended (`Session.helpersOnly`). */
   helpersOnly?: number
   /** What runs in the pane: the agent, or the shell's own name. */
   process: string
   /** The computer is connected to the daemon; starting an agent types into the shell. */
   online: boolean
-  onBackToTerminal: () => void
+  /** Shows the session's terminal log over this chat for a moment, without changing the app's view; absent for a chat session, which has none. */
+  onShowLog: () => void
   /** False for a chat session (ADR 0003): the agent has no terminal, so nothing here points to one. */
   hasTerminal?: boolean
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage | undefined
-  /** Types the agent's command into the shell (a shell tab only). */
-  onStartAgent: (agent: ChatAgent) => void
-  /** Starts a chat session (a structured conversation the daemon owns) in the shell's folder (a shell tab only). */
-  onStartChat?: (agent: ChatAgent, fullAccess: boolean) => void
-  /** Whether the full-access box starts ticked (Settings › Chat › Full access in new chats). */
-  fullAccessDefault?: boolean
   /** A subagent whose own chat shows instead of the session's, and the way back. */
   subagent?: SubagentView | null
   /** What the runtime lists the session's helpers as doing, for the helpers line above the message box. */
@@ -72,6 +69,12 @@ export type ChatPaneProps = {
   hideSuccessfulTools?: boolean
   /** The window's screens a command opens instead of Claude Code's menu. */
   windowActions?: WindowActions | undefined
+  /** The pane is in a tab kept out of sight: its chat stays mounted but reads nothing. */
+  paused?: boolean
+  /** Where the session runs, for the row under the message box. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the message box gives way to a read-only line with Resume and New session here. */
+  ended?: EndedActions | undefined
 }
 
 /**
@@ -89,7 +92,7 @@ export function ChatPane(props: ChatPaneProps) {
             link={availability.link}
             agent={availability.agent}
             online={props.online}
-            hasTerminal={props.hasTerminal ?? true}
+            paused={props.paused ?? false}
             root={props.root ?? null}
             onOpenDiff={props.onOpenDiff ?? null}
             onOpenFile={props.onOpenFile ?? null}
@@ -100,9 +103,11 @@ export function ChatPane(props: ChatPaneProps) {
             subagent={props.subagent ?? null}
             {...(props.subagents === undefined ? {} : { subagents: props.subagents })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}
-            {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onBackToTerminal })}
+            {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onShowLog })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
             problem={props.problem ?? null}
+            place={props.place}
+            ended={props.ended}
             effort={props.effort ?? null}
             hideSuccessfulTools={props.hideSuccessfulTools ?? false}
             {...(props.rewind === undefined ? {} : { rewind: props.rewind })}
@@ -114,7 +119,7 @@ export function ChatPane(props: ChatPaneProps) {
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined
-          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onBackToTerminal={props.onBackToTerminal} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
+          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onShowLog={props.onShowLog} {...(props.hooked === undefined ? {} : { hooked: props.hooked })} hookProblem={props.hookProblem ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
           : <NoChat {...props} availability={availability} />}
     </section>
   )
@@ -122,9 +127,8 @@ export function ChatPane(props: ChatPaneProps) {
 
 type NoChatProps = ChatPaneProps & { availability: Exclude<ChatAvailability, { kind: 'ready' }> }
 
-/** A session that has no chat: why, what runs here, and the way back (v18 B.3, shell tabs). */
-function NoChat({ availability, process, online, onBackToTerminal, onStartAgent, onStartChat, fullAccessDefault = false }: NoChatProps) {
-  const [fullAccess, setFullAccess] = useState(fullAccessDefault)
+/** A session that has no chat: why, what runs here, and the way to read its terminal log. */
+function NoChat({ availability, process, onShowLog }: NoChatProps) {
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="flex w-full max-w-[420px] flex-col items-center gap-3 text-center">
@@ -134,28 +138,7 @@ function NoChat({ availability, process, online, onBackToTerminal, onStartAgent,
         <h2 className="m-0 text-[15px] font-semibold text-fg">Chat view is for agent sessions</h2>
         <p className="m-0 text-[13px] leading-relaxed text-fg2">{noChatReason(availability)}</p>
         <p className="m-0 font-mono text-[12px] text-dim">Running here: {process}</p>
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
-          {availability.kind === 'shell' && CHAT_AGENTS.map((agent) => (
-            <Button key={agent} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartAgent(agent) }}>
-              Start {agent} here
-            </Button>
-          ))}
-          {availability.kind === 'shell' && onStartChat !== undefined && CHAT_AGENTS.map((agent) => (
-            <Button key={`chat-${agent}`} type="button" variant="soft" size="sm" disabled={!online} onClick={() => { onStartChat(agent, fullAccess) }}>
-              Start a {AGENT_LABEL[agent]} chat
-            </Button>
-          ))}
-          <Button type="button" size="sm" onClick={onBackToTerminal}>Back to terminal</Button>
-        </div>
-        {availability.kind === 'shell' && onStartChat !== undefined && (
-          <div className="grid gap-1 text-[12px]">
-            <label className="flex cursor-pointer items-center justify-center gap-2 text-fg2">
-              <Switch checked={fullAccess} onCheckedChange={setFullAccess} />
-              {FULL_ACCESS_LABEL}
-            </label>
-            {fullAccess && <span role="note" className="text-[var(--danger)]">{FULL_ACCESS_WARNING}</span>}
-          </div>
-        )}
+        <Button type="button" size="sm" onClick={onShowLog}>Show terminal log</Button>
       </div>
     </div>
   )

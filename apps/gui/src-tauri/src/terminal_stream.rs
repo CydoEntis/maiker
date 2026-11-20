@@ -58,6 +58,12 @@ const FOLDER_LISTING_EVENT: &str = "folder-listing";
 const FOLDER_CREATED_EVENT: &str = "folder-created";
 /// How a clone a window asked for ended.
 const REPOSITORY_CLONED_EVENT: &str = "repository-cloned";
+/// How far a clone has got, any number of times before it ends: `{machine, tag, phase, percent}`.
+const CLONE_PROGRESS_EVENT: &str = "clone-progress";
+/// What a folder's branches request found or did on a machine: `{machine, tag, state, why, listing, branch}`.
+const FOLDER_GIT_EVENT: &str = "folder-git";
+/// What a machine says it is: `{machine, tag, answer}`, `answer` its `MachineFacts`.
+const MACHINE_FACTS_EVENT: &str = "machine-facts";
 /// Who a machine says is signed in to GitHub there: `{machine, tag, report}`.
 const GITHUB_ACCOUNTS_EVENT: &str = "github-accounts";
 /// The repositories a machine's GitHub account can clone: `{machine, tag, state, why, listed}`.
@@ -516,6 +522,22 @@ impl Wire {
         )
     }
 
+    /// Ask a machine's daemon (this computer's when none is named) to list a folder's branches, or to switch,
+    /// make or check out one. The daemon checks the folder and every name; only what could not be a request is
+    /// refused here. The answer comes back as a `folder-git` event carrying `tag`.
+    pub fn folder_git(&self, machine: Option<u16>, folder: &str, request: maitty_shared::protocol::FolderGitRequest, tag: u64) -> Result<(), String> {
+        if folder.is_empty() || folder.len() > MOST_FOLDER_BYTES || folder.chars().any(char::is_control) {
+            return Err("Choose the folder by its full path".to_string());
+        }
+        self.send(machine_of(machine), ClientMsg::Query(Query::FolderGit { folder: folder.to_owned(), request, tag }))
+    }
+
+    /// Ask a machine's daemon (this computer's when none is named) what it is: system, cores, host name and the
+    /// agents installed. The answer comes back as a `machine-facts` event carrying `tag`.
+    pub fn machine_facts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
+        self.send(machine_of(machine), ClientMsg::Query(Query::MachineFacts { tag }))
+    }
+
     /// Ask this computer's daemon to start, stop or read an agent's sign-in. The answer comes back as an
     /// `agent-sign-in` event carrying `tag`. The window sends only which agent and which of the three; the
     /// daemon owns the command and what it prints.
@@ -685,6 +707,26 @@ pub fn clone_repository(
     tag: u64,
 ) -> Result<(), String> {
     wire.clone_repository(machine, &address, &parent, tag)
+}
+
+/// Lists a folder's branches on a machine (this computer when `machine` is left out), or switches, makes or checks out
+/// one. The answer arrives as a `folder-git` event with the same `tag`.
+#[tauri::command]
+pub fn folder_git(
+    wire: tauri::State<'_, Wire>,
+    machine: Option<u16>,
+    folder: String,
+    request: maitty_shared::protocol::FolderGitRequest,
+    tag: u64,
+) -> Result<(), String> {
+    wire.folder_git(machine, &folder, request, tag)
+}
+
+/// Asks a machine (this computer when `machine` is left out) what it is. The answer arrives as a `machine-facts`
+/// event with the same `tag`.
+#[tauri::command]
+pub fn machine_facts(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
+    wire.machine_facts(machine, tag)
 }
 
 /// Starts, stops or reads an agent's sign-in on this computer. The answer arrives as an `agent-sign-in` event
@@ -957,6 +999,25 @@ pub enum Reaction {
         tag: u64,
         outcome: Result<String, String>,
     },
+    /// How far a machine's clone has got, for the window that asked.
+    CloneProgress {
+        machine: MachineId,
+        tag: u64,
+        phase: maitty_shared::protocol::ClonePhase,
+        percent: u8,
+    },
+    /// What a machine found or did in a folder's branches, for the window that asked.
+    FolderGit {
+        machine: MachineId,
+        tag: u64,
+        outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
+    },
+    /// What a machine says it is, for the window that asked.
+    MachineFacts {
+        machine: MachineId,
+        tag: u64,
+        facts: maitty_shared::protocol::MachineFacts,
+    },
     /// Where this computer's agent sign-in stands, for the window that asked.
     AgentSignIn {
         tag: u64,
@@ -1032,6 +1093,12 @@ pub fn react(
             if handle.is_refused(machine) {
                 told.state = "refused";
             }
+            if told.state == "needs-login" {
+                // A login the person can do: the same line the add flow opens in a session. A route
+                // that cannot make one (a custom transport) leaves the window with the fix text only.
+                told.login_command = handle.route(machine).and_then(|route| route.first_login_command().ok());
+            }
+            told.target = handle.route(machine).and_then(|route| route.target().map(str::to_owned));
             let opts = handle.opts_of(machine);
             (told.clipboard, told.notices, told.sounds) = (opts.clipboard, opts.notices, opts.sounds);
             told.since = handle.down_since(machine, state.is_connected(), now_ms());
@@ -1086,6 +1153,9 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::Folders { machine, tag, listing } => Some(Reaction::Folders { machine, tag, listing }),
             Out::FolderCreated { machine, tag, outcome } => Some(Reaction::FolderCreated { machine, tag, outcome }),
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
+            Out::CloneProgress { machine, tag, phase, percent } => Some(Reaction::CloneProgress { machine, tag, phase, percent }),
+            Out::FolderGit { machine, tag, outcome } => Some(Reaction::FolderGit { machine, tag, outcome }),
+            Out::MachineFacts { machine, tag, facts } => Some(Reaction::MachineFacts { machine, tag, facts }),
             Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
@@ -1151,6 +1221,39 @@ struct CreatedAnswer {
 }
 
 /// One of `folder` and `refused` is set: where the clone is, or why there is none.
+/// How far a clone has got as the window reads it: `phase` is `counting`, `compressing`, `receiving`, `resolving` or
+/// `checking-out`; `percent` is of that phase.
+#[derive(Clone, Serialize)]
+struct CloneProgressAnswer {
+    machine: u16,
+    tag: u64,
+    phase: maitty_shared::protocol::ClonePhase,
+    percent: u8,
+}
+
+/// What a folder's branches request did as the window reads it: `state` is `branches`, `not-a-repo`, `switched` or
+/// `failed`; `listing` is set for `branches`, `branch` for `switched` and `why` for `failed`.
+#[derive(Clone, Serialize, Debug, PartialEq)]
+struct FolderGitOut {
+    machine: u16,
+    tag: u64,
+    state: &'static str,
+    why: Option<String>,
+    listing: Option<maitty_shared::protocol::FolderBranches>,
+    branch: Option<String>,
+}
+
+fn folder_git_out(machine: MachineId, tag: u64, outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>) -> FolderGitOut {
+    use maitty_shared::protocol::FolderGitAnswer;
+    let (state, why, listing, branch) = match outcome {
+        Ok(FolderGitAnswer::Branches(listing)) => ("branches", None, Some(listing), None),
+        Ok(FolderGitAnswer::NotARepo) => ("not-a-repo", None, None, None),
+        Ok(FolderGitAnswer::Switched { branch }) => ("switched", None, None, Some(branch)),
+        Err(why) => ("failed", Some(why), None, None),
+    };
+    FolderGitOut { machine: machine.0, tag, state, why, listing, branch }
+}
+
 #[derive(Clone, Serialize)]
 struct CloneAnswer {
     machine: u16,
@@ -1323,6 +1426,15 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
                     },
                 );
             }
+            Reaction::CloneProgress { machine, tag, phase, percent } => {
+                let _ = app.emit(CLONE_PROGRESS_EVENT, CloneProgressAnswer { machine: machine.0, tag, phase, percent });
+            }
+            Reaction::FolderGit { machine, tag, outcome } => {
+                let _ = app.emit(FOLDER_GIT_EVENT, folder_git_out(machine, tag, outcome));
+            }
+            Reaction::MachineFacts { machine, tag, facts } => {
+                let _ = app.emit(MACHINE_FACTS_EVENT, TaggedAnswer { machine: machine.0, tag, answer: facts });
+            }
             Reaction::AgentSignIn { tag, agent, state } => {
                 let _ = app.emit(AGENT_SIGN_IN_EVENT, agent_sign_in_answer(tag, agent, state));
             }
@@ -1438,12 +1550,39 @@ mod tests {
         assert!(serde_json::from_value::<SignInAgent>("rm".into()).is_err());
     }
 
+    #[test]
+    fn github_is_asked_for_by_name_and_signed_out_by_request() {
+        let (agent, request): (SignInAgent, SignInRequest) = (serde_json::from_value("github".into()).unwrap(), serde_json::from_value("sign-out".into()).unwrap());
+        assert_eq!((agent, request), (SignInAgent::Github, SignInRequest::SignOut));
+        let said = serde_json::to_value(agent_sign_in_answer(1, SignInAgent::Github, SignInState::Waiting { link: Some("https://github.com/login/device".into()), code: Some("1A2B-3C4D".into()) })).unwrap();
+        assert_eq!((said["agent"].as_str(), said["code"].as_str()), (Some("github"), Some("1A2B-3C4D")));
+    }
+
+    #[test]
+    fn a_folders_branches_reach_the_window_as_one_flat_answer_in_one_of_four_states() {
+        use maitty_shared::protocol::{FolderBranch, FolderBranches, FolderGitAnswer, FolderGitRequest};
+        let said = |outcome| serde_json::to_value(folder_git_out(MachineId(2), 4, outcome)).unwrap();
+        let listing = FolderBranches { current: Some("main".into()), branches: vec![FolderBranch { name: "origin/x".into(), current: false, when: Some(9), remote: true }], worktrees: Vec::new() };
+        let branches = said(Ok(FolderGitAnswer::Branches(listing)));
+        assert_eq!((branches["state"].as_str(), branches["listing"]["branches"][0]["remote"].as_bool()), (Some("branches"), Some(true)));
+        assert_eq!(said(Ok(FolderGitAnswer::NotARepo))["state"], "not-a-repo");
+        assert_eq!(said(Ok(FolderGitAnswer::Switched { branch: "x".into() }))["branch"], "x");
+        let failed = said(Err("a branch named 'x' already exists".into()));
+        assert_eq!((failed["state"].as_str(), failed["why"].as_str()), (Some("failed"), Some("a branch named 'x' already exists")));
+        let asked: FolderGitRequest = serde_json::from_value(serde_json::json!({"CheckoutRemote": {"remote_branch": "origin/x"}})).unwrap();
+        assert_eq!(asked, FolderGitRequest::CheckoutRemote { remote_branch: "origin/x".into() });
+        assert_eq!(serde_json::from_value::<FolderGitRequest>("Branches".into()).unwrap(), FolderGitRequest::Branches);
+    }
+
     fn state(machine: u16, name: &str, kind: &'static str) -> MachineState {
         MachineState {
             machine,
             name: name.into(),
             state: kind,
             why: None,
+            said: None,
+            login_command: None,
+            target: None,
             attempt: None,
             unsent: None,
             since: None,

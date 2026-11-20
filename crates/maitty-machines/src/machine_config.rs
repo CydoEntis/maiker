@@ -11,9 +11,28 @@ const KEY: &str = "machines";
 /// Append `[[machines]]` with this name and target. Nothing is written when the entry would
 /// not load, or when the name is taken.
 pub fn add_machine(file: &Path, name: &str, target: &str) -> Result<()> {
+    add_machine_with(file, name, target, &[])
+}
+
+/// `add_machine` with ssh's own arguments for the entry (`["-p", "2222"]`); none writes no key.
+pub fn add_machine_with(file: &Path, name: &str, target: &str, ssh_args: &[String]) -> Result<()> {
+    add_machine_keyed(file, name, target, ssh_args, None)
+}
+
+/// `add_machine_with` that also names a private key file for ssh (`identity_file`); none writes
+/// no key. Only the path is written: the file is not opened.
+pub fn add_machine_keyed(
+    file: &Path,
+    name: &str,
+    target: &str,
+    ssh_args: &[String],
+    identity_file: Option<&str>,
+) -> Result<()> {
     let def = MachineDef {
         name: name.into(),
         target: target.into(),
+        ssh_args: ssh_args.to_vec(),
+        identity_file: identity_file.map(str::to_owned),
         ..MachineDef::default()
     };
     let mut doc = read(file)?;
@@ -32,6 +51,16 @@ pub fn add_machine(file: &Path, name: &str, target: &str) -> Result<()> {
     let mut entry = toml_edit::Table::new();
     entry.insert("name", toml_edit::value(name));
     entry.insert("target", toml_edit::value(target));
+    if !ssh_args.is_empty() {
+        let mut args = toml_edit::Array::new();
+        for arg in ssh_args {
+            args.push(arg.as_str());
+        }
+        entry.insert("ssh_args", toml_edit::value(args));
+    }
+    if let Some(identity_file) = identity_file {
+        entry.insert("identity_file", toml_edit::value(identity_file));
+    }
     // After what the file already says, not up among its first keys.
     entry.set_position(isize::MAX);
     list.push(entry);
@@ -213,12 +242,26 @@ fn first_free(base: &str, taken: &[String]) -> String {
 
 /// Why `name` and `target` cannot be a machine alongside `existing`, in the loader's words.
 pub fn refusal(existing: &[MachineDef], name: &str, target: &str) -> Option<String> {
+    refusal_with(existing, name, target, &[])
+}
+
+/// `refusal` for an entry that also carries ssh arguments.
+pub fn refusal_with(existing: &[MachineDef], name: &str, target: &str, ssh_args: &[String]) -> Option<String> {
+    refusal_of(
+        existing,
+        &MachineDef {
+            name: name.into(),
+            target: target.into(),
+            ssh_args: ssh_args.to_vec(),
+            ..MachineDef::default()
+        },
+    )
+}
+
+/// Why `def` cannot be a machine alongside `existing`, in the loader's words.
+pub fn refusal_of(existing: &[MachineDef], def: &MachineDef) -> Option<String> {
     let mut all = existing.to_vec();
-    all.push(MachineDef {
-        name: name.into(),
-        target: target.into(),
-        ..MachineDef::default()
-    });
+    all.push(def.clone());
     validate_machines(&all).err().map(|e| e.to_string())
 }
 
@@ -251,6 +294,17 @@ mod tests {
             "[[machines]]\nname = \"build\"\ntarget = \"build\""
         );
         assert_eq!(after.matches("[[machines]]").count(), 2);
+    }
+
+    #[test]
+    fn a_key_file_is_written_as_a_path_that_reads_back_unchanged() {
+        let file = dir("keyed").join("config.local.toml");
+        let path = r"C:\Users\me\my keys\id_ed25519";
+        add_machine_keyed(&file, "build", "me@build", &[], Some(path)).unwrap();
+        let loaded = machines_of(&read(&file).unwrap());
+        assert_eq!(loaded[0].identity_file.as_deref(), Some(path));
+        add_machine(&file, "other", "other").unwrap();
+        assert_eq!(machines_of(&read(&file).unwrap())[1].identity_file, None);
     }
 
     #[test]

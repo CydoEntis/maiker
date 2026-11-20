@@ -5,7 +5,6 @@ import { Button, IconButton } from './button'
 import { Card, CardFoot, CardHead } from './card'
 import { Fold } from './fold'
 import { Progress } from './progress'
-import { StatusMark, type MarkState } from './status-mark'
 import { FileBadge, Tag, typeTone } from './tag'
 
 describe('Button', () => {
@@ -59,20 +58,6 @@ describe('Card', () => {
   })
 })
 
-describe('StatusMark', () => {
-  it.each<[MarkState, string]>([['running', 'running'], ['done', 'done'], ['failed', 'failed'], ['stopped', 'stopped'], ['waiting', 'waiting'], ['needs', 'needs you']])('reads %s by its mark and word, not by colour', (state, word) => {
-    render(<StatusMark state={state} word />)
-    expect(screen.getByRole('img', { name: word })).toHaveAttribute('data-state', state)
-    expect(screen.getByText(word, { selector: 'span:not([role])' })).toBeInTheDocument()
-  })
-
-  it('draws the needs mark as ! and the spinner the caller picked while running', () => {
-    render(<><StatusMark state="needs" /><StatusMark state="running" spinner={<i data-testid="picked" />} /></>)
-    expect(screen.getByRole('img', { name: 'needs you' })).toHaveTextContent('!')
-    expect(screen.getByTestId('picked')).toBeInTheDocument()
-  })
-})
-
 describe('Tag and FileBadge', () => {
   it('colours a tag by what it says', () => {
     render(<><Tag tone="err">exit 1</Tag><Tag>Modified</Tag></>)
@@ -89,18 +74,19 @@ describe('Tag and FileBadge', () => {
   it('shows the folder dimmed, keeps the whole path as its title, and opens from the keyboard', async () => {
     const user = userEvent.setup()
     const open = vi.fn()
-    render(<FileBadge path="src/auth/session.ts" tag="TS" line={12} onOpen={open} />)
+    render(<FileBadge path="src/auth/session.ts" line={12} onOpen={open} />)
     const badge = screen.getByRole('button', { name: /session\.ts/ })
     expect(badge).toHaveAttribute('title', 'src/auth/session.ts')
     expect(screen.getByText('src/auth/')).toBeInTheDocument()
     expect(screen.getByText(':12')).toBeInTheDocument()
+    expect(badge.querySelector('[data-slot="type-tag"]')).toBeNull()
     await user.tab()
     await user.keyboard('{Enter}')
     expect(open).toHaveBeenCalledOnce()
   })
 
   it('is plain text without an action, for use inside a row that is a button', () => {
-    render(<FileBadge path="README.md" tag="MD" />)
+    render(<FileBadge path="README.md" />)
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.getByTitle('README.md')).toBeInTheDocument()
   })

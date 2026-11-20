@@ -145,8 +145,9 @@ uses `icons.working` without animation. The terminal app's Settings offers prese
 `[[machines]]` names other computers reached over ssh. It is read only from
 `config.local.toml` (beside `config.toml`), which is per computer and never synced. A
 `[[machines]]` entry in `config.toml`, the file sync shares, is a load error that says where
-to move it; the file is left as it was. With `AGENT_CONFIG` set, that file is the whole
-config and is held to the same rule.
+to move it; the file is left as it was. With `AGENT_CONFIG` set, that file stands in for
+`config.toml` and its `config.local.toml` is still the one beside it (an isolated dev run keeps its
+machines there); both are held to the same rule.
 
 | Key | Meaning |
 | --- | --- |
@@ -253,6 +254,16 @@ The pull request is found by branch, so a new session on a branch whose earlier 
 merged is put away once it goes idle; leave the option off if you reuse branch names.
 Only the config file sets it; it adds no environment variable and is not in the desktop app's
 shared settings.
+
+## Project-specific: worktree folder
+
+`worktree.dir` is where new worktrees go (ADR 0015). Its default is
+`{home}/.<command>/worktrees/{project}/{branch}`, the app's folder in the home directory
+(`.maiker`, from the brand constants) with one folder per project. `{project}` is the repository's
+folder name, with six hex digits of a hash of its path added when another repository already uses
+that name; `{repo}`, `{repo_parent}` and `{branch}` still work, and a `dir` you set is used as
+written. The first worktree of a repository leaves a `.repo` note in its project folder; it goes
+when the last worktree is removed. Worktrees made before this stay where they are.
 
 ## Project-specific: inactive worktrees
 

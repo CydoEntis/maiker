@@ -1002,7 +1002,10 @@ async fn conversation_fixture(mode: &str) -> TestSession {
     .await
     .unwrap();
     let (tx, events) = mpsc::channel(128);
-    let mut daemon = Daemon::new(Config::default(), tx, || {});
+    let mut config = Config::default();
+    // Never the real home folder, which is where the default puts worktrees.
+    config.worktree.dir = crate::daemon::worktree_path::SIBLING_TEMPLATE.into();
+    let mut daemon = Daemon::new(config, tx, || {});
     daemon.session_path = fixture.directory.path().join("data/session.json");
     daemon.check_dir = fixture.directory.path().join("data/checks");
     daemon.approvals_file = fixture.directory.path().join("data/approvals.json");
@@ -2120,6 +2123,9 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
             Query::GitHubOwners { tag: 9 },
             Query::AgentCommands { agent: crate::conversation::Provider::Claude, folder: "/code".into(), tag: 9 },
             Query::AgentSignIn { agent: crate::protocol::SignInAgent::Codex, request: crate::protocol::SignInRequest::Start, tag: 9 },
+            Query::AgentSignIn { agent: crate::protocol::SignInAgent::Github, request: crate::protocol::SignInRequest::SignOut, tag: 9 },
+            Query::FolderGit { folder: "/code".into(), request: crate::protocol::FolderGitRequest::Branches, tag: 9 },
+            Query::MachineFacts { tag: 9 },
         ];
         for (client, query) in (442..).zip(about_github) {
             let from = authenticated_pane(&mut session);

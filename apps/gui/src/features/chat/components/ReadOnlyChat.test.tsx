@@ -47,10 +47,10 @@ describe('a chat that follows an agent started in the terminal (ADR 0003)', () =
     await act(async () => { await vi.advanceTimersByTimeAsync(0) })
 
     expect(screen.getByText('earlier')).toBeInTheDocument()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
     expect(box).toBeDisabled()
     expect(box).toHaveAttribute('placeholder', READ_ONLY_NOTE)
-    expect(screen.queryByRole('button', { name: 'Stop claude' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Stop Claude' })).not.toBeInTheDocument()
     expect(fake.submitMessage).not.toHaveBeenCalled()
     expect(fake.cancelTurn).not.toHaveBeenCalled()
   })

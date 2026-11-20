@@ -580,7 +580,7 @@ A new chat used to wait on five steps one after another: start a shell, list the
 `maiker integrate <agent>` (a process), type the agent's name into the shell once it was ready, then
 wait for the agent's first report. Now the agent is the new session's first command
 (`start_agent_session`, which accepts only a known agent and plain flag words), the status hooks are
-connected once per run of the window and ahead of time (when the New session dialog opens), and an open
+connected once per run of the window and ahead of time (when the New session draft opens), and an open
 chat that is working asks the daemon for news every 300 ms (`ACTIVE_POLL_MS`), not every second.
 The daemon also says when a conversation changed (`ServerMsg::ConversationChanged`), so the chat
 reads then and, once told, polls only every second (`TOLD_ACTIVE_POLL_MS`); its reads go out on a
@@ -661,7 +661,6 @@ What was changed, and how sure we are that it matters:
 | Loops: the running light moves in 16 steps a lap (about 15 frames a second); the skeleton shimmer is a transform-moved highlight over a still base; the M loader's fill colour is computed once; the status pulse, badge pulse, dock breath, M loader, shimmer, update bar and machine spinner pause while the window is hidden (`data-window="inactive"`). | `workspace.css`, `chat.css`, `session-dialogs.css`, `frame.css`, `dock.css` | 2026-11-03: all infinite animations cost 33 of 58 points. |
 | The reduced-motion rules no longer use `:root:has(.mx-app[data-motion="reduced"])`; they read `:root[data-reduced-motion="true"]`. | `sidebar.css`, `workspace.css` | Read in code: `:has` over the whole app is re-evaluated on every DOM change. |
 | The terminal fits its grid at most every 90ms while its pane keeps changing size (a sliding sidebar or drawer) and once at the end (`throttleTrailing`, `FIT_WHILE_ANIMATING_MS`). A fold's grid rows are `contain: layout style`. | `TerminalView.tsx`, `lib/throttle.ts`, `sidebar.css` | Read in code: a resize observer fired the fit at every frame. |
-| A row's status flash is an overlay that fades by opacity, not an animation of the row's background and ring. | `useStatusFlash.ts`, `sidebar.css` | Read in code. |
 | The offline banners and `Elapsed` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `Elapsed.tsx`, `states.tsx`, `ServiceStatus.tsx` | Read in code. |
 
 ### What was measured, and what could not be
@@ -717,3 +716,33 @@ unverified version), `--model haiku`, a small project with no MCP servers, one r
 About 0.95 s saved per message here; more with MCP servers, plugins or a slow disk, since that is
 the start-up being skipped. To re-measure, time from writing the user message to the first
 `text_delta` with and without a process started a few seconds earlier.
+
+## Switching between chats (2026-11-18)
+
+A click on another session shows a chat that was built from nothing: three keys (`PaneErrorBoundary` and `TerminalView` by
+session id in `WorkspacePane.tsx`, `ChatSession` by conversation in `ChatPane.tsx`) throw the old tree away. A side-by-side
+test of v0.79.0 and v0.80.0 found no single cause: v0.80 does 15 to 36 percent more component renders per switch, spread
+over the redesign, so the likely cost is paint or animation, which a headless test cannot see.
+
+Done: the pane's 200 ms entrance fade is gone (`pane.css`); the chat paints from the feed cache with no loading frame
+(`useChatFeed`, `CACHE_LIMIT`); a pointer on a sidebar row reads its feed ahead (`warmChatFeed`); the focused id is not in
+`flipKey`. **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
+paused (`useChatFeed` `paused`: no reads and no listening, and one read at once when it shows again), so going back to
+one of the last two tabs shows its chat, scroll position, draft and open trays as they were. Cost is memory: two more chats.
+Not measured on screen yet; record one session click in the built app (F12, Performance) before taking Step B.
+
+Open: **Step B**, one `ChatPane` per slot that swaps content (the keys removed), needs an audit of every piece of state in
+`ChatSession` (reset on switch, or remembered per conversation), per-conversation scroll restored in a layout effect, an
+error boundary with `resetKeys`, and tests that fail if a draft, queue, question or handler of session A is visible or
+usable in session B (rapid A to B to A, a switch mid-stream). **Step C**, a content-keyed cache of rendered markdown for
+finished messages.
+
+Step B audit (2026-11-18): removing the two keys would let about twenty pieces of state of the chat just left reach the next
+one. The dangerous ones are `useEditFromHere` (a pending restore of the wrong checkout), the mode, model and effort loops
+in `ChatSession` and the `RESUBMIT_AFTER_MS` timer in `useChatComposer` (keys typed into the wrong agent's terminal), the
+echo, held-mode and approval-answer state, `QuestionTray` request ids (numeric, so two conversations collide), and
+`PaneErrorBoundary`'s fault. Per-conversation stores (`composerStore`, `agentChoice`, the feed cache) are already safe. The
+state body of `ChatSession` is cheap to rebuild from the feed cache; what costs is re-measuring rows and scroll in
+`VirtualList`. So the plan is not to remove the keys: keep `VirtualList`'s shell mounted and reset it explicitly when the
+conversation changes (heights, follow, scroll), and keep the stateful body keyed by `conversation:generation`. Do that only
+if the measurement in MAITTY-432, with Step A in, still shows a delay the rebuild explains.

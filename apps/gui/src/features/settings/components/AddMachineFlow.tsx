@@ -1,0 +1,52 @@
+import { useState } from 'react'
+import { toast } from '@/lib/toast'
+import type { MachineHead } from '@/features/workspace/model/machines'
+import type { AddRequest, MachineFacts } from '../model/addStage'
+import { AddMachinePanel } from './AddMachinePanel'
+import { AddRun } from './AddRun'
+import type { MachinesInfo } from './DesktopSettings'
+
+type Props = {
+  machines: MachinesInfo
+  onClose: () => void
+  /** Start a session on the machine just added (by its number). */
+  onStartSession: (machine: number) => void
+  /** A host of the SSH config that is already a machine was clicked and the machine is not connected: mend it in this dialog. */
+  onMend: (head: MachineHead) => void
+  /** The same, for a machine that is connected: leave for where machines are managed. */
+  onOpenSettings: () => void
+  /** What the machine's daemon can say about it, once the host reports that. */
+  facts?: MachineFacts | undefined
+  /** The running app's version, for the helper that is copied. */
+  appVersion?: string | null | undefined
+}
+
+/**
+ * Add a remote machine, start to end, in one card: the address, then the checklist after Connect, then Machine added. Change
+ * address comes back to what was typed. Nothing is saved before the host adds the machine, so going back or cancelling early
+ * leaves nothing behind.
+ */
+export function AddMachineFlow({ machines, onClose, onStartSession, onMend, onOpenSettings, facts, appVersion }: Props) {
+  const [request, setRequest] = useState<AddRequest | null>(null)
+  const [entry, setEntry] = useState<AddRequest['entry'] | undefined>(undefined)
+
+  // The label is a local name for the machine in this window; it is only saved when it is not the name the host knows it by.
+  const save = (name: string, label: string) => { if (label !== name) machines.onRename(name, label) }
+
+  if (request === null) {
+    return <AddMachinePanel machines={machines} onClose={onClose} entry={entry} onOpenAdded={(head) => { if (head.chip?.word === 'connected') onOpenSettings(); else onMend(head) }} onConnect={(next) => { setEntry(next.entry); setRequest(next) }} />
+  }
+  return (
+    <AddRun
+      request={request}
+      machines={machines}
+      facts={facts}
+      appVersion={appVersion}
+      onChangeAddress={() => { setRequest(null) }}
+      onClose={onClose}
+      onKept={(name) => { toast.info(`Added ${name}`); onClose() }}
+      onDone={(name, label) => { save(name, label); onClose() }}
+      onStart={(name, label, machine) => { save(name, label); onClose(); onStartSession(machine) }}
+    />
+  )
+}

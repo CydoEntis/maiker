@@ -12,10 +12,10 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 
 import { BranchMenu } from './BranchMenu'
 
-function menu(onNewWorktree?: () => void, blocked?: string) {
+function menu(onNewWorktree?: () => void) {
   return render(
     <QueryClientProvider client={new QueryClient()}>
-      <BranchMenu spec={{ folder: '/w/task', ...(onNewWorktree === undefined ? {} : { onNewWorktree }), ...(blocked === undefined ? {} : { newWorktreeBlocked: blocked }) }} branch="task-1" worktree={false} project="shop" />
+      <BranchMenu spec={{ folder: '/w/task', ...(onNewWorktree === undefined ? {} : { onNewWorktree }) }} branch="task-1" worktree={false} project="shop" />
     </QueryClientProvider>,
   )
 }
@@ -35,15 +35,7 @@ describe('the pane header branch menu', () => {
     menu(onNewWorktree)
     await userEvent.click(screen.getByRole('button', { name: /Change branch/ }))
     expect(await screen.findByText('worktree')).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: /Move to a new worktree/ }))
+    await userEvent.click(screen.getByRole('button', { name: /New worktree/ }))
     expect(onNewWorktree).toHaveBeenCalled()
-  })
-
-  it('keeps the move row off, with the reason, while the move is not possible', async () => {
-    menu(vi.fn(), 'Wait until the agent is idle; moving restarts it')
-    await userEvent.click(screen.getByRole('button', { name: /Change branch/ }))
-    const row = await screen.findByRole('button', { name: /Move to a new worktree/ })
-    expect(row).toBeDisabled()
-    expect(row).toHaveAttribute('title', 'Wait until the agent is idle; moving restarts it')
   })
 })

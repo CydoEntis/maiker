@@ -44,4 +44,9 @@ function CardFoot({ className, ...props }: React.ComponentProps<"div">) {
   return <div data-slot="card-foot" className={cn("flex min-h-10 flex-wrap items-center gap-1.5 border-t border-(--line) py-1.5 pr-2 pl-3", className)} {...props} />
 }
 
-export { Card, CardHead, CardBody, CardFoot, cardVariants }
+/** Rows in one rounded card with a hairline between them: a list of choices or items (the setup's folders and agents). */
+function CardList({ className, ...props }: React.ComponentProps<"ul">) {
+  return <ul data-slot="card-list" className={cn(cardVariants(), "m-0 list-none gap-0 divide-y divide-(--line) overflow-hidden p-0", className)} {...props} />
+}
+
+export { Card, CardHead, CardBody, CardFoot, CardList, cardVariants }

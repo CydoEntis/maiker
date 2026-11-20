@@ -40,6 +40,30 @@ export function peekChatFeed(conversation: number): ChatFeed | undefined {
   return cache.get(conversation)
 }
 
+/** A warm read is running: only one runs at a time, so hovering down a list never queues up reads. */
+let warming = false
+
+/**
+ * Reads a conversation into the cache before its chat is opened (a pointer on its sidebar row), so the click paints from
+ * memory. It uses the same read as the chat itself and changes nothing on screen. Skipped, with `false`, when the chat is
+ * already cached, or another warm read is running. A failed read is dropped: the chat reads for itself when it opens.
+ */
+export async function warmChatFeed(conversation: number, generation: number, provider: ChatProvider, read: ReadPage = (cursor) => readConversationPage(conversation, cursor)): Promise<boolean> {
+  const held = cache.get(conversation)
+  if (warming || (held !== undefined && (held.generation === null || held.generation === generation))) return false
+  warming = true
+  try {
+    const next = await syncFeed(createFeed(provider, conversation), read, Date.now)
+    // An open chat may have filled the cache meanwhile: what it read is newer than this.
+    if (!cache.has(conversation)) remember(next)
+  } catch (error) {
+    console.warn('Could not read a conversation ahead of opening it', error instanceof Error ? error.message : String(error))
+  } finally {
+    warming = false
+  }
+  return true
+}
+
 /** For tests: the cache belongs to the window's lifetime. */
 export function forgetChatFeeds(): void {
   cache.clear()
@@ -60,6 +84,8 @@ type Options = {
   /** The generation the session list reports; a different one means the conversation started over. */
   generation: number
   provider: ChatProvider
+  /** The chat is mounted out of sight: no reads and no listening until it shows again, which reads at once. */
+  paused?: boolean
 }
 
 /**
@@ -69,7 +95,7 @@ type Options = {
  * next read starts from the beginning, so nothing is shown twice and nothing is missed. The daemon
  * also says when the conversation changed (`listenConversationChanged`), and the chat reads then.
  */
-export function useChatFeed({ conversation, generation, provider }: Options) {
+export function useChatFeed({ conversation, generation, provider, paused = false }: Options) {
   const [feed, setFeed] = useState<ChatFeed>(() => startFeed(provider, conversation, generation))
   const [forGeneration, setForGeneration] = useState(generation)
   const [offline, setOffline] = useState(false)
@@ -80,10 +106,18 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
     setForGeneration(generation)
     setFeed(createFeed(provider, conversation))
   }
+  // How many reads brought what the person was not there to watch arrive: the first since the chat opened (before it
+  // the feed is the one this window remembered) and each one after the window was hidden. The chat shows what such a
+  // read holds whole, and types in only what comes while it is being looked at.
+  const [unwatchedReads, setUnwatchedReads] = useState(0)
   const latest = useRef(feed)
   const wake = useRef<() => void>(() => undefined)
 
   useEffect(() => {
+    if (paused) {
+      wake.current = () => undefined
+      return undefined
+    }
     const life = { stopped: false }
     // A function, so a check after an await is not taken for the one before it.
     const gone = () => life.stopped
@@ -93,6 +127,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
     let again: 'now' | 'soon' | null = null
     let told = false
     let lastReadAt = 0
+    let unwatched = true
     let failures = 0
     latest.current = startFeed(provider, conversation, generation)
     const read: ReadPage = (cursor) => readConversationPage(conversation, cursor)
@@ -105,6 +140,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
         return
       }
       if (document.hidden) {
+        unwatched = true
         timer = window.setTimeout(() => { void tick() }, IDLE_POLL_MS)
         return
       }
@@ -116,6 +152,10 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
         latest.current = next
         remember(next)
         if (!unchanged) setFeed(next)
+        if (unwatched) {
+          unwatched = false
+          setUnwatchedReads((count) => count + 1)
+        }
         failures = 0
         setOffline(false)
         setReadError(null)
@@ -164,7 +204,7 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
       window.clearTimeout(timer)
       void listening.then((stop) => { stop() })
     }
-  }, [conversation, generation, provider])
+  }, [conversation, generation, provider, paused])
 
   /** Reads again now, for after an answer or a message was sent. */
   const refresh = useCallback(() => { wake.current() }, [])
@@ -178,5 +218,5 @@ export function useChatFeed({ conversation, generation, provider }: Options) {
   }, [])
 
   const events = useMemo(() => selectChatEvents(feed.projection), [feed.projection])
-  return { feed, events, offline, readError, refresh, recordAnswer }
+  return { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads }
 }

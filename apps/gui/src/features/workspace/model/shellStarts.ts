@@ -1,9 +1,9 @@
 /**
  * The sessions the person opened as a plain terminal. An agent typed into one later is still their
- * terminal, so its pane does not turn into the chat by itself; the view switch still shows the chat.
+ * terminal: when it ends, its pane stays (`useAgentExits`) instead of closing as an agent's would.
  * Kept in this window's storage so it holds after a restart, as the sessions themselves do.
  */
-const KEY = 'maitty.gui.shellStarts.v1'
+const KEY = 'maiker.gui.shellStarts.v1'
 
 /** The most sessions kept; older ones are long closed. */
 const KEEP = 200

@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.drafts.v1'
+const STORAGE_KEY = 'maiker.gui.drafts.v1'
 
 export type ConversationDrafts = Record<string, string>
 

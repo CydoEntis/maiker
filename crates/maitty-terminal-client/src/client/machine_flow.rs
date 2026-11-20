@@ -229,7 +229,7 @@ impl App {
             Probe::Ready { version } => {
                 self.machine_added(&def, Added::Connect, &version, Outcome::Ready(version.clone()))
             }
-            Probe::Failed(FailureClass::Login) => {
+            Probe::Failed(FailureClass::Login(_)) => {
                 self.machine_added(&def, Added::Login, "", Outcome::Login)
             }
             Probe::Failed(FailureClass::Unreachable(why)) => {

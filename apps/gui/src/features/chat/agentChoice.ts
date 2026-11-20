@@ -177,11 +177,30 @@ export function effortWord(level: string | null | undefined): string | null {
   return Object.hasOwn(REASONING_LABEL, level) ? REASONING_LABEL[level as ReasoningPick] : `${level.charAt(0).toUpperCase()}${level.slice(1)}`
 }
 
-/** How many of the four bars a level fills: its place among the menu's, and all four for a level above them. */
-export function effortBars(level: string | null | undefined): number {
-  if (level === null || level === undefined || !PLAIN_LEVEL.test(level)) return 0
-  const place = REASONING_LEVELS.indexOf(level as Reasoning)
-  return place >= 0 ? place + 1 : REASONING_LEVELS.length
+/** The level an agent runs at when nothing says otherwise: what Claude Code and Codex both start on. */
+export const DEFAULT_EFFORT: Reasoning = 'medium'
+
+/** The effort a chat is on, for the button and the slider: the level to light, and its word. */
+export type EffortInUse = {
+  /** The level in use; null when the agent runs at one the menu has no stop for (`xhigh`) or the agent takes no effort. */
+  readonly level: string | null
+  /** The word for it, "Medium · default" while it is only the model's default; null when the agent takes no effort. */
+  readonly word: string | null
+  /** Nothing was picked and the agent has not said: the level is the model's default, assumed. */
+  readonly assumed: boolean
+}
+
+/**
+ * The effort a chat runs at, in order of what is known: the level picked here, else what the agent's own files say (so `/effort medium`
+ * typed in the chat shows at once), else the model's default level, so the slider always has one stop lit and says it is the default.
+ */
+export function effortInUse(agent: ChatAgent, model: ModelOption | undefined, picked: ReasoningPick, said: string | null | undefined): EffortInUse {
+  if (!abilitiesOf(agent).takesEffort) return { level: null, word: null, assumed: false }
+  const known = picked === DEFAULT_PICK ? said : picked
+  const word = effortWord(known)
+  if (known !== null && known !== undefined && word !== null) return { level: known, word, assumed: false }
+  const fallback = effortAllowed(agent, model, DEFAULT_EFFORT) ? DEFAULT_EFFORT : REASONING_LEVELS.find((level) => effortAllowed(agent, model, level)) ?? null
+  return { level: fallback, word: fallback === null ? 'Default' : `${REASONING_LABEL[fallback]} · default`, assumed: true }
 }
 
 /** What a chat will use from its next message on. */
@@ -191,7 +210,7 @@ export function defaultChoice(): AgentChoice {
   return { model: DEFAULT_PICK, reasoning: DEFAULT_PICK }
 }
 
-const STORAGE_KEY = 'maitty.gui.agentChoice.v1'
+const STORAGE_KEY = 'maiker.gui.agentChoice.v1'
 const listeners = new Set<() => void>()
 /** A chat's pick, and what its agent last said it runs (see `noteAgentSaid`). */
 type StoredChoice = { model?: string; reasoning?: ReasoningPick; saidModel?: string; saidEffort?: string }

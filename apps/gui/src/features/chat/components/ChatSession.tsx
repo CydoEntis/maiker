@@ -38,14 +38,17 @@ import { followComposer } from '../composerStore'
 import type { SessionUsage } from '../usageStrip'
 import { releaseFirstMessage, releaseStartChoice, startChoiceOf, takeCarriedDraft, useHeldByDaemon, useHeldFirstMessage } from '../firstMessage'
 import { DEFAULT_PICK, noteAgentSaid, writeChoice } from '../agentChoice'
-import { Composer, type DockOpen } from './Composer'
+import { Composer, type DockOpen, type EndedActions } from './Composer'
+import type { SessionPlace } from './SessionBar'
 import { HelpersDock } from './HelpersDock'
 import { dockHelpers, HelpersLiveContext, liveAgentsRow, type HelpersLive } from '../helpersDock'
 import { ChatItem, type ChatItemContext } from './ChatItems'
+import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, PromptTray } from './QuestionTray'
+import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
 import { ProblemLine } from '@/components/ui/feedback'
@@ -70,6 +73,7 @@ import { AsideCard } from './AsideCard'
 import type { RewindPlace } from '../editFromHere'
 import type { FileSearchPlace } from '../fileMention'
 import { useEditFromHere } from '../useEditFromHere'
+import { agentLabel } from '@/features/workspace/model/session'
 
 /** When a turn ends the status changes at once, but the agent's last words may not be read yet: read now and again soon, instead of waiting for the idle poll. */
 const END_OF_TURN_READ_MS = 600
@@ -90,9 +94,9 @@ const ESTIMATED_ROW_PX = 72
 
 /** What a screen reader hears when the conversation changes state: one short line per change, never the text. */
 function announcement(feed: ChatFeed, agent: ChatAgent, working: boolean): string {
-  if (hasPendingApproval(feed) || feed.status === 'Blocked') return `${agent} is waiting for your answer`
-  if (working) return `${agent} is working`
-  if (feed.status === 'Done') return `${agent} finished`
+  if (hasPendingApproval(feed) || feed.status === 'Blocked') return `${agentLabel(agent)} is waiting for your answer`
+  if (working) return `${agentLabel(agent)} is working`
+  if (feed.status === 'Done') return `${agentLabel(agent)} finished`
   return ''
 }
 
@@ -109,6 +113,10 @@ const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntr
 /** Whether a key press belongs to a field, where a letter is text and not an answer. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
 
+/** The message box with nothing in it: y, a and n are not text there yet, so they answer the tray. Numbers stay the box's. */
+const inEmptyBox = (target: EventTarget) => target instanceof HTMLTextAreaElement && target.classList.contains('mx-box-text') && target.value === ''
+
+
 const NO_SUBAGENTS: readonly SubagentView[] = []
 /** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
 const FLASH_MS = 1200
@@ -121,8 +129,6 @@ type Props = {
   agent: ChatAgent
   /** The daemon is connected: a message or an answer can be sent. */
   online: boolean
-  /** False for a chat session: the agent has no terminal to type in, so no text sends the reader there. */
-  hasTerminal?: boolean
   /** The session's folder, so file names read relative to it. */
   root?: string | null
   /** Opens a file's diff, or a turn's, in the Changes panel; absent where there is none. */
@@ -153,7 +159,7 @@ type Props = {
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
-  /** Shows the session's terminal in place of this chat, for a command whose menu only the terminal draws. */
+  /** Shows the session's terminal log over this chat, for a command whose menu only the terminal draws; the app's view is unchanged. */
   onShowTerminal?: () => void
   /** What is wrong with the chat, if anything: shown as a banner over the message box when nothing else is asked of the person. */
   problem?: ChatProblem | null
@@ -167,6 +173,12 @@ type Props = {
   hideSuccessfulTools?: boolean
   /** The window's own screens a command opens instead of Claude Code's menu (`windowCommands.ts`); absent where there are none. */
   windowActions?: WindowActions | undefined
+  /** Where the session runs, for the row under the message box. */
+  place?: SessionPlace | undefined
+  /** Set once the session has ended: the message box gives way to a read-only line. */
+  ended?: EndedActions | undefined
+  /** The chat is mounted out of sight, behind the tab showing: it keeps what it shows but reads nothing until it is shown. */
+  paused?: boolean
 }
 
 /** The screens a command can open beside the chat: a Settings page, a tab of the session's side panel, the closed sessions. */
@@ -179,8 +191,8 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, hasTerminal = true, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions }: Props) {
-  const { feed, events, offline, readError, refresh, recordAnswer } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent })
+export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
+  const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
   const working = !agentFree && (feed.status === 'Working' || paneWorking)
@@ -250,8 +262,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
   const commandsMachine = sessionId !== undefined && remote ? (parseSessionId(sessionId)?.machine ?? null) : LOCAL_MACHINE
   const canPickCodexMode = typeInto !== undefined && abilities.permissionModes?.switchBy === 'command' && link.readOnly === true && !remote
   // The chips stay drawn while their keys would land in a turn or nowhere; they are only greyed out, so the box does not rearrange.
-  const pickerLocked = !online ? 'The daemon is offline' : stoppedOnPrompt ? `${agent} is asking something. Answer it first.` : null
-  const chipsLocked = !online ? 'The daemon is offline' : working ? `${agent} is working. Change this when it finishes.` : null
+  const pickerLocked = !online ? 'The Maiker service is offline' : stoppedOnPrompt ? `${agentLabel(agent)} is asking something. Answer it first.` : null
+  const chipsLocked = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Change this when it finishes.` : null
   // Picked commands are typed one after another: each waits for its Enter, so a model and an effort picked together do not interleave.
   const commandChain = useRef<Promise<void>>(Promise.resolve())
   // A mode picked while the agent works, typed in once the turn ends; numbered, so each is typed once.
@@ -301,9 +313,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     }
     if (!canChangeAgent) return {}
     return {
-      // The model and the effort can be picked while the agent works: the pick is typed in at once, as it would be in
-      // the terminal, and the agent takes it as soon as it can. Only a question it is asking holds the picker, since
-      // typed text would answer the question.
+      // A question the agent is asking holds the picker, since typed text would answer it; the composer also greys the model
+      // and effort while the agent works, and the mode waits for the turn's end here.
       agentChips: { locked: pickerLocked, pickerLocked, remote },
       onCommand: (text: string) => {
         if (pickerLocked !== null) return
@@ -363,7 +374,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     }
     setHeldMode((was) => ({ mode: target, pick: (was?.pick ?? 0) + 1 }))
     setLiveMode({ base: metaMode, value: target })
-    toast.info(`${modeLabel(target) ?? target} from the next turn`, { description: `${agent} is working, so the mode changes once this turn ends.` })
+    toast.info(`${modeLabel(target) ?? target} from the next turn`, { description: `${agentLabel(agent)} is working, so the mode changes once this turn ends.` })
   }, [applyNow, pickerLocked, working, metaMode, agent])
   const pickMode = applyNow === undefined ? undefined : pickHeld
   useEffect(() => {
@@ -372,10 +383,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     applyNow(heldMode.mode)
   }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
-  // A command that opens a menu of its own is typed into the agent's terminal, which is shown: the chat cannot draw the menu.
+  // A command that opens a menu of its own is typed into the agent's terminal, whose log is shown over the chat: the chat cannot draw the menu.
   const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
     onShowTerminal()
-    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so it opened in the terminal.`)
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so its menu is in the terminal log.`)
     void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
@@ -419,7 +430,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       case 'copy': {
         const reply = lastReply(bareRows)
-        if (reply === null) toast.info(`${agent} has not said anything yet.`)
+        if (reply === null) toast.info(`${agentLabel(agent)} has not said anything yet.`)
         else copyBlock(reply, 'Could not copy the reply')
         return
       }
@@ -430,9 +441,9 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         return
       }
       case 'plan':
-        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agent} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
+        if (shownMode === PLAN_MODE) aside.show('Plan mode', `${agentLabel(agent)} is already in plan mode. It reads and plans, and changes nothing until you approve the plan.`)
         else if (pickMode === undefined) aside.show('Plan mode', 'This chat cannot change its permission mode from here.')
-        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agent} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
+        else setConfirming({ ask: { title: 'Switch to plan mode?', body: `${agentLabel(agent)} will read and plan and change nothing until you approve the plan. You can pick another mode with the shield button.`, confirmLabel: 'Plan mode' }, typed, then: () => { pickMode(PLAN_MODE) } })
         return
       case 'commands':
       case 'complete': return
@@ -509,6 +520,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     if (picked === null) return
     quote(picked.speaker === 'user' ? 'You' : agentName(agent), picked.text)
     setPicked(null)
+  }
+  // Rows are known, and so shown whole, once a read has brought them without the person watching: the first read after
+  // the chat opened (until then it shows what this window remembered, which may be behind) and one after the window was
+  // hidden. Only a reply that comes while the chat is being looked at is typed in.
+  const [known, setKnown] = useState<Set<string> | null>(null)
+  const [knownAsOf, setKnownAsOf] = useState(0)
+  if (feed.loaded && knownAsOf !== unwatchedReads) {
+    setKnownAsOf(unwatchedReads)
+    setKnown(new Set(rows.map(rowKey)))
   }
   const pending = useMemo(() => allRows.find((row): row is Extract<ChatRow, { kind: 'approval' }> => isPendingApproval(row))?.event ?? null, [allRows])
   // The model and effort picked on the New session dialog are this conversation's choice from its first frame, so the picker shows them.
@@ -667,10 +687,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   const waitingStep = pending?.stepId ?? null
   const draftable = composer.draftable
-  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, canReply: true } : null), [draftable, quote, jump, reply])
+  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, retry: (text: string) => { void sendText(text) }, canReply: true } : null), [draftable, quote, jump, reply, sendText])
   const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
-  const rewindBusy = !online ? 'The daemon is offline' : working ? `${agent} is working. Edit from here when it finishes.` : null
+  const rewindBusy = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Edit from here when it finishes.` : null
   const editFromHere = useEditFromHere({ place: rewind ?? null, conversation: link.conversation, events, agent, busy: rewindBusy })
   const editAction = editFromHere.action
   const renderRow = useCallback(
@@ -681,11 +701,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     [agent, workingSince, approval, root, onOpenDiff, goToStep, found, waitingStep, editAction],
   )
 
-  // y, a and n answer the tray from anywhere in the chat but a field, as the same letters do in the terminal.
+  // y, a and n answer the tray from anywhere in the chat but a field with text in it, as the same letters do in the terminal.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    const inField = typedInField(event.target)
+    if (inField && !inEmptyBox(event.target)) return
     // A question's number picks its choice, as it does in the agent's own menu.
-    const choice = Number(event.key) - 1
+    const choice = inField ? Number.NaN : Number(event.key) - 1
     // A plan is answered from Claude's own menu as the screen shows it, never a guessed key (see PlanTray).
     if (ask?.tool === PLAN_TOOL) {
       const menu = sendKeys === undefined ? [] : planMenuChoices(asking)
@@ -698,6 +720,15 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         void sendKeys(ANSWER_KEYS.deny)
       }
       return
+    }
+    // A menu with no hook behind it: its number picks, never while typing (the check above) so the box keeps its digits.
+    if (ask === null && stoppedOnPrompt && online && sendKeys !== undefined) {
+      const menu = parseChoiceMenu(asking)
+      if (menu !== null && Number.isInteger(choice) && choice >= 0 && choice < menu.options.length) {
+        event.preventDefault()
+        void typeEach(sendKeys)(keysToPick(menu, choice))
+        return
+      }
     }
     const choices = ask?.choices ?? []
     if (stoppedOnPrompt && online && pickChoice !== undefined && formQuestions(ask).length === 0 && Number.isInteger(choice) && choice >= 0 && choice < choices.length) {
@@ -744,9 +775,14 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         />
       )
       : null
+  const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
+  // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag is
+  // for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
+  const bypassTag = fullAccess && !shieldDanger
   const problemView = useChatProblem(problem, () => summaryOf(bareRows))
   // The chat's own read: while it reconnects, or when it failed, one line in the dock says so, under any real problem.
-  const readLine = offline
+  // A lost service is the window's news, said once by its bar (lib/toast.ts), so the chat speaks only while the service is up.
+  const readLine = offline && online
     ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
     : feed.error !== null ? <ProblemLine tone="error" title="Could not read this chat" reason={feed.error} /> : null
   const dockProblem = problemView.line ?? readLine
@@ -757,7 +793,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
       {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
-      {fullAccess && (
+      {bypassTag && (
         <div className="mx-chat-notices">
           <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>
         </div>
@@ -771,18 +807,21 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
           <SubagentChat subagent={subagent} agent={agent} root={root} term={sessionId !== undefined && machineNameOf(sessionId) === null ? terminalOf(sessionId) : null} />
         </>
       ) : feed.loaded && rows.length === 0 ? (
-        <p className="mx-chat-empty">{hasTerminal ? 'No messages yet. Send one below, or type in the terminal.' : 'No messages yet. Send one below.'}</p>
+        // The design's empty chat is blank: the box below is the invitation. A screen reader still hears that there is nothing yet.
+        <div className="mx-chat-empty"><span className="sr-only">No messages yet.</span></div>
       ) : feed.loaded || rows.length > 0 ? (
         // A message held from the starting chat is a row before the history is read, so it stays where it was and no skeleton replaces it.
-        <OpenFileContext.Provider value={openFile}>
+        <KnownRowsContext.Provider value={known}>
+          <OpenFileContext.Provider value={openFile}>
           <HelpersLiveContext.Provider value={helpersLive}>
           <ChatActionsContext.Provider value={actions}>
           <RevealContext.Provider value={reveal}>
-          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agent}`} scrollTarget={scrollTarget} toLatest={sentCount} isSent={isSentRow} />
+          <VirtualList items={rows} getKey={rowKey} estimate={ESTIMATED_ROW_PX} renderItem={renderRow} label={`Conversation with ${agentLabel(agent)}`} scrollTarget={scrollTarget} toLatest={sentCount} isSent={isSentRow} />
           </RevealContext.Provider>
           </ChatActionsContext.Provider>
           </HelpersLiveContext.Provider>
-        </OpenFileContext.Provider>
+          </OpenFileContext.Provider>
+        </KnownRowsContext.Provider>
       ) : (
         <ChatSkeleton />
       )}
@@ -801,8 +840,10 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
         queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shownMode !== null && DANGER_MODES.includes(shownMode), model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
+        place={place}
+        ended={ended}
       />
       {problemView.alert}
     </div>

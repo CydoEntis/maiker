@@ -1,4 +1,4 @@
-const STORAGE_KEY = 'maitty.gui.machine-nicknames.v1'
+const STORAGE_KEY = 'maiker.gui.machine-nicknames.v1'
 
 /** Names given to machines in the sidebar, by the machine's real name in lower case. */
 export type MachineNicknames = Record<string, string>

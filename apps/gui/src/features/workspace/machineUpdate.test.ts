@@ -20,10 +20,10 @@ describe('installing or updating a machine', () => {
   })
 
   it('replaces another version without --install, and keeps the daemon note it gave', async () => {
-    vi.mocked(updateMachine).mockResolvedValue('box: maiker 0.67.0 is already up to date\nnote: could not ask the daemon (x); running sessions are untouched')
+    vi.mocked(updateMachine).mockResolvedValue('box: maiker 0.67.0 is already up to date\nnote: could not ask the Maiker service (x); running sessions are untouched')
     await runMachineUpdate('box', 'update', true, vi.fn())
     expect(updateMachine).toHaveBeenCalledWith('box', false, true)
-    expect(toasts.success).toHaveBeenCalledWith('box: maiker 0.67.0 is already up to date', { id: 'toast-1', description: 'note: could not ask the daemon (x); running sessions are untouched' })
+    expect(toasts.success).toHaveBeenCalledWith('box: maiker 0.67.0 is already up to date', { id: 'toast-1', description: 'note: could not ask the Maiker service (x); running sessions are untouched' })
   })
 
   it.each([

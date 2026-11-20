@@ -2,7 +2,7 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
-import { forgetComposers } from '../composerStore'
+import { forgetComposers, updateComposer } from '../composerStore'
 import { ChatSession } from './ChatSession'
 
 const fake = vi.hoisted(() => ({
@@ -85,7 +85,7 @@ describe('a long mixed conversation', () => {
     await settle()
     await settle()
 
-    const list = screen.getByRole('region', { name: 'Conversation with claude' })
+    const list = screen.getByRole('region', { name: 'Conversation with Claude' })
     expect(list.querySelectorAll('[data-key]').length).toBeLessThan(40)
     // The last item (index 1499, 1499 % 7 = 1) is an agent message with a code block.
     expect(within(list).getByText(/Done 1499/)).toBeInTheDocument()
@@ -138,6 +138,47 @@ describe('approvals in the chat', () => {
     await settle()
 
     expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'Accept')
+  })
+
+  it('answers with y, a and n typed in the message box while it is empty', async () => {
+    const daemon = withStep()
+    daemon.approvals = [request('req-1')]
+    daemon.status = 'Blocked'
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message Claude' }), { key: 'a' })
+    await settle()
+
+    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'AcceptForSession')
+  })
+
+  it('leaves y, a and n to the text once the message box holds some', async () => {
+    const daemon = withStep()
+    daemon.approvals = [request('req-1')]
+    daemon.status = 'Blocked'
+    updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, draft: 'yes please' }))
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message Claude' }), { key: 'y' })
+    await settle()
+
+    expect(fake.approveRequest).not.toHaveBeenCalled()
+  })
+
+  it('draws the request as the needs card: the agent at the right, the command, and the four answers', async () => {
+    const daemon = withStep()
+    daemon.approvals = [request('req-1', { can_remember: true })]
+    daemon.status = 'Blocked'
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    const card = screen.getByRole('region', { name: /Approval/ })
+    expect(card).toHaveTextContent('Wants to run a command')
+    expect(card).toHaveTextContent('Claude')
+    expect(card).toHaveTextContent('$ rm -rf build')
+    for (const name of ['Yes once', 'This session', 'No']) expect(within(card).getByRole('button', { name })).toBeInTheDocument()
   })
 
   it('asks one request at a time, the oldest first, and the next once that one is answered', async () => {
@@ -241,7 +282,7 @@ describe('the summary for a new chat', () => {
     render(<ChatSession link={link()} agent="claude" online root="/repo" hideSuccessfulTools problem={{ kind: 'context', agent: 'Claude', percent: 96, onCompact: vi.fn(), onNewWithSummary }} />)
     await settle()
 
-    fireEvent.click(screen.getByRole('button', { name: 'New chat with summary' }))
+    fireEvent.click(screen.getByRole('button', { name: 'New session with summary' }))
 
     expect(onNewWithSummary).toHaveBeenCalledWith(expect.stringContaining('Final words.'))
   })

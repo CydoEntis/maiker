@@ -16,7 +16,7 @@ export type PickerItem = {
 /** Choices under an optional heading. */
 export type PickerGroup = { label?: string; items: readonly PickerItem[] }
 
-const ITEM_CLASS = 'h-auto min-h-10 gap-2.5 py-1.5 pr-8 pl-1.5 text-[12.5px] text-fg focus:bg-hover focus:text-fg [&_[data-slot=dropdown-menu-radio-item-indicator]]:text-brand'
+const ITEM_CLASS = 'h-auto min-h-10 gap-2.5 py-1.5 px-1.5 text-[12.5px] text-fg focus:bg-hover focus:text-fg'
 const GROUP_LABEL_CLASS = 'px-1.5 pt-1.5 pb-1 text-[10.5px] font-semibold tracking-wider text-dim uppercase'
 
 /**

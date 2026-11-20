@@ -10,7 +10,6 @@ import { guardLocal } from '@/lib/localOnly'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import { repoLocate } from '@/features/inspect/api'
 import type { LookAt } from '@/features/inspect/FilesTab'
-import { usePaneViews } from './usePaneViews'
 import type { OpenSubagent } from './model/subagents'
 import { activeArrangement, type Layout, MAX_PANES, showSession, splitPane } from './model/layout'
 import { displayName, type SessionView } from './model/session'
@@ -18,7 +17,7 @@ import { makeId } from './makeId'
 import { copyText as writeClipboard } from '@/lib/clipboard'
 
 /** What a session's row and menu do: show it, rename it, split it, copy its path, open one of its files. */
-export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, paneViews, sessions, preferences, setPreferences, setSettingsSection, setLookAt, setInspectView, setInspectOpen }: {
+export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, setInspectView, setInspectOpen }: {
   setRenameId: Dispatch<SetStateAction<string | null>>
   queryClient: QueryClient
   setOpenSubagent: Dispatch<SetStateAction<OpenSubagent | null>>
@@ -26,7 +25,6 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
   layout: Layout
   flash: (text: string) => void
   sessionMap: Map<string, SessionView>
-  paneViews: ReturnType<typeof usePaneViews>
   sessions: SessionView[]
   preferences: SettingsPreferences
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
@@ -80,12 +78,11 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     if (target) copyText(target.cwd, 'Path')
   }, [sessionMap, copyText])
 
-  // A subagent's own chat shows in its session's pane, in the chat view.
+  // A subagent's own chat shows in its session's pane.
   const showSubagent = useCallback((sessionId: string, subagentId: string) => {
     setLayout((current) => showSession(current, sessionId, makeId))
-    paneViews.choose(sessionId, 'chat')
     setOpenSubagent({ sessionId, subagentId })
-  }, [paneViews, setLayout, setOpenSubagent])
+  }, [setLayout, setOpenSubagent])
 
   // The usage report names panes of this computer's daemon by number; only a pane this window has can be opened.
   const sessionForUsageTerm = useCallback((term: number) => {

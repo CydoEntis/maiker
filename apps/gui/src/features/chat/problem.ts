@@ -13,7 +13,7 @@ const PERCENT_MAX = 100
  * - `context`: the context is nearly full (a warning that blocks nothing).
  */
 export type ChatProblem =
-  | { kind: 'stopped'; agent: string; code: number | null; onRestart: (() => void) | null; onViewLog: () => void }
+  | { kind: 'stopped'; agent: string; code: number | null; onRestart: (() => void) | null; onViewLog: (() => void) | null }
   | { kind: 'machine'; machine: string; since: number | null; onRetry: () => void }
   | { kind: 'interrupted'; agent: string; resume: string; onRestart: () => void; onDismiss: () => void }
   | { kind: 'context'; agent: string; percent: number; onCompact: () => void; /** Opens a new chat in the same folder with the summary as its first message. */ onNewWithSummary: (summary: string) => void }
@@ -80,7 +80,7 @@ export function problemWords(problem: ChatProblem, now: number): ProblemWords {
       const how = killed !== undefined
         ? `${problem.agent} stopped in the middle of a step. ${killed}.`
         : `${problem.agent}${problem.code === PLAIN_EXIT ? ` exited with code ${String(PLAIN_EXIT)}` : ' exited'} in the middle of a step.`
-      const carry = problem.onRestart === null ? 'Open the terminal to see why.' : 'Restart to carry on from the last message.'
+      const carry = problem.onRestart === null ? 'The terminal log has the reason.' : 'Restart to carry on from the last message.'
       return {
         title: `${problem.agent} stopped`,
         reason: `${how} Your messages and changes are safe. ${carry}`,

@@ -4,6 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { archiveSessionOnDaemon, snoozeSessionOnDaemon } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import { displayName, untilWord, type SessionView } from './model/session'
+import { sessionWords } from './model/sidebar'
 
 /** As long as a close's Undo, so the two feel the same. */
 const UNDO_PUT_AWAY_MS = 6000
@@ -23,7 +24,8 @@ export function usePutAway({ queryClient, sessionMap }: { queryClient: QueryClie
     const session = sessionMap.get(sessionId)
     archiveSessionOnDaemon({ id: sessionId }, true)
       .then(async () => {
-        toast.info(`Put away ${session ? displayName(session) : 'the session'}`, { duration: UNDO_PUT_AWAY_MS, action: { label: 'Undo', onClick: () => { bringBack(sessionId) } } })
+        const words = session ? sessionWords(session) : { title: 'the session' }
+        toast.info(`Put away ${words.title}`, { duration: UNDO_PUT_AWAY_MS, action: { label: 'Undo', onClick: () => { bringBack(sessionId) } }, ...(words.description === undefined ? {} : { description: words.description }) })
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
       })
       .catch((error: unknown) => { toast.failed('Could not put the session away', error) })

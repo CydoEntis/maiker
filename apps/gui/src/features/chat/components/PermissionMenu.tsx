@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { BYPASS_MODE, DANGER_MODES, MODE_FACTS, modeLabel, PICKABLE_MODES } from '../chatMeta'
+import { agentLabel } from '@/features/workspace/model/session'
 
 type Props = {
   /** The button that opens the menu. */
@@ -24,7 +25,7 @@ export function PermissionMenu({ children, agent, label, mode, modes = PICKABLE_
       <DropdownMenuTrigger asChild>{children}</DropdownMenuTrigger>
       {/* Mounted in the window root, as the model menu is, so it reads the theme's colours. */}
       <DropdownMenuContent side="top" align="start" container={document.querySelector<HTMLElement>('.mx-app')} aria-label={label} className="mx-pm text-fg">
-        <p className="mx-pm-head m-0"><strong>Permissions</strong><span>{agent}</span></p>
+        <p className="mx-pm-head m-0"><strong>Permissions</strong><span>{agentLabel(agent)}</span></p>
         <DropdownMenuRadioGroup value={mode} onValueChange={onPick}>
           {modes.map((key) => {
             const off = key === BYPASS_MODE && bypassOff !== undefined

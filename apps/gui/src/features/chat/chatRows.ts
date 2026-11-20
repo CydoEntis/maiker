@@ -24,7 +24,8 @@ export type ChatRow =
   /** Helper agents that follow each other are one card; its key is the first one's id, so it stays put as more join. */
   | { readonly kind: 'agents'; readonly key: string; readonly events: readonly SubagentEvent[] }
   | { readonly kind: 'approval'; readonly key: string; readonly event: ApprovalEvent; readonly step: StepRef | null }
-  | { readonly kind: 'divider'; readonly key: string; readonly event: TurnEvent }
+  /** A turn's footer. `steps` is how many tools it ran, `reply` what the agent wrote and `prompt` what the person asked (null where the history has none). */
+  | { readonly kind: 'divider'; readonly key: string; readonly event: TurnEvent; readonly steps: number; readonly reply: string; readonly prompt: string | null }
   /**
    * Under a turn that edited files: how many, and the lines added and removed where every diff was kept. `turn` is when
    * it ran, null when the times are not the daemon's, so its snapshots cannot be picked by them.
@@ -93,9 +94,28 @@ function onlyCommands(events: readonly ChatEvent[], turnId: string): boolean {
   return own.some((event) => event.kind === 'note' || event.kind === 'summary') && own.every((event) => event.kind === 'note' || event.kind === 'summary' || (event.kind === 'message' && event.role === 'user'))
 }
 
+const STEP_KINDS: ReadonlySet<ChatEvent['kind']> = new Set(['edit', 'command', 'tool'])
+
+type TurnFacts = { steps: number; replies: string[]; prompt: string | null }
+
+/** What each turn's footer needs, in one pass: how many steps it took, the agent's words (for Copy) and the person's (for Retry). */
+function turnFactsOf(events: readonly ChatEvent[]): Map<string, TurnFacts> {
+  const facts = new Map<string, TurnFacts>()
+  for (const event of events) {
+    if (event.turnId === null) continue
+    const own = facts.get(event.turnId) ?? { steps: 0, replies: [], prompt: null }
+    facts.set(event.turnId, own)
+    if (STEP_KINDS.has(event.kind)) own.steps += 1
+    else if (event.kind === 'message' && event.role === 'agent') own.replies.push(event.text)
+    else if (event.kind === 'message' && own.prompt === null) own.prompt = event.text
+  }
+  return facts
+}
+
 export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false, workingPhrase: string | null = null): ChatRow[] {
   const rows: ChatRow[] = []
   const edits = new Map<string, EditEvent[]>()
+  const turns = turnFactsOf(events)
   for (const event of events) {
     if (event.kind === 'edit') edits.set(event.turnId, [...(edits.get(event.turnId) ?? []), event])
     switch (event.kind) {
@@ -129,7 +149,8 @@ export function buildRows(events: readonly ChatEvent[], working: boolean, root: 
       case 'turn': {
         // A turn that was only a command the person ran and what it printed took no work, so it gets no "Finished in 0s".
         if (event.outcome === 'completed' && onlyCommands(events, event.turnId)) break
-        rows.push({ kind: 'divider', key: event.id, event })
+        const facts = turns.get(event.turnId)
+        rows.push({ kind: 'divider', key: event.id, event, steps: facts?.steps ?? 0, reply: facts?.replies.join('\n\n') ?? '', prompt: facts?.prompt ?? null })
         const changed = changesOf(edits.get(event.turnId) ?? [])
         if (changed !== null) rows.push({ kind: 'changes', key: `changes:${event.turnId}`, ...changed, turn: event.timed ? { startedAtMs: event.startedAtMs, endedAtMs: event.endedAtMs } : null })
         break
@@ -250,6 +271,11 @@ export function dividerText(turn: TurnEvent, clock: (ms: number) => string): str
   return `${outcome === 'failed' ? 'Failed' : 'Stopped'} after ${took} · ${done}`
 }
 
+/** The visible words of a finished turn's footer: "Done · 5 steps". The duration and clock time stay in `dividerText`, which is its tooltip. */
+export function doneText(steps: number): string {
+  return steps === 0 ? 'Done' : `Done · ${String(steps)} ${steps === 1 ? 'step' : 'steps'}`
+}
+
 /** The lead sentence of an agent message: its first sentence, cut at 220 characters. The rest is the body. */
 const LEAD_LIMIT = 220
 
@@ -265,13 +291,36 @@ export function streamingParagraphs(paragraphs: readonly string[]): string[] {
   return shown.trim() === '' ? earlier : [...earlier, shown]
 }
 
+/** An abbreviation's full stop is not the end of a sentence. */
+const ABBREVIATION = /\b(?:e\.g|i\.e|etc|vs|approx|cf)\.$/i
+const SENTENCE_END = /[.!?](?=\s|$)/g
+
+const PAIR = 2
+
+/** Whether every inline code span and bold mark in `text` is closed: a lead cut inside one would show a bare mark. */
+function marksClosed(text: string): boolean {
+  const isEven = (pattern: RegExp) => (text.match(pattern)?.length ?? 0) % PAIR === 0
+  return isEven(/`/g) && isEven(/\*\*/g)
+}
+
+/** The first sentence of a paragraph: its first full stop that is not an abbreviation's, or the whole paragraph. */
+function firstSentence(first: string): string {
+  for (const match of first.matchAll(SENTENCE_END)) {
+    const end = match.index + 1
+    if (!ABBREVIATION.test(first.slice(0, end))) return first.slice(0, end)
+  }
+  return first
+}
+
 export function splitLead(paragraphs: readonly string[]): { lead: string; rest: readonly string[] } {
   const [first, ...others] = paragraphs
   if (first === undefined) return { lead: '', rest: [] }
   const [firstLine = '', secondLine] = first.split('\n')
   if (BLOCK_START.test(first) || startsTable(firstLine, secondLine)) return { lead: '', rest: paragraphs }
-  const sentence = /^[\s\S]*?[.!?](?=\s|$)/.exec(first)?.[0] ?? first
+  const sentence = firstSentence(first)
   const lead = sentence.length > LEAD_LIMIT ? first.slice(0, LEAD_LIMIT) : sentence
+  // A cut inside `code` or **bold** would leave the mark bare in the lead and unmatched in the rest, so the paragraph stays whole.
+  if (!marksClosed(lead)) return { lead: first, rest: others }
   const remainder = first.slice(lead.length).trim()
   return { lead, rest: remainder === '' ? others : [remainder, ...others] }
 }

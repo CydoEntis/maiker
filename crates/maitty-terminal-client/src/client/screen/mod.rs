@@ -1,7 +1,7 @@
 //! The app's layout: projects (git repos) in the sidebar, each
 //! project's worktrees with the sessions running in them, and the focused session full size
 //! (optionally split with a second). Most tools are centred overlays over a dimmed
-//! screen: jump, new pane, talk and keys. Settings uses a centred modal; review uses a right-hand sheet
+//! screen: jump, new pane, talk and keys. Settings is a full window; review uses a right-hand sheet
 //! beside the panes.
 //!
 //! Sidebar rows identify panes or durable conversations; terminal topology stays pane-owned.
@@ -63,8 +63,10 @@ pub(super) struct Saved {
     pub open_branches: Vec<String>,
     /// Sidebar width you dragged it to, and the split's share for the left (or top) half.
     pub side_w: Option<u16>,
-    /// The sidebar lists each machine's sessions under their folder instead of in one run.
-    pub group_folders: bool,
+    /// The sidebar groups sessions by machine instead of by status.
+    pub group_machine: bool,
+    /// How a group's sessions are ordered: `""` newest change first, `oldest`, or `az`.
+    pub side_sort: String,
     pub split: Option<f32>,
     /// A task typed into + New and not started yet.
     pub draft: String,
@@ -194,6 +196,8 @@ pub(super) struct Screen {
     /// Where the toast is drawn this frame (empty: none). It sits over the panes, so a click
     /// there is the toast's, never the program's under it.
     pub toast_rect: Rect,
+    /// Where the toast of `toasts` is drawn this frame (empty: none); a click there is the toast's.
+    pub toast_box: Rect,
     /// A session picked from the sidebar, the go-to list or a sheet: it shows its own tab, not
     /// the one you were last on in it. Taken by the next focus change.
     pub show_own: Option<ClientTerm>,
@@ -232,6 +236,9 @@ pub(super) struct Screen {
     pub last_focus: Option<ClientTerm>,
     /// Modal frames drawn this frame, flattened onto the workspace ground afterward.
     pub modal_rects: Vec<Rect>,
+    /// What was done about each stopped chat's box (`stopped.rs`), and the chat whose restart waits on the daemon's closed sessions.
+    pub stopped_ui: HashMap<ClientTerm, stopped::StoppedUi>,
+    pub restart_asked: Option<ClientTerm>,
     /// Sidebar scroll, and whether to bring the focused row into view on the next draw.
     pub side_scroll: u16,
     pub follow: bool,
@@ -1460,6 +1467,12 @@ fn session_title(t: &TermInfo, name: &str, top: &Path) -> String {
 pub(super) enum ScreenHit {
     /// The toast's ✕.
     ToastClose,
+    /// A toast's title or `go there`: open its chat (the update toast: the menu).
+    ToastGo,
+    /// A news toast's ✕ or `esc`.
+    ToastDismiss,
+    /// The update toast's `install now`.
+    ToastInstall,
     /// A subagent row of the sidebar (its place in `Screen::sub_rows`): it opens its parent's
     /// pane, where the agent shows its subagents itself.
     Subagent(usize),
@@ -1467,7 +1480,6 @@ pub(super) enum ScreenHit {
     /// folds its finished subagents.
     SubagentsDone(usize),
     /// The release chip on the sidebar's foot: its menu, opening upward.
-    ReleaseMenu,
     /// The `n new session` chip in a workspace with no pane open.
     NoPaneNew,
     /// A machine or folder heading's arrow and name: fold it or open it again (its key in `Screen::fold_keys`).
@@ -1484,6 +1496,24 @@ pub(super) enum ScreenHit {
     MachineFix(MachineId),
     /// A pane's folder and branch on its bottom border: its Project menu (Files, Changes, Branches, …).
     PaneProject(ClientTerm),
+    /// The context-almost-full bar on a pane: send its agent `/compact`.
+    Compact(ClientTerm),
+    /// The keys of a stopped chat's box and bar.
+    StoppedRestart(ClientTerm),
+    StoppedNotNow(ClientTerm),
+    StoppedCopy(ClientTerm),
+    StoppedReopen(ClientTerm),
+    /// The service box's buttons, and the red chip that brings the box back.
+    ServiceStart,
+    ServiceNotNow,
+    ServiceCopy,
+    ServiceReopen,
+    /// The sidebar's `⌕`: the search.
+    SidebarSearch,
+    /// The sidebar's `? keys`.
+    SidebarKeys,
+    /// `± changes N` on a pane's top border: focus the pane and open its Changes.
+    PaneChanges(ClientTerm),
     /// A session row of the sidebar.
     Session(ClientSession),
     /// A button on the selected Inbox item: the key it stands for (`\n` Enter, `\x1b` Esc).
@@ -1635,6 +1665,7 @@ pub(super) fn k(app: &App, a: &Action) -> String {
 mod behaviour;
 mod branch_sheet;
 mod card;
+mod changes_panel;
 mod check;
 mod chips;
 mod check_actions;
@@ -1659,7 +1690,16 @@ pub(in crate::client) mod machines;
 #[cfg(test)]
 mod machines_tests;
 mod service;
-pub(in crate::client) use service::{Service, draw_service_down};
+mod settings_page;
+#[cfg(test)]
+mod chat_menu_tests;
+mod side_keys;
+mod stopped;
+mod toasts;
+mod release;
+pub(in crate::client) use release::release_chip;
+pub(in crate::client) use toasts::{Toast, draw_live_toast};
+pub(in crate::client) use service::{Service, draw_service_down, service_chip};
 mod updates;
 pub(in crate::client) use updates::draw_updates;
 mod closing;
@@ -1673,6 +1713,7 @@ mod fuzzy;
 mod popover;
 mod popups;
 mod references_sheet;
+mod search;
 mod secret_ask;
 mod session_find;
 #[cfg(test)]
@@ -1689,6 +1730,7 @@ mod panes_apart_tests;
 mod reference;
 mod sheet;
 mod side;
+pub(in crate::client) use side::renames_in_place;
 mod splash;
 mod workspace;
 mod splash_wide;
@@ -1704,7 +1746,7 @@ mod clone_repo;
 mod specialists;
 #[cfg(test)]
 mod repos_tests;
-pub(in crate::client) use self::{clone_repo::*, specialists::*};
+pub(in crate::client) use self::{clone_repo::*, settings_page::draw_settings_screen, specialists::*};
 pub(in crate::client) use self::{
     branch_sheet::*, card::*, check_actions::*, check_approve::*, check_sheet::*, dialogs::*,
     draw::*, heads::*, helpers_ask::*, keyoverlay::*, leader::*, mode_bar::*, popover::*,

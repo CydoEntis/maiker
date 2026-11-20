@@ -258,6 +258,8 @@ pub(super) enum Btn {
     ViewChord(KeyCode, KeyModifiers),
     /// A row of the current view's list.
     Row(usize),
+    /// The box of a row of the list: chooses the row and flips whether it is picked.
+    Tick(usize),
 }
 
 pub(super) enum Bg {
@@ -560,10 +562,20 @@ pub struct App {
     notice: Option<(String, Instant, bool)>,
     /// The session the note is about (an agent finished or needs you): clicking it goes there.
     notice_term: Option<ClientTerm>,
+    /// News about chats you are not looking at, and the update; the newest shows (`screen::toasts`).
+    toasts: Vec<screen::Toast>,
+    /// Chats whose stopping already had a toast, so a dismissed one does not come back.
+    failed_told: HashSet<ClientTerm>,
+    /// Restart was asked for while chats are working; it goes when they finish.
+    restart_waiting: bool,
+    /// The version this window just updated to, and when.
+    updated: Option<(String, Instant)>,
     /// The toast offers Restart now (the update just installed, the daemon still old).
     notice_restart: bool,
     /// The toast is a hint about keys, not news: it is marked `i`, not ✓.
     notice_hint: bool,
+    /// The notice is a warning (yellow): something the user can fix by choosing again.
+    notice_warn: bool,
     /// The file being sent to another machine, if any (ADR 0007).
     sending: Option<send_file::Sending>,
     /// The toast's second and third rows, when the notice has them.
@@ -578,6 +590,8 @@ pub struct App {
     service: screen::Service,
     /// `r` asked to try now; `s` asked to start the service. Taken by the next tick.
     service_retry_now: bool,
+    /// When the service last came back: "Back online" shows on the bar for a few seconds.
+    back_online: Option<Instant>,
     service_start_now: bool,
     /// The protocol of a service that came back as a version this window cannot talk to.
     service_version: Option<u32>,
@@ -693,6 +707,10 @@ pub struct App {
     window_focused: bool,
     /// The background we told the terminal to use (OSC 11), so its padding matches.
     osc_bg: Option<ratatui::style::Color>,
+    /// The first frame has set the sidebar for the window's width (`start_for_width`).
+    started_for_width: bool,
+    /// The smallest window drawn; under it one line asks for a bigger one.
+    min_window: (u16, u16),
     /// Panes in the middle of a synchronized update (mode 2026): since when. Not drawn
     /// until it ends (or 100 ms pass), so redraws don't flicker.
     sync_hold: HashMap<ClientTerm, Instant>,
@@ -883,8 +901,13 @@ impl App {
             cfg,
             notice: None,
             notice_term: None,
+            toasts: Vec::new(),
+            failed_told: HashSet::new(),
+            restart_waiting: false,
+            updated: None,
             notice_restart: false,
             notice_hint: false,
+            notice_warn: false,
             sending: None,
             notice_card: None,
             copy_flash: None,
@@ -892,6 +915,7 @@ impl App {
             closing: Default::default(),
             service: Default::default(),
             service_retry_now: false,
+            back_online: None,
             service_start_now: false,
             service_version: None,
             stopped_since: None,
@@ -946,6 +970,10 @@ impl App {
             screen: screen::Screen::load(),
             window_focused: true,
             osc_bg: None,
+            // Tests draw at every size and expect the sidebar they set up, so they begin with
+            // both window-size rules off; the rules have tests of their own that switch them on.
+            started_for_width: cfg!(test),
+            min_window: if cfg!(test) { (40, 10) } else { render::MIN_WINDOW },
             sync_hold: HashMap::new(),
             focus_report: HashSet::new(),
             focus_sent: None,
@@ -1048,6 +1076,11 @@ impl App {
                     }
                     let frame = self.spinner_frame();
                     self.settle_alerts();
+                    self.fire_failed_toasts();
+                    if self.prune_toasts() {
+                        self.dirty = true;
+                    }
+                    self.release_tick();
                     self.ask_lists_again();
                     if frame != last_frame && ((self.motion_on() && (self.any_working() || self.any_checking() || self.any_calling())) || matches!(self.mode, Mode::Spinners(_))) {
                         last_frame = frame;
@@ -1282,8 +1315,15 @@ impl App {
         self.notice_term = None;
         self.notice_restart = false;
         self.notice_hint = false;
+        self.notice_warn = false;
         self.notice_card = None;
         self.dirty = true;
+    }
+
+    /// A notice in the warning colour: it was not an error, but nothing happened.
+    fn warn(&mut self, msg: String) {
+        self.notify(msg, false);
+        self.notice_warn = true;
     }
 
     /// A toast with a detail row and, optionally, a preview row under its title.
@@ -1492,6 +1532,10 @@ impl App {
             .filter(|t| t.status == Status::Blocked)
             .count();
         let keeps = self.cfg.restore.enabled;
+        if working > 0 {
+            // Stopping a working chat is never the default: Maiker waits for them to finish.
+            return self.restart_when_idle();
+        }
         if sessions == 0 || (working + waiting == 0 && keeps) {
             return self.restart_daemon_now();
         }
@@ -1587,12 +1631,9 @@ impl App {
         }
         match found {
             Ok(Some(v)) if self.update_available.as_ref() != Some(&v) => {
-                self.notify(
-                    format!("{APP_COMMAND} {v} is out: Update now is in Settings"),
-                    false,
-                );
-                self.update_available = Some(v);
+                self.update_available = Some(v.clone());
                 self.update_notes = notes;
+                self.announce_update(&v);
             }
             Ok(Some(v)) if asked => self.notify(
                 format!("{APP_COMMAND} {v} is out: Update now is in Settings"),
@@ -1897,30 +1938,6 @@ impl App {
                 }
             })
             .unwrap_or_default()
-    }
-
-    fn describe_term(&self, term: ClientTerm) -> String {
-        let name = self.session_name(term);
-        if let Some(t) = self.term_info(term) {
-            let place = crate::alert::place_label(
-                t.root.as_deref(),
-                t.top.as_deref().unwrap_or(&t.cwd),
-                t.branch.as_deref(),
-            );
-            if !place.is_empty() {
-                return format!("{name} ({place})");
-            }
-        }
-        match self
-            .snap_of(term.machine)
-            .and_then(|snap| snap.locate(term.term))
-        {
-            Some((w, t)) => {
-                let idx = w.tabs.iter().position(|x| x.id == t.id).unwrap_or(0) + 1;
-                format!("{name} ({} › {idx})", w.name)
-            }
-            None => name,
-        }
     }
 
     // ---- input ---------------------------------------------------------------------

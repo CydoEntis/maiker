@@ -22,6 +22,26 @@ export function standingWords(standing: WorktreeStanding): string {
   return `${idle}${standing.merged ? 'merged, nothing uncommitted' : 'not merged anywhere'}${ago}`
 }
 
+/** The word a worktree's row carries: what is on it that is not yet anywhere else. */
+export function standingTag(standing: WorktreeStanding): string {
+  if (standing.missing) return 'folder gone'
+  if (standing.dirty > 0) return `${String(standing.dirty)} ${standing.dirty === 1 ? 'change' : 'changes'}`
+  return standing.merged ? 'merged' : 'unmerged'
+}
+
+/** The tag's tone: changes still to save are working, merged work is done, a missing folder is an error. */
+export function standingTone(standing: WorktreeStanding): 'neutral' | 'done' | 'err' | 'working' {
+  if (standing.missing) return 'err'
+  if (standing.dirty > 0) return 'working'
+  return standing.merged ? 'done' : 'neutral'
+}
+
+/** How long it has been quiet, for a row's right edge: "inactive 16 days", or the last commit's age. */
+export function ageWords(standing: WorktreeStanding): string {
+  if (standing.inactive_days !== null) return `inactive ${String(standing.inactive_days)} ${standing.inactive_days === 1 ? 'day' : 'days'}`
+  return standing.last_commit
+}
+
 /** What pressing Remove would lose, or null when nothing: the button then asks twice only when it must. */
 export function lossOfRemoving(standing: WorktreeStanding): string | null {
   if (standing.dirty > 0) return `its ${String(standing.dirty)} uncommitted ${standing.dirty === 1 ? 'change' : 'changes'}`

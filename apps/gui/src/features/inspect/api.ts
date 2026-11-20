@@ -53,7 +53,7 @@ const LOG_LIMIT = 60
 async function ask<T>(term: number, question: unknown, kind: string, payload: z.ZodType<T>, machine: number = LOCAL_MACHINE): Promise<T> {
   if (!isTauri()) throw new Error('Repository details are only available in the desktop app')
   const reply = z.record(z.string(), z.unknown()).parse(await invoke<unknown>('repo_query', { ...(machine === LOCAL_MACHINE ? {} : { machine }), term, question }))
-  if (!(kind in reply)) throw new Error('The daemon answered a different question')
+  if (!(kind in reply)) throw new Error('The Maiker service answered a different question')
   return payload.parse(reply[kind])
 }
 

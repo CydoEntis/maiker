@@ -1,51 +1,56 @@
 import { cn } from "@/lib/utils"
+import "./status-icon.css"
 
-/** The states a status icon draws. The caller maps its own model onto these; the primitive knows no domain. */
-type StatusIconKind = "needs" | "working" | "done" | "error" | "limited" | "idle" | "unknown"
-
-/** The glyph each status carries, so colour is never the only signal. Working draws the running light instead. */
-const GLYPH: Record<Exclude<StatusIconKind, "working" | "unknown">, string> = {
-  needs: "!",
-  done: "✓",
-  error: "×",
-  limited: "‖",
-  idle: "–",
-}
-
-/** The running light's path round the folded tile: the same outline `corner-shape: bevel` cuts (top-left and bottom-right). */
-const FOLDED_OUTLINE = "M3 .5H9.5V7L7 9.5H.5V3Z"
-/** Share of the outline the light covers, and the gap after it (the dash pattern adds up to the 100 of `pathLength`). */
-const LIGHT_LENGTH = 24
-const PATH_LENGTH = 100
-const LIGHT_GAP = PATH_LENGTH - LIGHT_LENGTH
-/** The two sizes the design uses: rows and the pane header are 14px, the live box's own light 12px. */
-const DEFAULT_SIZE = 14
+/** The four marks there are: one set, each drawn in the same box. */
+type StatusMarkKind = "needs" | "working" | "done" | "idle"
 
 /**
- * A session's status as the design draws it: a small square with the status's own glyph (`!` needs you in the needs
- * colour, `✓` done, `×` failed, `–` idle and dim). Working is an empty tile with a light running round its edge, and
- * under Folded corners the light follows the cut outline and under Rounded corners it runs round a circle. Idle and unknown are dimmed, not coloured.
+ * What a caller may hand over: the four marks, or a daemon state that has none of its own. There is no failed mark: a
+ * stopped agent and one held by its plan limit both read as needs you (as `sectionOf` files them), and a state nobody
+ * knows reads as idle. The reason is words beside the mark, never a different mark.
  */
-function StatusIcon({ status, size = DEFAULT_SIZE, className }: { status: StatusIconKind; size?: number; className?: string }) {
+type StatusIconKind = StatusMarkKind | "error" | "limited" | "unknown"
+
+const MARK_OF: Record<StatusIconKind, StatusMarkKind> = {
+  needs: "needs", working: "working", done: "done", idle: "idle", error: "needs", limited: "needs", unknown: "idle",
+}
+
+/** The mark a status is drawn as. */
+const markOf = (status: StatusIconKind): StatusMarkKind => MARK_OF[status]
+
+/** Share of the ring the lit arc covers, and the gap after it (the dash pattern adds up to the 100 of `pathLength`). */
+const LIGHT_LENGTH = 40
+const PATH_LENGTH = 100
+const LIGHT_GAP = PATH_LENGTH - LIGHT_LENGTH
+/** The one box every mark sits in; a caller beside smaller text may ask for less. */
+const DEFAULT_SIZE = 16
+
+/**
+ * A session's status, one set in one box: idle a dim dot, done a green dot, needs you an amber dot, working a 2px ring
+ * with a lit arc running round it (11px, round under Rounded corners, square under Square). The colour and the place say it,
+ * not a glyph.
+ */
+function StatusIcon({ status, size = DEFAULT_SIZE, className }: { status: StatusIconKind; size?: number; className?: string | undefined }) {
+  const mark = markOf(status)
+  const dash = `${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`
   return (
     <span
       data-slot="status-icon"
-      data-status={status}
+      data-status={mark}
       aria-hidden="true"
       style={{ width: size, height: size }}
-      className={cn("mx-status-icon", `is-${status}`, className)}
+      className={cn("mx-status-icon", `is-${mark}`, className)}
     >
-      {status === "working" ? (
-        <svg viewBox="0 0 10 10" preserveAspectRatio="none" className="mx-status-light" focusable="false">
-          <rect className="mx-sq" x=".5" y=".5" width="9" height="9" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
-          <circle className="mx-round" cx="5" cy="5" r="4.5" fill="none" strokeWidth="1.5" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
-          <path className="mx-fold" d={FOLDED_OUTLINE} fill="none" strokeWidth=".95" strokeLinecap="square" pathLength={PATH_LENGTH} strokeDasharray={`${String(LIGHT_LENGTH)} ${String(LIGHT_GAP)}`} />
+      {mark === "working" ? (
+        <svg viewBox="0 0 11 11" className="mx-status-light" focusable="false">
+          <rect className="mx-sq mx-track" x="1" y="1" width="9" height="9" fill="none" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          <circle className="mx-round mx-track" cx="5.5" cy="5.5" r="4.5" fill="none" strokeWidth="2" vectorEffect="non-scaling-stroke" />
+          <rect className="mx-sq mx-arc" x="1" y="1" width="9" height="9" fill="none" strokeWidth="2" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={dash} />
+          <circle className="mx-round mx-arc" cx="5.5" cy="5.5" r="4.5" fill="none" strokeWidth="2" vectorEffect="non-scaling-stroke" pathLength={PATH_LENGTH} strokeDasharray={dash} />
         </svg>
-      ) : status === "unknown" ? null : (
-        GLYPH[status]
-      )}
+      ) : null}
     </span>
   )
 }
 
-export { StatusIcon, type StatusIconKind }
+export { StatusIcon, markOf, type StatusIconKind, type StatusMarkKind }

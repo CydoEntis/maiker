@@ -3,7 +3,7 @@
  * pick Bypass permissions, and a move to a worktree resumes them the same way. The key keeps its first name, so sessions
  * remembered before the rename still count.
  */
-const KEY = 'maitty.gui.yoloSessions.v1'
+const KEY = 'maiker.gui.yoloSessions.v1'
 
 function read(): string[] {
   try {

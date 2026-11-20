@@ -9,7 +9,7 @@
 .is-edge-caution { --edge: var(--caution); }
 .is-edge-needs { --edge: var(--needs); }
 .is-edge-working { --edge: var(--working); }
-.is-edge-info { --edge: var(--line2); }
+.is-edge-info { --edge: var(--muted); }
 
 /* ---- buttons: outlined, a status-tinted primary, the needs answer, a quiet text button ---- */
 .mx-fb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; font: 500 12px var(--ui); color: var(--fg); white-space: nowrap; background: transparent; box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
@@ -36,21 +36,53 @@
 .mx-fb-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; font: 800 13px/18px var(--mono); color: var(--edge); }
 .mx-fb-mark .mx-status-icon.is-working { --working: var(--edge); }
 
-/* ---- toasts: bottom right, 360px, newest above the others ---- */
-.mx-toaster { position: fixed; right: 20px; bottom: 20px; z-index: 85; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-.mx-toast[data-float] { pointer-events: auto; display: flex; gap: 10px; padding: 12px 6px 10px 12px; color: var(--fg); background: var(--main); border: 1px solid var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); animation: mx-fb-rise .2s var(--ease); }
-/* In the window the float material (material.css) would set its own border and shadow; the toast keeps its edge. */
-.mx-app .mx-toast[data-float] { border-color: var(--line2); box-shadow: inset 2px 0 0 var(--edge), var(--pop-sh); }
-.mx-toast > .mx-fb-mark { align-self: flex-start; height: 18px; }
-.mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.mx-toast-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--fg); overflow-wrap: anywhere; }
+/* ---- toasts (the handoff's "Maiker Current", Toasts): bottom right, clear of the 26px status bar (or top right, Settings › Notifications), 380px, newest above
+   the others. The floating surface with the panel radius and the status mark, no coloured edge; the status colour is the mark's. ---- */
+.mx-toaster { position: fixed; right: 18px; bottom: 40px; z-index: 85; width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+.mx-toast-slot { position: relative; isolation: isolate; pointer-events: none; }
+.mx-toast-slot[data-ghosts="1"] { margin-top: 9px; }
+.mx-toast-slot[data-ghosts="2"] { margin-top: 18px; }
+.mx-toast[data-float] { position: relative; z-index: 1; pointer-events: auto; display: flex; align-items: flex-start; gap: 9px; padding: 10px 8px 12px 11px; color: var(--fg); background: var(--main); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--pop-sh-dialog); overflow: hidden; animation: mx-toast-in .24s cubic-bezier(.2, .8, .2, 1); }
+.mx-app .mx-toast[data-float] { border-color: var(--line); box-shadow: var(--pop-sh-dialog); }
+.mx-toast.is-note[data-float] { align-items: center; min-height: 40px; padding: 6px 6px 6px 11px; }
+.mx-toast > .mx-status-icon { height: 20px; }
+.mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-toast-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.mx-toast-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; line-height: 20px; color: var(--fg); overflow-wrap: anywhere; }
+.mx-toast.is-note .mx-toast-title { font-weight: 400; color: var(--fg2); }
 .mx-toast-count { margin-left: 6px; font: 500 11.5px var(--mono); color: var(--dim); }
-.mx-toast-reason { font-size: 12.5px; line-height: 1.5; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.mx-toast-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
-.mx-toast-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
-.mx-toast-x:hover { background: var(--m-hover); color: var(--fg); }
+.mx-toast-context { flex: none; max-width: 55%; font: 400 11px var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-toast-reason { font-size: 12.5px; line-height: 1.5; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mx-toast.is-needs .mx-toast-reason { color: color-mix(in srgb, var(--needs) 85%, var(--fg)); }
+.mx-toast-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.mx-toast-x { flex: none; align-self: flex-start; margin-top: -2px; color: var(--dim); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-toast.is-note .mx-toast-x { align-self: center; margin-top: 0; }
+.mx-toast:hover .mx-toast-x, .mx-toast:focus-within .mx-toast-x { opacity: 1; }
+/* The countdown of a toast that hides itself: a 2px line that runs out in the time it has left, and rests with the timer. */
+.mx-toast-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--line2); transform-origin: left; animation: mx-toast-bar linear forwards; }
+.mx-toaster:hover .mx-toast-bar, .mx-toaster:focus-within .mx-toast-bar { animation-play-state: paused; }
+/* The two layers behind the newest toast while the stack is folded; they peek out on the side the stack grows from. */
+.mx-toast-ghost { position: absolute; inset: 0; z-index: 0; border: 1px solid var(--line); border-radius: var(--r-panel); background: color-mix(in srgb, var(--main) 94%, var(--bg)); transform-origin: 50% 0; }
+.mx-toast-ghost[data-depth="1"] { transform: translateY(-9px) scale(.96); }
+.mx-toast-ghost[data-depth="2"] { transform: translateY(-18px) scale(.92); }
+/* The position is a setting on <html> (usePreferenceEffects). */
+:root[data-toasts="top"] .mx-toaster { bottom: auto; top: 44px; }
+:root[data-toasts="top"] .mx-toast[data-float] { animation-name: mx-toast-drop; }
+:root[data-toasts="top"] .mx-toast-slot[data-ghosts="1"] { margin-top: 0; margin-bottom: 9px; }
+:root[data-toasts="top"] .mx-toast-slot[data-ghosts="2"] { margin-top: 0; margin-bottom: 18px; }
+:root[data-toasts="top"] .mx-toast-ghost { transform-origin: 50% 100%; }
+:root[data-toasts="top"] .mx-toast-ghost[data-depth="1"] { transform: translateY(9px) scale(.96); }
+:root[data-toasts="top"] .mx-toast-ghost[data-depth="2"] { transform: translateY(18px) scale(.92); }
+/* The collapsed stack's one line; it takes the pointer so hovering it opens the rest. */
+.mx-toast-more { pointer-events: auto; align-self: flex-end; padding: 0 2px; font-size: 11.5px; color: var(--dim); }
+@keyframes mx-toast-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes mx-toast-drop { from { opacity: 0; transform: translateY(-14px) scale(.98); } to { opacity: 1; transform: none; } }
+@keyframes mx-toast-bar { to { transform: scaleX(0); } }
 @keyframes mx-fb-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes mx-fb-fade { from { opacity: 0; } to { opacity: 1; } }
+/* Under software painting a scale repaints the card at every size: it fades and slides only. */
+:root[data-gpu="software"] .mx-toast[data-float] { animation-name: mx-fb-rise; }
+:root[data-gpu="software"][data-toasts="top"] .mx-toast[data-float] { animation-name: mx-toast-drop; }
 
 /* ---- the scoped alert: a veil over what it blocks, and one card centred on it ----
    The dim is one flat fill of the ground over what is blocked: no blur and no opacity group under it, so a
@@ -99,12 +131,14 @@
 .mx-note-actions { display: flex; flex-wrap: wrap; gap: 2px; margin: 4px 0 0 -6px; }
 
 /* ---- the field error: a 2px red underline and one sentence under the field; the field keeps its fill ---- */
-.mx-app [aria-invalid="true"]:is(input, textarea), .mx-app .mx-field-wrap.is-invalid { box-shadow: inset 0 -2px 0 var(--danger); }
+.mx-app [aria-invalid="true"]:is(input, textarea), .mx-app .mx-field-wrap.is-invalid { box-shadow: inset 0 -1px 0 var(--danger); }
 .mx-field-error { display: flex; gap: 6px; margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }
 /* The mark is drawn, not written, so the message read out and copied is the sentence alone. */
 .mx-field-error::before { content: "×"; flex: none; font: 800 12px/18px var(--mono); color: var(--danger); }
 .mx-field-error code { font: 400 .94em var(--mono); color: var(--fg); }
 
 /* ---- motion: off when asked ---- */
-@media (prefers-reduced-motion: reduce) { .mx-toast, .mx-veil, .mx-alert, .mx-problem-line, .mx-note { animation: none; } }
-:root[data-reduced-motion="true"] :is(.mx-toast, .mx-veil, .mx-alert, .mx-problem-line, .mx-note) { animation: none; }
+@media (prefers-reduced-motion: reduce) { .mx-toast, .mx-toast-bar, .mx-veil, .mx-alert, .mx-problem-line, .mx-note { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .mx-toast-bar { display: none; } }
+:root[data-reduced-motion="true"] :is(.mx-toast, .mx-toast-bar, .mx-veil, .mx-alert, .mx-problem-line, .mx-note) { animation: none; }
+:root[data-reduced-motion="true"] .mx-toast-bar { display: none; }

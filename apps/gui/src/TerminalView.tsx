@@ -26,7 +26,7 @@ import { throttleTrailing, type Throttled } from '@/lib/throttle'
 
 const DEFAULT_SCROLLBACK_LINES = 10000
 const DEFAULT_SCROLL_SPEED = 1
-const LINE_HEIGHT = 1.6
+const DEFAULT_LINE_HEIGHT = 1.6
 const CONNECT_RETRY_MS = 250
 /** How often the grid is fitted while its pane keeps changing size (a sliding sidebar or drawer); the last size is always fitted. */
 const FIT_WHILE_ANIMATING_MS = 90
@@ -105,6 +105,8 @@ export type TerminalLook = {
   scrollback?: number
   /** Lines per wheel notch as a multiple of xterm's default. */
   scrollSpeed?: number
+  /** Row height as a multiple of the font size. */
+  lineHeight?: number
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
   /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
@@ -166,7 +168,7 @@ const NEW_LINE_KEYS = '\x1b\r'
 
 export function TerminalView({ conversation, desktop, fontSize, look = {}, label, inputDisabled = false, ended = false, focused = false, paused = false, onInput, onOpenPath, onHandle, onPasteImage }: TerminalViewProps) {
   if (!desktop) return null
-  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maiker Desktop to use the daemon-owned terminal.</p></div>
+  if (!isDesktop()) return <div className="panel-empty"><TerminalSquare size={18} /><h2>Native terminal is not available</h2><p>Open Maiker Desktop to use the terminals the Maiker service keeps.</p></div>
   if (!hasNativeTerminal(conversation)) return <NativeHandoffView conversation={conversation} />
 
   return <ConnectedTerminalView conversation={conversation} fontSize={fontSize} look={look} label={label ?? `Native ${conversation.provider} terminal`} inputDisabled={inputDisabled || ended} ended={ended} focused={focused} paused={paused} onInput={onInput} onOpenPath={onOpenPath} onHandle={onHandle} onPasteImage={onPasteImage} />
@@ -177,7 +179,7 @@ function NativeHandoffView({ conversation }: { conversation: Conversation }) {
     return <div className="panel-empty" role="status">
       <CircleAlert size={18} />
       <h2>Native terminal needs recovery</h2>
-      <p>The daemon no longer has the native {conversation.provider} terminal attached. Reopen it from the terminal app.</p>
+      <p>The Maiker service no longer has the native {conversation.provider} terminal attached. Reopen it from the terminal app.</p>
     </div>
   }
 
@@ -360,7 +362,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
           fontWeight: lookRef.current.fontWeight ?? DEFAULT_FONT_WEIGHT,
           fontWeightBold: lookRef.current.fontWeightBold ?? DEFAULT_FONT_WEIGHT_BOLD,
           fontSize: fontSizeRef.current,
-          lineHeight: LINE_HEIGHT,
+          lineHeight: lookRef.current.lineHeight ?? DEFAULT_LINE_HEIGHT,
           scrollback: lookRef.current.scrollback ?? DEFAULT_SCROLLBACK_LINES,
           scrollSensitivity: lookRef.current.scrollSpeed ?? DEFAULT_SCROLL_SPEED,
           screenReaderMode: lookRef.current.screenReader ?? false,
@@ -462,7 +464,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
               resizePending = false
               if (!isMounted) return
               lastFailedSize = size
-              setResizeError('Terminal size could not be updated. Check the daemon connection and retry.')
+              setResizeError('Terminal size could not be updated. Check the Maiker service connection and retry.')
             })
             .finally(() => {
               resizeInFlight = false
@@ -693,6 +695,10 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
     }
     if (look.scrollback && emulator.options.scrollback !== look.scrollback) emulator.options.scrollback = look.scrollback
     if (look.scrollSpeed && emulator.options.scrollSensitivity !== look.scrollSpeed) emulator.options.scrollSensitivity = look.scrollSpeed
+    if (look.lineHeight && emulator.options.lineHeight !== look.lineHeight) {
+      emulator.options.lineHeight = look.lineHeight
+      refitTerminal.current?.()
+    }
     if (look.screenReader !== undefined && emulator.options.screenReaderMode !== look.screenReader) emulator.options.screenReaderMode = look.screenReader
     if (look.theme) emulator.options.theme = look.theme
     const minimumContrast = look.minimumContrast ?? NO_MINIMUM_CONTRAST
@@ -731,9 +737,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
 
   return <div className="terminal-view">
     {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
-    {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the daemon connection and reopen this session.</p></div>}
+    {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the Maiker service connection and reopen this session.</p></div>}
     <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
-    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the daemon could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
+    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the Maiker service could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
     {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
 }

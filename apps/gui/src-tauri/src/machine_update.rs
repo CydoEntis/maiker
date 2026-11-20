@@ -193,8 +193,9 @@ pub async fn machine_activity(
         .map_err(|error| format!("The question stopped unexpectedly: {error}"))?
 }
 
-#[tauri::command]
-pub async fn update_machine(
+/// Install or update the app on the machine called `name`, off the UI thread, with progress on
+/// `machine-update-progress`. The one path the Fix flow and the add flow share.
+pub(crate) async fn run_update(
     app: tauri::AppHandle,
     name: String,
     install: bool,
@@ -207,6 +208,16 @@ pub async fn update_machine(
     tauri::async_runtime::spawn_blocking(move || run(&app, &executable, &name, install, when_idle))
         .await
         .map_err(|error| format!("The update stopped unexpectedly: {error}"))?
+}
+
+#[tauri::command]
+pub async fn update_machine(
+    app: tauri::AppHandle,
+    name: String,
+    install: bool,
+    when_idle: bool,
+) -> Result<String, String> {
+    run_update(app, name, install, when_idle).await
 }
 
 #[cfg(test)]

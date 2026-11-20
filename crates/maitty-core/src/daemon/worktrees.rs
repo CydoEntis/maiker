@@ -310,12 +310,7 @@ pub(super) fn copy_claude_transcript(src: &std::path::Path, session: &str, dest:
     let Some(projects) = src.parent().and_then(|p| p.parent()) else {
         return;
     };
-    let slug: String = dest
-        .to_string_lossy()
-        .chars()
-        .map(|c| if c.is_ascii_alphanumeric() { c } else { '-' })
-        .collect();
-    let dir = projects.join(slug);
+    let dir = projects.join(super::claude_transcript::folder_slug(dest));
     let to = dir.join(format!("{session}.jsonl"));
     if !to.exists() && std::fs::create_dir_all(&dir).is_ok() {
         let _ = std::fs::copy(src, &to);

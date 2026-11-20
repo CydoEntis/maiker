@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import maittyTokens from '@tokens/maitty-tokens.json'
 import themeManifest from '@tokens/themes.json'
-import { channelsOf, composite, contrastRatio, luminance, mixOklab, withAlpha } from './color'
+import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, luminance, mixOklab, withAlpha } from './color'
 
 /** Every colour role the desktop app reads, set as CSS custom properties on the app root. */
 export type ThemeTokens = {
@@ -102,7 +102,7 @@ const LIGHT_METERS = { meterOk: '#2e7d32', meterMid: '#9a6b00', meterHigh: '#c25
 // Mix percentages from the design; `fg2`, `muted` and `dim` are raised when a theme would fall below
 // MIN_TEXT_CONTRAST against the terminal ground or the window ground.
 const MIX = {
-  raiseDark: 7, raiseLight: 5, hover: 5, sel: 10, line: 9, line2: 15, bgDark: 18, bgLight: 4, wellDark: 25, wellLight: 3,
+  raiseDark: 7, raiseLight: 5, hover: 5, sel: 10, line: 9, line2: 15, bgDark: 21, bgLight: 4, wellDark: 25, wellLight: 3,
   fg2: 80, muted: 62, dim: 52, accentSoft: 13, accentLine: 50, paneLine: 10, contrastStep: 2, full: 100,
 }
 
@@ -164,6 +164,9 @@ const MAIKER_DARK = maittyTheme(maittyTokens.dark, false)
 const MAIKER_LIGHT = maittyTheme(maittyTokens.light, true)
 
 const SHIFT_STEP = 2
+// The design's panel. Every generated dark theme sits its panel at this depth and keeps its own hue, so the surface steps
+// above and below it (window ground, card, hairline, selected row) land where the design's do in any theme.
+const DESIGN_PANEL = '#151517'
 
 /** Mixes a colour toward black (light themes) or white (dark themes) a step at a time until it reads as text on every ground. */
 function shiftUntilReadable(colour: string, grounds: readonly string[], toward: string): string {
@@ -175,7 +178,8 @@ function shiftUntilReadable(colour: string, grounds: readonly string[], toward: 
 
 /** Builds every token from a theme's six inputs, as the TUI themes import. */
 export function generateTheme(inputs: ThemeInputs): ThemeTokens {
-  const { bg, accent, mag, blue, green, light } = inputs
+  const { accent, mag, blue, green, light } = inputs
+  const bg = light ? inputs.bg : atLightnessOf(inputs.bg, DESIGN_PANEL)
   const towardFg = (percent: number) => mixOklab(bg, inputs.fg, percent)
   const windowBg = light ? towardFg(MIX.bgLight) : mixOklab(bg, '#000000', MIX.bgDark)
   // The foreground is lifted (or darkened) in place if a theme's own would fall short on the window ground (Tokyo Night Day).
@@ -318,11 +322,23 @@ export function onDanger(tokens: Pick<ThemeTokens, 'danger'>): string {
   return contrastRatio(light, tokens.danger) >= contrastRatio(dark, tokens.danger) ? light : dark
 }
 
+// A card on a panel and its selected row, as steps from the panel toward the text colour, measured from the design
+// (#1b1b1b and #2a2a2a on #151517). On a panel that is all but grey the design's cards are pure grey, so the panel's
+// faint tint is dropped there; a theme with a real hue keeps it.
+const CARD_STEP = 3.5
+const CARD_SEL_STEP = 12
+const NEAR_GREY_CHROMA = 0.01
+
+function cardSteps(tokens: ThemeTokens): Record<string, string> {
+  const tone = chromaOf(tokens.main) < NEAR_GREY_CHROMA ? greyOf : (colour: string) => colour
+  return { '--card-step': tone(mixOklab(tokens.main, tokens.fg, CARD_STEP)), '--card-sel-step': tone(mixOklab(tokens.main, tokens.fg, CARD_SEL_STEP)) }
+}
+
 /** The theme as CSS custom properties, for the app root's style. */
 export function themeStyle(theme: ThemeEntry): Record<string, string> {
   const style: Record<string, string> = { '--card-ring': theme.cardRing, colorScheme: theme.light ? 'light' : 'dark', '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, '--on-danger': onDanger(theme.tokens), ...(theme.light ? LIGHT_GLASS : DARK_GLASS) }
   for (const [key, variable] of Object.entries(CSS_VARIABLES)) style[variable] = theme.tokens[key as keyof ThemeTokens]
-  if (!theme.light) Object.assign(style, frostOf(theme.tokens.main))
+  if (!theme.light) Object.assign(style, frostOf(theme.tokens.main), cardSteps(theme.tokens))
   const { look, shading } = theme
   if (look !== undefined) {
     style['--ui'] = look.ui

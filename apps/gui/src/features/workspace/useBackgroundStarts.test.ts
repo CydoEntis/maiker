@@ -1,7 +1,7 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DraftAttachment } from '@/features/chat/composerStore'
-import type { NewChatRequest } from './components/NewSessionDialog'
+import type { NewChatRequest } from './components/NewChatPage'
 import { useBackgroundStarts } from './useBackgroundStarts'
 
 const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn() }))

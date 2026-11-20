@@ -4,11 +4,12 @@ import { reserveOperation } from '@/features/chat/sendOperation'
 import { PASTE_END, PASTE_START } from '@/features/chat/useChatComposer'
 import { peekChatFeed } from '@/features/chat/useChatFeed'
 import { isChatSession } from './chatSession'
-import type { SessionView } from './session'
+import { agentLabel, type SessionView } from './session'
 
-/** The agent's name as a button says it: `claude` is Claude. */
+/** The agent's name as a button says it: `claude` is Claude; a program not known by name gets a capital. */
 export function agentName(process: string): string {
-  return process.charAt(0).toUpperCase() + process.slice(1)
+  const known = agentLabel(process)
+  return known !== process ? known : process.charAt(0).toUpperCase() + process.slice(1)
 }
 
 /**

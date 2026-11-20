@@ -1,4 +1,4 @@
-import { memo, useContext, useId, useState, type ReactNode } from 'react'
+import { memo, useContext, useId, useState, type CSSProperties, type ReactNode } from 'react'
 import { ChevronDown } from 'lucide-react'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Fold } from '@/components/ui/fold'
@@ -11,11 +11,11 @@ import { listBullets, parseMarkdown, parseInline, safeHref, type Block, type Inl
 import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBlock'
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
-import { copyBlock, saveBlock } from '../saveBlock'
-import { TypeTag } from '@/components/ui/tag'
+import { saveBlock } from '../saveBlock'
+import { TypeTag, typeTone } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
+import { CopyButton } from './CopyButton'
 import type { Askable } from '../plainQuestions'
-import { FileBadge } from './cardParts'
 
 /**
  * Renders the agent's markdown as React elements (never as HTML; see `markdown.ts`). A link is
@@ -36,7 +36,8 @@ function LinkButton({ href, children }: { href: string; children: ReactNode }) {
 
 /**
  * Inline code. A web address opens like a link, still set as code: agents often quote the address to visit that way.
- * A file's name reads as a file badge that opens the file; anything else, or a name of no known type, stays code.
+ * A file's name stays code with no icon, so a sentence that names files reads straight through; it is tinted in its type's
+ * colour (a setting) and, where the chat can open files, is a button that opens the file (and its line).
  */
 function InlineCode({ text }: { text: string }) {
   const open = useContext(OpenFileContext)
@@ -44,9 +45,13 @@ function InlineCode({ text }: { text: string }) {
   if (href !== null) return <LinkButton href={href}><CodeChip className="text-(--link)">{text}</CodeChip></LinkButton>
   const named = FILE_NAME.exec(text)
   const path = named?.[1]
-  if (path === undefined || fileTag(path) === null) return <CodeChip>{text}</CodeChip>
+  const tag = path === undefined ? null : fileTag(path)
+  if (path === undefined || tag === null) return <CodeChip>{text}</CodeChip>
+  // The name is the badge: its type's colour is set here and drawn by `[data-file-colours]` (a setting).
+  const chip = <CodeChip className="mx-file-name" style={{ '--tone': typeTone(tag) } as CSSProperties}>{text}</CodeChip>
+  if (open === null) return chip
   const line = named?.[2] === undefined ? null : Number(named[2])
-  return <FileBadge path={path} line={line} onOpen={open === null ? undefined : () => { open(path, line) }} />
+  return <button type="button" title={`Open ${path}`} className="cursor-pointer border-0 bg-transparent p-0 text-left hover:underline" onClick={() => { open(path, line) }}>{chip}</button>
 }
 
 function Inlines({ nodes }: { nodes: readonly Inline[] }): ReactNode {
@@ -106,7 +111,7 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
         onToggle={() => { setOpen((current) => !current) }}
         actions={(
           <>
-            <button type="button" className="mx-block-action" onClick={() => { copyBlock(text, 'Could not copy the code') }}>Copy</button>
+            <CopyButton text={text} failed="Could not copy the code" />
             <button type="button" className="mx-block-action" title="Save as a file in your export folder" onClick={() => { saveBlock(language === '' ? 'code' : language, codeExtension(language), text) }}>Save</button>
           </>
         )}
@@ -141,7 +146,7 @@ function TableCard({ block }: { block: TableBlock }) {
       <div className="mx-md-tableacts" role="group" aria-label="Copy or save this table">
         <span className="mx-md-tabletitle">{rows} {rows === 1 ? 'row' : 'rows'}</span>
         <span className="mx-spacer" />
-        <button type="button" className="mx-block-action" onClick={() => { copyBlock(tableMarkdown(block), 'Could not copy the table') }}>Copy</button>
+        <CopyButton text={tableMarkdown(block)} failed="Could not copy the table" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button type="button" className="mx-block-action">Save as<ChevronDown className="size-3" aria-hidden="true" /></button>
@@ -251,9 +256,9 @@ const BlockView = memo(function BlockView({ block, replying }: { block: Block; r
       const [first, ...rest] = block.inlines
       const lead = first?.kind === 'strong' ? first : null
       return (
-        <div data-fold="" className="mx-note">
-          {lead !== null && <span className="mx-note-lead"><Inlines nodes={lead.children} /></span>}
-          <span className="mx-note-text"><Inlines nodes={lead === null ? block.inlines : rest} /></span>
+        <div data-fold="" className="mx-md-quote">
+          {lead !== null && <span className="mx-md-quote-lead"><Inlines nodes={lead.children} /></span>}
+          <span className="mx-md-quote-text"><Inlines nodes={lead === null ? block.inlines : rest} /></span>
         </div>
       )
     }

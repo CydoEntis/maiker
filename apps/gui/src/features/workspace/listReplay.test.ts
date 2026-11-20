@@ -65,7 +65,7 @@ async function replay() {
   const reads: Read[] = []
   vi.mocked(invoke).mockImplementation((command) => {
     if (command !== 'list_sessions') return Promise.reject(new Error(`unexpected ${command}`))
-    if (daemon === null) return Promise.reject(new Error('the daemon is restarting'))
+    if (daemon === null) return Promise.reject(new Error('the Maiker service is restarting'))
     reads.push({ at: Date.now(), ids: new Set(Object.keys(ListSchema.parse(daemon).terms).map(idOf)) })
     return Promise.resolve({ ...(daemon as object), removed: {} })
   })

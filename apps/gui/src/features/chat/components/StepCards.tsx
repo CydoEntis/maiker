@@ -4,6 +4,7 @@ import { HighlightedLine } from '@/components/HighlightedLine'
 import { Spinner } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
+import { outputSegments } from '../commandOutput'
 import { isOmitted, redactionNote } from '../redaction'
 import { commandHeadMeta, relativePath } from '../stepInfo'
 import { commandIntent, foundNothing, shownCommandStatus } from '../commandIntent'
@@ -12,9 +13,8 @@ import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
 import { Fold } from '@/components/ui/fold'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { copyText as writeClipboard } from '@/lib/clipboard'
-import { toast } from '@/lib/toast'
 import { Block, BlockHead } from './Block'
+import { CopyButton } from './CopyButton'
 import { ChangePill, FileBadge, StepRow, type MetaTone } from './cardParts'
 import { diffRows, type DiffRow } from './diffRows'
 import { DocumentCard } from './DocumentCard'
@@ -39,10 +39,12 @@ function RedactionNote({ texts }: { texts: readonly (string | null)[] }) {
 /**
  * Whether a step's detail is open, and how to flip it. Folded until the person opens it: a chat of many steps stays short,
  * and its lines say how each one went. A run of steps hands each one its `control`, so only one of them is open at a time.
+ * `startOpen` is for a step that stands alone between messages: it is one card, so showing its output or diff costs a few
+ * lines, where the same in every step of a long run would fill the screen.
  */
 export type OpenControl = { open: boolean; toggle: () => void }
-function useOpen(control?: OpenControl): [boolean, () => void] {
-  const [open, setOpen] = useState(false)
+function useOpen(control?: OpenControl, startOpen = false): [boolean, () => void] {
+  const [open, setOpen] = useState(startOpen)
   if (control !== undefined) return [control.open, control.toggle]
   return [open, () => { setOpen(!open) }]
 }
@@ -117,13 +119,6 @@ type CommandStepProps = {
   waiting?: boolean
 }
 
-function copyCommand(command: string): void {
-  writeClipboard(command).then(
-    () => { toast.info('Copied') },
-    () => { toast.error('Could not copy the command') },
-  )
-}
-
 /** The command's output on the well: every line, scrolling inside 320px, and what the daemon hid. */
 function CommandOutput({ event }: { event: CommandEvent }) {
   const omitted = isOmitted(event.output)
@@ -131,7 +126,7 @@ function CommandOutput({ event }: { event: CommandEvent }) {
   return (
     <>
       {omitted && <p className="mx-step-note">The output shows a secret file, so the history does not keep it.</p>}
-      {text !== '' && <pre className="mx-block-output">{text}</pre>}
+      {text !== '' && <pre className="mx-block-output">{outputSegments(text).map((run, index) => (run.tone === 'plain' ? run.text : <span key={index} className={`mx-out-${run.tone}`}>{run.text}</span>))}</pre>}
       {text !== '' && <RedactionNote texts={[event.output]} />}
     </>
   )
@@ -140,11 +135,11 @@ function CommandOutput({ event }: { event: CommandEvent }) {
 /**
  * A command the agent ran. In a run it is one line, the command's first line and how it ended, as the
  * agent's own terminal shows it; opened it is the whole command and its output. On its own it is a block with the
- * command in its head and, at the right, how it ended ("exit 1 · 2.9s", red when it failed). Every one starts
- * folded, a failed one too: its line says it failed, and opening it shows why.
+ * command in its head and, at the right, how it ended ("exit 1 · 2.9s", red when it failed). On its own it starts
+ * open, with the last lines of its output; as a row inside a run it starts folded, a failed one too.
  */
 export function CommandStep({ event, alone = false, waiting = false, control }: CommandStepProps) {
-  const [open, toggle] = useOpen(control)
+  const [open, toggle] = useOpen(control, alone)
   // A search that found nothing exits 1 but did not fail; how it shows is the one place that decides it.
   const status = shownCommandStatus(event)
   const intent = commandIntent(event.command)
@@ -160,11 +155,11 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
   const unreportedNote = unreported ? <span className="sr-only">exit code not reported</span> : null
   if (alone) {
     return (
-      <Block role="group" aria-label={`Command ${first}`} failed={failed} waiting={waiting}>
+      <Block role="group" aria-label={`Command ${first}`} waiting={waiting}>
         <BlockHead
           open={open}
           onToggle={toggle}
-          actions={open && event.command !== '' ? <button type="button" className="mx-block-action" aria-label="Copy command" onClick={() => { copyCommand(event.command) }}>Copy</button> : undefined}
+          actions={open && event.command !== '' ? <CopyButton text={event.command} failed="Could not copy the command" label="Copy command" /> : undefined}
         >
           <span className="mx-block-prompt" aria-hidden="true">$</span>
           <code className="mx-block-title">{short}</code>
@@ -284,7 +279,7 @@ type EditStepProps = {
 
 /** A file change: the file, what happened to it and its counts, opening to the first lines of its diff. */
 export function EditStep({ event, root, onOpen, alone = false, waiting = false, control }: EditStepProps) {
-  const [open, toggle] = useOpen(control)
+  const [open, toggle] = useOpen(control, alone)
   const file = event.file === null ? null : relativePath(event.file, root)
   const name = file ?? 'a file'
   const verb = event.tool === 'Write' ? 'Write' : 'Edit'
@@ -295,9 +290,8 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false, 
   const target = <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}<ChangePill change={event.change} /></>
   const metaTone = EDIT_TONE[event.status] ?? 'dim'
   if (alone) {
-    const failed = event.status === 'failed'
     return (
-      <Block role="group" aria-label={`${verb} ${name}`} failed={failed} waiting={waiting}>
+      <Block role="group" aria-label={`${verb} ${name}`} waiting={waiting}>
         <BlockHead
           open={open}
           onToggle={toggle}

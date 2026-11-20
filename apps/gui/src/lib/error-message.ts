@@ -12,7 +12,7 @@ export function errorMessage(error: unknown, fallback: string): string {
  * than the reason. A failure that already reads as a sentence is kept; a raw one (an OS error, a lower-case tool
  * message) is put in plain words where it is a known kind.
  */
-export type ExplainedError = { title: string; reason: string; details: string | null }
+export type ExplainedError = { title: string; reason: string; details: string | null; /** What the person can do about it, named as a button (`Pick another branch`); absent when there is none to offer. */ fix?: string }
 
 /** The longest reason shown; the rest is in the details. */
 const REASON_MAX = 240
@@ -57,4 +57,26 @@ export function explainError(error: unknown, action: string): ExplainedError {
   const known = looksRaw(raw) ? PLAIN_REASONS.find(([pattern]) => pattern.test(raw))?.[1] : undefined
   const reason = known ?? asSentence(shortenHome(raw))
   return { title: action, reason, details: reason === raw ? null : raw }
+}
+
+/** Git's refusal to make a worktree where a folder already stands: `fatal: '<path>' already exists`. */
+const WORKTREE_FOLDER_TAKEN = /'([^']+)' already exists/
+
+/** The button on a worktree failure that the branch name can cure. */
+export const PICK_ANOTHER_BRANCH = 'Pick another branch'
+
+/**
+ * A failed start that was making a worktree for `branch`. When the worktree's folder is already there, it says so in
+ * words and offers a different branch name; any other failure is explained as `explainError` does under `action`.
+ */
+export function explainStartFailure(error: unknown, action: string, branch: { name: string; worktree: boolean } | null): ExplainedError {
+  const raw = rawText(error)
+  const taken = branch?.worktree === true ? WORKTREE_FOLDER_TAKEN.exec(raw)?.[1] : undefined
+  if (branch === null || taken === undefined) return explainError(error, action)
+  return {
+    title: `Could not make a worktree for branch ${branch.name}`,
+    reason: `Its folder ${shortenHome(taken)} is already there. Remove that folder, or pick another branch name.`,
+    details: raw,
+    fix: PICK_ANOTHER_BRANCH,
+  }
 }

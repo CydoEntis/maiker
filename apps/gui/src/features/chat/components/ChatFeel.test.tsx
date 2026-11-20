@@ -32,6 +32,9 @@ afterEach(() => {
   fake.current = null
 })
 
+/** Long enough for any reply in these tests to be typed in: the reply catches up within a few seconds. */
+const TYPED_IN_MS = 3_000
+
 const LINK = { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }
 
 async function settle(ms = 0) {
@@ -65,7 +68,7 @@ describe('how the chat feels while it waits', () => {
     const { daemon, typeInto, user } = open()
     await settle()
 
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'hello there{Enter}')
     await settle()
 
     await settle(PASTE_SUBMIT_GAP_MS + 1)
@@ -84,7 +87,7 @@ describe('how the chat feels while it waits', () => {
   it('types the Enter once more when the message did not start a turn, and only once', async () => {
     const { typeInto, user } = open()
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'hello there{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     expect(typeInto).toHaveBeenCalledTimes(2)
 
@@ -99,7 +102,7 @@ describe('how the chat feels while it waits', () => {
   it('types no second Enter once the agent took the message', async () => {
     const { daemon, typeInto, user, setPaneStatus } = open()
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'hello there{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     setPaneStatus('working')
     daemon.status = 'Working'
@@ -111,7 +114,7 @@ describe('how the chat feels while it waits', () => {
   it('takes a message the agent joined to the one before it as sent', async () => {
     const { daemon, user } = open()
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'then the integrations{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'then the integrations{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
 
     daemon.upsert(daemon.message('t1', 'u2', 'User', 'set it up\nthen the integrations'))
@@ -123,7 +126,7 @@ describe('how the chat feels while it waits', () => {
   it('stops saying the agent is thinking after a few seconds, when its own status does not, while the message stays', async () => {
     const { user } = open()
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'hello there{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'hello there{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     expect(screen.getByText('Thinking')).toBeInTheDocument()
 
@@ -142,12 +145,12 @@ describe('how the chat feels while it waits', () => {
     daemon.status = 'Idle'
     await settle(ACTIVE_POLL_MS + 1)
     daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'the answer'))
-    await settle(700)
+    await settle(700 + TYPED_IN_MS)
 
     expect(screen.getByText('the answer')).toBeInTheDocument()
   })
 
-  it('draws the running turn as it streams in: its steps and its reply growing in place, over one working line', async () => {
+  it('draws the running turn as it streams in: its steps at once and its reply typed in, over one working line', async () => {
     const { daemon } = open('Working')
     daemon.upsert(daemon.message('t2', 'u2', 'User', 'fix the build'))
     await settle()
@@ -157,16 +160,16 @@ describe('how the chat feels while it waits', () => {
 
     daemon.upsert(daemon.tool('t2', 'c1', 'pnpm build', 'error: lockfile', 'Running'))
     daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because', 'Running'))
-    await settle(ACTIVE_POLL_MS + 1)
+    await settle(ACTIVE_POLL_MS + 1 + TYPED_IN_MS)
 
     expect(screen.getByText('The build fails because')).toBeInTheDocument()
     expect(document.querySelector('[data-key="t2:c1"]')).not.toBeNull()
     expect(document.querySelector('.mx-sk')).toBeNull()
     expect(screen.getByText('Esc to stop')).toBeInTheDocument()
 
-    // More of the same message: no timer stands between the read and the words.
+    // More of the same message: typed on from where it was.
     daemon.upsert(daemon.message('t2', 'a1', 'Assistant', 'The build fails because the lockfile is stale.', 'Running'))
-    await settle(ACTIVE_POLL_MS + 1)
+    await settle(ACTIVE_POLL_MS + 1 + TYPED_IN_MS)
     expect(screen.getByText('The build fails because the lockfile is stale.')).toBeInTheDocument()
     expect(document.querySelectorAll('[data-key="t2:a1"]')).toHaveLength(1)
   })
@@ -208,7 +211,7 @@ describe('how the chat feels while it waits', () => {
     await settle()
 
     expect(screen.getByText('Thinking')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message claude' })).toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
+    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', 'Queue a message for when Claude finishes')
 
     // And the chat read the conversation at that moment, not at its next idle poll.
     daemon.upsert(daemon.message('t1', 'u3', 'User', 'asked in the terminal'))
@@ -227,7 +230,7 @@ describe('how the chat feels while it waits', () => {
 
     expect(screen.getByText('Free · 3 helpers working')).toBeInTheDocument()
     expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
     expect(box).not.toHaveAttribute('placeholder', 'Queue a message for when claude finishes')
     await user.type(box, 'and Slack too{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
@@ -255,7 +258,7 @@ describe('how the chat feels while it waits', () => {
   it('gives the focus back to the message box when you click the conversation, so one click is enough to type again', async () => {
     open('Idle')
     await settle(IDLE_POLL_MS)
-    const box = screen.getByRole('textbox', { name: 'Message claude' })
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
     box.blur()
     expect(box).not.toHaveFocus()
 
@@ -271,7 +274,7 @@ describe('how the chat feels while it waits', () => {
 
     // The mode is a shield; its name is in the button's name and tooltip.
     expect(screen.getByRole('button', { name: /^Permission mode: Auto/ })).toHaveAttribute('title', expect.stringContaining('Auto'))
-    expect(screen.getByText('Claude Sonnet 5.5')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Claude · Sonnet 5.5')
   })
 
   it('marks a mode that asks about nothing, and shows nothing when the file said nothing', async () => {
@@ -284,13 +287,17 @@ describe('how the chat feels while it waits', () => {
     await settle(IDLE_POLL_MS)
 
     const shield = screen.getByRole('button', { name: /^Permission mode: Bypass permissions/ })
+    // Attention is a status-coloured dot beside a normal label, shortened to fit its slot; the full name stays in the tooltip.
     expect(shield.className).toContain('danger')
+    expect(shield.querySelector('.mx-mode-dot')).not.toBeNull()
+    expect(shield.querySelector('.mx-mode-name')).toHaveTextContent(/^Bypass$/)
+    expect(shield).toHaveAttribute('title', 'Permissions: Bypass permissions')
   })
 
   it('drops a message the history never showed, rather than leaving it standing as sent', async () => {
     const { user } = open()
     await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message claude' }), 'lost words{Enter}')
+    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), 'lost words{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     expect(screen.getByLabelText('Sending')).toBeInTheDocument()
 

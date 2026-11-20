@@ -10,11 +10,17 @@ const daemon = vi.hoisted(() => ({
     listed.sessions.push({ id: String(pane), kind: 'terminal', nativePane: pane })
     return Promise.resolve()
   }),
+  startShellSession: vi.fn<(folder: string) => Promise<void>>(() => {
+    const pane = listed.sessions.length + 1
+    listed.sessions.push({ id: String(pane), kind: 'terminal', nativePane: pane })
+    return Promise.resolve()
+  }),
   addWorktree: vi.fn<(folder: string, branch: string) => Promise<string>>((folder: string, branch: string) => Promise.resolve(`${folder}-${branch}`)),
   switchBranch: vi.fn(() => Promise.resolve()),
   renameConversationOnDaemon: vi.fn<(session: { id: string }, name: string) => Promise<void>>(() => Promise.resolve()),
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
+  archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
 }))
 // Another machine: a session started there shows in its next list.
 const remote = vi.hoisted(() => ({ machines: new Map<number, { conversations: { id: string; kind: 'terminal' }[] }>() }))
@@ -29,7 +35,7 @@ vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 
 import { useSessionStarts } from './useSessionStarts'
-import type { NewChatRequest } from './components/NewSessionDialog'
+import type { NewChatRequest } from './components/NewChatPage'
 
 const ID = '0d0f5c1e-1111-4222-8333-444455556666'
 
@@ -40,7 +46,7 @@ function starts(watch: Watch = {}) {
   const props = {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
-    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'] }, setExpectedAgents: setter, paneViews: { choose: setter },
+    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'] }, setExpectedAgents: setter,
     setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
@@ -86,6 +92,58 @@ describe('starting a new chat that resumes a saved conversation', () => {
     expect(daemon.addWorktree).not.toHaveBeenCalled()
     expect(daemon.switchBranch).not.toHaveBeenCalled()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+})
+
+describe('opening a new chat from the page', () => {
+  // The browser pictures the window right after a gliding pane's update (`movePanes`), so whatever the open needs must be in it.
+  function glidingPane() {
+    const pane = document.createElement('div')
+    pane.className = 'mx-pane'
+    pane.dataset.sessionId = 'old'
+    const panes = document.createElement('div')
+    panes.className = 'mx-panes'
+    panes.append(pane)
+    document.body.append(panes)
+    const transition = { inside: false }
+    const matchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: () => ({ matches: false }) })
+    Object.defineProperty(document, 'startViewTransition', {
+      configurable: true,
+      value: (update: () => void) => {
+        transition.inside = true
+        update()
+        transition.inside = false
+        return { finished: Promise.resolve() }
+      },
+    })
+    return { transition, remove: () => { panes.remove(); Reflect.deleteProperty(document, 'startViewTransition'); if (matchMedia === undefined) Reflect.deleteProperty(window, 'matchMedia'); else Object.defineProperty(window, 'matchMedia', matchMedia) } }
+  }
+
+  it('closes the page in the same update that opens the pane, not a frame later', async () => {
+    const glide = glidingPane()
+    const during: Record<string, boolean> = {}
+    const note = (what: string) => () => { during[what] = glide.transition.inside }
+    try {
+      await starts({ setLayout: note('layout'), setNewChatOpen: note('page') }).startNewChat(request({ message: 'hello' }))
+    } finally {
+      glide.remove()
+    }
+    expect(during).toEqual({ layout: true, page: true })
+  })
+
+  it('does the same for a chat started on another machine', async () => {
+    const glide = glidingPane()
+    remote.machines.set(3, { conversations: [] })
+    const during: Record<string, boolean> = {}
+    const note = (what: string) => () => { during[what] = glide.transition.inside }
+    try {
+      await starts({ setLayout: note('layout') }).startNewChat(request({ machine: 3, machineName: 'box' }))
+    } finally {
+      glide.remove()
+      remote.machines.delete(3)
+    }
+    expect(during).toEqual({ layout: true })
   })
 })
 

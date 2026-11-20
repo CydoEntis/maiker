@@ -4,7 +4,7 @@ import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeig
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
 import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
-import { DEFAULT_CHAT_VIEWS, type ChatAgent, type ChatViewDefaults, type PaneView } from '@/features/workspace/model/chatView'
+import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
 
 export type CursorStyle = 'block' | 'bar' | 'underline'
 /** How much room the sidebar's rows, the tabs and the panes get. */
@@ -28,6 +28,8 @@ export type SidebarSide = 'left' | 'right'
 export type SidebarOrder = 'creation' | 'priority'
 /** What the sidebar's headings are: what each session is doing, its project, or its machine. */
 export type SidebarGroup = 'status' | 'project' | 'machine'
+/** Which corner the toasts stack in. */
+export type ToastPosition = 'bottom' | 'top'
 /** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
 export type TerminalDock = 'bottom' | 'right' | 'full'
 /** Square or rounded corners, the one shape choice of the desktop's look (`theme/corners.ts`). Kept by this window alone. */
@@ -48,6 +50,16 @@ const SCROLL_TRIPLE = 3
 const SCROLL_FASTEST = 5
 export const SCROLL_SPEED_CHOICES = [SCROLL_NORMAL, SCROLL_DOUBLE, SCROLL_TRIPLE, SCROLL_FASTEST] as const
 export type ScrollSpeed = (typeof SCROLL_SPEED_CHOICES)[number]
+/**
+ * The terminal's row height as a multiple of the font size. Pixel art drawn in block characters (an agent's banner) joins up at 1
+ * to 1.2 and stretches past it. 1.6 was once offered and the default; it is gone, so a saved 1.6 reads as the new default.
+ */
+const LINE_TIGHT = 1
+const LINE_SNUG = 1.2
+const LINE_EASY = 1.4
+export const LINE_HEIGHT_CHOICES = [LINE_TIGHT, LINE_SNUG, LINE_EASY] as const
+export type TerminalLineHeight = (typeof LINE_HEIGHT_CHOICES)[number]
+export const DEFAULT_LINE_HEIGHT: TerminalLineHeight = LINE_SNUG
 
 export type SettingsPreferences = {
   accent: 'teal' | 'blue' | 'violet'
@@ -56,6 +68,8 @@ export type SettingsPreferences = {
   restoreLayout: boolean
   reduceMotion: boolean
   animateSidebarActivity: boolean
+  /** File names in a chat's messages are drawn in the colour of their type. */
+  colourFileNames: boolean
   /** The desktop sidebar is collapsed to its rail. */
   compactSidebar: boolean
   notifyNeedsYou: boolean
@@ -63,6 +77,8 @@ export type SettingsPreferences = {
   /** A session's program exited with an error (a native notification, while the window is in the background). */
   notifyError: boolean
   notificationSound: boolean
+  /** The right-hand corner the in-window toasts stack in. */
+  toastPosition: ToastPosition
   terminalFontSize: number
   /** One family name for the terminal text; empty uses the bundled Geist Mono. */
   terminalFontFamily: string
@@ -82,6 +98,7 @@ export type SettingsPreferences = {
   /** Lines each pane keeps; the daemon keeps the full history. */
   scrollback: ScrollbackLines
   scrollSpeed: ScrollSpeed
+  terminalLineHeight: TerminalLineHeight
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
   terminalScreenReader: boolean
   density: Density
@@ -105,7 +122,8 @@ export type SettingsPreferences = {
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
   chatTextSize: number
   /** Which view a Claude or Codex session opens in. Terminal until you change it. */
-  chatViewDefault: ChatViewDefaults
+  /** The view a new session opens in; the other is one click away on its pane. */
+  openSessionsIn: PaneView
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
@@ -155,7 +173,7 @@ export const UI_TEXT_SIZE_LARGE = 15
 const UI_TEXT_SIZE_MIN = 11
 const UI_TEXT_SIZE_MAX = 17
 
-const STORAGE_KEY = 'maitty.gui.settings.v1'
+const STORAGE_KEY = 'maiker.gui.settings.v1'
 
 // The theme was stored on its own before the desktop theme browser; carry that choice over.
 const THEME_FROM_PREFERENCE: Record<ThemePreference, string> = { night: DEFAULT_THEME, abyss: DEFAULT_THEME, day: DEFAULT_LIGHT_THEME }
@@ -173,6 +191,7 @@ function defaults(): SettingsPreferences {
     notifyFinished: true,
     notifyError: true,
     notificationSound: false,
+    toastPosition: 'bottom',
     terminalFontSize: 13,
     terminalFontFamily: '',
     terminalFontWeight: DEFAULT_FONT_WEIGHT,
@@ -186,6 +205,7 @@ function defaults(): SettingsPreferences {
     cursorStyle: 'block',
     scrollback: SCROLLBACK_DEFAULT,
     scrollSpeed: SCROLL_NORMAL,
+    terminalLineHeight: DEFAULT_LINE_HEIGHT,
     terminalScreenReader: false,
     corners: DEFAULT_CORNERS,
     density: 'comfortable',
@@ -201,9 +221,10 @@ function defaults(): SettingsPreferences {
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
-    chatViewDefault: DEFAULT_CHAT_VIEWS,
+    openSessionsIn: 'chat',
     defaultAgent: 'claude',
     hideSuccessfulTools: false,
+    colourFileNames: true,
     bypassOff: [],
     updateMachines: true,
     perfOverlay: false,
@@ -234,9 +255,10 @@ function readStored(): string | null {
 }
 
 /**
- * The redesign made Folded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
+ * The redesign made Rounded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
  * defaults. A blob saved before that has no era marker, so those two are old defaults, not choices: they read as the new
- * defaults. From the marker on, a saved choice wins.
+ * defaults. From the marker on, a saved choice wins; a saved `folded` (an option that no longer exists) is no choice
+ * either, so it reads as Rounded.
  */
 const CORNERS_ERA_KEY = 'cornersEra'
 const CORNERS_ERA = 2
@@ -276,6 +298,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
       notifyError: bool(preferences.notifyError, fallback.notifyError),
       notificationSound: bool(preferences.notificationSound, fallback.notificationSound),
+      toastPosition: preferences.toastPosition === 'top' || preferences.toastPosition === 'bottom' ? preferences.toastPosition : fallback.toastPosition,
       terminalFontSize: terminalFontSize(preferences.terminalFontSize, fallback.terminalFontSize),
       terminalFontFamily: isFontFamily(preferences.terminalFontFamily) ? preferences.terminalFontFamily.trim() : fallback.terminalFontFamily,
       terminalFontWeight: isFontWeight(preferences.terminalFontWeight) ? preferences.terminalFontWeight : fallback.terminalFontWeight,
@@ -286,6 +309,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       cursorStyle: isCursorStyle(preferences.cursorStyle) ? preferences.cursorStyle : fallback.cursorStyle,
       scrollback: isScrollback(preferences.scrollback) ? preferences.scrollback : fallback.scrollback,
       scrollSpeed: isScrollSpeed(preferences.scrollSpeed) ? preferences.scrollSpeed : fallback.scrollSpeed,
+      terminalLineHeight: LINE_HEIGHT_CHOICES.find((choice) => choice === preferences.terminalLineHeight) ?? fallback.terminalLineHeight,
       terminalScreenReader: bool(preferences.terminalScreenReader, fallback.terminalScreenReader),
       density: isDensity(preferences.density) ? preferences.density : fallback.density,
       sidebarTextSize: clampNumber(preferences.sidebarTextSize, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, fallback.sidebarTextSize),
@@ -297,12 +321,16 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
       // Before the corner switch a window style was saved under `style`; its corners carry over.
-      corners: ((value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA && isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
+      corners: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA
+        ? (isCorners(preferences.corners) ? preferences.corners : fallback.corners)
+        : cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
-      chatViewDefault: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? chatViewDefault(preferences.chatViewDefault, fallback.chatViewDefault) : fallback.chatViewDefault,
+      // Before one setting there was one per agent: what was chosen for Claude carries over.
+      openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
+      colourFileNames: bool(preferences.colourFileNames, fallback.colourFileNames),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
       bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
       updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
@@ -370,12 +398,6 @@ function themeChoice(saved: Partial<Record<string, unknown>>, fallback: Settings
 }
 
 const paneView = (value: unknown, fallback: PaneView): PaneView => (value === 'chat' || value === 'terminal' ? value : fallback)
-
-function chatViewDefault(value: unknown, fallback: ChatViewDefaults): ChatViewDefaults {
-  if (typeof value !== 'object' || value === null) return fallback
-  const saved = value as Partial<Record<keyof ChatViewDefaults, unknown>>
-  return { claude: paneView(saved.claude, fallback.claude), codex: paneView(saved.codex, fallback.codex), gemini: paneView(saved.gemini, fallback.gemini) }
-}
 
 function isCursorStyle(value: unknown): value is CursorStyle {
   return value === 'block' || value === 'bar' || value === 'underline'

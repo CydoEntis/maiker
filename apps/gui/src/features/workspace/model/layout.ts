@@ -198,6 +198,15 @@ export function reconcileLayout(layout: Layout, liveSessionIds: ReadonlySet<stri
   return keepPanes(layout, (pane) => liveSessionIds.has(pane.sessionId))
 }
 
+/**
+ * Drops the panes of sessions that are no longer listed and left for a reason the daemon gave (closed elsewhere, exited, put away).
+ * A session a list merely missed keeps its pane, shown as ended.
+ */
+export function dropGoneSessions(layout: Layout, live: ReadonlySet<string>, leftWithReason: (id: string) => boolean): Layout {
+  const gone = layout.arrangements.flatMap((tab) => tab.panes.map((pane) => pane.sessionId)).filter((id) => !live.has(id) && leftWithReason(id))
+  return gone.length === 0 ? layout : removeSessions(layout, new Set(gone))
+}
+
 /** Takes one pane out and leaves its session alone: the others of its tab take the room. */
 export function removePane(layout: Layout, paneId: string): Layout {
   return keepPanes(layout, (pane) => pane.id !== paneId)

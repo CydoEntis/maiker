@@ -840,7 +840,7 @@ no sounds, so there is no switch for them.
 A new session (**New session**, ⌘T) starts where the focused session is. On another machine it asks for a
 folder there, starting at `~`, because the folder picker is this computer's; a folder that does not exist
 opens in the machine's home folder. To start on a project that is not on the machine yet, use **Clone a
-repository…** in the New session dialog (in the project list): paste the repository's address,
+repository…** in the New session draft (in the project list): paste the repository's address,
 pick the folder it goes inside, and the chat opens on the new folder. The side panel's **Changes** tab
 works for a session on another machine too: it lists the changed files and their diffs, read from that
 machine. You can commit there too: tick the files, write the message, and **Commit**, **Pull** / **Push** /
@@ -930,6 +930,9 @@ saved to the data directory a couple of seconds after it changes. On the next st
   via OSC 7 or OSC 9;9, as oh-my-posh and starship can. Other shells are tracked automatically.
 - Agents resume. With hooks installed, maiker knows the exact session (`claude --resume <id>`).
   Otherwise it uses the agent's "most recent" form (`claude --continue`, `codex resume --last`).
+  A Claude session with no conversation saved (the agent was opened but never sent a message)
+  has nothing to resume: it starts fresh in the same folder instead of printing "No conversation
+  found". Where that cannot be checked, the resume is kept.
 - Panes started with a command (`spawn-right:lazygit`, `maiker split -- x`) run it again, except
   an agent's: `codex "<task>"` would start the task over, so an agent that can't be resumed
   opens as a shell.
@@ -958,11 +961,11 @@ means](#what-a-sessions-status-means).
 
 ### Starting a chat
 
-**New chat** (the `+` at the top of the sidebar, the Maiker menu at the top left of the window, or **New agent chat…** in the command palette, Ctrl+Shift+T, ⌘T
-on a Mac) opens the New session dialog. When nothing is running, the window shows "No sessions running" and the same
-dialog opens from it. It starts on your most recent project: write the first message and press Ctrl+Enter (⌘Enter on a Mac).
-The agent starts in its own terminal and the chat opens. (**New agent chat** without the dots,
-Ctrl+Shift+A, skips the dialog: it starts a chat at once with the default agent in the start folder.)
+**New session** (the `+` at the top of the sidebar, the Maiker menu at the top left of the window, or **New session…** in the command palette, Ctrl+Shift+T, ⌘T
+on a Mac) opens the New session draft: a chat that has not been sent, in the main window, not a dialog. When nothing is
+running, the window is that draft; Esc discards it. It asks where (machine, project, branch), what ("What should we work on?"), and who (the agent
+and its model). It starts on your most recent project: write the task and press Enter. Settings › Chat › **Open
+sessions in** decides whether every session, the open ones too, shows as its chat or its terminal; it is one setting for the whole app, so there is no switch on a pane. A plain shell is **New terminal**.
 
 **Where the chat runs** is in the dialog's header, as it is on a running chat's pane:
 
@@ -1086,8 +1089,8 @@ is kept, a notice says so and nothing is restored.
 
 ### The worktree manager
 
-**New worktree** (Ctrl+Shift+N, ⌘⇧N on a Mac, or the command palette) opens a dialog that makes a branch in its own folder next to the
-project. When the project already has other worktrees, the dialog lists them below. Each row says
+**New worktree** (Ctrl+Shift+N, ⌘⇧N on a Mac, or the command palette) opens a dialog that makes a branch in its own folder, kept with
+Maiker's other worktrees (see [Worktrees](#worktrees)). The branch name starts as one made from what the session is working on (`fix-login-redirect`); type your own and that is used. When the project already has other worktrees, the dialog lists them below. Each row says
 where that worktree stands, for example "inactive 3 days · not merged anywhere · last commit …" or "2
 uncommitted changes", and has:
 
@@ -1113,7 +1116,8 @@ maiker worktree fix-123 --base origin/main
 maiker worktree-remove [--force]          # closes the workspace and removes the checkout
 ```
 
-New worktrees go to `{repo_parent}/{repo}-worktrees/{branch}` (set `[worktree] dir`). An existing
+New worktrees go to `~/.maiker/worktrees/<project>/<name>`, one folder per project (set `[worktree] dir`; worktrees made earlier stay in their
+`<project>-worktrees` folder next to the project and keep working). An existing
 local or `origin/` branch is checked out instead of created. Set `[worktree] command = "claude"`
 to start an agent in every new worktree.
 
