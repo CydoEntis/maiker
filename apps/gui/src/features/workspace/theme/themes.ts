@@ -102,7 +102,7 @@ const LIGHT_METERS = { meterOk: '#2e7d32', meterMid: '#9a6b00', meterHigh: '#c25
 // Mix percentages from the design; `fg2`, `muted` and `dim` are raised when a theme would fall below
 // MIN_TEXT_CONTRAST against the terminal ground or the window ground.
 const MIX = {
-  raiseDark: 7, raiseLight: 5, hover: 5, sel: 10, line: 9, line2: 15, bgDark: 18, bgLight: 4, wellDark: 25, wellLight: 3,
+  raiseDark: 7, raiseLight: 5, hover: 5, sel: 10, line: 9, line2: 15, bgDark: 21, bgLight: 4, wellDark: 25, wellLight: 3,
   fg2: 80, muted: 62, dim: 52, accentSoft: 13, accentLine: 50, paneLine: 10, contrastStep: 2, full: 100,
 }
 
