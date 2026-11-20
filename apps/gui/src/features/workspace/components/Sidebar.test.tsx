@@ -412,6 +412,18 @@ describe('a machine heading', () => {
     expect(onNewShell).toHaveBeenCalledWith(4)
   })
 
+  it('lists a connected saved machine with no sessions: its name, its own + and "No sessions yet"', () => {
+    show([], { machines: [LOCAL_HEAD, DEVBOX] })
+    expect(screen.getByRole('button', { name: /^devbox/ })).toBeTruthy()
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Add a session to devbox' }).disabled).toBe(false)
+    expect(within(screen.getByRole('list', { name: 'Sessions on devbox' }).parentElement as HTMLElement).getByText('No sessions yet')).toBeTruthy()
+  })
+
+  it('says Connecting… on a machine whose first dial is still going', () => {
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, chip: { glyph: '○', word: 'connecting', tone: 'quiet' } }] })
+    expect(screen.getByText('Connecting…')).toBeTruthy()
+  })
+
   it('marks a machine that is not up with a red dot, Offline and a Fix button, the reason as its tooltip, and offers no new session on it', async () => {
     const user = userEvent.setup()
     const onFixMachine = vi.fn()

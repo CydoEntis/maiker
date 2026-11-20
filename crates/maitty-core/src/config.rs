@@ -1031,8 +1031,7 @@ impl Config {
 
     /// Load the config file; a missing file is the defaults, a broken one is an error.
     pub fn load() -> Result<Config> {
-        let own_file = maitty_shared::brand::env_var_os("CONFIG").is_some();
-        Config::load_at(&config_path(), !own_file)
+        Config::load_at(&config_path(), true)
     }
 
     /// Read `path`, with `config.local.toml` beside it laid over it when `with_local`.

@@ -44,12 +44,10 @@ fn config_path_in(
     base.join(APP_COMMAND).join("config.toml")
 }
 
-/// This computer's machine list. As in the terminal app, a config file named by the
-/// environment stands alone: the local file beside it is not read, so there are no machines.
+/// This computer's machine list: the local file beside the config file in use, which is the
+/// file the environment names when it names one (an isolated dev run keeps its machines there,
+/// and the add dialog writes them there).
 pub fn local_machines() -> MachineList {
-    if maitty_shared::brand::env_var_os("CONFIG").is_some() {
-        return MachineList::default();
-    }
     machines_beside(&config_path())
 }
 

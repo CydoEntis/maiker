@@ -448,8 +448,10 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
         <span className="mx-machine-progress" role="progressbar" aria-label={`Updating ${head.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${String(progress)}%` }} /></span>
       )}
       {head.down && head.name !== null && <MachineWhy head={head} onFix={onFix} />}
+      {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
+        {sessions.length === 0 && draft === null && <div className="mx-machine-empty">No sessions yet</div>}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
         {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
       </Collapse>

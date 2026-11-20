@@ -145,8 +145,9 @@ uses `icons.working` without animation. The terminal app's Settings offers prese
 `[[machines]]` names other computers reached over ssh. It is read only from
 `config.local.toml` (beside `config.toml`), which is per computer and never synced. A
 `[[machines]]` entry in `config.toml`, the file sync shares, is a load error that says where
-to move it; the file is left as it was. With `AGENT_CONFIG` set, that file is the whole
-config and is held to the same rule.
+to move it; the file is left as it was. With `AGENT_CONFIG` set, that file stands in for
+`config.toml` and its `config.local.toml` is still the one beside it (an isolated dev run keeps its
+machines there); both are held to the same rule.
 
 | Key | Meaning |
 | --- | --- |
