@@ -13,7 +13,7 @@ const gitCount = (count: number): string => `${String(count)} git project${count
 
 const joinPath = (home: string, name: string): string => `${home.replace(/[\\/]+$/, '')}${home.includes('\\') && !home.includes('/') ? '\\' : '/'}${name}`
 
-function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
+export function withTimeout<T>(work: Promise<T>, ms: number): Promise<T | null> {
   return new Promise((resolve) => {
     const timer = setTimeout(() => { resolve(null) }, ms)
     work.then(

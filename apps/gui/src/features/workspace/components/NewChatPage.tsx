@@ -35,7 +35,6 @@ import { ChipMenu, type ChipItem } from './NewChatMenus'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import { isMacPlatform } from '../model/shortcuts'
 import type { PickedFolder } from '../model/folderPick'
-import type { CloneOpening } from './useCloneRepo'
 import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
 import { copyText } from '@/lib/clipboard'
 
@@ -55,6 +54,9 @@ export type NewChatStartOptions = { background?: boolean; /** Told the new sessi
 
 /** A computer a session could start on. `down` is why it cannot, in words, when it cannot. */
 export type NewChatMachine = { machine: number; label: string; local: boolean; down?: string | null }
+
+/** What the clone window opens with: its first view, and an address and folder already filled in (a clone that needs another folder). */
+export type CloneOpening = { start: 'link' | 'repos'; address?: string; parent?: string }
 
 /** How the page brings a repository onto the machine it is on: the window's clone for it. */
 export type RepoCloner = {

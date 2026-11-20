@@ -1,9 +1,7 @@
 import { X } from 'lucide-react'
-import { openLink } from '@/api/daemon'
 import { Button, IconButton } from '@/components/ui/button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
-import { copyText } from '@/lib/clipboard'
-import { toast } from '@/lib/toast'
+import { copySignInCode, openSignInLink } from './signInActions'
 import { failureWords, linkHost, SIGN_IN_LABELS } from './signInWords'
 import type { SignInView } from './useAgentSignIn'
 
@@ -15,15 +13,6 @@ import type { SignInView } from './useAgentSignIn'
 export function SignInCard({ view, onCancel, onClose, onRetry }: { view: SignInView; onCancel: () => void; onClose: () => void; onRetry: () => void }) {
   const { agent, state, problem } = view
   const label = SIGN_IN_LABELS[agent]
-  const open = (link: string) => {
-    openLink(link).catch((error: unknown) => { toast.failed('Could not open the browser', error) })
-  }
-  const copy = (code: string) => {
-    copyText(code).then(
-      () => { toast.info('Code copied') },
-      () => { toast.error('Could not copy the code') },
-    )
-  }
   const failed = problem !== null || state.kind === 'failed'
   const waiting = problem === null && state.kind === 'waiting'
   const link = state.kind === 'waiting' ? state.link : null
@@ -52,8 +41,8 @@ export function SignInCard({ view, onCancel, onClose, onRetry }: { view: SignInV
         {problem === null && state.kind === 'failed' && <p role="alert">{failureWords(agent, state.failure)}</p>}
       </CardBody>
       <CardFoot>
-        {waiting && link !== null && <Button variant="primary" size="sm" onClick={() => { open(link) }}>Open link</Button>}
-        {waiting && code !== null && <Button variant="soft" size="sm" onClick={() => { copy(code) }}>Copy code</Button>}
+        {waiting && link !== null && <Button variant="primary" size="sm" onClick={() => { openSignInLink(link) }}>Open link</Button>}
+        {waiting && code !== null && <Button variant="soft" size="sm" onClick={() => { copySignInCode(code) }}>Copy code</Button>}
         {waiting && <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>}
         {(problem !== null || (state.kind === 'failed' && state.failure !== 'unsupported' && state.failure !== 'not-installed')) && <Button variant="soft" size="sm" onClick={onRetry}>Try again</Button>}
         {state.kind !== 'waiting' && <Button variant="ghost" size="sm" onClick={onClose}>{state.kind === 'signed-in' ? 'Done' : 'Close'}</Button>}

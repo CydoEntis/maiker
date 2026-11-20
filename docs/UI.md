@@ -586,6 +586,30 @@ key), which flips `appearance` and changes the whole screen at once.
 The preview shows built-in defaults; configured overrides still apply after saving.
 See [theme sources](theme-credits.md) for upstream palettes and local UI adaptations.
 
+## Project-specific: Open a project (desktop)
+
+**Open a project** (`features/open-project/OpenProjectDialog.tsx`; shown from the palette's "Open a project…" and from any
+part of the window through `useOpenProject()`, `features/workspace/useOpenProject.ts`) is the one dialog for bringing a
+project onto this computer: a 600px float in the shared `.mx-rename` frame, a `Segmented` row of three panels and one
+main button.
+
+- **Clone from URL** (`UrlPanel`). Accepts `https://host/owner/repo`, `git@host:owner/repo.git` and `host/owner/repo`
+  (`repoUrl.ts` turns them into the https or ssh form the daemon takes; the daemon's own check is unchanged). A valid
+  address shows `owner/repo` and its host. **Clone into** shows the whole folder (home plus the name) and is editable.
+  Text that is not an address says "That doesn't look like a git URL…" and what to type; one with a user name or password
+  in it is refused in words and never sent.
+- **GitHub** (`GitHubPanel`). Signed out: **Sign in with GitHub**, then the big one-time code, "Waiting for GitHub…",
+  **Copy code** and **Open link** (the daemon runs `gh auth login --web`; the window only shows what it printed, and polls
+  with `agentSignIn('github','read')`). Signed in: "Signed in as <login>" with **Sign out**, a search, an owner menu when
+  the account has organisations, and a row per repository (a **Private** tag) with **Clone**, or **Open** when a folder of
+  that name is already on this computer. A computer without `gh` is told so, with where to get it.
+- **On this computer** (`FolderPanel`). A folder field with **Browse…** (the system picker) and the git projects found
+  directly in the home folder and in `code`, `projects`, `dev`, `src` and `work` under it (`useFoundProjects`, one level, 2 s
+  limit per folder).
+- **Progress and finish.** A clone shows "Cloning <owner/repo>", a bar with the daemon's real percent and the phase word.
+  The dialog stays until it ends (a clone cannot be taken back). Then "**name** is ready in `path`" and the main button
+  becomes **Start a session in name**, which opens the New session draft on that folder.
+
 ## Project-specific: folder picker and loader
 
 **Open a folder on <machine>** (`PickFolderDialog`, `useFolderPick`; the New session draft, the folder rule and the clone folder all use it) is a 580px float. Its title names the machine with a dropdown to change it (a status dot per machine; an asleep one is amber and says "<machine> is asleep. Wake it, or pick another machine."). There are no tabs: a repository is a folder, so it is found by browsing, and its git branch shows beside its name in the list. Under the filter input sit an up button, the path as clickable parts and **New folder**; the list has a row per folder (its branch, an enter chevron); the foot holds a **Hidden folders** switch. One input filters the list, or goes to the path when the text starts with `/`, `~` or a drive. Keys: ↑ ↓ move, Enter and → go into a folder, Backspace and ← go up, Ctrl+Enter chooses the folder shown, Ctrl+Shift+N opens New folder, Esc clears the input and then closes. The button reads "Open <name> ↵".

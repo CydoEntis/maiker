@@ -63,14 +63,6 @@ export function carriesCredentials(input: string): boolean {
   return /^[a-z][a-z0-9+.-]*:\/\/[^/\s]*@/i.test(input.trim())
 }
 
-/** Where a clone goes on a machine that has no remembered folder: made on first use. */
-export const DEFAULT_CLONE_PARENT = '~/Projects'
-
-/** The folder a clone goes inside: the last one used on that machine, else `~/Projects`. */
-export function cloneParentFor(last: string | null): string {
-  return last === null || last.trim() === '' ? DEFAULT_CLONE_PARENT : last
-}
-
 /** What a clone would make, for the top row: `~/Projects/name`. */
 export function cloneTargetOf(parent: string, name: string): string {
   return `${parent.replace(/[\\/]+$/, '')}/${name}`

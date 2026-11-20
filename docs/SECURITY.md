@@ -867,9 +867,20 @@ typed:
   never written into. The one exception is the default `~/Projects` (the user's home plus `Projects`), which is made
   on first use; any other missing folder is refused.
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses the
-  credentials git already has on that machine. Maiker stores no GitHub token and cannot sign in to GitHub from the
-  clone flow; the window says so when git needs a sign-in. Git's own words are matched to a plain sentence and shown
-  without the address.
+  credentials git already has on that machine (`gh`'s, once the person has signed in through Open a project's GitHub
+  tab). Maiker stores no GitHub token; the window says so when git needs a sign-in. Git's own words are matched to a
+  plain sentence and shown without the address.
+
+The **Open a project** dialog (`features/open-project/`) is the desktop's other way in, on this computer only:
+
+- Its URL tab accepts any host, not only GitHub. `repoUrl.ts` reads `https://host/owner/repo`, `git@host:owner/repo.git` and
+  `host/owner/repo`, requires a dotted host name and path parts in the same safe characters as above, and builds the
+  https or ssh address again from them (a user name or token is refused, never carried on). The daemon's check on the
+  address is unchanged and is the one that decides.
+- GitHub sign-in is `gh auth login --web`, run by the daemon (`agentSignIn('github', …)`). The window shows the one-time
+  code and an https link and never asks for, receives or displays a token; `gh` keeps it. Sign-out is `gh auth logout`.
+- On this computer, the git projects offered come from `listFolders` on home and a fixed shortlist of folders under it,
+  one level deep, each with a timeout; no walk of the disk.
 
 ## Project-specific: signing an agent in from the desktop
 

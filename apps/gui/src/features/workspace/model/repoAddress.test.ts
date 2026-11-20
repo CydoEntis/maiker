@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { carriesCredentials, cloneParentFor, cloneTargetOf, DEFAULT_CLONE_PARENT, explainCloneFailure, parseRepoAddress } from './repoAddress'
+import { carriesCredentials, cloneTargetOf, explainCloneFailure, parseRepoAddress } from './repoAddress'
 import { openViewFor } from './chatView'
 
 describe('reading a pasted repository address', () => {
@@ -46,12 +46,6 @@ describe('reading a pasted repository address', () => {
 })
 
 describe('where a clone goes', () => {
-  it('is the last folder used on that machine, else ~/Projects', () => {
-    expect(cloneParentFor('/srv/code')).toBe('/srv/code')
-    expect(cloneParentFor(null)).toBe(DEFAULT_CLONE_PARENT)
-    expect(cloneParentFor('   ')).toBe('~/Projects')
-  })
-
   it('names the folder it would make, whatever the separator on the end', () => {
     expect(cloneTargetOf('~/Projects', 'widgets')).toBe('~/Projects/widgets')
     expect(cloneTargetOf('C:\\code\\', 'widgets')).toBe('C:\\code/widgets')
