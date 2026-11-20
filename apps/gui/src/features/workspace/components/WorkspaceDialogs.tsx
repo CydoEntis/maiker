@@ -39,7 +39,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { addMachineFor, signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
+  const { addMachineFor, signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
   const fixed = addMachineFor === null ? null : heads.find((head) => head.name === addMachineFor) ?? null
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
@@ -81,6 +81,17 @@ export function WorkspaceDialogs() {
                 {...(abilitiesOf(worktreeFrom.process).moveToWorktree ? { move: { blocked: moveRefusal(worktreeFrom), run: async (branch: string) => { setWorktreeFrom(null); await moveToWorktree(worktreeFrom, branch) } } } : {})}
                 onCreate={(branch, base) => createWorktree(worktreeFrom, branch, base)}
                 onCancel={() => { setWorktreeFrom(null) }}
+              />
+            )}
+            {/* From a project heading: the session only lends its repository, so no name from its task and no move of its chat. */}
+            {projectWorktreeFrom && (
+              <NewWorktreeDialog
+                term={projectWorktreeFrom.pane}
+                repoName={projectWorktreeFrom.repoName ?? projectWorktreeFrom.cwdLabel}
+                machine={projectWorktreeFrom.machine}
+                {...(projectWorktreeFrom.branch === null ? {} : { fromBranch: projectWorktreeFrom.branch })}
+                onCreate={async (branch, base) => { await createWorktree(projectWorktreeFrom, branch, base); setProjectWorktreeFrom(null) }}
+                onCancel={() => { setProjectWorktreeFrom(null) }}
               />
             )}
             {getFileId !== null && sessionMap.get(getFileId)?.machineName != null && (

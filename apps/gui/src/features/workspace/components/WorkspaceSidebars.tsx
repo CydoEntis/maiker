@@ -5,6 +5,7 @@ import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
 import { projectRequestFor } from '../useOpenProject'
+import { useProjectActions } from '../useProjectActions'
 
 const noop = () => undefined
 
@@ -13,6 +14,7 @@ export function WorkspaceSidebars() {
   const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const installedAgents = useInstalledAgents()
+  const projectActionsFor = useProjectActions()
   const start = {
     installedAgents,
     onAgent: startAgent,
@@ -49,6 +51,7 @@ export function WorkspaceSidebars() {
       onNewShell={chatView ? undefined : (machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
       onOpenProject={(machine) => { afterPick(); setOpenProject(projectRequestFor(machine)) }}
+      projectActions={projectActionsFor(afterPick)}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
       onFixMachine={(head) => { afterPick(); if (head.name !== null) fixMachine(head.name) }}
       onRenameMachine={setRenamingMachine}

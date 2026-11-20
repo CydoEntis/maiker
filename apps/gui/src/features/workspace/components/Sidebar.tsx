@@ -20,6 +20,9 @@ import { NeedsYouStrip } from './NeedsYouStrip'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
 import { flipKey } from './flipKey'
+import { menuPoint } from './menuPoint'
+import { ProjectHeadActions } from './ProjectHeadActions'
+import { projectCommands, projectMenuEntries, type ProjectActions } from './projectMenu'
 
 
 export type SidebarProps = {
@@ -61,6 +64,8 @@ export type SidebarProps = {
   onAddMachine: () => void
   /** Opens a folder of a machine as a project, starting nothing: from the + in that machine's heading. */
   onOpenProject?: ((machine: number) => void) | undefined
+  /** What a project heading's buttons and right-click menu do; without it a heading only folds. */
+  projectActions?: ProjectActions | undefined
   onMachineSettings: () => void
   /** Fix on a machine that is not up: mends it in the Add a remote machine dialog. */
   onFixMachine: (head: MachineHead) => void
@@ -264,11 +269,11 @@ function Expanded(props: SidebarProps) {
   }
   // Where each row sits, so a row that changes section because focus moved (`held`) still animates, while a focus change that moves nothing leaves the key alone and `useFlip` reads no layout.
   useFlip(list, reduced, flipKey(props.sessions, putAwayOpen, views.signature, draft !== null, treePlacement(tree, props.statusHeadings)))
-  const openMenu = (event: MouseEvent, title: string, items: MenuEntry[]) => {
+  const openMenu = (event: MouseEvent, title: string, items: MenuEntry[], at = { x: event.clientX, y: event.clientY }) => {
     event.preventDefault()
     event.stopPropagation()
     endHover()
-    setMenu({ title, at: { x: event.clientX, y: event.clientY }, items })
+    setMenu({ title, at, items })
   }
 
   const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session, shortcutText('close'))
@@ -288,6 +293,19 @@ function Expanded(props: SidebarProps) {
       ...(name === null ? [] : [{ label: 'Rename…', run: () => { props.onRenameMachine(name) } }]),
       { label: 'Machine settings…', run: props.onMachineSettings },
     ]
+  }
+
+  // A heading's buttons and menu, from every session placed in the project (put-away ones too), not only the rows drawn.
+  const projectHead = (head: MachineHead, node: ProjectNode): ProjectHeadProps | null => {
+    const actions = props.projectActions
+    if (actions === undefined) return null
+    const placed = props.projects.flatMap((machine) => machine.projects).find((entry) => sameProject(entry.project, node.project))
+    const commands = projectCommands(actions, { machine: head.machine, project: node.project, name: node.name, sessions: placed?.sessions ?? [], canStart: props.canStart && !head.down, online: props.online })
+    const items = projectMenuEntries(commands)
+    return {
+      onContextMenu: (event) => { openMenu(event, node.name, items) },
+      actions: <ProjectHeadActions name={node.name} commands={commands} onMore={(event) => { openMenu(event, node.name, items, menuPoint(event, true)) }} />,
+    }
   }
 
   const renderRow = (session: SessionView, showProject: boolean, showMachine = true) => {
@@ -330,6 +348,7 @@ function Expanded(props: SidebarProps) {
           onToggle={() => { views.toggle(project.key) }}
           headings={showsStatusHeadings(project.count, props.statusHeadings)}
           selected={props.selectedProject !== null && sameProject(project.project, props.selectedProject)}
+          head={projectHead(node.head, project)}
           renderRow={(session) => renderRow(session, true, false)}
         />
       ))}
@@ -400,6 +419,9 @@ function ListSection({ id, name, label, count, open, onToggle, children }: ListS
   )
 }
 
+/** A project heading's right-click menu and its buttons (`ProjectHeadActions`). */
+type ProjectHeadProps = { onContextMenu: (event: MouseEvent) => void; actions: ReactNode }
+
 type ProjectSectionProps = {
   node: ProjectNode
   open: boolean
@@ -408,6 +430,8 @@ type ProjectSectionProps = {
   headings: boolean
   /** The project last opened or picked (`useOpenedProjects().selected`), marked on its heading. */
   selected: boolean
+  /** Null: the heading only folds. */
+  head: ProjectHeadProps | null
   renderRow: (session: SessionView) => ReactNode
 }
 
@@ -415,14 +439,18 @@ type ProjectSectionProps = {
  * One opened project under its machine: a heading that folds it (its folder in the tooltip), then its sessions by status,
  * Needs you, Working, Done and Idle, the latest change first in each. A heading names a status only when `headings` is on.
  */
-function ProjectSection({ node, open, onToggle, headings, selected, renderRow }: ProjectSectionProps) {
+function ProjectSection({ node, open, onToggle, headings, selected, head, renderRow }: ProjectSectionProps) {
   return (
     <div className="mx-project" data-project={node.key}>
-      <button type="button" className={`mx-project-head${selected ? ' is-selected' : ''}`} data-flip={`head:${node.key}`} aria-expanded={open} aria-current={selected ? 'true' : undefined} title={node.project.folder} onClick={onToggle}>
-        <span className={`mx-caret-wrap${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
-        <FolderMark size={14} />
-        <span className="mx-project-name">{node.name}</span>
-      </button>
+      {/* A row holding the folding button and the action buttons beside it, as a machine heading does: a button cannot hold a button. */}
+      <div className={`mx-project-head${selected ? ' is-selected' : ''}`} data-flip={`head:${node.key}`} onContextMenu={head?.onContextMenu}>
+        <button type="button" className="mx-project-toggle" aria-expanded={open} aria-current={selected ? 'true' : undefined} title={node.project.folder} onClick={onToggle}>
+          <span className={`mx-caret-wrap${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
+          <FolderMark size={14} />
+          <span className="mx-project-name">{node.name}</span>
+        </button>
+        {head?.actions}
+      </div>
       <Collapse open={open}>
         {node.count === 0 && <div className="mx-project-empty">No sessions</div>}
         {headings

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { readOpenedProjects, writeOpenedProjects } from '@/data/openedProjects'
-import { groupByProject, openProject, type MachineProjects, type OpenedProject } from './model/openedProjects'
+import { closeProject, groupByProject, openProject, sameProject, type CloseResult, type MachineProjects, type OpenedProject } from './model/openedProjects'
 import type { SessionView } from './model/session'
 import { useWorkspace } from './workspaceContext'
 
@@ -21,6 +21,11 @@ export type OpenedProjects = {
    */
   readonly open: (project: OpenedProject) => OpenedProject
   readonly select: (project: OpenedProject | null) => void
+  /**
+   * Takes `project` off the list and saves it, unselecting it if it was selected. Refused, changing nothing, while a
+   * listed session is in it (`closeProject`): the result says which, for the caller to tell the person.
+   */
+  readonly close: (project: OpenedProject) => CloseResult
 }
 
 /**
@@ -45,7 +50,15 @@ export function useOpenedProjectsState(sessions: readonly SessionView[]): Opened
     setSelected(entry)
     return entry
   }, [opened])
-  return { opened, machines, selected, open, select: setSelected }
+  const close = useCallback((project: OpenedProject) => {
+    const result = closeProject(opened, project, sessions)
+    if (!result.ok) return result
+    // From the newest list, as `open` does; the check above is this render's, which is what the person was shown.
+    setSaved((current) => current.filter((candidate) => !sameProject(candidate, project)))
+    setSelected((current) => (current !== null && sameProject(current, project) ? null : current))
+    return result
+  }, [opened, sessions])
+  return { opened, machines, selected, open, select: setSelected, close }
 }
 
 /** The opened projects, from any part of the window. */

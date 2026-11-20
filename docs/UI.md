@@ -329,7 +329,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    fourth level: a worktree's session is a row of its repository's project, `project / worktree` on its second line.
    Machines and projects fold from their headings; which are folded is kept by name and folder in
    `maiker.gui.sidebar-folds.v1` (`data/sidebarFolds.ts`), so a fold survives a restart, and a project heading is its own
-   component (`ProjectSection`) for the actions later added to it. The tree draws `useOpenedProjects().machines` and adds
+   component (`ProjectSection`) with its actions (item 5). The tree draws `useOpenedProjects().machines` and adds
    nothing itself; when `selected` changes, that project and its machine unfold and the project's heading is marked. Above the tree and outside its scrolling list, the **Needs you strip** (`NeedsYouStrip`, from `waitingSessions`) lists every session waiting on you on every machine and in every project, whatever is folded and whatever the project filter, the latest to start waiting first, each with its machine and project; a click opens the session and unfolds its machine and project (dropping a filter on another project), and the session stays in its project too. With none waiting the strip is not drawn. The header's filter button narrows the tree to one project
    (its Group and Sort rows are not shown); Settings › Appearance still shows Group sessions by and Session order
    (`sidebarGroup`, `sidebarOrder`), which the tree reads neither of. The terminals
@@ -371,13 +371,22 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    the deepest opened folder around its own; a session that fits none opens that folder. A project with no sessions stays
    until closed, and `closeProject` refuses while a session in it has not ended. The window's one copy is
    `useOpenedProjects()` (`features/workspace/useOpenedProjects.ts`, owned by `useWorkspaceState`): `opened`, `machines`
-   (the grouping), `selected` (the project last opened or picked, for the sidebar to show) and `open`/`select`; a listed
+   (the grouping), `selected` (the project last opened or picked, for the sidebar to show), `open`/`select` and `close`; a listed
    session's project is added and saved at once. **Open a project…** on a machine heading's `+` opens one with no session:
    on this computer it is the Open a project dialog for the project alone, on another machine the folder picker on that
    machine (`ProjectFolderPicker`). That machine's daemon reads the folder (`projectOfFolder`, through `loadFolderBranches`):
    a folder in git opens its repository's main checkout, any other opens itself, and one the machine cannot read is refused
    with its reason (in the dialog, or a toast over the picker, which stays) and nothing is added. A folder that is already
-   open, in any spelling, selects that project and adds nothing. The sidebar draws `machines` as its tree (item 2) and
+   open, in any spelling, selects that project and adds nothing.
+   A project heading's buttons and right-click menu (`components/projectMenu.ts`, `ProjectHeadActions`; the ⋯ button opens
+   the menu from the keyboard) offer **New session** (the new-chat draft on the project's machine with its folder), **New
+   worktree…** and **Close project**. New worktree opens the New worktree dialog off a session of this computer in the
+   project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
+   from a session's terminal: a remote project, a plain folder and a git project with no session of this computer have
+   none. Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
+   (`useProjectActions`). Close project is `useOpenedProjects().close`: while a listed session is in the project (put-away
+   ones too) it is refused and a toast names the sessions in the way; ended sessions are never in the sidebar's list, so a
+   closed project is not opened again by one. The sidebar draws `machines` as its tree (item 2) and
    unfolds and marks `selected`.
 
 ## Project-specific: usage and cost page (desktop)

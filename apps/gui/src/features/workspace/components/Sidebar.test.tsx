@@ -1,14 +1,16 @@
 import { useState } from 'react'
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { writeMachineNicknames } from '@/data/machineNicknames'
+import { currentToasts, resetToasts } from '@/lib/toast'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
-import { groupByProject, type OpenedProject } from '../model/openedProjects'
+import { closeProject, groupByProject, type OpenedProject } from '../model/openedProjects'
 import { toSessionView, type SessionView } from '../model/session'
 import { Sidebar, type SidebarProps } from './Sidebar'
 import { flipKey } from './flipKey'
+import type { ProjectActions } from './projectMenu'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(id.indexOf('t') + 1)) }))
 
@@ -887,6 +889,119 @@ describe('the top of the sidebar', () => {
     expect(screen.queryByRole('button', { name: /^Terminals/ })).toBeNull()
   })
 })
+
+describe('a project heading', () => {
+  afterEach(() => { resetToasts() })
+
+  const SHOP: OpenedProject = { machineName: null, folder: '/home/me/shop' }
+  const NOTES: OpenedProject = { machineName: null, folder: '/home/me/notes' }
+  /** An agent in the shop repository's main checkout, and one in a linked worktree of it. */
+  const inShop = () => [
+    session(1, { agent: 'claude', named: true, title: 'In a worktree', repo: 'shop', branch: 'feat/x', folder: '/home/me/shop', cwd: '/home/me/.maiker/shop/feat-x', linked: true }),
+    session(2, { agent: 'claude', named: true, title: 'On main', repo: 'shop', branch: 'main', folder: '/home/me/shop', cwd: '/home/me/shop' }),
+  ]
+  /** The window's actions, with Close project deciding as the window does, over `sessions`. */
+  function actionsOver(sessions: readonly SessionView[], opened: readonly OpenedProject[]) {
+    return { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onClose: vi.fn((project: OpenedProject) => closeProject(opened, project, sessions)) } satisfies ProjectActions
+  }
+  function showProjects(sessions: SessionView[], opened: readonly OpenedProject[], more: Partial<SidebarProps> = {}) {
+    const grouping = groupByProject(sessions, opened)
+    const projectActions = actionsOver(sessions, grouping.opened)
+    show(sessions, { projects: grouping.machines, projectActions, ...more })
+    return projectActions
+  }
+  const menuItems = () => screen.getAllByRole('menuitem').map((item) => item.textContent)
+
+  it('starts a new-chat draft on the project\'s machine and folder from its + and from its menu', async () => {
+    const user = userEvent.setup()
+    const api = { machineName: 'devbox', folder: '/srv/api' }
+    const actions = showProjects([], [SHOP, api], { machines: [LOCAL_HEAD, DEVBOX] })
+    await user.click(screen.getByRole('button', { name: 'New session in shop' }))
+    expect(actions.onNewSession).toHaveBeenLastCalledWith(0, SHOP)
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New session' }))
+    expect(actions.onNewSession).toHaveBeenLastCalledWith(4, api)
+  })
+
+  it('offers New worktree on a git project of this computer and opens the dialog off its main checkout\'s session', async () => {
+    const user = userEvent.setup()
+    const sessions = inShop()
+    const actions = showProjects(sessions, [])
+    await user.click(screen.getByRole('button', { name: 'New worktree in shop' }))
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(sessions[1])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New worktree…' }))
+    expect(actions.onNewWorktree).toHaveBeenCalledTimes(2)
+  })
+
+  it('offers no New worktree on another machine\'s git project, where worktrees are not managed yet', async () => {
+    showProjects([session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })], [], { machines: [LOCAL_HEAD, DEVBOX] })
+    expect(screen.queryByRole('button', { name: 'New worktree in api' })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
+    await screen.findByRole('menu', { name: 'api' })
+    expect(menuItems()).toEqual(['New session', 'Close project'])
+  })
+
+  it('shows a plain-folder project New session and Close project only, on its buttons and in its menu', async () => {
+    showProjects([session(1, { agent: 'claude', named: true, title: 'Notes', cwd: '/home/me/notes', folder: '/home/me/notes' })], [])
+    expect(screen.getByRole('button', { name: 'New session in notes' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'New worktree in notes' })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'notes', expanded: true }))
+    await screen.findByRole('menu', { name: 'notes' })
+    expect(menuItems()).toEqual(['New session', 'Close project'])
+  })
+
+  it('closes a project with no running session and says nothing', async () => {
+    const user = userEvent.setup()
+    const actions = showProjects([], [NOTES])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'notes', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close project' }))
+    expect(actions.onClose).toHaveBeenCalledWith(NOTES)
+    expect(actions.onClose.mock.results[0]?.value).toEqual({ ok: true, value: [] })
+    expect(currentToasts().items).toHaveLength(0)
+  })
+
+  it('refuses to close a project a session runs in, and names the sessions in the way', async () => {
+    const user = userEvent.setup()
+    const actions = showProjects(inShop(), [])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close project' }))
+    expect(actions.onClose.mock.results[0]?.value).toMatchObject({ ok: false, error: { code: 'sessions-running' } })
+    const [said] = currentToasts().items
+    expect(said?.title).toBe('Could not close shop')
+    expect(said?.description).toBe('Still running in it: In a worktree and On main. Close them first.')
+  })
+
+  it('reaches every action from the keyboard: the ⋯ button opens the menu, the arrows move and Enter runs', async () => {
+    const user = userEvent.setup()
+    const sessions = inShop()
+    const actions = showProjects(sessions, [])
+    screen.getByRole('button', { name: 'More for shop' }).focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('menu', { name: 'shop' })
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Close project'])
+    await waitForFocus('New session')
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(actions.onNewWorktree).toHaveBeenCalledWith(sessions[1])
+    screen.getByRole('button', { name: 'More for shop' }).focus()
+    await user.keyboard('{Enter}')
+    await waitForFocus('New session')
+    await user.keyboard('{ArrowUp}{Enter}')
+    expect(actions.onClose).toHaveBeenCalledWith(SHOP)
+  })
+
+  it('has no buttons or menu on a heading when the window gives no project actions', () => {
+    show([session(1, { agent: 'claude', named: true, title: 'Notes', cwd: '/home/me/notes', folder: '/home/me/notes' })])
+    expect(screen.queryByRole('button', { name: 'New session in notes' })).toBeNull()
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'notes', expanded: true }))
+    expect(screen.queryByRole('menu')).toBeNull()
+  })
+})
+
+/** Waits for the menu item named `name` to take focus, as an opened menu gives it to its first item. */
+async function waitForFocus(name: string) {
+  await waitFor(() => { expect(document.activeElement).toBe(screen.getByRole('menuitem', { name })) })
+}
 
 describe('New worktree', () => {
   it('is in a session\'s menu, asks the window to make one from it, and is off outside a repository', async () => {

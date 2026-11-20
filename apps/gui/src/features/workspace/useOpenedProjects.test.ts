@@ -67,4 +67,27 @@ describe('the window\'s opened projects', () => {
     renderHook(() => useOpenedProjectsState(NO_SESSIONS))
     expect(localStorage.getItem(KEY)).toBe('{"this computer": 3}')
   })
+  it('closes a project with no session, unselects it, and it stays closed after the next list', () => {
+    const { result, rerender } = renderHook(({ sessions }) => useOpenedProjectsState(sessions), { initialProps: { sessions: NO_SESSIONS } })
+    let shop: OpenedProject | null = null
+    act(() => { shop = result.current.open({ machineName: null, folder: '/code/shop' }) })
+    act(() => { result.current.open({ machineName: null, folder: '/code/notes' }) })
+    act(() => { result.current.select(shop) })
+    act(() => { expect(result.current.close({ machineName: null, folder: '/code/shop/' }).ok).toBe(true) })
+    expect(result.current.opened).toEqual([{ machineName: null, folder: '/code/notes' }])
+    expect(result.current.selected).toBeNull()
+    expect(readOpenedProjects()).toEqual([{ machineName: null, folder: '/code/notes' }])
+    // A session in another project is listed: the closed one is not opened again by the list changing.
+    rerender({ sessions: [sessionIn(2, '/code/notes')] })
+    expect(result.current.opened).toEqual([{ machineName: null, folder: '/code/notes' }])
+  })
+
+  it('refuses to close a project a listed session is in, says which, and keeps it', () => {
+    const running = sessionIn(1, '/code/shop/src', '/code/shop')
+    const { result } = renderHook(() => useOpenedProjectsState([running]))
+    let outcome: ReturnType<typeof result.current.close> | null = null
+    act(() => { outcome = result.current.close({ machineName: null, folder: '/code/shop' }) })
+    expect(outcome).toEqual({ ok: false, error: { code: 'sessions-running', running: [running] } })
+    expect(result.current.opened).toEqual([{ machineName: null, folder: '/code/shop' }])
+  })
 })

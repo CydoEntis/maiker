@@ -49,8 +49,15 @@
    heading per status when the project has enough sessions to need one. No card of its own: a card in a card is noise. */
 .mx-projects { display: flex; flex-direction: column; gap: 2px; }
 .mx-project { display: flex; flex-direction: column; }
-.mx-project-head { min-width: 0; height: calc(26px * var(--pad, 1)); display: flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--r-control); font-size: calc(12px * var(--sidebar-text, 1)); font-weight: 600; color: var(--fg2); white-space: nowrap; }
+.mx-project-head { min-width: 0; height: calc(26px * var(--pad, 1)); display: flex; align-items: center; gap: 2px; padding: 0 3px 0 0; border-radius: var(--r-control); font-size: calc(12px * var(--sidebar-text, 1)); font-weight: 600; color: var(--fg2); white-space: nowrap; }
 .mx-project-head:hover { background: var(--card-hover); }
+.mx-project-toggle { flex: 1; min-width: 0; height: 100%; display: flex; align-items: center; gap: 6px; padding: 0 10px; color: inherit; }
+/* New session, New worktree and ⋯ show while the pointer or focus is on the heading, so a resting tree reads as names only
+   and a long name keeps the width. Folded to no width rather than hidden, so Tab still reaches them and opens them. */
+.mx-project-actions { flex: none; max-width: 0; display: flex; align-items: center; gap: 1px; overflow: hidden; opacity: 0; transition: opacity var(--t-fast) var(--ease); }
+.mx-project-head:hover .mx-project-actions, .mx-project-head:focus-within .mx-project-actions { max-width: none; opacity: 1; }
+.mx-sidebar .mx-head-button.mx-project-action { width: 22px; height: 22px; }
+.mx-sidebar .mx-head-button.mx-project-action:not(:disabled):hover { background: var(--m-hover); color: var(--fg); }
 /* The project last opened or picked: the picked row's fill, so it reads as chosen on every theme. */
 .mx-project-head.is-selected, .mx-project-head.is-selected:hover { background: var(--m-card-sel); color: var(--fg); }
 .mx-project-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
