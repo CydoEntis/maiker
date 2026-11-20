@@ -8,12 +8,13 @@ export const STEP_VIEW = 3
 export const STEP_REVIEW = 4
 
 /** The agent programs the setup lists, by the name `agents_installed` finds them under. Gemini has no chat view. */
-export const SETUP_AGENTS: ReadonlyArray<{ program: string; label: string; detail: string }> = [
-  { program: 'claude', label: 'Claude Code', detail: 'Anthropic’s coding agent' },
-  { program: 'codex', label: 'Codex', detail: 'OpenAI’s coding agent' },
-  { program: 'gemini', label: 'Gemini', detail: 'Google’s coding agent · terminal only' },
-  { program: 'opencode', label: 'OpenCode', detail: 'Open-source agent for any model' },
-  { program: 'cursor-agent', label: 'Cursor', detail: 'Cursor’s agent in your terminal' },
+export const SETUP_AGENTS: ReadonlyArray<{ program: string; label: string; detail: string; installable: boolean }> = [
+  { program: 'claude', label: 'Claude Code', detail: 'Anthropic’s coding agent', installable: true },
+  { program: 'codex', label: 'Codex', detail: 'OpenAI’s coding agent', installable: true },
+  { program: 'gemini', label: 'Gemini', detail: 'Google’s coding agent · terminal only', installable: true },
+  { program: 'opencode', label: 'OpenCode', detail: 'Open-source agent for any model', installable: true },
+  // Not on the desktop shell's install list (src-tauri/src/agent_install.rs), so it is listed but never offered an Install.
+  { program: 'cursor-agent', label: 'Cursor', detail: 'Cursor’s agent in your terminal', installable: false },
 ]
 
 export const agentLabel = (program: string): string => SETUP_AGENTS.find((agent) => agent.program === program)?.label ?? program

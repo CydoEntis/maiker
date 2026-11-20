@@ -59,6 +59,8 @@ export type SessionView = {
   hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
   agentEffort?: string | null
+  /** The model its agent answers with, short; empty when it has not said. */
+  agentModel: string
   /** When the status last changed, in milliseconds, as the daemon says; null when it did not say. */
   statusSince: number | null
   /** What set the status, in the daemon's own words (`hook: Stop`); empty when it gave no reason. */
@@ -334,6 +336,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     ...(conversation.details?.hooked === undefined ? {} : { hooked: conversation.details.hooked }),
     hookProblem: conversation.details?.hookProblem ?? null,
     agentEffort: conversation.details?.agentEffort ?? null,
+    agentModel: conversation.details?.agentModel ?? '',
     statusSince: (conversation.details?.since ?? 0) > 0 ? (conversation.details?.since ?? 0) * MS_PER_SECOND : null,
     statusWhy: conversation.details?.statusWhy ?? '',
     resumeAt,

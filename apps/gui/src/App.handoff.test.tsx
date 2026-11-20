@@ -1236,9 +1236,8 @@ describe('desktop overlays and pane tools', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    // Get started leaves the + menu open, on this computer, to start the first session from.
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeInTheDocument()
-    await user.keyboard('{Escape}')
+    // Finishing the setup opens nothing after it: the + menu stays closed until the person opens it.
+    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
     expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'chat' })
 
     app.unmount()

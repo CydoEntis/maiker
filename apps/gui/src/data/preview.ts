@@ -25,6 +25,8 @@ export type TerminalDetails = {
   hookProblem?: { file: string; why: string; repaired: boolean } | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
   agentEffort?: string | null
+  /** The model its agent answers with, short (the daemon's `TermInfo.model`); empty or absent when it has not said. */
+  agentModel?: string
   /** When the status last changed, in unix seconds (the daemon's `TermInfo.since`); absent or 0 when it did not say. */
   since?: number
   /** What set the status, in the daemon's own words (`TermInfo.status_why`: `hook: Stop`); absent or empty when it gave no reason. */

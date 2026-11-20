@@ -95,6 +95,8 @@ const TerminalSessionSchema = z.object({
   session: z.string().nullable().default(null),
   // The effort the agent's own files say it runs at (`TermInfo.effort`); null when they do not say.
   effort: z.string().nullable().default(null),
+  // The model its agent answers with, short (`TermInfo.model`); empty until the agent's hook has said.
+  model: z.string().default(''),
   // Lines added and removed in the session's checkout against HEAD; zero outside git.
   diff_added: z.number().int().nonnegative().default(0),
   diff_removed: z.number().int().nonnegative().default(0),
@@ -1468,6 +1470,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       hooked: term.hooked,
       hookProblem: term.hook_problem,
       agentEffort: term.effort,
+      agentModel: term.model,
       exit: term.exit,
       since: term.since,
       statusWhy: term.status_why,

@@ -22,6 +22,15 @@ export function ContextRing({ percent, label }: { percent: number; label: string
   )
 }
 
+/** A thin bar filled to `percent`: the status bar's and the pane footer's shape of the same meter. */
+export function MeterBar({ percent, label }: { percent: number; label: string }) {
+  return (
+    <span className="mx-usage-bar" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={percent}>
+      <i style={{ width: `${String(percent)}%` }} />
+    </span>
+  )
+}
+
 type MeterProps = {
   item: UsageItem
   /** Present: the meter is a button that does this. */
@@ -32,11 +41,13 @@ type MeterProps = {
   graded?: boolean
   /** Shown before the name, such as an agent's mark. */
   lead?: ReactNode
+  /** Draw a thin bar where the ring would be. */
+  bar?: boolean
   className?: string
 }
 
-/** One usage meter: a short name, a ring and the figure. The chat box's row and the status bar both draw it. */
-export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', graded = false, lead, className = '' }: MeterProps) {
+/** One usage meter: a short name, a ring or bar and the figure. The chat box's row and the status bar both draw it. */
+export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', graded = false, lead, bar = false, className = '' }: MeterProps) {
   const level = graded ? levelOf(item.percent) : null
   const tip = meterTip(item)
   const classes = `mx-usage-item is-${item.tone}${level === null ? '' : ` is-${level}`}${className === '' ? '' : ` ${className}`}`
@@ -44,7 +55,7 @@ export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', grad
     <>
       {lead}
       <span className="mx-usage-name">{usageName(item)}</span>
-      <ContextRing percent={item.percent} label={item.label} />
+      {bar ? <MeterBar percent={item.percent} label={item.label} /> : <ContextRing percent={item.percent} label={item.label} />}
       <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
     </>
   )
@@ -53,12 +64,14 @@ export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', grad
     : <button type="button" className={classes} title={`${tip} · ${openLabel}`} onClick={onOpen}>{body}</button>
 }
 
-/** A context ring and its figure with no name, for the pane footer. */
+/** The pane footer's context meter: the word, a bar and the figure, graded like a limit. */
 export function ContextMeter({ percent }: { percent: number }) {
+  const level = levelOf(percent)
   return (
-    <span className="mx-context-meter" title={`How much of this chat's memory is used: ${String(percent)}%`}>
-      <ContextRing percent={percent} label="Context" />
-      <span>{`${String(percent)}%`}</span>
+    <span className={`mx-context-meter${level === null ? '' : ` is-${level}`}`} title={`How much of this chat's memory is used: ${String(percent)}%`}>
+      <span className="mx-usage-name">context</span>
+      <MeterBar percent={percent} label="Context" />
+      <span className="mx-usage-figure">{`${String(percent)}%`}</span>
     </span>
   )
 }

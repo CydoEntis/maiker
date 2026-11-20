@@ -3,9 +3,14 @@
 .mx-status-version { font: 400 11px var(--mono); }
 .mx-status-fill { flex: 1; }
 .mx-status-meters { display: inline-flex; align-items: center; gap: 4px; }
-.mx-status-meter { height: 20px; padding: 0 6px; border-radius: var(--r-control); gap: 6px; cursor: pointer; }
+/* A meter is a pill: the agent's mark, the window's short name, a thin bar and the figure, in mono. */
+.mx-status-meter { height: 20px; padding: 0 6px; border-radius: var(--r-control); gap: 6px; cursor: pointer; font: 400 11px var(--mono); color: var(--muted); }
+.mx-status-meter .mx-usage-name { font: inherit; color: inherit; text-transform: lowercase; }
+.mx-status-meter .mx-usage-figure { color: inherit; }
+.mx-status-meter.is-warn { color: var(--fg); }
 .mx-status-meter:hover { background: var(--m-hover); }
-.mx-status-meter.is-current { background: var(--m-sel); }
+.mx-status-meter.is-current { background: var(--m-sel); color: var(--fg2); }
+.mx-status-sep { width: 1px; height: 12px; background: var(--line2); }
 .mx-status-commands { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px; border-radius: var(--r-control); color: var(--muted); }
 .mx-status-commands:hover { background: var(--m-hover); color: var(--fg); }
 .mx-status-commands:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-underline); }

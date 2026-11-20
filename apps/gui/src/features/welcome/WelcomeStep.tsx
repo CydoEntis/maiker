@@ -1,6 +1,8 @@
 import type { KeyboardEvent, Ref } from 'react'
 import { APP_NAME } from '@/brand'
 import { Button } from '@/components/ui/button'
+import { CardList } from '@/components/ui/card'
+import { Icon } from '@/features/workspace/components/glyphs'
 import { FieldError, fieldErrorProps } from '@/components/ui/feedback'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { StepHead } from './StepHead'
@@ -39,14 +41,14 @@ function HomeField({ path, onPath, missing, note, suggestions, onBrowse, onEnter
       <label htmlFor="mx-onb-home" className="text-xs font-semibold text-(--fg2)">Home directory</label>
       <span className="text-xs leading-normal text-(--dim)">Every new session and terminal opens here. You can pick a different folder for any one session.</span>
       <div className="flex gap-2">
-        <span className="relative flex min-w-0 flex-1 items-center">
-          <span aria-hidden="true" className="pointer-events-none absolute left-2.5 font-(family-name:--mono) text-xs text-(--dim)">cd</span>
+        <span className="mx-field flex h-[30px] min-w-0 flex-1 items-center gap-2 rounded-(--r-control) px-2.5 has-[[aria-invalid=true]]:border-(--err) has-[:focus-visible]:shadow-(--focus-underline)">
+          <span aria-hidden="true" className="flex flex-none text-(--dim)"><Icon name="folder" size={15} /></span>
           <input
             id="mx-onb-home"
             value={path}
             spellCheck={false}
             autoComplete="off"
-            className="h-8 min-w-0 flex-1 bg-(--well) pr-2.5 pl-8 font-(family-name:--mono) text-[12.5px] text-(--fg) shadow-[inset_0_0_0_1px_var(--line)] outline-none placeholder:text-(--dim) focus:shadow-(--focus-underline) aria-invalid:shadow-[inset_0_0_0_1px_var(--err)]"
+            className="h-full min-w-0 flex-1 bg-transparent font-(family-name:--mono) text-[12.5px] text-(--fg) outline-none placeholder:text-(--dim)"
             {...fieldErrorProps(PATH_ERROR_ID, missing ? HOME_MISSING : null)}
             onChange={(event) => { onPath(event.target.value) }}
             onKeyDown={enter}
@@ -57,14 +59,17 @@ function HomeField({ path, onPath, missing, note, suggestions, onBrowse, onEnter
       {missing && <FieldError id={PATH_ERROR_ID}>{HOME_MISSING}</FieldError>}
       {note !== '' && <p role="alert" className="m-0 text-xs text-(--fg2)">{note}</p>}
       {suggestions.length > 0 && (
-        <div role="group" aria-label="Suggested folders" className="flex flex-col shadow-[inset_0_0_0_1px_var(--line)]">
+        <CardList aria-label="Suggested folders">
           {suggestions.map((suggestion) => (
-            <button key={suggestion.path} type="button" aria-pressed={suggestion.path === path} onClick={() => { onPath(suggestion.path) }} className="flex items-center gap-3 border-b border-(--line) px-3 py-1.5 text-left outline-none last:border-b-0 hover:bg-(--hover) aria-pressed:bg-(--sel) focus-visible:shadow-(--focus-underline)">
-              <span className="min-w-0 flex-1 truncate font-(family-name:--mono) text-xs text-(--fg)">{suggestion.path}</span>
-              <span className="flex-none text-[11.5px] text-(--dim)">{suggestion.detail}</span>
-            </button>
+            <li key={suggestion.path}>
+              <button type="button" aria-pressed={suggestion.path === path} onClick={() => { onPath(suggestion.path) }} className="flex w-full items-center gap-2.5 px-3 py-2 text-left outline-none hover:bg-(--hover) aria-pressed:bg-(--sel) focus-visible:shadow-(--focus-underline)">
+                <span aria-hidden="true" className="flex flex-none text-(--dim)"><Icon name="folder" size={15} /></span>
+                <span className="min-w-0 flex-1 truncate font-(family-name:--mono) text-xs text-(--fg)">{suggestion.path}</span>
+                <span className="flex-none text-[11.5px] text-(--dim)">{suggestion.detail}</span>
+              </button>
+            </li>
           ))}
-        </div>
+        </CardList>
       )}
     </div>
   )

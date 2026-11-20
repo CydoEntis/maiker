@@ -10,6 +10,7 @@
 .mx-tbar-logo svg { pointer-events: none; }
 /* Changes and Files for the focused pane, before the window buttons. */
 .mx-tbar-panels { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
+.mx-tbar-view { display: flex; align-items: center; margin-right: 8px; }
 .mx-tbar-word { font-size: 13px; font-weight: 600; color: var(--fg); }
 .title-bar[data-platform="windows"] [data-testid="window-controls"] > button { height: 38px; }
 
@@ -30,12 +31,12 @@
 .mx-section-head.is-working { color: var(--working); }
 .mx-section-head.is-done { color: var(--done); }
 .mx-section-head.is-idle { color: var(--muted); }
-.mx-section-head:hover { background: var(--m-hover); }
+.mx-section-head:hover, .mx-machine-toggle:hover { background: var(--card-hover); }
 .mx-section-count { font: 500 10.5px var(--mono); opacity: .7; }
 .mx-rows { gap: 2px; }
 /* A row: the 16px tile, the name and its time, the project and machine under it. */
 .mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 7px 10px; border-radius: var(--r-control); }
-.mx-row:hover { background: var(--m-hover); }
+.mx-row:hover { background: var(--card-hover); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-sel); box-shadow: none; }
 .mx-row .mx-row-icon { margin-top: 1px; }
 .mx-row-name { font-weight: 450; color: var(--fg2); }
@@ -51,7 +52,8 @@
 .mx-row-sub .mx-row-branch-name { flex: 0 1 auto; }
 /* The other machine's name, in the accent colour: only a remote session has one. */
 .mx-row-machine { flex: none; max-width: 45%; color: var(--accent-text); }
-.mx-sidebar-foot { border-top-color: var(--line); }
+.mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; }
+.mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
 .mx-app-icon.is-dimmed { opacity: .45; }

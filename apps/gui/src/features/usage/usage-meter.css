@@ -5,6 +5,11 @@
 .mx-usage-track { stroke: var(--line2); }
 /* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
 .mx-usage-fill { stroke: var(--fg2); }
+/* The bar: 4px, in the same track and fill roles as the ring, graded the same way. */
+.mx-usage-bar { flex: none; display: block; width: 36px; height: 4px; border-radius: 2px; overflow: hidden; background: var(--line2); }
+.mx-usage-bar i { display: block; height: 100%; border-radius: 2px; background: var(--fg2); }
+.mx-usage-item.is-warn .mx-usage-bar i, .mx-context-meter.is-warn .mx-usage-bar i { background: var(--needs); }
+.mx-usage-item.is-hot .mx-usage-bar i, .mx-context-meter.is-hot .mx-usage-bar i { background: var(--danger); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
 /* The ring follows the corners: a square path under Square, a circle under Rounded. */
 .mx-usage-round { display: none; }
@@ -22,7 +27,12 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-usage-item.is-warn .mx-usage-figure { color: var(--needs); }
 .mx-usage-item.is-hot .mx-usage-figure { color: var(--danger); }
 /* The context ring beside its figure on its own (the pane footer). */
-.mx-context-meter { display: inline-flex; align-items: center; gap: 6px; font: 500 11px/12px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.mx-context-meter { display: inline-flex; align-items: center; gap: 8px; font: 400 11px/12px var(--mono); font-variant-numeric: tabular-nums; color: var(--fg2); }
+.mx-context-meter .mx-usage-bar { width: 56px; }
+.mx-context-meter .mx-usage-name { font: 400 12px var(--ui); }
+.mx-context-meter .mx-usage-figure { min-width: 30px; text-align: right; color: var(--fg2); }
+.mx-context-meter.is-warn .mx-usage-figure { color: var(--needs); }
+.mx-context-meter.is-hot .mx-usage-figure { color: var(--danger); }
 
 /* The usage popover: a short list that scrolls inside itself. */
 .mx-usage-pop { width: 300px; max-width: calc(100vw - 24px); max-height: min(360px, 60vh); overflow-y: auto; padding: 6px; display: flex; flex-direction: column; gap: 8px; color: var(--fg); }

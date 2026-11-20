@@ -75,7 +75,7 @@ describe('Onboarding steps', () => {
     expect(heading('You’re all set')).toBeInTheDocument()
     await press(user, 'Get started')
     expect(props.onApply).toHaveBeenCalledWith({ startFolder: '', openSessionsIn: 'chat' })
-    expect(props.onClose).toHaveBeenCalledWith(true)
+    expect(props.onClose).toHaveBeenCalledOnce()
   })
 
   it('goes back with the button, with Esc and from a finished step in the step bar', async () => {
@@ -104,7 +104,7 @@ describe('Onboarding steps', () => {
     const user = userEvent.setup()
     const props = setup()
     await press(user, 'Skip setup')
-    expect(props.onClose).toHaveBeenCalledWith(false)
+    expect(props.onClose).toHaveBeenCalledOnce()
     expect(props.onApply).not.toHaveBeenCalled()
   })
 
@@ -226,6 +226,18 @@ describe('Onboarding agent install', () => {
     expect(rows.queryByRole('button', { name: 'Install Codex' })).not.toBeInTheDocument()
   })
 
+  it('lists every supported agent and offers no Install for one the app cannot install', async () => {
+    const user = userEvent.setup()
+    setup()
+    await toAgents(user)
+    const rows = within(screen.getByRole('list', { name: 'Agents' }))
+    expect(rows.getAllByRole('listitem')).toHaveLength(5)
+    const cursor = rows.getByText('Cursor').closest('li')
+    expect(cursor).toHaveTextContent('Not installable here')
+    expect(rows.queryByRole('button', { name: 'Install Cursor' })).not.toBeInTheDocument()
+    expect(host.command).not.toHaveBeenCalledWith('cursor-agent')
+  })
+
   it('shows a failed install as something that needs you, in plain words, and tries again', async () => {
     const user = userEvent.setup()
     host.install.mockRejectedValueOnce(new Error('could not resolve host registry.npmjs.org'))
@@ -244,11 +256,27 @@ describe('Onboarding agent install', () => {
     host.install.mockResolvedValue({ version: null })
     setup()
     await toAgents(user)
-    await user.click(screen.getByRole('button', { name: 'Install all 4' }))
-    await waitFor(() => { expect(screen.getAllByText(/install-.* --yes/)).toHaveLength(4) })
+    await user.click(screen.getByRole('button', { name: 'Install all 3' }))
+    await waitFor(() => { expect(screen.getAllByText(/install-.* --yes/)).toHaveLength(3) })
     expect(host.install).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Run all 4' }))
-    await waitFor(() => { expect(host.install).toHaveBeenCalledTimes(4) })
+    await user.click(screen.getByRole('button', { name: 'Run all 3' }))
+    await waitFor(() => { expect(host.install).toHaveBeenCalledTimes(3) })
+  })
+})
+
+describe('Onboarding veil', () => {
+  it('blurs the whole window with a veil of its own that holds no content', () => {
+    setup()
+    const veil = document.querySelector('.mx-onb-veil')
+    expect(veil).not.toBeNull()
+    expect(veil?.childElementCount).toBe(0)
+    expect(screen.getByRole('dialog', { name: 'Set up Maiker' })).toHaveClass('mx-onb')
+  })
+
+  it('keeps Skip setup in its own slot, after the steps', () => {
+    setup()
+    const bar = screen.getByRole('navigation', { name: 'Setup progress' })
+    expect(bar.lastElementChild).toBe(within(bar).getByRole('button', { name: 'Skip setup' }))
   })
 })
 

@@ -240,6 +240,6 @@
 .mx-shint-agent:disabled { opacity: .4; }
 .mx-shint-note { font-size: 12px; color: var(--dim); }
 
-/* The agent pane's foot: its mark and name, the context meter at the far right. */
-.mx-pane-foot { flex: none; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 12px; font-size: 12px; color: var(--muted); }
-.mx-pane-foot-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The agent pane's foot, ruled off by a hairline: its mark and `Agent · Model`, the context meter at the far right. */
+.mx-pane-foot { flex: none; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
+.mx-pane-foot-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg2); }

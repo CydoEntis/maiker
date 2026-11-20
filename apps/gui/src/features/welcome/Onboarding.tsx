@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Dialog as DialogPrimitive } from 'radix-ui'
+import { Dialog, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { MaikerMark } from '@/components/ui/maiker-mark'
 import { StepBar } from '@/components/ui/step-bar'
@@ -34,8 +35,8 @@ type Props = {
   reducedMotion: boolean
   /** The themed window root the setup mounts in, so it reads the theme's tokens. */
   portalContainer: HTMLElement | null
-  /** The setup is over. `startSession` is true when Get started was pressed: open the + menu. */
-  onClose: (startSession: boolean) => void
+  /** The setup is over, by Get started or Skip setup. It opens nothing after it: the person starts a session when they choose to. */
+  onClose: () => void
 }
 
 const LAST_STEP = SETUP_STEPS.length - 1
@@ -96,7 +97,7 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
   const finish = () => {
     const wanted = path.trim()
     onApply({ startFolder: wanted === home ? '' : wanted, openSessionsIn: view })
-    onClose(true)
+    onClose()
   }
 
   const next = () => {
@@ -139,11 +140,11 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
 
   return (
     <Dialog open>
-      <DialogContent
-        unstyled
-        container={portalContainer}
-        overlayClassName="mx-onb"
-        className="mx-onb-win"
+      <DialogPortal container={portalContainer}>
+        <DialogPrimitive.Overlay data-slot="onboarding-veil" className="mx-onb-veil" />
+        <DialogPrimitive.Content
+        data-slot="dialog-content"
+        className="mx-onb"
         data-reduce={reducedMotion}
         aria-describedby={undefined}
         onKeyDown={onKeyDown}
@@ -157,11 +158,11 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
         {phase === 'draw' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press Enter to skip.</div>}
         {!reducedMotion && <OnboardingMark gone={phase === 'window'} />}
         {phase === 'window' && (
-          <div className="mx-onb-window flex max-h-[calc(100vh-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-panel) border border-(--line) bg-(--main) shadow-(--pop-sh)">
+          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-panel) border border-(--line) bg-(--main) shadow-(--pop-sh)">
             <div className="mx-onb-sr" aria-live="polite">{`Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`}</div>
             <div className="flex flex-none items-center gap-4 border-b border-(--line) px-5 py-3.5">
               <MaikerMark width={26} height={20} />
-              <StepBar className="min-w-0 flex-1" label="Setup progress" steps={SETUP_STEPS} current={step} onSelect={go} skip={{ label: 'Skip setup', onSkip: () => { onClose(false) } }} />
+              <StepBar className="min-w-0 flex-1" label="Setup progress" steps={SETUP_STEPS} current={step} onSelect={go} skip={{ label: 'Skip setup', onSkip: onClose }} />
             </div>
             <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
               <section key={step} data-back={back} aria-labelledby="mx-onb-h" className="mx-onb-screen flex flex-col gap-5 px-7 py-6">
@@ -185,7 +186,8 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
             </div>
           </div>
         )}
-      </DialogContent>
+        </DialogPrimitive.Content>
+      </DialogPortal>
     </Dialog>
   )
 }

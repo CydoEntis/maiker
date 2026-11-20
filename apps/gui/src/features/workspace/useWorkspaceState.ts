@@ -19,7 +19,8 @@ import { showSessionNotice } from '@/features/notifications/notify'
 import type { TerminalHandle } from '@/features/terminal/handle'
 import type { LookAt } from '@/features/inspect/FilesTab'
 import { connectAgentOnce } from './model/agentHooks'
-import { chatAvailability, chatSourceOf, type ChatAgent } from './model/chatView'
+import { chatAvailability, chatSourceOf, effectiveView, type ChatAgent } from './model/chatView'
+import { startedAsShell } from './model/shellStarts'
 import { useMachineActions, useRemoteMachines } from './useMachines'
 import { useKeyWait } from './useKeyWait'
 import type { KeyTerminalHost } from '@/features/settings/components/KeyTerminal'
@@ -320,9 +321,9 @@ export function useWorkspaceState() {
     const availability = chatAvailability(chatSourceOf(session))
     // A chat session has no terminal to switch to: its pane is the chat, always.
     if (isChatSession(session.conversation)) return { availability, view: 'chat' as const }
-    // The terminal experiment: every session is its real terminal; the chat view is no longer offered.
-    return { availability, view: 'terminal' as const }
-  }, [])
+    // A shell the user opened stays a terminal even once an agent runs in it.
+    return { availability, view: startedAsShell(session.id) ? 'terminal' as const : effectiveView(availability, preferences.openSessionsIn) }
+  }, [preferences.openSessionsIn])
   // An agent of this computer can have terminals of its own; a shell is one already.
   const ownsTerminals = useCallback((session: SessionView) => online && isDesktop() && session.machine === LOCAL_MACHINE, [online])
   // A terminal that was just started is shown in the dock, which opens for it, with its tab picked.

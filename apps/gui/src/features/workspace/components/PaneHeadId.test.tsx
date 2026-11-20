@@ -25,13 +25,18 @@ describe('PaneHeadId', () => {
 
 describe('PaneFooter', () => {
   it('names the agent and shows how full its context is', () => {
-    render(<PaneFooter session={{ process: 'claude', usage: { context: 41.6, cost: null, tokens: null } }} />)
+    render(<PaneFooter session={{ process: 'claude', agentModel: '', usage: { context: 41.6, cost: null, tokens: null } }} />)
     expect(screen.getByText('Claude')).toBeInTheDocument()
     expect(screen.getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '42')
   })
 
+  it('names the model beside the agent when the agent said it', () => {
+    render(<PaneFooter session={{ process: 'claude', agentModel: 'claude-sonnet-5-5', usage: { context: 62, cost: null, tokens: null } }} />)
+    expect(screen.getByText('Claude · Sonnet 5.5')).toBeInTheDocument()
+  })
+
   it('shows no meter while the agent has not said', () => {
-    render(<PaneFooter session={{ process: 'claude', usage: { context: null, cost: null, tokens: null } }} />)
+    render(<PaneFooter session={{ process: 'claude', agentModel: '', usage: { context: null, cost: null, tokens: null } }} />)
     expect(screen.queryByRole('meter')).toBeNull()
   })
 })

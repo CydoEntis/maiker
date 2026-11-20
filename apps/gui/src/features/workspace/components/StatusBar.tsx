@@ -37,6 +37,7 @@ export function StatusBar({ version, update, usages, currentAgent, commandsKeys,
                 key={usage.agent}
                 item={usage.tightest}
                 graded
+                bar
                 className={`mx-status-meter${usage.agent === currentAgent ? ' is-current' : ''}`}
                 lead={<AppIcon process={usage.agent} size={14} />}
                 openLabel="Show usage limits"
@@ -46,6 +47,7 @@ export function StatusBar({ version, update, usages, currentAgent, commandsKeys,
           </span>
         </UsagePopover>
       )}
+      <span className="mx-status-sep" aria-hidden="true" />
       <button type="button" className="mx-status-commands" onClick={onOpenCommands}>
         {commandsKeys !== '' && <kbd>{commandsKeys}</kbd>}
         Commands

@@ -33,6 +33,14 @@ describe('StatusBar', () => {
     expect(meters).not.toHaveTextContent('30%')
   })
 
+  it('draws each meter as a pill with its window name and a bar', () => {
+    bar()
+    const [claude] = Array.from(screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('button'))
+    expect(claude?.querySelector('.mx-usage-bar')).not.toBeNull()
+    expect(claude?.querySelector('svg.mx-usage-ring')).toBeNull()
+    expect(claude).toHaveTextContent('Week')
+  })
+
   it('colours a meter amber from 70 and red from 90', () => {
     bar()
     const [claude, codex] = Array.from(screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('button'))

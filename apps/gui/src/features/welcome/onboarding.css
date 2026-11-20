@@ -1,6 +1,8 @@
 /* The first-run setup: a veil over the app that blurs it (the one blur in the app, see DESIGN), the Maiker mark drawing itself, then a centred window. Role tokens only. */
-.mx-onb { position: fixed; inset: 0; z-index: 81; display: grid; place-items: center; animation: none; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(16px); color: var(--fg); font-size: 13px; overflow: hidden; }
-.mx-onb-win { display: grid; place-items: center; width: 100%; max-height: 100%; outline: none; }
+/* The veil is its own childless layer, apart from the content: a backdrop filter on a parent whose children animate or sit on their own
+   layers blurs only in bands (the strips above and below the window). The content layer above it carries no filter. */
+.mx-onb-veil { position: fixed; inset: 0; z-index: 81; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(16px); }
+.mx-onb { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; color: var(--fg); font-size: 13px; overflow: hidden; outline: none; }
 .mx-onb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* The mark: stroke in the text colour draws, then the fill fades in (fill-opacity, never a colour-mix on fill), then it rises away. */
@@ -18,5 +20,5 @@
 @keyframes mx-onb-rise { from { opacity: 0; transform: translateY(18px); } }
 @keyframes mx-onb-in { from { opacity: 0; transform: translateX(var(--dx, 10px)); } }
 
-.mx-onb-win[data-reduce="true"] :is(.mx-onb-window, .mx-onb-screen) { animation: none; }
+.mx-onb[data-reduce="true"] :is(.mx-onb-window, .mx-onb-screen) { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-onb :is(.mx-onb-window, .mx-onb-screen) { animation: none; } .mx-onb-mark path { animation-duration: .01s; animation-delay: 0s; } }
