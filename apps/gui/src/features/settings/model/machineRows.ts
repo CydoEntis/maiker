@@ -63,7 +63,8 @@ export function rowOf(head: MachineHead, sessions: number | null): MachineRow {
     return { glyph: '!', tone: 'needs', line: 'Maiker not installed', showsSince: false, action: 'install', rank: RANK_UPDATE }
   }
   if (head.updateAction === 'update') {
-    return { glyph: '!', tone: 'needs', line: count === null ? 'Older Maiker' : `${count} · older Maiker`, showsSince: false, action: 'update', rank: RANK_UPDATE }
+    // The machine is connected and its sessions run; only the update is waiting, so it reads as a live machine with a button.
+    return { glyph: '●', tone: 'ok', line: count === null ? 'Older Maiker' : `${count} · older Maiker`, showsSince: false, action: 'update', rank: RANK_UPDATE }
   }
   if (word === 'newer than this app') {
     return { glyph: '!', tone: 'needs', line: count === null ? 'Newer Maiker' : `${count} · newer Maiker`, showsSince: false, action: null, rank: RANK_UPDATE }

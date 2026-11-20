@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Added } from '@/api/machines'
 import { addressOf, stageAfterAdd, stageAfterFailure, type AddRequest } from './addStage'
 
-const request: AddRequest = { target: 'dev@10.0.4.12', name: 'server-12', port: null, host: '10.0.4.12', keyFile: null, fromConfig: false, entry: { address: 'dev@10.0.4.12', port: '', keyFile: '' } }
+const request: AddRequest = { target: 'dev@10.0.4.12', name: 'server-12', port: null, host: '10.0.4.12', user: 'dev', keyFile: null, fromConfig: false, entry: { address: 'dev@10.0.4.12', port: '', keyFile: '' } }
 const added = (extra: Partial<Extract<Added, { outcome: 'added' }>>): Added => ({ outcome: 'added', name: 'server-12', version: '0.46.0', reach: 'answered', took_ms: 9, ...extra })
 
 describe('where an answer from the host leads', () => {

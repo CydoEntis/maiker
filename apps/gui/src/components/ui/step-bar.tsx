@@ -19,28 +19,27 @@ function StepBar({ steps, current, onSelect, skip, label = "Progress", className
 }) {
   return (
     <nav data-slot="step-bar" aria-label={label} className={cn("@container flex items-center gap-3", className)}>
-      <ol className="m-0 flex min-w-0 flex-1 list-none items-center gap-2 p-0">
+      <ol className="m-0 flex min-w-0 flex-1 list-none items-center gap-1 p-0">
         {steps.map((name, index) => {
           const done = index < current
           const now = index === current
           const body = (
             <>
-              <span className={cn("flex size-5 flex-none items-center justify-center rounded-(--r-badge) font-(family-name:--mono) text-[11px] font-bold shadow-[inset_0_0_0_1px_var(--line2)]", now && "bg-(--fg) text-(--bg) shadow-none", done && "text-(--done)")}>{done ? "✓" : String(index + 1)}</span>
-              <span className={cn(!now && "@max-[639px]:sr-only")}>{name}</span>
+              <span className={cn("flex size-[18px] flex-none items-center justify-center rounded-full font-(family-name:--mono) text-[10.5px] font-semibold shadow-[inset_0_0_0_1px_var(--line2)]", now && "bg-(--fg) text-(--bg) shadow-none", done && "text-(--done) shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--done)_50%,transparent)]")}>{done ? "✓" : String(index + 1)}</span>
+              <span className={cn(!now && "@max-[559px]:sr-only")}>{name}</span>
             </>
           )
-          const tone = cn("flex items-center gap-2 text-[12.5px] whitespace-nowrap", now ? "font-semibold text-(--fg)" : done ? "text-(--fg2)" : "text-(--dim)")
+          const tone = cn("inline-flex h-7 items-center gap-[7px] rounded-(--r-control) pr-[9px] pl-[5px] text-[12.5px] whitespace-nowrap", now ? "font-semibold text-(--fg)" : done ? "text-(--fg2)" : "text-(--dim)")
           return (
             <li key={name} className="contents">
-              {index > 0 && <span aria-hidden="true" className={cn("h-px min-w-2 flex-1", index <= current ? "bg-(--fg2)" : "bg-(--line)")} />}
               {done
-                ? <button type="button" className={cn(tone, "cursor-pointer hover:text-(--fg)")} onClick={() => { onSelect(index) }}>{body}</button>
+                ? <button type="button" className={cn(tone, "cursor-pointer transition-colors duration-(--t-fast) hover:bg-(--hover) hover:text-(--fg)")} onClick={() => { onSelect(index) }}>{body}</button>
                 : <span aria-current={now ? "step" : undefined} className={tone}>{body}</span>}
             </li>
           )
         })}
       </ol>
-      {skip !== undefined && <Button variant="ghost" size="sm" className="flex-none" onClick={skip.onSkip}>{skip.label}</Button>}
+      {skip !== undefined && <Button variant="ghost" size="sm" className="h-auto flex-none px-2 py-[5px] text-[12.5px] font-normal text-(--dim)" onClick={skip.onSkip}>{skip.label}</Button>}
     </nav>
   )
 }

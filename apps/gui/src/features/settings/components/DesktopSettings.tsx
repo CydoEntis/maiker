@@ -6,6 +6,7 @@ import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, 
 import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
 import { ThemePicker } from './ThemePicker'
 import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
+import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
@@ -449,13 +450,10 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
   return (
     <>
-      <Card
-        title="View"
-        foot="Every session opens in this view, and changing it moves all open sessions together. Gemini has no chat view and stays in its terminal."
-      >
-        <div className="mx-scard-body">
+      <Card title="How you work">
+        <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent’s own CLI. Gemini has no chat view, so it always opens in Terminal.">
           <ViewSwitch view={preferences.openSessionsIn} onChange={(view) => { update('openSessionsIn', view) }} />
-        </div>
+        </Row>
       </Card>
       <Card
         title="Start folder"
@@ -469,9 +467,9 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
               <span className="mono mx-folder-path" style={{ color: home ? 'var(--dim)' : 'var(--fg)' }}>{home ? 'Your home folder' : preferences.startFolder}</span>
             </div>
             {onChooseFolder && (
-              <button type="button" className="mx-text-button" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) setStart(picked) }) }}>Browse…</button>
+              <Button variant="ghost" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) setStart(picked) }) }}>Browse…</Button>
             )}
-            {!home && <button type="button" className="mx-text-button" onClick={() => { setStart('') }}>Use home folder</button>}
+            {!home && <Button variant="ghost" onClick={() => { setStart('') }}>Use home folder</Button>}
           </div>
         </div>
       </Card>
@@ -485,9 +483,9 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
               <span className="mono mx-folder-path" style={{ color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
             </div>
             {onChooseFolder && (
-              <button type="button" className="mx-text-button" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</button>
+              <Button variant="ghost" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</Button>
             )}
-            {preferences.exportFolder !== '' && <button type="button" className="mx-text-button" onClick={() => { update('exportFolder', '') }}>Use Downloads</button>}
+            {preferences.exportFolder !== '' && <Button variant="ghost" onClick={() => { update('exportFolder', '') }}>Use Downloads</Button>}
           </div>
         </div>
       </Card>

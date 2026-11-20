@@ -23,6 +23,8 @@ type StyleOption = {
   value: string
   title: string
   detail: string
+  /** The small mark above the title. */
+  icon: string
   /** The view this answer points to. */
   points: PaneView
   /** The answer as the person says it, for the sentence that explains the recommendation ("work in a terminal"). */
@@ -33,17 +35,17 @@ export type StyleQuestion = { id: string; question: string; options: readonly St
 
 export const STYLE_QUESTIONS: readonly StyleQuestion[] = [
   { id: 'where', question: 'Where do you spend most of your day?', options: [
-    { value: 'terminal', title: 'In a terminal', detail: 'tmux, vim, the shell', points: 'terminal', quote: 'work in a terminal' },
-    { value: 'editor', title: 'In an editor', detail: 'VS Code, Cursor, JetBrains', points: 'chat', quote: 'work in an editor' },
-    { value: 'all', title: 'All over', detail: 'Browser, chat, docs', points: 'chat', quote: 'work all over the place' },
+    { value: 'terminal', title: 'In a terminal', detail: 'tmux, vim, the shell', icon: '>_', points: 'terminal', quote: 'work in a terminal' },
+    { value: 'editor', title: 'In an editor', detail: 'VS Code, Cursor, JetBrains', icon: '▢', points: 'chat', quote: 'work in an editor' },
+    { value: 'all', title: 'All over', detail: 'Browser, chat, docs', icon: '○', points: 'chat', quote: 'work all over the place' },
   ] },
   { id: 'run', question: 'When an agent wants to run a command, you’d rather…', options: [
-    { value: 'raw', title: 'See the raw output', detail: 'and decide from that', points: 'terminal', quote: 'see the raw output' },
-    { value: 'summary', title: 'Get a clear summary', detail: 'and click Allow or Deny', points: 'chat', quote: 'get a clear summary' },
+    { value: 'raw', title: 'See the raw output', detail: 'and decide from that', icon: '$', points: 'terminal', quote: 'see the raw output' },
+    { value: 'summary', title: 'Get a clear summary', detail: 'and click Allow or Deny', icon: '!', points: 'chat', quote: 'get a clear summary' },
   ] },
   { id: 'diff', question: 'How do you like to review changes?', options: [
-    { value: 'shell', title: 'git diff in the shell', detail: 'I know the tools', points: 'terminal', quote: 'review changes with git diff in the shell' },
-    { value: 'readable', title: 'Readable diffs', detail: 'folded steps I can open', points: 'chat', quote: 'see readable diffs' },
+    { value: 'shell', title: 'git diff in the shell', detail: 'I know the tools', icon: '±', points: 'terminal', quote: 'review changes with git diff in the shell' },
+    { value: 'readable', title: 'Readable diffs', detail: 'folded steps I can open', icon: '⇆', points: 'chat', quote: 'see readable diffs' },
   ] },
 ]
 

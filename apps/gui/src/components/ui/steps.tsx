@@ -20,23 +20,25 @@ type StepItem = {
 const MARK: Record<StepState, StatusMarkKind> = { pending: "idle", running: "working", done: "done", needs: "needs", failed: "needs" }
 /** The mark is hidden from screen readers, so the state is also said in words (colour is never the only signal). */
 const WORD: Record<StepState, string> = { pending: "waiting", running: "in progress", done: "done", needs: "needs you", failed: "needs you" }
-const LABEL_TONE: Record<StepState, string> = { pending: "text-(--dim)", running: "text-(--fg)", done: "text-(--fg2)", needs: "text-(--needs)", failed: "text-(--err)" }
+const LABEL_TONE: Record<StepState, string> = { pending: "text-(--dim)", running: "text-(--fg)", done: "text-(--fg)", needs: "font-semibold text-(--needs)", failed: "font-semibold text-(--err)" }
 /** The step the person's eye (and a screen reader) should be on. */
 const isCurrent = (state: StepState) => state === "running" || state === "needs" || state === "failed"
 
+/** A step that is done says what came of it in place of its name ("Reached 100.78.214.15 · 38 ms"); the others say what they do. */
 function StepRow({ step, last }: { step: StepItem; last: boolean }) {
+  const title = step.state === "done" && step.result !== undefined ? step.result : step.label
   return (
-    <li data-slot="step" data-state={step.state} aria-current={isCurrent(step.state) ? "step" : undefined} className="flex gap-3">
-      <span className="flex flex-none flex-col items-center pt-0.5">
-        <StatusIcon status={MARK[step.state]} /><span className="sr-only">{WORD[step.state]}</span>
-        {!last && <span aria-hidden="true" className={cn("mt-1 w-px flex-1", step.state === "done" ? "bg-(--line2)" : "bg-(--line)")} />}
+    <li data-slot="step" data-state={step.state} aria-current={isCurrent(step.state) ? "step" : undefined} className="flex gap-3.5">
+      <span className="flex w-[21px] flex-none flex-col items-center">
+        <span className={cn("flex size-[21px] flex-none items-center justify-center", step.state === "pending" && "opacity-35")}><StatusIcon status={MARK[step.state]} /></span>
+        <span className="sr-only">{WORD[step.state]}</span>
+        {!last && <span aria-hidden="true" className={cn("mt-px -mb-1 w-px flex-1", step.state === "done" ? "bg-[color-mix(in_oklab,var(--done)_40%,transparent)]" : "bg-(--line2)")} />}
       </span>
-      <div className={cn("flex min-w-0 flex-1 flex-col gap-1", !last && "pb-3.5")}>
-        <span className={cn("text-[13px] leading-[18px] font-semibold", LABEL_TONE[step.state])}>{step.label}</span>
+      <div className={cn("flex min-w-0 flex-1 flex-col gap-1 pt-px", !last && "pb-[18px]")}>
         {/* Always rendered, so the live region exists before its text changes and the change is read out. */}
-        <span aria-live="polite" className="text-xs text-(--muted) empty:hidden">{step.result}</span>
+        <span aria-live="polite" className={cn("text-[13.5px] leading-[19px]", LABEL_TONE[step.state])}>{title}</span>
         {/* The active step's body sits straight under its label: one calm list, no card inside the dialog's card. */}
-        {step.body !== undefined && <div className="mt-1.5">{step.body}</div>}
+        {step.body !== undefined && <div className="flex flex-col gap-2.5">{step.body}</div>}
       </div>
     </li>
   )

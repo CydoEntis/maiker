@@ -70,6 +70,8 @@
   --r-control: 0px;
   --r-panel: 0px;
   --r-badge: 0px;
+  /* The setup window and the Add a remote machine dialog: larger than a panel, as the handoff draws them. */
+  --r-dialog: 0px;
 
   /* Shadow: a waiting card rises from the message box; menus and toasts use `--sh-pop`; cards in the feed have none. */
   --sh-rise: 0 -6px 18px rgba(var(--sd), calc(.42 * var(--sk)));
@@ -81,5 +83,5 @@
   --t-spin: 900ms;
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
-:root[data-corners="rounded"] .mx-app { --r-control: 6px; --r-panel: 10px; --r-badge: 3px; }
+:root[data-corners="rounded"] .mx-app { --r-control: 6px; --r-panel: 10px; --r-badge: 3px; --r-dialog: 14px; }
 :root[data-reduced-motion="true"] .mx-app { --t-fast: 0ms; --t-base: 0ms; --t-slow: 0ms; }

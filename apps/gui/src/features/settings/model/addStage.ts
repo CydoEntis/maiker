@@ -6,7 +6,10 @@ export type AddRequest = {
   target: string
   name: string
   port: number | null
+  /** The computer's address, as it is reached and shown ('100.78.214.15'), not the alias it was picked by. */
   host: string
+  /** The login name, when the address or the SSH config's host line gave one. */
+  user: string | null
   keyFile: string | null
   /** The machine was picked from the SSH config, so its name is the config's and stays. */
   fromConfig: boolean
@@ -68,9 +71,10 @@ export type Stage =
 /** The host's refusal when the name is already in the saved machines. */
 const SAVED_NAME = /already have a machine called (\S+?)\./
 
-/** The address as shown: the target with its port when it is not the default one. */
+/** The address as shown: user@host, with its port when it is not the default one. */
 export function addressOf(request: AddRequest): string {
-  return request.port === null ? request.target : `${request.target}:${String(request.port)}`
+  const login = request.user === null ? request.host : `${request.user}@${request.host}`
+  return request.port === null ? login : `${login}:${String(request.port)}`
 }
 
 /** What is known of a machine that was reached, from the host's answer when there was one. */

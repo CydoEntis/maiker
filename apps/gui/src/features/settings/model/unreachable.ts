@@ -1,4 +1,6 @@
 const DEFAULT_SSH_PORT = 22
+/** How long ssh waits for a computer to answer (`CONNECT_TIMEOUT_SECS` in crates/maitty-machines). */
+const CONNECT_WAIT_SECONDS = 15
 
 export type Unreachable = 'no-answer' | 'refused' | 'cannot-resolve' | 'other'
 
@@ -24,7 +26,7 @@ export function unreachableTitle(kind: Unreachable, host: string): string {
 export function unreachableAdvice(kind: Unreachable, host: string, port: number | null): string {
   const shown = String(port ?? DEFAULT_SSH_PORT)
   switch (kind) {
-    case 'no-answer': return `Check that the address is right, that the computer is on and on your network or VPN, and that SSH is listening on port ${shown}.`
+    case 'no-answer': return `Maiker tried for ${String(CONNECT_WAIT_SECONDS)} seconds. Check the address, that the computer is on, and that it accepts SSH on port ${shown}.`
     case 'refused': return `It's on, but nothing is listening for SSH on port ${shown}.`
     case 'cannot-resolve': return `Couldn't find a computer called ${host}. Check the spelling, or use its IP address.`
     case 'other': return 'ssh said the words under Details.'

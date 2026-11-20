@@ -1,5 +1,4 @@
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
-import { Icon } from './glyphs'
 import type { PaneView } from '../model/chatView'
 
 /**
@@ -9,8 +8,8 @@ import type { PaneView } from '../model/chatView'
 export function ViewSwitch({ view, onChange }: { view: PaneView; onChange: (view: PaneView) => void }) {
   return (
     <Segmented aria-label="View" value={view} onValueChange={(next) => { if (next === 'chat' || next === 'terminal') onChange(next) }}>
-      <SegmentedItem value="chat" icon={<Icon name="chat" size={13} />}>Chat</SegmentedItem>
-      <SegmentedItem value="terminal" icon={<Icon name="terminal" size={13} />}>Terminal</SegmentedItem>
+      <SegmentedItem value="chat">Chat</SegmentedItem>
+      <SegmentedItem value="terminal">Terminal</SegmentedItem>
     </Segmented>
   )
 }

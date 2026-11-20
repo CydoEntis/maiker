@@ -17,7 +17,9 @@ import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
-import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleHostKey, sampleInspect, sampleSessions } from './machinesSample'
+import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleHostKey, sampleInspect, sampleProgress, sampleSessions } from './machinesSample'
+import { AddMachineDialog } from '@/features/workspace/components/AddMachineDialog'
+import { Onboarding } from '@/features/welcome/Onboarding'
 import { galleryParams } from './galleryParams'
 
 /*
@@ -81,13 +83,13 @@ function DockBox({ what }: { what: string }) {
 
 const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
-const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, hostKey: { inspect: sampleHostKey, trust: () => Promise.resolve() }, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, inspect: sampleInspect, trust: () => Promise.resolve(), onProgress: () => Promise.resolve(SAME), open: SAME } }
+const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, hostKey: { inspect: sampleHostKey, trust: () => Promise.resolve() }, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, inspect: sampleInspect, trust: () => Promise.resolve(), onProgress: sampleProgress, open: SAME } }
 
 function Settings({ section }: { section: DesktopSettingsSection }) {
   const [prefs, setPrefs] = useState(PREFS)
   return (
     <QueryClientProvider client={CLIENT}>
-      <DesktopSettings section={section} onSection={SAME} preferences={prefs} onChange={setPrefs} systemReducedMotion={false} systemDark onPreviewTheme={SAME} onShowWelcome={SAME} platform="linux" daemon={{ online: true, sessionCount: 3 }}
+      <DesktopSettings section={section} onSection={SAME} preferences={prefs} onChange={setPrefs} systemReducedMotion={false} systemDark onPreviewTheme={SAME} onShowWelcome={SAME} onChooseFolder={() => Promise.resolve(null)} platform="linux" daemon={{ online: true, sessionCount: 3 }}
         machines={SETTINGS_MACHINES} appVersion="0.80.0" usage={{ budget: null, onBudget: SAME, sessionForTerm: () => null, onOpenSession: SAME }} onClose={SAME} />
     </QueryClientProvider>
   )
@@ -121,6 +123,50 @@ function ScriptedPicker({ what, children }: { what: string; children: ReactNode 
     return () => { window.clearTimeout(timer) }
   }, [what])
   return children
+}
+
+/** For the Add a remote machine states: types an address or clicks a host of the SSH config once the dialog is up, as a person would. */
+function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) {
+  useEffect(() => {
+    const click = (name: string) => { document.querySelector<HTMLButtonElement>(`button[aria-label="Connect to ${name}"]`)?.click() }
+    const type = (text: string) => {
+      const field = document.querySelector<HTMLInputElement>('input[aria-label="Address"]')
+      if (field === null) return
+      typeInto(field, text)
+      field.form?.requestSubmit()
+    }
+    const timer = window.setTimeout(() => {
+      if (what === 'add-error') type('dev@10.0.4')
+      if (what === 'add-no-answer') type('cydo@10.9.9.9')
+      if (what === 'add-trust') click('linkables-vps')
+      if (what === 'add-helper') click('homelab')
+      if (what === 'add-name') click('server-15')
+    }, STATE_READ_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [what])
+  return children
+}
+
+const STYLE_STEP = 3
+const FIRST_STEP_MS = 2600
+const STEP_GAP_MS = 400
+const ONBOARDING_ANSWERS = ['In an editor', 'Get a clear summary', 'Readable diffs']
+
+/** The first-run setup at a step (0 is the opening mark, 1 to 5 the steps): clicks through as a person would, answering the questions on the way. */
+function OnboardingShown({ step }: { step: number }) {
+  const [root] = useState(() => document.querySelector<HTMLElement>('.mx-app'))
+  useEffect(() => {
+    const press = (text: string) => { Array.from(document.querySelectorAll<HTMLElement>('button, [role="radio"]')).find((node) => node.textContent.includes(text))?.click() }
+    const timers: number[] = []
+    for (let at = 1; at < step; at += 1) {
+      timers.push(window.setTimeout(() => {
+        if (at === STYLE_STEP) for (const answer of ONBOARDING_ANSWERS) press(answer)
+        press(at === STYLE_STEP ? 'See my recommendation' : 'Continue')
+      }, FIRST_STEP_MS + at * STEP_GAP_MS))
+    }
+    return () => { for (const timer of timers) window.clearTimeout(timer) }
+  }, [step])
+  return <Onboarding home="C:\Users\cstin\code" startFolder="" validateFolder={() => Promise.resolve(true)} onChooseFolder={() => Promise.resolve(null)} onApply={SAME} reducedMotion={false} portalContainer={root} onClose={SAME} />
 }
 
 const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'
@@ -159,6 +205,10 @@ function Show({ what }: { what: string }): ReactNode {
     const create = what === 'picker-denied' ? () => Promise.resolve({ kind: 'failed' as const, reason: 'You do not have permission to make a folder here.' }) : () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' })
     return <ScriptedPicker what={what}><PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} create={create} onPick={() => undefined} onCancel={() => undefined} /></ScriptedPicker>
   }
+  if (what === 'add' || what.startsWith('add-')) {
+    return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} facts={{ system: 'Ubuntu 24.04 · 8 cores', agents: ['Claude Code', 'Codex'] }} appVersion="0.46.0" /></ScriptedAdd>
+  }
+  if (what.startsWith('onboarding')) return <OnboardingShown step={Number(what.split('-')[1] ?? 0)} />
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />
   if (what.startsWith('settings')) return <Settings section={(what.split('-')[1] ?? 'appearance') as DesktopSettingsSection} />
   if (what === 'palette') return <CommandPalette items={ITEMS} outputItem={() => null} onClose={() => undefined} />

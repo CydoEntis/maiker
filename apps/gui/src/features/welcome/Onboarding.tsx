@@ -158,14 +158,14 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
         {phase === 'draw' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press Enter to skip.</div>}
         {!reducedMotion && <OnboardingMark gone={phase === 'window'} />}
         {phase === 'window' && (
-          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-panel) border border-(--line) bg-(--main) shadow-(--pop-sh)">
+          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-dialog) border border-(--line) bg-(--main) shadow-(--pop-sh)">
             <div className="mx-onb-sr" aria-live="polite">{`Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`}</div>
-            <div className="flex flex-none items-center gap-4 border-b border-(--line) px-5 py-3.5">
+            <div className="flex h-[52px] flex-none items-center gap-4 border-b border-(--line) px-5">
               <MaikerMark width={26} height={20} />
               <StepBar className="min-w-0 flex-1" label="Setup progress" steps={SETUP_STEPS} current={step} onSelect={go} skip={{ label: 'Skip setup', onSkip: onClose }} />
             </div>
             <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-              <section key={step} data-back={back} aria-labelledby="mx-onb-h" className="mx-onb-screen flex flex-col gap-5 px-7 py-6">
+              <section key={step} data-back={back} aria-labelledby="mx-onb-h" className="mx-onb-screen flex flex-col gap-[18px] px-7 pt-[26px] pb-2">
                 {step === STEP_WELCOME && (
                   <WelcomeStep
                     headingRef={heading}
@@ -178,11 +178,11 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
                 {step === STEP_REVIEW && <ReviewStep headingRef={heading} rows={review} />}
               </section>
             </div>
-            <div className="flex flex-none items-center gap-2 border-t border-(--line) px-5 py-3">
-              <Button variant="ghost" className={step === STEP_WELCOME ? 'invisible' : ''} tabIndex={step === STEP_WELCOME ? -1 : 0} onClick={() => { go(step - 1) }}>Back</Button>
+            <div className="flex flex-none items-center gap-2 border-t border-(--line) px-5 pt-3.5 pb-4">
+              <Button variant="ghost" size="lg" className={step === STEP_WELCOME ? 'invisible' : ''} tabIndex={step === STEP_WELCOME ? -1 : 0} onClick={() => { go(step - 1) }}>Back</Button>
               <span className="flex-1" />
               <span className="flex items-center gap-1.5 text-[11.5px] text-(--dim)"><kbd className="rounded-(--r-badge) px-1 font-(family-name:--mono) text-[10.5px] shadow-[inset_0_0_0_1px_var(--line2)]">Enter</kbd>{step === STEP_REVIEW ? 'to start' : 'to continue'}</span>
-              <Button disabled={checking} onClick={next}>{nextLabel(step, answers)}</Button>
+              <Button variant="solid" size="xl" disabled={checking} aria-disabled={checking} onClick={next}>{nextLabel(step, answers)}</Button>
             </div>
           </div>
         )}

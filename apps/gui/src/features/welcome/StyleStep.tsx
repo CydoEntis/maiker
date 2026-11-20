@@ -10,15 +10,15 @@ export function StyleStep({ headingRef, answers, onAnswer }: { headingRef: Ref<H
       <StepHead headingRef={headingRef} title="How do you work?" lead="Three quick questions. Your answers decide how sessions open, and you can always change it." />
       {STYLE_QUESTIONS.map((question, index) => (
         <div key={question.id} className="flex flex-col gap-2">
-          <span className="flex items-center gap-2 text-[13px] font-semibold">
-            <span aria-hidden="true" className="flex size-[18px] items-center justify-center rounded-(--r-badge) font-(family-name:--mono) text-[11px] text-(--fg2) shadow-[inset_0_0_0_1px_var(--line2)]">{index + 1}</span>
+          <span className="flex items-center gap-[9px] text-[13.5px] font-semibold">
+            <span aria-hidden="true" className="flex size-5 flex-none items-center justify-center rounded-full font-(family-name:--mono) text-[10.5px] font-semibold text-(--dim) shadow-[inset_0_0_0_1px_var(--line2)]">{index + 1}</span>
             {question.question}
           </span>
           <ChoiceCards
             label={question.question}
             value={answers[question.id] ?? null}
             onValueChange={(value) => { onAnswer(question.id, value) }}
-            cards={question.options.map((option) => ({ value: option.value, title: option.title, detail: option.detail }))}
+            cards={question.options.map((option) => ({ value: option.value, title: option.title, detail: option.detail, icon: option.icon }))}
           />
         </div>
       ))}

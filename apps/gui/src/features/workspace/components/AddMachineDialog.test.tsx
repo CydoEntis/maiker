@@ -68,7 +68,7 @@ describe('the address step', () => {
   it('is one field, and Connect waits for an address that holds up', () => {
     render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
-    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveAttribute('placeholder', 'user@host, IP address or name')
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveAttribute('placeholder', 'user@host, an IP address, or a name from your SSH config')
     expect(screen.getByRole('button', { name: 'Connect' })).toHaveAttribute('aria-disabled', 'true')
   })
 
@@ -150,7 +150,7 @@ describe('the checklist', () => {
     const steps = await screen.findByRole('list', { name: 'Steps to connect' })
     await waitFor(() => { expect(within(steps).getByText('Known computer')).toBeInTheDocument() })
     expect(within(steps).getByText('Reached 100.78.214.15')).toBeInTheDocument()
-    for (const name of ['Sign in with your key', 'Set up the Maiker helper', 'Connected']) expect(within(steps).getByText(name)).toBeInTheDocument()
+    for (const name of ['Sign in as dev with your SSH key', 'Set up the Maiker helper', 'Connected']) expect(within(steps).getByText(name)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '← Change address' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
     await act(async () => { finish(added()); await Promise.resolve() })
@@ -190,7 +190,7 @@ describe('the checklist', () => {
       const onClose = vi.fn()
       const { user } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
       await screen.findByRole('button', { name: 'Trust and continue' })
-      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+      await user.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1) as HTMLElement)
       expect(onClose).toHaveBeenCalled()
       expect(machines.add.onAdd).not.toHaveBeenCalled()
       expect(machines.onRemove).not.toHaveBeenCalled()
@@ -331,7 +331,7 @@ describe('the checklist', () => {
     it("says the host didn't answer, with the plain reasons", async () => {
       await connectTo(silent(), 'dev@10.9.9.9')
       expect(await screen.findByText("10.9.9.9 didn't answer")).toBeInTheDocument()
-      expect(screen.getByText(/the address is right, that the computer is on.*SSH is listening on port 22/)).toBeInTheDocument()
+      expect(screen.getByText(/Maiker tried for 15 seconds.*accepts SSH on port 22/)).toBeInTheDocument()
     })
 
     it('tries the whole sequence again', async () => {
@@ -458,8 +458,6 @@ describe('Machine added', () => {
     expect((name as HTMLInputElement).selectionEnd).toBe('server-15'.length)
     const details = screen.getByText('Address').closest('dl') as HTMLElement
     expect(within(details).getByText('dev@100.78.214.15')).toBeInTheDocument()
-    expect(within(details).getByText('38 ms')).toBeInTheDocument()
-    expect(within(details).getByText('id_ed25519')).toBeInTheDocument()
     expect(within(details).getByText('0.46.0')).toBeInTheDocument()
   })
 

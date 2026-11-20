@@ -115,7 +115,7 @@ export function OpenProjectDialog({ tab: first, home, chooseFolder, folderExists
             <ProjectStatus state={state} onUseExisting={project.open} />
           </ModalBody>
           <ModalFoot left={<Button variant="ghost" size="lg" disabled={cloning} onClick={onClose}>Cancel</Button>}>
-            <Button variant="primary" size="lg" disabled={primary.disabled} onClick={primary.run}>{primary.label}</Button>
+            <Button variant="primary" size="xl" disabled={primary.disabled} onClick={primary.run}>{primary.label}</Button>
           </ModalFoot>
         </div>
       </DialogContent>

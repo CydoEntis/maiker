@@ -8,7 +8,7 @@ const COPIED_MS = 1600
 
 /** The mark that starts a status line. The shape says the state too, so colour is never the only signal. */
 export function StateMark({ glyph, tone }: { glyph: Glyph | '✓'; tone: Tone | 'done' }) {
-  return <span className={`mx-rm-mark is-${tone}`} aria-hidden="true">{glyph}</span>
+  return <span className={`mx-rm-mark is-${tone}`} data-shape={glyph === '●' || glyph === '○' ? glyph : undefined} aria-hidden="true">{glyph}</span>
 }
 
 /** A command or fingerprint in mono, with Copy that turns to Copied. `shown` is what is drawn when it is more than what is copied. */

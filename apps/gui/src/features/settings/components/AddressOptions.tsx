@@ -18,7 +18,7 @@ export function AddressOptions({ port, keyFile, onPort, onKeyFile }: Props) {
   const id = useId()
   return (
     <div className="mx-rm-options">
-      <button type="button" className="mx-rm-text" aria-expanded={open} aria-controls={id} onClick={() => { setOpen(!open) }}>Port and key</button>
+      <button type="button" className="mx-rm-advanced" aria-expanded={open} aria-controls={id} onClick={() => { setOpen(!open) }}><span aria-hidden="true">{open ? '▾' : '▸'} </span>Port and key</button>
       {open && (
         <div id={id} className="mx-rm-option-list">
           <div className="mx-rm-option">
@@ -37,7 +37,7 @@ export function AddressOptions({ port, keyFile, onPort, onKeyFile }: Props) {
             <label htmlFor={`${id}-key`}>Key file</label>
             <input
               id={`${id}-key`}
-              className="mono mx-rm-option-wide"
+              className="mono"
               value={keyFile}
               placeholder="~/.ssh/id_ed25519"
               spellCheck={false}

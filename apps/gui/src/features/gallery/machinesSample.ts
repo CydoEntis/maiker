@@ -30,10 +30,10 @@ export const SAMPLE_HEADS = machineHeads(new Map(ENTRIES.map(([name, state, targ
 export const sampleSessions = (machine: number): number => ENTRIES.find(([name]) => name === SAMPLE_HEADS.find((head) => head.machine === machine)?.name)?.[3] ?? 0
 
 export const SAMPLE_HOSTS = [
-  { alias: 'homelab', detail: 'cydo@192.168.1.20', added: false },
-  { alias: 'nas', detail: 'admin@nas.lan', added: false },
-  { alias: 'work-vm', detail: 'cydo@work-vm.corp', added: false },
-  { alias: 'media-pc', detail: 'cydo@media-pc.lan', added: false },
+  { alias: 'linkables-vps', detail: 'ubuntu@40.160.103.45', added: false },
+  { alias: 'pi', detail: 'cydo@192.168.1.242', added: false },
+  { alias: 'server-15', detail: 'dev@100.78.214.15', added: false },
+  { alias: 'homelab', detail: 'root@192.168.1.20', added: false },
 ]
 
 const added = (name: string, reach: Extract<Added, { outcome: 'added' }>['reach'], version: string | null = null, installed = false): Added => ({ outcome: 'added', name, version, reach, took_ms: 18, reach_ms: 38, key: 'id_ed25519', helper_install: installed ? { installed, said: 'Installed' } : null })
@@ -42,9 +42,8 @@ const added = (name: string, reach: Extract<Added, { outcome: 'added' }>['reach'
 export function sampleAdd(target: string, name?: string): Promise<Added> {
   const pause = (result: Added) => new Promise<Added>((resolve) => { window.setTimeout(() => { resolve(result) }, ANSWER_MS) })
   if (target === 'homelab') return pause(added('homelab', 'missing', '0.46.0', true))
-  if (target === 'nas') return pause(added('nas', 'answered', '0.46.0'))
-  if (target === 'media-pc') return pause(added('media-pc', 'older', '0.45.2'))
-  if (target === 'work-vm') return pause({ outcome: 'login', name: 'work-vm', target: 'cydo@work-vm.corp', said: 'cydo@work-vm.corp: Permission denied (publickey).', command: null })
+  if (target === 'pi') return pause(added('pi', 'older', '0.45.2'))
+  if (target === 'linkables-vps') return pause(added('linkables-vps', 'answered', '0.46.0'))
   if (target.includes('10.9.9.9')) return new Promise((_, reject) => { window.setTimeout(() => { reject(new Error('ssh: connect to host 10.9.9.9 port 22: Connection timed out')) }, ANSWER_MS) })
   return pause(added(name ?? target, 'answered', '0.46.0'))
 }
@@ -52,8 +51,15 @@ export function sampleAdd(target: string, name?: string): Promise<Added> {
 /** The host key a sample host offers: the ones of the SSH config are known, a typed address is new, and 10.9.9.9 gives none. */
 export function sampleInspect(target: string): Promise<HostKeyReport> {
   if (target.includes('10.9.9.9')) return Promise.reject(new Error('ssh: connect to host 10.9.9.9 port 22: Connection timed out'))
-  const status = SAMPLE_HOSTS.some((host) => host.alias === target) ? 'trusted' : 'unknown'
+  const status = SAMPLE_HOSTS.some((host) => host.alias === target) && target !== 'linkables-vps' ? 'trusted' : 'unknown'
   return Promise.resolve({ status, host: target, port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:q3Vt9kQ0x1yZ8Rk4fN0b2c7mW5sPpL1aEo6hT3uJdGc' })
 }
 
 export const sampleHostKey = (): Promise<HostKeyReport> => Promise.resolve({ status: 'unknown', host: '10.0.4.50', port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:q3Vt9kQ0x1yZ8Rk4fN0b2c7mW5sPpL1aEo6hT3uJdGc' })
+
+const PROGRESS_DIVISOR = 3
+/** The helper install of the sample hosts, climbing as the host would report it. */
+export function sampleProgress(listener: (progress: { name: string; percent: number }) => void): Promise<() => void> {
+  const timer = window.setTimeout(() => { listener({ name: 'homelab', percent: 60 }) }, ANSWER_MS / PROGRESS_DIVISOR)
+  return Promise.resolve(() => { window.clearTimeout(timer) })
+}

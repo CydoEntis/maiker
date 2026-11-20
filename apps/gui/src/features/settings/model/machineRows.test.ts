@@ -37,7 +37,7 @@ describe('a machine row', () => {
   })
 
   it('offers Update for an older Maiker and Install when there is none, in amber', () => {
-    expect(rowOf(head('box', 'needs-update', { why: OLDER }), 2)).toMatchObject({ glyph: '!', tone: 'needs', line: '2 sessions · older Maiker', action: 'update' })
+    expect(rowOf(head('box', 'needs-update', { why: OLDER }), 2)).toMatchObject({ glyph: '●', tone: 'ok', line: '2 sessions · older Maiker', action: 'update' })
     expect(rowOf(head('box', 'needs-update', { why: MISSING }), 0)).toMatchObject({ line: 'Maiker not installed', action: 'install' })
   })
 

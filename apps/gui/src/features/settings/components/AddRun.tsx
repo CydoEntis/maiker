@@ -40,10 +40,10 @@ function resultsOf(stage: Stage, request: AddRequest, host: HostResult): Partial
   }
 }
 
-type Parts = { request: AddRequest; machines: MachinesInfo; run: Run; appVersion: string | null; onChangeAddress: () => void; onKept: (name: string) => void }
+type Parts = { request: AddRequest; machines: MachinesInfo; run: Run; appVersion: string | null; onChangeAddress: () => void; onKept: (name: string) => void; onClose: () => void }
 
 /** Where the checklist stands for a stage: the step in hand, how it is, and the one fix when it needs the person. */
-function positionOf(stage: Stage, { request, machines, run, appVersion, onChangeAddress, onKept }: Parts): Position {
+function positionOf(stage: Stage, { request, machines, run, appVersion, onChangeAddress, onKept, onClose }: Parts): Position {
   const { host } = request
   switch (stage.kind) {
     case 'checking': return { at: 'reach', state: 'running' }
@@ -57,8 +57,8 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
       return { at: 'reach', state: 'needs', label: `${stage.name} is already added`, body }
     }
     case 'removing': return { at: 'reach', state: 'running', label: `Removing ${stage.name}…`, body: <StepBody text={`Taking the saved ${stage.name} out, then starting again.`} /> }
-    case 'saved': return savedPosition(stage.name, { request, machines, run, appVersion, onChangeAddress, onKept })
-    case 'trust': return { at: 'host', state: 'needs', label: `First time connecting to ${host}`, body: <HostKeyBody report={stage.report} trusting={stage.trusting} problem={stage.problem} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
+    case 'saved': return savedPosition(stage.name, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
+    case 'trust': return { at: 'host', state: 'needs', label: `First time connecting to ${request.fromConfig ? request.name : host}`, body: <HostKeyBody report={stage.report} trusting={stage.trusting} problem={stage.problem} onTrust={run.trust} onCopy={machines.onCopyCommand} onCancel={onClose} /> }
     case 'changed': return { at: 'host', state: 'failed', label: `${host}'s identity changed since you last connected`, body: <HostKeyBody report={stage.report} trusting={false} problem={null} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
     case 'unverified': return { at: 'host', state: 'needs', label: `Couldn't check ${host}'s identity`, body: <StepBody text={stage.said}><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Try again</Button></StepBody> }
     case 'adding': {
@@ -67,7 +67,7 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
       return { at: 'helper', state: 'running', body: <HelperProgressBody text={text} percent={stage.percent} /> }
     }
     case 'key': return { at: 'key', state: 'needs', label: `Couldn't sign in to ${stage.login.target}`, body: <KeyStep target={stage.login.target} port={request.port} said={stage.login.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.removeSaved(stage.login.name) }} /> }
-    case 'helper': return helperPosition(stage, { request, machines, run, appVersion, onChangeAddress, onKept })
+    case 'helper': return helperPosition(stage, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
     case 'connected': return { at: 'connected', state: 'done' }
   }
 }
@@ -125,12 +125,12 @@ export function AddRun({ request, machines, facts, appVersion = null, onChangeAd
     // A machine the host has not reported yet has a negative number: a session cannot be started on it.
     return <MachineAdded reached={stage.reached} facts={facts} machine={machine !== undefined && machine > 0 ? machine : null} onDone={(label) => { onDone(name, label) }} onStart={(label, number) => { onStart(name, label, number) }} />
   }
-  const position = positionOf(stage, { request, machines, run, appVersion, onChangeAddress, onKept })
+  const position = positionOf(stage, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
   return (
     <AddMachineFrame title={`Connecting to ${request.name}`} address={addressOf(request)}>
-      <FrameBody><AddChecklist host={request.host} position={position} results={resultsOf(stage, request, run.host)} /></FrameBody>
-      <FrameFoot start={<Button variant="ghost" onClick={onChangeAddress}>← Change address</Button>}>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+      <FrameBody><AddChecklist host={request.host} user={request.user} position={position} results={resultsOf(stage, request, run.host)} /></FrameBody>
+      <FrameFoot start={<Button variant="ghost" size="lg" onClick={onChangeAddress}>← Change address</Button>}>
+        <Button variant="ghost" size="lg" onClick={onClose}>Cancel</Button>
       </FrameFoot>
     </AddMachineFrame>
   )

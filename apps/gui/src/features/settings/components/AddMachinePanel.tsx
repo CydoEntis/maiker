@@ -11,9 +11,8 @@ import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
 import { AddressOptions } from './AddressOptions'
 import type { MachinesInfo } from './DesktopSettings'
 
-const LEAD = 'Maiker connects over SSH, using your keys. It never asks for or keeps passwords.'
-const ADDRESS_PLACEHOLDER = 'user@host, IP address or name'
-const ADDRESS_HINT = 'Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.'
+const LEAD = 'Maiker connects over SSH with the keys you already use. It never asks for or stores a password.'
+const ADDRESS_PLACEHOLDER = 'user@host, an IP address, or a name from your SSH config'
 
 type Hosts = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoice[] } | { status: 'failed'; message: string }
 
@@ -66,7 +65,7 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
   const submit = () => {
     setShown(true)
     if (!valid) return
-    onConnect({ target: targetOf(address.user, address.host), name: suggestedName({ host: address.host }, taken), port: address.port, host: address.host, keyFile, fromConfig: false, entry: kept })
+    onConnect({ target: targetOf(address.user, address.host), name: suggestedName({ host: address.host }, taken), port: address.port, host: address.host, user: address.user === '' ? null : address.user, keyFile, fromConfig: false, entry: kept })
   }
 
   // The field is for typing an address and pressing Enter, not for searching: the SSH config's hosts are shortcuts that stay as they are.
@@ -77,7 +76,7 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
       if (head !== undefined) onOpenAdded(head)
       return
     }
-    onConnect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, host: host.alias, keyFile, fromConfig: true, entry: kept })
+    onConnect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, ...loginOf(host), keyFile, fromConfig: true, entry: kept })
   }
 
   return (
@@ -85,7 +84,7 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
       <FrameBody>
         <p className="mx-rm-lead-text">{LEAD}</p>
         {/* One form, so Enter in the port or key file sends it too. */}
-        <form className="flex flex-col gap-3" onSubmit={(event) => { event.preventDefault(); submit() }}>
+        <form className="flex flex-col gap-2" onSubmit={(event) => { event.preventDefault(); submit() }}>
           <div className="mx-rm-address">
             <input
               className="mono"
@@ -99,12 +98,11 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
               autoFocus
               onChange={(event) => { setText(event.target.value); setShown(false) }}
             />
-            <Button type="submit" aria-disabled={!valid} className="aria-disabled:cursor-not-allowed aria-disabled:opacity-42">Connect</Button>
+            <Button type="submit" variant="solid" size="field" aria-disabled={typed === ''}>Connect</Button>
           </div>
-          <p className="mx-rm-hint">{ADDRESS_HINT}</p>
+          {shown && problem !== null && <p className="mx-rm-error" role="alert">{problem}</p>}
           <AddressOptions port={portText} keyFile={keyText} onPort={(next) => { setPortText(next); setShown(false) }} onKeyFile={setKeyText} />
         </form>
-        {shown && problem !== null && <p className="mx-rm-error" role="alert"><span aria-hidden="true">×</span> {problem}</p>}
         {shown && already?.name != null && (
           <p className="mx-rm-hint">
             <Button onClick={() => { machines.onRetry(already.name ?? '') }}>Retry {already.name}</Button>
@@ -114,10 +112,16 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
         <SshHosts hosts={hosts} choices={choices} list={list} onPick={pick} />
       </FrameBody>
       <FrameFoot>
-        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button variant="ghost" size="lg" onClick={onClose}>Cancel</Button>
       </FrameFoot>
     </AddMachineFrame>
   )
+}
+
+/** The computer and login behind an SSH config host, read from the line the list shows (`user@host`); the alias alone when it shows no more. */
+function loginOf(host: HostChoice): { host: string; user: string | null } {
+  const at = host.detail.indexOf('@')
+  return at > 0 && at < host.detail.length - 1 ? { user: host.detail.slice(0, at), host: host.detail.slice(at + 1) } : { user: null, host: host.alias }
 }
 
 /** The machine a host of the SSH config was added as: by its target, or by its name. */
@@ -137,9 +141,9 @@ function SshHosts({ hosts, choices, list, onPick }: { hosts: Hosts; choices: rea
   if (hosts.status === 'failed') return <p className="mx-rm-hint" role="alert">{hosts.message}</p>
   if (choices.length === 0) return null
   return (
-    <div className="mx-rm-hosts">
+    <div className="flex flex-col gap-1.5">
       <span className="mx-rm-label" id="mx-rm-hosts-label">From your SSH config</span>
-      <div role="list" aria-labelledby="mx-rm-hosts-label">
+      <div role="list" aria-labelledby="mx-rm-hosts-label" className="mx-rm-hostlist">
         {choices.map((host) => {
           const words = hostWords(host, headOf(list, host.alias))
           return (
