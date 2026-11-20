@@ -13,7 +13,6 @@ import type { MachinesInfo } from './DesktopSettings'
 const LEAD = 'Maiker connects over SSH, using your keys. It never asks for or keeps passwords.'
 const ADDRESS_PLACEHOLDER = 'user@host, IP address or name'
 const ADDRESS_HINT = 'Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.'
-const BARE_HOST = /^[\d.]+(:\d*)?$/
 
 type Hosts = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoice[] } | { status: 'failed'; message: string }
 
@@ -67,9 +66,8 @@ export function AddMachinePanel({ machines, onClose, onConnect, entry = { addres
     onConnect({ target: targetOf(address.user, address.host), name: suggestedName({ host: address.host }, taken), port: address.port, host: address.host, keyFile, fromConfig: false, entry: kept })
   }
 
-  // Only a name typed for the SSH config narrows its list; `user@host` and an IP address never do.
-  const filter = typed.includes('@') || BARE_HOST.test(typed) ? '' : typed.toLowerCase()
-  const choices = hosts.status === 'ready' ? hosts.hosts.filter((host) => `${host.alias} ${host.detail}`.toLowerCase().includes(filter)) : []
+  // The field is for typing an address and pressing Enter, not for searching: the SSH config's hosts are shortcuts that stay as they are.
+  const choices = hosts.status === 'ready' ? hosts.hosts : []
   const pick = (host: HostChoice) => {
     onConnect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, host: host.alias, keyFile, fromConfig: true, entry: kept })
   }
