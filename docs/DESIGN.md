@@ -838,7 +838,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   side on `--panel-in` and out on `--panel-out`. The dock is a card in the shell's shape (`.mx-tdock` in `material.css`: 12px
   rounded or square by the corners setting), and **the terminal fills it edge to edge**: the bar sits on `--main`, one `--line` hairline under it,
   and everything below is one opaque `--term` ground (a see-through ground costs a blend per repaint, PERFORMANCE) with
-  `--tdock-pad` (0: the text runs to the dock edge). No frame, ring or inner box around a terminal; shells of a split are told apart by
+  `--tdock-pad` (8px 12px) of text inset, on the same ground (`--term`) as the tab row and the card. No frame, ring or inner box around a terminal; shells of a split are told apart by
   one hairline between them, and the focused one of several by a 2px accent line along its top. Its 44px bar: mono tabs
   "shell", "shell 2" with an accent `>_` (each tab is a 5px-cut control; the picked one has the `--m-hover` fill and a `--line2`
   edge). Every tab holds the room of its × at all times: the × is 18px, always there, and only its opacity changes (shown on the

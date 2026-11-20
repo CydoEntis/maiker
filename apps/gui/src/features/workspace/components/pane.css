@@ -146,9 +146,9 @@
 .mx-termwrap[data-dock="full"]:not([data-leaving]) > .mx-main { display: none; }
 .mx-tdock {
   position: relative; flex: none; min-width: 0; min-height: 0; display: flex; flex-direction: column; overflow: hidden;
-  background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel);
-  /* The terminal runs to the dock's edge: no inset around it. */
-  --tdock-pad: 0;
+  background: var(--term); border: 1px solid var(--line2); border-radius: var(--r-panel);
+  /* The terminal's inset from the dock's edge. The tab row, the body and the terminal share one ground (--term), so the inset reads as room, not as a frame. */
+  --tdock-pad: 8px 12px;
   container: tdock / inline-size;
 }
 .mx-tdock[data-dock="bottom"] { height: var(--tdock-h, clamp(120px, calc(100vh - 480px), 260px)); animation: mx-dock-from-bottom var(--panel-in); }
@@ -198,7 +198,7 @@
 
 /* The terminal fills the dock edge to edge on one opaque ground (--term; a see-through ground costs a blend per repaint,
    docs/PERFORMANCE.md). A split is told from its neighbour by one hairline, never by a frame of its own. */
-.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--term); border-top: 1px solid var(--line); }
+.mx-tdock-body { flex: 1; min-height: 0; display: flex; background: var(--term); }
 .mx-tdock-column { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
 .mx-tdock-column + .mx-tdock-column { border-left: 1px solid var(--line); }
 .mx-tdock-column > .mx-tdock-split + .mx-tdock-split { border-top: 1px solid var(--line); }
