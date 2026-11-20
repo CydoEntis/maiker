@@ -1002,7 +1002,10 @@ async fn conversation_fixture(mode: &str) -> TestSession {
     .await
     .unwrap();
     let (tx, events) = mpsc::channel(128);
-    let mut daemon = Daemon::new(Config::default(), tx, || {});
+    let mut config = Config::default();
+    // Never the real home folder, which is where the default puts worktrees.
+    config.worktree.dir = crate::daemon::worktree_path::SIBLING_TEMPLATE.into();
+    let mut daemon = Daemon::new(config, tx, || {});
     daemon.session_path = fixture.directory.path().join("data/session.json");
     daemon.check_dir = fixture.directory.path().join("data/checks");
     daemon.approvals_file = fixture.directory.path().join("data/approvals.json");

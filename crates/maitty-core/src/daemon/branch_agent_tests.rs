@@ -18,8 +18,10 @@ fn own_data_folder() {
     });
 }
 
-pub(super) fn daemon_with(cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
+pub(super) fn daemon_with(mut cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
+    // Never the real home folder, which is where the default puts worktrees.
+    cfg.worktree.dir = super::worktree_path::SIBLING_TEMPLATE.into();
     let (tx, rx) = mpsc::channel(4096);
     let mut d = Daemon::new(cfg, tx, || {});
     d.check_dir = persist::scratch_dir().path().to_path_buf();
@@ -356,10 +358,10 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
     let root = scratch("branch-worktree-busy");
     let repo = repo_in(&root);
     let busy = crate::gitfs::head(&repo).map(|h| h.branch).expect("the main checkout has a branch");
-    let template = Config::default().worktree.dir;
+    let template = super::worktree_path::SIBLING_TEMPLATE;
 
-    let (first, _) = branch_worktree(&repo, &busy, &template, false).expect("first worktree off it");
-    let (second, _) = branch_worktree(&repo, &busy, &template, false).expect("and a second one");
+    let (first, _) = branch_worktree(&repo, &busy, template, false).expect("first worktree off it");
+    let (second, _) = branch_worktree(&repo, &busy, template, false).expect("and a second one");
     assert_ne!(first, second, "each gets its own folder");
     let tip = |dir: &Path| git::git(dir, &["rev-parse", "HEAD"]).unwrap();
     for made in [&first, &second] {
@@ -370,7 +372,7 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
 
     // A branch checked out nowhere is checked out itself, as before.
     git::git(&repo, &["branch", "free"]).unwrap();
-    let (free, _) = branch_worktree(&repo, "free", &template, false).expect("a free branch");
+    let (free, _) = branch_worktree(&repo, "free", template, false).expect("a free branch");
     assert_eq!(crate::gitfs::head(&free).map(|h| h.branch).as_deref(), Some("free"));
     let _ = std::fs::remove_dir_all(&root);
 }

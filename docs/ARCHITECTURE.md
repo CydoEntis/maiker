@@ -78,6 +78,7 @@ src/
     commands.rs  commands from clients and the CLI
     status.rs    hook reports (checked on their own thread) and screen detection
     worktrees.rs making and trusting worktrees, spares, hooks, cleanup
+    worktree_path.rs where a worktree's folder goes: `<home>/.maiker/worktrees/<project>/<name>`, safe and short names, one project folder per repository (ADR 0015)
     warm.rs      an agent a window asked for ahead of its first message: hidden until its session is started
     restore.rs   saving sessions and recovering agents left asleep by older versions
     provider_groups.rs  the process groups of running providers, on disk, and the start-up sweep of those a killed daemon left (Linux, macOS)

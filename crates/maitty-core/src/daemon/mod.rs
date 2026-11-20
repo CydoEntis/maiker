@@ -12,6 +12,7 @@ mod check;
 pub use check::first_failing_line;
 mod check_source;
 mod check_stale;
+mod claude_transcript;
 mod closed_sessions;
 mod clone;
 mod commit;
@@ -54,6 +55,7 @@ mod terminal_sends;
 mod usage;
 mod usage_store;
 mod warm;
+mod worktree_path;
 mod worktrees;
 
 use crate::brand::APP_COMMAND;
@@ -434,6 +436,9 @@ impl Client {
 struct Daemon {
     cfg: Config,
     agents: Vec<CompiledAgent>,
+    /// Claude's config folder when no account or config names another; `None` skips the check
+    /// that a saved session has a conversation.
+    claude_folder: Option<PathBuf>,
     terms: HashMap<TermId, Term>,
     workspaces: Vec<WorkspaceInfo>,
     active_ws: Option<WsId>,
@@ -1296,6 +1301,7 @@ impl Daemon {
         Daemon {
             cfg,
             agents,
+            claude_folder: hook_repair::default_claude_folder(),
             terms: HashMap::new(),
             workspaces: Vec::new(),
             active_ws: None,

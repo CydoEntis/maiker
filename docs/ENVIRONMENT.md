@@ -254,6 +254,16 @@ merged is put away once it goes idle; leave the option off if you reuse branch n
 Only the config file sets it; it adds no environment variable and is not in the desktop app's
 shared settings.
 
+## Project-specific: worktree folder
+
+`worktree.dir` is where new worktrees go (ADR 0015). Its default is
+`{home}/.<command>/worktrees/{project}/{branch}`, the app's folder in the home directory
+(`.maiker`, from the brand constants) with one folder per project. `{project}` is the repository's
+folder name, with six hex digits of a hash of its path added when another repository already uses
+that name; `{repo}`, `{repo_parent}` and `{branch}` still work, and a `dir` you set is used as
+written. The first worktree of a repository leaves a `.repo` note in its project folder; it goes
+when the last worktree is removed. Worktrees made before this stay where they are.
+
 ## Project-specific: inactive worktrees
 
 `worktree.inactive_days` (default `14`; `0` turns it off) flags a worktree inactive in its

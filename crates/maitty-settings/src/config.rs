@@ -329,7 +329,9 @@ pub struct Restore {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Worktree {
-    /// Where new worktrees go. `{repo}`, `{repo_parent}`, `{branch}` are substituted.
+    /// Where new worktrees go. `{home}`, `{project}` (the repository's folder name, with a short
+    /// hash added when another repository has the same name), `{repo}`, `{repo_parent}` and
+    /// `{branch}` are substituted.
     pub dir: String,
     /// Command to start in a new worktree's first pane (e.g. "claude"). Empty = a shell.
     pub command: String,
@@ -407,10 +409,15 @@ impl Default for Restore {
     }
 }
 
+/// Every worktree under one folder in the home directory, grouped by project (ADR 0015).
+fn default_worktree_dir() -> String {
+    format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
+}
+
 impl Default for Worktree {
     fn default() -> Self {
         Worktree {
-            dir: "{repo_parent}/{repo}-worktrees/{branch}".into(),
+            dir: default_worktree_dir(),
             command: String::new(),
             per_agent: true,
             delete_with_last: true,
@@ -1185,7 +1192,10 @@ mod tests {
         );
 
         let worktree = Worktree::default();
-        assert_eq!(worktree.dir, "{repo_parent}/{repo}-worktrees/{branch}");
+        assert_eq!(
+            worktree.dir,
+            format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
+        );
         assert!(worktree.per_agent && worktree.delete_with_last);
         assert!(worktree.command.is_empty() && worktree.prewarm.is_empty());
         assert_eq!(worktree.inactive_days, 14);

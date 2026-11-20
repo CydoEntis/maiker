@@ -930,6 +930,9 @@ saved to the data directory a couple of seconds after it changes. On the next st
   via OSC 7 or OSC 9;9, as oh-my-posh and starship can. Other shells are tracked automatically.
 - Agents resume. With hooks installed, maiker knows the exact session (`claude --resume <id>`).
   Otherwise it uses the agent's "most recent" form (`claude --continue`, `codex resume --last`).
+  A Claude session with no conversation saved (the agent was opened but never sent a message)
+  has nothing to resume: it starts fresh in the same folder instead of printing "No conversation
+  found". Where that cannot be checked, the resume is kept.
 - Panes started with a command (`spawn-right:lazygit`, `maiker split -- x`) run it again, except
   an agent's: `codex "<task>"` would start the task over, so an agent that can't be resumed
   opens as a shell.
@@ -1086,8 +1089,8 @@ is kept, a notice says so and nothing is restored.
 
 ### The worktree manager
 
-**New worktree** (Ctrl+Shift+N, ⌘⇧N on a Mac, or the command palette) opens a dialog that makes a branch in its own folder next to the
-project. When the project already has other worktrees, the dialog lists them below. Each row says
+**New worktree** (Ctrl+Shift+N, ⌘⇧N on a Mac, or the command palette) opens a dialog that makes a branch in its own folder, kept with
+Maiker's other worktrees (see [Worktrees](#worktrees)). The branch name starts as one made from what the session is working on (`fix-login-redirect`); type your own and that is used. When the project already has other worktrees, the dialog lists them below. Each row says
 where that worktree stands, for example "inactive 3 days · not merged anywhere · last commit …" or "2
 uncommitted changes", and has:
 
@@ -1113,7 +1116,8 @@ maiker worktree fix-123 --base origin/main
 maiker worktree-remove [--force]          # closes the workspace and removes the checkout
 ```
 
-New worktrees go to `{repo_parent}/{repo}-worktrees/{branch}` (set `[worktree] dir`). An existing
+New worktrees go to `~/.maiker/worktrees/<project>/<name>`, one folder per project (set `[worktree] dir`; worktrees made earlier stay in their
+`<project>-worktrees` folder next to the project and keep working). An existing
 local or `origin/` branch is checked out instead of created. Set `[worktree] command = "claude"`
 to start an agent in every new worktree.
 

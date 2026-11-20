@@ -212,7 +212,7 @@ A repo can also ship its own in `.maiker/checks.toml`; those never run until you
 <summary><strong>Worktrees and setup hooks</strong></summary>
 
 Every new Claude or Codex session gets its own worktree, at
-`{repo_parent}/{repo}-worktrees/{branch}` (`[worktree] dir` changes it). To prepare each new
+`~/.maiker/worktrees/<project>/<name>` (`[worktree] dir` changes it). To prepare each new
 worktree, put a `.maiker.toml` in the repo:
 
 ```toml

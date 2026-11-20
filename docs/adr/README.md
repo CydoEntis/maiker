@@ -39,3 +39,4 @@ holds the history; an ADR states only what is true now.
 | [0012](0012-brand-names-live-in-one-place-and-env-has-a-generic-prefix.md) | Brand-dependent names live in one place; environment variables have a generic prefix |
 | [0013](0013-no-in-app-tickets.md) | Maiker has no in-app tickets; they live in their tracker |
 | [0014](0014-markdown-documents-on-other-machines.md) | Markdown documents are read and saved on other machines, by that machine's own daemon |
+| [0015](0015-worktrees-live-in-one-folder-under-home.md) | Worktrees live in one folder under home, grouped by project and named for the task |
