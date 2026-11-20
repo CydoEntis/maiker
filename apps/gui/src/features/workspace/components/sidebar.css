@@ -126,7 +126,7 @@
 .mx-row-folder { display: inline-flex; flex: none; color: var(--dim); }
 .mx-row-slash { flex: none; color: var(--line2); }
 .mx-row-sub .mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
-.mx-row.is-idle .mx-row-name, .mx-row.is-idle .mx-row-sub { opacity: .7; }
+/* An idle row is told by its grey dot, not by fading its words: the design keeps its title at --fg2 (measured #b2b2b0). */
 .mx-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-row-name { height: calc(18px * var(--sidebar-text, 1)); font-size: calc(13px * var(--sidebar-text, 1)); line-height: calc(18px * var(--sidebar-text, 1)); font-weight: 400; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-row.is-selected .mx-row-name { color: var(--fg); }

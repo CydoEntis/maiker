@@ -59,7 +59,7 @@
 .mx-row-machine { flex: none; max-width: 45%; font-weight: 500; color: var(--accent-text); }
 .mx-row-sub:has(.mx-row-machine) .mx-row-folder { color: var(--accent-text); }
 /* A session that has not been sent anything is a quiet, italic "New session". */
-.mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--muted); }
+.mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--fg2); }
 .mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
 .mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
 
