@@ -131,7 +131,7 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
     <WaitingCard
       label={label}
       title={event.approvalKind === 'FileChange' && event.changes.length > 0 ? `Wants to change ${String(event.changes.length)} ${event.changes.length === 1 ? 'file' : 'files'}` : TITLE[event.approvalKind]}
-      aside={agent}
+      aside={agent === undefined ? undefined : agentLabel(agent)}
       flush={hasCommand && reason === null}
       onEnter={main}
       foot={actions === null ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : (

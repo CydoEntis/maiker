@@ -113,6 +113,10 @@ const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntr
 /** Whether a key press belongs to a field, where a letter is text and not an answer. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
 
+/** The message box with nothing in it: y, a and n are not text there yet, so they answer the tray. Numbers stay the box's. */
+const inEmptyBox = (target: EventTarget) => target instanceof HTMLTextAreaElement && target.classList.contains('mx-box-text') && target.value === ''
+
+
 const NO_SUBAGENTS: readonly SubagentView[] = []
 /** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
 const FLASH_MS = 1200
@@ -311,9 +315,8 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     }
     if (!canChangeAgent) return {}
     return {
-      // The model and the effort can be picked while the agent works: the pick is typed in at once, as it would be in
-      // the terminal, and the agent takes it as soon as it can. Only a question it is asking holds the picker, since
-      // typed text would answer the question.
+      // A question the agent is asking holds the picker, since typed text would answer it; the composer also greys the model
+      // and effort while the agent works, and the mode waits for the turn's end here.
       agentChips: { locked: pickerLocked, pickerLocked, remote },
       onCommand: (text: string) => {
         if (pickerLocked !== null) return
@@ -686,7 +689,7 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
 
   const waitingStep = pending?.stepId ?? null
   const draftable = composer.draftable
-  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, canReply: true } : null), [draftable, quote, jump, reply])
+  const actions = useMemo<ChatActions | null>(() => (draftable ? { quote, jump, reply, retry: (text: string) => { void sendText(text) }, canReply: true } : null), [draftable, quote, jump, reply, sendText])
   const plan = useMemo(() => (ask?.tool === PLAN_TOOL ? askedPlan(events) : null), [ask?.tool, events])
   // The daemon refuses a restore while the agent works too: its files would be rolled back under it.
   const rewindBusy = !online ? 'The Maiker service is offline' : working ? `${agentLabel(agent)} is working. Edit from here when it finishes.` : null
@@ -700,11 +703,13 @@ export function ChatSession({ link, agent, online, hasTerminal = true, root = nu
     [agent, workingSince, approval, root, onOpenDiff, goToStep, found, waitingStep, editAction],
   )
 
-  // y, a and n answer the tray from anywhere in the chat but a field, as the same letters do in the terminal.
+  // y, a and n answer the tray from anywhere in the chat but a field with text in it, as the same letters do in the terminal.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    const inField = typedInField(event.target)
+    if (inField && !inEmptyBox(event.target)) return
     // A question's number picks its choice, as it does in the agent's own menu.
-    const choice = Number(event.key) - 1
+    const choice = inField ? Number.NaN : Number(event.key) - 1
     // A plan is answered from Claude's own menu as the screen shows it, never a guessed key (see PlanTray).
     if (ask?.tool === PLAN_TOOL) {
       const menu = sendKeys === undefined ? [] : planMenuChoices(asking)

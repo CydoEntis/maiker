@@ -204,7 +204,7 @@ export function ChatParity() {
     { kind: 'step', key: 's3', event: commandEvent('c4', { command: 'pnpm tsc --noEmit', output: 'No errors.', exitCode: 0, durationMs: 3_800 }) },
     { kind: 'step', key: 's4', event: commandEvent('c5', { command: LONG_COMMAND, output: 'Tests: 12 passed, 12 total', durationMs: 4_200 }) },
     { kind: 'step', key: 's5', event: editEvent('e2', { file: 'src/flags/settings.ts', diff: { status: 'available', hunks: [{ header: '@@ -12,2 +12,3 @@', lines: DIFF }], added: 2, removed: 1, truncated: false } }) },
-    { kind: 'divider', key: 'd1', event: TURN },
+    { kind: 'divider', key: 'd1', event: TURN, steps: 7, reply: PROSE, prompt: 'Move auth from JWT to server sessions.' },
     { kind: 'user', key: 'u2', event: messageEvent('u2', 'user', 'Should sessions be stored in Redis instead of Postgres? And does that change how logout reads the session?') },
     { kind: 'working', key: 'wk', phrase: 'running the full test suite', placeholder: false },
     { kind: 'agent', key: 'a2', turnId: 't2', status: 'completed', paragraphs: PROSE.split('\n\n') },

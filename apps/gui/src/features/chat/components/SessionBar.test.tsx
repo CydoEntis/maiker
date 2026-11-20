@@ -41,14 +41,17 @@ describe('SessionBar', () => {
 describe('the chat under its box', () => {
   const LINK = { conversation: FAKE_CONVERSATION, generation: 1 }
 
-  it('puts the place, usage and permissions in the row under the box, and only send beside it', async () => {
+  it('keeps the place and usage in the row under the box; the model, permissions, attach and send are in the box', async () => {
     render(<ChatSession link={LINK} agent="claude" online place={PLACE} usage={{ context: 70, limits: [] }} />)
     const bar = await screen.findByRole('group', { name: 'Session location' })
     const row = bar.parentElement as HTMLElement
     expect(within(row).getByRole('group', { name: 'Usage' })).toBeInTheDocument()
-    expect(within(row).getByRole('img', { name: /Permission mode/ })).toBeInTheDocument()
     const send = screen.getByRole('button', { name: 'Send message' })
+    const inBox = send.closest('.mx-box') as HTMLElement
+    expect(within(inBox).getByRole('img', { name: /Permission mode/ })).toBeInTheDocument()
+    expect(within(inBox).getByRole('button', { name: /^Attach files/ })).toBeInTheDocument()
     expect(row.contains(send)).toBe(false)
+    expect(within(row).queryByRole('img', { name: /Permission mode/ })).toBeNull()
   })
 
   it('swaps the box for a read-only line with Resume and New session here once the session has ended', async () => {

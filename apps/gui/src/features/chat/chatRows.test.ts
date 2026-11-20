@@ -37,6 +37,14 @@ const turn = (outcome: TurnEvent['outcome'], timed: boolean): TurnEvent => ({ ki
 
 const writtenDoc = (id: string) => editEvent(id, { tool: 'Write', file: '/home/me/Downloads/plan.md', status: 'completed', change: 'add', diff: { status: 'available', hunks: [{ header: '@@ -0,0 +1,2 @@', lines: [{ kind: 'add', text: '# Plan' }, { kind: 'add', text: 'Do it.' }] }], added: 2, removed: 0, truncated: false } })
 
+describe('a turn footer row', () => {
+  it('carries how many steps the turn took, what the agent wrote and what the person asked', () => {
+    const rows = buildRows([message('u1', 'user', 'Fix it'), toolEvent('s1'), command('c1'), message('a1', 'agent', 'Fixed.'), message('a2', 'agent', 'Done.'), turn('completed', true)], false)
+
+    expect(rows.at(-1)).toMatchObject({ kind: 'divider', steps: 2, reply: 'Fixed.\n\nDone.', prompt: 'Fix it' })
+  })
+})
+
 describe('buildRows', () => {
   it('shows a slash command as the person typed it with its output beneath, and no "Finished in 0s" after it', () => {
     const note = { ...message('o1', 'agent', ''), kind: 'note' as const, text: 'Set model to Haiku 5.5' }

@@ -4,6 +4,7 @@ import { HighlightedLine } from '@/components/HighlightedLine'
 import { Spinner } from '@/features/workspace/components/glyphs'
 import { ElapsedSince } from '@/features/workspace/components/times'
 import type { CommandEvent, EditEvent, ToolEvent } from '../chatEvents'
+import { outputSegments } from '../commandOutput'
 import { isOmitted, redactionNote } from '../redaction'
 import { commandHeadMeta, relativePath } from '../stepInfo'
 import { commandIntent, foundNothing, shownCommandStatus } from '../commandIntent'
@@ -12,8 +13,8 @@ import type { WorkStep } from '../workSummary'
 import { documentOf } from '../writtenDocument'
 import { Fold } from '@/components/ui/fold'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { useCopied } from '@/lib/useCopied'
 import { Block, BlockHead } from './Block'
+import { CopyButton } from './CopyButton'
 import { ChangePill, FileBadge, StepRow, type MetaTone } from './cardParts'
 import { diffRows, type DiffRow } from './diffRows'
 import { DocumentCard } from './DocumentCard'
@@ -118,12 +119,6 @@ type CommandStepProps = {
   waiting?: boolean
 }
 
-/** Copy on a command, which says Copied for a moment where it was pressed. */
-function CopyCommand({ command }: { command: string }) {
-  const { copied, copy } = useCopied('Could not copy the command')
-  return <button type="button" className="mx-block-action" aria-label="Copy command" onClick={() => { copy(command) }}>{copied ? 'Copied' : 'Copy'}</button>
-}
-
 /** The command's output on the well: every line, scrolling inside 320px, and what the daemon hid. */
 function CommandOutput({ event }: { event: CommandEvent }) {
   const omitted = isOmitted(event.output)
@@ -131,7 +126,7 @@ function CommandOutput({ event }: { event: CommandEvent }) {
   return (
     <>
       {omitted && <p className="mx-step-note">The output shows a secret file, so the history does not keep it.</p>}
-      {text !== '' && <pre className="mx-block-output">{text}</pre>}
+      {text !== '' && <pre className="mx-block-output">{outputSegments(text).map((run, index) => (run.tone === 'plain' ? run.text : <span key={index} className={`mx-out-${run.tone}`}>{run.text}</span>))}</pre>}
       {text !== '' && <RedactionNote texts={[event.output]} />}
     </>
   )
@@ -160,11 +155,11 @@ export function CommandStep({ event, alone = false, waiting = false, control }: 
   const unreportedNote = unreported ? <span className="sr-only">exit code not reported</span> : null
   if (alone) {
     return (
-      <Block role="group" aria-label={`Command ${first}`} failed={failed} waiting={waiting}>
+      <Block role="group" aria-label={`Command ${first}`} waiting={waiting}>
         <BlockHead
           open={open}
           onToggle={toggle}
-          actions={open && event.command !== '' ? <CopyCommand command={event.command} /> : undefined}
+          actions={open && event.command !== '' ? <CopyButton text={event.command} failed="Could not copy the command" label="Copy command" /> : undefined}
         >
           <span className="mx-block-prompt" aria-hidden="true">$</span>
           <code className="mx-block-title">{short}</code>
@@ -295,9 +290,8 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false, 
   const target = <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}<ChangePill change={event.change} /></>
   const metaTone = EDIT_TONE[event.status] ?? 'dim'
   if (alone) {
-    const failed = event.status === 'failed'
     return (
-      <Block role="group" aria-label={`${verb} ${name}`} failed={failed} waiting={waiting}>
+      <Block role="group" aria-label={`${verb} ${name}`} waiting={waiting}>
         <BlockHead
           open={open}
           onToggle={toggle}

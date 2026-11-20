@@ -141,21 +141,18 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto).toHaveBeenCalledWith('\u001b[Z')
   })
 
-  it('sends a model and an effort picked while the agent works at once, as typing them in the terminal does', async () => {
+  it('locks the model and effort while the agent works, and says when they unlock', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const typeInto = open('claude', 'Working')
     await settle(IDLE_POLL_MS)
 
     const model = screen.getByRole('button', { name: /^Agent, model and reasoning/ })
-    expect(model).not.toHaveAttribute('aria-disabled', 'true')
+    expect(model).toHaveAttribute('aria-disabled', 'true')
+    expect(model).toHaveAttribute('title', 'Claude is working. You can change the model and effort when it finishes, or after Esc.')
     await user.click(model)
-    await user.click(await screen.findByRole('radio', { name: /^Opus 5\.5/ }))
-    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
-
-    // Nothing waits for the turn to end, nothing is left in the queue, and the two commands do not interleave.
+    expect(screen.queryByRole('radio', { name: /^Opus 5\.5/ })).not.toBeInTheDocument()
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
-    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '/effort high', '\r'])
-    expect(screen.queryByRole('region', { name: 'Queued messages' })).not.toBeInTheDocument()
+    expect(typeInto).not.toHaveBeenCalled()
   })
 
   it('names what the agent says it runs, whether it was picked here or typed in the terminal', async () => {

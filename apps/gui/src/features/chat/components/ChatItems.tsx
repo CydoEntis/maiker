@@ -3,7 +3,7 @@ import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
+import { paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
 import type { ItemStatus } from '../chatEvents'
 import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
@@ -27,6 +27,7 @@ import { InlineMarkdown, Markdown } from './Markdown'
 import { PlanCard } from './PlanCard'
 import { StepView } from './StepCards'
 import { ThoughtRow } from './ThoughtRow'
+import { TurnFooter } from './TurnFooter'
 import { WorkCard } from './WorkCard'
 import { MessageMenu } from './MessageMenu'
 import { stripRestoreNote, type EditFromHere } from '../editFromHere'
@@ -36,9 +37,6 @@ import { stripRestoreNote, type EditFromHere } from '../editFromHere'
  * not carry is said to be unavailable, never guessed. Colours are theme tokens; only a step that is
  * running animates, so a long conversation costs nothing at rest.
  */
-
-/** The character a turn's footer starts with, by how the turn ended. */
-const DIVIDER_MARK = { completed: '✓', failed: '×', interrupted: '■' } as const
 
 const clock = (ms: number) => new Date(ms).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
 
@@ -97,10 +95,11 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
       return b.kind === 'echo' && a.text === b.text
     case 'report':
       return b.kind === 'report' && a.text === b.text
+    case 'divider':
+      return b.kind === 'divider' && a.event === b.event && a.steps === b.steps && a.reply === b.reply && a.prompt === b.prompt
     case 'user':
     case 'step':
     case 'summary':
-    case 'divider':
       return 'event' in b && a.event === b.event
   }
 }
@@ -263,12 +262,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'approval':
       return <Frame><ApprovalCard event={row.event} actions={approval} step={row.step} onGoToStep={goToStep} /></Frame>
     case 'divider':
-      // The turn's footer (design): a quiet line with how it ended, no rules. ✓ finished, × failed, ■ stopped.
-      return (
-        <div className={`mx-chat-row mx-divider${row.event.outcome === 'failed' ? ' is-failed' : ''}`} role="separator" aria-label={dividerText(row.event, clock)}>
-          <span className="mx-divider-text"><span aria-hidden="true">{DIVIDER_MARK[row.event.outcome]} </span>{dividerText(row.event, clock)}</span>
-        </div>
-      )
+      return <TurnFooter row={row} clock={clock} />
     case 'changes': {
       // The turn's changed-files bar (design: ChangedFilesBar): how many files and lines, and Review, which opens what this
       // turn changed in the side panel. The files themselves are listed there.

@@ -1133,8 +1133,9 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
 
 ## Project-specific: desktop chat view
 
-The message box's controls (usage meters, model, permissions) and the session's place (machine, project, branch) live in
-one row under the box, drawn by `features/chat/components/SessionBar.tsx`. It takes `place` and its controls as props and
+The message box's controls (model and effort, permissions, attach, send) are one row inside the box (`Composer.tsx`); the
+session's place (machine, project, branch) and the usage meters live in one row under it, drawn by
+`features/chat/components/SessionBar.tsx`. It takes `place` and its controls as props and
 imports nothing from the chat, so the terminal view reuses it; the place is built from the session list
 (`features/chat/sessionPlace.ts`), never by running git in the view. An ended session shows the read-only line with Resume
 and New session here (`EndedActions` on `Composer`) in place of the box; see DESIGN.md, *The message box*.
@@ -1321,7 +1322,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   request is left out of the list (the question tray asks it).
   Two or more steps that follow each other (edits, commands, tools; never the to-do list) fold into one **work row**
   (`workSummary.ts`, `WorkCard`): a line such as "Read 2 files, edited 3, ran 1 command" with the daemon's own time for
-  the run, a "N steps" chip and a chevron on one row that opens to every step, one open at a time. Every run and every
+  the run, "· N steps" and a chevron on one quiet line (no box) that opens to every step, one open at a time. Every run and every
   step inside a run starts folded, a failed one too (its line says so), so a long turn stays short; only a run whose pending
   request is about one of its steps starts open. A command or an edit that stands alone is a card with its facts in
   the head (`StepView` with `alone`) and starts open, showing the command's last lines of output or the edit's diff;
@@ -1375,7 +1376,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Where an agent ran out of room and carried on from its own summary of the conversation, the daemon sends the summary
   as a `contextSummary` tool step and the chat shows a **summary row** (`ContextSummary`): a divider reading "Earlier
   conversation summarised to make room" that opens to the summary as formatted text. It is never a user bubble, never
-  folds into a work row, and Find does not look inside it. A turn that held only the summary gets no "Finished in"
+  folds into a work row, and Find does not look inside it. A turn that held only the summary gets no footer ("Done · N steps")
   divider. What `/compact` prints ("Compacted (ctrl+o …)" and its hooks' output) is drawn as a **compacted line**
   (`compactionOf`, `CompactedLine`): a pill in `--link` across the chat reading "Conversation compacted", with the hook
   events that ran named ("PreCompact hook ran"), never their command lines; the whole output is its tooltip.
@@ -1509,7 +1510,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   ssh line's timeout to answer. A failed index is the same quiet line; a machine shown as down says "Machine offline"
   and asks nothing. Which place a session gets is `fileSearchOf` (`fileMention.ts`). It is not offered in the browser
   build or for a session of this computer with no pane to ask.
-- **Attachments** (ticket 20). A paperclip left of the text box (tooltip and `aria-label` "Attach files",
+- **Attachments** (ticket 20). A paperclip in the box's bottom row, left of send (tooltip and `aria-label` "Attach files",
   or "Attach files: <reason>" while the composer is off; `aria-disabled`, not `disabled`, so the reason can be read),
   a drop on the composer, or a bare image pasted into the box adds files to the draft; a paste that holds any text
   stays a text paste. The picker is the dialog plugin's `open` (`api/attachments.chooseFilesToAttach`); a drop

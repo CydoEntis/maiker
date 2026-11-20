@@ -641,15 +641,18 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   A command run in the terminal shows in the chat as the person's bubble with what it printed beneath as a quiet
   "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
   agent then says it runs (`/model`, `/effort`) replaces the model and effort picked in the chat.
-- **The message box** is one box (layout 2h): the text, with attach (+) at its top right, a plan strip while Plan
-  mode is on (`PLAN MODE` in mono blue, then what it means), and a bottom row that keeps only send, at the right. The rest
-  sits in **Under the box**, one row below it (`SessionBar`, `data-screen-label="Under the box"`): at the left the machine
+- **The message box** is one box (layout 2h): the text on top (two lines tall), a plan strip while Plan
+  mode is on (`PLAN MODE` in mono blue, then what it means), and ONE bottom row inside the box. At its left, the model
+  picker (the agent's mark, the model, the effort; it opens the menu with the effort slider) and the permissions button
+  (`ModeControl`: a shield, the mode's name, a chevron when it opens, and a `▲` in `--danger` in a mode that asks about
+  nothing); at its right, attach (a paperclip) and then send. The model and effort lock while the agent works (tooltip:
+  "You can change the model and effort when it finishes, or after Esc"); the mode waits for the turn's end as before. The
+  rest sits in **Under the box**, one row below it (`SessionBar`, `data-screen-label="Under the box"`): at the left the machine
   (a monitor mark, and its name only when it is not this computer), the project (a folder mark and the repository's name,
   or the folder outside git), `/` and the branch in mono with a `worktree` tag when the session works in a linked
   worktree (all from what the session list already holds, `sessionPlace.ts`; the view runs no git); at the right the
-  usage meters, the model picker and the permissions button (`ModeControl`: a shield, the mode's name, a chevron when it
-  opens, and a `▲` in `--danger` in a mode that asks about nothing). `SessionBar` takes the place and the controls as
-  props and knows nothing of chat internals, so the terminal view draws the same row. An **ended** session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder); Under the box keeps the place and drops the controls. Its focus is the border turning accent (the one bordered focus). The meters
+  usage meters. `SessionBar` takes the place and the controls as
+  props and knows nothing of chat internals, so the terminal view draws the same row. An **ended** session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder); Under the box keeps the place and drops the controls. Its focus is the border turning `--focus` with a 1px inset glow (the one bordered focus). The meters
   (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Context`, `5h`, `Week`, which
   go below a 1180px window), a 12px square ring (a path round the box, as square as the window's corners) and the
   figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
@@ -839,7 +842,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   agent's mark and its branch line. Its pane has no terminal | chat switch; the pane is the chat. The approvals
   (y / a / n), user-input form, Stop and the daemon's queue are the chat's own.
 - **Chat body** (`features/chat/chat.css`). A 760px centred column, 20px in, rows 16px apart, under a 36px fade at its
-  top. The scroller is as wide as the column, so its scrollbar sits at the column's edge and not the pane's, and the jump-to-latest button is centred over the column; the wheel still scrolls the chat from the empty room beside it. A message you send moves to the top of the view, just under the fade, and the reply is drawn under it (see UI, *List*). Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
+  top. The scroller is the pane's width, so its thin rounded scrollbar (no arrow buttons) sits flush with the pane's edge while the rows keep the column's width and centre in it, and the jump-to-latest button is centred over the column. A message you send moves to the top of the view, just under the fade, and the reply is drawn under it (see UI, *List*). Every card in the feed is the shared **Card** (a hairline, `--card`, no shadow; head 36px, body 10/12, foot 40px), every colour a token. Your messages are right-aligned bubbles (`--bubble`, a `--line` hairline, padding 9/13, 14/1.55, at most `min(560px, 85%)`), attachments above and a meta line under it (the time and the ⋯ menu); one still sending is at 60% with "Sending…".
   An agent's reply has no avatar: its lead sentence at 400 in `--fg` (the first sentence, kept whole: a full stop after e.g., i.e. or etc. does not end it, and a cut inside `code` or **bold** makes the whole first paragraph the lead), the rest in `--fg2` at 14.5/1.65, 10px between
   blocks, as rich text (headings 22 / 18 / 16 / 14.5 / 13 / 12, lists indented 20 and 22 with 4px between items, a quote
   with a 2px `--line2` rule, inline code as a **CodeChip**, a link in `--link`, a file's name in the text as inline code tinted in its type's `--tag-*` colour (Chat setting **Colour file names**, on by default; off leaves it plain), never a file badge or type tag before it). A code
@@ -864,8 +867,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   type, what it was asked, the time); several share a card, "3 agents · 1 working · 2 done", with hairlines between
   rows. **Thought** is one quiet italic 26px line in `--dim` that opens to the reasoning, ruled on its left in
   `--line2`. A helper's report is one line, "↳ summary · time", the summary cut short. A request answered earlier
-  folds into one line, "Allowed", "Allowed for this session" or "Denied". A turn ends with a divider (centred words
-  between hairlines, "Finished in 3m 40s · 10:46"; failed in `--err` and stopped in `--dim`, each with its mark; a
+  folds into one line, "Allowed", "Allowed for this session" or "Denied". A turn ends with a quiet footer
+  ("✓ Done · 10 steps", the time it took and when in its tooltip, **Copy** (the agent's reply) and **Retry** (asks the same again) at the right; failed in `--err` as "Failed after …" and stopped in `--dim`, each with its mark; a
   turn the person stopped in the terminal is "Stopped after …", never a bubble of Claude's "[Request interrupted…]") and,
   when it edited files, the changed-files card (a head-only card: icon, "N changed files", +A −R, **Review**; no file chips, the files are listed in the side panel). While the agent works the chat shows the turn as it arrives and the live box at its end (see *The live box*). Problems with the history (offline, incomplete, a provider error) and Full access show in one
   slim strip above the list. **A subagent's chat** replaces the list with a 36px bar on `--well` (**‹ Main session**,
@@ -877,20 +880,19 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   agent waits on you, one at a time and the oldest first: a card 24px narrower than the box, open at its bottom so it
   rises out of the box's top (10px over 0.2s; it simply appears with motion reduced), with the needs edge. Its head is the needs
   mark and what is asked ("Wants to run a command", "Approve this plan?", "claude has a question for you") with the
-  agent or "Plan mode" quiet at the right; its body the command on `--well`, the files as badges, the plan formatted
+  agent or "Plan mode" quiet at the right, on a light amber band (12% of the needs colour) under an amber outline, 12px radius; its body the command on `--well`, the files as badges, the plan formatted
   as a reply, the question's choices as boxes with their number keys (the picked one on a 9% needs tint and the needs
   edge) or the agent's own menu in mono with its selected line tinted; its foot the answers: **Yes once** `y` in the
   needs colour, **This session** `a` and **No** `n` soft, and for a command request **Always in this project** as a
   ghost at the right (the daemon then approves that exact command in that project without asking; see ADR 0005).
   Settings → Permissions lists these under "Commands approved for a project" (`ApprovedCommands.tsx`), each with **Forget**.
   A plan has Claude's own menu, each choice on its number, and **Keep planning** `n` (no `y`: the menu has no single yes); a form **Send answer(s)** `⏎`; a menu its keys, headed "<agent> is waiting in its own menu" when the hook named no question. y, a and n
-  answer from anywhere in the chat but a field, a choice's number picks it, and Enter on the card gives its main
+  answer from anywhere in the chat but a field, and from the message box while it is empty, a choice's number picks it, and Enter on the card gives its main
   answer. Answering removes it, the box unlocks and the agent is working again (its row and the badge follow the
   daemon); the request then folds into one line in the feed (a hairline row: its mark, "Allowed for this session",
   and **Go to step ↑**). **2. The box**: flat
-  (`--main`, a `--line2` border, radius `--r-panel`; focused, a `--focus` border and 1px ring), a two-line text box on top, **+**
-  (attach) at the left, and at the right the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
-  picked or the one its own file says, the effort) and the 32px send button (radius `--r-control`), in the accent when it can send and grey while
+  (`--raise`, one step off the pane, a `--line2` hairline, radius `--r-panel`; focused, a `--focus` border and a 1px inset glow of the same colour), a two-line text box on top, and one bottom row: at the left the model picker ("Claude Sonnet 5.5 · Medium ▾": the agent's mark, the model
+  picked or the one its own file says, the effort) and the permissions button, at the right the paperclip (attach) and the 32px send button (radius `--r-control`), in the accent when it can send and grey while
   a question waits. While the agent works and nothing is typed, the send button is the Stop square, still (the line over the
   box says the agent is at work, so the button does not spin); just after a send, before there is a turn to stop, the
   square is there and off.
@@ -899,7 +901,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   follows another agent (Codex, Gemini) draws its model label from the start, with just the agent's name until it says its
   model. The "agent has not reported" hint of a starting chat floats over the conversation and moves nothing. Placeholders: "Message the agent, or type / for commands" ("Reply to the plan…" in Plan mode), "Queue a
   message for when claude finishes" while it works, "Answer the request above first" (and off, with the focus on the question
-  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row and Under the box** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the helpers line do. Queued messages sit above in the dock (see *Queued messages*). The box's whole border turns `--accent` on focus, with no second ring; attach (top right) and send are both 32px and share the box's right edge; the meters at the right are neutral (`--fg2` ring, `--muted` mono figure, never a status colour), 12px, square under Square and Folded and a circle under Rounded.
+  when it takes keys, never on one answered only by a click) while a question waits, "The daemon is offline" (still typeable) while it is. **3. The bottom row and Under the box** (see *The message box*): the permission mode's menu is headed PERMISSIONS with the agent's name and has a row a mode, each with a line saying what it does; a new Codex chat has Read only, Auto and Full access instead. It does not list subagents: the sidebar and the helpers line do. Queued messages sit above in the dock (see *Queued messages*). The box's border turns `--focus` on focus with a 1px inset glow of the same colour (the box shows the focus, not the pane); attach and send are both 32px and share the bottom row's right edge; the meters at the right are neutral (`--fg2` ring, `--muted` mono figure, never a status colour), 12px, square under Square and Folded and a circle under Rounded.
 - **Esc ladder.** Esc closes the topmost open layer and reaches the terminal only when none is
   open (`model/escLadder.ts`): What's new, palette, Settings, the sidebar drawer,
   Focus mode. A new dialog adds its id there.
@@ -1077,14 +1079,13 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   paragraph in `--fg` and the rest `--fg2`, nothing bold unless written so. A command, a diff and a code block are one `Block`
   (`--well`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns). A command head reads `$ command` and, at the
   right, "exit 1 · 2.9s" (red when it failed; a provider with no exit code shows only the time, and a screen reader hears "exit
-  code not reported"); a failed block has a 2px red left edge; there is no check mark, chip or copy icon (Copy is a text button
-  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote) is the well with a
-  2px `--needs` edge and a bold lead. A list uses dim bullets; a table has no box (title row, Copy, rules under the head and
-  rows). A turn ends in one quiet footer line ("✓ Finished in 2m 4s", × red when failed), the files it changed are 26px chips. An
-  agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row keeps its ✱ and wears a red
-  edge and the word "failed" when a step failed; inside it, steps are ✓ (quiet) or × (red) rows.
-- **A run of steps is one row** (`WorkCard`): "Read 6 files, ran 1 command", a "6 steps" chip and a chevron on the `--well`
-  ground; opened it lists the steps, and only one step is open at a time. There is no "latest 3" and no "+N more".
+  code not reported"); a failed block has no coloured edge (its words and meta are in `--err`, and a command's output marks passing lines `--done`, failing lines `--err` and colours the counts in its "2 failed | 9 passed" summary line); there is no check mark, chip or copy icon (Copy is a text button
+  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a 2px `--line2` edge with no box and a bold lead. A list uses dim bullets; a table has no box (title row, Copy, rules under the head and
+  rows). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
+  agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row has the run's own mark
+  (✓ quiet, × red, ■ stopped) and says "failed" in red when a step failed; inside it, steps are ✓ (quiet) or × (red) rows.
+- **A run of steps is one quiet line** (`WorkCard`, no box): "✓ Read 6 files, ran 1 command · 6 steps ›" in `--muted`; opened
+  it lists the steps under a 1px `--line` rule at their left, and only one step is open at a time. There is no "latest 3" and no "+N more".
 - **Action cards** (`WaitingCard`, Needs Card in the design) are floating cards the width of the message box: `--main`, a
   `--line2` border, the shared `--pop-sh`, the panel radius (`data-float`), an amber `!` and an amber primary
   button, rising in over 0.2s. A question card shows one question at a time: tabs with an amber underline, numbered answers

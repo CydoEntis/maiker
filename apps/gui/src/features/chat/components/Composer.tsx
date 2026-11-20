@@ -144,8 +144,8 @@ const PERCENT = 100
 const TRAY_FIRST_CONTROL = '[aria-keyshortcuts]:not([disabled])'
 
 /**
- * The message box (layout 2h): the question tray when the agent asks, then one box: the text with attach at its top
- * right, and under it the model, the permission mode, the usage meters and send. Enter sends, Shift+Enter
+ * The message box (layout 2h): the question tray when the agent asks, then one box: the text, and one row under it with
+ * the model, effort and permission mode at the left and attach and send at the right. The usage meters sit in the row under the box. Enter sends, Shift+Enter
  * adds a line, Esc interrupts the running turn. While the agent works, sending queues the message;
  * while a request waits for an answer the box is off and says why, and the request has the focus; while the daemon is
  * offline the box still takes typing but does not send.
@@ -417,12 +417,6 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             onKeyDown={onKeyDown}
             onPaste={onPaste}
           />
-          {(composer.attachable ?? !readOnly) && (
-            // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
-            <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
-              <Icon name="plus" size={16} />
-            </button>
-          )}
           {planning && (
             <p className="mx-plan-strip">
               <span className="mx-plan-strip-name">Plan mode</span>
@@ -430,6 +424,16 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             </p>
           )}
           <div className="mx-box-row">
+            <div className="mx-box-controls" role="group" aria-label="Model and permissions">
+              <AgentControls agent={agent} conversation={conversation} facts={facts} readOnly={readOnly} lockedWhileWorking={running ? `${agentLabel(agent)} is working. You can change the model and effort when it finishes, or after Esc.` : null} />
+            </div>
+            <span className="mx-spacer" />
+            {(composer.attachable ?? !readOnly) && (
+              // aria-disabled, not disabled: a disabled button gets no focus or tooltip, and the reason is the point.
+              <button type="button" className="mx-box-attach" aria-label={attachLabel} title={attachLabel} aria-disabled={off} onClick={() => { if (!off) attach.pick() }}>
+                <Icon name="paperclip" size={16} />
+              </button>
+            )}
             {stopping ? (
               <button type="button" className="mx-send is-stop" aria-label={`Stop ${agentLabel(agent)}`} title={`${agentLabel(agent)} is working. Stop it (Esc)`} onClick={stop}><span className="mx-stop-square" aria-hidden="true" /></button>
             ) : busy ? (
@@ -444,22 +448,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
         </div>
         {ended !== undefined && <EndedLine ended={ended} />}
         <SessionBar place={place}>
-          {ended === undefined && (
-            <>
-              {facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
-              {facts.agentChips !== undefined ? (
-                conversation !== undefined
-                  ? <ModelPicker remote={facts.agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={facts.agentChips.pickerLocked === undefined ? facts.agentChips.locked : facts.agentChips.pickerLocked} />
-                  : <AgentPicker agent={agent} choice={facts.agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={facts.agentChips.locked ?? undefined} />
-              ) : (
-                <>
-                  {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={readOnly ? facts.onCommand : undefined} locked={null} />}
-                  {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
-                </>
-              )}
-              <ModeControl facts={facts} />
-            </>
-          )}
+          {ended === undefined && facts.usage !== undefined && <UsageMeters usage={facts.usage} onOpen={facts.onOpenUsage} />}
         </SessionBar>
         {readOnly && abilitiesOf(agent).bangToTerminal && isBangLine(draft) && <p className="mx-composer-note">Runs in the terminal, not as a message. Anything it asks can only be answered there.</p>}
         {restoreNote !== null && composer.conversationKey !== undefined && (
@@ -484,6 +473,30 @@ function EndedLine({ ended }: { ended: EndedActions }) {
       <button type="button" className="mx-ended-button is-primary" aria-disabled={!resumable} title={resumable ? 'Open this conversation again' : ended.resumeWhy} onClick={resumable ? ended.onResume : undefined}>Resume</button>
       <button type="button" className="mx-ended-button" onClick={ended.onNewSession}>New session here</button>
     </div>
+  )
+}
+
+/**
+ * The left of the box's bottom row: the agent's mark with its model and effort (the menu with the slider), then the
+ * permission mode. The model and effort lock while the agent works; `lockedWhileWorking` says why.
+ */
+function AgentControls({ agent, conversation, facts, readOnly, lockedWhileWorking }: { agent: ChatAgent; conversation: number | undefined; facts: ComposerFacts; readOnly: boolean; lockedWhileWorking: string | null }) {
+  const { agentChips } = facts
+  const live = readOnly ? facts.onCommand : undefined
+  return (
+    <>
+      {agentChips !== undefined ? (
+        conversation !== undefined
+          ? <ModelPicker remote={agentChips.remote === true} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={(agentChips.pickerLocked === undefined ? agentChips.locked : agentChips.pickerLocked) ?? lockedWhileWorking} />
+          : <AgentPicker agent={agent} choice={agentChips.start ?? defaultChoice()} onChange={NO_CHANGE} locked={agentChips.locked ?? undefined} />
+      ) : (
+        <>
+          {conversation !== undefined && (!readOnly || facts.onCommand !== undefined) && <ModelPicker remote={false} agent={agent} conversation={conversation} model={facts.model} effort={facts.effort ?? null} live={live} locked={lockedWhileWorking} />}
+          {readOnly && facts.onCommand === undefined && <ModelLabel agent={agent} model={facts.model} onOpenMenu={facts.onOpenModelMenu} locked={facts.modelMenuLocked ?? null} />}
+        </>
+      )}
+      <ModeControl facts={facts} />
+    </>
   )
 }
 
