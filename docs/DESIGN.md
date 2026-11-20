@@ -175,20 +175,18 @@ frame* (Toast). The desktop app's toasts are under *Errors*.
 
 The desktop app's error states (built 2026-11-18; `components/ui/feedback.tsx`, `feedback.css`, `lib/toast.ts`,
 `components/ui/toaster.tsx`). The rule: **say it where it happened, only as loud as what it blocks, and never twice.**
-There are no banners. Every surface is the float (a `--line2` hairline, the dialog shadow) with a 3px
+There are no banners. Every surface but the toast (below: the status mark, no edge) is the float (a `--line2` hairline, the dialog shadow) with a 3px
 **status edge** on its left in its tone: `--err` failed, `--caution` (`--m-mid`) a warning, `--blocked` needs you,
 `--ok` back or done, `--working` running, the accent a note. The mark before the title is the tone's glyph (`×`, `▲`,
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
-- **Toasts** (`toast.*`). Bottom right (Settings › Notifications › Toast position can move them to the top right), 16px in, 360px wide, newest on top. From 3 toasts on only the newest shows, with "N more, hover to see all" above it; the pointer or focus on the stack opens the rest. An optional muted context line (the project or machine, `context`) sits under the title. Title 13px 600, the reason 12.5px
-  `--fg2` up to three lines, the actions on their own row, a ✕ at the top right. Errors, warnings, needs-you and progress
-  stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`) and wait while the pointer or focus is on the stack.
+- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (`--main`, `--line`, `--pop-sh-dialog`, the `--r-panel` radius, so square under Square corners) with **no coloured edge**: the status colour is the **status mark** at its head (`StatusIcon`, the one set: a note is idle, a success done, a progress working, and an error, a warning or a needs-you toast needs you). Bottom right (Settings › Notifications › Toast position can move them to the top right), 18px in, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
-  OS failure of a known kind in plain words), with **Copy details** when the tool's own text says more (CODE-STANDARDS ›
+  OS failure of a known kind in plain words), with **Copy details** when the tool's text says more (CODE-STANDARDS ›
   error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
   asks, and offers **Allow** (only when the window can answer) and **Open session**. A progress toast (a file being sent)
-  has no ✕, only **Cancel**, and becomes its outcome in place. They slide in 8px and fade; reduced motion only fades.
+  has no ✕, only **Cancel**, and becomes its outcome in place. A toast rises 14px, scaling from .98, and fades in over .24s (it drops in from the top when the stack is at the top; under software painting and with reduced motion it only fades or slides, and the countdown line is not drawn); it leaves at once.
   Settings › Notifications and the desktop settings each have a **Show a test** row.
 - **Field errors** (`FieldError`). Under the field, 12px `--fg2` after a red `×`, one sentence that says what to type
   ("Branch names can’t contain spaces. Try feat-new-login."). The field keeps its value and its underline turns red. It
@@ -265,7 +263,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   program that paints with black leaves no box. On a web view without WebGL 2 (`data-gpu="software"`) the same rules
   use cheaper values: a 1px ring for the popover shadow ([PERFORMANCE](PERFORMANCE.md)). The window ground is opaque
   on every platform (no Mica), and nothing blurs.
-- **The toast (`components/ui/toaster.tsx`).** 360px wide, 16px from the bottom and right edges; see *Errors*.
+- **The toast (`components/ui/toaster.tsx`).** 380px wide, 18px from the bottom and right edges; see *Errors*.
 - **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (sidebar, main card,
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
   tray), and takes its fill, hairline and shadow from that role's rule in `material.css`: a panel is `--main` with a
@@ -540,7 +538,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
   notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
   each pick made switching feel slow.
-- **Toasts are one design** (see *Errors*): bottom right, 360px, a status edge, the title and reason, the actions on their own row.
+- **Toasts are one design** (see *Errors*): bottom right, 380px, the status mark, the title with its context, the reason, the actions on their own row (a note keeps its one action on its line).
 - **A remote machine that needs the app** has no row of its own: its dot turns amber and an amber **↑ Update** (or Install)
   text button sits in its header before the folder button. While it updates, a mono percentage replaces the button and a
   2px accent line runs under the header (indented 26px left, 10px right); both go when it ends. The percentage is the stage
@@ -1195,7 +1193,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   holds while the window is in the background.
 - **Working loader.** A wait of a second or more shows the **M loader** (`MLoader`): the three strokes of the M icon traced in turn over 2.4 s, in the text colour, with a word beside it ("Reading <machine>…"); a list shows it only after 160 ms. Reduce motion draws the M still. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
 - **Desktop dialogs.** The folder picker, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, the panel radius, the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus. Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
-- **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber edge.
+- **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber mark edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
 - **Themes**: fifty-four in the desktop app (the terminal app also ships Maiker Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maiker's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maiker Night** and **Maiker Day** (sea-glass and brass, the defaults), **Maiker Dark** and **Maiker Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maiker Retro Dark** and **Maiker Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maiker's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maiker Night saved by the terminal app, falls back to Maiker Dark or Maiker Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
   `--main`. The foreground, terminal text (`--fg2`), muted and dim text keep 4.5:1 on both `--term` and the

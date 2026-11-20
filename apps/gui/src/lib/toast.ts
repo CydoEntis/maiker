@@ -56,6 +56,8 @@ export type ToastItem = {
   readonly secondary?: ToastAction
   readonly closeButton: boolean
   readonly mergeKey: string | null
+  /** Milliseconds until it hides itself, or null when it stays; the countdown line runs for this long. */
+  readonly hideAfter: number | null
 }
 
 /** How long a success or a plain note stays. */
@@ -131,6 +133,7 @@ function show(kind: ToastKind, title: string, options: ToastOptions = {}): strin
     ...(options.secondary === undefined ? {} : { secondary: options.secondary }),
     closeButton: options.closeButton !== false,
     mergeKey,
+    hideAfter: Number.isFinite(duration) ? duration : null,
   }
   const items = snapshot.items
   const replaced = options.id === undefined ? undefined : items.find((item) => item.id === String(options.id))

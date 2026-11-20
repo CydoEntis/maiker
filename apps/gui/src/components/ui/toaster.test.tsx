@@ -14,6 +14,45 @@ describe('the toaster', () => {
     expect(screen.getByText('devbox')).toBeInTheDocument()
   })
 
+  it('draws each kind with the app status mark, never a letter or a coloured edge', () => {
+    render(<Toaster />)
+    const marks: Array<[string, string | null | undefined]> = []
+    for (const kind of ['info', 'success', 'error', 'warning', 'needs', 'progress'] as const) {
+      act(() => { toast[kind](`A ${kind}`) })
+      const card = screen.getByText(`A ${kind}`).closest('.mx-toast')
+      marks.push([kind, card?.querySelector('[data-slot="status-icon"]')?.getAttribute('data-status')])
+      act(() => { resetToasts() })
+    }
+    expect(marks).toEqual([['info', 'idle'], ['success', 'done'], ['error', 'needs'], ['warning', 'needs'], ['needs', 'needs'], ['progress', 'working']])
+    expect(document.querySelector('[class*="is-edge"]')).toBeNull()
+  })
+
+  it('puts a note\'s action on its one line and a card\'s actions on their own row', () => {
+    render(<Toaster />)
+    act(() => {
+      toast.info('Closed chameleon', { action: { label: 'Undo', onClick: () => undefined } })
+      toast.needs('Fix needs you', { description: 'Wants to run pnpm test', action: { label: 'Allow', onClick: () => undefined } })
+    })
+    const note = screen.getByText('Closed chameleon').closest('.mx-toast')
+    const card = screen.getByText('Fix needs you').closest('.mx-toast')
+    expect(note).toHaveClass('is-note')
+    expect(note?.querySelector('.mx-toast-actions')).toBeNull()
+    expect(card?.querySelector('.mx-toast-actions')).toHaveTextContent('Allow')
+  })
+
+  it('counts a toast that hides itself down with a line, and leaves one that stays without it', () => {
+    render(<Toaster />)
+    act(() => { toast.success('Pushed'); toast.error('Broke') })
+    expect(screen.getByText('Pushed').closest('.mx-toast')?.querySelector('.mx-toast-bar')).toHaveStyle({ animationDuration: `${String(TOAST_HIDE_MS)}ms` })
+    expect(screen.getByText('Broke').closest('.mx-toast')?.querySelector('.mx-toast-bar')).toBeNull()
+  })
+
+  it('shows two layers behind the newest toast while the stack is folded', () => {
+    render(<Toaster />)
+    act(() => { toast.error('One'); toast.error('Two'); toast.error('Three') })
+    expect(document.querySelectorAll('.mx-toast-ghost')).toHaveLength(2)
+  })
+
   it('shows two toasts in full, and from three on only the newest with how many more', () => {
     render(<Toaster />)
     act(() => { toast.error('One'); toast.error('Two') })

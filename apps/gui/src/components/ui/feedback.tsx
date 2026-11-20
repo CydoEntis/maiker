@@ -1,5 +1,6 @@
 import * as React from "react"
 import { FocusScope } from "radix-ui/internal"
+import { Button } from "@/components/ui/button"
 import { StatusIcon } from "@/components/ui/status-icon"
 import { cn } from "@/lib/utils"
 import "./feedback.css"
@@ -49,11 +50,11 @@ function CopyDetails({ text, copy, large = false, className }: { text: string; c
   }, [said])
   const words = { idle: "Copy details", copied: "Copied", failed: "Could not copy" } as const
   return (
-    <FeedbackButton kind="text" large={large} className={className} onClick={() => { copy(text).then(() => { setSaid("copied") }, () => { setSaid("failed") }) }}>
+    <Button variant="ghost" size={large ? "md" : "sm"} className={className} onClick={() => { copy(text).then(() => { setSaid("copied") }, () => { setSaid("failed") }) }}>
       <span className="mx-fb-swap">
         {(Object.keys(words) as Array<keyof typeof words>).map((key) => <span key={key} className="mx-fb-word" data-shown={String(key === said)} aria-hidden={key !== said}>{words[key]}</span>)}
       </span>
-    </FeedbackButton>
+    </Button>
   )
 }
 
