@@ -115,7 +115,7 @@
   background-color: var(--main);
 }
 /* Menus and popovers are the lifted exception: one surface and one ring for every right-click menu, dropdown, picker and popover. */
-.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], .mx-pop, .mx-menu, .mx-picker-menu, .mx-ctx) {
+.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], [role="tooltip"], .mx-pop, .mx-menu, .mx-picker-menu, .mx-ctx, .mx-tip, .mx-hover-card) {
   background-color: var(--pop-bg);
   border-color: var(--pop-ring);
 }

@@ -84,7 +84,7 @@
    and moves to the next row with no fade. Its icons hang in the left margin, so the text lines up under the name. */
 .mx-hover-card {
   position: fixed; z-index: 85; width: 300px; max-height: calc(100vh - 16px); display: flex; flex-direction: column; border-radius: var(--r-panel); pointer-events: none;
-  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-flat); color: var(--fg);
+  background: var(--pop-bg); border: 1px solid var(--pop-ring); box-shadow: var(--pop-sh-menu); color: var(--fg);
   /* A hairline ring needs no 48px bleed in the folded cut's clip. */
   --float-bleed: 4px;
 }
