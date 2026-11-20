@@ -19,23 +19,49 @@ export function keySetupCommand(target: string, port: number | null, windows = f
   return `$p="${file}"; if(!(Test-Path $p)){ssh-keygen -t ed25519}; Get-Content $p | ssh${portFlag} ${target} "mkdir -p ~/.ssh; cat >> ~/.ssh/authorized_keys"`
 }
 
+/** Written after the command by the line that is typed, so the dialog knows the command ended and how, without trusting anything else. */
+const EXIT_MARK = 'MAIKER-KEY-EXIT:'
+
 /**
- * The line that is typed into the key terminal and run: the command, then an exit, so the shell ends when the command does and
- * the dialog knows to check the key. What the person reads and copies is the command alone.
+ * The line that is typed into the key terminal and run: the command, then a line that writes its exit status after a marker. The
+ * shell stays open, so what the command printed stays on screen to be read. What the person reads and copies is the command alone.
  */
 export function keyRunLine(command: string, windows = false): string {
-  return `${command}; exit ${windows ? '$LASTEXITCODE' : '$?'}`
+  return windows ? `${command}; [Console]::WriteLine('${EXIT_MARK}' + [int]$LASTEXITCODE)` : `${command}; echo "${EXIT_MARK}$?"`
 }
 
 const PENALTY = /connection closed|not allowed at this time/i
 const DENIED = /permission denied/i
 /** ssh asking for the password or a passphrase: never kept, even as "the last line". */
 const ASKING = /password|passphrase/i
+const ESC = '\u001b'
+const BEL = '\u0007'
+/** Colour, cursor and mode sequences, and titles: the daemon's screen text is the terminal's own formatted state, not plain text. */
+const ANSI = new RegExp(`${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}${ESC}]*(?:${BEL}|${ESC}\\\\)|${ESC}[@-Z\\\\-_]`, 'g')
+const KEPT_CONTROLS = new Set(['\n', '\r', '\t'])
+const DELETE = '\u007f'
+const EXIT_LINE = new RegExp(`${EXIT_MARK}(\\d+)`)
 
-/** The last line of what the terminal showed that is worth saying back: not blank, and never ssh's question for the password. */
-export function lastKeyLine(screen: string): string | null {
-  const lines = screen.split('\n').map((line) => line.trim()).filter((line) => line !== '' && !ASKING.test(line))
-  return lines.at(-1) ?? null
+/** Text with its terminal escape sequences and other control characters taken out, fit to show. */
+export function stripAnsi(text: string): string {
+  return Array.from(text.replace(ANSI, '')).filter((char) => KEPT_CONTROLS.has(char) || (char >= ' ' && char !== DELETE)).join('')
+}
+
+/** What the key terminal's screen says: the command's exit status once the marker line has printed, and the last line it said before that. */
+export type KeyScreen = { exit: number | null; lastLine: string | null }
+
+/**
+ * Reads the key terminal's screen text. The typed line echoes the marker too, but not followed by digits, so only the line the
+ * shell printed after the command ended counts. The last line is the last one the command itself printed, after the echo of the
+ * typed line, and never ssh's question for the password.
+ */
+export function readKeyScreen(screen: string): KeyScreen {
+  const lines = stripAnsi(screen).split(/\r\n|\r|\n/).map((line) => line.trim())
+  const echoEnd = lines.findIndex((line) => line.includes(EXIT_MARK))
+  const doneAt = lines.findIndex((line) => EXIT_LINE.test(line))
+  const exit = doneAt === -1 ? null : Number(EXIT_LINE.exec(lines[doneAt] ?? '')?.[1])
+  const said = lines.slice(echoEnd + 1, doneAt === -1 ? undefined : doneAt).filter((line) => line !== '' && !ASKING.test(line))
+  return { exit, lastLine: said.at(-1) ?? null }
 }
 
 /** Why the key did not go on, in plain words, from the last line the terminal showed. */

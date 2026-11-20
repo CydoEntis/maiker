@@ -226,12 +226,11 @@ export function useWorkspaceState() {
   const keyTerminal = useMemo<KeyTerminalHost>(() => ({
     start: startKeyTerminal,
     end: endKeyTerminal,
-    isOpen: (id) => sessions.some((session) => session.id === id),
     readScreen: (session) => loadTerminalScreen({ id: session.id, generation: session.generation ?? 0 }),
     watch: (name) => watchKey(name, true),
     fontSize: preferences.terminalFontSize,
     look,
-  }), [startKeyTerminal, endKeyTerminal, sessions, watchKey, preferences.terminalFontSize, look])
+  }), [startKeyTerminal, endKeyTerminal, watchKey, preferences.terminalFontSize, look])
   const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded } = useRecentSessions(startNewChat, starting)
   const [openProject, setOpenProject] = useOpenProjectState()
 

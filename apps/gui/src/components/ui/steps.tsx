@@ -1,6 +1,5 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
-import { Card, CardBody } from "./card"
 import { StatusIcon, type StatusMarkKind } from "./status-icon"
 
 /** Where a step is. `needs` is a step stopped on something only the person can fix; `failed` is one that ended badly. */
@@ -36,9 +35,8 @@ function StepRow({ step, last }: { step: StepItem; last: boolean }) {
         <span className={cn("text-[13px] leading-[18px] font-semibold", LABEL_TONE[step.state])}>{step.label}</span>
         {/* Always rendered, so the live region exists before its text changes and the change is read out. */}
         <span aria-live="polite" className="text-xs text-(--muted) empty:hidden">{step.result}</span>
-        {step.body !== undefined && (step.state === "needs"
-          ? <Card className="mt-1.5"><CardBody>{step.body}</CardBody></Card>
-          : <div className="mt-1.5">{step.body}</div>)}
+        {/* The active step's body sits straight under its label: one calm list, no card inside the dialog's card. */}
+        {step.body !== undefined && <div className="mt-1.5">{step.body}</div>}
       </div>
     </li>
   )

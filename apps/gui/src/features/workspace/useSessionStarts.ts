@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
 import { everywhereModel } from '@/features/chat/agentChoice'
-import { addWorktree, archiveConversationOnDaemon, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { addWorktree, archiveConversationOnDaemon, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, loadTerminalScreen, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
@@ -19,6 +19,7 @@ import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
 import type { ChatAgent, StructuredAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
+import { waitForPrompt } from './model/waitForPrompt'
 import type { NewChatRequest, NewChatSeed, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberBypassSession } from '@/features/chat/bypassSessions'
@@ -412,12 +413,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     const started: { session: Conversation | null } = { session: null }
     const placed = await runStart(
       async () => home || (await defaultSessionFolder()),
-      (id) => {
-        started.session = queryClient.getQueryData<Conversation[]>(['conversations'])?.find((item) => item.id === id) ?? null
-        sendTerminalInput({ id, generation: 0 }, `${line}\r`).catch((error: unknown) => { toast.failed('Could not type the command in the terminal', error) })
-      },
+      (id) => { started.session = queryClient.getQueryData<Conversation[]>(['conversations'])?.find((item) => item.id === id) ?? null },
     )
-    return placed ? started.session : null
+    const { session } = started
+    if (!placed || session === null) return null
+    // Typed once the shell has drawn its prompt, never into one that is still starting, then Enter so it runs.
+    await waitForPrompt(() => loadTerminalScreen({ id: session.id, generation: 0 }))
+    await sendTerminalInput({ id: session.id, generation: 0 }, `${line}\r`).catch((error: unknown) => { toast.failed('Could not type the command in the terminal', error) })
+    return session
   }, [runStart, home, queryClient])
 
   // Ending the shell closes it for good (no undo window): it was only ever a part of the dialog.

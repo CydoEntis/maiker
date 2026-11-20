@@ -30,11 +30,10 @@ describe('Steps', () => {
     expect(screen.getAllByText(/^(done|needs you|waiting)$/).map((word) => word.textContent)).toEqual(['done', 'needs you', 'waiting'])
   })
 
-  it('puts the fix of a step that needs you in the standard card, the step itself in amber, and keeps it usable', async () => {
+  it('puts the fix of a step that needs you straight under the step, in amber, and keeps it usable', async () => {
     const user = userEvent.setup()
     render(<Steps label="Adding" steps={STEPS} />)
     const fix = screen.getByRole('button', { name: 'Copy my key' })
-    expect(fix.closest('[data-slot="card"]')?.className).toContain('border-(--line)')
     expect(screen.getByText('Sign in with your key')).toHaveClass('text-(--needs)')
     await user.tab()
     expect(fix).toHaveFocus()

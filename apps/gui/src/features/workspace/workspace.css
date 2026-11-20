@@ -411,8 +411,7 @@
 /* One size in every state of Add a remote machine (the address, each step, Machine added): the card is a header, a scrolling body and a foot. */
 .mx-rename.mx-addmachine { width: 600px; max-width: calc(100vw - 32px); height: min(560px, calc(100vh - 48px)); padding: 0; gap: 0; overflow: hidden; }
 .mx-rename.mx-addmachine > form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
-.mx-key-term-wrap { display: flex; flex-direction: column; gap: 6px; }
-.mx-key-term { height: clamp(180px, 30vh, 240px); min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
+.mx-key-term { height: clamp(200px, 32vh, 260px); min-height: 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
 .mx-key-term:focus-within { border-color: var(--line2); box-shadow: var(--focus-underline); }
 .mx-key-term .terminal-view { padding: 6px 8px; }
 .mx-key-term-wait { margin: 0; padding: 10px 12px; }

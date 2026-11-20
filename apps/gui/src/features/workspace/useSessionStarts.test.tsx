@@ -20,6 +20,7 @@ const daemon = vi.hoisted(() => ({
   renameConversationOnDaemon: vi.fn<(session: { id: string }, name: string) => Promise<void>>(() => Promise.resolve()),
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
+  loadTerminalScreen: vi.fn(() => Promise.resolve('me@box:~$ ')),
   archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
 }))
 // Another machine: a session started there shows in its next list.

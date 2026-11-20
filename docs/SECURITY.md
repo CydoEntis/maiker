@@ -166,10 +166,11 @@ webview supplies the machine and nothing else, so it is not a way to run a progr
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
 password or token from it. The key step of Add a remote machine shows a plain shell of this computer inside the
 dialog with `ssh-copy-id` typed and run when the person presses **Run** (`keySetupCommand` refuses a target that is not
-one plain word; `keyRunLine` adds an exit so the shell ends with the command); the password is typed into that terminal
+one plain word; `keyRunLine` adds a line that prints the exit status after a marker); the password is typed into that terminal
 and travels as any terminal input to ssh, and the window reads, stores, logs and prefills none of it. The window does read
-the terminal's screen text while the command runs, only to say its last line back when it fails (`lastKeyLine` drops any
-line that asks for a password or passphrase, ssh does not echo what is typed, and nothing is stored or logged). The shell
+the terminal's screen text while the command runs, only to find the exit marker and say the command's last line back when it
+fails (`readKeyScreen` drops any line that asks for a password or passphrase and strips escape sequences, ssh does not echo
+what is typed, and nothing is stored or logged). The shell
 is ended when the dialog goes.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
