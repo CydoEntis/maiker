@@ -15,7 +15,7 @@ import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, newSession, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap } = useWorkspace()
+  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, openStartMenu, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap } = useWorkspace()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
   const reduced = useReducedMotion()
   const terminal = usePresence(terminalShown, TERMINAL_DOCK_EXIT_MS, reduced)
@@ -93,7 +93,7 @@ export function WorkspaceMain() {
                     listed={sessionsListed}
                     startFolderLabel={startFolderLabel}
                     canStart={canStart}
-                    onNewSession={() => { newSession(focusedMachineNumber) }}
+                    onNewSession={() => { openStartMenu(focusedMachineNumber) }}
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />
                 )}

@@ -4,9 +4,9 @@ import { describe, expect, it, vi } from 'vitest'
 import { UpdateSlot } from './UpdateSlot'
 import type { UpdaterState } from './useUpdater'
 
-function setup(state: UpdaterState, extra: { skipped?: string | null; variant?: 'footer' | 'rail' } = {}) {
+function setup(state: UpdaterState, extra: { skipped?: string | null } = {}) {
   const actions = { onInstall: vi.fn(), onRestartNow: vi.fn(), onCheck: vi.fn(), onSkip: vi.fn() }
-  render(<UpdateSlot variant={extra.variant ?? 'footer'} state={state} version="0.60.2" skipped={extra.skipped ?? null} portalContainer={null} {...actions} />)
+  render(<UpdateSlot state={state} version="0.60.2" skipped={extra.skipped ?? null} portalContainer={null} {...actions} />)
   return actions
 }
 
@@ -21,11 +21,6 @@ describe('update slot', () => {
     setup({ status: 'current' })
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
     expect(screen.queryByText(/0\.60\.2/)).not.toBeInTheDocument()
-  })
-
-  it('offers the rail no button without an update', () => {
-    setup({ status: 'current' }, { variant: 'rail' })
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('offers an available update as an icon button, with a card of the versions and what is new, and downloads on click', async () => {

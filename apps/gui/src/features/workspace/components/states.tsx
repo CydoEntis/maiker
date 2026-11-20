@@ -1,5 +1,4 @@
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
-import { useShortcutText } from '@/features/shortcuts/platform'
 import { Icon } from './glyphs'
 
 /** Before the daemon's first list: says it is looking, once the wait is long enough to notice. */
@@ -27,7 +26,6 @@ export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, on
   onNewSession: () => void
   onChangeStartFolder: () => void
 }) {
-  const shortcutText = useShortcutText()
   if (!listed) return <LookingForSessions />
   return (
     <div className="mx-empty">
@@ -38,11 +36,11 @@ export function EmptyState({ hasSessions, listed, startFolderLabel, canStart, on
           {hasSessions ? (
             <p>Your sessions keep running in the sidebar. Pick one to show it here, or start a new one.</p>
           ) : (
-            <p>A new session opens a terminal in <span className="mono">{startFolderLabel}</span>. Type an agent's command in it, like <span className="mono">claude</span> or <span className="mono">codex</span>, and it shows up in the sidebar.</p>
+            <p>A new session starts in <span className="mono">{startFolderLabel}</span>: a terminal, or an agent like <span className="mono">claude</span> or <span className="mono">codex</span>. It shows up in the sidebar.</p>
           )}
         </div>
         <div className="mx-empty-actions">
-          <button type="button" className="mx-primary" disabled={!canStart} onClick={onNewSession}>New session<kbd>{shortcutText('new-session')}</kbd></button>
+          <button type="button" className="mx-primary" disabled={!canStart} onClick={onNewSession}>New session</button>
           <button type="button" className="mx-quiet" onClick={onChangeStartFolder}>Change start folder</button>
         </div>
         <span className="mx-empty-note-small">Sessions live in the Maiker service. Closing this window never stops them, and the Maiker TUI sees the same sessions.</span>

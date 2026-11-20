@@ -28,7 +28,6 @@ export function WorkspaceStatusBar() {
       version={runningVersion}
       update={(
         <UpdateSlot
-          variant="bar"
           state={updater.state}
           version={runningVersion}
           skipped={skippedVersion}

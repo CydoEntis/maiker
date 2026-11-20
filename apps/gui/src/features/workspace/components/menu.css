@@ -9,6 +9,8 @@
 /* The menu itself holds focus while it is open; the rows show where you are, so the menu draws no focus underline of its own. */
 .mx-ctx:focus, .mx-ctx:focus-visible, .mx-ctx [role="menu"]:focus-visible { outline: none; box-shadow: none; }
 @keyframes mx-pop { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
+/* The + menu's pages sit in one wrapper that catches the number and back keys; it adds no box of its own. */
+.mx-start-body { display: contents; }
 .mx-ctx-title { max-width: 260px; padding: 6px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-ctx-heading { padding: 6px 10px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
 .mx-ctx-sep { height: 1px; margin: 4px 8px; background: var(--pane-line); }

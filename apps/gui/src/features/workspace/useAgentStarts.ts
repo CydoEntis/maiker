@@ -14,13 +14,15 @@ import { resolveStartFolder } from './model/startFolder'
 import { makeId } from './makeId'
 
 /** Starts for what is in front: another terminal for an agent, or an agent in the focused folder. */
-export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onTerminalAdded, runStart, setLayout, focusedSession, setSettingsSection, preferences, home }: {
+export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onTerminalAdded, runStart, startRemoteShell, setLayout, focusedSession, setSettingsSection, preferences, home }: {
   sessionMap: Map<string, SessionView>
   endSessions: (ids: string[]) => void
   setAgentTerminals: Dispatch<SetStateAction<AgentTerminals>>
   /** A terminal was started for an agent: the window shows it in the terminal dock, as a tab or split in at `place`. */
   onTerminalAdded: (agentId: string, terminalId: string, place?: SplitPlace) => void
   runStart: (folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>) => Promise<boolean>
+  /** A shell in another machine's home folder, opened in the window once that machine lists it; its id, or null when it did not appear. */
+  startRemoteShell: (machine: number) => Promise<string | null>
   setLayout: Dispatch<SetStateAction<Layout>>
   focusedSession: SessionView | undefined
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
@@ -45,17 +47,26 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
   // Closing a tab ends its shell. It stays in the agent's list, so Undo brings the tab back and not a stray session.
   const closeAgentTerminal = useCallback((terminalId: string) => { endSessions([terminalId]) }, [endSessions])
 
-  const startAgent = useCallback((program: string) => {
-    const refusal = remoteStartRefusal(focusedSession !== undefined && focusedSession.machine !== LOCAL_MACHINE, focusedSession?.machineName ?? null, `Starting ${program} here`)
-    if (refusal) {
-      toast.info(refusal)
+  // An agent is its program typed into a new shell, so it is the same start as a terminal. On this computer it opens in the
+  // folder in front (when that is on this computer), else the start folder; on another machine, in that machine's home folder.
+  const startAgent = useCallback((program: string, machine: number = focusedSession?.machine ?? LOCAL_MACHINE) => {
+    setSettingsSection(null)
+    const typeProgram = (id: string) => sendTerminalInput({ id, generation: 0 }, `${program}`).catch((error: unknown) => { toast.failed(`Could not start ${program}`, error) })
+    if (machine !== LOCAL_MACHINE) {
+      void startRemoteShell(machine).then((id) => { if (id !== null) void typeProgram(id) })
       return
     }
-    setSettingsSection(null)
-    void runStart(async () => focusedSession?.cwd ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => {
+    const inFront = focusedSession !== undefined && focusedSession.machine === LOCAL_MACHINE ? focusedSession.cwd : null
+    void runStart(async () => inFront ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => {
       movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
-      void sendTerminalInput({ id, generation: 0 }, `${program}\r`).catch((error: unknown) => { toast.failed(`Could not start ${program}`, error) })
+      void typeProgram(id)
     })
-  }, [focusedSession, setSettingsSection, runStart, preferences.startFolder, home, setLayout])
-  return { addAgentTerminal, closeAgentTerminal, startAgent }
+  }, [focusedSession, setSettingsSection, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
+
+  // "Open worktree" in the + menu: a terminal in that worktree's folder, shown in the window.
+  const openWorktree = useCallback((path: string) => {
+    setSettingsSection(null)
+    void runStart(() => Promise.resolve(path), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
+  }, [setSettingsSection, runStart, setLayout])
+  return { addAgentTerminal, closeAgentTerminal, startAgent, openWorktree }
 }

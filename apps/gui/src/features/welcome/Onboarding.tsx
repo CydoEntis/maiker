@@ -34,7 +34,7 @@ type Props = {
   reducedMotion: boolean
   /** The themed window root the setup mounts in, so it reads the theme's tokens. */
   portalContainer: HTMLElement | null
-  /** The setup is over. `startSession` is true when Get started was pressed: open the New session page. */
+  /** The setup is over. `startSession` is true when Get started was pressed: open the + menu. */
   onClose: (startSession: boolean) => void
 }
 

@@ -170,6 +170,19 @@ describe('desktop terminal multiplexer', () => {
     expect(await screen.findByRole('region', { name: 'Shell in ~' })).toBeInTheDocument()
   })
 
+  it('opens the + menu from the empty state New session, and its Terminal starts a plain shell', async () => {
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await screen.findByRole('heading', { name: 'No sessions running' })
+    daemon.loadConversations.mockResolvedValue([term(5, HOME)])
+
+    await user.click(within(screen.getByRole('main', { name: 'Terminals' })).getByRole('button', { name: 'New session' }))
+    await user.click(await screen.findByRole('menuitem', { name: /^Terminal/ }))
+
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
+    expect(await screen.findByRole('region', { name: 'Shell in ~' })).toBeInTheDocument()
+  })
+
   it('applies the saved density, text sizes and sidebar width, and a drag of the edge changes and saves the width', async () => {
     const wide = window.innerWidth
     Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1400 })
@@ -1223,6 +1236,9 @@ describe('desktop overlays and pane tools', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     await screen.findByRole('heading', { name: 'No sessions running' })
+    // Get started leaves the + menu open, on this computer, to start the first session from.
+    expect(await screen.findByRole('menu', { name: 'Start' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
     expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'chat' })
 
     app.unmount()

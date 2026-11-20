@@ -1,6 +1,6 @@
-import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
-import { STATUS_WORD, type SessionView } from '../model/session'
+import { folderNameOf, STATUS_WORD, type SessionView } from '../model/session'
 import { canPutAway, canSnooze, DEFAULT_SIDEBAR_SORT, inProject, isShell, machineGroups, projectChoices, projectSections, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow, type MachineGroup, type SidebarGrouping, type SidebarOrder, type SidebarSort } from '../model/sidebar'
 import { snoozeChoices } from '../model/snooze'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
@@ -12,6 +12,7 @@ import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { StartMenu, type OpenableWorktree } from './StartMenu'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
@@ -45,7 +46,11 @@ export type SidebarProps = {
   width: number
   onResize: (width: number) => void
   onResizeEnd: (width: number) => void
-  onNewSession: (machine: number) => void
+  /** The + menu: the machine it is open for (null: closed). The window opens it too, for Get started and the palette. */
+  startMenu: number | null
+  onStartMenu: (machine: number | null) => void
+  /** What the + menu lists: the agents found on this computer (null while unknown), the open project's other worktrees, and its starts. */
+  start: StartSupport
   onNewShell: (machine: number) => void
   onAddMachine: () => void
   onMachineSettings: () => void
@@ -82,14 +87,18 @@ export type SidebarProps = {
   onOpenSettings: () => void
   /** Opens the list of agent sessions closed on this computer. */
   onRecentSessions: () => void
-  /** The footer's left slot (the update button). The caller owns the updater. */
-  updateSlot: ReactNode
-  /** The update button in the rail's foot. */
-  railUpdateSlot: ReactNode
   /** How far an install or update of each remote machine has got, by machine name, 0 to 100; absent when none runs. */
   updateProgress?: Readonly<Record<string, number>> | undefined
   /** A chat that is being written but has no first message yet: listed on its machine so it is not lost. */
   draft?: DraftChat | null | undefined
+}
+
+/** What the + menu needs from the window beyond the machines. */
+export type StartSupport = {
+  installedAgents: readonly string[] | null
+  worktrees: readonly OpenableWorktree[]
+  onAgent: (program: string, machine: number) => void
+  onOpenWorktree: (path: string) => void
 }
 
 /** The New session dialog's chat while it is unsent: where it will start, and the agent picked for it. */
@@ -126,6 +135,44 @@ function sessionMenuEntries(props: SidebarProps, session: SessionView, closeHint
     ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
     ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
   ]
+}
+
+/** Why the + menu cannot make a worktree from `session`, or null when it can: worktrees are made from a repository on this computer. */
+function worktreeRefusal(props: SidebarProps, session: SessionView | undefined): string | null {
+  if (!props.online) return 'The Maiker service is not reachable'
+  if (session === undefined) return 'Open a session in the project first'
+  if (session.machineName !== null) return 'Worktrees are made on this computer'
+  return session.branch === null ? 'This folder is not in a git repository yet' : null
+}
+
+/**
+ * The + menu for a + button, fed from the sidebar's props. The header's (and the rail's) + is the one the window can open too, so
+ * it follows `startMenu`; a machine's own + opens and closes itself.
+ */
+function SidebarStartMenu({ sidebar, machine, windowOpens = false, children }: { sidebar: SidebarProps; machine: number; windowOpens?: boolean; children: ReactElement }) {
+  const focused = sidebar.focusedId === null ? undefined : sidebar.sessions.find((session) => session.id === sidebar.focusedId)
+  const here = focused !== undefined && focused.machine === machine ? focused : undefined
+  const { installedAgents, worktrees, onAgent, onOpenWorktree } = sidebar.start
+  return (
+    <StartMenu
+      machine={machine}
+      machines={sidebar.machines}
+      project={here === undefined ? null : folderNameOf(here)}
+      installed={installedAgents}
+      worktrees={here === undefined ? [] : worktrees}
+      worktreeRefusal={worktreeRefusal(sidebar, here)}
+      portalContainer={sidebar.portalContainer}
+      open={windowOpens ? sidebar.startMenu !== null : undefined}
+      onOpenChange={windowOpens ? (open) => { sidebar.onStartMenu(open ? machine : null) } : undefined}
+      onTerminal={sidebar.onNewShell}
+      onAgent={onAgent}
+      onAddMachine={sidebar.onAddMachine}
+      onNewWorktree={() => { if (here !== undefined) sidebar.onNewWorktree?.(here.id) }}
+      onOpenWorktree={onOpenWorktree}
+    >
+      {children}
+    </StartMenu>
+  )
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -186,12 +233,6 @@ function Expanded(props: SidebarProps) {
   // Where each row sits, so a row that changes section because focus moved (`held`) still animates, while a focus change that moves nothing leaves the key alone and `useFlip` reads no layout.
   const placement = props.grouping === 'status' ? statusSections(sessions, held, sort).map((section) => `${section.key}:${section.sessions.map((session) => session.id).join(',')}`).join('|') : ''
   useFlip(list, reduced, flipKey(props, sessions, sort, project, putAwayOpen, views, draft !== null, placement))
-  const startMenu = (): MenuEntry[] => [
-    { label: 'New session', hint: shortcutText('new-session'), disabled: !props.canStart, run: () => { props.onNewSession(localMachine) } },
-    { label: 'New terminal', hint: shortcutText('new-terminal'), disabled: !props.canStart, run: () => { props.onNewShell(localMachine) } },
-    'separator',
-    { label: 'Add a remote machine…', run: props.onAddMachine },
-  ]
   const openMenu = (event: MouseEvent, title: string, items: MenuEntry[]) => {
     event.preventDefault()
     event.stopPropagation()
@@ -207,7 +248,7 @@ function Expanded(props: SidebarProps) {
     const action = head.updateAction
     return [
       ...(name !== null && action !== null ? [{ label: `${UPDATE_WORDS[action].verb} Maiker`, run: () => { props.onUpdateMachine(name, action) } }, 'separator' as const] : []),
-      { label: 'New session here', hint: shortcutText('new-session'), disabled: !props.canStart || head.down, run: () => { props.onNewSession(head.machine) } },
+      { label: 'New session here', disabled: !props.canStart || head.down, run: () => { props.onStartMenu(head.machine) } },
       { label: 'New terminal here', disabled: !props.canStart || head.down, run: () => { props.onNewShell(head.machine) } },
       ...(head.down ? [{ label: `Not reachable: ${head.why ?? head.chip?.word ?? 'not reachable'}`, disabled: true, run: () => undefined }] : []),
       'separator',
@@ -244,7 +285,9 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
         <SidebarFilterMenu grouping={props.grouping} onGrouping={props.onGrouping} sort={sort} onSort={setSort} projects={projects} project={project} onProject={setPickedProject} />
-        <button type="button" className="mx-head-button" aria-label="New session" title={tip('New terminal', 'new-session')} disabled={!props.canStart} onClick={() => { props.onNewSession(localMachine) }} onContextMenu={(event) => { openMenu(event, 'Start', startMenu()) }}><Icon name="plus" size={15} /></button>
+        <SidebarStartMenu sidebar={props} machine={props.startMenu ?? localMachine} windowOpens>
+          <button type="button" className="mx-head-button" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart}><Icon name="plus" size={15} /></button>
+        </SidebarStartMenu>
       </div>
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         {props.grouping !== 'machine' && (
@@ -278,7 +321,7 @@ function Expanded(props: SidebarProps) {
               onContextMenu={(event) => { openMenu(event, machineTitle(group.head), machineMenu(group.head)) }}
               renderRow={renderRow}
               canStart={props.canStart}
-              onNewSession={props.onNewSession}
+              renderStart={(machine, button) => <SidebarStartMenu sidebar={props} machine={machine}>{button}</SidebarStartMenu>}
               onFix={props.onFixMachine}
             />
           ))}
@@ -296,7 +339,7 @@ function Expanded(props: SidebarProps) {
       <div className="mx-sidebar-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
         <button type="button" className="mx-head-button mx-add-machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={14} />Remote machine</button>
-        <span className="mx-foot-slot">{props.updateSlot}</span>
+        <span className="mx-spacer" />
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={15} /></button>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
@@ -387,7 +430,8 @@ function MachineWhy({ head, onFix }: { head: MachineHead; onFix: (head: MachineH
 
 type SectionProps = {
   canStart: boolean
-  onNewSession: (machine: number) => void
+  /** Wraps a machine's + in its + menu. */
+  renderStart: (machine: number, button: ReactElement) => ReactNode
   onFix: (head: MachineHead) => void
   /** The draft chat, listed first in this machine; null when it is not on this machine. */
   draft: DraftChat | null
@@ -402,7 +446,7 @@ type SectionProps = {
 }
 
 /** One machine: its heading (name, count, update, its line's dot) and its sessions as one list, most urgent first. */
-function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onContextMenu, renderRow, canStart, onNewSession, onFix }: SectionProps) {
+function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onContextMenu, renderRow, canStart, renderStart, onFix }: SectionProps) {
   const { head, sessions } = group
   const title = machineTitle(head)
   return (
@@ -417,7 +461,7 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
         {progress !== undefined
           ? <span className="mx-machine-pct mono">{String(progress)}%</span>
           : head.name !== null && head.updateAction !== null && <UpdateButton name={head.name} action={head.updateAction} onUpdate={onUpdate} />}
-        <button type="button" className="mx-head-button is-small mx-machine-add" aria-label={`Add a session to ${title}`} title={`New session on ${title}`} disabled={!canStart || head.down} onClick={() => { onNewSession(head.machine) }}><Icon name="plus" size={13} /></button>
+        {renderStart(head.machine, <button type="button" className="mx-head-button is-small mx-machine-add" aria-label={`Add a session to ${title}`} title={`New session on ${title}`} disabled={!canStart || head.down}><Icon name="plus" size={13} /></button>)}
         <span className={`mx-machine-dot${head.updateAction !== null ? ' is-warn' : head.down ? ' is-offline' : ''}`} role="img" aria-label={head.down ? `${title} is ${head.chip?.word ?? 'not reachable'}` : `${title} is connected`} title={head.why ?? (head.down ? head.chip?.word ?? 'not reachable' : `${title} is connected`)} />
       </div>
       {progress !== undefined && head.name !== null && (
@@ -426,9 +470,6 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
       {head.down && head.name !== null && <MachineWhy head={head} onFix={onFix} />}
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true))}</div>
-        {head.name !== null && !head.down && (
-          <button type="button" className="mx-machine-new" disabled={!canStart} onClick={() => { onNewSession(head.machine) }}><Icon name="plus" size={12} />New session on {title}</button>
-        )}
         {/* Last, where the new chat will be (sessions keep creation order), so it fills in without anything moving. */}
         {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
       </Collapse>
@@ -468,7 +509,7 @@ function UpdateButton({ name, action, onUpdate }: { name: string; action: Update
 /**
  * The slim strip of a narrow window, in the design's language: the sidebar toggle, search and new session, then one flat
  * status icon per session under its status (a hairline between the sections, in the order of the expanded list), the
- * update button and Settings at the foot. A session's hover card is the expanded row's. There is no agent tile and no
+ * Remote machine and Settings at the foot. A session's hover card is the expanded row's. There is no agent tile and no
  * connection dot: the service's state shows in the title bar alone.
  */
 function Rail(props: SidebarProps) {
@@ -483,7 +524,9 @@ function Rail(props: SidebarProps) {
     <div className="mx-rail">
       <div className="mx-rail-top">
         <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart} onClick={() => { props.onNewSession(props.machines[0]?.machine ?? 0) }}><Icon name="plus" size={15} /></button>
+        <SidebarStartMenu sidebar={props} machine={props.startMenu ?? props.machines[0]?.machine ?? 0} windowOpens>
+          <button type="button" className="mx-head-button is-rail" aria-label="New session" title={tip('New session', 'new-session')} disabled={!props.canStart}><Icon name="plus" size={15} /></button>
+        </SidebarStartMenu>
         <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
       </div>
       <div className="mx-rail-rule" aria-hidden="true" />
@@ -514,7 +557,6 @@ function Rail(props: SidebarProps) {
         ))}
       </div>
       <div className="mx-rail-bottom">
-        {props.railUpdateSlot}
         <button type="button" className="mx-head-button is-rail" aria-label="Remote machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
       </div>

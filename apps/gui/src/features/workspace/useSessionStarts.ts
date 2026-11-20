@@ -361,17 +361,20 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     } })
   }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff])
 
+  // A shell in another machine's home folder, opened in the window when that machine lists it.
+  const startRemoteShell = useCallback((machine: number) => startOnMachine({ machine, name: 'The machine' }, REMOTE_HOME), [startOnMachine])
+
   // A plain shell in the start folder: terminal view only, whatever the default agent is.
   // On another machine it starts in that machine's home folder.
   const newTerminal = useCallback((machine?: number) => {
     setSettingsSection(null)
     const target = machine ?? remoteTargetOf(focusedSession)?.machine ?? LOCAL_MACHINE
     if (target !== LOCAL_MACHINE) {
-      void startOnMachine({ machine: target, name: 'The machine' }, REMOTE_HOME).then((id) => { if (id !== null) rememberShellStart(id) })
+      void startRemoteShell(target).then((id) => { if (id !== null) rememberShellStart(id) })
       return
     }
     void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
-  }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
+  }, [setSettingsSection, focusedSession, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
 
   // The terminal experiment: New session is a plain shell, the same as New terminal. You type the agent's command in it.
   const newSession = newTerminal
@@ -430,5 +433,5 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
   }, [queryClient])
 
-  return { startKeyTerminal, endKeyTerminal, signInAgent, signInGitHub, gitHubSignInsEnded, runStart, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
+  return { startKeyTerminal, endKeyTerminal, signInAgent, signInGitHub, gitHubSignInsEnded, runStart, startRemoteShell, newSession, newTerminal, startAgentSession, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree }
 }
