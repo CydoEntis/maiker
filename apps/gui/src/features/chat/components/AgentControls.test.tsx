@@ -88,7 +88,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
-    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })
@@ -150,7 +150,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(model).not.toHaveAttribute('aria-disabled', 'true')
     await user.click(model)
     await user.click(await screen.findByRole('radio', { name: /^Opus 5\.5/ }))
-    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
 
     // Nothing waits for the turn to end, nothing is left in the queue, and the two commands do not interleave.
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
@@ -172,7 +172,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     // Picked here: shown at once, and the agent's files then say the same.
     await user.click(button())
-    await user.click(screen.getByRole('radio', { name: 'High' }))
+    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(button()).toHaveAccessibleName(/· High/)
     rerender(chat('high'))

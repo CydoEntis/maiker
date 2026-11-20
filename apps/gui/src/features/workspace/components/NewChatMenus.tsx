@@ -105,7 +105,6 @@ function ChipRow({ item, onPick }: { item: ChipItem; onPick: (item: ChipItem) =>
         {item.sub !== undefined && <span className="mx-chip-row-sub">{item.sub}</span>}
       </span>
       {item.right}
-      {item.checked && <Icon name="check" size={12} stroke="var(--accent)" strokeWidth={2.4} />}
     </ChoiceItem>
   )
 }

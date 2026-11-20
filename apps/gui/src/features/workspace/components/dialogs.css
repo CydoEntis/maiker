@@ -54,6 +54,7 @@
 .mx-chip-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; text-align: left; font-size: 13px; color: var(--fg2); }
 .mx-chip-row:hover { background: var(--m-hover); }
 .mx-chip-row.is-checked { background: var(--m-sel); color: var(--fg); }
+.mx-chip-row.is-checked .mx-chip-row-label { font-weight: 700; }
 .mx-chip-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-chip-row-label { display: flex; align-items: center; gap: 6px; font-weight: 600; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Two lines at most: what a choice does reads whole, and a long path still keeps to its row. */

@@ -2,6 +2,7 @@ import * as React from "react"
 import { RadioGroup as RadioGroupPrimitive } from "radix-ui"
 import { cn } from "@/lib/utils"
 import "./segmented.css"
+import "./menu-row.css"
 
 /** One choice out of several. Radix gives it the arrow keys, Tab as one stop, and the radio roles; what it looks like is the className. */
 function RadioGroup({ className, ...props }: React.ComponentProps<typeof RadioGroupPrimitive.Root>) {

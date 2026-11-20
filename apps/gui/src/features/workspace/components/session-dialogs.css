@@ -95,6 +95,7 @@
 .mx-chip-menu.is-token .mx-chip-row:hover { background: var(--m-hover); }
 .mx-chip-menu.is-token .mx-chip-row.is-checked { background: var(--m-sel); }
 .mx-chip-menu.is-token .mx-chip-row-label { font-weight: 400; }
+.mx-chip-menu.is-token .mx-chip-row.is-checked .mx-chip-row-label { font-weight: 700; }
 .mx-chip-menu.is-token .mx-chip-row-label.is-mono { font-family: var(--mono); font-size: 12.5px; }
 /* The list's head already says what it lists, so the rows carry no section heading or count, and what sits at a row's right is a dim word and a neutral tick. */
 .mx-chip-menu.is-token :is(.mx-chip-heading, .mx-chip-count) { display: none; }

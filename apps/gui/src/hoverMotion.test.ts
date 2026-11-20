@@ -49,9 +49,10 @@ describe('hover, focus and press motion', () => {
 
   // Bold on pick re-sets the text and, in a control that sizes to its label, widens it. A picked item says so with colour,
   // a fill or a mark. Allowed: a plan step that is bold for where
-  // the agent is, not for where the pointer is.
+  // the agent is, not for where the pointer is; a picked menu row (`.mx-menu-row`, full width, so nothing widens); and a
+  // stop slider's picked word, which sits in a column of equal width.
   it('never changes the weight of a control for hover, focus or selection', () => {
-    expect(offenders(({ selector, body }) => STATE.test(selector) && /font-weight/.test(body), [/mx-plan-item\.is-current/])).toEqual([])
+    expect(offenders(({ selector, body }) => STATE.test(selector) && /font-weight/.test(body), [/mx-plan-item\.is-current/, /^\.mx-menu-row/, /^\.mx-stop\.is-picked/])).toEqual([])
   })
 
   // A control does not lift, shrink or slide when it is hovered or pressed; press is a deeper fill. Allowed: a switch's knob,

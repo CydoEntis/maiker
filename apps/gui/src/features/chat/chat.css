@@ -421,27 +421,16 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-mm-model { flex: none; display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; font-size: 13px; font-weight: 500; color: var(--fg); text-align: left; outline: none; }
 .mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-mm-model:hover, .mx-mm-model:focus-visible { background: var(--m-hover); }
-.mx-mm-model[aria-checked="true"] { background: var(--m-hover); }
 .mx-mm-model small { font-size: 11px; font-weight: 400; color: var(--dim); }
 .mx-mm-more { flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
 .mx-mm-more:hover, .mx-mm-more:focus-visible { background: var(--m-hover); color: var(--fg); }
 .mx-mm-more[aria-expanded="true"] svg { transform: rotate(180deg); }
-.mx-mm-check { width: 13px; height: 13px; flex: none; color: var(--accent-text); }
 /* The foot: the word, the four rising bars, and the level's name at the right. */
-.mx-mm-effort { display: grid; grid-template-columns: auto 1fr 9ch; align-items: center; gap: 12px; height: 44px; padding: 0 14px; border-top: 1px solid var(--line); }
+.mx-mm-effort { display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 6px; padding: 10px 14px 12px; border-top: 1px solid var(--line); }
+.mx-mm-stops { grid-column: 1 / -1; }
 .mx-mm-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
 .mx-mm-effort-word { font-size: 12px; color: var(--muted); }
 .mx-mm-level { text-align: right; font-size: 12.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
-.mx-mm-bars { display: flex; align-items: flex-end; gap: 3px; height: 16px; }
-.mx-mm-bar { width: 16px; height: 6px; border-radius: 0; background: var(--line2); outline: none; }
-.mx-mm-bar:nth-child(2) { height: 9.3px; }
-.mx-mm-bar:nth-child(3) { height: 12.6px; }
-.mx-mm-bar:nth-child(4) { height: 15.9px; }
-.mx-mm-bar.is-on { background: var(--accent); }
-.mx-mm-bar:hover:not(:disabled) { background: var(--muted); }
-.mx-mm-bar.is-on:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 80%, #fff); }
-.mx-mm-bar:focus-visible { box-shadow: var(--focus-underline); }
-.mx-mm-bar:disabled { opacity: .35; cursor: not-allowed; }
 .mx-mm-mini { display: flex; align-items: flex-end; gap: 1.5px; height: 10px; margin-left: 2px; }
 /* The bars of a level that was never picked are still drawn as bars: at half the old strength the meter read as missing. */
 .mx-mm-mini span { width: 2.5px; height: 4px; border-radius: 1px; background: rgba(var(--hl), calc(.34 * var(--hk))); }
@@ -458,8 +447,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-pm-mode[aria-checked="true"] { background: rgba(var(--hl), calc(.07 * var(--hk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))); }
 .mx-pm-mode[aria-checked="true"]:focus-visible { box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))), var(--focus-underline); }
 .mx-pm-mode:disabled { opacity: .5; cursor: not-allowed; }
-.mx-pm-tick { width: 16px; flex: none; display: flex; justify-content: center; color: var(--accent-text); }
-.mx-pm-tick svg { width: 13px; height: 13px; }
 .mx-pm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-pm-name { display: flex; align-items: baseline; gap: 7px; font-size: 13.5px; font-weight: 500; color: var(--fg); }
 .mx-pm-mode.is-danger .mx-pm-name { color: var(--danger); }

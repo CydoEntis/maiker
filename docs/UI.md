@@ -1227,17 +1227,17 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
 - **New session draft: nothing jumps** (`NewChatPage`, `session-dialogs.css`). The header's chips, the message box and the foot's chips keep their places whatever is chosen: the Branch chip's width is its own and not its text's, the permission chip and More options always show, and the Starting card takes the place of the title in the same column the session's own chat uses. The draft is a plain region in the main area (`aria-label="New session"`), never a `dialog`; a test fails if it becomes one. Check it by measuring `getBoundingClientRect` of each control across the states (each agent, model, effort, New worktree and This folder, an error, a long branch name, 360px and 1200px): the differences are 0. `#dialogs?show=new`, `new-long`, `new-more` and `new-fail` draw the states.
 - **The agent dropdown** (`AgentPicker compact`, given `onAgent`) is the dialog's one control for the agent, model and effort: its menu opens downward from the button, so it never covers the message box it belongs to (it flips up when there is no room, and is never taller than the room there is), and has an Agent radio list (flat marks, type-ahead), the Model rows and Reasoning as a Segmented (none for an agent without an effort setting). It stays open while a choice changes and closes on Esc, Enter or a click outside. The chat's own button, below, is unchanged.
 - **Agent, model and effort.** A button names the agent's mark and the model (the one picked, else the one the agent's
-  own file says, else just the agent) with a four-bar meter for the effort, and opens one small menu (`AgentPicker`, layout 2h: 300px, square,
+  own file says, else just the agent) with a small four-bar meter for the effort, and opens one small menu (`AgentPicker`, layout 2h: 300px, square,
   opening up from the right of the box): the agent, only before a chat starts (after that its agent is already running), as an **Agent**
   segmented control with a column per agent, each its mark and name; the models, a 32px row
-  each with its description as the tooltip, an accent tick on the picked one and a dim "default" on the model the agent's settings
-  name; then a foot of **Effort**, four rising bars (Low, Medium, High, Max) and the level's name at the right. Earlier models wait
+  each with its description as the tooltip, the picked one shown by a filled ground and bold (never a tick: `components/ui/menu-row.css`, the one look of a picked row in every single-choice menu, list and select) and a dim "default" on the model the agent's settings
+  name; then a foot of **Effort**: a `StopSlider` (`components/ui/stop-slider.tsx`, `role="slider"`, Left and Right move it, a click on a dot or word picks it) with a stop for each level the model takes (Low, Medium, High, Max; Max is absent where the model lacks it), and the level's name at the right of the heading. Earlier models wait
   under a **More models** row, so the newest lead; the picked one shows wherever it is. Picking leaves the menu open; Esc
   or a click outside closes it. The default model (the one the settings name, else the one Claude Code says it
   would pick) stands for "nothing picked": there is no separate Default row then, and picking it sends no model. Where
-  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. Effort starts as "Agent's own" with no bar filled, since the level the
-  agent uses cannot be read; pressing the picked bar again goes back to it. A level a model does not take is dimmed with
-  "not on this model": the levels come from the agent's own list for each model (for Codex's Default row, whose model cannot be read, Max
+  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. Effort starts as "Agent's own" with no stop filled, since the level the
+  agent uses cannot be read; pressing the picked stop again goes back to it. A level a model does not take has no stop:
+  the levels come from the agent's own list for each model (for Codex's Default row, whose model cannot be read, Max
   is left out). Codex's default is the top-level `model` of its `config.toml`, where its list has that model.
   Picking a model that does not take the picked level drops to Medium, or to the agent's own where it takes none.
   Claude's models are asked of Claude Code itself (`agent_models` in `apps/gui/src-tauri/src/lib.rs`): the app starts it once, reads the
