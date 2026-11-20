@@ -90,6 +90,13 @@ describe('themes', () => {
     expect(tokens.ok).toBe('#50FA7B')
   })
 
+  it('steps a card and its selected row to the design greys on Maiker Dark, and keeps the hue of a tinted theme', () => {
+    const dark = themeStyle(findTheme('Maiker Dark'))
+    expect(dark['--card-step']).toBe('#1B1B1B')
+    expect(dark['--card-sel-step']).toBe('#2A2A2A')
+    expect(themeStyle(findTheme('Abyss'))['--card-step']).toBe('#151A28')
+  })
+
   it('leaves a light theme on its own ground', () => {
     expect(generateTheme({ bg: '#FFFFFF', fg: '#16181A', accent: '#0057D1', mag: '#A018FF', blue: '#0057D1', green: '#008B0C', light: true }).main).toBe('#FFFFFF')
   })

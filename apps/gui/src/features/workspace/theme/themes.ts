@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import maittyTokens from '@tokens/maitty-tokens.json'
 import themeManifest from '@tokens/themes.json'
-import { atLightnessOf, channelsOf, composite, contrastRatio, luminance, mixOklab, withAlpha } from './color'
+import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, luminance, mixOklab, withAlpha } from './color'
 
 /** Every colour role the desktop app reads, set as CSS custom properties on the app root. */
 export type ThemeTokens = {
@@ -322,11 +322,23 @@ export function onDanger(tokens: Pick<ThemeTokens, 'danger'>): string {
   return contrastRatio(light, tokens.danger) >= contrastRatio(dark, tokens.danger) ? light : dark
 }
 
+// A card on a panel and its selected row, as steps from the panel toward the text colour, measured from the design
+// (#1b1b1b and #2a2a2a on #151517). On a panel that is all but grey the design's cards are pure grey, so the panel's
+// faint tint is dropped there; a theme with a real hue keeps it.
+const CARD_STEP = 3.5
+const CARD_SEL_STEP = 12
+const NEAR_GREY_CHROMA = 0.01
+
+function cardSteps(tokens: ThemeTokens): Record<string, string> {
+  const tone = chromaOf(tokens.main) < NEAR_GREY_CHROMA ? greyOf : (colour: string) => colour
+  return { '--card-step': tone(mixOklab(tokens.main, tokens.fg, CARD_STEP)), '--card-sel-step': tone(mixOklab(tokens.main, tokens.fg, CARD_SEL_STEP)) }
+}
+
 /** The theme as CSS custom properties, for the app root's style. */
 export function themeStyle(theme: ThemeEntry): Record<string, string> {
   const style: Record<string, string> = { '--card-ring': theme.cardRing, colorScheme: theme.light ? 'light' : 'dark', '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, '--on-danger': onDanger(theme.tokens), ...(theme.light ? LIGHT_GLASS : DARK_GLASS) }
   for (const [key, variable] of Object.entries(CSS_VARIABLES)) style[variable] = theme.tokens[key as keyof ThemeTokens]
-  if (!theme.light) Object.assign(style, frostOf(theme.tokens.main))
+  if (!theme.light) Object.assign(style, frostOf(theme.tokens.main), cardSteps(theme.tokens))
   const { look, shading } = theme
   if (look !== undefined) {
     style['--ui'] = look.ui

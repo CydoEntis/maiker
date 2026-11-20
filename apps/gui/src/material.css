@@ -37,10 +37,11 @@
   /* A card on a panel (a sidebar group, the sidebar's foot): one small step lighter than the panel it sits on, measured from the
      design (#1b1b1b on #151517), with a hairline a step lighter again and a selected row two steps up. Never darker than the panel. */
   /* Mixed from the panel toward the text colour, not from --raise: several themes set --raise equal to --main, which would leave no step. */
-  --m-card: color-mix(in srgb, var(--main) 97%, var(--fg));
+  --m-card: var(--card-step, color-mix(in srgb, var(--main) 97%, var(--fg)));
   /* The theme's own hairline at full strength: the design's card edge measures #272727, which a half-strength line (#202022) fell short of. */
   --m-card-line: var(--line);
-  --m-card-sel: color-mix(in srgb, var(--m-sel) 97%, var(--fg));
+  /* A dark theme's two steps are computed with the theme (`cardSteps` in themes.ts); the mixes here are a light theme's. */
+  --m-card-sel: var(--card-sel-step, color-mix(in srgb, var(--m-sel) 97%, var(--fg)));
   /* What a menu or popover is drawn on: the raised surface nudged toward the text colour, so it reads as one step lifted off the
      window in a dark theme and a light one alike, with the stronger hairline as its ring. */
   --pop-bg: color-mix(in srgb, var(--m-raise) 92%, var(--fg));
