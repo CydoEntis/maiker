@@ -2,10 +2,10 @@ import { useEffect, useState } from 'react'
 import type { HostKeyReport } from '@/api/machines'
 import { Button } from '@/components/ui/button'
 import { errorMessage } from '@/lib/error-message'
-import type { MachineHead } from '@/features/workspace/model/machines'
+import { UPDATE_WORDS, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
 import { HOST_KEY_WORDS } from '../model/machineRows'
 import { AddChecklist, type Position } from './AddChecklist'
-import { StepBody } from './AddBodies'
+import { HelperProgressBody, StepBody } from './AddBodies'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
 import type { MachinesInfo } from './DesktopSettings'
 import { HostKeyBody } from './HostKeyBody'
@@ -54,6 +54,37 @@ function FixHostKey({ name, target, machines }: { name: string; target: string; 
   return <HostKeyBody report={report} trusting={trusting} problem={problem} onTrust={doTrust} onCopy={machines.onCopyCommand} />
 }
 
+type Setup = { state: 'idle' } | { state: 'running'; percent: number | null } | { state: 'failed'; message: string }
+
+/** Maiker on the machine is missing or older: one button puts this computer's version there, with how far it has got. */
+function FixHelper({ name, action, machines }: { name: string; action: UpdateAction; machines: MachinesInfo }) {
+  const { onUpdate, add } = machines
+  const [setup, setSetup] = useState<Setup>({ state: 'idle' })
+  const running = setup.state === 'running'
+  useEffect(() => {
+    if (!running) return undefined
+    let gone = false
+    let stop: (() => void) | null = null
+    add.onProgress((progress) => {
+      if (progress.name === name) setSetup((now) => (now.state === 'running' ? { state: 'running', percent: progress.percent } : now))
+    }).then((stopListening) => { if (gone) stopListening(); else stop = stopListening }, (error: unknown) => { console.warn('Could not follow the helper install', error) })
+    return () => { gone = true; stop?.() }
+  }, [running, add, name])
+  const start = () => {
+    setSetup({ state: 'running', percent: null })
+    onUpdate(name, action, false).then(
+      () => { setSetup({ state: 'idle' }) },
+      (error: unknown) => { setSetup({ state: 'failed', message: errorMessage(error, `Could not ${action} Maiker on ${name}`) }) },
+    )
+  }
+  if (setup.state === 'running') return <HelperProgressBody text={action === 'install' ? `Putting Maiker on ${name}…` : `Updating Maiker on ${name}…`} percent={setup.percent} />
+  return (
+    <StepBody text={setup.state === 'failed' ? setup.message : UPDATE_WORDS[action].need(name)}>
+      <Button variant="primary" autoFocus onClick={start}>{setup.state === 'failed' ? 'Try again' : `${UPDATE_WORDS[action].verb} Maiker on ${name}`}</Button>
+    </StepBody>
+  )
+}
+
 /** Where the checklist stands for a machine that is not connected: the step its state stopped on, with that step's one fix. */
 function positionOf(live: MachineHead, name: string, machines: MachinesInfo): Position {
   if (live.chip?.word === 'connected') return { at: 'connected', state: 'done' }
@@ -62,6 +93,11 @@ function positionOf(live: MachineHead, name: string, machines: MachinesInfo): Po
     return { at: 'host', state: 'needs', label: `Check ${name} is the right computer`, body: <FixHostKey name={name} target={live.target ?? ''} machines={machines} /> }
   }
   if (needsLogin) return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? name}`, body: <KeyStep target={live.target ?? name} port={null} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} /> }
+  if (live.updateAction !== null) {
+    const action = live.updateAction
+    const label = action === 'install' ? `Maiker is not on ${name}` : `${name} needs a Maiker update`
+    return { at: 'helper', state: 'needs', label, body: <FixHelper name={name} action={action} machines={machines} /> }
+  }
   const body = <StepBody text={live.said ?? live.why ?? NO_REASON}><Button variant="needs" autoFocus onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
   return { at: 'reach', state: 'needs', label: `${name} is not connected`, body }
 }

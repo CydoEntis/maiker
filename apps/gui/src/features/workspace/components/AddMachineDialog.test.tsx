@@ -127,6 +127,17 @@ describe('the address step', () => {
       await user.click(screen.getByRole('button', { name: 'Try again' }))
       expect(machines.onRetry).toHaveBeenCalledWith('kingdom')
     })
+
+    it('offers one button to update an older Maiker there, not a command to type', async () => {
+      const machines = info({ list: [{ ...kingdom('older Maiker', 'bad'), updateAction: 'update', said: 'run `maiker machine update kingdom`, then retry' }] })
+      render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
+      const user = userEvent.setup()
+      await user.click(await screen.findByRole('button', { name: /^kingdom: Already added/ }))
+      expect(await screen.findByText('kingdom needs a Maiker update')).toBeInTheDocument()
+      expect(screen.queryByText(/maiker machine update/)).toBeNull()
+      await user.click(screen.getByRole('button', { name: 'Update Maiker on kingdom' }))
+      expect(machines.onUpdate).toHaveBeenCalledWith('kingdom', 'update', false)
+    })
   })
 
   it('says a machine that is already in Maiker is already there', async () => {
