@@ -155,6 +155,8 @@ mod tests {
         assert_eq!(at("/home/ada", "/other/shop-api", "feat/x"), native("/home/ada/.maiker/worktrees/shop-api/feat-x"));
     }
 
+    // Only Windows reads `\` as a separator: elsewhere the whole string is one folder name.
+    #[cfg(windows)]
     #[test]
     fn a_windows_style_repository_path_gives_the_same_layout() {
         let placed = place(DEFAULT, Path::new(r"C:\dev\chameleon"), Some(Path::new(r"C:\Users\ada")), "warm-finch").unwrap();

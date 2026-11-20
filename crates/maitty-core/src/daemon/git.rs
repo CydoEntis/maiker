@@ -1148,7 +1148,8 @@ mod central_worktrees {
         let tmp = crate::daemon::persist::scratch_dir();
         let repo = repo_named(tmp.path(), "shop");
         let (old, _) = create_worktree_in(&repo, "old-one", None, "{repo_parent}/{repo}-worktrees/{branch}", None).expect("worktree");
-        assert_eq!(old, tmp.path().join("shop-worktrees").join("old-one"));
+        // Compared as resolved paths: Windows may hand the temp folder back in its short 8.3 form.
+        assert_eq!(old.canonicalize().ok(), tmp.path().join("shop-worktrees").join("old-one").canonicalize().ok());
         assert!(list_worktrees(&repo).expect("list").iter().any(|w| w.path.canonicalize().ok() == old.canonicalize().ok()));
         remove_worktree(&old, false, true).expect("remove");
         assert!(!tmp.path().join("shop-worktrees").exists());
