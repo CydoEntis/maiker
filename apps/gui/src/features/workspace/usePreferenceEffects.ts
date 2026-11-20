@@ -41,4 +41,8 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
   useEffect(() => {
     document.documentElement.dataset.icons = preferences.iconColor
   }, [preferences.iconColor])
+
+  useEffect(() => {
+    document.documentElement.dataset.toasts = preferences.toastPosition
+  }, [preferences.toastPosition])
 }

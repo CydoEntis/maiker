@@ -36,7 +36,7 @@
 .mx-fb-mark { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 16px; font: 800 13px/18px var(--mono); color: var(--edge); }
 .mx-fb-mark .mx-status-icon.is-working { --working: var(--edge); }
 
-/* ---- toasts: bottom right, 360px, newest above the others ---- */
+/* ---- toasts: bottom right (or top right, Settings › Notifications), 360px, newest above the others ---- */
 .mx-toaster { position: fixed; right: 20px; bottom: 20px; z-index: 85; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
 .mx-toast[data-float] { pointer-events: auto; display: flex; gap: 10px; padding: 12px 6px 10px 12px; color: var(--fg); background: var(--main); border: 1px solid var(--line); box-shadow: inset 3px 0 0 var(--edge), var(--pop-sh); animation: mx-fb-rise .2s var(--ease); }
 /* In the window the float material (material.css) would set its own border and shadow; the toast keeps its edge. */
@@ -49,6 +49,13 @@
 .mx-toast-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 7px; }
 .mx-toast-x { flex: none; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; color: var(--dim); font-size: 13px; }
 .mx-toast-x:hover { background: var(--m-hover); color: var(--fg); }
+/* The position is a setting on <html> (usePreferenceEffects). */
+:root[data-toasts="top"] .mx-toaster { bottom: auto; top: 20px; }
+:root[data-toasts="top"] .mx-toast[data-float] { animation-name: mx-fb-drop; }
+.mx-toast-context { font: 500 11.5px var(--mono); color: var(--dim); overflow-wrap: anywhere; }
+/* The collapsed stack's one line; it takes the pointer so hovering it opens the rest. */
+.mx-toast-more { pointer-events: auto; align-self: flex-end; padding: 0 2px; font-size: 11.5px; color: var(--dim); }
+@keyframes mx-fb-drop { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
 @keyframes mx-fb-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
 @keyframes mx-fb-fade { from { opacity: 0; } to { opacity: 1; } }
 

@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 import { DAEMON_NAME } from '@/brand'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -197,14 +197,15 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ hideSuccessfulTools: true }))
   })
 
-  it('shows a test toast, and offers no place to move toasts: they always appear at the bottom right', async () => {
+  it('shows a test toast, and moves the toasts to the top right when asked', async () => {
     const user = userEvent.setup()
     const onTestNotice = vi.fn()
-    renderSettings('notifications', { onTestNotice })
+    const { onChange } = renderSettings('notifications', { onTestNotice })
 
-    expect(screen.queryByRole('group', { name: 'Notification position' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Show a test' }))
     expect(onTestNotice).toHaveBeenCalledTimes(1)
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Toast position' })).getByRole('radio', { name: 'Top right' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, toastPosition: 'top' })
   })
 
   it('keeps the two update switches on General, and the update itself at the foot of the nav', async () => {

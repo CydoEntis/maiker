@@ -510,6 +510,7 @@ const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creatio
 const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
 const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
 const SIDE_OPTIONS = [['left', 'Left'], ['right', 'Right']] as const
+const TOAST_POSITION_OPTIONS = [['bottom', 'Bottom right'], ['top', 'Top right']] as const
 const ICON_OPTIONS = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] as const
 const DENSITY_OPTIONS = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['spacious', 'Spacious']] as const
 const UI_TEXT_OPTIONS = [[UI_TEXT_SIZE_SMALL, 'Small'], [UI_TEXT_SIZE_DEFAULT, 'Medium'], [UI_TEXT_SIZE_LARGE, 'Large']] as const
@@ -862,6 +863,7 @@ const CHAT_TEXT_SIZE_OPTIONS: ReadonlyArray<readonly [number, string]> = CHAT_TE
 
 function NotificationsSection({ preferences, update, onTestNotice }: { preferences: SettingsPreferences; update: Update; onTestNotice: (() => void) | undefined }) {
   return (
+    <>
     <Card
       title="System notifications"
       foot="Clicking a notification brings the window forward and shows that session. It never shows what the agent asked, so nothing private appears on a locked screen."
@@ -875,11 +877,17 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
       <Row label="Error" detail="A session's program exited with an error.">
         <Switch aria-label="Notify when a session errors" checked={preferences.notifyError} onCheckedChange={(value) => { update('notifyError', value) }} />
       </Row>
+    </Card>
+    <Card title="In-window toasts" foot="Notes and successes go after 5 seconds, or when you move off them. Anything that needs you stays until you act.">
+      <Row label="Toast position" detail="Which right-hand corner the toasts stack in.">
+        <SegmentedChoice label="Toast position" value={preferences.toastPosition} options={TOAST_POSITION_OPTIONS} onChange={(value) => { update('toastPosition', value) }} />
+      </Row>
       {onTestNotice && (
-        <Row label="Try it" detail="Shows a toast like the ones above, at the bottom right. Done is green, needs you amber and an error red.">
+        <Row label="Try it" detail="Shows a toast like the ones above. Done is green, needs you amber and an error red.">
           <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>
         </Row>
       )}
     </Card>
+    </>
   )
 }

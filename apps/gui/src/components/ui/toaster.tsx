@@ -1,6 +1,6 @@
 import * as React from "react"
 import { copyText } from "@/lib/clipboard"
-import { MOST_TOASTS, readingToasts, toast, useToasts, type ToastAction, type ToastItem, type ToastKind } from "@/lib/toast"
+import { COLLAPSE_AT, readingToasts, toast, useToasts, type ToastAction, type ToastItem, type ToastKind } from "@/lib/toast"
 import { CopyDetails, FeedbackButton, FeedbackMark, type FeedbackTone } from "./feedback"
 
 const TONE: Record<ToastKind, FeedbackTone> = { success: "ok", info: "info", error: "error", warning: "caution", needs: "needs", progress: "working" }
@@ -36,6 +36,7 @@ function ToastView({ item }: { item: ToastItem }) {
           {item.title}
           {item.count > 1 && !item.countInTitle && <span className="mx-toast-count">×{item.count}</span>}
         </span>
+        {item.context !== undefined && <span className="mx-toast-context">{item.context}</span>}
         {item.description !== undefined && <span className="mx-toast-reason">{item.description}</span>}
         {(item.action !== undefined || item.secondary !== undefined || item.details !== undefined) && (
           <span className="mx-toast-actions">
@@ -53,14 +54,18 @@ function ToastView({ item }: { item: ToastItem }) {
 }
 
 /**
- * Where every toast is drawn: bottom right, 360px, newest above the others, at most three at once. Toasts that wait while
+ * Where every toast is drawn: the corner Settings chose, 360px, newest above the others. From `COLLAPSE_AT` toasts on, only
+ * the newest shows with "N more, hover to see all"; the pointer or the keys on the stack open it. Toasts that wait while
  * the window has no line to its service are not drawn. Nothing hides while the pointer or the keys are on a toast.
  */
 function Toaster() {
   const { items, held } = useToasts()
   const region = React.useRef<HTMLElement>(null)
-  const shown = held ? [] : items.slice(0, MOST_TOASTS)
-  const any = shown.length > 0
+  const [open, setOpen] = React.useState(false)
+  const visible = held ? [] : items
+  const collapsed = visible.length >= COLLAPSE_AT && !open
+  const shown = collapsed ? visible.slice(0, 1) : visible
+  const any = visible.length > 0
   React.useEffect(() => {
     if (!any) return undefined
     const jump = (event: KeyboardEvent) => {
@@ -75,17 +80,20 @@ function Toaster() {
   }, [any])
   // A toast that goes away under the pointer would never send pointerleave, so reading ends with the last one.
   React.useEffect(() => { if (!any) readingToasts(false) }, [any])
+  // Likewise the stack closes with its last toast (state set during render, as React allows).
+  if (!any && open) setOpen(false)
   return (
     <section
       ref={region}
       className="mx-toaster"
       aria-label="Notifications"
       aria-live="polite"
-      onPointerEnter={() => { readingToasts(true) }}
-      onPointerLeave={() => { readingToasts(false) }}
-      onFocus={() => { readingToasts(true) }}
-      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) readingToasts(false) }}
+      onPointerEnter={() => { readingToasts(true); setOpen(true) }}
+      onPointerLeave={() => { readingToasts(false); setOpen(false) }}
+      onFocus={() => { readingToasts(true); setOpen(true) }}
+      onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) { readingToasts(false); setOpen(false) } }}
     >
+      {collapsed && <span className="mx-toast-more">{visible.length - 1} more, hover to see all</span>}
       {shown.map((item) => <ToastView key={item.id} item={item} />)}
     </section>
   )

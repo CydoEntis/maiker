@@ -12,7 +12,7 @@ const DEFAULTS: SettingsPreferences = {
   notifyNeedsYou: true,
   notifyFinished: true,
   notifyError: true,
-  notificationSound: false,
+  notificationSound: false, toastPosition: 'bottom',
   terminalFontSize: 13,
   terminalFontFamily: '',
   terminalFontWeight: 400,
@@ -45,6 +45,14 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: false })
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cursorBlink: true }))
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: true })
+  })
+
+  it('stacks toasts at the bottom right until told otherwise, and ignores a value it does not know', () => {
+    expect(readSettingsPreferences().toastPosition).toBe('bottom')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ toastPosition: 'top' }))
+    expect(readSettingsPreferences().toastPosition).toBe('top')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ toastPosition: 'left' }))
+    expect(readSettingsPreferences().toastPosition).toBe('bottom')
   })
 
   it('installs updates when idle by default, and a stored off stays off', () => {
@@ -101,7 +109,7 @@ describe('settings preferences', () => {
   })
 
   it('reads preferences saved before the terminal settings existed', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 10, startFolder: '~/code' }))
 
     expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
   })

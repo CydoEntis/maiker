@@ -17,7 +17,7 @@ describe('updated notice', () => {
     return onDone
   }
 
-  it('says so in a success toast that goes after four seconds, as every success does', () => {
+  it('says so in a success toast that goes after five seconds, as every success does', () => {
     const onDone = show()
     expect(screen.getByRole('status')).toHaveTextContent('Updated to 0.65.0')
 

@@ -181,9 +181,9 @@ There are no banners. Every surface is the Folded float (a `--line2` hairline, t
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
-- **Toasts** (`toast.*`). Bottom right, 16px in, 360px wide, newest on top, at most 3. Title 13px 600, the reason 12.5px
+- **Toasts** (`toast.*`). Bottom right (Settings › Notifications › Toast position can move them to the top right), 16px in, 360px wide, newest on top. From 3 toasts on only the newest shows, with "N more, hover to see all" above it; the pointer or focus on the stack opens the rest. An optional muted context line (the project or machine, `context`) sits under the title. Title 13px 600, the reason 12.5px
   `--fg2` up to three lines, the actions on their own row, a ✕ at the top right. Errors, warnings, needs-you and progress
-  stay until dismissed or replaced; success and notes go after 4 s and wait while the pointer or focus is on the stack.
+  stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`) and wait while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
   OS failure of a known kind in plain words), with **Copy details** when the tool's own text says more (CODE-STANDARDS ›
   error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
@@ -1111,7 +1111,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   General › Updates row). Right after the app restarts into an update, an older service is restarted as part of that
   update at the same quiet moment, with no second question, whatever the service switch says. Idle means no agent working or waiting on an answer, no keyboard input
   for 5 minutes, and the window unfocused or minimized. After the relaunch
-  a success toast "Updated to X" with **What’s new** for 4 s (dismissable), and What's new opens a 460 px dialog with the release's
+  a success toast "Updated to X" with **What’s new** for 5 s (dismissable), and What's new opens a 460 px dialog with the release's
   notes and "No session was interrupted."
 - **Sidebar position.** Settings › Appearance › Sidebar position, or the palette, puts the sidebar
   on the left or right. On the right the window mirrors: the resize edge is on its left, the narrow-window

@@ -8,7 +8,7 @@ describe('the toast store', () => {
   beforeEach(() => { vi.useFakeTimers(); resetToasts() })
   afterEach(() => { resetToasts(); vi.useRealTimers() })
 
-  it('hides a success or a note after four seconds, and keeps a failure, a warning, a needs-you and a progress toast', () => {
+  it('hides a success or a note after five seconds, and keeps a failure, a warning, a needs-you and a progress toast', () => {
     toast.success('Copied')
     toast.info('Put away Parser fix')
     toast.error('Could not save the file')
@@ -21,6 +21,13 @@ describe('the toast store', () => {
     expect(shown().map((item) => item.kind)).toEqual(['progress', 'needs', 'warning', 'error'])
     vi.advanceTimersByTime(TOAST_HIDE_MS * 10)
     expect(shown()).toHaveLength(4)
+  })
+
+  it('keeps a context line, the project or machine, and leaves it off when none is given', () => {
+    toast.info('Put away Parser fix', { context: 'chameleon' })
+    toast.info('Copied', { context: '' })
+    expect(shown()[1]).toMatchObject({ context: 'chameleon' })
+    expect(shown()[0]).not.toHaveProperty('context')
   })
 
   it('puts the newest first', () => {

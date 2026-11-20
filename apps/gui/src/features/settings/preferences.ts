@@ -28,6 +28,8 @@ export type SidebarSide = 'left' | 'right'
 export type SidebarOrder = 'creation' | 'priority'
 /** What the sidebar's headings are: what each session is doing, its project, or its machine. */
 export type SidebarGroup = 'status' | 'project' | 'machine'
+/** Which corner the toasts stack in. */
+export type ToastPosition = 'bottom' | 'top'
 /** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
 export type TerminalDock = 'bottom' | 'right' | 'full'
 /** Square or rounded corners, the one shape choice of the desktop's look (`theme/corners.ts`). Kept by this window alone. */
@@ -75,6 +77,8 @@ export type SettingsPreferences = {
   /** A session's program exited with an error (a native notification, while the window is in the background). */
   notifyError: boolean
   notificationSound: boolean
+  /** The right-hand corner the in-window toasts stack in. */
+  toastPosition: ToastPosition
   terminalFontSize: number
   /** One family name for the terminal text; empty uses the bundled Geist Mono. */
   terminalFontFamily: string
@@ -187,6 +191,7 @@ function defaults(): SettingsPreferences {
     notifyFinished: true,
     notifyError: true,
     notificationSound: false,
+    toastPosition: 'bottom',
     terminalFontSize: 13,
     terminalFontFamily: '',
     terminalFontWeight: DEFAULT_FONT_WEIGHT,
@@ -292,6 +297,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
       notifyError: bool(preferences.notifyError, fallback.notifyError),
       notificationSound: bool(preferences.notificationSound, fallback.notificationSound),
+      toastPosition: preferences.toastPosition === 'top' || preferences.toastPosition === 'bottom' ? preferences.toastPosition : fallback.toastPosition,
       terminalFontSize: terminalFontSize(preferences.terminalFontSize, fallback.terminalFontSize),
       terminalFontFamily: isFontFamily(preferences.terminalFontFamily) ? preferences.terminalFontFamily.trim() : fallback.terminalFontFamily,
       terminalFontWeight: isFontWeight(preferences.terminalFontWeight) ? preferences.terminalFontWeight : fallback.terminalFontWeight,
