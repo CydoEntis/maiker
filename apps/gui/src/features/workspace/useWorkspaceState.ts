@@ -30,7 +30,8 @@ import { useAgentExits } from './useAgentExits'
 import { readMachineNicknames } from '@/data/machineNicknames'
 import type { OpenSubagent } from './model/subagents'
 import { useSharedSettings } from '@/features/settings/sharedSettings'
-import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type Layout, MAX_PANES, openArrangement, type SplitDirection, splitPane, visibleSessionIds } from './model/layout'
+import { isShell } from './model/sidebar'
+import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type Layout, MAX_PANES, openArrangement, removeSessions, type SplitDirection, splitPane, visibleSessionIds } from './model/layout'
 import { LAYOUT_RESET_NOTICE, readLayout, writeLayout } from './model/layoutStorage'
 import { byPriority } from './model/attentionOrder'
 import { folderNameOf, inCreationOrder, type SessionView, tildePath } from './model/session'
@@ -187,6 +188,8 @@ export function useWorkspaceState() {
   // With the window in the background nothing is being looked at, so a session that finishes then keeps its unread dot.
   const visibleKey = windowFocused ? [...visibleSessionIds(layout)].sort().join(' ') : ''
   // Every session some layout shows: one the daemon lists before its pane is placed is kept off the sidebar until it is.
+  // The whole app is in one view. In the Chat view no plain shell is made or shown: a terminal is the dock under a chat.
+  const chatView = preferences.openSessionsIn === 'chat'
   const openIds = useMemo(() => new Set(layout.arrangements.flatMap((candidate) => candidate.panes.map((pane) => pane.sessionId))), [layout.arrangements])
   const [machineNicknames, setMachineNicknames] = useState(readMachineNicknames)
   const [renamingMachine, setRenamingMachine] = useState<string | null>(null)
@@ -197,13 +200,17 @@ export function useWorkspaceState() {
   // An agent's own terminals are tabs of that agent, not sessions to list; one whose agent is gone is listed again.
   const agentTerminals = useMemo(() => liveAgentTerminals(savedAgentTerminals, new Set(sessionMap.keys())), [savedAgentTerminals, sessionMap])
   const ownedTerminals = useMemo(() => ownedTerminalIds(agentTerminals), [agentTerminals])
+  // A shell pane left open from the Terminal view is taken out of the Chat view's layout (state adjusted while rendering, as it follows from the view); the shell itself keeps running.
+  const shellPanes = chatView ? layout.arrangements.flatMap((tab) => tab.panes.map((pane) => pane.sessionId)).filter((id) => { const session = sessionMap.get(id); return session !== undefined && isShell(session) && !ownedTerminals.has(id) }) : []
+  if (shellPanes.length > 0) setLayout(removeSessions(layout, new Set(shellPanes)))
   // A session the daemon lists a moment before its pane exists would show in the sidebar and then jump once placed.
   const sidebarSessions = useMemo(() => {
     // A terminal made by splitting a pane is listed like any other: hiding it left panes on screen with an empty sidebar.
-    const listed = ordered.filter((session) => !ownedTerminals.has(session.id))
+    // In the Chat view a plain shell is not a session of its own (a terminal is the dock under a chat): it keeps running and is listed again in the Terminal view.
+    const listed = ordered.filter((session) => !ownedTerminals.has(session.id) && !(chatView && isShell(session)))
     if (startedFrom === null) return listed
     return listed.filter((session) => startedFrom.has(session.id) || openIds.has(session.id))
-  }, [ordered, startedFrom, openIds, ownedTerminals])
+  }, [ordered, startedFrom, openIds, ownedTerminals, chatView])
 
   // New sessions go to the machine of the session in front, else this computer.
   const focusedMachineNumber = focusedSession?.machine ?? LOCAL_MACHINE
@@ -222,8 +229,6 @@ export function useWorkspaceState() {
   const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded } = useRecentSessions(startNewChat, starting)
   const [openProject, setOpenProject] = useOpenProjectState()
 
-  // The whole app is in one view. In the Chat view no plain shell is made: a terminal is the dock under a chat.
-  const chatView = preferences.openSessionsIn === 'chat'
   const split = useCallback((paneId: string | null, direction: SplitDirection) => {
     const tab = activeArrangement(layout)
     if (!tab) return

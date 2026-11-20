@@ -77,6 +77,8 @@ const REFUSAL = (feature: string) => `${feature} is local-only in v1: the files 
 
 async function openRemotePane() {
   window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
+  // A plain shell is a session of its own only in the Terminal view.
+  window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
   const user = userEvent.setup()

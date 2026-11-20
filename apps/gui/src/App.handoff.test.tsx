@@ -1094,6 +1094,7 @@ describe('desktop overlays and pane tools', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
+    setSettings()
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.startShellSession.mockResolvedValue(undefined)
     daemon.sendTerminalInput.mockResolvedValue(undefined)
@@ -1215,6 +1216,7 @@ describe('desktop overlays and pane tools', () => {
 
   it('greets a first launch, saves the choices, starts in the folder, and never greets again', async () => {
     const user = userEvent.setup()
+    window.localStorage.removeItem('maiker.gui.settings.v1')
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.agentsInstalled.mockResolvedValue(['claude'])
     const app = renderDesktopApp({ firstRun: true })
@@ -1255,6 +1257,7 @@ describe('desktop overlays and pane tools', () => {
 
   it('skips the setup, steps back with Escape, and does not greet a window that already has settings', async () => {
     const user = userEvent.setup()
+    window.localStorage.removeItem('maiker.gui.settings.v1')
     renderDesktopApp({ firstRun: true })
     const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
 
@@ -1473,21 +1476,6 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
   })
 
-  it('does not make a terminal from the New terminal command in the Chat view: it says a chat is needed first', async () => {
-    setSettings({ openSessionsIn: 'chat' })
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
-    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'terminal under')
-    await user.keyboard('{Enter}')
-
-    expect(await screen.findByText('Open a chat first: the terminal is docked under it.')).toBeInTheDocument()
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
-  })
-
   it('opens the terminal docked under the chat from the New terminal command in the Chat view', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
@@ -1502,27 +1490,15 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })
 
-  it('does not split into a plain shell in the Chat view', async () => {
+  it('shows no plain shell in the Chat view: not in the sidebar and not as a pane, and it is back in the Terminal view', async () => {
     setSettings({ openSessionsIn: 'chat' })
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), claude(3, `${HOME}/b`)])
     renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
 
-    await user.keyboard('{Control>}\\{/Control}')
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
-
-    expect(await screen.findByText(/dock a terminal under the chat instead/)).toBeInTheDocument()
+    await screen.findByRole('button', { name: 'New session, claude, idle' })
+    expect(screen.queryByRole('region', { name: 'Shell in ~/a' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^a, shell/ })).not.toBeInTheDocument()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
-  })
-
-  it('shows a plain shell as its terminal in the Chat view, with no dock button for it', async () => {
-    setSettings({ openSessionsIn: 'chat' })
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-
-    expect(await screen.findByRole('region', { name: 'Shell in ~/a' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Terminal' })).not.toBeInTheDocument()
   })
 
   it('shows the Terminal button in the title bar for an agent chat in the Chat view, and it docks a terminal in the chat folder', async () => {

@@ -94,6 +94,7 @@ describe('usage and cost in the desktop app', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     window.localStorage.clear()
+    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([term(5)])
     daemon.suggestProjectFolders.mockResolvedValue([])
