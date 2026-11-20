@@ -14,8 +14,6 @@
 .mx-op-path { display: flex; align-items: center; gap: 8px; min-width: 0; padding-left: 12px; border-radius: var(--r-control); background: var(--m-well); border: 1px solid var(--line); color: var(--dim); font-family: var(--mono); font-size: 12.5px; }
 .mx-op-path input { flex: 1; min-width: 0; border: 0; background: transparent; font-family: var(--mono); font-size: 13px; padding-left: 0; }
 .mx-op-path > button { margin-right: 6px; }
-.mx-op-path:focus-within { border-color: var(--line2); box-shadow: var(--focus-underline); }
-.mx-rename .mx-op-path input:focus-visible { box-shadow: none; }
 
 .mx-op-search { display: flex; gap: 8px; }
 .mx-op-search input { flex: 1; min-width: 0; }

@@ -53,7 +53,7 @@
 .session-row-menu { opacity: 0; position: absolute; right: 3px; top: 4px; }
 .session-row-shell:hover .session-row-menu, .session-row-shell:focus-within .session-row-menu { opacity: 1; }
 .session-row-rename { align-items: center; display: flex; gap: 2px; min-height: 38px; padding: 3px 2px 3px 7px; }
-.session-row-rename input { background: transparent; border: 1px solid transparent; border-radius: 0; box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); color: var(--foreground); flex: 1; font: inherit; min-width: 0; outline: none; padding: 5px 6px; }
+.session-row-rename input { background: transparent; border: 1px solid transparent; border-radius: 0; box-shadow: none; color: var(--foreground); flex: 1; font: inherit; min-width: 0; outline: none; padding: 5px 6px; }
 .session-row-copy { display: flex; flex: 1; flex-direction: column; gap: 5px; min-width: 0; }
 .session-row-top, .session-row-bottom { gap: 6px; justify-content: space-between; min-width: 0; }
 .session-row-title { color: var(--foreground); flex: 1; font-size: 11px; font-weight: 560; line-height: 1.35; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -186,7 +186,7 @@
 .delivery-notice.is-unknown { background: color-mix(in srgb, var(--needs-you) 10%, var(--card)); border-color: color-mix(in srgb, var(--needs-you) 45%, var(--border)); color: var(--foreground); }
 .delivery-notice.is-not-delivered { background: var(--card); color: var(--foreground); }
 .composer-box { background: var(--card); border: 1px solid var(--input); border-radius: 9px; box-shadow: 0 7px 22px rgb(0 0 0 / 12%); padding: 8px 9px 7px 12px; transition: border-color var(--t-fast) var(--ease), box-shadow var(--t-fast) var(--ease); }
-.composer-box:focus-within { border-color: var(--primary); }
+.composer-box:focus-within { border-color: var(--field-focus); }
 .composer-box textarea { background: transparent; border: 0; box-shadow: none; color: var(--foreground); font-size: 12px; line-height: 1.55; min-height: 51px; padding: 2px 0 6px; resize: vertical; }
 .composer-box textarea::placeholder { color: var(--muted-foreground); }
 .composer-box textarea:focus-visible { outline: none; }
@@ -899,7 +899,7 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .composer-wrap { max-width: 760px; padding: 0 20px 16px; }
 .composer-note { font-size: 12.5px; margin: 0 0 8px; padding: 0 4px; }
 .composer-box { background: var(--m-raise); border: 1px solid var(--line2); border-radius: 14px; box-shadow: 0 12px 40px rgb(0 0 0 / 28%); overflow: hidden; padding: 0; transition: border-color var(--t-fast) var(--ease); }
-.composer-box:focus-within { border-color: var(--accent); }
+.composer-box:focus-within { border-color: var(--field-focus); }
 .composer-box textarea { font-size: 14px; line-height: 1.55; max-height: 200px; min-height: 0; padding: 12px 14px 4px; resize: none; }
 .composer-box textarea::placeholder { color: #6f7a86; }
 .composer-actions { gap: 6px; padding: 6px 8px 8px 10px; }

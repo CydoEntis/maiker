@@ -22,6 +22,10 @@
      at `--fg` here, never given a rule of its own. A bordered control keeps its own border and lists it first. */
   --focus-line: var(--accent-text);
   --focus-underline: inset 0 -1px 0 var(--focus-line);
+  /* A text field is the exception: the whole 1px edge takes the focus colour (a real border turns `border-color`; a field that
+     draws its edge in `box-shadow` uses `--field-focus-edge`), never an underline, ring or glow (`material.css`, `focusStyle.test.ts`). */
+  --field-focus: var(--focus-line);
+  --field-focus-edge: inset 0 0 0 1px var(--field-focus);
   --link: var(--ansi-blue);
   /* Code */
   --code-kw: var(--ansi-mag);

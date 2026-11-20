@@ -88,7 +88,6 @@
 .mx-token-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
 .mx-token-head > span:first-child { font-weight: 600; color: var(--fg2); }
 .mx-chip-menu.is-token .mx-chip-search { flex: none; margin: 8px 8px 4px; height: 32px; padding: 0 9px; background: var(--m-well); box-shadow: none; border: 1px solid var(--line2); font-size: 12.5px; }
-.mx-chip-menu.is-token .mx-chip-search:focus-within { box-shadow: var(--focus-underline); }
 .mx-chip-menu.is-token .mx-chip-search input { font-size: 12.5px; }
 .mx-chip-menu.is-token .mx-chip-list { flex: 1; min-height: 0; gap: 0; padding: 2px 4px 6px; }
 .mx-chip-menu.is-token .mx-chip-row { min-height: 32px; padding: 4px 8px; gap: 9px; font-size: 13px; }
@@ -122,7 +121,6 @@
 .mx-fp-machine-word.is-asleep { color: var(--warn); }
 .mx-fp-find { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 6px; }
 .mx-fp-field { display: flex; align-items: center; height: 34px; padding: 0 0 0 10px; gap: 8px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
-.mx-fp-field:focus-within { box-shadow: var(--focus-underline); }
 .mx-fp-field input { flex: 1; min-width: 0; height: 100%; padding: 0 10px 0 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
 .mx-fp-path { display: flex; align-items: center; gap: 2px; min-width: 0; height: 24px; }
 .mx-fp-up { flex: none; width: 24px; height: 24px; margin-right: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); }
@@ -140,7 +138,6 @@
 .mx-fp-new-button:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
 .mx-fp-new-button:disabled { opacity: .45; }
 .mx-fp-new { margin: 0 0 4px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
-.mx-fp-new:focus-within { box-shadow: var(--focus-underline); }
 .mx-fp-new-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 0 8px; }
 .mx-fp-new input { min-width: 0; height: 34px; padding: 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
 .mx-fp-new input:disabled { opacity: .6; }

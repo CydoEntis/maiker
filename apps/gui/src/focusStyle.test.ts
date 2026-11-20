@@ -5,7 +5,8 @@ import { describe, expect, it } from 'vitest'
 import { contrastRatio } from './features/workspace/theme/color'
 import { THEMES } from './features/workspace/theme/themes'
 
-// docs/UI.md, *Focus is one style*: a 1px accent underline drawn inside the control, never a box, ring, glow or outline.
+// docs/UI.md, *Focus is one style*: a 1px accent underline drawn inside the control, never a box, ring, glow or outline; a text
+// field is the one exception and turns its whole 1px edge to `--field-focus`.
 // Vitest hands every stylesheet to a test as an empty string, so the globs only name the files and their text is read from disk.
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 const SHEETS: Record<string, string> = Object.fromEntries(Object.keys(import.meta.glob('./**/*.css')).map((path) => [path, read(path)]))
@@ -56,13 +57,32 @@ const splitLayers = (value: string): string[] => {
 }
 const allowed = (rule: Rule, list: ReadonlyArray<readonly [RegExp, string]>): boolean => list.some(([pattern]) => pattern.test(rule.selector))
 
-describe('focus is one underline', () => {
+describe('focus is one underline, and a field turns its edge', () => {
   it('reads the stylesheets it checks', () => {
     expect(focusRules.length).toBeGreaterThan(40)
   })
 
   it('defines the one token', () => {
     expect(SHEETS['./tokens.css']).toMatch(/--focus-underline:\s*inset 0 -1px 0 var\(--focus-line\)/)
+  })
+
+  it('defines the field focus token on the focus colour', () => {
+    expect(SHEETS['./tokens.css']).toMatch(/--field-focus:\s*var\(--focus-line\)/)
+    expect(SHEETS['./tokens.css']).toMatch(/--field-focus-edge:\s*inset 0 0 0 1px var\(--field-focus\)/)
+  })
+
+  it('turns a text field edge to the field focus colour, with no underline, ring or glow', () => {
+    const fieldRules = RULES.filter((rule) => rule.where.startsWith('./material.css') && /:is\(input, textarea, select\)/.test(rule.selector))
+    expect(fieldRules).toHaveLength(1)
+    expect(fieldRules[0]?.body).toMatch(/border-color:\s*var\(--field-focus\)/)
+    expect(fieldRules[0]?.body).toMatch(/box-shadow:\s*none/)
+  })
+
+  it('leaves no field with its own underline on focus', () => {
+    const FIELD = /\b(input|textarea|select|search|field|palette-input|composer-box)\b/
+    const NOT_A_FIELD = /button|btn|row|chip-menu|option|tab|theme-card|stops|resizer|close/
+    const offenders = focusRules.filter(({ selector, body }) => FIELD.test(selector) && /--focus-underline/.test(body) && !NOT_A_FIELD.test(selector)).map(({ where, selector }) => `${where} ${selector}`)
+    expect(offenders).toEqual([])
   })
 
   it('never sets an outline in a focus rule, only removes it', () => {
@@ -83,7 +103,7 @@ describe('focus is one underline', () => {
       const shadow = /(?:^|[;\s])box-shadow\s*:\s*([^;]*)/.exec(body)?.[1]
       if (shadow === undefined || /^none\b/.test(shadow.trim())) return false
       const layers = splitLayers(shadow)
-      return layers.some((layer) => !/--focus-underline|--focus-line|--pop-sh|--c-field-sh/.test(layer) && !/^inset 0 0 0 1px /.test(layer) && !NEEDS_UNDERLINE.test(layer))
+      return layers.some((layer) => !/--focus-underline|--focus-line|--field-focus-edge|--pop-sh|--c-field-sh/.test(layer) && !/^inset 0 0 0 1px /.test(layer) && !NEEDS_UNDERLINE.test(layer))
     }).map(({ where, selector }) => `${where} ${selector}`)
     expect(offenders).toEqual([])
   })
