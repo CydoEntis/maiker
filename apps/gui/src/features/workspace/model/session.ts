@@ -222,7 +222,7 @@ export const STATUS_WORD: Record<SessionStatus, string> = {
   working: 'working',
   needs: 'needs you',
   limited: 'limited',
-  done: 'finished',
+  done: 'done',
   error: 'stopped',
   idle: 'idle',
   unknown: 'offline',
@@ -365,7 +365,7 @@ export function statusText(session: SessionView, now: number = Date.now()): stri
     case 'limited':
       return limitedWord(session.resumeAt, now)
     case 'done':
-      return 'finished'
+      return 'done'
     case 'error':
       return 'exited with error'
     case 'unknown':

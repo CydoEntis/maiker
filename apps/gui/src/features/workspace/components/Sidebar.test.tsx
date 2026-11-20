@@ -37,7 +37,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   return { ...view, again: (next: Partial<SidebarProps>) => { view.rerender(<Sidebar {...props} {...next} />) } }
 }
 
-const rows = () => screen.getAllByRole('button', { name: /, (idle|working|needs you|finished|stopped|offline)$/ })
+const rows = () => screen.getAllByRole('button', { name: /, (idle|working|needs you|done|stopped|offline)$/ })
 const names = () => rows().map((row) => row.getAttribute('aria-label')?.split(',')[0])
 
 describe('the sidebar', () => {
@@ -216,7 +216,7 @@ describe('a session row', () => {
     expect(head).toHaveTextContent('2')
     await userEvent.click(head)
     const list = screen.getByRole('list', { name: 'Put away' })
-    expect(within(list).getAllByRole('button', { name: /, (idle|finished)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])).toEqual(['Away agent', 'Away shell'])
+    expect(within(list).getAllByRole('button', { name: /, (idle|done)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])).toEqual(['Away agent', 'Away shell'])
     expect(screen.queryByRole('list', { name: 'Terminals' })).toBeNull()
   })
 
@@ -460,7 +460,7 @@ describe('grouped by status', () => {
 
   it('lists what needs you, then working, finished and idle, each with its count, and leaves out a status nothing has', () => {
     show(mixed(), { grouping: 'status' })
-    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle'])
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Done', 'Idle'])
     expect(within(screen.getByRole('list', { name: 'Needs you' })).getByRole('button', { name: /^Asking,/ })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^Needs you\s*1$/ })).toBeTruthy()
     cleanup()
@@ -470,7 +470,7 @@ describe('grouped by status', () => {
 
   it('lists a shell with the agents by its status, with no section of its own', () => {
     show([session(9, { named: true, title: 'Dev server', status: 'working' }), ...mixed()], { grouping: 'status' })
-    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Finished', 'Idle'])
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Needs you', 'Working', 'Done', 'Idle'])
     expect(within(screen.getByRole('list', { name: 'Working' })).getByRole('button', { name: /^Dev server,/ })).toBeTruthy()
   })
 

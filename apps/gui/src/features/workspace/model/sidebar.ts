@@ -147,7 +147,7 @@ export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle'
 const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint: string }> = [
   { key: 'needs', name: 'Needs you', hint: 'waiting on you' },
   { key: 'working', name: 'Working', hint: 'running now' },
-  { key: 'done', name: 'Finished', hint: 'ready to review' },
+  { key: 'done', name: 'Done', hint: 'ready to review' },
   { key: 'idle', name: 'Idle', hint: 'nothing to do' },
 ]
 

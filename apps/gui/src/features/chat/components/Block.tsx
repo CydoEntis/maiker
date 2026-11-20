@@ -3,7 +3,7 @@ import { Icon } from '@/features/workspace/components/glyphs'
 
 /**
  * The chat's block (design: command, diff and code blocks): a hairline box on the well with a 34px head that
- * opens and closes it. The corners come from `data-fold` (cut under Folded, the token's radius otherwise), so a block never
+ * opens and closes it. The corners come from the radius tokens, so a block never
  * sets its own. A failed one wears a 2px red edge; one a request waits on, an amber border.
  */
 type BlockProps = Omit<HTMLAttributes<HTMLElement>, 'className'> & {

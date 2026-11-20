@@ -27,7 +27,7 @@ describe('Steps', () => {
 
   it('names each step state with the shared mark, so colour is never the only signal', () => {
     render(<Steps label="Adding" steps={STEPS} />)
-    expect(screen.getAllByRole('img').map((mark) => mark.getAttribute('aria-label'))).toEqual(['done', 'needs you', 'waiting'])
+    expect(screen.getAllByText(/^(done|needs you|waiting)$/).map((word) => word.textContent)).toEqual(['done', 'needs you', 'waiting'])
   })
 
   it('puts the fix of a step that needs you in an amber card and keeps it usable', async () => {

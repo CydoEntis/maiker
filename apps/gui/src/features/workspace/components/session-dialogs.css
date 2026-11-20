@@ -175,8 +175,6 @@
 
 /* The dialog's own box takes focus (so Esc and Tab have a place to start), and it is no field: it keeps its shadow, with no underline. */
 .mx-app :is(.mx-rename, .mx-fp, .mx-palette):focus-visible { box-shadow: var(--pop-sh-dialog); }
-/* A palette row is a row: the cut of the corners' setting, not a pill. */
-:root[data-corners="folded"] .mx-app .mx-palette-row { border-radius: 5px 0 5px 0 !important; }
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
 :is(.mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }

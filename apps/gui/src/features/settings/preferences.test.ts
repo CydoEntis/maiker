@@ -141,6 +141,8 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().corners).toBe('rounded')
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'folded', cornersEra: 2 }))
     expect(readSettingsPreferences().corners).toBe('rounded')
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'folded', cornersEra: 2, style: 'pixel' }))
+    expect(readSettingsPreferences().corners).toBe('rounded')
   })
 
   it('reads the Claude view saved before there was one setting as the one setting, and a pre-redesign Terminal as Chat', () => {

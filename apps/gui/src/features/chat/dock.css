@@ -1,6 +1,6 @@
 /* The dock between the chat and the message box (docs/DESIGN.md, "The dock"): the helpers line and its list, the queue,
    and the record block a finished helpers line becomes in the chat. Colours are tokens; corners follow the root's
-   `data-corners` (Square is zeroed by material.css, Folded cuts every `data-fold` and `data-float` box there), so the
+   `data-corners` (Square is zeroed by material.css), so the
    only corner rule here is Rounded's. Focus is an accent underline, as everywhere. */
 
 @keyframes mxDockGrow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
@@ -116,9 +116,6 @@
 .mx-qd-clear { height: 26px; padding: 0 9px; font-size: 12px; color: var(--muted); }
 .mx-qd-clear:hover { background: var(--m-hover); color: var(--fg); }
 .mx-dock-note { margin: 6px 4px 0; font-size: 12px; color: var(--dim); }
-
-/* ---- Folded: a row inside a cut card is square, so the hover does not show a second cut inside the first ---- */
-:root[data-corners="folded"] .mx-app :is(.mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-head, .mx-agents-head, .mx-qd-clear, .mx-dock-marker):is(button) { border-radius: 0 !important; }
 
 /* ---- Focus: the accent underline ---- */
 :is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: var(--focus-underline); }

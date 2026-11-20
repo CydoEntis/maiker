@@ -293,7 +293,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 
 /* Layer one: what the agent waits on, a floating card above the message box (`WaitingCard`, Needs Card in the design): the
-   box's width, a --line2 border, the shared floating shadow, folded corners under Folded. It rises in, 0.2s. */
+   box's width, a --line2 border, the shared floating shadow. It rises in, 0.2s. */
 @keyframes mxRise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mx-waiting {
   position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none;
@@ -474,7 +474,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 /* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
 .mx-usage-fill { stroke: var(--fg2); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
-/* The ring follows the corners: a square path under Square and Folded, a circle under Rounded. */
+/* The ring follows the corners: a square path under Square, a circle under Rounded. */
 .mx-usage-round { display: none; }
 :root[data-corners="rounded"] .mx-usage-round { display: inline; }
 :root[data-corners="rounded"] .mx-usage-sq { display: none; }
@@ -511,11 +511,6 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
 .mx-question-slot { display: contents; }
 
-/* Folded corners (docs/DESIGN.md): chat blocks and bubbles are cut 10px, a floating action card 14px; the
-   Square and Rounded corners come from the tokens. */
-:root[data-corners="folded"] .mx-app :is(.mx-work, .mx-chat [data-slot="card"], .mx-step-card, .mx-answered) { border-radius: 10px 0 10px 0 !important; }
-:root[data-corners="folded"] .mx-app .mx-waiting { border-radius: 14px 0 14px 0 !important; }
-:root[data-corners="folded"] .mx-app .mx-chat .mx-waiting-step { border-radius: 0 !important; }
 .mx-waiting-head:has(+ .mx-waiting-body > .mx-waiting-form) { border-bottom: 0; }
 
 /* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
@@ -587,9 +582,6 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-reply-chip:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
 .mx-reply-send:not(:disabled) { border-color: var(--fg); background: var(--fg); color: var(--bg); }
 .mx-reply-send:not(:disabled):hover { background: color-mix(in oklab, var(--fg) 88%, var(--bg)); }
-:root[data-corners="folded"] .mx-app .mx-quote-strip { border-radius: 10px 0 10px 0 !important; }
-/* The answer line is an underline, not a box: it has no cut corners of its own (Folded draws them on every textarea). */
-:root[data-corners="folded"] .mx-app .mx-reply-input { --fold-line: transparent !important; --fold: 0px !important; border-radius: 0 !important; }
 
 /* A file's name in a message, in its type's colour (`--tone` from `typeTone`); the Chat setting "Colour file names" turns it off. */
 :root[data-file-colours="on"] .mx-file-name { color: var(--tone); background: color-mix(in oklab, var(--tone) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 30%, transparent); }

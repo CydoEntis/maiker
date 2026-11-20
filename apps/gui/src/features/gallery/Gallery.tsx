@@ -3,7 +3,7 @@ import { Button, IconButton } from '@/components/ui/button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
-import { StatusMark, type MarkState } from '@/components/ui/status-mark'
+import { StatusIcon, type StatusMarkKind } from '@/components/ui/status-icon'
 import { CodeChip, FileBadge, Tag, TextLink } from '@/components/ui/tag'
 import { CORNERS, withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes'
@@ -21,7 +21,7 @@ import { galleryParams, galleryHash } from './galleryParams'
  * browser preview. The hover and pressed samples are drawn with the state's own look, as the system page draws them.
  */
 
-const STATES: readonly MarkState[] = ['running', 'done', 'failed', 'stopped', 'waiting', 'needs']
+const STATES: readonly StatusMarkKind[] = ['idle', 'done', 'needs', 'working']
 const KINDS = ['primary', 'needs', 'soft', 'ghost', 'danger'] as const
 /** What hover and press look like for each kind, drawn at rest so they can be compared side by side. */
 const FORCED: Record<(typeof KINDS)[number], { hover: string; pressed: string }> = {
@@ -82,8 +82,8 @@ function Primitives() {
         </Sample>
         <Sample label="Card · hover"><Card className="border-(--line2)"><CardHead>Edge goes to line2</CardHead></Card></Sample>
         <Sample label="Card · keyboard focus"><Card className={FOCUS_RING}><CardHead>2px focus underline inside</CardHead></Card></Sample>
-        <Sample label="Card · tone=needs"><Card tone="needs"><CardHead><StatusMark state="needs" />Amber edge</CardHead></Card></Sample>
-        <Sample label="Card · tone=err"><Card tone="err"><CardHead><StatusMark state="failed" />Error edge</CardHead></Card></Sample>
+        <Sample label="Card · tone=needs"><Card tone="needs"><CardHead><StatusIcon status="needs" />Amber edge</CardHead></Card></Sample>
+        <Sample label="Card · tone=err"><Card tone="err"><CardHead>Error edge</CardHead></Card></Sample>
         <Sample label="Card · interactive (tab to it)"><Card interactive tabIndex={0}><CardHead>Hover or focus me</CardHead></Card></Sample>
       </div>
       {KINDS.map((kind) => <ButtonRow key={kind} kind={kind} />)}
@@ -112,8 +112,8 @@ function Primitives() {
         <Sample label="CodeChip · Link">
           <span className="text-sm text-(--fg2)">Run <CodeChip>pnpm test</CodeChip> or read <TextLink href="#gallery">the guide</TextLink></span>
         </Sample>
-        <Sample label="StatusMark (mark + word)">
-          {STATES.map((state) => <StatusMark key={state} state={state} word />)}
+        <Sample label="StatusIcon (the four marks, one box)">
+          {STATES.map((state) => <Captioned key={state} caption={state}><StatusIcon status={state} /></Captioned>)}
         </Sample>
         <Sample label="Fold">
           <div className="w-full border border-(--line)">

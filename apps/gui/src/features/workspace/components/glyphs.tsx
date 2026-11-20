@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { TreePine } from 'lucide-react'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { SHELL_PROCESS, type SessionStatus } from '../model/session'
+import { SHELL_PROCESS } from '../model/session'
 import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
 import { FOLDER_PATH } from './paths'
 
@@ -164,28 +164,4 @@ export function AppIcon({ process, size, dimmed = false }: { process: string; si
   if (icon) return <span className={`${className} is-${icon.kind}`} aria-hidden="true">{icon.glyph}</span>
   // Any other agent or program: its first letter, flat.
   return <span className={`${className} is-tinted`} aria-hidden="true">{program.charAt(0).toUpperCase()}</span>
-}
-
-/**
- * The 9px badge on an agent's tile: a square per status with its own glyph, so colour is never the only signal (needs
- * you `!` on the needs colour, done `✓`, failed `×`, held by the plan limit `‖`, working the spinner Settings picked).
- * An idle session has none; its tile dims instead.
- */
-export function StatusBadge({ status }: { status: SessionStatus }) {
-  switch (status) {
-    case 'working':
-      return <span className="mx-badge is-working" aria-hidden="true"><Spinner className="" /></span>
-    case 'needs':
-      return <span className="mx-badge is-needs" aria-hidden="true">!</span>
-    case 'limited':
-      return <span className="mx-badge is-limited" aria-hidden="true">‖</span>
-    case 'done':
-      return <span className="mx-badge is-done" aria-hidden="true">✓</span>
-    case 'error':
-      return <span className="mx-badge is-error" aria-hidden="true">×</span>
-    case 'unknown':
-      return <span className="mx-badge is-unknown" aria-hidden="true" />
-    case 'idle':
-      return null
-  }
 }

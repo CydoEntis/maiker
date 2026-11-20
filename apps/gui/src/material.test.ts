@@ -37,6 +37,11 @@ describe('the window material', () => {
     expect(offenders).toEqual([])
   })
 
+  it('has only the Square and Rounded corners, so no rule is keyed on the removed Folded ones', () => {
+    const offenders = Object.entries(SHEETS).filter(([, css]) => /data-corners="folded"/.test(css)).map(([path]) => path)
+    expect(offenders).toEqual([])
+  })
+
   it('has one finish, so no rule asks which finish is on and nothing blurs what is behind it', () => {
     const offenders = Object.entries(SHEETS).filter(([, css]) => /data-finish|backdrop-filter/.test(css)).map(([path]) => path)
     expect(offenders).toEqual([])

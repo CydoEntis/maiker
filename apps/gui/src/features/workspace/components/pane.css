@@ -55,8 +55,7 @@
 .mx-pane-status::after { width: 26%; background-color: var(--working); animation: mx-pane-bounce 1.3s ease-in-out infinite alternate; }
 .mx-pane-status[data-status="working"]::before { opacity: .4; }
 .mx-pane-status[data-status="working"]::after { opacity: 1; }
-.mx-pane-status[data-status="needs"]::before, .mx-pane-status[data-status="limited"]::before { background-color: var(--needs); opacity: 1; }
-.mx-pane-status[data-status="error"]::before { background-color: var(--danger); opacity: 1; }
+.mx-pane-status[data-status="needs"]::before, .mx-pane-status[data-status="limited"]::before, .mx-pane-status[data-status="error"]::before { background-color: var(--needs); opacity: 1; }
 /* 26% wide, so 285% of itself is the rest of the edge. */
 @keyframes mx-pane-bounce { from { transform: translateX(0); } to { transform: translateX(285%); } }
 :root[data-window="inactive"] .mx-pane-status::after { animation-play-state: paused; }

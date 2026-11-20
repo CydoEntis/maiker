@@ -1,6 +1,5 @@
 /* The one segmented control (Segmented in radio-group.tsx): a 28px frame on the well with a 1px edge and 2px of room,
-   22px choices, the picked one raised. Nothing outside this file styles it; a caller may only place it. The Folded
-   corners cut its frame and its first and last choice in material.css, keyed on `[role="radiogroup"][data-fold]`. */
+   22px choices, the picked one raised. Nothing outside this file styles it; a caller may only place it. */
 .mx-segmented { display: inline-flex; align-items: center; flex: none; box-sizing: border-box; height: 28px; gap: 0; padding: 2px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); }
 .mx-segmented.is-full { display: flex; flex: 1 1 auto; min-width: 0; }
 .mx-segmented > button { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 22px; padding: 0 9px; border-radius: var(--r-control); font-size: 12px; font-weight: 500; white-space: nowrap; color: var(--muted); background: transparent; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }

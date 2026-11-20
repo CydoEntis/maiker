@@ -111,7 +111,7 @@ function sessionMenuEntries(props: SidebarProps, session: SessionView): MenuEntr
     ...(props.onNewWorktree === undefined ? [] : [{ label: 'New worktree…', disabled: !props.online || session.machineName !== null || session.branch === null, run: () => { props.onNewWorktree?.(session.id) } }]),
     ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
     ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
-    // A finished agent waits under Finished until you look; this files it under Idle without opening it.
+    // A finished agent waits under Done until you look; this files it under Idle without opening it.
     ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
     ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
     ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),

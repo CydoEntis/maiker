@@ -5,7 +5,6 @@ import { Button, IconButton } from './button'
 import { Card, CardFoot, CardHead } from './card'
 import { Fold } from './fold'
 import { Progress } from './progress'
-import { StatusMark, type MarkState } from './status-mark'
 import { FileBadge, Tag, typeTone } from './tag'
 
 describe('Button', () => {
@@ -56,20 +55,6 @@ describe('Card', () => {
     expect(card).toHaveFocus()
     await user.tab()
     expect(screen.getByRole('button', { name: 'Allow' })).toHaveFocus()
-  })
-})
-
-describe('StatusMark', () => {
-  it.each<[MarkState, string]>([['running', 'running'], ['done', 'done'], ['failed', 'failed'], ['stopped', 'stopped'], ['waiting', 'waiting'], ['needs', 'needs you']])('reads %s by its mark and word, not by colour', (state, word) => {
-    render(<StatusMark state={state} word />)
-    expect(screen.getByRole('img', { name: word })).toHaveAttribute('data-state', state)
-    expect(screen.getByText(word, { selector: 'span:not([role])' })).toBeInTheDocument()
-  })
-
-  it('draws the needs mark as ! and the spinner the caller picked while running', () => {
-    render(<><StatusMark state="needs" /><StatusMark state="running" spinner={<i data-testid="picked" />} /></>)
-    expect(screen.getByRole('img', { name: 'needs you' })).toHaveTextContent('!')
-    expect(screen.getByTestId('picked')).toBeInTheDocument()
   })
 })
 

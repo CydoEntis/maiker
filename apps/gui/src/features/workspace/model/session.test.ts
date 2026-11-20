@@ -76,7 +76,7 @@ describe('session view', () => {
     const view = (status: Conversation['status'], extra: Partial<Conversation> = {}) => statusText(toSessionView(conversation(1, HOME, { status, ...extra }), HOME))
     expect(view('working')).toBe('working')
     expect(view('needs-you')).toBe('needs you')
-    expect(view('done')).toBe('finished')
+    expect(view('done')).toBe('done')
     expect(view('idle')).toBe('idle')
     expect(view('unknown', { lastKnownStatus: 'working' })).toBe('last seen working')
   })

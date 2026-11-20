@@ -126,7 +126,7 @@ describe('machine groups', () => {
 describe('status sections', () => {
   it('lists needs you, working, finished and idle in that order, and leaves out a status nothing has', () => {
     const sections = statusSections([session(1, { agent: 'codex' }), session(2, { agent: 'claude', status: 'done' }), session(3, { agent: 'claude', status: 'needs-you' })])
-    expect(sections.map((section) => [section.name, section.sessions.map((item) => item.id)])).toEqual([['Needs you', ['t3']], ['Finished', ['t2']], ['Idle', ['t1']]])
+    expect(sections.map((section) => [section.name, section.sessions.map((item) => item.id)])).toEqual([['Needs you', ['t3']], ['Done', ['t2']], ['Idle', ['t1']]])
   })
 
   it('puts an agent that stopped with what needs you', () => {

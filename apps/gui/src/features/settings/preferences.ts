@@ -255,9 +255,10 @@ function readStored(): string | null {
 }
 
 /**
- * The redesign made Folded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
+ * The redesign made Rounded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
  * defaults. A blob saved before that has no era marker, so those two are old defaults, not choices: they read as the new
- * defaults. From the marker on, a saved choice wins.
+ * defaults. From the marker on, a saved choice wins; a saved `folded` (an option that no longer exists) is no choice
+ * either, so it reads as Rounded.
  */
 const CORNERS_ERA_KEY = 'cornersEra'
 const CORNERS_ERA = 2
@@ -320,7 +321,9 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
       // Before the corner switch a window style was saved under `style`; its corners carry over.
-      corners: ((value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA && isCorners(preferences.corners) ? preferences.corners : null) ?? cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
+      corners: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA
+        ? (isCorners(preferences.corners) ? preferences.corners : fallback.corners)
+        : cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
       // Before one setting there was one per agent: what was chosen for Claude carries over.

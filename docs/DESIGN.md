@@ -175,7 +175,7 @@ frame* (Toast). The desktop app's toasts are under *Errors*.
 
 The desktop app's error states (built 2026-11-18; `components/ui/feedback.tsx`, `feedback.css`, `lib/toast.ts`,
 `components/ui/toaster.tsx`). The rule: **say it where it happened, only as loud as what it blocks, and never twice.**
-There are no banners. Every surface is the Folded float (a `--line2` hairline, the fold, the dialog shadow) with a 3px
+There are no banners. Every surface is the float (a `--line2` hairline, the dialog shadow) with a 3px
 **status edge** on its left in its tone: `--err` failed, `--caution` (`--m-mid`) a warning, `--blocked` needs you,
 `--ok` back or done, `--working` running, the accent a note. The mark before the title is the tone's glyph (`×`, `▲`,
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
@@ -212,7 +212,7 @@ its line, then outlined ones, then text ones (Copy details); Copy details says C
   Later leaves a caution **Restart needed** chip. A downloaded app update is a note toast that stays, "Maiker X is ready",
   with **Restart now** and **Later**; after the relaunch a success toast "Updated to X" offers **What’s new**.
 - **Light and dark.** The tones are the theme's own, so the same rules draw both; on the light theme a filled fix is the
-  tone at its soft ground with a darker line. Folded, Rounded and Square corners all apply through the float material.
+  tone at its soft ground with a darker line. Rounded and Square corners both apply through the float material.
 
 ## Status bar
 
@@ -306,27 +306,41 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
   Loading or Reading, the label is for screen readers only), **FileBadge** (the path with its folder dimmed and no type icon,
   then the path with its folder dimmed; a long path shortens from the front so the name stays), **CodeChip**,
-  **TextLink**, **StatusMark** (`status-mark.tsx`: running a spinner (the Settings spinner where the caller passes
-  it), done ✓, failed ×, stopped ■, waiting ·, needs you ! on the needs square; with `word`, the state's word beside
-  it in its colour), **Fold** (a 30px row: "Show 12 more lines" or "Hide"), **Progress** (a 4px bar on `--sel`),
+  **TextLink**, **StatusIcon** (`status-icon.tsx`, the one status mark; see *Status marks* below), **Fold** (a 30px row: "Show 12 more lines" or "Hide"), **Progress** (a 4px bar on `--sel`),
   **Counter**, **Divider** and **ToastCard** (`toast-card.tsx`: one line on the card with the pop shadow). The
   chat's step marks, file badges and change tags (`cardParts.tsx`) and the workspace toast are built from them. The
   gallery shows every primitive in every state, and the chat's cards at 760 and 360px, on any theme and either corners: open the app or the browser preview
   with `#gallery` (`#gallery?theme=Paper&corners=rounded`; `features/gallery/`).
-- **Corners: Folded, Rounded or Square, any theme** (Settings › Appearance › Corners, `corners`; the root carries
-  `data-corners`). Folded is the default (a saved choice wins; a window style from before the switch still maps to Rounded or Square). Corners are shape only, never colour or
+- **Design tokens are theme roles, never values.** The design handoff names its colours by role; the app reads each from the
+  role of the same job, so every theme (about 20, `themes.json` shared with the terminal app) wears the design. A hex from the
+  handoff is never written into a stylesheet or a theme: a role that looks wrong is changed in the theme.
+
+  | Handoff | Role | Note |
+  | --- | --- | --- |
+  | `--bg` | `--bg` | the window ground |
+  | pane (+ 1px inset ring) | `--main` with `1px solid --line` | the card is flat; its ring is the hairline |
+  | `--fg`, `--fg2`, `--muted`, `--dim` | the same four roles | text, in that order of strength |
+  | `--acc` | `--accent` (`--accent-text` as text) | |
+  | needs | `--needs` (the theme's `--warn`) | needs you and nothing else |
+  | ok | `--ok` (read as `--done`) | |
+  | working | `--working` | |
+  | danger | `--danger` (read as `--err`) | an error is shown as needs you with its reason |
+  | floating surface | `--main`, `1px solid --line`, `--pop-sh-menu`, `--pop-sh` or `--pop-sh-dialog` | menus, popovers, toasts and dialogs only; the shadow scales with the theme's `--sk` and the radius is `--r-panel` |
+
+  Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
+- **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
+  box (a caller beside smaller text may ask for less): idle a `--dim` dot, done a `--done` dot, needs you a `--needs` dot, working an
+  11px ring with a 2px stroke, a `--working` arc running round a `--line2` track (a square path under Square corners). There is no
+  failed mark: a stopped agent (`error`) and one held by its plan limit (`limited`) are drawn as needs you, an unreadable
+  session (`unknown`) as idle, and the reason is words beside the mark (`rowWord`). The preview's `StatusMark`
+  (`components/StatusMark.tsx`) only maps its own names onto it. The status section that lists finished agents is called **Done**.
+- **Corners: Rounded or Square, any theme** (Settings › Appearance › Corners, `corners`; the root carries
+  `data-corners`). Rounded is the default (a saved choice wins; a window style from before the switch still maps to Rounded or Square,
+  and a saved `folded`, an option that no longer exists, reads as Rounded). Corners are shape only, never colour or
   type: every theme wears either, in Inter and JetBrains Mono (`withLook` in `theme/corners.ts` sets `--ui`, `--mono`
   and the shading). Square is the one rule at the end of `material.css`, which zeroes every radius inside the window;
   Rounded sets `--r-control` 6px, `--r-panel` 10px and `--r-badge` 3px. A component not yet on those tokens keeps its
-  own radius under Rounded. **Folded** cuts the top-left and bottom-right corners diagonally: 5px controls, 12px panes and
-  the message box, 14px floats, 10px chat bubbles, 8px toggle frames, 4px tiles (`material.css`, last block). A web view
-  with `corner-shape: bevel` draws it with `border-radius: N 0 N 0`. WebKit (Linux, macOS) has none, so
-  `@supports not (corner-shape: bevel)` draws the same cut with a `clip-path` polygon sized `--fold`, and pays for what
-  the polygon clips: every cut surface draws a 1px anti-aliased stripe along both cuts as its top background layer, in
-  `--fold-line` (the colour of its border or its 1px inset shadow; transparent when unset, so a filled button with no
-  edge shows no line; the accent on a focused message box; Button and Card variants set it; a segmented control's first
-  and last choice cut only their outer corner through `--fold-tl` and `--fold-br`), a float's polygon is widened by `--fold-bleed` (48px) on its
-  square sides so its shadow survives (no `filter`, no wrapper: cheap on software drawing). A new Folded surface is added to both blocks and looked at in both engines. The corners are the desktop app's own: the
+  own radius under Rounded. The corners are the desktop app's own: the
   shared `window_style` setting is not read by the desktop. A window style saved before the switch carries over: Glass,
   Flat and the older names to Rounded, Squared and Retro Pixel to Square (`cornersOfWindowStyle`). **Components are
   built once and read tokens, never the corners.** Besides the base tokens, the shared pieces read the component
@@ -358,12 +372,6 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   while checks fail) and **Terminal**
   (shows or hides the dock, adding the first terminal when the session has none; `toggleTerminal`), then the pane's own entries.
   A view button opens the side panel on that view, or closes it when it already shows it. There is no middle column and no tab bar: the window is the sidebar, the workspace and the side panel.
-- **Terminal bar.** An agent's terminal pane ends in a 38px bar (`TerminalBar`, `features/terminal/`): a 1px `--line` top border on `--main`,
-  12.5px `--muted` text, 18px left and 14px right padding. At the left the machine (only for another computer), the project
-  (the repository, else the `~` path; 180px at most, ellipsised), then `/` in `--line2` and the branch (12px mono, `--branch`; `--link`
-  with a dim 11px `worktree` tag in a linked worktree). At the right the usage meters (the chat's `mx-usage` meters, so the two rows read
-  alike), and the agent's name (the model and permission mode are not shown: a terminal pane does not read them). The bar only says: where a session runs is set when it starts. A plain shell has no bar but a dashed one-line hint
-  (`ShellHint`) that offers `claude`, `codex` and `gemini`.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
@@ -458,7 +466,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   A choice applies at once and the menu stays open. Recent puts the session whose state changed last first, Oldest is creation order; the sort is the sidebar's own and is not remembered), **New terminal** (the terminal glyph; a plain shell in the start folder, the same action as New terminal and its key, shown in the tooltip) and **New session** `+` (opens the draft chat on this computer; a right-click offers New session,
   New terminal and Add a remote machine…). The grouping is `sidebarGroup`, also Settings › Appearance › Group sessions by.
   **By status** (`statusSections`): **Needs you** (in `--needs`; an agent that stopped is here too, and so is one held
-  by its plan limit), **Working**, **Finished**, **Idle** (a session the daemon cannot read is here) each a heading
+  by its plan limit), **Working**, **Done**, **Idle** (a session the daemon cannot read is here) each a heading
   with its count that folds it on a click; a section with nothing in it is not listed, and rows follow the Sort within one. A terminal that asks is under Needs you.
   **Terminals** are not one of these headings: under every grouping, the sessions with no agent in them (a shell, a
   program running in one, a shell that exited, the shell an agent left behind) are one **Terminals** section stuck
@@ -808,8 +816,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   icons in its bar or Settings › Terminal › Panes › Terminals open in; a dragged edge keeps its own size
   (`model/terminalDock.ts`, at most 60% of the room) and a double-click puts the design's back. It slides in from its
   side on `--panel-in` and out on `--panel-out`. The dock is a card in the shell's shape (`.mx-tdock` in `material.css`: 12px
-  cut top-left and bottom-right in Folded, with the WebKit clip-path fallback and its full border along the cuts; rounded or
-  square otherwise), and **the terminal fills it edge to edge**: the bar sits on `--main`, one `--line` hairline under it,
+  rounded or square by the corners setting), and **the terminal fills it edge to edge**: the bar sits on `--main`, one `--line` hairline under it,
   and everything below is one opaque `--term` ground (a see-through ground costs a blend per repaint, PERFORMANCE) with
   `--tdock-pad` (8px 12px) of text inset. No frame, ring or inner box around a terminal; shells of a split are told apart by
   one hairline between them, and the focused one of several by a 2px accent line along its top. Its 44px bar: mono tabs
@@ -838,7 +845,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   with a 2px `--line2` rule, inline code as a **CodeChip**, a link in `--link`, a file's name in the text as inline code tinted in its type's `--tag-*` colour (Chat setting **Colour file names**, on by default; off leaves it plain), never a file badge or type tag before it). A code
   block is a card (language, **Copy**, **Save**; numbered lines in a 36px gutter on `--well`, folded past 24 lines). A
   table is a card (**Table**, "N rows", **Copy**, **Save as** Markdown / CSV / HTML; cells never wrap, numbers right-aligned, a wide table scrolls sideways).
-  **A step** is a 30px row, gap 9: its **StatusMark** (14px), a verb at 13/600, what it acted on in mono 12.5 (cut at
+  **A step** is a 30px row, gap 9: its status mark (14px), a verb at 13/600, what it acted on in mono 12.5 (cut at
   the end), how it ended in mono 11.5 `--dim` at the right, and a caret; it opens to its detail. The step a pending
   request is about is the only one in amber: a 9% `--needs` tint, a 2px left edge and "waiting for you ↓". A file is a
   badge (type tag, folder in `--dim`, name in `--fg`, cut from the front so the name stays). A **command on its own**
@@ -1079,7 +1086,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
 - **A run of steps is one row** (`WorkCard`): "Read 6 files, ran 1 command", a "6 steps" chip and a chevron on the `--well`
   ground; opened it lists the steps, and only one step is open at a time. There is no "latest 3" and no "+N more".
 - **Action cards** (`WaitingCard`, Needs Card in the design) are floating cards the width of the message box: `--main`, a
-  `--line2` border, the shared `--pop-sh`, 14px folded corners (`data-float`), an amber `!` and an amber primary
+  `--line2` border, the shared `--pop-sh`, the panel radius (`data-float`), an amber `!` and an amber primary
   button, rising in over 0.2s. A question card shows one question at a time: tabs with an amber underline, numbered answers
   with no boxes (1 to 9 pick, ↑↓ move, ←→ question, Enter next), a ruled free-text line, and "Skip" / "Next ↵" (the last one
   "Send answers (N left)").
@@ -1170,7 +1177,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   `filter` or `backdrop-filter` ([PERFORMANCE](PERFORMANCE.md)). The working spinner steps every 160 ms and
   holds while the window is in the background.
 - **Working loader.** A wait of a second or more shows the **M loader** (`MLoader`): the three strokes of the M icon traced in turn over 2.4 s, in the text colour, with a word beside it ("Reading <machine>…"); a list shows it only after 160 ms. Reduce motion draws the M still. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
-- **Desktop dialogs.** The folder picker, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, 14px (Folded: the cut corner), the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus. Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
+- **Desktop dialogs.** The folder picker, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, the panel radius, the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus. Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
 - **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
 - **Themes**: fifty-four in the desktop app (the terminal app also ships Maiker Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maiker's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maiker Night** and **Maiker Day** (sea-glass and brass, the defaults), **Maiker Dark** and **Maiker Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maiker Retro Dark** and **Maiker Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maiker's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maiker Night saved by the terminal app, falls back to Maiker Dark or Maiker Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque

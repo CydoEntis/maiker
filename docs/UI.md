@@ -1,4 +1,4 @@
-# UI
+MISS: Needs you, Working, Finished, Idle), Project MISSCUT:    Folded is the default corner style and needs two drawings # UI
 
 This doc covers how the user interface is structured and built.
 `AGENTS.md` is the operating contract; this doc holds the UI practices in depth.
@@ -234,13 +234,7 @@ Rules for `apps/gui/`. Owner-approved 2026-11-04.
 3. New components use Tailwind utilities on those tokens. Heavy animation and
    per-look rules (the Square corners rule, `data-gpu`) stay in `material.css` and `workspace.css`; the design's
    role, spacing, type, radius and motion tokens are in `tokens.css` ([DESIGN](DESIGN.md#desktop-app)).
-   Folded is the default corner style and needs two drawings: `corner-shape: bevel` where it exists, and a `clip-path`
-   fallback under `@supports not (corner-shape: bevel)` for WebKit, the engine the app ships in on Linux and macOS
-   ([DESIGN](DESIGN.md#desktop-app), Corners). A new surface with a cut is added to both, with its size, and its border,
-   shadow are checked in the fallback, where a clip-path clips them, and a surface whose edge is not a plain
-   border (an inset shadow, a themed colour) sets `--fold-line` to that colour so the cut keeps its line. Look at the
-   fallback in the real engine, not in Chromium with `corner-shape` switched off: WebKitGTK renders it headless under
-   `cage` (`GtkOffscreenWindow`, `WEBKIT_DISABLE_COMPOSITING_MODE=1`, see `apps/gui/scripts/perf/webkit-harness.py`).
+   The corners are Rounded (the default) or Square, both plain `border-radius` tokens ([DESIGN](DESIGN.md#desktop-app), Corners).
 4. Old CSS moves to these rules only when a ticket touches that area. There is
    no big-bang rewrite.
 
@@ -473,15 +467,8 @@ says so instead.
 
 **New sessions** (`client/screen/newsession.rs`). Leader `n` and leader `t` start a plain shell with no form (`Action::PickSession` and `Action::ShellHere` both reach `new_ship`): in the folder you are working in in that workspace (else where it last was, else the workspace's own), with the toast `New shell · <folder>`; with no workspace it starts the Scratch one, and an offline machine says so. You type the agent in the shell (see *Agent launchers*); a just-started agent's row shows its name and idle mark with no words under it. A new tab (leader `t`) takes only the shell that answers it: it waits ten seconds at most, takes only a pane that did not exist when the tab was asked for and that no agent started (another pane taking the focus leaves it waiting), and starting any other session before it arrives cancels the tab, so that session gets its own row and tab bar rather than becoming a tab of the one you were in.
 
-## Project-specific: terminal bar and shell hint (desktop)
+## Project-specific: new-session gaps (desktop)
 
-- A pane that shows an agent's terminal ends in `TerminalBar` (`features/terminal/TerminalBar.tsx`), drawn by `PaneCard`'s `bar` slot
-  only while the terminal shows (the chat's composer row carries the same facts). `terminalBarOf(session)` builds its facts from the
-  daemon's session (machine, project, branch, worktree, usage, limits, agent) and returns null for a plain shell, an ended session and a
-  chat with no terminal. The bar is read-only: it never derives status. It names the agent; the model and permission mode are not shown
-  (they come from the agent's structured events, which a terminal pane does not read). A click on a meter opens Settings › Usage.
-- A live plain shell gets `ShellHint` instead: one dashed line with the agents it can start (`claude`, `codex`, `gemini`), typed into the
-  shell the way the chat's start card types them (same bypass setting). Both are disabled while the connection is down.
 - Not built: editing machine, folder and branch before a first message (the desktop starts a session from the New session dialog, where those are
   chosen), and a draft terminal page.
 

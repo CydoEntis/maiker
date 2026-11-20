@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { cn } from "@/lib/utils"
 import { Card, CardBody } from "./card"
-import { StatusMark, type MarkState } from "./status-mark"
+import { StatusIcon, type StatusMarkKind } from "./status-icon"
 
 /** Where a step is. `needs` is a step stopped on something only the person can fix; `failed` is one that ended badly. */
 type StepState = "pending" | "running" | "done" | "needs" | "failed"
@@ -18,7 +18,9 @@ type StepItem = {
 }
 
 /** A step is drawn with the shared status mark; a step waiting its turn is the mark's waiting dot. */
-const MARK: Record<StepState, MarkState> = { pending: "waiting", running: "running", done: "done", needs: "needs", failed: "failed" }
+const MARK: Record<StepState, StatusMarkKind> = { pending: "idle", running: "working", done: "done", needs: "needs", failed: "needs" }
+/** The mark is hidden from screen readers, so the state is also said in words (colour is never the only signal). */
+const WORD: Record<StepState, string> = { pending: "waiting", running: "in progress", done: "done", needs: "needs you", failed: "needs you" }
 const LABEL_TONE: Record<StepState, string> = { pending: "text-(--dim)", running: "text-(--fg)", done: "text-(--fg2)", needs: "text-(--needs)", failed: "text-(--err)" }
 /** The step the person's eye (and a screen reader) should be on. */
 const isCurrent = (state: StepState) => state === "running" || state === "needs" || state === "failed"
@@ -27,7 +29,7 @@ function StepRow({ step, last }: { step: StepItem; last: boolean }) {
   return (
     <li data-slot="step" data-state={step.state} aria-current={isCurrent(step.state) ? "step" : undefined} className="flex gap-3">
       <span className="flex flex-none flex-col items-center pt-0.5">
-        <StatusMark state={MARK[step.state]} />
+        <StatusIcon status={MARK[step.state]} /><span className="sr-only">{WORD[step.state]}</span>
         {!last && <span aria-hidden="true" className={cn("mt-1 w-px flex-1", step.state === "done" ? "bg-(--line2)" : "bg-(--line)")} />}
       </span>
       <div className={cn("flex min-w-0 flex-1 flex-col gap-1", !last && "pb-3.5")}>
