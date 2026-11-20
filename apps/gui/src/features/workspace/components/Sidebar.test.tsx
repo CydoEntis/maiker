@@ -152,13 +152,15 @@ describe('a machine that needs maiker installed or updated', () => {
     return within(screen.getByRole('menu', { name: 'devbox' })).getAllByRole('menuitem').map((item) => item.textContent)
   }
 
-  it('offers Install in its header, and its dot says it is not installed', async () => {
+  it('offers one Install button when it is down, which opens its fix, and its dot says it is not installed', async () => {
     const user = userEvent.setup()
-    const onUpdateMachine = vi.fn()
-    show([], { machines: [LOCAL_HEAD, needing('install')], onUpdateMachine })
+    const onFixMachine = vi.fn()
+    show([], { machines: [LOCAL_HEAD, needing('install')], onFixMachine })
     expect(screen.getByRole('img', { name: /^devbox is / })).toHaveClass('is-warn')
+    expect(screen.queryByRole('button', { name: 'Fix devbox' })).toBeNull()
+    expect(screen.getAllByRole('button', { name: 'Install Maiker on devbox' })).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Install Maiker on devbox' }))
-    expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'install')
+    expect(onFixMachine).toHaveBeenCalledWith(expect.objectContaining({ name: 'devbox' }))
   })
 
   it('has no + on a machine, and a machine that is down still says why from its dot and its menu', () => {

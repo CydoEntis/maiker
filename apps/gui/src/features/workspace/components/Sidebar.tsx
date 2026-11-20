@@ -387,8 +387,8 @@ function MachineNotes({ heads, progress, onUpdate, onFix }: { heads: readonly Ma
             <span className="mx-machine-name">{machineTitle(head)}</span>
             {done !== undefined
               ? <span className="mx-machine-pct mono">{String(done)}%</span>
-              : head.updateAction !== null && <UpdateButton name={name} action={head.updateAction} onUpdate={onUpdate} />}
-            {head.down && <MachineWhy head={head} onFix={onFix} />}
+              : !head.down && head.updateAction !== null && <UpdateButton name={name} action={head.updateAction} onUpdate={onUpdate} />}
+            {head.down && done === undefined && <MachineWhy head={head} onFix={onFix} />}
           </div>
         )
       })}
@@ -403,11 +403,13 @@ function MachineNotes({ heads, progress, onUpdate, onFix }: { heads: readonly Ma
  */
 function MachineWhy({ head, onFix }: { head: MachineHead; onFix: (head: MachineHead) => void }) {
   const reason = head.said ?? head.why
+  // One thing to press: a machine that is down because its Maiker is old or missing says so here, and the head carries no second button.
+  const update = head.updateAction
   return (
     <span className="mx-machine-why" title={reason === null || reason === '' ? undefined : reason}>
       <span className="mx-machine-why-dot" aria-hidden="true" />
-      <span className="mx-machine-why-word">Offline</span>
-      <button type="button" className="mx-machine-fix" aria-label={`Fix ${head.label}`} onClick={() => { onFix(head) }}>Fix</button>
+      <span className="mx-machine-why-word">{update === null ? 'Offline' : update === 'install' ? 'Maiker not installed' : 'Needs update'}</span>
+      <button type="button" className="mx-machine-fix" aria-label={update === null ? `Fix ${head.label}` : `${UPDATE_WORDS[update].verb} Maiker on ${head.label}`} onClick={() => { onFix(head) }}>{update === null ? 'Fix' : UPDATE_WORDS[update].verb}</button>
     </span>
   )
 }
@@ -445,14 +447,14 @@ function MachineSection({ draft, progress, group, open, onToggle, onUpdate, onCo
         </button>
         {progress !== undefined
           ? <span className="mx-machine-pct mono">{String(progress)}%</span>
-          : head.name !== null && head.updateAction !== null && <UpdateButton name={head.name} action={head.updateAction} onUpdate={onUpdate} />}
+          : head.name !== null && !head.down && head.updateAction !== null && <UpdateButton name={head.name} action={head.updateAction} onUpdate={onUpdate} />}
         {renderStart(head.machine, <button type="button" className="mx-head-button is-small mx-machine-add" aria-label={`Add a session to ${title}`} title={`New session on ${title}`} disabled={!canStart || head.down}><Icon name="plus" size={13} /></button>)}
         <span className={`mx-machine-dot${head.updateAction !== null ? ' is-warn' : head.down ? ' is-offline' : ''}`} role="img" aria-label={head.down ? `${title} is ${head.chip?.word ?? 'not reachable'}` : `${title} is connected`} title={head.why ?? (head.down ? head.chip?.word ?? 'not reachable' : `${title} is connected`)} />
       </div>
       {progress !== undefined && head.name !== null && (
         <span className="mx-machine-progress" role="progressbar" aria-label={`Updating ${head.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${String(progress)}%` }} /></span>
       )}
-      {head.down && head.name !== null && <MachineWhy head={head} onFix={onFix} />}
+      {head.down && head.name !== null && progress === undefined && <MachineWhy head={head} onFix={onFix} />}
       {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
       <Collapse open={open}>
         <div className="mx-rows" role="list" aria-label={`Sessions on ${title}`}>{sessions.map((session) => renderRow(session, true, false))}</div>

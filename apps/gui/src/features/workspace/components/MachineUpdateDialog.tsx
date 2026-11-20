@@ -1,4 +1,6 @@
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { useEffect, useRef, useState } from 'react'
 import type { MachineActivity } from '@/api/machines'
 import { installNote, UPDATE_WORDS, updateVerb, updateWarning, type UpdateAction } from '../model/machines'
@@ -59,22 +61,23 @@ export function MachineUpdateDialog({ name, action, checkActivity, onUpdate, onC
         ref={dialog}
         tabIndex={-1}
         aria-label={title}
-        className="mx-rename"
+        className="mx-rename mx-modal is-compact"
         onKeyDown={(event) => {
           // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
           if (event.key === 'Escape') event.stopPropagation()
         }}
       >
-        <DialogTitle asChild><h2>{title}</h2></DialogTitle>
-        <p>{words.need(name)}</p>
-        {asked.done
-          ? <p>{action === 'install' ? installNote(name) : updateWarning(name, asked.activity)}</p>
-          : <p role="status">Checking what is open on {name}…</p>}
-        <div className="mx-rename-actions">
-          <button type="button" className="mx-text-button" onClick={onCancel}>Cancel</button>
-          {action === 'update' && <button type="button" className="mx-text-button" disabled={!asked.done} onClick={() => { onUpdate(true) }}>{verb} when idle</button>}
-          <button type="button" className="mx-text-button is-primary" disabled={!asked.done} onClick={() => { onUpdate(false) }}>{verb} now</button>
-        </div>
+        <ModalHead title={title} onClose={onCancel} />
+        <ModalBody>
+          <p className="mx-modal-lead">{words.need(name)}</p>
+          {asked.done
+            ? <p className="mx-modal-note">{action === 'install' ? installNote(name) : updateWarning(name, asked.activity)}</p>
+            : <p className="mx-modal-note" role="status">Checking what is open on {name}…</p>}
+        </ModalBody>
+        <ModalFoot left={<Button variant="ghost" size="lg" onClick={onCancel}>Cancel</Button>}>
+          {action === 'update' && <Button variant="outline" size="lg" disabled={!asked.done} onClick={() => { onUpdate(true) }}>{verb} when idle</Button>}
+          <Button variant="primary" size="xl" disabled={!asked.done} onClick={() => { onUpdate(false) }}>{verb} now</Button>
+        </ModalFoot>
       </div>
       </DialogContent>
     </Dialog>

@@ -5,3 +5,7 @@
 .mx-modal-head h2 { font-size: 15px; }
 .mx-modal-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 14px; padding: 20px; overflow-y: auto; }
 .mx-modal-foot { flex: none; display: flex; align-items: center; gap: 8px; padding: 12px 16px 14px; border-top: 1px solid var(--line); }
+/* A question with two or three answers: narrower, with a lead line and a quieter note under it. */
+.mx-rename.mx-modal.is-compact { width: 460px; }
+.mx-modal-lead { margin: 0; font-size: 13.5px; color: var(--fg); }
+.mx-modal-note { margin: 0; font-size: 12.5px; line-height: 1.55; color: var(--muted); }
