@@ -5,12 +5,17 @@
 
 use maitty_machines::MachineDef;
 use maitty_machines::link_failure::FailureClass;
-use maitty_machines::machine_config::{refusal_with, suggest_name};
+use maitty_machines::host_key::{self, TOOL_LIMIT, Tools};
+use maitty_machines::key_file::check_key_file;
+use maitty_machines::machine_config::{refusal_of, refusal_with, suggest_name};
 use maitty_machines::machine_probe::Probe;
 use maitty_machines::ssh_hosts::SshHost;
 use maitty_machines::Machine;
-use maitty_machines::machine_config::add_machine_with as write_entry;
+use maitty_machines::machine_config::add_machine_keyed as write_entry;
 use maitty_machines::machine_probe;
+use maitty_machines::reach::reach_ms as measure_reach;
+use crate::machine_access::{HostKeyReport, is_fingerprint, report_of};
+use tauri::Manager;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use serde::Serialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,6 +24,9 @@ use std::time::Duration;
 
 /// How long ssh may take to answer before the look ends, whatever ssh does.
 pub const PROBE_LIMIT: Duration = Duration::from_secs(12);
+
+/// How long the plain connect to a machine may take before it is left out of the result.
+const REACH_LIMIT: Duration = Duration::from_secs(3);
 
 /// A name no machine has, for telling a bad target from a bad name.
 const SPARE_NAME: &str = "machine-to-add";
@@ -85,17 +93,25 @@ pub enum Prepare {
     Cancelled,
 }
 
-/// Check `target` (and `name`, or one made from it) against the machines already there, then
-/// look at the machine with `probe`. Writes nothing. An error is words for the person: a target
-/// or name the loader refuses, or a machine ssh cannot reach (nothing is to be added then).
+/// What the window asked to add. `identity_file` is already checked to be a file that exists.
+pub struct Request<'a> {
+    pub target: &'a str,
+    pub name: Option<&'a str>,
+    pub ssh_args: &'a [String],
+    pub identity_file: Option<&'a str>,
+}
+
+/// Check the request (and its name, or one made from the target) against the machines already
+/// there, then look at the machine with `probe`. Writes nothing. An error is words for the
+/// person: a target or name the loader refuses, or a machine ssh cannot reach (nothing is to be
+/// added then).
 pub fn prepare(
     existing: &[MachineDef],
-    target: &str,
-    name: Option<&str>,
-    ssh_args: &[String],
+    request: &Request<'_>,
     probe: &dyn Fn(&MachineDef) -> Probe,
 ) -> Result<Prepare, String> {
-    let target = target.trim();
+    let target = request.target.trim();
+    let (name, ssh_args) = (request.name, request.ssh_args);
     if let Some(why) = refusal_with(existing, SPARE_NAME, target, ssh_args) {
         return Err(why);
     }
@@ -115,15 +131,16 @@ pub fn prepare(
             taken.name
         ));
     }
-    if let Some(why) = refusal_with(existing, &name, target, ssh_args) {
-        return Err(why);
-    }
     let def = MachineDef {
         name,
         target: target.to_owned(),
         ssh_args: ssh_args.to_vec(),
+        identity_file: request.identity_file.map(str::to_owned),
         ..MachineDef::default()
     };
+    if let Some(why) = refusal_of(existing, &def) {
+        return Err(why);
+    }
     match probe(&def) {
         Probe::Cancelled => Ok(Prepare::Cancelled),
         Probe::Ready { version } => Ok(Prepare::Ready {
@@ -161,14 +178,33 @@ fn reach_of(class: &FailureClass) -> Reach {
 #[derive(Default)]
 pub struct AddProbe(Mutex<Option<Arc<AtomicBool>>>);
 
+/// What came of installing the helper (the app on the far side) as a step of adding the machine.
+#[derive(Debug, Serialize, PartialEq, Eq)]
+pub struct HelperInstall {
+    pub installed: bool,
+    /// The install's last line when it worked, or why it did not.
+    pub said: String,
+}
+
 /// What adding a machine came to. A machine that could not be added is an error with the words
 /// to show instead.
 #[derive(Debug, Serialize, PartialEq, Eq)]
 #[serde(tag = "outcome", rename_all = "kebab-case")]
 pub enum Outcome {
     /// Written and dialling. `version` is what the app there answered, when it did; `reach` says
-    /// how far the look got, and `took_ms` how long it took to log in and ask.
-    Added { name: String, version: Option<String>, reach: Reach, took_ms: u64 },
+    /// how far the look got. `reach_ms` is how long the machine took to be reached (a plain
+    /// connect), `took_ms` how long it took to log in and ask, `key` the file name of the key that
+    /// signed in. `helper_install` is set when the app was missing and the window asked for it to
+    /// be installed as part of adding.
+    Added {
+        name: String,
+        version: Option<String>,
+        reach: Reach,
+        took_ms: u64,
+        reach_ms: Option<u64>,
+        key: Option<String>,
+        helper_install: Option<HelperInstall>,
+    },
     /// Written and dialling, but ssh could not log in without a person. Nothing is opened: the
     /// window shows `said` (ssh's own words), and the way forward (the host key card, or the
     /// user to fix). `command` is the same login to run in any terminal, when the machine has one.
@@ -189,52 +225,132 @@ pub async fn list_ssh_hosts() -> Result<Vec<HostChoice>, String> {
     .map_err(|error| format!("Could not read ~/.ssh/config: {error}"))
 }
 
+/// ssh with only a port, for looking at a host that is not a machine yet.
+fn bare_ssh(port: Option<u16>) -> Result<Vec<String>, String> {
+    let mut ssh = vec![maitty_machines::SSH_PROGRAM.to_string()];
+    ssh.extend(maitty_machines::machine_target::port_args(port)?);
+    Ok(ssh)
+}
+
+/// Look at the host key a new machine offers and whether this computer knows it, before anything
+/// is written: a new host asks to be trusted first, and Cancel leaves nothing behind. Read-only.
+#[tauri::command]
+pub async fn inspect_new_host(target: String, port: Option<u16>) -> Result<HostKeyReport, String> {
+    let target = target.trim().to_owned();
+    maitty_machines::machine_target::check_target(&target)?;
+    let ssh = bare_ssh(port)?;
+    let seen = tauri::async_runtime::spawn_blocking(move || host_key::inspect(&ssh, &target, &Tools::default(), TOOL_LIMIT))
+        .await
+        .map_err(|error| format!("Could not look at the host key: {error}"))?
+        .map_err(|error| format!("{error:#}"))?;
+    Ok(report_of(&seen))
+}
+
+/// Trust the key whose fingerprint the person was shown for a host that is not a machine yet: it
+/// is fetched again and added to known_hosts only when it is still that key and is new.
+#[tauri::command]
+pub async fn trust_new_host(target: String, fingerprint: String, port: Option<u16>) -> Result<(), String> {
+    if !is_fingerprint(&fingerprint) {
+        return Err("That is not a fingerprint".to_string());
+    }
+    let target = target.trim().to_owned();
+    maitty_machines::machine_target::check_target(&target)?;
+    let ssh = bare_ssh(port)?;
+    tauri::async_runtime::spawn_blocking(move || host_key::trust(&ssh, &target, &fingerprint, &Tools::default(), TOOL_LIMIT))
+        .await
+        .map_err(|error| format!("Could not trust the host key: {error}"))?
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// A key file the window named: blank means none; otherwise it must be a file that exists.
+fn checked_key_file(key_file: Option<String>) -> Result<Option<String>, String> {
+    match key_file.as_deref().map(str::trim).filter(|text| !text.is_empty()) {
+        Some(text) => check_key_file(text).map(Some),
+        None => Ok(None),
+    }
+}
+
 /// Look at `target`, and when it holds up write it to `config.local.toml` and start dialling it.
-/// Nothing is written when the machine cannot be reached or the look is cancelled.
+/// Nothing is written when the machine cannot be reached or the look is cancelled. `key_file` is a
+/// private key for ssh to sign in with (its path is kept, the file is never read). When the app is
+/// missing on the machine and `install_helper` is true, it is installed as the last step.
 #[tauri::command]
 pub async fn add_machine(
-    wire: tauri::State<'_, crate::terminal_stream::Wire>,
-    probing: tauri::State<'_, AddProbe>,
+    app: tauri::AppHandle,
     target: String,
     name: Option<String>,
     port: Option<u16>,
+    key_file: Option<String>,
+    install_helper: Option<bool>,
 ) -> Result<Outcome, String> {
     // The window checks these too; this is the boundary, so they are checked again here.
     maitty_machines::machine_target::check_target(target.trim())?;
     let ssh_args = maitty_machines::machine_target::port_args(port)?;
-    let handle = wire.handle()?.clone();
+    let identity_file = checked_key_file(key_file)?;
+    let handle = app.state::<crate::terminal_stream::Wire>().handle()?.clone();
+    let probing = app.state::<AddProbe>();
     let cancel = Arc::new(AtomicBool::new(false));
     *probing.0.lock().map_err(|_| "Adding is busy".to_string())? = Some(cancel.clone());
     let file = config_path().with_file_name("config.local.toml");
-    let started = std::time::Instant::now();
     let looked = {
         let cancel = cancel.clone();
-        tauri::async_runtime::spawn_blocking(move || look_and_write(&file, &target, name.as_deref(), &ssh_args, &cancel))
-            .await
-            .map_err(|error| format!("Could not look at the machine: {error}"))
+        tauri::async_runtime::spawn_blocking(move || {
+            let request = Request {
+                target: &target,
+                name: name.as_deref(),
+                ssh_args: &ssh_args,
+                identity_file: identity_file.as_deref(),
+            };
+            look_and_write(&file, &request, &cancel)
+        })
+        .await
+        .map_err(|error| format!("Could not look at the machine: {error}"))
     };
     if let Ok(mut slot) = probing.0.lock() {
         *slot = None;
     }
-    let (def, how) = match looked?? {
+    let looked = looked??;
+    let (def, how) = match looked.prepared {
         Prepare::Cancelled => return Ok(Outcome::Cancelled),
         Prepare::NeedsName => return Ok(Outcome::NeedsName),
         Prepare::Ready { def, how } => (def, how),
     };
     handle.add(def.clone());
     match how {
-        How::Connect { version, reach } => Ok(Outcome::Added {
-            name: def.name,
-            version,
-            reach,
-            took_ms: u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
-        }),
+        How::Connect { version, reach } => {
+            let helper_install = match (reach, install_helper.unwrap_or(false)) {
+                (Reach::Missing, true) => Some(install_helper_step(&app, &def.name).await),
+                _ => None,
+            };
+            let reach = match &helper_install {
+                Some(HelperInstall { installed: true, .. }) => Reach::Answered,
+                _ => reach,
+            };
+            Ok(Outcome::Added {
+                name: def.name,
+                version,
+                reach,
+                took_ms: looked.took_ms,
+                reach_ms: looked.reach_ms,
+                key: looked.key,
+                helper_install,
+            })
+        }
         How::Login { said } => Ok(Outcome::Login {
             command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
             name: def.name,
             target: def.target,
             said,
         }),
+    }
+}
+
+/// Install the app on a machine that was just added and has none, the same install as the Fix flow
+/// (`maiker machine update <name> --install`), with its progress on `machine-update-progress`.
+async fn install_helper_step(app: &tauri::AppHandle, name: &str) -> HelperInstall {
+    match crate::machine_update::run_update(app.clone(), name.to_string(), true, false).await {
+        Ok(said) => HelperInstall { installed: true, said },
+        Err(said) => HelperInstall { installed: false, said },
     }
 }
 
@@ -248,28 +364,44 @@ pub fn cancel_add_machine(probing: tauri::State<'_, AddProbe>) {
     }
 }
 
-/// The blocking part: check, look, and only then write the entry.
-fn look_and_write(
-    file: &std::path::Path,
-    target: &str,
-    name: Option<&str>,
-    ssh_args: &[String],
-    cancel: &AtomicBool,
-) -> Result<Prepare, String> {
+/// What the blocking part found: the decision, and the three things the window shows beside it.
+struct Looked {
+    prepared: Prepare,
+    /// How long the login and the question took (not the connect).
+    took_ms: u64,
+    reach_ms: Option<u64>,
+    key: Option<String>,
+}
+
+/// The blocking part: check, reach, look, name the key, and only then write the entry.
+fn look_and_write(file: &std::path::Path, request: &Request<'_>, cancel: &AtomicBool) -> Result<Looked, String> {
     let listed = machines_beside(&config_path());
     if let Some(error) = listed.error {
         return Err(error);
     }
+    let mut ssh = vec![maitty_machines::SSH_PROGRAM.to_string()];
+    ssh.extend(request.ssh_args.iter().cloned());
+    let reach_ms = measure_reach(&ssh, request.target.trim(), REACH_LIMIT);
     let look = |def: &MachineDef| {
         let machine = Machine::from_def(def, maitty_machines::SSH_PROGRAM);
         machine_probe::probe(&machine, PROBE_LIMIT, cancel)
     };
-    let prepared = prepare(&listed.machines, target, name, ssh_args, &look)?;
-    if let Prepare::Ready { def, .. } = &prepared {
-        write_entry(file, &def.name, &def.target, &def.ssh_args)
+    let started = std::time::Instant::now();
+    let prepared = prepare(&listed.machines, request, &look)?;
+    let took_ms = u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX);
+    let mut key = None;
+    if let Prepare::Ready { def, how } = &prepared {
+        if matches!(how, How::Connect { .. }) {
+            let machine = Machine::from_def(def, maitty_machines::SSH_PROGRAM);
+            key = machine_probe::signed_in_key(&machine, PROBE_LIMIT, cancel);
+        }
+        if cancel.load(Ordering::Relaxed) {
+            return Ok(Looked { prepared: Prepare::Cancelled, took_ms, reach_ms, key: None });
+        }
+        write_entry(file, &def.name, &def.target, &def.ssh_args, def.identity_file.as_deref())
             .map_err(|error| format!("Could not add {}: {error:#}", def.name))?;
     }
-    Ok(prepared)
+    Ok(Looked { prepared, took_ms, reach_ms, key })
 }
 
 async fn start_login_session(app: &tauri::AppHandle, name: &str, command: String) -> Result<(), String> {
@@ -332,9 +464,13 @@ mod tests {
         }
     }
 
+    fn request<'a>(target: &'a str, name: Option<&'a str>) -> Request<'a> {
+        Request { target, name, ssh_args: &[], identity_file: None }
+    }
+
     fn look(mode: &str) -> Result<Prepare, String> {
         let sandbox = Sandbox::new();
-        prepare(&[], "build.example", None, &[], &through_shim(&sandbox, mode))
+        prepare(&[], &request("build.example", None), &through_shim(&sandbox, mode))
     }
 
     #[test]
@@ -377,19 +513,19 @@ mod tests {
     #[test]
     fn a_target_ssh_would_read_as_an_option_is_refused_before_anything_runs() {
         let never = |_: &MachineDef| -> Probe { panic!("nothing is to run") };
-        assert!(prepare(&[], "-oProxyCommand=x", None, &[], &never).is_err());
-        assert!(prepare(&[], "a b", None, &[], &never).is_err());
+        assert!(prepare(&[], &request("-oProxyCommand=x", None), &never).is_err());
+        assert!(prepare(&[], &request("a b", None), &never).is_err());
     }
 
     #[test]
     fn a_name_that_is_taken_is_refused_and_a_suggestion_steps_around_it() {
         let ok = |_: &MachineDef| Probe::Ready { version: "v".into() };
         let existing = [def("build", "other.example")];
-        let Err(why) = prepare(&existing, "x.example", Some("BUILD"), &[], &ok) else {
+        let Err(why) = prepare(&existing, &request("x.example", Some("BUILD")), &ok) else {
             panic!("refused");
         };
         assert!(why.starts_with("You already have a machine called build."), "{why}");
-        let Ok(Prepare::Ready { def, .. }) = prepare(&existing, "build", None, &[], &ok) else {
+        let Ok(Prepare::Ready { def, .. }) = prepare(&existing, &request("build", None), &ok) else {
             panic!("ready");
         };
         assert_eq!(def.name, "build-2");
@@ -398,17 +534,72 @@ mod tests {
     #[test]
     fn a_target_nothing_can_name_asks_for_a_name() {
         let ok = |_: &MachineDef| Probe::Ready { version: String::new() };
-        assert_eq!(prepare(&[], "me@", None, &[], &ok), Ok(Prepare::NeedsName));
+        assert_eq!(prepare(&[], &request("me@", None), &ok), Ok(Prepare::NeedsName));
         assert!(matches!(
-            prepare(&[], "me@", Some("lab"), &[], &ok),
+            prepare(&[], &request("me@", Some("lab")), &ok),
             Ok(Prepare::Ready { .. })
         ));
     }
 
     #[test]
+    fn a_key_file_rides_on_the_def_and_reaches_the_probe_as_dash_i() {
+        let seen = std::cell::RefCell::new(Vec::new());
+        let spy = |def: &MachineDef| {
+            *seen.borrow_mut() = def.ssh_arguments();
+            Probe::Ready { version: "v".into() }
+        };
+        let port = ["-p".to_string(), "2222".to_string()];
+        let with_key = Request { target: "me@box", name: None, ssh_args: &port, identity_file: Some("/k/id") };
+        let Ok(Prepare::Ready { def, .. }) = prepare(&[], &with_key, &spy) else {
+            panic!("ready");
+        };
+        assert_eq!(def.identity_file.as_deref(), Some("/k/id"));
+        assert_eq!(*seen.borrow(), ["-p", "2222", "-i", "/k/id"]);
+    }
+
+    #[test]
+    fn a_key_file_ssh_would_read_as_an_option_is_refused_before_anything_runs() {
+        let never = |_: &MachineDef| -> Probe { panic!("nothing is to run") };
+        let bad = Request { target: "box", name: None, ssh_args: &[], identity_file: Some("-oProxyCommand=x") };
+        assert!(prepare(&[], &bad, &never).is_err());
+    }
+
+    #[test]
+    fn a_blank_key_file_is_none_and_a_missing_one_is_refused_in_words() {
+        assert_eq!(checked_key_file(None), Ok(None));
+        assert_eq!(checked_key_file(Some("  ".into())), Ok(None));
+        assert!(checked_key_file(Some("/no/such/key-file-here".into())).is_err());
+    }
+
+    #[test]
+    fn a_new_host_is_looked_at_through_ssh_with_only_its_port() {
+        assert_eq!(bare_ssh(None).unwrap(), [maitty_machines::SSH_PROGRAM]);
+        assert_eq!(bare_ssh(Some(2222)).unwrap(), [maitty_machines::SSH_PROGRAM, "-p", "2222"]);
+        assert!(bare_ssh(Some(0)).is_err());
+    }
+
+    #[test]
+    fn the_outcome_names_reach_time_key_and_helper_step_for_the_window() {
+        let added = Outcome::Added {
+            name: "box".into(),
+            version: None,
+            reach: Reach::Missing,
+            took_ms: 900,
+            reach_ms: Some(38),
+            key: Some("id_ed25519".into()),
+            helper_install: Some(HelperInstall { installed: true, said: "done".into() }),
+        };
+        let json = serde_json::to_value(&added).unwrap();
+        assert_eq!(json["outcome"], "added");
+        assert_eq!((json["reach_ms"].as_u64(), json["took_ms"].as_u64()), (Some(38), Some(900)));
+        assert_eq!(json["key"], "id_ed25519");
+        assert_eq!(json["helper_install"]["installed"], true);
+    }
+
+    #[test]
     fn a_cancelled_look_adds_nothing() {
         let cancelled = |_: &MachineDef| Probe::Cancelled;
-        assert_eq!(prepare(&[], "build", None, &[], &cancelled), Ok(Prepare::Cancelled));
+        assert_eq!(prepare(&[], &request("build", None), &cancelled), Ok(Prepare::Cancelled));
     }
 
     #[test]

@@ -204,6 +204,15 @@ pub(crate) fn ssh_argv_probe(
     Ok(build(ssh, target, remote, Shape::PROBE))
 }
 
+/// `ssh -v ... true`: a login that never asks a person and says on stderr which key it signed in
+/// with. Nothing is run on the far side but `true`.
+pub(crate) fn ssh_argv_key(ssh: &[String], target: &str) -> Result<Vec<String>, SshCommandError> {
+    validate_target(target)?;
+    let mut verbose = ssh.to_vec();
+    verbose.push("-v".to_string());
+    Ok(build(&verbose, target, "true".to_string(), Shape::PROBE))
+}
+
 /// The subcommand that restarts the far side's daemon when no session is open.
 const RESTART_IF_IDLE: &str = "restart-if-idle";
 /// Added to it to restart even with sessions open, when they are saved.
@@ -557,6 +566,15 @@ mod tests {
 
     fn via(words: &[&str], remote_cmd: &str, mode: ProxyMode) -> Vec<String> {
         command_argv(&args(words), remote_cmd, mode).expect("a valid command")
+    }
+
+    #[test]
+    fn the_key_line_is_a_batch_login_that_only_runs_true_with_debug_output() {
+        let argv = ssh_argv_key(&args(&["ssh", "-i", "k"]), "me@box").unwrap();
+        assert!(argv.contains(&"BatchMode=yes".to_string()));
+        assert!(argv.contains(&"-v".to_string()) && argv.contains(&"k".to_string()));
+        assert_eq!(&argv[argv.len() - 3..], ["--", "me@box", "true"]);
+        assert!(ssh_argv_key(&args(&["ssh"]), "-oProxyCommand=x").is_err());
     }
 
     #[test]

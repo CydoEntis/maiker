@@ -581,8 +581,11 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   pull request's must be exactly `https://github.com/<owner>/<repo>/pull/<number>`
   (`maitty_shared::github::is_pull_request_address`), so a machine cannot hand the window any other
   address to show. Any other answer is dropped.
-- **No install or restart.** A machine that needs the app shows the command to run; the desktop app never
-  installs, updates or restarts anything on it.
+- **Install and restart only on a click or a step the person chose.** The owner approved installing the
+  helper from the app: adding a machine whose app is missing runs the same `maiker machine update <name>
+  --install` as the Fix flow, as a step of the add flow (`install_helper`), with the fixed install script
+  and the checks above. The window asks for it by passing `installHelper`; nothing else installs, updates or
+  restarts anything on a machine.
 - **A different daemon at a known name** is refused (the shared daemon-id store) and says so; Remove then
   adding the machine again is the way out.
 
@@ -890,6 +893,32 @@ person a link and a code (`daemon/agent_sign_in.rs`). What it may do:
 - Claude's paste-a-code flow is not supported on purpose: a code typed into the window would be a credential
   in a text box (ADR 0006).
 
+## Project-specific: installing an agent from the desktop
+
+`install_agent` (`apps/gui/src-tauri/src/agent_install.rs`) runs an agent's own documented install on this
+computer. The owner approved installing agents from the app; this replaces the earlier rule that the desktop
+app installs nothing. Running a downloaded script is running remote code as the person, so:
+
+- **An allowlist in code, not input.** The window sends only the agent's name (`claude`, `codex`, `gemini`
+  or `opencode`; anything else is refused). The command comes from a table in the file: a script at an
+  `https://` address on `claude.ai`, `chatgpt.com` or `opencode.ai` (no port, user name, query or fragment),
+  or `npm install -g` of one of two fixed packages. The table is checked against the allowlist again before
+  anything starts. A new agent or host needs a code change and a line here.
+- **Shown before it runs.** `agent_install_command` returns the exact command for this system, and the
+  window shows it before asking. The vendor pages the commands come from are listed in the file.
+- **No shell line is built.** A script is `curl -fsSL <url>` with its output piped to `bash` or `sh` as
+  two programs (on Windows, `powershell -NoProfile -Command "irm <url> | iex"` with a constant line). Nothing
+  from the window or from the download is ever interpolated.
+- **Never elevated.** It runs as the person who runs the app, never with `sudo`, `runas` or an administrator
+  prompt. An install that needs more fails and says so.
+- **Bounded and visible.** One install at a time, stopped after 10 minutes, no input. Its output is cleaned
+  (control characters dropped, lines cut at 400 characters) and streamed to the window as `install-progress`;
+  nothing it prints is run or stored. The version is read afterwards with `<agent> --version`, stopped after
+  2 seconds.
+- **No Copilot.** It is not a supported agent here (ADR 0005), so it has no row and no command.
+- **Limits that remain.** The vendors' scripts are trusted as much as their domains; there is no checksum
+  of the script here. npm and curl come from this computer's PATH.
+
 ## Project-specific: the message the daemon sends by itself
 
 With `restore.continue_turn` on, the daemon sends one fixed message, `Continue where you left off.`,
@@ -1075,6 +1104,9 @@ the window, so each is bounded as follows.
 | Command | What it takes | Rule |
 | --- | --- | --- |
 | `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
+| `add_machine` key file | a path | Optional `identity_file` on the entry, passed as `-i <path>` (one argv entry). It must be an absolute path (a leading `~/` is expanded), exist and be a file; a path that starts with `-`, has a control character or ends in `.pub` is refused. The file is never opened by Maiker (only ssh reads it) and a path with `via` is refused. Entries without it still load. |
+| `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
+| `inspect_new_host`, `trust_new_host` | target, port, fingerprint | The same checks as `inspect_host_key` and `trust_host_key`, for a host that is not a machine yet, so a new host is trusted before anything is written. Nothing is saved when the person cancels. |
 | `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
 | `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. |
 | `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |

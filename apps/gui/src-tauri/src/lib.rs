@@ -6,6 +6,8 @@ mod attachment;
 mod image_paste;
 pub mod hub;
 mod agent_auth;
+mod agent_install;
+mod reveal;
 mod daemon_log;
 mod export;
 mod highlight;
@@ -1774,6 +1776,11 @@ pub fn run() {
             add_machine::add_machine,
             add_machine::cancel_add_machine,
             add_machine::open_machine_login,
+            add_machine::inspect_new_host,
+            add_machine::trust_new_host,
+            agent_install::agent_install_command,
+            agent_install::install_agent,
+            reveal::reveal_in_explorer,
             machine_access::inspect_host_key,
             machine_access::trust_host_key,
             machine_access::local_user_name,

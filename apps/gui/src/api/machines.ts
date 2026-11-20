@@ -235,7 +235,20 @@ export async function listSshHosts(): Promise<HostChoice[]> {
 }
 
 const AddedSchema = z.discriminatedUnion('outcome', [
-  z.object({ outcome: z.literal('added'), name: z.string(), version: z.string().nullable(), reach: z.enum(['answered', 'missing', 'older', 'newer-here', 'not-running']), took_ms: z.number() }),
+  z.object({
+    outcome: z.literal('added'),
+    name: z.string(),
+    version: z.string().nullable(),
+    reach: z.enum(['answered', 'missing', 'older', 'newer-here', 'not-running']),
+    /** How long the login and the question took, not the connect. */
+    took_ms: z.number(),
+    /** How long the machine took to be reached (a plain connect); null when it cannot be told (a jump host). */
+    reach_ms: z.number().nullish(),
+    /** File name only of the key that signed in (`id_ed25519`); null for a password or an agent key. */
+    key: z.string().nullish(),
+    /** Set when the app was missing and `installHelper` asked for it to be installed as part of adding. */
+    helper_install: z.object({ installed: z.boolean(), said: z.string() }).nullish(),
+  }),
   z.object({ outcome: z.literal('login'), name: z.string(), target: z.string(), said: z.string(), command: z.string().nullable() }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),
@@ -243,13 +256,25 @@ const AddedSchema = z.discriminatedUnion('outcome', [
 /** What adding a machine came to. A machine that could not be added rejects with the words to show. */
 export type Added = z.infer<typeof AddedSchema>
 
+/** What an add may also say: a private key file for ssh to sign in with (checked to exist, never read), and whether to install the helper when it is missing. */
+export type AddMachineOptions = { keyFile?: string | null; installHelper?: boolean }
+
 /**
  * Look at `target` over ssh without asking anyone anything and, when it holds up, add it and start
- * dialling it. `name` is only needed when none can be made from the target.
+ * dialling it. `name` is only needed when none can be made from the target. Call `inspectNewHost`
+ * first so a host this computer has never seen is trusted before anything is written.
  */
-export async function addMachine(target: string, name?: string, port?: number): Promise<Added> {
+export async function addMachine(target: string, name?: string, port?: number, options: AddMachineOptions = {}): Promise<Added> {
   if (!isTauri()) throw new Error('Machines can only be added in the desktop app')
-  return AddedSchema.parse(await invoke<unknown>('add_machine', { target, name: name ?? null, port: port ?? null }))
+  return AddedSchema.parse(
+    await invoke<unknown>('add_machine', {
+      target,
+      name: name ?? null,
+      port: port ?? null,
+      keyFile: options.keyFile ?? null,
+      installHelper: options.installHelper ?? false,
+    }),
+  )
 }
 
 const HostKeySchema = z.discriminatedUnion('status', [
@@ -264,6 +289,17 @@ export type HostKeyReport = z.infer<typeof HostKeySchema>
 export async function inspectHostKey(name: string): Promise<HostKeyReport> {
   if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
   return HostKeySchema.parse(await invoke<unknown>('inspect_host_key', { name }))
+}
+
+/** `inspectHostKey` for a host that is not a machine yet: nothing is written, so Cancel leaves nothing behind. Rejects with the reason when the key cannot be fetched. */
+export async function inspectNewHost(target: string, port?: number): Promise<HostKeyReport> {
+  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
+  return HostKeySchema.parse(await invoke<unknown>('inspect_new_host', { target, port: port ?? null }))
+}
+
+/** `trustHostKey` for a host that is not a machine yet: the fingerprint shown is added to known_hosts only when it is still that key and is new. */
+export async function trustNewHost(target: string, fingerprint: string, port?: number): Promise<void> {
+  if (isTauri()) await invoke('trust_new_host', { target, fingerprint, port: port ?? null })
 }
 
 /** Add the key whose fingerprint was shown to known_hosts; the machine is dialled again. The host refuses a key that changed or no longer matches. */

@@ -142,7 +142,7 @@ impl Machine {
     }
 
     fn named_by(def: &MachineDef, ssh: &[String]) -> Machine {
-        let argv = ssh.iter().chain(def.ssh_args.iter()).cloned().collect();
+        let argv = ssh.iter().cloned().chain(def.ssh_arguments()).collect();
         let remote_cmd = def.remote_cmd.as_deref().unwrap_or(APP_COMMAND);
         Machine {
             name: def.name.clone(),
@@ -207,6 +207,13 @@ impl Machine {
     pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
+    }
+
+    /// A login that runs `true` with ssh's own debug lines on stderr, to read which key signed in.
+    /// It never asks anyone anything.
+    pub fn key_argv(&self) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_key(&route.ssh, &route.target)?)
     }
 
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
