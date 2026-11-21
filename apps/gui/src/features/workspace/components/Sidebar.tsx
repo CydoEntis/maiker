@@ -3,7 +3,7 @@ import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from 
 import { STATUS_WORD, type SessionView } from '../model/session'
 import { inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
-import { machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
+import { machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, showsMachineHeadings, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
 import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
@@ -226,6 +226,8 @@ function Expanded(props: SidebarProps) {
   // Narrowed to one project, the tree drops what has nothing of it, as the list did before it was a tree.
   const tree = project === null ? whole : withSessionsOnly(whole, (head) => draft?.machine === head.machine)
   const localMachine = props.machines[0]?.machine ?? 0
+  // With this computer alone its projects are the top of the tree; the header's + still opens one there.
+  const headed = showsMachineHeadings(props.machines)
   // Every machine and project, whatever the filter: what waits on you is never narrowed out of sight.
   const waiting = waitingSessions(props.machines, props.projects)
   const openWaiting = ({ session, project: place }: WaitingSession) => {
@@ -296,12 +298,25 @@ function Expanded(props: SidebarProps) {
     )
   }
 
+  const projectSections = (node: MachineNode) => node.projects.map((project) => (
+    <ProjectSection
+      key={project.key}
+      node={project}
+      open={views.isOpen(project.key)}
+      onToggle={() => { views.toggle(project.key) }}
+      headings={showsStatusHeadings(project.count, props.statusHeadings)}
+      selected={props.selectedProject !== null && sameProject(project.project, props.selectedProject)}
+      head={projectHead(node.head, project)}
+      renderRow={(session) => renderRow(session, true, false)}
+    />
+  ))
+  const machineDraft = (node: MachineNode) => (draft?.machine === node.head.machine ? draft : null)
   const machineSection = (node: MachineNode) => (
     <MachineSection
       key={node.key}
       node={node}
       open={views.isOpen(node.key) || draft?.machine === node.head.machine}
-      draft={draft?.machine === node.head.machine ? draft : null}
+      draft={machineDraft(node)}
       progress={node.head.name === null ? undefined : props.updateProgress?.[node.head.name]}
       onToggle={() => { views.toggle(node.key) }}
       onUpdate={props.onUpdateMachine}
@@ -310,19 +325,14 @@ function Expanded(props: SidebarProps) {
       onOpenProject={props.onOpenProject}
       onFix={props.onFixMachine}
     >
-      {node.projects.map((project) => (
-        <ProjectSection
-          key={project.key}
-          node={project}
-          open={views.isOpen(project.key)}
-          onToggle={() => { views.toggle(project.key) }}
-          headings={showsStatusHeadings(project.count, props.statusHeadings)}
-          selected={props.selectedProject !== null && sameProject(project.project, props.selectedProject)}
-          head={projectHead(node.head, project)}
-          renderRow={(session) => renderRow(session, true, false)}
-        />
-      ))}
+      {projectSections(node)}
     </MachineSection>
+  )
+  // No heading and no fold: the machine's own counts and menu have nothing to sit on, and its body is always shown.
+  const topProjects = (node: MachineNode) => (
+    <div key={node.key}>
+      <MachineBody node={node} label="Projects" draft={machineDraft(node)}>{projectSections(node)}</MachineBody>
+    </div>
   )
   return (
     <div className="mx-sidebar-expanded">
@@ -338,7 +348,7 @@ function Expanded(props: SidebarProps) {
       <NeedsYouStrip waiting={waiting} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         <section aria-label="Agents" className="mx-machines">
-          {tree.map(machineSection)}
+          {tree.map(headed ? machineSection : topProjects)}
           {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Open a project, then start a session in it. Sessions appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
         </section>
         {putAway.length > 0 && (
@@ -500,12 +510,21 @@ function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onCon
       {head.down && head.name !== null && progress === undefined && <MachineWhy head={head} onFix={onFix} />}
       {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
       <Collapse open={open}>
-        <div className="mx-projects" role="group" aria-label={`Projects on ${title}`}>{children}</div>
-        {node.projects.length === 0 && draft === null && <div className="mx-machine-empty">No sessions yet</div>}
-        {/* Last, under the projects, so the projects above it never move while it is written. */}
-        {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
+        <MachineBody node={node} label={`Projects on ${title}`} draft={draft}>{children}</MachineBody>
       </Collapse>
     </div>
+  )
+}
+
+/** What a machine holds, under its heading or at the top of the tree: its projects, else "No sessions yet", then the draft. */
+function MachineBody({ node, label, draft, children }: { node: MachineNode; label: string; draft: DraftChat | null; children: ReactNode }) {
+  return (
+    <>
+      <div className="mx-projects" role="group" aria-label={label}>{children}</div>
+      {node.projects.length === 0 && draft === null && <div className="mx-machine-empty">No sessions yet</div>}
+      {/* Last, under the projects, so the projects above it never move while it is written. */}
+      {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
+    </>
   )
 }
 

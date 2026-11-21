@@ -1,6 +1,6 @@
 # 0007. Multiple machines: one connection per machine, held by the client
 
-- **Status:** Accepted; the rule that nothing which reads a disk works on another machine is amended for markdown documents by [0014](0014-markdown-documents-on-other-machines.md)
+- **Status:** Accepted; the rule that nothing which reads a disk works on another machine is amended for markdown documents by [0014](0014-markdown-documents-on-other-machines.md); how a machine is reached and added (your own ssh setup, a new host key trusted once) is amended by [0017](0017-remote-machines-rely-on-your-ssh-setup.md)
 - **Date:** 2026-11-06
 
 ## Context
