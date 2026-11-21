@@ -1357,19 +1357,27 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   (`carryDraftToTerminal`), and **Back to chat** in the pane's ⋯ menu puts the chat back. A shell's ⋯ menu offers
   **Start a Claude chat here**, **Start a Codex chat here** and **Start Gemini here**.
 - **What the Chat view starts** ([ADR 0018](adr/0018-the-chat-view-talks-to-the-agent-directly.md), proposed).
-  Sending the New session draft on this computer starts a chat with the agent over ACP, with no terminal behind it
-  (`startDirectChat` in `useSessionStarts`, the host's `start_acp_chat`), for every agent; "Start a chat" on a shell's
-  empty chat card does the same. Only the agent's name is sent: the daemon picks the program. No agent is started ahead of
-  the first message, and nothing the agent draws on a terminal can stand in the chat's way. The chat is listed in the
-  sidebar like any session (`isInSidebar` in `useSessionList`) and its pane is the chat, with no terminal log. The page
-  stays until the daemon has answered, then closes in the update that opens the chat; the first message is an ordinary
-  send, and a send that fails puts the words in the chat's box. A start that fails (the agent's ACP helper is not
-  installed) leaves the page open with the daemon's reason.
-  A chat over ACP (`chat.acp`) uses the agent's own model and permission settings, so its box names the agent and shows no
-  model, effort or permission picker (`ownSettings` in `Composer`), and it has no slash-command menu or side question. An
-  approval's buttons carry the agent's own words for each choice (`choiceLabels`), and a command the agent runs is a
-  command step. The draft's model, effort and mode picks are not sent to such a chat. Still the agent's own session: a
-  saved conversation that is resumed, a start on another machine, and every start in the Terminal view.
+  Sending the New session draft on this computer starts a chat session the daemon owns, with no terminal behind it
+  (`startDirectChat` in `useSessionStarts`); "Start a chat" on a shell's empty chat card does the same. No agent is
+  started ahead of the first message, and nothing the agent draws on a terminal can stand in the chat's way. The chat is
+  listed in the sidebar like any session (`isInSidebar` in `useSessionList`) and its pane is the chat, with no terminal
+  log. The page stays until the daemon has answered, then closes in the update that opens the chat; the first message is
+  an ordinary send, and a send that fails puts the words in the chat's box. A start that fails leaves the page open with
+  the daemon's reason.
+  - **Claude Code and Codex** run through their own adapters (the host's `start_chat_session`). The first message carries
+    the model and effort picked, and the mode picked becomes the daemon's posture (`chatPermissions` in
+    `model/newChatHost.ts`): Claude's Default and Codex's Auto ask first, Plan and Read only change nothing, Bypass
+    permissions and Full access ask about nothing, and the agent's Bypass Permissions switch is read as it is for a
+    terminal start. The daemon has no posture for Claude's Accept edits and Auto, so the draft refuses them in a line and
+    starts nothing.
+  - **Every other agent** runs over ACP by its name (the host's `start_acp_chat`); the daemon picks the program from its
+    config. Such a chat (`chat.acp`) uses the agent's own model and permission settings, so its box names the agent and
+    shows no model, effort or permission picker (`ownSettings` in `Composer`), and it has no slash-command menu or side
+    question. The draft's model, effort and mode picks are not sent to it.
+  - In any chat, an approval's buttons carry the agent's own words for each choice where it gave them (`choiceLabels`),
+    and a command an ACP agent runs is a command step.
+  Still the agent's own session: a saved conversation that is resumed, a start on another machine, and every start in the
+  Terminal view.
 - **Keyboard.** While the chat covers a pane its terminal is not focused (`TerminalView focused` is false) and is
   hidden from Tab and screen readers. The chat adds no layer to the Esc ladder.
 - **Selecting.** In a terminal pane, releasing the mouse on a selection copies it and a "Copied" toast says so
