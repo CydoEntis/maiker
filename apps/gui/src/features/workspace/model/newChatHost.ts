@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { agentsInstalled, folderBranches, folderSyncState, savedConversations, type FolderBranches, type FolderSync, type SavedConversation } from '@/api/daemon'
 import { DEFAULT_PICK, type ReasoningPick } from '@/features/chat/agentChoice'
-import { BYPASS_MODE, CODEX_FULL_MODE, PICKABLE_MODES } from '@/features/chat/chatMeta'
-import type { ChatAgent } from './chatView'
+import { BYPASS_MODE, CODEX_FULL_MODE, PICKABLE_MODES, START_MODE } from '@/features/chat/chatMeta'
+import type { SessionPermissions } from '@/api/daemon'
+import type { ChatAgent, StructuredAgent } from './chatView'
 
 const MODEL_ID = /^[A-Za-z0-9][A-Za-z0-9._:/[\]-]*$/
 const CLAUDE_EFFORT = new Set<ReasoningPick>(['low', 'medium', 'high', 'max'])
@@ -66,6 +67,27 @@ export function withBypass(agent: ChatAgent, words: readonly string[], on: boole
   if (agent !== 'claude' || picked === null) return [BYPASS_FLAG[agent], ...words]
   if (picked === BYPASS_MODE) return [BYPASS_FLAG.claude, ...withoutMode]
   return [CLAUDE_ALLOW_BYPASS, ...words]
+}
+
+/** What a chat with no terminal may do, for each mode the New session draft can carry into one. Accept edits and Auto are absent: the daemon has no posture for them. */
+const CHAT_PERMISSIONS: Readonly<Record<StructuredAgent, Readonly<Record<string, SessionPermissions>>>> = {
+  claude: { default: 'workspace-write', plan: 'read-only', [BYPASS_MODE]: 'full-access' },
+  codex: { codexReadOnly: 'read-only', codexAuto: 'workspace-write', [CODEX_FULL_MODE]: 'full-access' },
+}
+
+/**
+ * What a chat started from the New session draft may do: the daemon's posture for the mode picked, with the agent's
+ * Bypass Permissions switch read as `withBypass` reads it for a terminal start. `null` when the daemon cannot start a
+ * chat in that mode, so the draft can say so instead of starting it in another.
+ */
+export function chatPermissions(agent: StructuredAgent, mode: string, bypass: boolean): SessionPermissions | null {
+  const picked = CHAT_PERMISSIONS[agent][mode] ?? null
+  if (picked === null) return null
+  const unpicked = mode === START_MODE[agent]
+  if (bypass && (agent === 'codex' || unpicked)) return 'full-access'
+  // Bypass permissions picked while the agent's switch is off starts in its usual mode, as the terminal start does.
+  if (!bypass && agent === 'claude' && picked === 'full-access') return 'workspace-write'
+  return picked
 }
 
 /** Whether these start words run the agent without permission prompts. */

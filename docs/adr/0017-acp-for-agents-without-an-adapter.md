@@ -17,8 +17,7 @@ for an agent nobody here has pinned, and how the protocol change reaches install
 
 - **ACP only where there is no native adapter.** Codex and Claude Code stay on their own
   adapters, even where they offer ACP. An agent is run through ACP only when its `[[agents]]`
-  entry says `acp = true`. *(Replaced by [0018](0018-the-chat-view-talks-to-the-agent-directly.md),
-  proposed: the Chat view runs every agent over ACP.)*
+  entry says `acp = true`.
 - **Capabilities are labelled.** What this project checked against a pinned version is reported
   as verified; what an agent only says about itself is reported as advertised and shown with
   that label. Gemini CLI and OpenCode are the two agents meant to be supported through ACP.

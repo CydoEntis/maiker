@@ -58,6 +58,8 @@ pub struct AgentDef {
 
 /// The longest name an ACP agent may have: it names the agent in every conversation it runs.
 pub const ACP_NAME_MAX: usize = maitty_shared::conversation::ACP_AGENT_NAME_MAX;
+/// The agents with an adapter of their own, which are never run over ACP (ADR 0017).
+pub const NATIVE_CHAT_AGENTS: [&str; 2] = ["claude", "codex"];
 const ACP_ARGS_MAX: usize = 32;
 const ACP_ENV_MAX: usize = 32;
 const ACP_VALUE_MAX_BYTES: usize = 4096;
@@ -78,6 +80,10 @@ pub fn validate_agents(agents: &[AgentDef]) -> Result<()> {
         anyhow::ensure!(
             maitty_shared::conversation::acp_agent_name(name),
             "{place}: an agent with `acp = true` needs a `name` of lowercase letters, digits, `-` or `_`, at most {ACP_NAME_MAX} long"
+        );
+        anyhow::ensure!(
+            !NATIVE_CHAT_AGENTS.contains(&name.as_str()),
+            "{place}: {name} has its own chat support and is not run over ACP; remove `acp = true`"
         );
         let command = agent.command.as_deref().unwrap_or_default();
         anyhow::ensure!(!command.trim().is_empty(), "{place}: `acp = true` needs a `command`, the program to run");
@@ -1064,8 +1070,6 @@ mod tests {
     #[test]
     fn an_acp_agent_with_a_program_passes_and_an_ordinary_entry_is_left_alone() {
         assert_eq!(agents_problem("name = 'gemini'\nacp = true\ncommand = 'gemini'\nargs = ['--experimental-acp']\nenv = { A_1 = 'x' }"), None);
-        // ADR 0018: an agent with an adapter of its own may be run over ACP too.
-        assert_eq!(agents_problem("name = 'claude'\nacp = true\ncommand = 'claude-agent-acp'"), None);
         assert_eq!(agents_problem("name = 'goose'\nenabled = false"), None);
     }
 
@@ -1074,6 +1078,7 @@ mod tests {
         for (entry, reason) in [
             ("name = 'x'\nacp = true", "needs a `command`"),
             ("name = 'x'\nacp = true\ncommand = '--acp'", "is the program alone"),
+            ("name = 'claude'\nacp = true\ncommand = 'claude'", "has its own chat support"),
             ("name = 'My Agent'\nacp = true\ncommand = 'x'", "needs a `name` of lowercase"),
             ("name = 'x'\nacp = true\ncommand = 'x'\nargs = [\"a\\nb\"]", "no control characters"),
             ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { '1A' = 'v' }", "not a variable name"),
