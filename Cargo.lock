@@ -2780,6 +2780,7 @@ dependencies = [
  "maitty-ipc-transport",
  "maitty-machines",
  "maitty-provider",
+ "maitty-provider-acp",
  "maitty-provider-claude",
  "maitty-provider-codex",
  "maitty-settings",

@@ -88,15 +88,21 @@ struct Running {
     requests: mpsc::Sender<Command>,
     received: mpsc::Receiver<Ev>,
     owner: Owner,
+    /// The name the runner gave the turn it last started; it makes the name up.
+    turn: Option<String>,
     _directory: crate::daemon::persist::ScratchDir,
 }
 
 impl Running {
     fn start(dialect: impl ProviderDialect + 'static) -> Self {
         static BUILT: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+        Self::start_on(dialect, super::super::tests::compiled(&BUILT, "fake_agent.rs"))
+    }
+
+    /// Runs `dialect` against the fixture program `built`.
+    fn start_on(dialect: impl ProviderDialect + 'static, built: &std::path::Path) -> Self {
         let directory = crate::daemon::persist::scratch_dir();
         std::fs::create_dir_all(directory.path()).unwrap();
-        let built = super::super::tests::compiled(&BUILT, "fake_agent.rs");
         let executable = super::super::tests::placed(built, directory.path(), "fake-agent");
         let host = Host {
             executable,
@@ -108,7 +114,7 @@ impl Running {
         let (stop, stopped) = mpsc::channel(1);
         let (requests, incoming) = mpsc::channel(4);
         let task = tokio::spawn(run(Box::new(dialect), host, owner, events, stopped, incoming));
-        Self { task, stop, requests, received, owner, _directory: directory }
+        Self { task, stop, requests, received, owner, turn: None, _directory: directory }
     }
 
     async fn ask(&self, token: u64, request: Rpc) {
@@ -124,6 +130,11 @@ impl Running {
             panic!("a conversation event");
         };
         assert_eq!(event.owner, self.owner);
+        if let Payload::Response { result: Ok(value), .. } = &event.payload
+            && let Some(turn) = value["turn"]["id"].as_str()
+        {
+            self.turn = Some(turn.to_owned());
+        }
         event.payload
     }
 
@@ -134,6 +145,8 @@ impl Running {
         last
     }
 }
+
+mod acp;
 
 fn open() -> Rpc {
     Rpc::Open { settings: Box::new(super::super::tests::claude_settings()), session: None }
