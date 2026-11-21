@@ -1493,7 +1493,8 @@ unreachable machine's (a redial that meets it counts as a reconnect blip), and a
 refuses adds nothing, like one that can't be reached. `fix_command` is the one command a sentence names,
 for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
 `doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
-`message`) show these sentences and write none of their own. `is_failure_sentence` tells such a
+`message`) show these sentences and write none of their own; `doctor` only puts the two numbers before
+the sentence for a version or protocol that differs (`0.58.1 there, 0.60.0 here. …`). `is_failure_sentence` tells such a
 sentence from a machine's other words, for MCP's `unreachable` error code.
 
 **Custom transport.** A machine with `via` is reached by running the user's program

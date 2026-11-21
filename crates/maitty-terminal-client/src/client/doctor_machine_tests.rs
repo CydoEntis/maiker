@@ -1,9 +1,11 @@
 //! `doctor`'s machine checks against the fake-ssh shim (see TESTING, "testing over ssh"): a
-//! machine that is fine, one on another protocol, one that needs a login, and ones that never
-//! answer, which must cost the budget and no more, all at the same time.
+//! machine that is fine, one on another protocol (the shared update sentence), one that needs a
+//! login, and ones that never answer, which must cost the budget and no more, all at the same
+//! time.
 
 use super::cli_machine_tests::Build;
 use crate::cli::doctor_machines::{Check, MachineReport, check_all};
+use crate::link_failure::{FailureClass, Subject, sentence_here};
 use crate::protocol::PROTOCOL_VERSION;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -85,23 +87,27 @@ fn a_good_machine_passes_every_check() {
 }
 
 #[test]
-fn a_daemon_of_another_protocol_fails_the_protocol_check_with_the_update_hint() {
+fn a_daemon_of_another_protocol_fails_the_protocol_check_with_the_shared_update_sentence() {
     let build = Build::start(&[("skew", "mismatch")]);
     let reports = doctor(&build, &["skew"], Duration::from_secs(30));
     let protocol = find(&reports, "skew")
         .iter()
         .find(|c| c.what == "protocol")
         .expect("a protocol line");
+    let def = build
+        .cfg
+        .machines
+        .iter()
+        .find(|m| m.name == "skew")
+        .expect("a skew machine");
     assert_eq!(protocol.ok, Some(false));
-    assert!(
-        protocol
-            .detail
-            .contains(&format!("protocol {}", crate::protocol::COMPATIBLE_SINCE - 1)),
-        "{protocol:?}"
-    );
-    assert!(
-        protocol.detail.contains("`maiker machine update skew`"),
-        "{protocol:?}"
+    assert_eq!(
+        protocol.detail,
+        format!(
+            "protocol {} there, {PROTOCOL_VERSION} here. {}",
+            crate::protocol::COMPATIBLE_SINCE - 1,
+            sentence_here(&FailureClass::Update, &Subject::of_def(def))
+        )
     );
 }
 
