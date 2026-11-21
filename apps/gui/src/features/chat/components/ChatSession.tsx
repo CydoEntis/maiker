@@ -159,8 +159,6 @@ type Props = {
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
-  /** Shows the session's terminal log over this chat, for a command whose menu only the terminal draws; the app's view is unchanged. */
-  onShowTerminal?: () => void
   /** What is wrong with the chat, if anything: shown as a banner over the message box when nothing else is asked of the person. */
   problem?: ChatProblem | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
@@ -191,7 +189,7 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
+export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -383,11 +381,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     applyNow(heldMode.mode)
   }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
-  // A command that opens a menu of its own is typed into the agent's terminal, whose log is shown over the chat: the chat cannot draw the menu.
-  const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
-    onShowTerminal()
-    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so its menu is in the terminal log.`)
-    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
+  // A command that opens a menu of its own is drawn only by the agent's terminal, and a chat never shows one (ADR 0018):
+  // it is not typed, so no menu is left open out of sight, and the person is told where it runs.
+  const runInTerminal = typeInto === undefined || link.readOnly !== true ? undefined : (command: string) => {
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version: its menu is in the terminal. Switch to the Terminal view in Settings to use it.`)
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
@@ -396,9 +393,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const aside = useAside(link.conversation)
   const signIn = useAgentSignIn(undefined)
   const signInView = signIn.view
-  // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
+  // Once confirmed it runs where Claude Code runs it. One that only its terminal takes (`/exit`) is typed there: the yes
+  // was given here and it draws no menu, so nothing is left open out of sight. The rest are sent.
   const runConfirmed = (typed: string) => {
-    if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
+    if (typeInto !== undefined && link.readOnly === true && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) void typeMessage(typeInto, agent, typed).catch((error: unknown) => { toast.failed(`Could not run ${typed}`, error) })
     else void sendText(typed)
   }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.

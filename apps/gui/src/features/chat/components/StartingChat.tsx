@@ -26,8 +26,6 @@ type StartingChatProps = {
   agent: ChatAgent
   /** The session this chat belongs to: its held message and draft are kept under it. */
   sessionId: string
-  /** Shows the session's terminal log over this page, for an agent that never reports in. */
-  onShowLog: () => void
   /** What the daemon says the session is doing: Needs before any chat events means a question only the terminal shows. */
   paneStatus?: SessionStatus
   /** Whether the agent's hooks have reported in; absent when the daemon did not say. */
@@ -58,7 +56,7 @@ function echoed(message: string) {
  * box are there at once. A message sent now is held and goes out when the real chat takes over; a
  * half-typed one is carried across.
  */
-export function StartingChat({ agent, sessionId, onShowLog, paneStatus, hooked, hookProblem = null, asking = '', typeInto }: StartingChatProps) {
+export function StartingChat({ agent, sessionId, paneStatus, hooked, hookProblem = null, asking = '', typeInto }: StartingChatProps) {
   const waiting = paneStatus === 'needs'
   const menu = waiting && typeInto !== undefined ? parseScreenMenu(asking) : null
   const trust = menu === null ? null : parseTrustPrompt(agent, menu)
@@ -142,7 +140,6 @@ export function StartingChat({ agent, sessionId, onShowLog, paneStatus, hooked, 
         <div className="mx-chat-notices">
           <span role="note" className="is-warn">{waiting ? waitingInTerminalHint(agent) : hookProblem !== null && hooked !== true ? hookProblemHint(agent, hookProblem) : hooked === true ? noConversationHint(agent) : noEventsHint(agent)}</span>
           <span className="mx-spacer" />
-          <button type="button" className="mx-sub-back" onClick={onShowLog}>Show terminal log</button>
           {!waiting && hooked !== true && <button type="button" className="mx-sub-back" disabled={connecting} onClick={connect}>{connecting ? 'Connecting…' : hookProblem === null ? `Connect ${agentLabel(agent)}` : hookProblem.repaired ? `Restart ${agentLabel(agent)}` : `Repair ${agentLabel(agent)} hooks`}</button>}
         </div>
       )}

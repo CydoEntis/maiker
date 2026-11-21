@@ -451,7 +451,7 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   return (
     <>
       <Card title="How you work">
-        <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent’s own CLI. Gemini has no chat view, so it always opens in Terminal.">
+        <Row label="Open sessions in" detail="What a new session is: a chat, or the agent’s own CLI in a terminal. Sessions that are already open stay what they were started as. A chat stays a chat in either view; a terminal agent is shown as a chat only while this is on Chat.">
           <ViewSwitch view={preferences.openSessionsIn} onChange={(view) => { update('openSessionsIn', view) }} />
         </Row>
       </Card>

@@ -90,7 +90,7 @@ export function recommendationReason(answers: StyleAnswers): string {
 export function viewNote(chosen: PaneView, recommended: PaneView, geminiInstalled: boolean): string {
   const parts = [
     chosen === recommended ? '' : `You picked ${VIEW_NAME[chosen]} over our suggestion. That works too.`,
-    'You can change this any time in Settings, or switch one session from its ··· menu.',
+    'You can change this any time in Settings.',
     geminiInstalled && chosen === 'chat' ? 'Gemini has no chat view, so Gemini sessions open in Terminal.' : '',
   ]
   return parts.filter((part) => part !== '').join(' ')

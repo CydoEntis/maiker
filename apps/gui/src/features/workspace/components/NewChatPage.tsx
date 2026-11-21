@@ -117,7 +117,7 @@ const NO_BUSY_HERE: ReadonlyMap<string, string> = new Map()
 /** No agent switched off: every one starts on its skip-permissions mode. */
 const NONE_OFF: readonly ChatAgent[] = []
 const FIRST_CHOICE: AgentChoice = { model: DEFAULT_PICK, reasoning: START_REASONING }
-/** Said under the agent when Gemini is picked: it has no chat events, so it opens in its terminal. */
+/** Said under the agent when Gemini is picked in the Terminal view: it has no chat events, so it stays a terminal. In the Chat view it runs over ACP. */
 const GEMINI_TERMINAL_LINE = 'Gemini has no chat view yet, so this session opens in its terminal.'
 
 /** Where the session works: in the checkout, a worktree of its own, or `auto`: a worktree only when another session is on that branch here. */
@@ -495,7 +495,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const notes = (
     <>
     <StartNotes error={error} treeLine={treeLine} syncNote={syncNote} onUpdate={updateFirst} onUseWorktree={() => { setWorkIn('tree') }} onFix={() => { setBranchOpen(true) }} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
-      machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }} geminiLine={agent === 'gemini'}
+      machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }} geminiLine={agent === 'gemini' && !otherAgents}
       clone={cloning} onUseFolder={(path) => { setCloning(null); openFolder(path) }} onDismissClone={() => { setCloning(null) }}
       onPickAnotherFolder={cloner === null || cloning === null ? undefined : () => { const again = cloning; setCloning(null); openCloneWindow({ start: 'link', address: again.address, parent: again.parent }) }}
       onOpenGitHubSettings={cloner?.onOpenGitHubSettings} />

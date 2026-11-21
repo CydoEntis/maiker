@@ -36,7 +36,7 @@ const FACTS = { mode: 'default', modeDanger: false, model: 'claude-sonnet-5-5', 
 const PROBLEMS: Record<string, ChatProblem> = {
   'err-chat': { kind: 'machine', machine: 'devbox', since: TWO_MINUTES_AGO, onRetry: SAME },
   'err-line': { kind: 'machine', machine: 'devbox', since: TWO_MINUTES_AGO, onRetry: SAME },
-  'err-stopped': { kind: 'stopped', agent: 'Claude', code: 1, onRestart: SAME, onViewLog: SAME },
+  'err-stopped': { kind: 'stopped', agent: 'Claude', code: 1, onRestart: SAME },
   'err-context': { kind: 'context', agent: 'Claude', percent: CONTEXT_PERCENT, onCompact: SAME, onNewWithSummary: SAME },
 }
 

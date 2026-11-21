@@ -96,13 +96,13 @@ export function noChatReason(availability: Exclude<ChatAvailability, { kind: 're
 export const NO_EVENTS_HINT_AFTER_MS = 10_000
 
 /** Shown once a session has stayed empty past `NO_EVENTS_HINT_AFTER_MS`: the usual cause is hooks from another version. */
-export const noEventsHint = (agent: ChatAgent): string => `Still nothing. ${agent} may be waiting for you in the terminal, or its status hooks are not connected or are from another version. Check the terminal, connect them here, or run "maiker integrate ${agent}".`
+export const noEventsHint = (agent: ChatAgent): string => `Still nothing. ${agent} may be waiting for you in the terminal, or its status hooks are not connected or are from another version. Connect them here, run "maiker integrate ${agent}", or switch to the Terminal view in Settings to see its terminal.`
 
 /**
  * Shown once a session has stayed empty past `NO_EVENTS_HINT_AFTER_MS` while its hooks HAVE reported in: Maiker hears
  * from the agent, so the hooks are not the problem, but it has not found the conversation to show yet.
  */
-export const noConversationHint = (agent: ChatAgent): string => `${agent} is reporting in, but Maiker has not found its conversation yet, so there is nothing to show here. The terminal has everything ${agent} has said; the chat takes over once the conversation is found.`
+export const noConversationHint = (agent: ChatAgent): string => `${agent} is reporting in, but Maiker has not found its conversation yet, so there is nothing to show here. Its terminal has everything ${agent} has said (the Terminal view, in Settings); the chat takes over once the conversation is found.`
 
 /** The daemon looked at the agent's settings file and knows why its hooks never report: said in plain words, with the file. */
 export const hookProblemHint = (agent: ChatAgent, problem: { file: string; why: string; repaired: boolean }): string =>
@@ -114,10 +114,10 @@ export const hookProblemHint = (agent: ChatAgent, problem: { file: string; why: 
 export const configFolderOf = (file: string): string => file.replace(/[\\/][^\\/]*$/, '')
 
 /** What the empty chat says once it has waited too long, in place of promising that a message is sent when the agent is ready. */
-export const stuckChatLine = (agent: ChatAgent): string => `No conversation to show yet. Show the terminal log to see what ${agent} is doing.`
+export const stuckChatLine = (agent: ChatAgent): string => `No conversation to show yet. Switch to the Terminal view in Settings to see what ${agent} is doing.`
 
 /** Shown instead when the daemon already knows the agent is stopped for an answer (a trust-this-folder question, a login). */
-export const waitingInTerminalHint = (agent: ChatAgent): string => `${agent} is waiting for you in the terminal, for example to trust this folder. Answer it there and the chat takes over.`
+export const waitingInTerminalHint = (agent: ChatAgent): string => `${agent} is waiting for you in the terminal, for example to trust this folder. Switch to the Terminal view in Settings to answer it; the chat takes over after that.`
 
 /** What a session tells the chat view about itself, from the fields every session view carries. */
 export function chatSourceOf(session: { conversation: { agent?: string | null; chat?: ChatLink | undefined } }): ChatSource {

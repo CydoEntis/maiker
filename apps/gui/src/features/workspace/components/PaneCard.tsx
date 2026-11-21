@@ -30,8 +30,6 @@ export type PaneCardProps = {
   terminal: ReactNode
   /** The view the pane shows: the app-wide one (Settings › Open sessions in). The terminal stays mounted under the chat, so it keeps streaming and keeps its size. */
   view?: PaneView
-  /** Present while the pane shows its terminal log over a chat that could not carry on; it puts the chat back. */
-  onHideLog?: () => void
   /** The chat that covers the terminal while `view` is `chat`. */
   chat?: ReactNode
   /** What floats over the top of the body in either view: the agent's running subagents. */
@@ -81,7 +79,6 @@ export function PaneCard(props: PaneCardProps) {
     'separator',
     { label: 'Rename…', hint: 'F2', run: props.onRename },
     { label: maximized ? 'Restore layout' : 'Maximize pane', disabled: !multi && !maximized, run: () => { props.onToggleMaximize(pane.id) } },
-    ...(props.onHideLog === undefined ? [] : [{ label: 'Back to chat', run: props.onHideLog }]),
     { label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear },
     { label: 'Copy folder path', run: props.onCopyPath },
     // The header has no close button; with the sidebar hidden this is the one close in reach, on the only pane too.
