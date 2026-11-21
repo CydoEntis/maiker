@@ -49,3 +49,10 @@ field names and types, never values), and write each line fresh. The recording h
 paths, account ids and your instructions; keep it local and never paste it into an issue, a chat or a
 model. Apply the checklist above, and also: `base_instructions`, `encrypted_content`, account, creator
 and thread ids, `repository_url` and every `commit_hash` are placeholders.
+
+## Made-up agents for the generic runner
+
+`fake_agent.rs` speaks a made-up line protocol, for a dialect that is neither Codex nor Claude.
+`fake_acp_agent.rs` speaks the Agent Client Protocol, version 1, and what it does with a prompt is
+in the prompt's own text (its header lists the words). Its lines are written by hand from the
+protocol's schema: no real ACP agent has been recorded (`docs/stack/acp.md`).

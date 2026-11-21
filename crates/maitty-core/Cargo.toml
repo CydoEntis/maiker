@@ -45,6 +45,8 @@ unicode-segmentation = "1"
 vt100 = "0.16"
 
 [dev-dependencies]
+# Run only by the generic runner's tests until the daemon starts ACP agents (MAITTY-491).
+maitty-provider-acp = { path = "../adapters/maitty-provider-acp" }
 tokio = { version = "1", features = ["fs"] }
 ratatui = "0.30"
 
