@@ -716,6 +716,13 @@ background storage lock. Attachments never submit independent cache revisions.
 See [stack/claude-code-cli.md](stack/claude-code-cli.md) for the Claude CLI
 process boundary and event/approval handling rules.
 
+Between the daemon and a provider the flow is the provider contract
+([ADR 0016](adr/0016-one-provider-contract-with-no-io.md)): a client's command becomes a typed
+`runtime::Rpc`, the provider's adapter turns it into its own wire form, and what the provider
+reports comes back as typed `ProviderEvent`s that one place in the daemon turns into status and
+history. No provider frame is forwarded to a client, and a client names a provider only by the
+`Provider` in a summary.
+
 **An agent in a pane has a read-only conversation** ([ADR 0003](adr/0003-status-and-conversation-trust.md)),
 with no protocol change. For an owned desktop pane whose hook-verified agent is `claude` or `codex` and
 whose hook gave a session id (and, for Claude, its transcript path), the snapshot's `conversations` holds
