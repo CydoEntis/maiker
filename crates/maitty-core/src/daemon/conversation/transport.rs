@@ -217,17 +217,7 @@ impl Launch {
     ) -> Result<Connection, StartupFailure> {
         let turn_steer = self.preflight().await?;
         let mut command = self.command(self.paths().0);
-        let [id, generation, connection, token] = crate::ipc::STRUCTURED_KEYS;
-        for (key, value) in [
-            (id, identity.conversation.0.to_string()),
-            (generation, identity.generation.to_string()),
-            (connection, identity.connection.to_string()),
-            (token, identity.token.clone()),
-        ] {
-            for name in maitty_shared::brand::env_names(key) {
-                command.env(name, &value);
-            }
-        }
+        identify(&mut command, identity);
         command.arg("app-server").args(["--listen", "stdio://"]);
         let mut process = OwnedChild::spawn(command)
             .await
@@ -392,6 +382,22 @@ impl Drop for PreflightDirectory {
                 tracing::warn!(%error, "Cannot clean Codex preflight folder");
             }
         });
+    }
+}
+
+/// Tells the provider process `command` starts which chat it is, so the tools it runs (`mcp`)
+/// reach the daemon as that chat's runtime and not as a person (ADR 0016).
+pub(super) fn identify(command: &mut Command, identity: &crate::protocol::StructuredIdentity) {
+    let [id, generation, connection, token] = crate::ipc::STRUCTURED_KEYS;
+    for (key, value) in [
+        (id, identity.conversation.0.to_string()),
+        (generation, identity.generation.to_string()),
+        (connection, identity.connection.to_string()),
+        (token, identity.token.clone()),
+    ] {
+        for name in maitty_shared::brand::env_names(key) {
+            command.env(name, &value);
+        }
     }
 }
 

@@ -69,6 +69,17 @@ pub(super) fn test_owner(conversation: ConversationId, generation: u64) -> Owner
     }
 }
 
+/// The identity a test starts `owner`'s runtime with.
+#[cfg(test)]
+pub(super) fn test_identity_of(owner: Owner) -> crate::protocol::StructuredIdentity {
+    crate::protocol::StructuredIdentity {
+        conversation: owner.conversation,
+        generation: owner.generation,
+        connection: owner.connection,
+        token: "fixture-runtime-secret".into(),
+    }
+}
+
 pub(crate) struct Event {
     pub(super) owner: Owner,
     pub(super) payload: Payload,
@@ -340,7 +351,7 @@ async fn run(
         }
     };
     if launch.provider() == crate::conversation::Provider::Claude {
-        super::claude::run(launch, owner, events, stop, requests).await;
+        super::claude::run(launch, owner, identity, events, stop, requests).await;
         return;
     }
     let connected = launch.connect(&identity).await;

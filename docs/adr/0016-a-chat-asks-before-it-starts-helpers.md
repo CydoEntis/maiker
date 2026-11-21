@@ -17,11 +17,12 @@ this, and the two providers differ:
 - **A Codex chat** runs its tools with the daemon-minted runtime identity (`Hello.structured`).
   The daemon refuses every start from it: "Structured runtimes cannot start descendants until
   conversation-owned helper consent is supported".
-- **A Claude chat** is launched with every identity variable removed and no runtime identity
-  added. A `maiker mcp` it loads from the person's own Claude configuration therefore connects
-  with no identity, which the daemon reads as a person. Read from the code, not yet run against
-  a live chat: its starts are not asked about, not counted against `helpers_at_once`, and the
-  sessions they start carry no `started_by`.
+- **A Claude chat** was launched with every identity variable removed and no runtime identity
+  added. A `maiker mcp` it loads therefore connects with no identity, which the daemon reads as
+  a person: its starts are not asked about, not counted against `helpers_at_once`, and the
+  sessions they start carry no `started_by`. Read from the code. Whether a chat loads the server
+  at all depends on its configuration root
+  ([claude-code-cli](../stack/claude-code-cli.md#project-specific-claude-code-cli)).
 
 So in the desktop app's chat view a lead either cannot delegate (Codex) or delegates unasked and
 unseen (Claude).
@@ -71,7 +72,9 @@ unseen (Claude).
 
 ## To confirm
 
-1. That Claude Code passes its environment to the stdio MCP servers it starts, so decision 7
-   reaches `maiker mcp`. To be checked against a live Claude chat.
+1. That decision 7 reaches `maiker mcp` in a live Claude chat. Claude Code 2.1.330 passes its
+   environment to the stdio MCP servers it starts (seen on terminal sessions, 2026-11-21); a
+   chat itself could not be run, because 2.1.330 is not a verified version. To be checked on a
+   verified version, on a configuration root where the chat loads the server.
 2. That Codex's MCP environment allowlist (the appended identity names) still holds for a start,
    on a live Codex chat.

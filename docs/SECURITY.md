@@ -1048,7 +1048,9 @@ exemption; human-only grant/check/helper answers remain human-only. A structured
 runtime starts helpers only (an agent on a task, in a new session or worktree),
 and only after the person's answer held on its conversation; a bare shell and
 every other descendant start are refused, and a runtime that is no longer current
-starts nothing and is never counted as a person (ADR 0016, proposed).
+starts nothing and is never counted as a person (ADR 0016, proposed). A Claude chat's process is
+given the same four variables as a Codex chat's and no other identity, so a tool server it loads
+(`mcp`) reaches the daemon as that chat and never as a person.
 
 Codex filters MCP child environments, so validated runtime overrides append the
 four reserved identity variable names to existing stdio MCP allowlists. They

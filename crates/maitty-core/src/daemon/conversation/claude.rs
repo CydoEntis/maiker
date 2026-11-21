@@ -39,6 +39,7 @@ impl Client {
         cwd: &Path,
         config_root: &Path,
         environment: &[(OsString, OsString)],
+        identity: &crate::protocol::StructuredIdentity,
         arguments: &[OsString],
     ) -> std::result::Result<Self, super::transport::StartupFailure> {
         let mut command = Command::new(executable);
@@ -56,6 +57,7 @@ impl Client {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        super::transport::identify(&mut command, identity);
         crate::proc::quiet(&mut command);
         let mut process = super::process::OwnedChild::spawn(command)
             .await
@@ -223,6 +225,7 @@ async fn prewarm(
     launch: &super::transport::Launch,
     settings: &crate::conversation::LaunchSettings,
     transcript: Option<&Path>,
+    identity: &crate::protocol::StructuredIdentity,
     arguments: Vec<OsString>,
 ) -> Option<Warm> {
     let transcript = transcript?.to_path_buf();
@@ -239,6 +242,7 @@ async fn prewarm(
         cwd,
         &settings.config_root,
         &launch.environment,
+        identity,
         &arguments,
     )
     .await
@@ -323,6 +327,7 @@ async fn retire(mut client: Client, reason: &str) {
 pub(super) async fn run(
     launch: super::transport::Launch,
     owner: super::runtime::Owner,
+    identity: crate::protocol::StructuredIdentity,
     events: tokio::sync::mpsc::Sender<crate::daemon::Ev>,
     mut stop: tokio::sync::mpsc::Receiver<()>,
     mut requests: tokio::sync::mpsc::Receiver<super::runtime::Command>,
@@ -434,6 +439,7 @@ pub(super) async fn run(
                                 launch: &launch,
                                 settings: &settings,
                                 session: &session,
+                                identity: &identity,
                                 awaiting_first_message,
                                 owner,
                                 events: &events,
@@ -453,7 +459,7 @@ pub(super) async fn run(
                                 // Started only after the last process exited, so it loads the
                                 // whole transcript; it bets the next message keeps this model and effort.
                                 let arguments = command_arguments_for_turn(&session, true, &settings, &choice);
-                                warm = prewarm(&launch, &settings, transcript.as_deref(), arguments).await;
+                                warm = prewarm(&launch, &settings, transcript.as_deref(), &identity, arguments).await;
                             }
                             Err(TurnFailure::BeforeStart { token, error }) => {
                                 let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
@@ -564,6 +570,8 @@ struct TurnContext<'a> {
     launch: &'a super::transport::Launch,
     settings: &'a crate::conversation::LaunchSettings,
     session: &'a str,
+    /// Given to every process a message starts, so its tools are known as this chat.
+    identity: &'a crate::protocol::StructuredIdentity,
     awaiting_first_message: bool,
     owner: super::runtime::Owner,
     events: &'a tokio::sync::mpsc::Sender<crate::daemon::Ev>,
@@ -594,6 +602,7 @@ async fn run_turn(
         launch,
         settings,
         session,
+        identity,
         awaiting_first_message,
         owner,
         events,
@@ -629,6 +638,7 @@ async fn run_turn(
                 cwd,
                 &settings.config_root,
                 &launch.environment,
+                identity,
                 &args,
             )
             .await

@@ -69,5 +69,18 @@ reports as `interrupted` once Claude acknowledged the interrupt. Verified versio
 2.1.312, 2.1.314, 2.1.316 and 2.1.327 (`VERIFIED_VERSIONS` in `maitty-provider-claude`).
 A Claude chat with history is not taken up again after a daemon restart; that is the daemon's
 history rule, not a version limit.
+
+Every Claude Code process a chat starts gets the chat's runtime identity (the four reserved
+variables, ADR 0016) after the inherited pane and chat variables are removed, so a Maiker tool
+server it loads is known as the chat. Seen on Linux with Claude Code 2.1.330 on 2026-11-21, on
+terminal sessions and with `claude mcp list`, not through a chat (2.1.330 is not a verified
+version, so a chat does not start on it):
+
+- Claude Code passes its whole environment to the stdio MCP servers it starts: a `mcp` child of a
+  session in a pane held the pane's variables.
+- A chat is started with `CLAUDE_CONFIG_DIR` set, and Claude Code then reads the user's MCP
+  servers from `<config root>/.claude.json`, not from `~/.claude.json`. `integrate` registers
+  Maiker's server in `~/.claude.json` for the default root, so a chat on the default root loads
+  no Maiker tool server and starts no helper.
 Native Linux/Omarchy and macOS checks, plus daemon recovery after interruption,
 remain open; keep those as release acceptance items in the roadmap.

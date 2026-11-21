@@ -80,6 +80,15 @@ fn main() {
     // Lets a test see which arguments the last message was started with.
     if let Ok(executable) = std::env::current_exe() {
         let _ = std::fs::write(executable.with_extension("args"), arguments.join("\n"));
+        // Lets a test see who this process was told it is: the variables that name a chat or a pane.
+        let mut told: Vec<String> = std::env::vars()
+            .filter(|(name, _)| {
+                ["_CONVERSATION_", "_TERM_ID", "_PANE_TOKEN"].iter().any(|part| name.contains(part))
+            })
+            .map(|(name, value)| format!("{name}={value}"))
+            .collect();
+        told.sort();
+        let _ = std::fs::write(executable.with_extension("identity"), told.join("\n"));
     }
     // Claude Code keeps the message in the session's transcript, which the daemon watches.
     if let (Some(config), Ok(cwd)) = (std::env::var_os("CLAUDE_CONFIG_DIR"), std::env::current_dir()) {

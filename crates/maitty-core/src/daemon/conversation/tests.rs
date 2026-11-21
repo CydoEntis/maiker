@@ -145,7 +145,7 @@ async fn start_claude_adapter(
     let (events, mut received) = mpsc::channel(8);
     let (stop, stopped) = mpsc::channel(1);
     let (requests, incoming) = mpsc::channel(2);
-    let task = tokio::spawn(super::claude::run(launch, owner, events, stopped, incoming));
+    let task = tokio::spawn(super::claude::run(launch, owner, super::runtime::test_identity_of(owner), events, stopped, incoming));
     assert!(matches!(
         receive_claude_payload(&mut received, owner).await,
         Payload::Ready
@@ -198,7 +198,7 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     let (events, mut received) = mpsc::channel(8);
     let (stop, stopped) = mpsc::channel(1);
     let (requests, incoming) = mpsc::channel(2);
-    let task = tokio::spawn(super::claude::run(launch, owner, events, stopped, incoming));
+    let task = tokio::spawn(super::claude::run(launch, owner, super::runtime::test_identity_of(owner), events, stopped, incoming));
 
     let ready = tokio::time::timeout(Duration::from_secs(5), received.recv())
         .await
@@ -695,6 +695,57 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
         Payload::Notification { method, params }
             if method == "turn/completed" && params["turn"]["status"] == "interrupted"
     ));
+    stop_claude_adapter(task, stop, &mut received, owner).await;
+    drop(directory);
+}
+
+#[tokio::test]
+async fn a_claude_chats_process_is_told_it_is_this_chat_and_nothing_else() {
+    let directory = crate::daemon::persist::scratch_dir();
+    let (mut launch, owner) = claude_launch(directory.path(), None);
+    // What the daemon's own environment may hold: a pane it was started from, and an older chat.
+    for (key, value) in [("TERM_ID", "7"), ("PANE_TOKEN", "a-pane"), ("CONVERSATION_AUTH", "an-older-chat")] {
+        for name in maitty_shared::brand::env_names(key) {
+            launch.environment.push((name.into(), value.into()));
+        }
+    }
+    let executable = launch.paths().1.to_owned();
+    let (task, stop, requests, mut received) = start_claude_adapter(launch, owner).await;
+    start_claude_thread(&requests, &mut received, owner).await;
+    requests
+        .send(super::runtime::Command {
+            token: 3,
+            request: super::runtime::Rpc::Send {
+                params: json!({"threadId":"fixture-session","input":[{"type":"text","text":"hello fake Claude"}]}),
+            },
+        })
+        .await
+        .unwrap();
+    loop {
+        if let Payload::Notification { method, .. } = receive_claude_payload(&mut received, owner).await
+            && method == "turn/completed"
+        {
+            break;
+        }
+    }
+
+    let told = std::fs::read_to_string(executable.with_extension("identity")).unwrap();
+    let identity = super::runtime::test_identity_of(owner);
+    let mut expected: Vec<String> = crate::ipc::STRUCTURED_KEYS
+        .into_iter()
+        .zip([
+            identity.conversation.0.to_string(),
+            identity.generation.to_string(),
+            identity.connection.to_string(),
+            identity.token,
+        ])
+        .flat_map(|(key, value)| {
+            maitty_shared::brand::env_names(key).into_iter().map(move |name| format!("{name}={value}"))
+        })
+        .collect();
+    expected.sort();
+    assert_eq!(told.lines().collect::<Vec<_>>(), expected);
+
     stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);
 }
