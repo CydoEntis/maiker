@@ -757,7 +757,7 @@ async fn run_turn(
                         }
                         continue;
                 }
-                if matches!(frame, OutputFrame::Result { .. }) && pending_token.is_some() {
+                if matches!(frame, OutputFrame::Result { .. }) && pending_token.is_some() && !projector.takes_answer_as_receipt() {
                     return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude completed without echoing the submitted prompt; delivery is uncertain") });
                 }
                 let finished = matches!(frame, OutputFrame::Result { .. });

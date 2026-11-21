@@ -24,6 +24,8 @@ pub struct TurnProjector {
     /// When this turn began (Unix ms). Claude reports no times, so the daemon-side clock stands in.
     started_at_ms: u64,
     acknowledged: bool,
+    /// The message was a slash command Claude answered without replaying it.
+    command_unreplayed: bool,
     /// Claude acknowledged an interrupt of this turn, so an error result is the stop, not a failure.
     interrupted: bool,
     active_message_id: Option<String>,
@@ -47,6 +49,7 @@ impl TurnProjector {
             user_item_id,
             started_at_ms: now_ms(),
             acknowledged: false,
+            command_unreplayed: false,
             interrupted: false,
             active_message_id: None,
             assistant_text: BTreeMap::new(),
@@ -68,24 +71,45 @@ impl TurnProjector {
         self.interrupted = true;
     }
 
+    /// Whether Claude's answer stands in for the replay of this message. Claude runs a slash
+    /// command itself and, in a resumed session, answers without replaying it (seen on Claude Code
+    /// 2.1.330), so the answer is the only proof it took the message. Any other message must be
+    /// replayed before it counts as delivered.
+    pub fn takes_answer_as_receipt(&self) -> bool {
+        !self.acknowledged && self.submitted_text.trim_start().starts_with('/')
+    }
+
+    /// The turn's start, the person's message and the delivery receipt, once Claude has shown it
+    /// took the message.
+    fn receipt(&mut self, text: String) -> Vec<ProviderEvent> {
+        self.acknowledged = true;
+        let message = Content::Message { role: Role::User, text };
+        vec![
+            ProviderEvent::TurnStarted {
+                turn: self.turn_id.clone(),
+                started_at_ms: Some(whole_seconds(self.started_at_ms)),
+            },
+            self.started(self.user_item_id.clone(), message.clone()),
+            self.ended(self.user_item_id.clone(), message, ItemState::Completed),
+            ProviderEvent::Delivered { turn: self.turn_id.clone() },
+        ]
+    }
+
     /// What one line of Claude's output says about the turn, in the order it happened.
     pub fn project(&mut self, frame: OutputFrame) -> Result<Vec<ProviderEvent>> {
         let mut events = Vec::new();
+        let answers = matches!(frame, OutputFrame::MessageStarted { .. } | OutputFrame::Result { .. });
+        if answers && self.takes_answer_as_receipt() {
+            self.command_unreplayed = true;
+            events.extend(self.receipt(self.submitted_text.clone()));
+        }
         match frame {
             OutputFrame::UserReplay { text } if !self.acknowledged => {
                 anyhow::ensure!(
                     text == self.submitted_text,
                     "Claude replayed a different user message"
                 );
-                events.push(ProviderEvent::TurnStarted {
-                    turn: self.turn_id.clone(),
-                    started_at_ms: Some(whole_seconds(self.started_at_ms)),
-                });
-                let message = Content::Message { role: Role::User, text };
-                events.push(self.started(self.user_item_id.clone(), message.clone()));
-                events.push(self.ended(self.user_item_id.clone(), message, ItemState::Completed));
-                events.push(ProviderEvent::Delivered { turn: self.turn_id.clone() });
-                self.acknowledged = true;
+                events.extend(self.receipt(text));
             }
             OutputFrame::UserReplay { .. } => {}
             OutputFrame::MessageStarted { message_id, .. } => {
@@ -193,6 +217,14 @@ impl TurnProjector {
                     session_id == self.thread_id,
                     "Claude returned a different session identity"
                 );
+                // A command Claude ran itself streams no message: what it printed is only here.
+                if self.command_unreplayed && self.started_messages.is_empty() && !is_error
+                    && let Some(output) = result.as_ref().filter(|text| !text.is_empty())
+                {
+                    let id = format!("{}-command-output", self.turn_id);
+                    events.push(self.started(id.clone(), answer(String::new())));
+                    events.push(self.ended(id, answer(output.clone()), ItemState::Completed));
+                }
                 for (message_id, streamed_text) in std::mem::take(&mut self.assistant_text) {
                     let text = result
                         .as_ref()
@@ -293,6 +325,48 @@ mod tests {
             "show status".into(),
             "user-1".into(),
         )
+    }
+
+    fn command(text: &str) -> TurnProjector {
+        TurnProjector::new("session-1".into(), "turn-1".into(), text.into(), "user-1".into())
+    }
+
+    #[test]
+    fn a_slash_command_claude_ran_itself_is_delivered_by_its_answer_and_shows_what_it_printed() {
+        let mut projector = command("/cost");
+
+        let events = projector.project(result(false, Some("14% of the week used"))).unwrap();
+
+        assert!(matches!(events.first(), Some(ProviderEvent::TurnStarted { turn, .. }) if turn == "turn-1"));
+        assert!(matches!(&item(&events[2]).content, Content::Message { role: Role::User, text } if text == "/cost"));
+        assert_eq!(events[3], ProviderEvent::Delivered { turn: "turn-1".into() });
+        let printed = item(&events[5]);
+        assert!(matches!(&printed.content, Content::Message { role: Role::Assistant, text } if text == "14% of the week used"));
+        assert!(matches!(events.last(), Some(ProviderEvent::TurnCompleted { state: ItemState::Completed, .. })));
+    }
+
+    #[test]
+    fn a_slash_command_claude_answers_as_a_message_is_delivered_when_the_answer_starts() {
+        let mut projector = command("/bw");
+
+        let events = projector
+            .project(OutputFrame::MessageStarted { message_id: "message-1".into(), model: "model".into() })
+            .unwrap();
+
+        assert_eq!(events.last(), Some(&ProviderEvent::Delivered { turn: "turn-1".into() }));
+        assert!(projector.acknowledged());
+        assert!(!projector.takes_answer_as_receipt());
+    }
+
+    #[test]
+    fn an_ordinary_message_is_never_delivered_by_an_answer_alone() {
+        let mut projector = projector();
+
+        let events = projector.project(result(false, Some("done"))).unwrap();
+
+        assert!(!projector.takes_answer_as_receipt());
+        assert!(!projector.acknowledged());
+        assert!(!events.iter().any(|event| matches!(event, ProviderEvent::Delivered { .. })));
     }
 
     fn result(is_error: bool, text: Option<&str>) -> OutputFrame {
