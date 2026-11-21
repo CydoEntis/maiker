@@ -8,6 +8,7 @@ import type { SessionStatus } from '@/features/workspace/model/session'
 import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { ChatSession, type WindowActions } from './ChatSession'
+import type { HelperAsk } from './QuestionTray'
 import type { SessionPlace } from './SessionBar'
 import type { EndedActions } from './Composer'
 import type { SessionUsage } from '../usageStrip'
@@ -32,6 +33,8 @@ export type ChatPaneProps = {
   asking?: string
   /** The permission prompt the agent's hook says the pane is stopped on. */
   ask?: PermissionAsk | null
+  /** The helpers the session waits on the person to allow (`ChatSession`). */
+  helperAsk?: HelperAsk | undefined
   /** The session's id, so what is typed before its agent is ready is kept for it. */
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
@@ -100,6 +103,7 @@ export function ChatPane(props: ChatPaneProps) {
             paneQueue={props.paneQueue}
             ask={props.ask ?? null}
             asking={props.asking ?? ''}
+            helperAsk={props.helperAsk}
             subagent={props.subagent ?? null}
             {...(props.subagents === undefined ? {} : { subagents: props.subagents })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}

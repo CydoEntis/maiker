@@ -1051,9 +1051,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   label and the reason the agent gave, and **Provide…** (a masked box; Enter gives it) and **Decline**. The value goes
   from that box to the daemon and nowhere else: it is not kept in the window's state and not shown in the chat, and the
   agent gets a single-use reference (ADR 0006, `SecretAskBar.tsx`). This computer's sessions only.
-- **A session that asks to start helpers** shows a bar across the top of its pane, in the needs-you colour: "Wants to start N helpers", the
-  tasks, and **Allow** (this session, from now on), **Always in this project** and **No**. It is the only place the desktop app
-  answers that request, and it stays until the daemon says the request is answered.
+- **A session that asks to start helpers** asks where every other request is asked: in the tray over the message box
+  (`HelpersTray`), in the needs-you colour: "Wants to start N helpers", one task per line, and **Allow** (this session, from now
+  on), **No** and **Always in this project**. A pane showing its terminal has no tray, so it shows the same words and answers in
+  a bar across the top of the pane. It stays until the daemon says the request is answered. The agent's start waits on the
+  answer (`maiker mcp`, up to ten minutes for Claude Code and twenty seconds for the agents that end a tool call sooner), so
+  Allow starts the helper with nothing more to type.
 - **Ended panes.** A pane never disappears because a refresh missed its session: it
   stays in its tab with its output, the tab keeps its name, and a card along the bottom says **Session
   ended** with **Restart shell** (a new shell in the same folder, in the same place) and **Close pane**

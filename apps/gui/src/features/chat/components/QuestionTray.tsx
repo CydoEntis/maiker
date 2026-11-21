@@ -101,6 +101,38 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
   )
 }
 
+/** What a session wants to start helpers for, and the way to answer; `answer` is absent where it cannot be sent. */
+export type HelperAsk = {
+  readonly tasks: readonly string[]
+  readonly answer: (choice: 'allow' | 'always' | 'no') => void
+}
+
+/**
+ * A session asking to start helpers. It is asked where every other request is, over the message box, and the agent's
+ * start waits on the answer.
+ */
+export function HelpersTray({ ask, online, agent }: { ask: HelperAsk; online: boolean; agent?: string }) {
+  const count = ask.tasks.length
+  return (
+    <WaitingCard
+      label="Wants to start helpers"
+      title={`Wants to start ${String(count)} helper${count === 1 ? '' : 's'}`}
+      aside={agent === undefined ? undefined : agentLabel(agent)}
+      onEnter={online ? () => { ask.answer('allow') } : undefined}
+      foot={(
+        <>
+          <Button variant="needs" disabled={!online} title="This session may start helpers from now on" onClick={() => { ask.answer('allow') }}>Allow</Button>
+          <Button variant="soft" disabled={!online} title="It does the work alone" onClick={() => { ask.answer('no') }}>No</Button>
+          <span className="mx-spacer" />
+          <Button variant="ghost" size="sm" disabled={!online} title="Every session of this project may, from now on" onClick={() => { ask.answer('always') }}>Always in this project</Button>
+        </>
+      )}
+    >
+      {ask.tasks.map((task) => <p key={task} className="mx-waiting-text">{task}</p>)}
+    </WaitingCard>
+  )
+}
+
 /** What a request would run or touch: the command on a well, or one badge per file. */
 function RequestDetail({ event }: { event: ApprovalEvent }) {
   if (event.command !== null && event.command !== '') {

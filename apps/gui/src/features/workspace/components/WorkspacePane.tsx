@@ -97,6 +97,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   const rewindRefusal = guardLocal(session, 'rewind') ?? (rewindTerm === null ? null : sharedFolderRefusalOf(session))
   const fileSearch = fileSearchOf(session, { term: rewindTerm, machineDown: head?.down === true, desktop: isDesktop() })
   const rewind: RewindPlace | undefined = rewindRefusal !== null ? { refusal: rewindRefusal } : rewindTerm !== null ? { term: rewindTerm } : undefined
+  const answerHelperAsk = (choice: 'allow' | 'always' | 'no') => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }
   // A shell is a terminal already: its menu keeps Clear and Copy folder path in place of New terminal.
   const shell = isShell(session)
   // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
@@ -133,6 +134,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           paneQueue={paneQueue}
           ask={session.ask}
           asking={session.asking}
+          helperAsk={session.helperAsk.length > 0 ? { tasks: session.helperAsk, answer: answerHelperAsk } : undefined}
           sessionId={session.id}
           problem={problem}
           place={placeOf(session)}
@@ -194,7 +196,8 @@ export function WorkspacePane({ shown, pane, kept }: {
       onRename={() => { setRenameId(session.id) }}
       branchMenu={branchMenu}
       onRestart={restartPane}
-      onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }}
+      onAnswerHelpers={answerHelperAsk}
+      helpersAskedInChat={chat.availability.kind === 'ready'}
     />
   )
 }

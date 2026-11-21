@@ -58,6 +58,8 @@ export type PaneCardProps = {
   onRestart: (paneId: string) => void
   /** Answers the session's request to start helpers; absent where it cannot be answered. */
   onAnswerHelpers?: (choice: 'allow' | 'always' | 'no') => void
+  /** The chat shown in the pane asks the helpers question itself, over its message box, so the bar here stays out. */
+  helpersAskedInChat?: boolean
 }
 
 const stop = (event: MouseEvent) => { event.stopPropagation() }
@@ -150,7 +152,7 @@ export function PaneCard(props: PaneCardProps) {
         {props.overlay}
       </div>
       {shown === 'terminal' && !shell && <PaneFooter session={session} />}
-      {session.helperAsk.length > 0 && props.onAnswerHelpers && (
+      {session.helperAsk.length > 0 && props.onAnswerHelpers && !(shown === 'chat' && props.helpersAskedInChat) && (
         <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants to start helpers">
           <span className="mx-pane-ended-text">
             <strong>{`Wants to start ${String(session.helperAsk.length)} helper${session.helperAsk.length === 1 ? '' : 's'}`}</strong>
