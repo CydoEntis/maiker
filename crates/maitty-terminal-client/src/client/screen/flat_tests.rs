@@ -1213,3 +1213,75 @@ fn clicking_a_subagent_shows_its_own_steps_from_its_record() {
     assert!(all.contains("asked write the drafts tests"));
     assert!(all.contains("Added 4 tests for drafts."));
 }
+
+// ---- helpers: who started whom --------------------------------------------------------------
+
+/// The world with sessions 2 and 3 started by session 1's agent.
+fn world_with_helpers() -> App {
+    let mut app = reference_fixture::world(Stage::None);
+    for helper in [2, 3] {
+        app.snap.terms.get_mut(&helper).expect("a session").started_by = Some(1);
+    }
+    app
+}
+
+/// Where `words` start on row `y` of the sidebar.
+fn column_of(rows: &[String], y: usize, words: &str) -> u16 {
+    let at = side_of(&rows[y]).find(words).unwrap_or_else(|| panic!("{words} on {}", rows[y]));
+    rows[y][..at].chars().count() as u16
+}
+
+#[test]
+fn a_helper_names_its_starter_and_the_starter_counts_its_helpers() {
+    let mut app = world_with_helpers();
+    let plain = text(&mut reference_fixture::world(Stage::None), 140, 36);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "helpers 140x36");
+    let lead = row_of(&app, 1);
+    assert!(side(&rows, lead).contains("✓ fix-footer") && side(&rows, lead).contains("2 helpers 2m"), "{}", side(&rows, lead));
+    for helper in [2, 3] {
+        let y = row_of(&app, helper) + 1;
+        assert!(side(&rows, y).contains("↳ fix-footer  "), "the starter, then the place: {}", side(&rows, y));
+    }
+    // Nothing moves: only the three rows that gained words differ from the same list without helpers.
+    let changed: Vec<usize> = (0..rows.len()).filter(|y| side_of(&rows[*y]) != side_of(&plain[*y])).collect();
+    assert_eq!(changed, [row_of(&app, 3) + 1, row_of(&app, 2) + 1, lead], "{changed:?}");
+}
+
+#[test]
+fn a_starters_count_is_in_the_needs_you_colour_only_while_a_helper_waits() {
+    let mut app = world_with_helpers();
+    let rows = text(&mut app, 140, 36);
+    let lead = row_of(&app, 1);
+    let x = column_of(&rows, lead, "2 helpers");
+    // Session 3 waits on you in this world.
+    assert_eq!(app.snap.terms[&3].status, Status::Blocked);
+    assert_eq!(cells(&mut app, 140, 36)[(x, lead as u16)].fg, app.theme.blocked);
+    app.snap.terms.get_mut(&3).expect("a session").started_by = None;
+    let rows = text(&mut app, 140, 36);
+    let lead = row_of(&app, 1);
+    let x = column_of(&rows, lead, "1 helper ");
+    assert_eq!(cells(&mut app, 140, 36)[(x, lead as u16)].fg, app.theme.muted);
+}
+
+#[test]
+fn a_helper_whose_starter_is_gone_is_an_ordinary_row() {
+    let mut app = reference_fixture::world(Stage::None);
+    let plain = text(&mut app, 140, 36);
+    app.snap.terms.get_mut(&2).expect("a session").started_by = Some(999);
+    let rows = text(&mut app, 140, 36);
+    assert_eq!(rows.iter().map(|r| side_of(r)).collect::<Vec<_>>(), plain.iter().map(|r| side_of(r)).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_narrow_sidebar_shortens_the_count_and_keeps_the_name() {
+    let mut app = world_with_helpers();
+    app.screen.saved.side_w = Some(24);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "helpers, a narrow sidebar");
+    let lead = row_of(&app, 1);
+    let line: String = rows[lead].chars().take(24).collect();
+    assert!(line.contains("fix-footer") && line.contains("+2 2m") && !line.contains("helper"), "{line}");
+    let helper: String = rows[row_of(&app, 2) + 1].chars().take(24).collect();
+    assert!(helper.contains("↳ fix-footer"), "{helper}");
+}
