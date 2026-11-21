@@ -21,17 +21,6 @@ async fn send(session: &mut TestSession, client: u64, id: ConversationId, genera
     exchange(session, client, message, None).await
 }
 
-async fn handle_until(session: &mut TestSession, what: &str, done: impl Fn(&Daemon) -> bool) {
-    tokio::time::timeout(Duration::from_secs(30), async {
-        while !done(&session.daemon) {
-            let event = session.events.recv().await.expect("the daemon's events stay open");
-            session.daemon.handle(event);
-        }
-    })
-    .await
-    .unwrap_or_else(|_| panic!("{what}"));
-}
-
 fn generation(session: &TestSession, id: ConversationId) -> u64 {
     session.daemon.conversations.iter().find(|c| c.id == id).unwrap().generation
 }
@@ -194,39 +183,6 @@ async fn a_daemon_restart_mid_turn_resumes_a_codex_chat_once_without_a_second_se
     }
 }
 
-/// Starts a Claude chat on the scripted fake `claude` playing `scenario`.
-async fn claude_chat(session: &mut TestSession, client: u64, scenario: &'static str) -> (PathBuf, ConversationId, u64) {
-    let root = session.fixture.directory.path().to_path_buf();
-    let (executable, config_root) = tokio::task::spawn_blocking(move || {
-        let executable = fake_claude_executable(&root);
-        std::fs::write(executable.with_extension("scenario"), scenario).unwrap();
-        (executable, std::fs::canonicalize(&root).unwrap())
-    })
-    .await
-    .unwrap();
-    let claude = crate::conversation::LaunchSettings {
-        provider: crate::conversation::Provider::Claude,
-        executable: executable.clone(),
-        config_root,
-        cwd: session.fixture.record.binding.cwd.clone(),
-        model: None,
-        model_provider: None,
-        approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
-        sandbox: crate::conversation::Sandbox::WorkspaceWrite,
-    };
-    let started = exchange(
-        session,
-        client,
-        ClientMsg::Command(Command::ConversationStart { target: StartTarget::Create(claude), branch: None }),
-        None,
-    )
-    .await;
-    let ServerMsg::Reply(Reply::ConversationStarted { id, generation }) = started else {
-        panic!("{started:?}");
-    };
-    (executable, id, generation)
-}
-
 /// The process of the fake `claude` beside `executable` that was handed a message last.
 async fn claude_pid(executable: &Path) -> u32 {
     let log = tokio::fs::read_to_string(executable.with_extension("log")).await.unwrap();
@@ -246,7 +202,7 @@ async fn a_claude_killed_mid_turn_blocks_the_chat_and_its_resume_is_refused_with
     let mut session = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         // This scenario holds its first turn open until it is interrupted.
-        let (executable, id, started) = claude_chat(&mut session, 620, "interrupt-any").await;
+        let (executable, id, started) = start_claude_chat(&mut session, 620, "interrupt-any").await;
         let sent = send(&mut session, 621, id, started, "hello fake Claude").await;
         assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
 
@@ -290,7 +246,7 @@ async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_blocked_without_a_second
     let mut session = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         // This scenario holds its first turn open until it is interrupted.
-        let (executable, id, started) = claude_chat(&mut session, 640, "interrupt-any").await;
+        let (executable, id, started) = start_claude_chat(&mut session, 640, "interrupt-any").await;
         let sent = send(&mut session, 641, id, started, "hello fake Claude").await;
         assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
 

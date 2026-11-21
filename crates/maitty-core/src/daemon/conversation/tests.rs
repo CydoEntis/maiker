@@ -719,6 +719,51 @@ async fn drive_reply(
     }).await.unwrap()
 }
 
+/// Handles the daemon's events until `done`, and fails with `what` when that never happens.
+async fn handle_until(session: &mut TestSession, what: &str, done: impl Fn(&Daemon) -> bool) {
+    tokio::time::timeout(Duration::from_secs(30), async {
+        while !done(&session.daemon) {
+            let event = session.events.recv().await.expect("the daemon's events stay open");
+            session.daemon.handle(event);
+        }
+    })
+    .await
+    .unwrap_or_else(|_| panic!("{what}"));
+}
+
+/// Starts a Claude chat on the scripted fake `claude` playing `scenario`.
+async fn start_claude_chat(session: &mut TestSession, client: u64, scenario: &'static str) -> (PathBuf, crate::conversation::ConversationId, u64) {
+    let root = session.fixture.directory.path().to_path_buf();
+    let (executable, config_root) = tokio::task::spawn_blocking(move || {
+        let executable = fake_claude_executable(&root);
+        std::fs::write(executable.with_extension("scenario"), scenario).unwrap();
+        (executable, std::fs::canonicalize(&root).unwrap())
+    })
+    .await
+    .unwrap();
+    let claude = crate::conversation::LaunchSettings {
+        provider: crate::conversation::Provider::Claude,
+        executable: executable.clone(),
+        config_root,
+        cwd: session.fixture.record.binding.cwd.clone(),
+        model: None,
+        model_provider: None,
+        approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+        sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+    };
+    let started = exchange(
+        session,
+        client,
+        crate::protocol::ClientMsg::Command(crate::protocol::Command::ConversationStart { target: crate::conversation::StartTarget::Create(claude), branch: None }),
+        None,
+    )
+    .await;
+    let ServerMsg::Reply(crate::protocol::Reply::ConversationStarted { id, generation }) = started else {
+        panic!("{started:?}");
+    };
+    (executable, id, generation)
+}
+
 mod queue;
 
 mod send_now;
@@ -745,3 +790,4 @@ mod reading;
 mod delivery;
 mod process;
 mod resume;
+mod golden;

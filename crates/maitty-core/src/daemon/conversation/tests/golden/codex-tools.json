@@ -1,0 +1,80 @@
+{
+  "steps": [
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "created",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Idle"
+    },
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [
+        {
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "turn-1"
+          },
+          "state": "Completed"
+        },
+        {
+          "content": {
+            "Tool": {
+              "duration_ms": 12,
+              "exit_code": 0,
+              "kind": "commandExecution",
+              "label": "echo synthetic",
+              "output": "synthetic\n"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "cmd-1",
+            "turn": "turn-1"
+          },
+          "state": "Completed"
+        },
+        {
+          "content": {
+            "Tool": {
+              "kind": "fileChange",
+              "label": "Edited src/synthetic.rs",
+              "output": "src/synthetic.rs (update)\n@@ -1 +1 @@\n-old\n+new\n"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "file-1",
+            "turn": "turn-1"
+          },
+          "state": "Completed"
+        },
+        {
+          "content": {
+            "Message": {
+              "role": "Assistant",
+              "text": "Synthetic stream complete"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "answer",
+            "turn": "turn-1"
+          },
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the turn ended",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Done"
+    }
+  ]
+}

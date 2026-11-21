@@ -273,6 +273,24 @@ fn main() {
                 println!(
                     "{{\"id\":\"approval-private\",\"method\":\"future/unknownApproval\",\"params\":{{\"threadId\":\"exact-thread\"}}}}"
                 );
+            } else if mode == "conversation-tools" {
+                // A turn that runs a command, edits a file and then answers.
+                let event = |method: &str, item: &str| {
+                    println!(
+                        "{{\"method\":\"{method}\",\"params\":{{\"threadId\":\"exact-thread\",\"turnId\":\"{turn}\",\"item\":{item}}}}}"
+                    );
+                };
+                println!(
+                    "{{\"method\":\"turn/started\",\"params\":{{\"threadId\":\"exact-thread\",\"turn\":{{\"id\":\"{turn}\",\"status\":\"inProgress\"}}}}}}"
+                );
+                event("item/started", r#"{"id":"cmd-1","type":"commandExecution","command":"echo synthetic","status":"inProgress"}"#);
+                event("item/completed", r#"{"id":"cmd-1","type":"commandExecution","command":"echo synthetic","status":"completed","aggregatedOutput":"synthetic\n","exitCode":0,"durationMs":12}"#);
+                event("item/started", r#"{"id":"file-1","type":"fileChange","status":"inProgress","changes":[{"path":"src/synthetic.rs","kind":{"type":"update"},"diff":"@@ -1 +1 @@\n-old\n+new\n"}]}"#);
+                event("item/completed", r#"{"id":"file-1","type":"fileChange","status":"completed","changes":[{"path":"src/synthetic.rs","kind":{"type":"update"},"diff":"@@ -1 +1 @@\n-old\n+new\n"}]}"#);
+                event("item/completed", r#"{"id":"answer","type":"agentMessage","text":"Synthetic stream complete"}"#);
+                println!(
+                    "{{\"method\":\"turn/completed\",\"params\":{{\"threadId\":\"exact-thread\",\"turn\":{{\"id\":\"{turn}\",\"status\":\"completed\"}}}}}}"
+                );
             } else if mode == "conversation-cancel" {
                 println!(
                     "{{\"method\":\"turn/started\",\"params\":{{\"threadId\":\"exact-thread\",\"turn\":{{\"id\":\"{turn}\",\"status\":\"inProgress\"}}}}}}"

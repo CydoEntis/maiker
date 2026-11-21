@@ -1,0 +1,96 @@
+{
+  "steps": [
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "created",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Idle"
+    },
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "the provider asked",
+      "open_requests": [
+        {
+          "can_remember": false,
+          "changes": [
+            {
+              "diff": "@@ -1 +1 @@\n-old\n+new\n",
+              "kind": "update",
+              "path": "src/synthetic.rs"
+            }
+          ],
+          "choices": [
+            "Accept",
+            "Decline"
+          ],
+          "command": null,
+          "cwd": "C:/synthetic/project",
+          "item_id": "file-change-1",
+          "kind": "FileChange",
+          "permissions": null,
+          "questions": [],
+          "reason": "Synthetic file change",
+          "request_id": "file-approval-private",
+          "turn_id": "turn-1"
+        }
+      ],
+      "recovery": "Running",
+      "status": "Blocked"
+    },
+    {
+      "answered_requests": [
+        {
+          "answered_at_ms": "<time>",
+          "decision": "Accept",
+          "request": {
+            "can_remember": false,
+            "changes": [
+              {
+                "diff": "@@ -1 +1 @@\n-old\n+new\n",
+                "kind": "update",
+                "path": "src/synthetic.rs"
+              }
+            ],
+            "choices": [
+              "Accept",
+              "Decline"
+            ],
+            "command": null,
+            "cwd": "C:/synthetic/project",
+            "item_id": "file-change-1",
+            "kind": "FileChange",
+            "permissions": null,
+            "questions": [],
+            "reason": "Synthetic file change",
+            "request_id": "file-approval-private",
+            "turn_id": "turn-1"
+          }
+        }
+      ],
+      "error": null,
+      "history": [
+        {
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "turn-1"
+          },
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the turn ended",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Done"
+    }
+  ]
+}

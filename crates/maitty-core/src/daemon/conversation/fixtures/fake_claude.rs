@@ -52,6 +52,8 @@ fn main() {
                 .find_map(|argument| argument.strip_prefix("--resume=").map(str::to_owned))
         })
         .expect("Claude session identity argument");
+    // Every result names the session the daemon asked for, so a conversation it created itself
+    // (with its own session id) reads back as well as the fixed one.
     // Claude Code 2.1.325 and later send `init` only after the message; this fake sends it early,
     // except in the scenario that has the late one name another session.
     if scenario != "late-init-other" {
@@ -185,7 +187,7 @@ fn main() {
             _ => unreachable!(),
         };
         assert_eq!(line.trim_end(), expected_response);
-        writeln!(output, "{}", r#"{"is_error":false,"result":"tool decision processed","session_id":"fixture-session","type":"result"}"#).unwrap();
+        writeln!(output, r#"{{"is_error":false,"result":"tool decision processed","session_id":"{session_id}","type":"result"}}"#).unwrap();
         output.flush().unwrap();
         return;
     }
@@ -212,8 +214,8 @@ fn main() {
             r#"{"response":{"request_id":"edit-request","response":{"behavior":"allow","updatedInput":{"file_path":"src/a.rs","new_string":"new","old_string":"old"}},"subtype":"success"},"type":"control_response"}"#
         );
         for frame in [
-            r#"{"message":{"content":[{"content":"edited","tool_use_id":"toolu_edit","type":"tool_result"}]},"type":"user"}"#,
-            r#"{"is_error":false,"result":"done","session_id":"fixture-session","type":"result"}"#,
+            r#"{"message":{"content":[{"content":"edited","tool_use_id":"toolu_edit","type":"tool_result"}]},"type":"user"}"#.to_owned(),
+            format!(r#"{{"is_error":false,"result":"done","session_id":"{session_id}","type":"result"}}"#),
         ] {
             writeln!(output, "{frame}").unwrap();
         }
@@ -251,7 +253,7 @@ fn main() {
             r#"{"event":{"delta":{"partial_json":"{\"command\":\"echo $TOKEN\"}","type":"input_json_delta"},"index":2,"type":"content_block_delta"},"type":"stream_event"}"#.to_owned(),
             r#"{"event":{"index":2,"type":"content_block_stop"},"type":"stream_event"}"#.to_owned(),
             format!(r#"{{"message":{{"content":[{{"content":"token is {token}","tool_use_id":"toolu_echo","type":"tool_result"}}]}},"type":"user"}}"#),
-            r#"{"is_error":false,"result":"done","session_id":"fixture-session","type":"result"}"#.to_owned(),
+            format!(r#"{{"is_error":false,"result":"done","session_id":"{session_id}","type":"result"}}"#),
         ] {
             writeln!(output, "{frame}").unwrap();
         }
@@ -271,13 +273,11 @@ fn main() {
         );
         // Claude Code 2.1.327's answer to an interrupt and the result that ends the stopped turn.
         writeln!(output, "{}", r#"{"response":{"request_id":"interrupt-4","response":{"still_queued":[]},"subtype":"success"},"type":"control_response"}"#).unwrap();
-        writeln!(output, "{}", r#"{"is_error":true,"session_id":"fixture-session","subtype":"error_during_execution","type":"result"}"#).unwrap();
+        writeln!(output, r#"{{"is_error":true,"session_id":"{session_id}","subtype":"error_during_execution","type":"result"}}"#).unwrap();
         output.flush().unwrap();
         return;
     }
 
-    // The result names the session the daemon asked for, so a conversation it created itself (with its
-    // own session id) reads back as well as the fixed one.
     let result = format!(
         r#"{{"is_error":false,"result":"fake reply","session_id":"{session_id}","type":"result"}}"#
     );
