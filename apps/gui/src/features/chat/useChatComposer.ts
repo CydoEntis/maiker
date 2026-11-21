@@ -3,7 +3,7 @@ import { cancelTurn, dequeueMessage, sendQueuedMessageNow, submitMessage } from 
 import { errorMessage } from '@/lib/error-message'
 import { useLatest } from '@/lib/useLatest'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
-import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
+import { abilitiesOf, runsMidTurn, steersIntoTurn } from '@/features/workspace/model/agentAbilities'
 import { hasPendingApproval, type ChatFeed } from './chatFeed'
 import { buildAttachmentMessage, parseAttachmentMessage } from './attachmentMessage'
 import { buildQuoteMessage, MAX_QUOTES, parseQuoteMessage, sameQuote, type MessageSegment } from './quoteMessage'
@@ -173,6 +173,8 @@ export type ChatComposer = {
    * (steered into the turn, or the turn stopped for it) and a refusal leaves it queued; absent while a request waits for an answer.
    */
   sendQueuedNow?: ((id: number) => void) | undefined
+  /** Send now goes into the running turn instead of stopping it, as the daemon reports for this chat. */
+  sendNowSteers?: boolean | undefined
   /** The queued messages whose Send now the daemon has not answered yet, so a second click cannot send it twice. */
   sendingNow?: ReadonlySet<number> | undefined
   /** Sends the draft; while the agent works the daemon holds it and sends it when the turn ends. */
@@ -590,7 +592,7 @@ export function useChatComposer({ link, agent, feed, online, refresh, typeInto, 
       .catch((failure: unknown) => { setError(errorMessage(failure, 'Could not interrupt the turn')) })
   }, [running, feed.cancelling, conversation, link.generation, refresh, typeText])
 
-  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow: disabledReason === null ? sendQueuedNow : undefined, sendingNow, submit, stop, running, sending, disabledReason,
+  return { conversationKey: link.conversation, setDraft, attachments, attach, readOnly, attachable: !readOnly || typing, queue, removeQueued, editQueued, moveQueuedUp, clearQueued, sendQueuedNow: disabledReason === null ? sendQueuedNow : undefined, sendNowSteers: steersIntoTurn(link.steers), sendingNow, submit, stop, running, sending, disabledReason,
     // Offline, the message cannot go but the person can still write it: a reconnect a few seconds later should not
     // cost them what they were typing, nor the box its focus.
     draftable: disabledReason === null || disabledReason === OFFLINE_NOTE,

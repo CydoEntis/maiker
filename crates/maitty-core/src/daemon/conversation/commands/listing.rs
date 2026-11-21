@@ -94,6 +94,9 @@ impl Daemon {
                         .filter(|s| s.helpers_generation == c.generation)
                         .map_or_else(Vec::new, |s| s.helpers.clone()),
                     helper_ask: state.map_or_else(Vec::new, |s| s.helper_consent.asked.clone()),
+                    capabilities: (c.execution == ExecutionKind::Structured)
+                        .then(|| self.conversation_capabilities(c.binding.provider, c.id, c.generation))
+                        .flatten(),
                 }
             })
             .collect();
@@ -117,6 +120,8 @@ impl Daemon {
                 branch: None,
                 helpers: Vec::new(),
                 helper_ask: Vec::new(),
+                // The daemon only reads this pane's transcript; what the agent can do is the pane's.
+                capabilities: None,
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -140,8 +145,22 @@ impl Daemon {
                 branch: None,
                 helpers: Vec::new(),
                 helper_ask: Vec::new(),
+                // Not running yet, so nothing its provider's own run decides is known.
+                capabilities: self.conversation_capabilities(p.settings.provider, p.id, p.generation),
             }
         }));
         summaries
+    }
+
+    /// What a chat's provider can do. Whether it takes a message into a running turn is its
+    /// live runtime's to say, so a chat that is not running claims it cannot.
+    fn conversation_capabilities(
+        &self,
+        provider: Provider,
+        id: ConversationId,
+        generation: u64,
+    ) -> Option<crate::conversation::capabilities::Capabilities> {
+        let structured = crate::daemon::providers::adapter(provider).structured.as_ref()?;
+        Some((structured.capabilities)(self.conversation_runtimes.can_steer(id, generation)))
     }
 }

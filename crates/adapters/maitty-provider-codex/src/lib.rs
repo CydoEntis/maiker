@@ -359,6 +359,20 @@ pub fn parse_turn_steer_ack(response: &Value) -> Result<String, String> {
         .ok_or_else(|| "Codex's steer response has no turnId".to_owned())
 }
 
+/// What Codex's app-server can do in a chat, checked against the pinned version. `steers` is
+/// what the running version's schema says about taking a message into a turn.
+pub fn capabilities(steers: bool) -> maitty_shared::conversation::capabilities::Capabilities {
+    use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+    Capabilities {
+        steer: steers,
+        resume: true,
+        history_replay: true,
+        helpers: true,
+        verified: Verified::Pinned,
+        ..Capabilities::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

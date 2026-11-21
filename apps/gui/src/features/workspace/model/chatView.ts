@@ -36,6 +36,8 @@ export type ChatLink = {
   readonly readOnly?: boolean
   /** The machine the agent runs on, so attachments are sent there; absent for this computer. */
   readonly machine?: string | null
+  /** The daemon's report that the agent takes a message into a running turn; absent when it made none. */
+  readonly steers?: boolean
 }
 
 export type ChatAvailability =

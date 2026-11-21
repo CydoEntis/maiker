@@ -10,7 +10,7 @@ use crate::{
 };
 use anyhow::{Context, Result, bail, ensure};
 use maitty_provider::{Command, LaunchPlan, ProviderDialect, ProviderEvent, Step};
-use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+use maitty_shared::conversation::capabilities::Capabilities;
 use maitty_shared::conversation::{ApprovalDecision, LaunchSettings, ProviderRequestId, TurnChoice};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -221,11 +221,7 @@ impl ProviderDialect for ClaudeDialect {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            resume: true,
-            verified: Verified::Pinned,
-            ..Capabilities::default()
-        }
+        crate::capabilities()
     }
 }
 

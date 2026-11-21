@@ -551,6 +551,11 @@ pub struct ConversationSummary {
     /// from an older daemon.
     #[serde(default)]
     pub helper_ask: Vec<String>,
+    /// What the conversation's provider can do, as the daemon knows it. Absent for a conversation
+    /// the daemon does not run (a followed pane) and from an older daemon; a client then falls
+    /// back to what it knows about the agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub capabilities: Option<crate::conversation::capabilities::Capabilities>,
 }
 
 /// How the service's refusal starts while a session's request to start helpers waits on the
@@ -3103,6 +3108,30 @@ mod tests {
         assert_eq!((summary.root, summary.branch), (None, None));
         assert!(summary.helpers.is_empty(), "an older daemon reports no helpers");
         assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
+        assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
+    }
+
+    #[test]
+    fn a_summary_carries_capabilities_only_when_the_daemon_knows_them() {
+        use crate::conversation::capabilities::{Capabilities, Verified};
+        let mut summary: ConversationSummary = serde_json::from_value(serde_json::json!({
+            "id": 7, "generation": 3, "provider": "Codex", "cwd": "/code", "worktree": null,
+            "state": "Running", "status": "Idle", "native_term": null, "checks": []
+        }))
+        .unwrap();
+        let unknown = serde_json::to_value(&summary).unwrap();
+        summary.capabilities = Some(Capabilities {
+            steer: true,
+            verified: Verified::Pinned,
+            ..Capabilities::default()
+        });
+
+        let known = serde_json::to_value(&summary).unwrap();
+        let read: ConversationSummary = serde_json::from_value(known.clone()).unwrap();
+
+        assert!(unknown.get("capabilities").is_none());
+        assert_eq!(known["capabilities"]["steer"], true);
+        assert_eq!(read.capabilities, summary.capabilities);
     }
 
     /// A message held for a starting agent is a new command, and the news that a conversation

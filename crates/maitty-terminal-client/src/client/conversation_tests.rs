@@ -22,6 +22,7 @@ fn conversation() -> ConversationSummary {
         branch: None,
         helpers: Vec::new(),
         helper_ask: Vec::new(),
+        capabilities: None,
     }
 }
 

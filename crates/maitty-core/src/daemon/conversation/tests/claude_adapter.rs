@@ -504,9 +504,7 @@ async fn a_claude_chats_process_is_told_it_is_this_chat_and_nothing_else() {
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::runtime::Rpc::Send {
-                params: json!({"threadId":"fixture-session","input":[{"type":"text","text":"hello fake Claude"}]}),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();

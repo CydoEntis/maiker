@@ -393,6 +393,7 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
           onRemove={removeQueued}
           onEdit={(id) => { editQueued(id); text.current?.focus() }}
           onSendNow={sendQueuedNow}
+          steers={composer.sendNowSteers}
           onMoveUp={moveQueuedUp}
           onClear={clearQueued}
           sendingNow={sendingNow}

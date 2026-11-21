@@ -2,6 +2,7 @@
 //! here, and the rest of the daemon reads the field. A new agent is one more entry.
 
 use super::conversation::follow_transcript::Format;
+use crate::conversation::capabilities::Capabilities;
 use crate::conversation::{LaunchSettings, Provider};
 use anyhow::Result;
 use serde_json::Value;
@@ -35,6 +36,9 @@ pub(in crate::daemon) struct Structured {
     /// which must be the expected one when one was asked for.
     pub(in crate::daemon) opened:
         fn(reply: &Value, settings: &mut LaunchSettings, expected: Option<&str>) -> Result<String>,
+    /// What the agent can do in a chat. `steers` is whether its running process says it takes
+    /// a message into a turn; an agent that never does ignores it.
+    pub(in crate::daemon) capabilities: fn(steers: bool) -> Capabilities,
 }
 
 /// How long an agent's process lives.
@@ -76,6 +80,7 @@ static CODEX: Adapter = Adapter {
         process: ProcessModel::Server,
         history: HistorySource::Provider,
         opened: maitty_provider_codex::requests::validate_thread,
+        capabilities: maitty_provider_codex::capabilities,
     }),
     transcript: Format::Codex,
     transcript_is_sessions: |stem, session| stem.starts_with("rollout-") && stem.ends_with(session),
@@ -91,6 +96,7 @@ static CLAUDE: Adapter = Adapter {
         history: HistorySource::Transcript,
         // Claude's loop answers with the session alone: it has no sandbox or model to echo.
         opened: |reply, _, expected| maitty_provider_codex::requests::thread_id(reply, expected),
+        capabilities: |_| maitty_provider_claude::capabilities(),
     }),
     transcript: Format::Claude,
     transcript_is_sessions: |stem, session| stem == session,
@@ -134,6 +140,17 @@ mod tests {
             .collect();
 
         assert_eq!(without, [Provider::Gemini]);
+    }
+
+    #[test]
+    fn only_codex_can_steer_and_only_when_its_process_says_so() {
+        let steers = |provider, running: bool| {
+            let structured = adapter(provider).structured.as_ref().unwrap();
+            (structured.capabilities)(running).steer
+        };
+
+        assert!(steers(Provider::Codex, true) && !steers(Provider::Codex, false));
+        assert!(!steers(Provider::Claude, true));
     }
 
     #[test]

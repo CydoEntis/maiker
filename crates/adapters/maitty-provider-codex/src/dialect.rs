@@ -10,7 +10,7 @@ use crate::history::{self, HistoryEvent};
 use crate::requests;
 use anyhow::{Context, Result, bail, ensure};
 use maitty_provider::{Asked, Command, Item, LaunchPlan, ProviderDialect, ProviderEvent, SavedTurn, Step};
-use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+use maitty_shared::conversation::capabilities::Capabilities;
 use maitty_shared::conversation::history::ItemState;
 use maitty_shared::conversation::{
     ApprovalRequestKind, FileChangePreview, LaunchSettings, ProviderRequestId,
@@ -335,15 +335,7 @@ impl ProviderDialect for CodexDialect {
     }
 
     fn capabilities(&self) -> Capabilities {
-        Capabilities {
-            steer: self.steer,
-            resume: true,
-            history_replay: true,
-            helpers: true,
-            usage: true,
-            verified: Verified::Pinned,
-            ..Capabilities::default()
-        }
+        crate::capabilities(self.steer)
     }
 }
 
