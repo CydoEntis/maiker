@@ -444,7 +444,8 @@ outside Maiker. No provider-specific status adapter is needed.
 Decisions are in [`adr/`](adr/README.md): the daemon owns every session (0001), the
 terminal substrate and wire protocol (0002), status trust (0003), the client split (0004),
 provider adapters (0005), secrets (0006), multiple machines (0007), Windows and the product
-name (0008), provider-reported usage (0009), and the provider contract (0016). Workflows and specialist agents stay
+name (0008), provider-reported usage (0009), the provider contract (0016), and ACP for agents without
+an adapter (0017; rules in [stack/acp.md](stack/acp.md)). Workflows and specialist agents stay
 outside Maiker, which shows them (0010).
 
 ## Project-specific: planned structured conversations
