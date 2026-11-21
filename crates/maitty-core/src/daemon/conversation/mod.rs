@@ -6,8 +6,6 @@ mod claude;
 pub(super) mod commands;
 pub(super) mod continue_turn;
 mod daemon;
-// Run by no registered agent yet; see the module.
-#[cfg(test)]
 mod dialect_runtime;
 pub(super) mod follow;
 pub(in crate::daemon) mod follow_transcript;

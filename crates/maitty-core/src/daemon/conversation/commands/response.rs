@@ -94,10 +94,21 @@ impl Daemon {
                     Pending::Cancelling { .. } => "turn/interrupt",
                     _ => "unknown",
                 };
-                self.conversation_fail(
-                    pending,
-                    format!("Codex rejected {stage} (RPC error {}); no fallback or automatic resend was attempted", error.code),
-                );
+                let id = pending.conversation();
+                let over_acp = self.conversations.iter().map(|c| (c.id, c.binding.provider))
+                    .chain(self.pending_starts.iter().map(|p| (p.id, p.settings.provider)))
+                    .any(|(other, provider)| other == id && provider == Provider::Acp);
+                let reason = match (&pending, over_acp) {
+                    (Pending::Opening { expected: Some(_), .. }, true) => format!(
+                        "The agent did not continue the saved conversation (error {}); it can only when the agent says it loads sessions",
+                        error.code
+                    ),
+                    (Pending::Opening { .. }, true) => {
+                        format!("The agent did not open a conversation (error {}); nothing was sent again", error.code)
+                    }
+                    _ => format!("Codex rejected {stage} (RPC error {}); no fallback or automatic resend was attempted", error.code),
+                };
+                self.conversation_fail(pending, reason);
                 return Ok(());
             }
         };

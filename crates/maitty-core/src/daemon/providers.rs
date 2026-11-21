@@ -28,8 +28,9 @@ pub(in crate::daemon) struct Adapter {
 
 /// How the daemon runs a chat with an agent.
 pub(in crate::daemon) struct Structured {
-    /// The variable that tells the agent where its configuration is.
-    pub(in crate::daemon) config_variable: &'static str,
+    /// The variable that tells the agent where its configuration is. `None` for an agent the
+    /// daemon does not point at a configuration.
+    pub(in crate::daemon) config_variable: Option<&'static str>,
     pub(in crate::daemon) process: ProcessModel,
     pub(in crate::daemon) history: HistorySource,
     /// Checks the reply to opening a conversation and returns the agent's own name for it,
@@ -48,6 +49,8 @@ pub(in crate::daemon) enum ProcessModel {
     Server,
     /// One process for each message, which resumes the session and exits when the turn ends.
     PerMessage,
+    /// Whatever the agent's dialect asks for, carried out by the generic runner.
+    Dialect,
 }
 
 /// Where a conversation's saved history is read from.
@@ -57,6 +60,9 @@ pub(in crate::daemon) enum HistorySource {
     Provider,
     /// The transcript file the agent writes.
     Transcript,
+    /// Only what the daemon recorded while the conversation ran: the agent is not asked and
+    /// writes no file the daemon reads.
+    Recorded,
 }
 
 /// The program that lists an agent's commands, and what kind of list it gives.
@@ -76,7 +82,7 @@ const GEMINI_ID_CHARS: usize = 8;
 
 static CODEX: Adapter = Adapter {
     structured: Some(Structured {
-        config_variable: "CODEX_HOME",
+        config_variable: Some("CODEX_HOME"),
         process: ProcessModel::Server,
         history: HistorySource::Provider,
         opened: maitty_provider_codex::requests::validate_thread,
@@ -91,7 +97,7 @@ static CODEX: Adapter = Adapter {
 
 static CLAUDE: Adapter = Adapter {
     structured: Some(Structured {
-        config_variable: "CLAUDE_CONFIG_DIR",
+        config_variable: Some("CLAUDE_CONFIG_DIR"),
         process: ProcessModel::PerMessage,
         history: HistorySource::Transcript,
         // Claude's loop answers with the session alone: it has no sandbox or model to echo.
@@ -123,8 +129,15 @@ static GEMINI: Adapter = Adapter {
 /// Any agent run over ACP. It has no transcript of its own that the daemon follows: a pane
 /// running the same agent is known by that agent's own name, never as this.
 static ACP: Adapter = Adapter {
-    // Not run by the daemon yet (MAITTY-491).
-    structured: None,
+    structured: Some(Structured {
+        config_variable: None,
+        process: ProcessModel::Dialect,
+        history: HistorySource::Recorded,
+        // The runner answers with the session alone.
+        opened: |reply, _, expected| maitty_provider_codex::requests::thread_id(reply, expected),
+        // What one agent advertised is known only to its running dialect, so nothing is claimed here.
+        capabilities: |_| maitty_provider_acp::unadvertised(),
+    }),
     // Never read: no pane's agent is named as this provider, so nothing follows a file for it.
     transcript: Format::Gemini,
     transcript_is_sessions: |_, _| false,

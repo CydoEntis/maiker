@@ -79,7 +79,10 @@ the agent answers with an error fails the turn with the agent's message, cleaned
 the conversation goes on.
 
 A saved session's replayed updates (`session/load`) are dropped: the daemon does not rebuild
-history from them yet, so `history_replay` is never claimed.
+history from them yet, so `history_replay` is never claimed. The history of an ACP conversation
+is what the daemon recorded while it ran (`HistorySource::Recorded`); the agent is never asked
+for it. A conversation is continued only when the agent says it loads sessions and the daemon
+still holds its record; otherwise it is blocked with the reason, and nothing is sent.
 
 ## Limits
 
@@ -92,8 +95,17 @@ history from them yet, so `history_replay` is never claimed.
 
 An ACP agent is an `[[agents]]` entry with `acp = true`. The entry names the program and its
 arguments; Maiker does not guess an agent's ACP flag. The keys and their checks are in
-[ENVIRONMENT](../ENVIRONMENT.md#project-specific-agents-run-over-acp). The config is read and
-checked; the daemon does not start an agent from it yet (MAITTY-491).
+[ENVIRONMENT](../ENVIRONMENT.md#project-specific-agents-run-over-acp).
+
+## Project-specific: how the daemon runs it
+
+`StartTarget::Acp { agent, cwd }` names an `[[agents]]` entry; the daemon resolves the program,
+arguments and variables from its own config (`commands/start.rs`) and refuses a start that
+names a program for the `Acp` provider. The registry entry (`daemon/providers.rs`) runs the
+dialect on the generic runner (`conversation/dialect_runtime.rs`), one process per
+conversation, owned and stopped as a process tree like every provider's. The daemon sets no
+sandbox for the agent: the agent asks before it acts, and its own limits apply. The summary's
+capabilities claim nothing yet: what one agent advertised stays inside its running dialect.
 
 ## Project-specific: what is verified
 

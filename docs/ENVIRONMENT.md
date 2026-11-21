@@ -357,7 +357,10 @@ what is written to `config.toml`.
 An `[[agents]]` entry with `acp = true` names an agent that can be run as a chat over the Agent
 Client Protocol ([stack/acp.md](stack/acp.md)). The keys are read when the config loads
 (`validate_agents`), and a bad entry refuses the whole file with a message that names the entry
-and the reason. The daemon does not start such an agent yet.
+and the reason. The daemon starts the agent by its name (`StartTarget::Acp`): it finds `command`
+on the login PATH, passes `args`, and sets `env` over what it inherited. A client never names the
+program. A conversation that is continued runs what the config says at that moment; an agent no
+longer in the config cannot be continued.
 
 | Key | Meaning and checks |
 | --- | --- |

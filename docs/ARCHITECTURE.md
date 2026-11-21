@@ -273,7 +273,7 @@ provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
 (`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
 contract from the open connection on, and `ClaudeDialect` (`maitty-provider-claude/src/dialect.rs`)
 implements it whole. `AcpDialect` (`maitty-provider-acp`) is the dialect for an agent with no
-adapter of its own ([stack/acp.md](stack/acp.md)); the daemon does not run it yet. Both providers' events reach one place in the daemon
+adapter of its own ([stack/acp.md](stack/acp.md)). Every provider's events reach one place in the daemon
 (`conversation_reported`, `conversation_asked`), so a turn's status and history are decided the
 same way for every provider.
 
@@ -285,8 +285,7 @@ provider (`runtime::Rpc`) are in no provider's words. `conversation/dialect_runt
 `ProviderDialect`: it owns the process and pipes and carries out the dialect's steps. Codex and
 Claude still run in their own loops (`runtime.rs`, `claude.rs`), which hold what the generic
 runner has not learned: Codex's handshake and version checks, and Claude's process started ahead
-of the next message. No registered agent uses the generic runner yet, so it is built only for
-its tests, where a made-up third dialect runs a turn through it. The decision is
+of the next message. Agents run over ACP run on the generic runner. The decision is
 [ADR 0016](adr/0016-one-provider-contract-with-no-io.md).
 JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.

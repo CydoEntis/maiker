@@ -1,10 +1,9 @@
 //! Runs any [`ProviderDialect`]: owns the provider's process and pipes, hands the dialect each
 //! command and each line, and carries out the steps it gets back.
 //!
-//! Codex and Claude do not run here yet: each still has its own loop (`runtime.rs`,
-//! `claude.rs`), which holds what this one has not learned (Codex's handshake and version
-//! checks, Claude's process started ahead of the next message). No agent in the registry uses
-//! it, so it is built only for its tests until the first one does.
+//! Agents run over ACP run here. Codex and Claude do not yet: each still has its own loop
+//! (`runtime.rs`, `claude.rs`), which holds what this one has not learned (Codex's handshake
+//! and version checks, Claude's process started ahead of the next message).
 
 use super::runtime::{Command, Owner, Payload, Rpc, emit};
 use super::transport::RpcError;

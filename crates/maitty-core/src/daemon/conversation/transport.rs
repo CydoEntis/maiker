@@ -26,6 +26,9 @@ const MAX_STARTUP_NOTIFICATIONS: usize = 8;
 pub(crate) struct Launch {
     pub(super) identity: LaunchIdentity,
     pub(crate) environment: Vec<(OsString, OsString)>,
+    /// The arguments the daemon's config gives the program, for an agent whose program is the
+    /// config's to name. Empty for every other.
+    pub(crate) arguments: Vec<OsString>,
     #[cfg(test)]
     pub(super) failure_point: Option<FailurePoint>,
 }
@@ -169,7 +172,7 @@ impl Launch {
                 if key.is_empty() || key.to_string_lossy().contains(['=', '\0']) || value.to_string_lossy().contains('\0') {
                     bail!("Invalid effective provider environment");
                 }
-                if key.to_string_lossy().eq_ignore_ascii_case(structured.config_variable)
+                if structured.config_variable.is_some_and(|variable| key.to_string_lossy().eq_ignore_ascii_case(variable))
                     && std::fs::canonicalize(Path::new(value)).ok().as_ref() != Some(&home) {
                     bail!("Effective environment disagrees with selected provider configuration root");
                 }
@@ -693,6 +696,7 @@ mod tests {
                 thread_id: None,
             }),
             environment: Vec::new(),
+            arguments: Vec::new(),
             failure_point: None,
         };
 
@@ -755,6 +759,7 @@ mod tests {
                 thread_id: None,
             }),
             environment: Vec::new(),
+            arguments: Vec::new(),
             failure_point: None,
         };
 
