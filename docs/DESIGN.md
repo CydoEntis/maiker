@@ -466,7 +466,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   of the group look (`--m-card`, hairline, `--r-panel`, 8px from the sidebar's sides) headed **Needs you** with its count
   in `--needs` lists every such session, on every machine and in every project, folded or filtered out or not, the one
   that started waiting last first (`TermInfo.since`). A row is the tree's row with its second line saying where: the
-  machine's icon and name (another machine's in `--accent-text`, **This computer** plainly) · the project. A click opens
+  machine's icon and name (another machine's in `--accent-text`, **This computer** plainly) · the project. With this
+  computer alone there are no machine headings, so the row names no machine: the monitor, then the project. A click opens
   the session and unfolds its machine and project (and drops a project filter that would hide it); its right-click menu
   is the row's. The session is still listed in its own project. The strip is outside the scrolling list, so it never
   scrolls away; it takes at most a third of the sidebar and scrolls its own rows past that. With nothing waiting it is not
@@ -503,7 +504,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   activity line in the daemon's own words (the status word, dim, only when it said nothing; never both), then icon rows hanging in the left margin: the
   folder (locked for a worktree; a shell shows its working directory in mono), the branch in mono with an **own worktree** tag, the changes
   (`+added` `--ok`, `−removed` `--danger`) and the pull request (`#218` and its state in the state's colour), and a 30px footer with the agent's mark,
-  `agent · machine` and how long ago it last changed. It takes no pointer input and goes on leave, click, scroll or a menu.
+  `agent · machine` (the agent alone while there are no machine headings) and how long ago it last changed. It takes no pointer input and goes on leave, click, scroll or a menu.
   The name is 13px, 600 and `--fg` for an agent that is doing anything. A stopped agent says `stopped` and an exited shell `exited` at the right, in `--danger`, instead of a
   badge. An agent the daemon holds until its plan limit resets is **limited**: its row says `limited until 14:05` there in
   `--muted` (the daemon's `TermInfo.resume_at`, in this computer's time; `limited until Thu 14:05` when that is not today), and it goes back to the daemon's status when that

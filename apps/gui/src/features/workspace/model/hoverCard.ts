@@ -41,7 +41,7 @@ export type HoverCardText = {
   startedBy: string | null
   /** The helpers its agent started: `2 helpers: Review the diff, Write the tests`, and whether one waits on the person. */
   helpers: { text: string; needs: boolean } | null
-  /** The agent and where it runs: `Claude · This computer`. */
+  /** The agent and where it runs: `Claude · This computer`; the agent alone while the tree names no machine. */
   who: string
 }
 
@@ -56,7 +56,7 @@ function helpersLine(helpers: HelperCount): string {
  * asks when it needs you, the prompt it was last given while it works. The status word is only a stand-in
  * for an activity the session did not report.
  */
-export function hoverCardText(session: SessionView, title: string, starter: string | null = null, helpers: HelperCount | null = null): HoverCardText {
+export function hoverCardText(session: SessionView, title: string, namesMachine: boolean, starter: string | null = null, helpers: HelperCount | null = null): HoverCardText {
   const asked = session.ask === null ? session.asking : askWords(session.ask)
   const said = session.status === 'needs' ? asked : session.status === 'working' ? session.lastPrompt : ''
   const shell = session.process === SHELL_PROCESS
@@ -72,7 +72,7 @@ export function hoverCardText(session: SessionView, title: string, starter: stri
     pr: pr === null ? null : { number, state: pullRequestHeadline(pr).slice(number.length).trim() || pr.state.toLowerCase(), tone: pullRequestTone(pr) },
     startedBy: starter,
     helpers: helpers === null ? null : { text: helpersLine(helpers), needs: helpers.needs > 0 },
-    who: `${agentLabel(session.process)} · ${session.machineName === null ? 'This computer' : machineLabel(session.machineName)}`,
+    who: namesMachine ? `${agentLabel(session.process)} · ${session.machineName === null ? 'This computer' : machineLabel(session.machineName)}` : agentLabel(session.process),
   }
 }
 
