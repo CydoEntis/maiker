@@ -815,7 +815,8 @@ fn a_long_session_of_thinking_keeps_its_newest_messages_and_a_bounded_reasoning(
         }
     }
 
-    apply_notes(&mut follower, notes, false);
+    let session = follower.session.clone();
+    apply_notes(follower.id, &session, &mut follower.history, notes, false);
 
     let entries = &follower.history.entries;
     let last = format!("m{}", pairs - 1);
@@ -859,7 +860,8 @@ fn a_reasoning_note_that_replaces_or_fails_never_breaks_the_counts() {
     });
     notes.extend(transcript.feed(9, claude_reply("after").trim_end()));
 
-    apply_notes(&mut follower, notes, false);
+    let session = follower.session.clone();
+    apply_notes(follower.id, &session, &mut follower.history, notes, false);
 
     let entries = &follower.history.entries;
     let thoughts: Vec<_> = entries

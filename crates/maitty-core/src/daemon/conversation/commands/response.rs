@@ -191,6 +191,7 @@ impl Daemon {
                             .and_then(|conversation| conversation.worktree_origin.clone())
                     }),
                 };
+                let adopted = !created_thread && !self.conversations.iter().any(|known| known.id == id);
                 let mut proposed = self.conversations.clone();
                 proposed.retain(|c| c.id != id);
                 proposed.push(c);
@@ -206,6 +207,7 @@ impl Daemon {
                         id,
                         generation,
                         created_thread,
+                        adopted,
                     },
                 );
                 self.conversation_persist(token)?;

@@ -115,6 +115,8 @@ pub(in crate::daemon) enum Pending {
         id: ConversationId,
         generation: u64,
         created_thread: bool,
+        /// The conversation is new here but its session is not: it began outside this app.
+        adopted: bool,
     },
     Hydration {
         id: ConversationId,

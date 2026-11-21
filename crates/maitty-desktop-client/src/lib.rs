@@ -2080,6 +2080,40 @@ pub async fn create_conversation(
     branch: Option<String>,
     daemon_executable: PathBuf,
 ) -> Result<Value> {
+    let settings = chat_launch_settings(cwd, provider, permissions)?;
+    start_conversation(StartTarget::Create(settings), branch, daemon_executable).await
+}
+
+/// Open a saved Claude Code or Codex conversation as a chat session the daemon owns: the agent's own
+/// session `session` in `cwd`, continued where it stopped, with its earlier messages as the history.
+pub async fn resume_chat_session(
+    cwd: PathBuf,
+    provider: Provider,
+    session: String,
+    permissions: Permissions,
+    daemon_executable: PathBuf,
+) -> Result<Value> {
+    let target = saved_session_target(chat_launch_settings(cwd, provider, permissions)?, session)?;
+    start_conversation(target, None, daemon_executable).await
+}
+
+/// The start that opens the agent's saved session `session`. The name comes from the window, so it
+/// is checked here: it becomes part of a file name and of the agent's command line.
+fn saved_session_target(settings: LaunchSettings, session: String) -> Result<StartTarget> {
+    let mut letters = session.chars();
+    let named = letters.next().is_some_and(|first| first.is_ascii_alphanumeric())
+        && session.len() <= MAX_SAVED_SESSION_NAME
+        && letters.all(|letter| letter.is_ascii_alphanumeric() || letter == '-' || letter == '_');
+    if !named {
+        bail!("{session:?} is not a saved conversation's name");
+    }
+    Ok(StartTarget::Session { settings, thread_id: session })
+}
+
+/// The longest name an agent gives a saved session, as the daemon's saved list allows.
+const MAX_SAVED_SESSION_NAME: usize = 128;
+
+fn chat_launch_settings(cwd: PathBuf, provider: Provider, permissions: Permissions) -> Result<LaunchSettings> {
     let cwd = cwd
         .canonicalize()
         .context("The project folder is not there. It may have been moved or deleted")?;
@@ -2095,7 +2129,7 @@ pub async fn create_conversation(
         Provider::Acp => bail!("An agent run over ACP cannot be started from here yet"),
     };
     let (sandbox, approval_policy) = permissions.launch_policy();
-    let settings = LaunchSettings {
+    Ok(LaunchSettings {
         agent: None,
         provider,
         executable,
@@ -2105,15 +2139,11 @@ pub async fn create_conversation(
         model_provider: None,
         approval_policy,
         sandbox,
-    };
-    let reply = request(
-        ClientMsg::Command(Command::ConversationStart {
-            target: StartTarget::Create(settings),
-            branch,
-        }),
-        daemon_executable,
-    )
-    .await?;
+    })
+}
+
+async fn start_conversation(target: StartTarget, branch: Option<String>, daemon_executable: PathBuf) -> Result<Value> {
+    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch }), daemon_executable).await?;
     match reply {
         Reply::ConversationStarted { id, generation } => {
             Ok(json!({"id": id, "generation": generation}))
@@ -2125,12 +2155,7 @@ pub async fn create_conversation(
 /// Start a chat with `agent` over ACP in `cwd`. Only the agent's name is sent: the daemon picks
 /// its program from its own config, so this app never names a program to run.
 pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon_executable: PathBuf) -> Result<Value> {
-    let target = acp_start_target(cwd, agent)?;
-    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch: None }), daemon_executable).await?;
-    match reply {
-        Reply::ConversationStarted { id, generation } => Ok(json!({"id": id, "generation": generation})),
-        _ => bail!("The Maiker service gave an answer this app does not understand (conversation start). Restart the service in Settings, or update the app so both are the same version."),
-    }
+    start_conversation(acp_start_target(cwd, agent)?, None, daemon_executable).await
 }
 
 fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
@@ -2166,6 +2191,41 @@ mod acp_start_tests {
         assert!(acp_start_target(std::env::temp_dir(), "Not A Name".into()).unwrap_err().to_string().contains("not an agent's name"));
         assert!(acp_start_target("/no/such/folder/anywhere".into(), "claude".into()).unwrap_err().to_string().contains("not there"));
         assert!(acp_start_target(file, "claude".into()).unwrap_err().to_string().contains("a file"));
+    }
+}
+
+#[cfg(test)]
+mod saved_session_tests {
+    use super::{ApprovalPolicy, LaunchSettings, Provider, Sandbox, StartTarget, saved_session_target};
+
+    fn settings() -> LaunchSettings {
+        LaunchSettings {
+            agent: None,
+            provider: Provider::Claude,
+            executable: "/bin/claude".into(),
+            config_root: "/home/someone/.claude".into(),
+            cwd: "/code".into(),
+            model: None,
+            model_provider: None,
+            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox: Sandbox::WorkspaceWrite,
+        }
+    }
+
+    #[test]
+    fn a_saved_session_is_opened_by_its_own_name_with_the_settings_asked_for() {
+        let target = saved_session_target(settings(), "0b5c-9a_1".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Session { settings: settings(), thread_id: "0b5c-9a_1".into() });
+    }
+
+    #[test]
+    fn a_name_no_agent_gives_a_session_is_refused_before_it_reaches_the_service() {
+        for name in ["", "-leading", "../escape", "two words", "a;b", &"a".repeat(129)] {
+            let refused = saved_session_target(settings(), name.to_owned()).unwrap_err().to_string();
+
+            assert!(refused.contains("not a saved conversation's name"), "{name:?}: {refused}");
+        }
     }
 }
 

@@ -1233,6 +1233,19 @@ export async function startChatSession(folder: string, agent: 'claude' | 'codex'
 }
 
 /**
+ * Opens a saved Claude Code or Codex conversation of this computer as a chat session: the agent's own session
+ * `session` in `folder`, continued where it stopped, with its earlier messages as the chat's history (ADR 0018).
+ */
+export async function resumeChatSession(folder: string, agent: 'claude' | 'codex', session: string, permissions: SessionPermissions = 'workspace-write'): Promise<{ id: number; generation: number }> {
+  return invokeParsed('resume_chat_session', CreatedConversationSchema, {
+    cwd: folder,
+    provider: agent === 'claude' ? 'Claude' : 'Codex',
+    session,
+    permissions,
+  })
+}
+
+/**
  * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0018). Only the agent's name is sent: the
  * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */

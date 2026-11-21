@@ -22,6 +22,7 @@ const daemon = vi.hoisted(() => ({
   sendTerminalInput: vi.fn(() => Promise.resolve()),
   archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
   startAcpChat: vi.fn<(folder: string, agent: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
+  resumeChatSession: vi.fn<(folder: string, agent: string, session: string, permissions: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string, choice?: { model?: string; effort?: string }) => Promise<null>>(() => Promise.resolve(null)),
   prewarmAgentSession: vi.fn(() => Promise.resolve()),
@@ -329,12 +330,31 @@ describe('starting a chat from the draft in the Chat view', () => {
     expect(daemon.submitMessage).not.toHaveBeenCalled()
   })
 
-  it('still starts a saved conversation and anything in the Terminal view as the agent\'s own session', async () => {
+  it('opens a saved conversation as a chat on the agent\'s own session, never as a terminal', async () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(request({ resume: ID }))
+    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'codex', resume: ID }))
+
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(1, '/dev/app', 'claude', ID, expect.any(String))
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(2, '/dev/app', 'codex', ID, expect.any(String))
+    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('says why a saved conversation did not open and leaves the page as it was', async () => {
+    daemon.resumeChatSession.mockRejectedValueOnce(new Error('Claude Code has no saved conversation `x` for this folder'))
+
+    await expect(starts({ openSessionsIn: 'chat' }).startNewChat(request({ resume: ID }))).rejects.toThrow('no saved conversation')
+
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('starts anything in the Terminal view as the agent\'s own session, a saved conversation included', async () => {
+    await starts({ openSessionsIn: 'terminal' }).startNewChat(request({ resume: ID }))
     await starts({ openSessionsIn: 'terminal' }).startNewChat(request({}))
 
     expect(daemon.startAgentSession).toHaveBeenCalledTimes(2)
     expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.resumeChatSession).not.toHaveBeenCalled()
     expect(daemon.startAcpChat).not.toHaveBeenCalled()
   })
 

@@ -1412,8 +1412,12 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     question. The draft's model, effort and mode picks are not sent to it.
   - In any chat, an approval's buttons carry the agent's own words for each choice where it gave them (`choiceLabels`),
     and a command an ACP agent runs is a command step.
-  Still the agent's own session: a saved conversation that is resumed, a start on another machine, and every start in the
-  Terminal view.
+  - **A saved Claude Code or Codex conversation** (the saved list, a closed session reopened, Resume on an ended chat)
+    opens as a chat on the agent's own session (the host's `resume_chat_session`), in the agent's usual mode, with what
+    was said before as its history: Codex is asked for the thread's turns, and Claude Code's transcript is read by the
+    daemon. One that cannot be opened says why in a toast and nothing is started: no saved conversation of that name
+    for the folder, a transcript too long to read whole (the daemon reads 16 MiB), or one the daemon already owns.
+  Still the agent's own session: a start on another machine, and every start in the Terminal view.
 - **Keyboard.** While the chat covers a pane its terminal is not focused (`TerminalView focused` is false) and is
   hidden from Tab and screen readers. The chat adds no layer to the Esc ladder.
 - **Selecting.** In a terminal pane, releasing the mouse on a selection copies it and a "Copied" toast says so

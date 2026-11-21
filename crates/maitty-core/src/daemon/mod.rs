@@ -148,6 +148,8 @@ pub enum Ev {
     },
     /// A background read of a followed pane's transcript finished (ADR 0003).
     FollowRead(Box<conversation::follow::Done>),
+    /// The transcript of a saved session a chat was opened on has been read, or why it was not.
+    SavedHistory(Box<conversation::follow::Saved>),
     /// A background look at a Claude pane's config folder finished (`hook_repair`).
     HookFolderChecked(Box<hook_repair::Checked>),
     ConversationStorage {
@@ -1997,6 +1999,7 @@ impl Daemon {
                 self.conversation_save_completed(barrier, result);
             }
             Ev::FollowRead(done) => self.follow_read_done(*done),
+            Ev::SavedHistory(saved) => self.saved_history_read(*saved),
             Ev::HookFolderChecked(done) => self.hook_checked(*done),
             Ev::ConversationStorage {
                 id,

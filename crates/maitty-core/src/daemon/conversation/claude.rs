@@ -203,7 +203,7 @@ struct Warm {
 
 /// Where Claude Code keeps this session's transcript. `None` for a session id that is not a plain
 /// file name, so no path outside the folder is ever looked at.
-fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> Option<PathBuf> {
+pub(super) fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> Option<PathBuf> {
     (!session.is_empty() && session.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).then(
         || {
             config_root

@@ -175,6 +175,15 @@ pub struct Done {
     result: Result<Chunk, ReadFailure>,
 }
 
+/// The result of reading a saved session's whole transcript for the chat opened on it.
+pub struct Saved {
+    pub(in crate::daemon) id: ConversationId,
+    pub(in crate::daemon) generation: u64,
+    /// Who asked for the start, and is answered once the history is kept.
+    pub(in crate::daemon) client: crate::daemon::ClientId,
+    pub(in crate::daemon) result: Result<History, String>,
+}
+
 #[derive(Debug)]
 pub(in crate::daemon) enum ReadFailure {
     /// The file is not one this pane's session may be read from (path, name or place).
@@ -433,7 +442,8 @@ impl Daemon {
                 follower.offset = Some(chunk.offset);
                 follower.meta = chunk.parser.meta().clone();
                 follower.parser = Some(chunk.parser);
-                apply_notes(follower, chunk.notes, chunk.start_missing);
+                let session = follower.session.clone();
+                apply_notes(follower.id, &session, &mut follower.history, chunk.notes, chunk.start_missing);
             }
         }
         if let Some((term, title)) = renamed
@@ -524,10 +534,7 @@ fn reasoning_cost(note: &Note) -> Option<usize> {
 
 /// Puts notes into a followed history. History is capped, and a cap or a problem with a note is
 /// said in its completeness, never hidden.
-fn apply_notes(follower: &mut Followed, notes: Vec<Note>, start_missing: bool) {
-    let id = follower.id;
-    let session = follower.session.clone();
-    let history = &mut follower.history;
+fn apply_notes(id: ConversationId, session: &str, history: &mut History, notes: Vec<Note>, start_missing: bool) {
     let (mut reasoning_entries, mut reasoning_bytes) = reasoning_totals(history);
     for note in notes {
         let cost = reasoning_cost(&note);
@@ -543,7 +550,7 @@ fn apply_notes(follower: &mut Followed, notes: Vec<Note>, start_missing: bool) {
             return;
         }
         let before = history.entries.len();
-        match super::history_provider::notification(id, &session, note.method, &note.params) {
+        match super::history_provider::notification(id, session, note.method, &note.params) {
             Ok(Some(update)) => {
                 if history.apply(update).is_err() {
                     return;
@@ -673,6 +680,32 @@ fn read_new(
         restarted,
         start_missing,
     })
+}
+
+/// A saved session's history, read whole from the transcript its agent wrote: what a chat opened
+/// on a session that began outside this app shows before its first message here. A file longer
+/// than the first read keeps only its end and says so in its completeness. Runs on a blocking
+/// thread.
+pub(in crate::daemon) fn saved_history(
+    id: ConversationId,
+    provider: Provider,
+    session: &str,
+    path: &Path,
+    home: &Path,
+) -> Result<History, ReadFailure> {
+    let mut history = History::new(id);
+    let mut parser = Transcript::new(format_of(provider), session);
+    let mut offset = None;
+    loop {
+        let chunk = read_new(provider, session, Some(path), offset, parser, home)?;
+        let ended = offset == Some(chunk.offset);
+        apply_notes(id, session, &mut history, chunk.notes, chunk.start_missing);
+        if ended {
+            return Ok(history);
+        }
+        offset = Some(chunk.offset);
+        parser = chunk.parser;
+    }
 }
 
 /// The user's home folder, the only place a followed transcript may be read from.
