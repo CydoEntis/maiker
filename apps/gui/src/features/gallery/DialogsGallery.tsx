@@ -128,7 +128,7 @@ function ScriptedPicker({ what, children }: { what: string; children: ReactNode 
 /** For the Add a remote machine states: types an address or clicks a host of the SSH config once the dialog is up, as a person would. */
 function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
-    const click = (name: string) => { document.querySelector<HTMLButtonElement>(`button[aria-label="Connect to ${name}"]`)?.click() }
+    const click = (name: string) => { document.querySelector<HTMLButtonElement>(`button[aria-label="Add ${name}"]`)?.click() }
     const type = (text: string) => {
       const field = document.querySelector<HTMLInputElement>('input[aria-label="Address"]')
       if (field === null) return
@@ -138,9 +138,9 @@ function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) 
     const timer = window.setTimeout(() => {
       if (what === 'add-error') type('dev@10.0.4')
       if (what === 'add-no-answer') type('cydo@10.9.9.9')
-      if (what === 'add-connected') click('linkables-vps')
-      if (what === 'add-helper') click('homelab')
-      if (what === 'add-name') click('server-15')
+      if (what === 'add-busy') click('homelab')
+      if (what === 'add-key') click('server-15')
+      if (what === 'add-host-key') click('pi')
     }, STATE_READ_MS)
     return () => { window.clearTimeout(timer) }
   }, [what])
@@ -206,7 +206,7 @@ function Show({ what }: { what: string }): ReactNode {
     return <ScriptedPicker what={what}><PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} create={create} onPick={() => undefined} onCancel={() => undefined} /></ScriptedPicker>
   }
   if (what === 'add' || what.startsWith('add-')) {
-    return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} facts={{ system: 'Ubuntu 24.04 · 8 cores', agents: ['Claude Code', 'Codex'] }} appVersion="0.46.0" /></ScriptedAdd>
+    return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} /></ScriptedAdd>
   }
   if (what.startsWith('onboarding')) return <OnboardingShown step={Number(what.split('-')[1] ?? 0)} />
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />

@@ -1,12 +1,9 @@
-import { act, render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { Added, UpdateProgress } from '@/api/machines'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
-
-const toast = vi.hoisted(() => ({ success: vi.fn(), info: vi.fn(), failed: vi.fn() }))
-vi.mock('@/lib/toast', () => ({ toast }))
 
 import { AddMachineDialog } from './AddMachineDialog'
 
@@ -49,7 +46,7 @@ async function connectTo(machines: MachinesInfo, address = 'dev@100.78.214.15', 
   return { user, view }
 }
 
-describe('the address step', () => {
+describe('the field', () => {
   it('opens inside the themed window, so the corners and colours are the theme’s and not the bare page’s', () => {
     const root = document.createElement('div')
     root.className = 'mx-app'
@@ -59,11 +56,11 @@ describe('the address step', () => {
     root.remove()
   })
 
-  it('is one field, and Connect waits for an address that holds up', () => {
+  it('is one field, and Add waits for an address that holds up', () => {
     render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
     expect(screen.getAllByRole('textbox')).toHaveLength(1)
     expect(screen.getByRole('textbox', { name: 'Address' })).toHaveAttribute('placeholder', 'user@host, an IP address, or a name from your SSH config')
-    expect(screen.getByRole('button', { name: 'Connect' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('answers a wrong address in plain words after Enter, and sends nothing', async () => {
@@ -86,11 +83,19 @@ describe('the address step', () => {
     view.unmount()
   })
 
-  it('connects the moment a host of the SSH config is clicked, and keeps its name', async () => {
+  it('adds a host of the SSH config the moment it is clicked, and keeps its name', async () => {
     const machines = info()
     render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'Connect to build' }))
+    await userEvent.setup().click(await screen.findByRole('button', { name: 'Add build' }))
     await waitFor(() => { expect(machines.add.onAdd).toHaveBeenCalledWith('build', 'build', undefined, { keyFile: null, installHelper: true }) })
+  })
+
+  it('offers the hosts of the SSH config that match what is typed', async () => {
+    render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
+    await screen.findByRole('button', { name: 'Add build' })
+    await userEvent.setup().type(screen.getByRole('textbox', { name: 'Address' }), 'king')
+    expect(screen.queryByRole('button', { name: 'Add build' })).toBeNull()
+    expect(screen.getByRole('button', { name: /^kingdom: Already added/ })).toBeInTheDocument()
   })
 
   describe('a host of the SSH config that is already a machine', () => {
@@ -100,7 +105,7 @@ describe('the address step', () => {
       render(<AddMachineDialog machines={info({ list: [kingdom('connected', 'ok')] })} onClose={vi.fn()} />)
       const row = await screen.findByRole('button', { name: 'kingdom: Already added' })
       expect(row).toHaveClass('is-added')
-      expect(screen.queryByRole('button', { name: 'Connect to kingdom' })).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Add kingdom' })).toBeNull()
     })
 
     it('opens where machines are managed when it is connected, and adds nothing', async () => {
@@ -128,344 +133,200 @@ describe('the address step', () => {
   })
 })
 
-describe('the checklist', () => {
-  it('adds a host this computer has never seen without asking about its key, then shows Machine added', async () => {
-    const machines = info()
-    await connectTo(machines)
-    expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
+
+/** A host that answers only when the test says so. */
+function answerLater() {
+  let answer: (result: Added) => void = () => undefined
+  const onAdd = vi.fn(() => new Promise<Added>((resolve) => { answer = resolve }))
+  return { onAdd, answer: async (result: Added) => { await act(async () => { answer(result); await Promise.resolve() }) } }
+}
+
+describe('after Add', () => {
+  it('spins on one line while the host connects, with no steps, and closes with the machine in once it answers', async () => {
+    const later = answerLater()
+    const onClose = vi.fn()
+    const machines = info({}, { onAdd: later.onAdd })
+    await connectTo(machines, 'dev@100.78.214.15', { onClose })
+    expect(await screen.findByText('Connecting to 100.78.214.15…')).toBeInTheDocument()
+    expect(screen.queryByRole('list', { name: 'Steps to connect' })).toBeNull()
     expect(machines.add.onAdd).toHaveBeenCalledWith('dev@100.78.214.15', 'server-15', undefined, { keyFile: null, installHelper: true })
-  })
-
-  it('shows every step with its result while the host signs in, in the same dialog', async () => {
-    let finish: (result: Added) => void = () => undefined
-    const onAdd = vi.fn(() => new Promise<Added>((resolve) => { finish = resolve }))
-    await connectTo(info({}, { onAdd }))
-    const steps = await screen.findByRole('list', { name: 'Steps to connect' })
-    await waitFor(() => { expect(within(steps).getByText('Reached 100.78.214.15')).toBeInTheDocument() })
-    expect(within(steps).queryByText("Check it's the right computer")).toBeNull()
-    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
-    for (const name of ['Sign in as dev with your SSH key', 'Set up the Maiker helper', 'Connected']) expect(within(steps).getByText(name)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '← Change address' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
-    await act(async () => { finish(added()); await Promise.resolve() })
-  })
-
-  it('says a changed host key at Reach in the host\'s sentence, with no Trust, and saves nothing', async () => {
-    const refusal = "100.78.214.15's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '100.78.214.15'` in a terminal and try again."
-    const machines = info({}, { onAdd: vi.fn(() => Promise.reject(new Error(refusal))) })
-    await connectTo(machines)
-    expect(await screen.findByText(refusal)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+    await later.answer(added())
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
     expect(machines.onRemove).not.toHaveBeenCalled()
+    expect(screen.queryByText('Machine added')).toBeNull()
   })
 
-  describe('a machine that would not sign in', () => {
-    const open = async (said = refused.said, extra: Partial<MachinesInfo> = {}) => {
-      const onAdd = vi.fn<MachinesInfo['add']['onAdd']>().mockResolvedValueOnce({ ...refused, said }).mockResolvedValue(added())
-      const machines = info(extra, { onAdd })
-      const { user, view } = await connectTo(machines)
-      await screen.findByText("Couldn't sign in to dev@100.78.214.15")
-      return { user, view, machines }
-    }
-
-    it('says the host\'s one sentence, with no terminal, command run or password', async () => {
-      await open()
-      expect(screen.getByText(REFUSED_KEY)).toBeInTheDocument()
-      expect(screen.queryByRole('button', { name: 'Run' })).toBeNull()
-      expect(screen.queryByTestId('key-terminal')).toBeNull()
-      expect(screen.queryByText('Checking your key…')).toBeNull()
-    })
-
-    it('shows the host’s own reason', async () => {
-      await open('dev@100.78.214.15: Permission denied (publickey).')
-      expect(screen.getByText(/SSH said: dev@100\.78\.214\.15: Permission denied \(publickey\)\./)).toBeInTheDocument()
-    })
-
-    it('copies the command the host named', async () => {
-      const { user, machines } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy the command' }))
-      expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15')
-    })
-
-    it('Try again takes the saved machine out and goes through the whole checklist again', async () => {
-      const { user, machines } = await open()
-      await user.click(screen.getByRole('button', { name: 'Try again' }))
-      expect(machines.onRemove).toHaveBeenCalledWith('server-15')
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-      expect(machines.add.onAdd).toHaveBeenCalledTimes(2)
-    })
-
-    it('removes the machine the host saved when the dialog is closed before it connected', async () => {
-      const { machines, view } = await open()
-      view.unmount()
-      expect(machines.onRemove).toHaveBeenCalledWith('server-15')
-    })
-
-    it('carries on by itself, to Machine added, if the machine connects meanwhile', async () => {
-      const { machines, view } = await open()
-      view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={vi.fn()} />)
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    })
+  it('says it is setting up Maiker on the same line while the host installs it, and closes once it is on', async () => {
+    let listener: (progress: UpdateProgress) => void = () => undefined
+    const onProgress = vi.fn((on: (progress: UpdateProgress) => void) => { listener = on; return Promise.resolve(vi.fn()) })
+    const later = answerLater()
+    const onClose = vi.fn()
+    await connectTo(info({}, { onAdd: later.onAdd, onProgress }), 'dev@100.78.214.15', { onClose })
+    await waitFor(() => { expect(onProgress).toHaveBeenCalled() })
+    act(() => { listener({ name: 'server-15', percent: 40 }) })
+    expect(await screen.findByText('Connecting to 100.78.214.15 and setting up Maiker there…')).toBeInTheDocument()
+    await later.answer(added({ reach: 'missing', helper_install: { installed: true, said: 'Installed' } }))
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
   })
 
-  describe('the Maiker helper', () => {
-    it('installs by itself as a step with a progress bar that follows the host', async () => {
-      let listener: (progress: UpdateProgress) => void = () => undefined
-      let finish: (result: Added) => void = () => undefined
-      const onProgress = vi.fn((on: (progress: UpdateProgress) => void) => { listener = on; return Promise.resolve(vi.fn()) })
-      const onAdd = vi.fn(() => new Promise<Added>((resolve) => { finish = resolve }))
-      await connectTo(info({}, { onAdd, onProgress }), 'dev@100.78.214.15', { appVersion: '0.46.0' })
-      await waitFor(() => { expect(onProgress).toHaveBeenCalled() })
-      await screen.findByText('Reached 100.78.214.15')
-      act(() => { listener({ name: 'server-15', percent: 40 }) })
-      expect(await screen.findByText('Not installed yet. Copying Maiker 0.46.0 to server-15…')).toBeInTheDocument()
-      expect(screen.getByRole('progressbar', { name: 'Setting up the Maiker helper' })).toHaveAttribute('aria-valuenow', '40')
-      expect(onAdd).toHaveBeenCalledWith('dev@100.78.214.15', 'server-15', undefined, { keyFile: null, installHelper: true })
-      await act(async () => { finish(added({ reach: 'missing', helper_install: { installed: true, said: 'Installed' } })); await Promise.resolve() })
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    })
-
-    it('says so when the install did not work, and tries it again from the step', async () => {
-      const message = 'Maiker could not be installed or started on server-15 (No space left on the device.); only Linux and macOS machines are supported.'
-      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null, helper_install: { installed: false, said: 'No space left on the device.' }, message }))) })
-      const { user } = await connectTo(machines)
-      expect(await screen.findByText("Couldn't put Maiker on server-15")).toBeInTheDocument()
-      expect(screen.getByText(message)).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Try again' }))
-      expect(machines.onUpdate).toHaveBeenCalledWith('server-15', 'install', false)
-    })
-
-    it('keeps a machine the person chose to add without Maiker on it, and says so', async () => {
-      const onClose = vi.fn()
-      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null }))) })
-      const { user, view } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
-      await user.click(await screen.findByRole('button', { name: 'Add without it' }))
-      view.unmount()
-      expect(machines.onRemove).not.toHaveBeenCalled()
-      expect(toast.info).toHaveBeenCalledWith('Added server-15')
-      expect(onClose).toHaveBeenCalled()
-    })
-
-    it('offers to update an older Maiker, or keep it', async () => {
-      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'older', version: '0.45.2' }))) })
-      const { user } = await connectTo(machines)
-      expect(await screen.findByText('server-15 has an older Maiker (0.45.2)')).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Keep 0.45.2' })).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Update it' }))
-      expect(machines.onUpdate).toHaveBeenCalledWith('server-15', 'update', false)
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    })
-
-    it('says Maiker is installed but did not start, and tries again', async () => {
-      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'not-running' }))) })
-      const { user } = await connectTo(machines)
-      expect(await screen.findByText("Maiker is on server-15 but couldn't start")).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Try again' }))
-      expect(machines.onRetry).toHaveBeenCalledWith('server-15')
-    })
+  it('closes for a machine whose Maiker is older, which its sidebar heading offers to update', async () => {
+    const onClose = vi.fn()
+    await connectTo(info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'older', version: '0.45.2' }))) }), 'dev@100.78.214.15', { onClose })
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
   })
 
-  describe('a machine that does not answer', () => {
-    const UNREACHED = "Can't reach 10.9.9.9: check the name or address, and that the machine is on (ssh: connect to host 10.9.9.9 port 22: Connection timed out)."
-    const silent = () => info({}, { onAdd: vi.fn(() => Promise.reject(new Error(UNREACHED))) })
-
-    it("says it couldn't reach the machine, in the host's one sentence", async () => {
-      await connectTo(silent(), 'dev@10.9.9.9')
-      expect(await screen.findByText("Couldn't reach 10.9.9.9")).toBeInTheDocument()
-      expect(screen.getByText(UNREACHED)).toBeInTheDocument()
-    })
-
-    it('tries the whole sequence again', async () => {
-      const machines = silent()
-      const { user } = await connectTo(machines, 'dev@10.9.9.9')
-      await user.click(await screen.findByRole('button', { name: 'Try again' }))
-      await waitFor(() => { expect(machines.add.onAdd).toHaveBeenCalledTimes(2) })
-    })
-
-    it('goes back to the address, as typed, with Edit the address', async () => {
-      const { user } = await connectTo(silent(), 'dev@10.9.9.9')
-      await user.click(await screen.findByRole('button', { name: 'Edit the address' }))
-      expect(await screen.findByRole('textbox', { name: 'Address' })).toHaveValue('dev@10.9.9.9')
-    })
-
-    it('says what ssh said when it is none of the known reasons', async () => {
-      const machines = info({}, { onAdd: vi.fn(() => Promise.reject(new Error('Something odd happened in ssh'))) })
-      await connectTo(machines)
-      expect(await screen.findByText("Couldn't reach 100.78.214.15")).toBeInTheDocument()
-      expect(screen.getByText('Something odd happened in ssh')).toBeInTheDocument()
-    })
-
-    it('offers Retry and Remove for a saved machine of the same name', async () => {
-      const machines = info({}, { onAdd: vi.fn(() => Promise.reject(new Error('You already have a machine called server-15. Remove it in Remote machines, or pick another name.'))) })
-      const { user } = await connectTo(machines)
-      expect(await screen.findByText('server-15 is already added')).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Remove server-15' }))
-      expect(machines.onRemove).toHaveBeenCalledWith('server-15')
-    })
-  })
-
-  describe('a machine of the same name that is already saved', () => {
-    const taken = new Error('You already have a machine called server-15. Remove it in Remote machines, or pick another name.')
-    const takenOnce = () => vi.fn<MachinesInfo['add']['onAdd']>().mockRejectedValueOnce(taken).mockResolvedValue(added())
-    const saved = (word: string, extra: Partial<MachineHead> = {}): MachineHead => ({ ...connectedHead(), chip: { glyph: '▲', word, tone: 'bad' }, ...extra })
-
-    it('removes it, says so while it does, then runs the whole checklist again', async () => {
-      let finish: (removed: boolean) => void = () => undefined
-      const onRemove = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve }))
-      const machines = info({ onRemove }, { onAdd: takenOnce() })
-      const { user } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Remove server-15' }))
-      expect(await screen.findByText('Removing server-15…')).toBeInTheDocument()
-      await act(async () => { finish(true); await Promise.resolve() })
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-      expect(machines.add.onAdd).toHaveBeenCalledTimes(2)
-    })
-
-    it('goes back to the choice when it could not be removed', async () => {
-      const machines = info({ onRemove: vi.fn(() => Promise.resolve(false)) }, { onAdd: takenOnce() })
-      const { user } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Remove server-15' }))
-      expect(await screen.findByText('server-15 is already added')).toBeInTheDocument()
-      expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
-    })
-
-    it('Retry dials it again and shows it signing in, never the same screen', async () => {
-      const machines = info({}, { onAdd: takenOnce() })
-      const { user } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
-      expect(machines.onRetry).toHaveBeenCalledWith('server-15')
-      expect(await screen.findByText('Signing in to server-15…')).toBeInTheDocument()
-      expect(screen.queryByText('server-15 is already added')).toBeNull()
-    })
-
-    it('Retry carries on at the key step when the machine needs a login, then to Machine added once it connects', async () => {
-      const machines = info({}, { onAdd: takenOnce() })
-      const { user, view } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
-      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('needs login', { said: 'Permission denied (publickey).' })] }} onClose={vi.fn()} />)
-      expect(await screen.findByText("Couldn't sign in to dev@server-15.lan")).toBeInTheDocument()
-      expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
-      view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={vi.fn()} />)
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    })
-
-    it('Retry carries on at the helper step when Maiker is missing there, and installs it from the step', async () => {
-      const machines = info({}, { onAdd: takenOnce() })
-      const { user, view } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
-      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('not installed', { updateAction: 'install' })] }} onClose={vi.fn()} />)
-      expect(await screen.findByText('Maiker is not on server-15')).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Install it' }))
-      expect(machines.onUpdate).toHaveBeenCalledWith('server-15', 'install', false)
-      expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    })
-
-    it('Retry says so, with Try again, when the machine still does not answer', async () => {
-      const machines = info({}, { onAdd: takenOnce() })
-      const { user, view } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Retry server-15' }))
-      view.rerender(<AddMachineDialog machines={{ ...machines, list: [saved('unreachable', { why: 'ssh: connect to host 100.78.214.15 port 22: Connection timed out' })] }} onClose={vi.fn()} />)
-      expect(await screen.findByText('server-15 is not connected')).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Try again' }))
-      expect(machines.onRetry).toHaveBeenCalledTimes(2)
-    })
-  })
-
-  it('goes back to the address with ← Change address, and cancels the look that is running', async () => {
-    const onAdd = vi.fn(() => new Promise<Added>(() => undefined))
-    const machines = info({}, { onAdd })
-    const { user } = await connectTo(machines)
-    await user.click(await screen.findByRole('button', { name: '← Change address' }))
-    expect(await screen.findByRole('textbox', { name: 'Address' })).toHaveValue('dev@100.78.214.15')
+  it('Cancel during the spinner ends the look and gives the field back, as typed', async () => {
+    const onClose = vi.fn()
+    const machines = info({}, { onAdd: vi.fn(() => new Promise<Added>(() => undefined)) })
+    const { user } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
+    await screen.findByText('Connecting to 100.78.214.15…')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
     expect(machines.add.onCancel).toHaveBeenCalled()
-    expect(machines.onRemove).not.toHaveBeenCalled()
+    expect(screen.queryByText('Connecting to 100.78.214.15…')).toBeNull()
+    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveValue('dev@100.78.214.15')
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('takes out a machine a cancelled add saved after all, so nothing unseen is left', async () => {
+    const later = answerLater()
+    const machines = info({}, { onAdd: later.onAdd })
+    const { user } = await connectTo(machines)
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }))
+    await later.answer(refused)
+    expect(machines.onRemove).toHaveBeenCalledWith('server-15')
+    expect(screen.queryByText(REFUSED_KEY)).toBeNull()
+  })
+
+  it('cancels the look when the dialog closes during the spinner', async () => {
+    const machines = info({}, { onAdd: vi.fn(() => new Promise<Added>(() => undefined)) })
+    const { view } = await connectTo(machines)
+    await screen.findByText('Connecting to 100.78.214.15…')
+    view.unmount()
+    expect(machines.add.onCancel).toHaveBeenCalled()
   })
 })
 
-describe('Machine added', () => {
-  const addedDialog = async (props: Partial<Parameters<typeof AddMachineDialog>[0]> = {}, machines = info({ list: [connectedHead()] })) => {
-    const { user } = await connectTo(machines, 'dev@100.78.214.15', props)
-    await screen.findByText('Machine added')
-    return { user, machines }
-  }
+describe('a failure', () => {
+  const UNREACHED = "Can't reach 10.9.9.9: check the name or address, and that the machine is on (ssh: connect to host 10.9.9.9 port 22: Connection timed out)."
+  const CHANGED = "100.78.214.15's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '100.78.214.15'` in a terminal and try again."
+  const unreachable: Added = { outcome: 'failed', message: UNREACHED, failure: 'unreachable', fix_command: null }
+  const changed: Added = { outcome: 'failed', message: CHANGED, failure: 'host-key-changed', fix_command: "ssh-keygen -R '100.78.214.15'" }
+  // The machine the host saved for a login it could not do, as the window then lists it.
+  const savedHead: MachineHead = { ...connectedHead(), chip: { glyph: '!', word: 'needs login', tone: 'bad' }, target: 'dev@100.78.214.15' }
 
-  it('says it is connected, with the name selected so typing replaces it, and the details that are known', async () => {
-    await addedDialog()
-    expect(screen.getByText('Connected. Its sessions show up in your sidebar under this name.')).toBeInTheDocument()
-    const name = screen.getByRole('textbox', { name: 'Name' })
-    expect(name).toHaveValue('server-15')
-    expect((name as HTMLInputElement).selectionStart).toBe(0)
-    expect((name as HTMLInputElement).selectionEnd).toBe('server-15'.length)
-    const details = screen.getByText('Address').closest('dl') as HTMLElement
-    expect(within(details).getByText('dev@100.78.214.15')).toBeInTheDocument()
-    expect(within(details).getByText('0.46.0')).toBeInTheDocument()
+  it('says a machine that does not answer in the host\'s one sentence, with Try again', async () => {
+    await connectTo(info({}, { onAdd: vi.fn(() => Promise.resolve(unreachable)) }), 'dev@10.9.9.9')
+    expect(await screen.findByText(UNREACHED)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Copy the command' })).toBeNull()
   })
 
-  it('leaves out the system and agents rows until the host reports them', async () => {
-    await addedDialog()
-    expect(screen.queryByText('System')).toBeNull()
-    expect(screen.queryByText('Agents found')).toBeNull()
+  it('says a changed host key in its sentence with its command to copy, never as unreachable and never with Trust', async () => {
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(changed)) })
+    const { user } = await connectTo(machines)
+    expect(await screen.findByText(CHANGED)).toBeInTheDocument()
+    expect(screen.queryByText(/couldn't reach|unreachable/i)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Copy the command' }))
+    expect(machines.onCopyCommand).toHaveBeenCalledWith("ssh-keygen -R '100.78.214.15'")
   })
 
-  it('shows the system and the agents found when the host reports them', async () => {
-    await addedDialog({ facts: { system: 'Ubuntu 24.04 · 8 cores', agents: ['Claude Code', 'Codex'] } })
-    expect(screen.getByText('Ubuntu 24.04 · 8 cores')).toBeInTheDocument()
-    expect(screen.getByText('Claude Code, Codex')).toBeInTheDocument()
+  it('says a refused key in the host\'s sentence, with its command to copy and no password or terminal', async () => {
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(refused)) })
+    const { user } = await connectTo(machines)
+    expect(await screen.findByText(REFUSED_KEY)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Sign in in a terminal' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Copy the command' }))
+    expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15')
   })
 
-  it('saves a name that was typed when Done is pressed, and closes', async () => {
-    const onClose = vi.fn()
-    const { user, machines } = await addedDialog({ onClose })
-    const name = screen.getByRole('textbox', { name: 'Name' })
-    await user.clear(name)
-    await user.type(name, 'gpu box')
-    await user.click(screen.getByRole('button', { name: 'Done' }))
-    expect(machines.onRename).toHaveBeenCalledWith('server-15', 'gpu box')
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it('saves nothing when the name was left as it is', async () => {
-    const { user, machines } = await addedDialog()
-    await user.click(screen.getByRole('button', { name: 'Done' }))
-    expect(machines.onRename).not.toHaveBeenCalled()
-  })
-
-  it('saves the name and starts a session on that machine with Start a session', async () => {
-    const onStartSession = vi.fn()
-    const onClose = vi.fn()
-    const { user, machines } = await addedDialog({ onStartSession, onClose })
-    // The name is selected when the step opens, so the first key typed replaces it.
-    await user.keyboard('x')
-    await user.click(screen.getByRole('button', { name: 'Start a session' }))
-    expect(machines.onRename).toHaveBeenCalledWith('server-15', 'x')
-    expect(onStartSession).toHaveBeenCalledWith(3)
-    expect(onClose).toHaveBeenCalled()
-  })
-
-  it('keeps the name of an SSH config host, and suggests the reported name for a bare address', async () => {
-    const machines = info({ list: [connectedHead('build', 4)] }, { onAdd: vi.fn(() => Promise.resolve(added({ name: 'build' }))) })
-    render(<AddMachineDialog machines={machines} onClose={vi.fn()} facts={{ reportedName: 'gpu-box' }} />)
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'Connect to build' }))
-    expect(await screen.findByRole('textbox', { name: 'Name' })).toHaveValue('build')
-  })
-
-  it('follows the name the machine reports when it arrives after the screen, and keeps what was typed', async () => {
-    const machines = info({ list: [connectedHead()] })
+  it('offers Sign in in a terminal for a login that needs a person, on the machine the host saved', async () => {
+    const message = 'server-15 needs a password or a code: sign in in a terminal, then try again.'
+    const needsPerson: Added = { ...refused, message, failure: 'needs-person', fix_command: null }
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(needsPerson)) })
     const { user, view } = await connectTo(machines)
-    await screen.findByText('Machine added')
-    view.rerender(<AddMachineDialog machines={machines} onClose={vi.fn()} facts={{ reportedName: 'gpu-box' }} />)
-    const name = screen.getByRole('textbox', { name: 'Name' })
-    expect(name).toHaveValue('gpu-box')
-    await user.clear(name)
-    await user.type(name, 'mine')
-    view.rerender(<AddMachineDialog machines={machines} onClose={vi.fn()} facts={{ reportedName: 'other' }} />)
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('mine')
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={vi.fn()} />)
+    await user.click(screen.getByRole('button', { name: 'Sign in in a terminal' }))
+    expect(machines.onOpenLogin).toHaveBeenCalledWith(3)
   })
 
-  it('suggests the name the machine reports for a bare address', async () => {
-    await addedDialog({ facts: { reportedName: 'gpu-box' } })
-    expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('gpu-box')
+  it('says Maiker could not be put on the machine, or did not start, in the host\'s sentence', async () => {
+    const message = 'Maiker could not be installed or started on server-15 (No space left on the device.); only Linux and macOS machines are supported.'
+    await connectTo(info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null, helper_install: { installed: false, said: 'No space left on the device.' }, message }))) }))
+    expect(await screen.findByText(message)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+  })
+
+  it('says the host\'s words for a request it refused before looking', async () => {
+    const words = 'You already have a machine called server-15. Remove it in Remote machines, or pick another name.'
+    await connectTo(info({}, { onAdd: vi.fn(() => Promise.reject(new Error(words))) }))
+    expect(await screen.findByText(words)).toBeInTheDocument()
+  })
+
+  it('Try again asks the host again', async () => {
+    const onAdd = vi.fn<MachinesInfo['add']['onAdd']>().mockResolvedValueOnce(unreachable).mockResolvedValue(added())
+    const onClose = vi.fn()
+    const machines = info({}, { onAdd })
+    const { user } = await connectTo(machines, 'dev@10.9.9.9', { onClose })
+    await user.click(await screen.findByRole('button', { name: 'Try again' }))
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
+    expect(onAdd).toHaveBeenCalledTimes(2)
+    expect(onAdd).toHaveBeenLastCalledWith('dev@10.9.9.9', 'server-9', undefined, { keyFile: null, installHelper: true })
+    expect(machines.onRemove).not.toHaveBeenCalled()
+  })
+
+  it('Try again takes out the machine the host saved first, so the name is free, then asks again', async () => {
+    const onAdd = vi.fn<MachinesInfo['add']['onAdd']>().mockResolvedValueOnce(refused).mockResolvedValue(added())
+    const onClose = vi.fn()
+    const machines = info({}, { onAdd })
+    const { user, view } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
+    await screen.findByText(REFUSED_KEY)
+    view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={onClose} />)
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
+    expect(machines.onRemove).toHaveBeenCalledWith('server-15')
+    expect(onAdd).toHaveBeenLastCalledWith('dev@100.78.214.15', 'server-15', undefined, { keyFile: null, installHelper: true })
+  })
+
+  it('stays on the sentence when the saved machine could not be taken out', async () => {
+    const onAdd = vi.fn<MachinesInfo['add']['onAdd']>().mockResolvedValue(refused)
+    const machines = info({ onRemove: vi.fn(() => Promise.resolve(false)) }, { onAdd })
+    const { user } = await connectTo(machines)
+    await user.click(await screen.findByRole('button', { name: 'Try again' }))
+    await waitFor(() => { expect(machines.onRemove).toHaveBeenCalled() })
+    expect(onAdd).toHaveBeenCalledTimes(1)
+    expect(screen.getByText(REFUSED_KEY)).toBeInTheDocument()
+  })
+
+  it('takes a new address typed after a failure, without calling the saved machine already added', async () => {
+    const onAdd = vi.fn<MachinesInfo['add']['onAdd']>().mockResolvedValueOnce(refused).mockResolvedValue(added())
+    const machines = info({}, { onAdd })
+    const { user, view } = await connectTo(machines)
+    await screen.findByText(REFUSED_KEY)
+    view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={vi.fn()} />)
+    await user.type(screen.getByRole('textbox', { name: 'Address' }), '{Enter}')
+    expect(screen.queryByText('dev@100.78.214.15 is already in Maiker.')).toBeNull()
+    await waitFor(() => { expect(onAdd).toHaveBeenCalledTimes(2) })
+  })
+
+  it('closes by itself when the saved machine connects meanwhile (a key installed, a sign-in done)', async () => {
+    const onClose = vi.fn()
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(refused)) })
+    const { view } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
+    await screen.findByText(REFUSED_KEY)
+    view.rerender(<AddMachineDialog machines={{ ...machines, list: [connectedHead()] }} onClose={onClose} />)
+    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
+    view.unmount()
+    expect(machines.onRemove).not.toHaveBeenCalled()
+  })
+
+  it('takes out the machine the host saved when the dialog closes before it connected', async () => {
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(refused)) })
+    const { view } = await connectTo(machines)
+    await screen.findByText(REFUSED_KEY)
+    view.unmount()
+    expect(machines.onRemove).toHaveBeenCalledWith('server-15')
   })
 })

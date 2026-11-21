@@ -5,11 +5,13 @@ import { errorMessage } from '@/lib/error-message'
 import type { HostChoice } from '@/api/machines'
 import { checkAddress, suggestedName, withPort } from '../model/addressCheck'
 import type { MachineHead } from '@/features/workspace/model/machines'
-import type { AddRequest } from '../model/addStage'
+import { offeredHosts, type AddFailure, type AddState } from '../model/addFlow'
 import { targetOf } from '../model/machineTarget'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
 import { AddressOptions } from './AddressOptions'
 import type { MachinesInfo } from './DesktopSettings'
+import { StatusBlock } from './StatusBlock'
+import { useAddMachine } from './useAddMachine'
 
 const LEAD = 'Maiker connects over SSH with the keys you already use. It never asks for or stores a password.'
 const ADDRESS_PLACEHOLDER = 'user@host, an IP address, or a name from your SSH config'
@@ -18,25 +20,26 @@ type Hosts = { status: 'loading' } | { status: 'ready'; hosts: readonly HostChoi
 
 type Props = {
   machines: MachinesInfo
-  /** Cancel: the dialog closes. */
+  /** Cancel, the close button, or the machine is in: the dialog closes. */
   onClose: () => void
-  /** Connect (or a host of the SSH config): the checklist takes over. */
-  onConnect: (request: AddRequest) => void
   /** A host of the SSH config that is already a machine was clicked: the machine's own status is shown instead of adding it again. */
   onOpenAdded: (head: MachineHead) => void
-  /** What was typed before, when the person came back with Change address. */
-  entry?: AddRequest['entry'] | undefined
 }
 
-/** Add a remote machine's first step: one field, a closed Port and key row, and the hosts of ~/.ssh/config. */
-export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, entry = { address: '', port: '', keyFile: '' } }: Props) {
+/**
+ * Add a remote machine (ADR 0017): one field and Add, the hosts of ~/.ssh/config offered as you type, then a spinner on one line
+ * until the machine is in (the dialog closes) or the host's one sentence says what failed, with Try again.
+ */
+export function AddMachinePanel({ machines, onClose, onOpenAdded }: Props) {
   const { add, list } = machines
+  const flow = useAddMachine(machines, onClose)
+  const busy = flow.state.kind === 'busy'
   // One field takes `user@host`, an IP address or a name from the SSH config, as typed or pasted.
-  const [text, setText] = useState(entry.address)
-  const [portText, setPortText] = useState(entry.port)
-  const [keyText, setKeyText] = useState(entry.keyFile)
+  const [text, setText] = useState('')
+  const [portText, setPortText] = useState('')
+  const [keyText, setKeyText] = useState('')
   const typed = text.trim()
-  // The message waits for Enter or Connect, and editing the field hides it again.
+  // The message waits for Enter or Add, and editing the field hides it again.
   const [shown, setShown] = useState(false)
   const [hosts, setHosts] = useState<Hosts>({ status: 'loading' })
   const { loadHosts } = add
@@ -50,33 +53,35 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
     return () => { gone = true }
   }, [loadHosts])
 
-  const taken = useMemo(() => list.flatMap((head) => (head.name === null ? [] : [head.name])), [list])
+  // The machine the last try saved goes again before the next one, so it is neither "already in Maiker" nor a name that is taken.
+  const others = useMemo(() => list.filter((head) => head.name === null || head.name !== flow.saved), [list, flow.saved])
+  const taken = useMemo(() => others.flatMap((head) => (head.name === null ? [] : [head.name])), [others])
   const address = typed === '' ? null : withPort(checkAddress(typed), portText)
   const already = useMemo(() => {
     const lower = typed.toLowerCase()
     if (lower === '') return null
-    return list.find((head) => head.name?.toLowerCase() === lower || head.target?.toLowerCase() === lower) ?? null
-  }, [list, typed])
+    return others.find((head) => head.name?.toLowerCase() === lower || head.target?.toLowerCase() === lower) ?? null
+  }, [others, typed])
   const problem = already !== null ? `${typed} is already in Maiker.` : address !== null && !address.ok ? address.message : null
   const valid = address?.ok === true && already === null
   const keyFile = keyText.trim() === '' ? null : keyText.trim()
-  const kept = { address: text, port: portText, keyFile: keyText }
 
   const submit = () => {
-    setShown(true)
+    if (busy) return
+    // A problem shows only for what was sent; an address that was sent has none to show until it is edited and sent again.
+    setShown(!valid)
     if (!valid) return
-    onConnect({ target: targetOf(address.user, address.host), name: suggestedName({ host: address.host }, taken), port: address.port, host: address.host, user: address.user === '' ? null : address.user, keyFile, fromConfig: false, entry: kept })
+    flow.add({ target: targetOf(address.user, address.host), name: suggestedName({ host: address.host }, taken), port: address.port, keyFile, shown: address.host })
   }
 
-  // The field is for typing an address and pressing Enter, not for searching: the SSH config's hosts are shortcuts that stay as they are.
-  const choices = hosts.status === 'ready' ? hosts.hosts : []
+  const choices = hosts.status === 'ready' ? offeredHosts(text, hosts.hosts) : []
   const pick = (host: HostChoice) => {
     if (host.added) {
       const head = headOf(list, host.alias)
       if (head !== undefined) onOpenAdded(head)
       return
     }
-    onConnect({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, ...loginOf(host), keyFile, fromConfig: true, entry: kept })
+    flow.add({ target: host.alias, name: suggestedName({ alias: host.alias }, taken), port: null, keyFile, shown: host.alias })
   }
 
   return (
@@ -96,9 +101,10 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
               autoCapitalize="none"
               autoComplete="off"
               autoFocus
+              readOnly={busy}
               onChange={(event) => { setText(event.target.value); setShown(false) }}
             />
-            <Button type="submit" variant="solid" size="field" aria-disabled={typed === ''}>Connect</Button>
+            <Button type="submit" variant="solid" size="field" aria-disabled={typed === '' || busy}>Add</Button>
           </div>
           {shown && problem !== null && <p className="mx-rm-error" role="alert">{problem}</p>}
           <AddressOptions port={portText} keyFile={keyText} onPort={(next) => { setPortText(next); setShown(false) }} onKeyFile={setKeyText} />
@@ -109,19 +115,37 @@ export function AddMachinePanel({ machines, onClose, onConnect, onOpenAdded, ent
             <Button variant="ghost" onClick={() => { void machines.onRemove(already.name ?? '') }}>Remove {already.name}</Button>
           </p>
         )}
-        <SshHosts hosts={hosts} choices={choices} list={list} onPick={pick} />
+        <AddStatus state={flow.state} machines={machines} onRetry={flow.retry} />
+        <SshHosts hosts={hosts} choices={choices} list={list} busy={busy} onPick={pick} />
       </FrameBody>
       <FrameFoot>
-        <Button variant="ghost" size="lg" onClick={onClose}>Cancel</Button>
+        <Button variant="ghost" size="lg" onClick={busy ? flow.cancel : onClose}>Cancel</Button>
       </FrameFoot>
     </AddMachineFrame>
   )
 }
 
-/** The computer and login behind an SSH config host, read from the line the list shows (`user@host`); the alias alone when it shows no more. */
-function loginOf(host: HostChoice): { host: string; user: string | null } {
-  const at = host.detail.indexOf('@')
-  return at > 0 && at < host.detail.length - 1 ? { user: host.detail.slice(0, at), host: host.detail.slice(at + 1) } : { user: null, host: host.alias }
+/** The one line under the field once Add is pressed: the spinner, or the host's sentence and what can be done about it. */
+function AddStatus({ state, machines, onRetry }: { state: AddState; machines: MachinesInfo; onRetry: () => void }) {
+  if (state.kind === 'busy') {
+    const { shown } = state.request
+    return <StatusBlock tone="work" lead={state.installing ? `Connecting to ${shown} and setting up Maiker there…` : `Connecting to ${shown}…`} />
+  }
+  if (state.kind !== 'failed') return null
+  const { failure } = state
+  // The login terminal needs the machine's number, which it has once the window lists the machine the host saved.
+  const login = failure.kind === 'needs-person' ? machines.list.find((head) => head.name === failure.saved && head.machine > 0) : undefined
+  return (
+    <StatusBlock tone={toneOf(failure)} lead={failure.message} copy={failure.fixCommand === null ? undefined : { text: failure.fixCommand, label: 'the command', onCopy: machines.onCopyCommand }}>
+      <button type="button" className="mx-rm-primary" onClick={onRetry}>Try again</button>
+      {login !== undefined && <button type="button" className="mx-rm-text" onClick={() => { machines.onOpenLogin(login.machine) }}>Sign in in a terminal</button>}
+    </StatusBlock>
+  )
+}
+
+/** Amber for a login only the person can finish, red for anything else. */
+function toneOf(failure: AddFailure): 'needs' | 'bad' {
+  return failure.kind === 'key-refused' || failure.kind === 'needs-person' ? 'needs' : 'bad'
 }
 
 /** The machine a host of the SSH config was added as: by its target, or by its name. */
@@ -130,13 +154,15 @@ function headOf(list: readonly MachineHead[], alias: string): MachineHead | unde
   return list.find((head) => head.target?.toLowerCase() === lower || head.name?.toLowerCase() === lower)
 }
 
-/** What the right-hand end of a host row says: Connect, or that the machine is already there and how it stands. */
+/** What the right-hand end of a host row says: Add, or that the machine is already there and how it stands. */
 function hostWords(host: HostChoice, head: MachineHead | undefined): string {
-  if (!host.added) return 'Connect'
+  if (!host.added) return 'Add'
   return head?.chip === null || head?.chip === undefined || head.chip.word === 'connected' ? 'Already added' : `Already added · ${head.chip.word}`
 }
 
-function SshHosts({ hosts, choices, list, onPick }: { hosts: Hosts; choices: readonly HostChoice[]; list: readonly MachineHead[]; onPick: (host: HostChoice) => void }) {
+type HostsProps = { hosts: Hosts; choices: readonly HostChoice[]; list: readonly MachineHead[]; busy: boolean; onPick: (host: HostChoice) => void }
+
+function SshHosts({ hosts, choices, list, busy, onPick }: HostsProps) {
   if (hosts.status === 'loading') return <SkeletonLines label="Reading hosts from ~/.ssh/config" className="mx-rm-hint" />
   if (hosts.status === 'failed') return <p className="mx-rm-hint" role="alert">{hosts.message}</p>
   if (choices.length === 0) return null
@@ -148,7 +174,7 @@ function SshHosts({ hosts, choices, list, onPick }: { hosts: Hosts; choices: rea
           const words = hostWords(host, headOf(list, host.alias))
           return (
             <div key={host.alias} role="listitem">
-              <button type="button" className={host.added ? 'mx-rm-host is-added' : 'mx-rm-host'} aria-label={host.added ? `${host.alias}: ${words}` : `Connect to ${host.alias}`} onClick={() => { onPick(host) }}>
+              <button type="button" className={host.added ? 'mx-rm-host is-added' : 'mx-rm-host'} disabled={busy} aria-label={host.added ? `${host.alias}: ${words}` : `Add ${host.alias}`} onClick={() => { onPick(host) }}>
                 <span className="mx-rm-hostname">{host.alias}</span>
                 <span className="mx-rm-hostaddr mono">{host.detail}</span>
                 <span className="mx-rm-hostgo" aria-hidden={host.added ? undefined : 'true'}>{words}</span>

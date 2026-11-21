@@ -393,29 +393,21 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   and they take the whole dialog, with no nav (Usage's groups run full width).
   **Remote machines** (`MachinesPage.tsx`) is one list or this computer's details, one at a time in the
   same pane; there is no page per machine; **+ Add machine** here, the sidebar's **+ Remote machine** (foot or rail) and the palette all open the
-  same flow as one dialog (`AddMachineDialog`, a fixed-size 600 x 560 `.mx-rename.mx-addmachine` card in every state: a header with a
-  server mark, the title, the address in mono and a close button; a scrolling body; a foot). The first step is one mono `Address`
-  field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.")
-  under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row (a
-  Port box and a Key file box, placeholder `~/.ssh/id_ed25519`), and the `~/.ssh/config` hosts as rows (one already added is dimmed and says "Already added" where Connect would be); its foot is Cancel. After
-  Connect the same card shows the checklist (`Steps`, `AddChecklist`): **Reach**, **Sign in with your key**, **Set up the Maiker
-  helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Signed in with id_ed25519"); the foot is
-  **← Change address** (back to what was typed) and **Cancel**. There is no host-key step and no fingerprint: ssh records a new
-  host's key, and a changed one is refused at Reach in the host's sentence ("<name>'s host key has changed, …", naming the
-  `ssh-keygen -R` that clears the old key) with **Try again** and never a Trust; nothing is added. A step that needs the person is
-  an amber step with one main fix: a machine that would not sign in ("Couldn't sign in to <user@host>": the host's one sentence with the fix, ssh's own reason
-  when it gave one, a Copy line for the command the sentence names and **Try again**; no terminal, no command preview, no
-  password anywhere in Maiker), a host that does not answer ("Couldn't reach <host>", the host's one sentence, **Try again** and
-  **Edit the address**). Every failure's words are the host's shared sentence, the same as the terminal app's. A missing helper is not a question: it installs as a step with a
-  progress bar ("Not installed yet. Copying Maiker <version> to <name>…"). When the machine is in, the card is **Machine added**: a
-  green "Connected. Its sessions show up in your sidebar under this name." line, a Name field (selected, so typing replaces it;
-  an SSH config host keeps its config name), the details that are known (Address, Reach time, Key used, Maiker helper; System and
-  Agents found only when the host reports them) and **Done** and **Start a session**. A saved machine of the same name is **Retry <name>** (the checklist
-  carries on at the key or helper step the machine's own state names, and shows it signing in meanwhile) or **Remove <name>**
-  (**Removing <name>…**, then the run starts again from the top). A host of the SSH config list that is already a machine
-  opens Settings › Remote machines, connected or not; the dialog never mends a machine. The dialog mounts in the window root (`.mx-app`), where the corner and role
-  tokens live: the frame, the wells and the buttons take `--r-panel` and `--r-control` and are rounded in Rounded mode; a step's
-  body sits straight under its label (no card inside the dialog's card); the one box in the key step is the command or terminal well. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
+  same flow as one dialog (`AddMachineDialog`, a 600px `.mx-rename.mx-addmachine` card as tall as what it holds: a header with a
+  server mark, the title and a close button; a scrolling body; a foot with Cancel). It has no steps and no second screen (ADR
+  0017): the line that says Maiker connects with your keys and never asks for or keeps passwords, one mono `Address` field with
+  **Add** (the `solid` Button), a closed **Port and key** row (a Port box and a Key file box, placeholder `~/.ssh/id_ed25519`),
+  and the `~/.ssh/config` hosts as rows that follow what is typed (one already added is dimmed and says "Already added" where
+  Add would be). After Add a status block (`StatusBlock`) under the field is one line with the teal spinner: "Connecting to
+  <host>…", or "Connecting to <host> and setting up Maiker there…" while Maiker is installed; the field is read-only and the host
+  rows wait at 55% opacity, and the foot's Cancel stops the add and gives the field back. When the machine is in the dialog
+  closes and the sidebar lists it. Otherwise the block is the host's one sentence (red ×, or amber ! for a key refused or a login
+  that needs a person; never a step label, so a changed host key is never called unreachable), a Copy line for the command it
+  names (`ssh-copy-id`, `ssh-keygen -R`), **Try again** as the neutral primary and, for a login that needs a person, **Sign in in a
+  terminal**. There is no checklist, no host-key or key screen and no "Machine added" card. A host of the SSH config list that is
+  already a machine opens Settings › Remote machines, connected or not; the dialog never mends a machine. The dialog mounts in the
+  window root (`.mx-app`), where the corner and role tokens live: the frame, the wells and the buttons take `--r-panel` and
+  `--r-control` and are rounded in Rounded mode. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
   `user@host` in mono, the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Can't reach it · 14 min", "N sessions ·
@@ -430,7 +422,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Notifications, two switches). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
   Nothing on <name> is deleted.", **Remove** and Cancel). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
   a mark or teal spinner, one sentence, an optional command with Copy, the actions, and raw output behind
-  Details. **Add a machine** is the dialog described above, never a page here. The key terminal (`KeyTerminal.tsx`, a 150px well `.mx-key-term`, inside the amber key step) has the command typed and not run, takes keyboard focus and shows a one-line hint ("Press Enter, then type the password here. It goes to ssh like any terminal input; Maiker does not read or keep it."); the machine is dialled every 5 seconds (up to 10 minutes) until it connects and the checklist then carries on by itself. Esc goes to the terminal while it has focus and closes the dialog anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's close button is always there. Whatever closes the dialog ends the shell. On Windows the typed line is the PowerShell one.
+  Details. **Add a machine** is the dialog described above, never a page here.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
   when the page name or the group title matches, else with only the rows whose label or detail match, and a group with
@@ -1277,7 +1269,6 @@ text `--dim`; it is one flat box (no box inside a box), the same size in both st
 ## Dialog corner, solid buttons and the setup (audit of the handoff screens)
 
 - **`--r-dialog`** is the corner of the big windows (Add a remote machine, the first-run setup): 14px in Rounded, 0 in Square.
-- **Button** has a `solid` variant (the text colour as fill, the ground colour as text: the primary of the setup, Connect, Start a session, Add machine) and an `outline` variant (a `--line2` ring); sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
-- **Steps** (`StepRow`): a 21px mark column joined by a line (green once done); a done step with a result shows the result as its title; a step that needs the person is semibold in `--needs`, a failed one in `--err`.
+- **Button** has a `solid` variant (the text colour as fill, the ground colour as text: the primary of the setup, Add a remote machine's Add, Add machine) and an `outline` variant (a `--line2` ring); sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
 - **Setup window**: 680px wide, header 52px (mark, numbered `StepBar` with 18px circles, Skip setup), body padded 26/28 with an 18px gap, title 22px with a 14px `--muted` lead, a foot with Back, the Enter hint and the `solid` `xl` primary. Question cards carry a small mark, a 13px title and an 11.5px detail; the picked card is the accent on an 8% wash. A card marked `recommended` carries a "Recommended for you" tag.
 - **Settings › General** has one "How you work" card with **Open sessions in** (an icon-less Chat | Terminal switch). A connected machine on an older Maiker shows the green dot with an Update button. The machine marks are drawn dots (round, hollow for connecting) so they match in every font.

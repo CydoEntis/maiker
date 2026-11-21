@@ -89,6 +89,9 @@ pub enum Prepare {
     Ready { def: MachineDef, how: How },
     /// No usable name can be made from the target: ask for one.
     NeedsName,
+    /// ssh could not reach the machine, or refused its changed host key: nothing is to be added,
+    /// and `failure` is what the window says instead.
+    Refused { def: MachineDef, failure: FailureClass },
     Cancelled,
 }
 
@@ -102,8 +105,7 @@ pub struct Request<'a> {
 
 /// Check the request (and its name, or one made from the target) against the machines already
 /// there, then look at the machine with `probe`. Writes nothing. An error is words for the
-/// person: a target or name the loader refuses, or a machine ssh cannot reach (nothing is to be
-/// added then).
+/// person: a target or name the loader refuses. A machine ssh cannot reach is `Refused`.
 pub fn prepare(
     existing: &[MachineDef],
     request: &Request<'_>,
@@ -152,7 +154,7 @@ pub fn prepare(
         // A changed host key is refused by ssh, so the machine would never connect: nothing is
         // added, and the sentence says how to clear the old key once the change is confirmed.
         Probe::Failed(failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. })) => {
-            Err(sentence_here(&failure, &Subject::of_def(&def)))
+            Ok(Prepare::Refused { def, failure })
         }
         Probe::Failed(failure) if failure.is_login() => Ok(Prepare::Ready {
             def,
@@ -238,9 +240,28 @@ pub enum Outcome {
         fix_command: Option<String>,
         command: Option<String>,
     },
+    /// Nothing was written: ssh could not reach the machine, or its host key changed. `message`
+    /// is the shared sentence, `failure` which failure it is (`FailureClass::kind`) and
+    /// `fix_command` the command the sentence names, for a Copy button.
+    Failed {
+        message: String,
+        failure: &'static str,
+        fix_command: Option<String>,
+    },
     /// No name could be made from the target.
     NeedsName,
     Cancelled,
+}
+
+/// What the window is told of a machine that was not added: the same three things a machine's
+/// own state carries, so both say a failure the same way.
+fn refused(def: &MachineDef, failure: &FailureClass) -> Outcome {
+    let subject = Subject::of_def(def);
+    Outcome::Failed {
+        message: sentence_here(failure, &subject),
+        failure: failure.kind(),
+        fix_command: fix_command(failure, &subject, ClientOs::this()),
+    }
 }
 
 /// The hosts of `~/.ssh/config`, minus the ones that are already machines. Read off the UI thread.
@@ -305,6 +326,7 @@ pub async fn add_machine(
     let (def, how) = match looked.prepared {
         Prepare::Cancelled => return Ok(Outcome::Cancelled),
         Prepare::NeedsName => return Ok(Outcome::NeedsName),
+        Prepare::Refused { def, failure } => return Ok(refused(&def, &failure)),
         Prepare::Ready { def, how } => (def, how),
     };
     handle.add(def.clone());
@@ -512,12 +534,21 @@ mod tests {
         ));
     }
 
+    /// What the window is told of a look that refused the machine.
+    fn refusal(looked: &Result<Prepare, String>) -> Outcome {
+        let Ok(Prepare::Refused { def, failure }) = looked else {
+            panic!("refused: {looked:?}");
+        };
+        refused(def, failure)
+    }
+
     #[test]
     fn a_machine_ssh_cannot_reach_adds_nothing_and_says_why() {
-        let Err(why) = look("unreachable") else {
-            panic!("an error");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&look("unreachable")) else {
+            panic!("a failure");
         };
-        assert!(why.starts_with("Can't reach build.example: check the name or address"), "{why}");
+        assert!(message.starts_with("Can't reach build.example: check the name or address"), "{message}");
+        assert_eq!((failure, fix_command), ("unreachable", None));
     }
 
     /// The ed25519 key the shim's machine offers, and another one on record for a changed key.
@@ -553,18 +584,20 @@ mod tests {
     fn a_changed_host_key_is_refused_adds_nothing_and_leaves_known_hosts_as_it_was() {
         let on_record = format!("build.example ssh-ed25519 {OLD_KEY}\n");
         let (looked, known_hosts) = look_with_keys(Some(&on_record), "ask");
-        let Err(why) = looked else {
-            panic!("refused: {looked:?}");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&looked) else {
+            panic!("a failure");
         };
-        assert!(why.starts_with("build.example's host key has changed"), "{why}");
-        assert!(why.contains("ssh-keygen -R 'build.example'"), "the fix is named, never an accept: {why}");
+        assert!(message.starts_with("build.example's host key has changed"), "{message}");
+        assert!(message.contains("ssh-keygen -R 'build.example'"), "the fix is named, never an accept: {message}");
+        assert_eq!(failure, "host-key-changed", "never said to be unreachable");
+        assert_eq!(fix_command.as_deref(), Some("ssh-keygen -R 'build.example'"));
         assert_eq!(known_hosts, Some(on_record));
     }
 
     #[test]
     fn a_config_that_refuses_new_host_keys_is_the_person_s_and_is_kept() {
         let (looked, known_hosts) = look_with_keys(None, "true");
-        assert!(looked.is_err(), "{looked:?}");
+        assert!(matches!(looked, Ok(Prepare::Refused { .. })), "{looked:?}");
         assert_eq!(known_hosts, None, "nothing was written");
     }
 
@@ -646,6 +679,16 @@ mod tests {
         assert_eq!((json["reach_ms"].as_u64(), json["took_ms"].as_u64()), (Some(38), Some(900)));
         assert_eq!(json["key"], "id_ed25519");
         assert_eq!(json["helper_install"]["installed"], true);
+    }
+
+    #[test]
+    fn a_refusal_reaches_the_window_as_one_failed_outcome() {
+        let failed = refused(&def("build", "build.example"), &FailureClass::HostKeyChanged { known_as: None });
+        let json = serde_json::to_value(&failed).unwrap();
+        assert_eq!(json["outcome"], "failed");
+        assert_eq!(json["failure"], "host-key-changed");
+        assert_eq!(json["fix_command"], "ssh-keygen -R 'build.example'");
+        assert!(json["message"].as_str().is_some_and(|message| message.starts_with("build's host key has changed")), "{json}");
     }
 
     #[test]

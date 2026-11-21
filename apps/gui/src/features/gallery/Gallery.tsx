@@ -172,7 +172,7 @@ export function Gallery() {
           </nav>
         </header>
         <Primitives />
-        <h2 className="m-0 mt-4 text-[18px] font-[650]">Checklist and setup parts</h2>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Setup parts</h2>
         <FlowPartsGallery />
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Chat feed as the prototype draws it</h2>
         <div className="flex flex-wrap items-start gap-6">

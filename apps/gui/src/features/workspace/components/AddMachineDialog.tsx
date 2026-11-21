@@ -1,6 +1,5 @@
 import { Dialog, DialogContent } from '@/components/ui/dialog'
-import { AddMachineFlow } from '@/features/settings/components/AddMachineFlow'
-import type { MachineFacts } from '@/features/settings/model/addStage'
+import { AddMachinePanel } from '@/features/settings/components/AddMachinePanel'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { windowRoot } from './windowRoot'
 
@@ -9,19 +8,14 @@ type Props = {
   onClose: () => void
   /** Leaves for Settings › Remote machines, where a host clicked in the SSH config list that is already a machine is managed. */
   onOpenSettings?: () => void
-  /** Start a session on the machine just added (by its number): the Start a session button of Machine added. */
-  onStartSession?: (machine: number) => void
-  /** What the machine's daemon reports about itself. Nothing supplies it yet, so Machine added leaves those rows out. */
-  facts?: MachineFacts
-  /** The running app's version, for "Copying Maiker <version>". */
-  appVersion?: string | null
 }
 
 /**
- * Adds a remote machine over the window; Settings › Remote machines is where the ones added are managed. A machine that is
- * not connected is mended where it is listed (its sidebar heading, its Settings row), never here.
+ * Adds a remote machine over the window; it closes once the machine is in, and the sidebar lists it. Settings › Remote machines
+ * is where the ones added are managed. A machine that is not connected is mended where it is listed (its sidebar heading, its
+ * Settings row), never here.
  */
-export function AddMachineDialog({ machines, onClose, onOpenSettings = onClose, onStartSession = onClose, facts, appVersion = null }: Props) {
+export function AddMachineDialog({ machines, onClose, onOpenSettings = onClose }: Props) {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
       <DialogContent
@@ -38,7 +32,7 @@ export function AddMachineDialog({ machines, onClose, onOpenSettings = onClose, 
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <AddMachineFlow machines={machines} onClose={onClose} onStartSession={onStartSession} onOpenSettings={onOpenSettings} facts={facts} appVersion={appVersion} />
+          <AddMachinePanel machines={machines} onClose={onClose} onOpenAdded={onOpenSettings} />
         </div>
       </DialogContent>
     </Dialog>

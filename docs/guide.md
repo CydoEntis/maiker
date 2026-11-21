@@ -813,13 +813,16 @@ its own. An Inbox row from another machine says `· on build`.
 - **Retry** dials a machine now and lets a refused one be looked at again.
 - **Remove** asks first, then takes the machine out of the list and out of `config.local.toml`. Its sessions
   keep running on it and the layout you saved is kept.
-- **Add a machine** lists the hosts in `~/.ssh/config` that are not machines yet, or takes `user@host`. The
-  desktop app first looks at the machine over ssh without asking anything (12 seconds at most; *Cancel* ends
-  it) and adds it only when ssh could reach it; a new host key is recorded by ssh without a question, and a
-  machine whose key changed is not added. If ssh needs you to type a password or a code, the
-  machine is added and ssh opens in a session named `ssh <name>`; the machine connects when that session
-  closes. On Windows use ssh keys or an agent: password prompts work in that session but are not remembered.
-  A machine whose app is missing or old is added too; its header then says `not installed` or `needs update`.
+- **Add a machine** is one field and an **Add** button: type `user@host`, an address or a name from
+  `~/.ssh/config` (its hosts are offered as you type, and a click adds one). If `ssh <name>` works in a
+  terminal, it works here. A spinner says *Connecting to <name>…* while the desktop app looks at the machine
+  over ssh without asking anything (12 seconds at most; *Cancel* ends it) and puts Maiker on it when it is
+  missing; then the dialog closes and the machine is in the sidebar. A new host key is recorded by ssh without a
+  question; a machine whose key changed is not added. When something fails, one sentence says what and how to
+  fix it, with the command to copy (such as `ssh-copy-id`) and **Try again**. If ssh needs you to type a
+  password or a code, **Sign in in a terminal** opens ssh in a session named `ssh <name>`; the machine
+  connects once you have signed in. On Windows use ssh keys or an agent: password prompts work in that session
+  but are not remembered. A machine whose Maiker is older is added too; its header then offers the update.
 
 A machine with no maiker says `not installed` under its header in the sidebar, with an **Install** button; one
 with another version says `needs update`, with an **Update** button. Its right-click menu has the same as

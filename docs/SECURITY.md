@@ -165,7 +165,7 @@ in the home folder of this computer or of the machine named, whose first command
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
 password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
-has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
+has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. A refused key's one-line failure only says so and offers a
 one-line key-copy command to copy and run in the person's own terminal. The command comes from the host
 (`link_failure::fix_command`), which gives none for a target that is not one plain word (`check_target`). A changed host key is
 refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it.

@@ -270,10 +270,19 @@ const AddedSchema = z.discriminatedUnion('outcome', [
     fix_command: z.string().nullable(),
     command: z.string().nullable(),
   }),
+  /** Nothing was written: ssh could not reach the machine, or its host key changed. */
+  z.object({
+    outcome: z.literal('failed'),
+    /** The host's one sentence for what failed and the fix. */
+    message: z.string(),
+    failure: z.enum(FAILURE_KINDS),
+    /** The command `message` asks for, for a Copy button. */
+    fix_command: z.string().nullable(),
+  }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),
 ])
-/** What adding a machine came to. A machine that could not be added rejects with the words to show. */
+/** What adding a machine came to. A request the host refuses before looking (a bad target, a taken name) rejects with the words to show. */
 export type Added = z.infer<typeof AddedSchema>
 
 /** What an add may also say: a private key file for ssh to sign in with (checked to exist, never read), and whether to install the helper when it is missing. */
@@ -282,7 +291,7 @@ export type AddMachineOptions = { keyFile?: string | null; installHelper?: boole
 /**
  * Look at `target` over ssh without asking anyone anything and, when it holds up, add it and start
  * dialling it. `name` is only needed when none can be made from the target. A host key ssh has not
- * seen is recorded by ssh itself; a changed one is refused, and nothing is added.
+ * seen is recorded by ssh itself; a changed one is `failed`, and nothing is added.
  */
 export async function addMachine(target: string, name?: string, port?: number, options: AddMachineOptions = {}): Promise<Added> {
   if (!isTauri()) throw new Error('Machines can only be added in the desktop app')
