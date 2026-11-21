@@ -3127,6 +3127,10 @@ async fn a_chat_asks_before_it_starts_helpers_and_only_a_person_answers() {
         assert_eq!(s.daemon.terms.len(), panes + 1);
         let helper = s.daemon.terms.values().max_by_key(|term| term.born).expect("the helper");
         assert_eq!((helper.started_by_chat, helper.started_by), (Some(id), None));
+        // The tool server that asked is a terminal client, but the chat is the desktop app's.
+        let helper = helper.id;
+        assert_eq!(s.daemon.terms[&helper].owner, crate::protocol::Surface::Desktop);
+        assert!(s.daemon.snapshot_for(crate::protocol::Surface::Desktop).terms.contains_key(&helper), "the app the chat is in lists it");
         // An answer to nothing is an error, not a grant.
         for (client, chat) in [(307, id), (308, crate::conversation::ConversationId(9_999))] {
             let nothing = exchange(&mut s, client, answer_chat(chat, HelperChoice::No), None).await;

@@ -130,8 +130,7 @@ impl Daemon {
                     None => self.spawn(cmd.as_deref(), &cwd, cols, rows)?,
                 };
                 self.started(term, by);
-                // The app that asked for it owns it: only that app may use this session.
-                let owner = self.surface_of(client);
+                let owner = self.owner_of_start(client, by);
                 if let Some(t) = self.terms.get_mut(&term) {
                     t.owner = owner;
                 }

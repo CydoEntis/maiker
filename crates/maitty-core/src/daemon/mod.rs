@@ -3989,6 +3989,21 @@ impl Daemon {
                 .count()
     }
 
+    /// The app a new session belongs to, which is the only app that lists it. A person's start
+    /// belongs to the app they asked from. A helper belongs to the app its starter is in: an
+    /// agent asks through the tool server, which is a terminal client whichever app the agent
+    /// runs in, so going by the asking client would hide a desktop chat's helpers from it.
+    fn owner_of_start(&self, client: ClientId, by: Option<helpers::Starter>) -> Surface {
+        match by {
+            Some(helpers::Starter::Chat(_)) => Surface::Desktop,
+            Some(helpers::Starter::Pane(pane)) => self
+                .terms
+                .get(&pane)
+                .map_or_else(|| self.surface_of(client), |t| t.owner),
+            None => self.surface_of(client),
+        }
+    }
+
     /// Note whose agent started `term`.
     fn started(&mut self, term: TermId, by: Option<helpers::Starter>) {
         if let Some(t) = self.terms.get_mut(&term) {
