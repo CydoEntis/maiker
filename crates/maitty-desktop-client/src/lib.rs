@@ -2090,9 +2090,12 @@ pub async fn create_conversation(
         Provider::Claude => (claude_executable()?, claude_config_dir()?),
         // Gemini runs in a terminal and its chat is read from the transcript; it has no structured runtime.
         Provider::Gemini => bail!("Gemini has no structured chat; start it in a terminal"),
+        // The daemon picks an ACP agent's program from its own config; this start names a program itself.
+        Provider::Acp => bail!("An agent run over ACP cannot be started from here yet"),
     };
     let (sandbox, approval_policy) = permissions.launch_policy();
     let settings = LaunchSettings {
+        agent: None,
         provider,
         executable,
         config_root,

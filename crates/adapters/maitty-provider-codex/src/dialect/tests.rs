@@ -9,6 +9,7 @@ const HANDSHAKE_REQUESTS: i64 = 2;
 
 fn settings() -> LaunchSettings {
     LaunchSettings {
+        agent: None,
         provider: Provider::Codex,
         executable: PathBuf::from("codex"),
         config_root: PathBuf::from("/synthetic/home"),

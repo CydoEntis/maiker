@@ -57,7 +57,7 @@ pub struct AgentDef {
 }
 
 /// The longest name an ACP agent may have: it names the agent in every conversation it runs.
-pub const ACP_NAME_MAX: usize = 32;
+pub const ACP_NAME_MAX: usize = maitty_shared::conversation::ACP_AGENT_NAME_MAX;
 /// The agents with an adapter of their own, which are never run over ACP (ADR 0017).
 pub const NATIVE_CHAT_AGENTS: [&str; 2] = ["claude", "codex"];
 const ACP_ARGS_MAX: usize = 32;
@@ -78,9 +78,7 @@ pub fn validate_agents(agents: &[AgentDef]) -> Result<()> {
         }
         let name = &agent.name;
         anyhow::ensure!(
-            !name.is_empty()
-                && name.len() <= ACP_NAME_MAX
-                && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            maitty_shared::conversation::acp_agent_name(name),
             "{place}: an agent with `acp = true` needs a `name` of lowercase letters, digits, `-` or `_`, at most {ACP_NAME_MAX} long"
         );
         anyhow::ensure!(

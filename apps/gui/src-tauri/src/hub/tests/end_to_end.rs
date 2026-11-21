@@ -571,6 +571,7 @@ async fn the_window_is_told_when_a_chat_of_this_computers_daemon_changes() {
     };
     command(Command::ConversationStart {
         target: StartTarget::Create(LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable,
             config_root: root.clone(),

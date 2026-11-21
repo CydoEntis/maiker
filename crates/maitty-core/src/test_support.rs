@@ -6,6 +6,7 @@ pub(crate) fn conversation() -> Conversation {
     Conversation {
         id: ConversationId(1),
         binding: NativeBinding {
+            agent: None,
             provider: Provider::Codex,
             session_id: "exact-session".into(),
             account: Some("work".into()),

@@ -106,9 +106,8 @@ pub enum SettingKey {
     ReduceMotion,
     WindowStyle,
     /// Takes `SettingValue::List`: the agents to switch off; the rest are switched on.
-    /// Sent only to a daemon from `BYPASS_SETTING_SINCE` on.
     BypassOff,
-    /// Takes `SettingValue::Bool`. Sent only to a daemon from `UPDATE_MACHINES_SINCE` on.
+    /// Takes `SettingValue::Bool`.
     UpdateMachines,
 }
 

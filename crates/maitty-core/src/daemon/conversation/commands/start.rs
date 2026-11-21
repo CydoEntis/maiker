@@ -15,6 +15,8 @@ impl Daemon {
         self.durable_conversation()?;
         let by = self.starting(client, "a structured Codex conversation")?;
         let identity = match target {
+            // The wire names the agent; running one is the daemon's next step (MAITTY-491).
+            StartTarget::Acp { .. } => bail!("This version cannot start an agent over ACP yet"),
             StartTarget::Create(settings)
             | StartTarget::Session {
                 settings,

@@ -96,6 +96,7 @@ impl Daemon {
                     capabilities: (c.execution == ExecutionKind::Structured)
                         .then(|| self.conversation_capabilities(c.binding.provider, c.id, c.generation))
                         .flatten(),
+                    agent: c.binding.agent.clone(),
                 }
             })
             .collect();
@@ -120,6 +121,7 @@ impl Daemon {
                 helpers: Vec::new(),
                 // The daemon only reads this pane's transcript; what the agent can do is the pane's.
                 capabilities: None,
+                agent: None,
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -144,6 +146,7 @@ impl Daemon {
                 helpers: Vec::new(),
                 // Not running yet, so nothing its provider's own run decides is known.
                 capabilities: self.conversation_capabilities(p.settings.provider, p.id, p.generation),
+                agent: p.settings.agent.clone(),
             }
         }));
         summaries

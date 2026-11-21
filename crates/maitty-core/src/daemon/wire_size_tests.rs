@@ -433,6 +433,7 @@ fn conversation(i: u32) -> ConversationSummary {
         branch: Some(branch_of(i)),
         helpers: Vec::new(),
         capabilities: None,
+        agent: None,
     }
 }
 

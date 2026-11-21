@@ -10,6 +10,7 @@ const RESULT: &str = r#"{"type":"result","session_id":"session-1","is_error":fal
 
 fn dialect() -> ClaudeDialect {
     let settings = LaunchSettings {
+        agent: None,
         provider: Provider::Claude,
         executable: PathBuf::from("claude"),
         config_root: PathBuf::from("config"),

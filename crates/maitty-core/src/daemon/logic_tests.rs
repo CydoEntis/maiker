@@ -11020,6 +11020,7 @@ fn a_conversation_terminal_its_hooks_never_named_is_remembered_by_its_conversati
     d.conversations.push(Conversation {
         id: ConversationId(9),
         binding: NativeBinding {
+            agent: None,
             provider: Provider::Codex,
             session_id: "native-1".into(),
             account: None,

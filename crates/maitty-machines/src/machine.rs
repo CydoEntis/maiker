@@ -810,18 +810,16 @@ mod tests {
         }
     }
 
-    /// The window dials newest-only, so a machine whose daemon predates documents (`FILE_EDIT_SINCE`) is turned away
-    /// at connect time and offered its update: a document is never asked of one that would not answer it.
+    /// The window dials newest-only, so a machine whose daemon is older is turned away at connect
+    /// time and offered its update: nothing is asked of one that would not answer it.
     #[test]
-    fn a_daemon_older_than_saving_documents_is_not_used_by_the_window_but_the_newest_is() {
+    fn a_daemon_older_than_this_build_is_not_used_by_the_window_but_the_newest_is() {
         use maitty_ipc_transport::Welcomed;
-        use maitty_shared::protocol::{COMPATIBLE_SINCE, FILE_EDIT_SINCE, PROTOCOL_VERSION};
-        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE };
-        assert!(!super::accepts(true, daemon(FILE_EDIT_SINCE - 1)));
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION};
+        // An older daemon that would still be talked to, had the window opened further back.
+        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE.min(version) };
         assert!(!super::accepts(true, daemon(PROTOCOL_VERSION - 1)));
         assert!(super::accepts(true, daemon(PROTOCOL_VERSION)));
-        // A line that is not the window's (the terminal app) may still use an older daemon the two can talk to.
-        assert!(super::accepts(false, daemon(FILE_EDIT_SINCE - 1)));
     }
 
     #[test]

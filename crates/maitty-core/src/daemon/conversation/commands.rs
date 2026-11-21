@@ -351,6 +351,7 @@ mod native_resume_tests {
     #[test]
     fn claude_identity_accepts_only_the_exact_provider_session() {
         let mut settings = LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: PathBuf::from("claude"),
             config_root: PathBuf::from("claude-config"),

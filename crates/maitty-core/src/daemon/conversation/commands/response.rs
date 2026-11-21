@@ -132,6 +132,7 @@ impl Daemon {
                     id,
                     generation,
                     binding: NativeBinding {
+                        agent: settings.agent.clone(),
                         provider: settings.provider,
                         session_id: thread,
                         account: None,

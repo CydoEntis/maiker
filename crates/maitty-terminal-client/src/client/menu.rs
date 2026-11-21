@@ -504,11 +504,7 @@ impl App {
         else {
             return;
         };
-        let title = c.title.clone().unwrap_or_else(|| match c.provider {
-            crate::conversation::Provider::Codex => format!("Codex {}", id.0),
-            crate::conversation::Provider::Claude => format!("Claude {}", id.0),
-            crate::conversation::Provider::Gemini => format!("Gemini {}", id.0),
-        });
+        let title = c.title.clone().unwrap_or_else(|| format!("{} {}", c.agent_label(), id.0));
         let items = vec![
             ("Rename".to_string(), Act::RenameConversation(id)),
             ("Close".to_string(), Act::ArchiveConversation(id)),

@@ -362,6 +362,7 @@ async fn a_claude_chat_has_its_turn_interrupted_and_the_message_sent_as_the_next
         std::fs::write(executable.with_extension("scenario"), "interrupt-any").unwrap();
         let messages = executable.with_extension("messages");
         let claude = crate::conversation::LaunchSettings {
+            agent: None,
             provider: crate::conversation::Provider::Claude,
             executable,
             config_root,

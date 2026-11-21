@@ -680,6 +680,7 @@ mod tests {
                 id: crate::conversation::ConversationId(1),
                 generation: 1,
                 settings: LaunchSettings {
+                    agent: None,
                     provider: crate::conversation::Provider::Claude,
                     executable,
                     config_root,
@@ -741,6 +742,7 @@ mod tests {
                 id: ConversationId(1),
                 generation: 1,
                 settings: LaunchSettings {
+                    agent: None,
                     provider: crate::conversation::Provider::Codex,
                     executable: codex.clone(),
                     config_root,
