@@ -190,7 +190,7 @@ impl ProviderDialect for ClaudeDialect {
             frame => {
                 let finished = matches!(frame, OutputFrame::Result { .. });
                 ensure!(
-                    !finished || turn.acknowledged,
+                    !finished || turn.acknowledged || turn.projector.takes_answer_as_receipt(),
                     "Claude completed without echoing the submitted prompt; delivery is uncertain"
                 );
                 let events = turn.projector.project(frame)?;
