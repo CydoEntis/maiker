@@ -1165,10 +1165,13 @@ the window, so each is bounded as follows.
 | `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
 | `inspect_new_host`, `trust_new_host` | target, port, fingerprint | The same checks as `inspect_host_key` and `trust_host_key`, for a host that is not a machine yet, so a new host is trusted before anything is written. Nothing is saved when the person cancels. |
 | `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
-| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. |
+| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. Replaced by [ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md) (a new host key is trusted on first connection, as `accept-new`); this row describes the code until that lands. |
 | `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |
 
 Key login with a password once (`key_login`):
+
+> [ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md) removes this flow (Maiker relies on your
+> own ssh keys and agent); the rules below describe the code until that lands.
 
 - **The password.** It arrives as one argument, is moved into a `Secret` (no `Debug`, `Clone` or
   `Serialize`; its bytes are overwritten on drop), and lives only for that call. It is not written
