@@ -1087,7 +1087,7 @@ impl App {
                     }
                     self.release_tick();
                     self.ask_lists_again();
-                    if frame != last_frame && ((self.motion_on() && (self.any_working() || self.any_checking() || self.any_calling())) || matches!(self.mode, Mode::Spinners(_))) {
+                    if frame != last_frame && ((self.motion_on() && (self.any_working() || self.any_checking() || self.any_calling() || self.adding_machine())) || matches!(self.mode, Mode::Spinners(_))) {
                         last_frame = frame;
                         self.dirty = true;
                     }
@@ -1739,6 +1739,11 @@ impl App {
             term.check()
                 .is_some_and(|c| c.state == crate::protocol::CheckState::Checking)
         })
+    }
+
+    /// The Machines dialog is connecting to a machine being added: its working line turns.
+    fn adding_machine(&self) -> bool {
+        matches!(&self.mode, Mode::Machines(v) if matches!(v.step, screen::machines::MachineStep::Checking { .. }))
     }
 
     /// A session that needs you or finished unseen: its name pulses or shimmers.

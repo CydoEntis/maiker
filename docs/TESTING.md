@@ -296,7 +296,10 @@ the interactive line, the machine dialled when the popup pane closes, `needs log
 login still fails), removing (config, supervisor, sidebar, daemon id, saved layout lane, and the remote
 daemon's pane still alive over a second connection), that what a removed machine's daemon or supervisor
 says afterwards does not bring it back (handed to the window directly, with no daemon), and retrying a
-refusal. The frames of the dialog are
+refusal. Its frame tests (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture --test-threads=1`
+prints them at 80x24 and 100x30) draw the add while it connects and how each ending looks: added,
+unreachable, a refused key, a login that needs a person (the popup's toast), a changed host key, and
+Maiker missing or older; none may draw a step or `MACHINE ADDED`. The other frames of the dialog are
 `client/screen/machines_tests.rs` (`AGENT_SHOW=1 cargo test machines_tests -- --nocapture` prints them
 at 80x24, 100x30 and 160x45).
 
@@ -311,18 +314,23 @@ No test drives a real terminal, so look once with a nested server and the shim:
    `AGENT_FAKE_SSH_MAITTY=<path to target/debug/maiker>`, `PATH=<lookat>:$PATH` (PowerShell:
    `$env:NAME = ...`). A machine added in the dialog is reached with plain `ssh`, which is now the
    shim, and the shim runs `maiker proxy` against that same private daemon.
-3. Run `target/debug/maiker`, press the leader, then `w`. Type `box` and Enter: the dialog says
-   `Checking box…`, then the machine appears in *Yours* as `connecting` and then `connected`, and its group
-   is in the sidebar. `<lookat>/config.local.toml` holds one `[[machines]]` entry (`name = "box"`,
+3. Run `target/debug/maiker`, press the leader, then `w`. Type `box` and Enter: the field keeps `box`,
+   one line under it says `Connecting to box…` with the working spinner turning (no steps, no
+   `MACHINE ADDED` screen), then the dialog is back on its list with `box` chosen under `YOUR MACHINES`
+   as `connecting` and then `connected`, the input empty and `Added box. … Connecting.` at its foot,
+   and its group is in the sidebar. `<lookat>/config.local.toml` holds one `[[machines]]` entry (`name = "box"`,
    `target = "box"`) and `config.toml` is untouched.
 4. `Tab`, `x`, Enter removes it: its group leaves the sidebar and the entry leaves the file, and the
    daemon's sessions are still there.
 5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=needs-person`, start `maiker`, add `box` again. The probe
-   fails with a login that needs a person, the dialog closes with the toast `ssh needs you to log in: use the popup`, and a popup runs the interactive line
+   fails with a login that needs a person, the dialog closes with the toast `Added box. Sign in in the popup.`
+   and the shared sentence (`box asks for a password or a second code, …`), and a popup runs the interactive line
    (the shim prints `Permission denied` and the popup closes). The machine then shows `needs login`
-   with its fix. With `auth-fail` (a refused key) no popup opens: the dialog stays on `MACHINE ADDED` with
-   `✕ sign in as you` and says "Added box. box refused your key: run `ssh-copy-id box` in a terminal, then try again." Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
-   ssh's `Connection refused` line. `hang` shows `Checking box…` until `Esc` (or 12 s).
+   with its fix. With `auth-fail` (a refused key) no popup opens: the dialog is back on its list with
+   `box` chosen and says "Added box. box refused your key: run `ssh-copy-id box` in a terminal, then try again."; `r` tries again. With `not-installed` it is added and chosen the same way with the
+   `Maiker isn't installed on box` sentence, and `u install` in the bar once its state says so. Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: `box` stays in the field and
+   the shared `Can't reach box` sentence (with ssh's `Connection refused` line) stands right under it in red, where the
+   `user`/`host` line was; typing or Backspace brings that line back. `hang` shows `Connecting to box…` until `Esc` (or 12 s).
 6. With a real host (no shim): leader `w`, pick a host from your `~/.ssh/config`, answer ssh's
    prompts in the popup if it opens one.
 

@@ -495,7 +495,9 @@ Closing the window, or losing the connection, never stops anything over there.
 
 Leader `w` (or `Machines` in the command palette) lists the computers maiker reaches over ssh and
 adds more. Pick a host from your `~/.ssh/config` and press Enter: if ssh logs in on its own (a key, an
-agent) the machine is added and connecting in that one step. A machine ssh has not seen before has its host
+agent) the machine is added and connecting in that one step: one line says *Connecting to <name>…*, then the
+dialog lists the machine, chosen. When something fails, one sentence under the field says what and how to fix
+it (such as the `ssh-copy-id` to run), and Enter tries again. A machine ssh has not seen before has its host
 key recorded by ssh with no question; one whose key changed is refused and not added. If ssh needs you (a
 password, a code) it opens in a popup, you answer, and the machine connects when the popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
 the agent there.

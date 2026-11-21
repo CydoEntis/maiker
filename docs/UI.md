@@ -1026,17 +1026,26 @@ choice does), `client/machine_config.rs` (where `config.local.toml` is; the `[[m
   - `GIT IDENTITY` (`Query::GitIdentities`): who commits where no rule applies, then FOLDERS THAT COMMIT AS SOMEONE ELSE, one row per rule: the folder, and the name, email and GitHub account a rule Maiker wrote sets, or `set outside Maiker` (listed, never changed). ↑↓ choose one. `a` adds a rule (refused until an account is signed in there): Folder, Name and Email fields (the global name and email filled in) and the GitHub account (←→ among the signed-in ones), Tab between them; Enter asks for a preview (`GitRuleChange::Preview`) and shows the lines the daemon would write, by file, as text; only Enter on a clean preview writes it (`Apply`), Esc goes back. `x` on a rule Maiker wrote asks `Remove the rule for <folder>?` first (Enter removes, Esc keeps it); on one set outside Maiker it says to change it in the git config. After a write or a removal the rules are read again and a line says how it went; `r` reads everything again. Text from the daemon is drawn cleaned of control characters; nothing here holds a credential.
 - **Windows.** The dialog says, in a dim line at its top and on Windows only, `Windows: use ssh keys or an
   agent. Password prompts work in the popup but are not remembered.`
-- **Adding is one step for a key-based host.** Enter on a host row (or on the typed text) first refuses a
-  target ssh would read as an option or that holds whitespace (the loader's own words, shown under the lists;
+- **Adding shows no steps** (ADR 0017), as the desktop app's dialog does. Enter on a host row (or on the typed text) first refuses a
+  target ssh would read as an option or that holds whitespace (the loader's own words, shown under the input;
   nothing runs and nothing is written). The name is the alias, made valid and unique (`build`, then
   `build-2`); when nothing usable is left of the target, a name step asks for one and shows the loader's
   reason inline. The entry is `name` and `target` only, and `target` is the alias, so ssh's own config for
   it (user, port, key, jump host) still applies. Then the machine is looked at, off the UI thread, with `ssh
   <target> maiker --version` that never asks anything (`BatchMode`, a short `ConnectTimeout`, stdin closed;
-  `Checking…`, `Esc` ends ssh and adds nothing, and a limit of 12 s ends it whatever ssh does).
+  `Esc` ends ssh and adds nothing, and a limit of 12 s ends it whatever ssh does). Meanwhile the field
+  holds the target and takes no keys, no host row is marked, and the parse line is one working line,
+  the working spinner and `Connecting to <name>…` (it turns with motion on; the look installs nothing,
+  so there is no setting-up line: Install is `u`, which asks first). A machine that is added sends the
+  dialog back to its list with that machine chosen in `YOUR MACHINES` (title `MACHINES`, its state and
+  fix under it, its keys in the bar) and the input emptied; the dialog stays open because that list is
+  where its state shows and `r` tries again. What happened is the line at the dialog's foot. A machine
+  that is not added keeps the target in the field, and the shared sentence stands right under it in
+  place of the parse line (red); typing or Backspace puts the parse line back, Enter tries again. There
+  is no checklist and no `MACHINE ADDED` screen.
   - *It answers:* the entry is appended to `config.local.toml` (comments and the rest of the file kept,
-    written atomically, never `config.toml`), the machine's supervisor starts, and its group is in the
-    sidebar as `connecting` at once.
+    written atomically, never `config.toml`), the machine's supervisor starts, its group is in the
+    sidebar as `connecting` at once, and the dialog says `Added <name>. <version> answered there. Connecting.`
   - *ssh needs a person* (a password or a second code, `FailureClass::NeedsPerson`; the only failure that
     opens a popup, ADR 0017): the entry is written, and ssh is run
     **once**, interactively, in a popup pane on this computer's daemon (`Command::Popup`), so the prompts can
@@ -1044,39 +1053,33 @@ choice does), `client/machine_config.rs` (where `config.local.toml` is; the `[[m
     `-a`, `ConnectTimeout`, `--` before the target). When the popup pane closes the machine is dialled with
     `BatchMode` as every connection is; whether the login worked is the connection's to say, and if it did
     not the machine shows `needs login` with the fix. A popup has the keys only in plain typing mode, so
-    the dialog closes when it asks for the popup and a toast says `ssh needs you to log in: use the popup`;
+    the dialog closes when it asks for the popup and a toast says `Added <name>. Sign in in the popup.` and
+    the shared sentence ("<name> asks for a password or a second code, which Maiker can't answer: …");
     the keys then go to ssh. A popup that is never seen (it ended between two reports of the daemon) is
     taken as closed after 20 s. A `remote_cmd` that needs quoting, or an `ssh_args` word that holds a quote, cannot
-    be put on a pane's command line safely: the machine is added, the sign-in step shows `✕`, and the dialog
-    says the shared sentence with why the popup could not open.
+    be put on a pane's command line safely: the machine is added and chosen, and the dialog says the
+    shared sentence with why the popup could not open.
   - *The machine refuses the key* (`FailureClass::KeyRefused`): no popup, since a password typed there
-    would not fix the key. The machine is added (as the desktop app adds it), the sign-in step shows `✕`, and
+    would not fix the key. The machine is added (as the desktop app adds it) and chosen, and
     the dialog says `Added <name>.` and the shared sentence with its command ("<name> refused your key: run
     `ssh-copy-id <target>` in a terminal, then try again."; on Windows the PowerShell line). Once the key is
     copied, `r` on the machine tries again.
-  - *The app is missing, old or not running there:* the machine is added, the dialog says `Added <name>.` and
+  - *The app is missing, old or not running there:* the machine is added and chosen, the dialog says `Added <name>.` and
     the shared sentence ("Maiker isn't installed on <name>: run …"), and its state shows `needs update`
     or `unreachable` with the same sentence. A `needs update` toast names the click rather than the command
     (`build has no Maiker: click install on its sidebar heading, or press u on it in Machines`; `runs another
     version of Maiker` and `update` for an old one; `AppFix::notice`).
   - *ssh refused its host key* (it differs from the one on record): nothing is added, and the shared sentence
-    ("<name>'s host key has changed, so Maiker won't connect: … run `ssh-keygen -R '<host>'` …") is shown. A key ssh
+    ("<name>'s host key has changed, so Maiker won't connect: … run `ssh-keygen -R '<host>'` …") is shown
+    under the input; it is never called unreachable. A key ssh
     has not seen is no question: the probe's line carries `StrictHostKeyChecking=accept-new`, so ssh records it
     (SECURITY.md, Host keys). When the person's own ssh config is strict and refuses that new key, nothing is
     added either and the sentence says the key isn't known yet, with the `ssh -o StrictHostKeyChecking=ask <target>`
     line to run once in a terminal; it never says the key changed.
   - *ssh cannot reach it* (a bad host): the shared sentence ("Can't reach <name>: check the name or address,
-    and that the machine is on (<ssh's last line, cleaned and cut>).") is shown under the lists, and nothing is added. Nothing hangs: every look ends at its limit, on `Esc`, or when
+    and that the machine is on (<ssh's last line, cleaned and cut>).") is shown under the input, and nothing is added. Nothing hangs: every look ends at its limit, on `Esc`, or when
     ssh does.
   A Windows remote is not supported in v1; the dialog does not guess one from the probe.
-- **Checklist.** After Enter the dialog shows the steps connecting takes: `reach host`, `sign in as
-  user`, `maitty-daemon`, with `✓` done, a spinner while running, `●` (amber) waiting on you,
-  `○` pending and `✕` failed. There is no host-key step: ssh records a new key itself and a changed one
-  adds nothing (ADR 0017). While ssh is being asked, the first step runs. When the machine is written the
-  title becomes `MACHINE ADDED` and the steps show how it stands: all `✓` with the daemon's version; `●` at
-  the sign-in with `log in in the popup`; `✕` at the sign-in (a refused key); or `✕` at `maitty-daemon`.
-  A step has no failure words of its own: why it failed is the shared sentence under the list.
-  `Enter` or `Esc` closes. The password and daemon install are still asked by ssh in its popup, not inline.
 - **A machine heading's right-click menu** (`App::menu_for_machine`): **Install Maiker** or **Update Maiker** first while the app
   there is missing or on another version, **New terminal here**, **Details…** (the machine's details, above), and for a remote machine **Reconnect** and **Machines…** (the dialog with it
   chosen, where Edit and Remove are). The sidebar's ` menu ` chip lists `Install Maiker on <name>` / `Update Maiker on <name>` first for

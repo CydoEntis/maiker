@@ -1,5 +1,5 @@
-//! The Add Machine dialog drawn: loading, with hosts and a typed target, checking, added in each
-//! way and naming. Every frame is looked at at 80x24, 100x30 and 160x45.
+//! The Add Machine dialog drawn: loading, with hosts and a typed target, connecting, a failure
+//! under the input and naming. Every frame is looked at at 80x24, 100x30 and 160x45.
 
 use super::machines::*;
 use super::*;
@@ -323,11 +323,13 @@ fn the_windows_hint_is_said_on_windows_only() {
 }
 
 #[test]
-fn checking_is_a_checklist_with_the_first_step_running() {
+fn connecting_is_one_working_line_under_the_field_and_no_steps() {
     for (w, h) in SIZES {
         let mut app = app_with(&[]);
         let v = MachinesView {
+            in_list: true,
             step: MachineStep::Checking {
+                name: "kingdom".into(),
                 target: "dev@kingdom.lan".into(),
             },
             ..view(Some(hosts()))
@@ -337,84 +339,49 @@ fn checking_is_a_checklist_with_the_first_step_running() {
         let said = words(&text, r);
         for want in [
             "ADD MACHINE",
-            "reach kingdom.lan",
-            "○ sign in as dev",
-            "○ maitty-daemon",
+            "› dev@kingdom.lan",
+            "Connecting to kingdom…",
+            "FROM ~/.ssh/config",
             "Esc cancel",
         ] {
             assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
         }
-        assert!(
-            !said.contains("host key"),
-            "a new host key is no step: ssh records it (ADR 0017): {w}x{h}\n{text}"
-        );
+        // No steps, no internal part named, and no host to pick while it connects (ADR 0017).
+        for gone in ["sign in as", "maitty-daemon", "reach kingdom", "host key", "█", "⏎ connect", "user —"] {
+            assert!(!said.contains(gone), "{w}x{h}: {gone:?}\n{text}");
+        }
     }
 }
 
 #[test]
-fn an_added_machine_says_how_it_stands() {
-    let cases = [
-        (
-            Outcome::Ready("0.64.0".into()),
-            [
-                "✓ reach kingdom.lan",
-                "✓ maitty-daemon 0.64.0",
-                "Enter done",
-            ],
-        ),
-        (
-            Outcome::Login,
-            [
-                "● sign in as dev log in in the popup",
-                "○ maitty-daemon",
-                "Esc close",
-            ],
-        ),
-        (
-            Outcome::SignInFailed,
-            [
-                "✓ reach kingdom.lan",
-                "✕ sign in as dev",
-                "○ maitty-daemon",
-            ],
-        ),
-        (
-            Outcome::Fix,
-            [
-                "✓ sign in as dev",
-                "✕ maitty-daemon",
-                "Esc close",
-            ],
-        ),
-    ];
-    for (how, wants) in cases {
-        for (w, h) in SIZES {
-            let mut app = app_with(&[("kingdom", "dev@kingdom.lan")]);
-            let v = MachinesView {
-                step: MachineStep::Added {
-                    name: "kingdom".into(),
-                    target: "dev@kingdom.lan".into(),
-                    how: how.clone(),
-                },
-                ..view(Some(hosts()))
-            };
-            let (text, r, buf) = shown(&mut app, v, w, h);
-            assert_box_whole(&text, r, &buf);
-            let said = words(&text, r);
-            assert!(said.contains("MACHINE ADDED"), "{w}x{h}\n{text}");
-            assert!(
-                said.contains("⇄ kingdom dev@kingdom.lan"),
-                "{w}x{h}\n{text}"
-            );
-            for want in wants {
-                assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
-            }
-            // Why a step failed is the shared sentence under the list, never words of its own.
-            for gone in ["host key", "the connection shows the fix"] {
-                assert!(!said.contains(gone), "{w}x{h}: {gone:?}\n{text}");
-            }
-        }
+fn a_failure_is_said_right_under_the_input_in_place_of_the_parse_line() {
+    let sentence = "Can't reach kingdom: check the name or address, and that the machine is on (ssh: connect to host kingdom.lan port 22: Connection refused).";
+    for (w, h) in SIZES {
+        let mut app = app_with(&[]);
+        let v = MachinesView {
+            query: "dev@kingdom.lan".into(),
+            notice: Some(MachineNotice {
+                text: sentence.into(),
+                error: true,
+            }),
+            ..view(Some(hosts()))
+        };
+        let (text, r, buf) = shown(&mut app, v, w, h);
+        assert_box_whole(&text, r, &buf);
+        let said = words(&text, r);
+        assert!(said.contains(&format!("› dev@kingdom.lan█ {sentence} FROM ~/.ssh/config")), "{w}x{h}\n{text}");
+        assert!(!said.contains("user dev"), "the sentence stands where the parse line was: {w}x{h}\n{text}");
     }
+    // Typing again (Backspace too) puts the parse line back.
+    let mut app = app_with(&[]);
+    open(&mut app, MachinesView {
+        query: "dev@kingdom.lan".into(),
+        notice: Some(MachineNotice { text: sentence.into(), error: true }),
+        ..view(Some(hosts()))
+    });
+    app.on_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+    let Mode::Machines(v) = &app.mode else { panic!("the dialog is open") };
+    assert_eq!(v.notice, None);
 }
 
 #[test]
