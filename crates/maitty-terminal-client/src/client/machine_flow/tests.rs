@@ -448,6 +448,25 @@ fn a_bad_host_shows_ssh_s_error_adds_nothing_and_does_not_hang() {
 }
 
 #[test]
+fn a_changed_host_key_adds_nothing_and_says_the_shared_sentence() {
+    let mut h = Harness::new("proxy");
+    let known_hosts = h.sandbox.dir.join("known_hosts");
+    let on_record = "box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm\n";
+    std::fs::write(&known_hosts, on_record).unwrap();
+    h.app.machine_flow.ssh.extend([
+        format!("--known-hosts={}", known_hosts.display()),
+        "--host-key=AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl".to_owned(),
+    ]);
+    h.add_by_enter("box");
+    h.next_bg();
+    assert!(h.notice().starts_with("box's host key has changed"), "{}", h.notice());
+    assert!(h.view().notice.as_ref().unwrap().error);
+    assert!(matches!(h.view().step, MachineStep::Browse));
+    assert!(h.local_config().is_none() && h.app.cfg.machines.is_empty());
+    assert_eq!(std::fs::read_to_string(&known_hosts).unwrap(), on_record);
+}
+
+#[test]
 fn a_probe_that_hangs_is_ended_at_the_limit_and_ssh_is_gone() {
     let mut h = Harness::new("hang");
     h.app.machine_flow.probe_limit = Duration::from_millis(400);

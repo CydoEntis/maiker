@@ -12,7 +12,6 @@ const ONBOARDING_STEPS = ['Welcome', 'Agents', 'Your style', 'Your view', 'Revie
 
 const CHECKLIST: StepItem[] = [
   { id: 'reach', label: 'Reach the computer', state: 'done', result: 'Reached 100.78.214.15 · 38 ms' },
-  { id: 'host', label: 'Check it is the right computer', state: 'done', result: 'Known computer' },
   {
     id: 'key',
     label: 'Sign in with your key',

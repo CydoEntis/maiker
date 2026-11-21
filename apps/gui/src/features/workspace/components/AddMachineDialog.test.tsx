@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Added, HostKeyReport, UpdateProgress } from '@/api/machines'
+import type { Added, UpdateProgress } from '@/api/machines'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 
@@ -9,10 +9,6 @@ const toast = vi.hoisted(() => ({ success: vi.fn(), info: vi.fn(), failed: vi.fn
 vi.mock('@/lib/toast', () => ({ toast }))
 
 import { AddMachineDialog } from './AddMachineDialog'
-
-const FINGERPRINT = 'SHA256:q3Vt9kQ0x1yZ8Rk4fN0b2c7mW5sPpL1aEo6hT3uJdGc'
-const key = (status: 'unknown' | 'trusted'): HostKeyReport => ({ status, host: 'build.example', port: 22, key_type: 'ssh-ed25519', fingerprint: FINGERPRINT })
-const changed: HostKeyReport = { status: 'changed', host: 'build.example', port: 22, key_type: 'ssh-ed25519', fingerprint: FINGERPRINT, known_fingerprint: 'SHA256:old' }
 
 type AddedOutcome = Extract<Added, { outcome: 'added' }>
 const added = (extra: Partial<AddedOutcome> = {}): Added => ({ outcome: 'added', name: 'server-15', version: '0.46.0', reach: 'answered', took_ms: 90, reach_ms: 38, key: 'id_ed25519', ...extra })
@@ -33,13 +29,10 @@ function info(overrides: Partial<MachinesInfo> = {}, add: Partial<MachinesInfo['
     onCopyCommand: vi.fn(),
     onOpenLogin: vi.fn(),
     onRename: vi.fn(),
-    hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) },
     add: {
       loadHosts: () => Promise.resolve([{ alias: 'build', detail: 'me@build.example', added: false }, { alias: 'kingdom', detail: 'dev@kingdom.lan', added: true }]),
       onAdd: vi.fn(() => Promise.resolve(added())),
       onCancel: vi.fn(),
-      inspect: vi.fn(() => Promise.resolve(key('trusted'))),
-      trust: vi.fn(() => Promise.resolve()),
       onProgress: vi.fn(() => Promise.resolve(vi.fn())),
       open: vi.fn(),
       ...add,
@@ -77,7 +70,7 @@ describe('the address step', () => {
     const machines = info()
     await connectTo(machines, 'me@10.0.4')
     expect(await screen.findByRole('alert')).toHaveTextContent('That IP address is incomplete.')
-    expect(machines.add.inspect).not.toHaveBeenCalled()
+    expect(machines.add.onAdd).not.toHaveBeenCalled()
   })
 
   it('sends the port and the key file typed under Port and key', async () => {
@@ -148,11 +141,12 @@ describe('the address step', () => {
 })
 
 describe('the checklist', () => {
-  it('ticks Reach, the host and the key, then shows Machine added', async () => {
+  it('adds a host this computer has never seen without asking about its key, then shows Machine added', async () => {
     const machines = info()
     await connectTo(machines)
     expect(await screen.findByText('Machine added')).toBeInTheDocument()
-    expect(machines.add.inspect).toHaveBeenCalledWith('dev@100.78.214.15', undefined)
+    expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
+    expect(machines.add.onAdd).toHaveBeenCalledWith('dev@100.78.214.15', 'server-15', undefined, { keyFile: null, installHelper: true })
   })
 
   it('shows every step with its result while the host signs in, in the same dialog', async () => {
@@ -160,69 +154,23 @@ describe('the checklist', () => {
     const onAdd = vi.fn(() => new Promise<Added>((resolve) => { finish = resolve }))
     await connectTo(info({}, { onAdd }))
     const steps = await screen.findByRole('list', { name: 'Steps to connect' })
-    await waitFor(() => { expect(within(steps).getByText('Known computer')).toBeInTheDocument() })
-    expect(within(steps).getByText('Reached 100.78.214.15')).toBeInTheDocument()
+    await waitFor(() => { expect(within(steps).getByText('Reached 100.78.214.15')).toBeInTheDocument() })
+    expect(within(steps).queryByText("Check it's the right computer")).toBeNull()
+    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
     for (const name of ['Sign in as dev with your SSH key', 'Set up the Maiker helper', 'Connected']) expect(within(steps).getByText(name)).toBeInTheDocument()
     expect(screen.getByRole('button', { name: '← Change address' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
     await act(async () => { finish(added()); await Promise.resolve() })
   })
 
-  describe('a host this computer has not seen', () => {
-    const unknown = () => info({}, { inspect: vi.fn(() => Promise.resolve(key('unknown'))) })
-
-    it('asks to trust it with the fingerprint, and adds nothing until the person says so', async () => {
-      const machines = unknown()
-      await connectTo(machines)
-      expect(await screen.findByText('First time connecting to 100.78.214.15')).toBeInTheDocument()
-      expect(screen.getByText(`ED25519 · ${FINGERPRINT}`)).toBeInTheDocument()
-      expect(machines.add.onAdd).not.toHaveBeenCalled()
-      expect(machines.add.trust).not.toHaveBeenCalled()
-    })
-
-    it('trusts the key that was shown, then goes on and adds the machine', async () => {
-      const machines = unknown()
-      const { user } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Trust and continue' }))
-      await screen.findByText('Machine added')
-      expect(machines.add.trust).toHaveBeenCalledWith('dev@100.78.214.15', FINGERPRINT, undefined)
-      expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
-    })
-
-    it('says why trusting failed and stays on the card', async () => {
-      const machines = info({}, { inspect: vi.fn(() => Promise.resolve(key('unknown'))), trust: vi.fn(() => Promise.reject(new Error('The key changed while you looked.'))) })
-      const { user } = await connectTo(machines)
-      await user.click(await screen.findByRole('button', { name: 'Trust and continue' }))
-      expect(await screen.findByRole('alert')).toHaveTextContent('The key changed while you looked.')
-      expect(machines.add.onAdd).not.toHaveBeenCalled()
-    })
-
-    it('cancels from the footer without adding anything or removing anything', async () => {
-      const machines = unknown()
-      const onClose = vi.fn()
-      const { user } = await connectTo(machines, 'dev@100.78.214.15', { onClose })
-      await screen.findByRole('button', { name: 'Trust and continue' })
-      await user.click(screen.getAllByRole('button', { name: 'Cancel' }).at(-1) as HTMLElement)
-      expect(onClose).toHaveBeenCalled()
-      expect(machines.add.onAdd).not.toHaveBeenCalled()
-      expect(machines.onRemove).not.toHaveBeenCalled()
-    })
-  })
-
-  it('refuses a host key that changed: no Trust, and the command that forgets the old one', async () => {
-    const machines = info({}, { inspect: vi.fn(() => Promise.resolve(changed)) })
+  it('says a changed host key at Reach in the host\'s sentence, with no Trust, and saves nothing', async () => {
+    const refusal = "100.78.214.15's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '100.78.214.15'` in a terminal and try again."
+    const machines = info({}, { onAdd: vi.fn(() => Promise.reject(new Error(refusal))) })
     await connectTo(machines)
-    expect(await screen.findByText("100.78.214.15's identity changed since you last connected")).toBeInTheDocument()
+    expect(await screen.findByText(refusal)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
-    expect(screen.getByText('ssh-keygen -R build.example')).toBeInTheDocument()
-    expect(machines.add.onAdd).not.toHaveBeenCalled()
-  })
-
-  it('goes on to adding as before when the host key cannot be fetched here', async () => {
-    const machines = info({}, { inspect: vi.fn(() => Promise.reject(new Error('no host key'))) })
-    await connectTo(machines)
-    await screen.findByText('Machine added')
-    expect(machines.add.onAdd).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    expect(machines.onRemove).not.toHaveBeenCalled()
   })
 
   describe('a machine that would not sign in', () => {
@@ -258,7 +206,6 @@ describe('the checklist', () => {
       await user.click(screen.getByRole('button', { name: 'Try again' }))
       expect(machines.onRemove).toHaveBeenCalledWith('server-15')
       expect(await screen.findByText('Machine added')).toBeInTheDocument()
-      expect(machines.add.inspect).toHaveBeenCalledTimes(2)
       expect(machines.add.onAdd).toHaveBeenCalledTimes(2)
     })
 
@@ -283,7 +230,7 @@ describe('the checklist', () => {
       const onAdd = vi.fn(() => new Promise<Added>((resolve) => { finish = resolve }))
       await connectTo(info({}, { onAdd, onProgress }), 'dev@100.78.214.15', { appVersion: '0.46.0' })
       await waitFor(() => { expect(onProgress).toHaveBeenCalled() })
-      await screen.findByText('Known computer')
+      await screen.findByText('Reached 100.78.214.15')
       act(() => { listener({ name: 'server-15', percent: 40 }) })
       expect(await screen.findByText('Not installed yet. Copying Maiker 0.46.0 to server-15…')).toBeInTheDocument()
       expect(screen.getByRole('progressbar', { name: 'Setting up the Maiker helper' })).toHaveAttribute('aria-valuenow', '40')
@@ -334,7 +281,7 @@ describe('the checklist', () => {
 
   describe('a machine that does not answer', () => {
     const UNREACHED = "Can't reach 10.9.9.9: check the name or address, and that the machine is on (ssh: connect to host 10.9.9.9 port 22: Connection timed out)."
-    const silent = () => info({}, { inspect: vi.fn(() => Promise.reject(new Error('timed out'))), onAdd: vi.fn(() => Promise.reject(new Error(UNREACHED))) })
+    const silent = () => info({}, { onAdd: vi.fn(() => Promise.reject(new Error(UNREACHED))) })
 
     it("says it couldn't reach the machine, in the host's one sentence", async () => {
       await connectTo(silent(), 'dev@10.9.9.9')
@@ -385,7 +332,6 @@ describe('the checklist', () => {
       expect(await screen.findByText('Removing server-15…')).toBeInTheDocument()
       await act(async () => { finish(true); await Promise.resolve() })
       expect(await screen.findByText('Machine added')).toBeInTheDocument()
-      expect(machines.add.inspect).toHaveBeenCalledTimes(2)
       expect(machines.add.onAdd).toHaveBeenCalledTimes(2)
     })
 
@@ -553,12 +499,16 @@ describe('mending a machine that is not connected', () => {
     expect(machines.onRetry).toHaveBeenCalledWith('build')
   })
 
-  it('asks to trust a host key it has not seen, by the machine name', async () => {
-    const trust = vi.fn(() => Promise.resolve())
-    const head = down('needs login', { said: 'Host key verification failed.', failure: 'host-key-changed' })
-    render(<AddMachineDialog machines={info({ list: [head], hostKey: { inspect: vi.fn(() => Promise.resolve(key('unknown'))), trust } })} fixing={head} onClose={vi.fn()} />)
-    await userEvent.setup().click(await screen.findByRole('button', { name: 'Trust and continue' }))
-    expect(trust).toHaveBeenCalledWith('build', FINGERPRINT)
+  it('stops a machine whose host key changed at Reach, with the host\'s sentence and Try again, never Trust', async () => {
+    const onRetry = vi.fn()
+    const why = "build's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R 'build.example'` in a terminal and try again."
+    const head = down('needs login', { said: 'Host key verification failed.', failure: 'host-key-changed', why })
+    render(<AddMachineDialog machines={info({ list: [head], onRetry })} fixing={head} onClose={vi.fn()} />)
+    expect(screen.getByText("build's host key has changed")).toBeInTheDocument()
+    expect(screen.getByText(why)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
+    expect(onRetry).toHaveBeenCalledWith('build')
   })
 
   it('shows the reason for any other state, with Try again and a way to Settings', async () => {

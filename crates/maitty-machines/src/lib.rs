@@ -19,6 +19,7 @@ pub mod machine_config;
 pub mod machine_target;
 pub mod machine_ids;
 pub mod machine_probe;
+mod new_host_keys;
 mod remote_browse;
 mod remote_folder;
 mod remote_get;

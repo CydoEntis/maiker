@@ -156,6 +156,7 @@ fn the_shim_is_called_the_way_the_client_calls_ssh() {
         "-o ConnectTimeout=",
         "-o ServerAliveInterval=",
         "-o ServerAliveCountMax=",
+        "-o StrictHostKeyChecking=accept-new",
         "-a",
         "-T",
     ] {
@@ -164,6 +165,51 @@ fn the_shim_is_called_the_way_the_client_calls_ssh() {
             "{want} is passed before `--`: {args:?}"
         );
     }
+    assert!(
+        !options.contains("StrictHostKeyChecking=no"),
+        "host-key checking is never turned off: {args:?}"
+    );
+}
+
+/// The ed25519 key the shim's machine offers, and another one for a key that changed.
+const OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+const OLD_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm";
+
+/// `maiker --remote box ls --json` through the shim checking its host key against `known_hosts`
+/// (holding `on_record`, or no file); what came of it and the file afterwards.
+fn remote_with_host_key(on_record: Option<&str>) -> (Output, Option<String>) {
+    let sandbox = Sandbox::new();
+    let known_hosts = sandbox.dir.join("known_hosts");
+    if let Some(line) = on_record {
+        std::fs::write(&known_hosts, line).expect("write known_hosts");
+    }
+    let mut command = sandbox.command(MAITTY, "proxy");
+    command
+        .env(env_name("FAKE_SSH_KNOWN_HOSTS"), &known_hosts)
+        .env(env_name("FAKE_SSH_HOST_KEY"), OFFERED_KEY)
+        .args(["--remote", "box", "ls", "--json"]);
+    let out = output_within(command, WAIT);
+    (out, std::fs::read_to_string(&known_hosts).ok())
+}
+
+#[test]
+fn a_host_key_never_seen_is_recorded_by_ssh_and_the_terminal_app_connects_without_a_question() {
+    let (out, known_hosts) = remote_with_host_key(None);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(known_hosts, Some(format!("box ssh-ed25519 {OFFERED_KEY}\n")));
+}
+
+#[test]
+fn a_changed_host_key_is_refused_and_known_hosts_is_left_as_it_was() {
+    let on_record = format!("box ssh-ed25519 {OLD_KEY}\n");
+    let (out, known_hosts) = remote_with_host_key(Some(&on_record));
+    assert!(!out.status.success(), "a changed key must not connect");
+    assert!(
+        text(&out.stderr).contains("Host key verification failed"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert_eq!(known_hosts, Some(on_record));
 }
 
 #[test]

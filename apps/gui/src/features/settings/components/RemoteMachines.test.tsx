@@ -37,8 +37,7 @@ function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
     onCopyCommand: vi.fn(),
     onOpenLogin: vi.fn(),
     onRename: vi.fn(),
-    hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) },
-    add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), inspect: vi.fn(), trust: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() },
+    add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() },
     ...overrides,
   }
 }
@@ -332,6 +331,23 @@ describe('removing a machine from its row', () => {
     expect(onRemove).toHaveBeenCalledWith('gpu')
     expect(onRemove).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('button', { name: 'Remove gpu' })).toBeNull()
+  })
+})
+
+describe('a machine whose host key changed', () => {
+  const why = "new's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R 'new.lan'` in a terminal and try again."
+  const stopped = () => heads(machine(1, 'new', 'needs-login', { why, failure: 'host-key-changed', fix_command: "ssh-keygen -R 'new.lan'", said: 'Host key verification failed.' }))
+
+  it('says so with the host\'s sentence and Try again, never offering to trust the key', async () => {
+    const onRetry = vi.fn()
+    const user = renderPage(info({ list: stopped(), onRetry }))
+    await user.click(screen.getByRole('button', { name: 'Fix new' }))
+    const fold = screen.getByRole('group', { name: 'More about new' })
+    expect(within(fold).getByRole('status')).toHaveTextContent(`Host key changed. ${why}`)
+    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
+    expect(screen.queryByText(/ssh-copy-id/)).toBeNull()
+    await user.click(within(fold).getByRole('button', { name: 'Try again' }))
+    expect(onRetry).toHaveBeenCalledWith('new')
   })
 })
 

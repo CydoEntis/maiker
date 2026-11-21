@@ -1,11 +1,11 @@
 //! Adding a machine from the window: the hosts `~/.ssh/config` offers, and the look at a machine
 //! before anything is written. The look logs in with what ssh already has and never asks anyone
-//! anything (the shared `machine_probe`); a login that needs a person is the caller's to open.
-//! Nothing here touches the config file or the hub: it decides, and the command acts.
+//! anything (the shared `machine_probe`): a host key ssh has not seen is recorded by ssh itself, a
+//! changed one is refused and nothing is added; a login that needs a person is the caller's to
+//! open. Nothing here touches the config file or the hub: it decides, and the command acts.
 
 use maitty_machines::MachineDef;
 use maitty_machines::link_failure::{ClientOs, FailureClass, Subject, clean, fix_command, sentence_here};
-use maitty_machines::host_key::{self, TOOL_LIMIT, Tools};
 use maitty_machines::key_file::check_key_file;
 use maitty_machines::machine_config::{refusal_of, refusal_with, suggest_name};
 use maitty_machines::machine_probe::Probe;
@@ -14,7 +14,6 @@ use maitty_machines::Machine;
 use maitty_machines::machine_config::add_machine_keyed as write_entry;
 use maitty_machines::machine_probe;
 use maitty_machines::reach::reach_ms as measure_reach;
-use crate::machine_access::{HostKeyReport, is_fingerprint, report_of};
 use tauri::Manager;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use serde::Serialize;
@@ -150,13 +149,15 @@ pub fn prepare(
                 reach: Reach::Answered,
             },
         }),
+        // A changed host key is refused by ssh, so the machine would never connect: nothing is
+        // added, and the sentence says how to clear the old key once the change is confirmed.
+        Probe::Failed(failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. })) => {
+            Err(sentence_here(&failure, &Subject::of_def(&def)))
+        }
         Probe::Failed(failure) if failure.is_login() => Ok(Prepare::Ready {
             def,
             how: How::Login { failure },
         }),
-        Probe::Failed(failure @ FailureClass::Unreachable(_)) => {
-            Err(sentence_here(&failure, &Subject::of_def(&def)))
-        }
         // Reached, but the app is missing, old or not running: said here so the window can ask
         // about it at once, and the connection's own state carries on once it dials.
         Probe::Failed(class) => Ok(Prepare::Ready {
@@ -251,43 +252,6 @@ pub async fn list_ssh_hosts() -> Result<Vec<HostChoice>, String> {
     })
     .await
     .map_err(|error| format!("Could not read ~/.ssh/config: {error}"))
-}
-
-/// ssh with only a port, for looking at a host that is not a machine yet.
-fn bare_ssh(port: Option<u16>) -> Result<Vec<String>, String> {
-    let mut ssh = vec![maitty_machines::SSH_PROGRAM.to_string()];
-    ssh.extend(maitty_machines::machine_target::port_args(port)?);
-    Ok(ssh)
-}
-
-/// Look at the host key a new machine offers and whether this computer knows it, before anything
-/// is written: a new host asks to be trusted first, and Cancel leaves nothing behind. Read-only.
-#[tauri::command]
-pub async fn inspect_new_host(target: String, port: Option<u16>) -> Result<HostKeyReport, String> {
-    let target = target.trim().to_owned();
-    maitty_machines::machine_target::check_target(&target)?;
-    let ssh = bare_ssh(port)?;
-    let seen = tauri::async_runtime::spawn_blocking(move || host_key::inspect(&ssh, &target, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not look at the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))?;
-    Ok(report_of(&seen))
-}
-
-/// Trust the key whose fingerprint the person was shown for a host that is not a machine yet: it
-/// is fetched again and added to known_hosts only when it is still that key and is new.
-#[tauri::command]
-pub async fn trust_new_host(target: String, fingerprint: String, port: Option<u16>) -> Result<(), String> {
-    if !is_fingerprint(&fingerprint) {
-        return Err("That is not a fingerprint".to_string());
-    }
-    let target = target.trim().to_owned();
-    maitty_machines::machine_target::check_target(&target)?;
-    let ssh = bare_ssh(port)?;
-    tauri::async_runtime::spawn_blocking(move || host_key::trust(&ssh, &target, &fingerprint, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not trust the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))
 }
 
 /// A key file the window named: blank means none; otherwise it must be a file that exists.
@@ -477,8 +441,14 @@ mod tests {
 
     /// The real look, through the fake ssh in `mode`.
     fn through_shim(sandbox: &Sandbox, mode: &str) -> impl Fn(&MachineDef) -> Probe {
+        through_shim_with(sandbox, mode, &[])
+    }
+
+    /// `through_shim` with more of the shim's own settings (its host key, the person's config).
+    fn through_shim_with(sandbox: &Sandbox, mode: &str, more: &[String]) -> impl Fn(&MachineDef) -> Probe {
         let shim = fake_ssh().display().to_string();
-        let args = sandbox.shim_args(mode);
+        let mut args = sandbox.shim_args(mode);
+        args.extend_from_slice(more);
         move |def: &MachineDef| {
             let def = MachineDef {
                 ssh_args: args.clone(),
@@ -550,6 +520,54 @@ mod tests {
         assert!(why.starts_with("Can't reach build.example: check the name or address"), "{why}");
     }
 
+    /// The ed25519 key the shim's machine offers, and another one on record for a changed key.
+    const OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+    const OLD_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm";
+
+    /// The look at `build.example` through the shim with its known_hosts file holding `known`
+    /// (nothing when `None`) and the person's config setting `config_strict`; what came of it and
+    /// the file afterwards (`None` when there is none).
+    fn look_with_keys(known: Option<&str>, config_strict: &str) -> (Result<Prepare, String>, Option<String>) {
+        let sandbox = Sandbox::new();
+        let known_hosts = sandbox.dir.join("known_hosts");
+        if let Some(line) = known {
+            std::fs::write(&known_hosts, line).unwrap();
+        }
+        let more = [
+            format!("--known-hosts={}", known_hosts.display()),
+            format!("--host-key={OFFERED_KEY}"),
+            format!("--config-strict={config_strict}"),
+        ];
+        let looked = prepare(&[], &request("build.example", None), &through_shim_with(&sandbox, "proxy", &more));
+        (looked, std::fs::read_to_string(&known_hosts).ok())
+    }
+
+    #[test]
+    fn a_host_key_never_seen_is_recorded_by_ssh_and_the_machine_is_added_without_a_question() {
+        let (looked, known_hosts) = look_with_keys(None, "ask");
+        assert!(matches!(looked, Ok(Prepare::Ready { how: How::Connect { reach: Reach::Answered, .. }, .. })), "{looked:?}");
+        assert_eq!(known_hosts, Some(format!("build.example ssh-ed25519 {OFFERED_KEY}\n")));
+    }
+
+    #[test]
+    fn a_changed_host_key_is_refused_adds_nothing_and_leaves_known_hosts_as_it_was() {
+        let on_record = format!("build.example ssh-ed25519 {OLD_KEY}\n");
+        let (looked, known_hosts) = look_with_keys(Some(&on_record), "ask");
+        let Err(why) = looked else {
+            panic!("refused: {looked:?}");
+        };
+        assert!(why.starts_with("build.example's host key has changed"), "{why}");
+        assert!(why.contains("ssh-keygen -R 'build.example'"), "the fix is named, never an accept: {why}");
+        assert_eq!(known_hosts, Some(on_record));
+    }
+
+    #[test]
+    fn a_config_that_refuses_new_host_keys_is_the_person_s_and_is_kept() {
+        let (looked, known_hosts) = look_with_keys(None, "true");
+        assert!(looked.is_err(), "{looked:?}");
+        assert_eq!(known_hosts, None, "nothing was written");
+    }
+
     #[test]
     fn a_target_ssh_would_read_as_an_option_is_refused_before_anything_runs() {
         let never = |_: &MachineDef| -> Probe { panic!("nothing is to run") };
@@ -609,13 +627,6 @@ mod tests {
         assert_eq!(checked_key_file(None), Ok(None));
         assert_eq!(checked_key_file(Some("  ".into())), Ok(None));
         assert!(checked_key_file(Some("/no/such/key-file-here".into())).is_err());
-    }
-
-    #[test]
-    fn a_new_host_is_looked_at_through_ssh_with_only_its_port() {
-        assert_eq!(bare_ssh(None).unwrap(), [maitty_machines::SSH_PROGRAM]);
-        assert_eq!(bare_ssh(Some(2222)).unwrap(), [maitty_machines::SSH_PROGRAM, "-p", "2222"]);
-        assert!(bare_ssh(Some(0)).is_err());
     }
 
     #[test]

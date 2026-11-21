@@ -17,7 +17,7 @@ import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook, type Corners } from '@/features/workspace/theme/corners'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
-import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleHostKey, sampleInspect, sampleProgress, sampleSessions } from './machinesSample'
+import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleProgress, sampleSessions } from './machinesSample'
 import { AddMachineDialog } from '@/features/workspace/components/AddMachineDialog'
 import { Onboarding } from '@/features/welcome/Onboarding'
 import { galleryParams } from './galleryParams'
@@ -83,7 +83,7 @@ function DockBox({ what }: { what: string }) {
 
 const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
-const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, hostKey: { inspect: sampleHostKey, trust: () => Promise.resolve() }, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, inspect: sampleInspect, trust: () => Promise.resolve(), onProgress: sampleProgress, open: SAME } }
+const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, onProgress: sampleProgress, open: SAME } }
 
 function Settings({ section }: { section: DesktopSettingsSection }) {
   const [prefs, setPrefs] = useState(PREFS)
@@ -138,7 +138,7 @@ function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) 
     const timer = window.setTimeout(() => {
       if (what === 'add-error') type('dev@10.0.4')
       if (what === 'add-no-answer') type('cydo@10.9.9.9')
-      if (what === 'add-trust') click('linkables-vps')
+      if (what === 'add-connected') click('linkables-vps')
       if (what === 'add-helper') click('homelab')
       if (what === 'add-name') click('server-15')
     }, STATE_READ_MS)

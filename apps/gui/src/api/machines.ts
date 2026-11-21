@@ -281,8 +281,8 @@ export type AddMachineOptions = { keyFile?: string | null; installHelper?: boole
 
 /**
  * Look at `target` over ssh without asking anyone anything and, when it holds up, add it and start
- * dialling it. `name` is only needed when none can be made from the target. Call `inspectNewHost`
- * first so a host this computer has never seen is trusted before anything is written.
+ * dialling it. `name` is only needed when none can be made from the target. A host key ssh has not
+ * seen is recorded by ssh itself; a changed one is refused, and nothing is added.
  */
 export async function addMachine(target: string, name?: string, port?: number, options: AddMachineOptions = {}): Promise<Added> {
   if (!isTauri()) throw new Error('Machines can only be added in the desktop app')
@@ -295,36 +295,6 @@ export async function addMachine(target: string, name?: string, port?: number, o
       installHelper: options.installHelper ?? false,
     }),
   )
-}
-
-const HostKeySchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('unknown'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
-  z.object({ status: z.literal('trusted'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
-  z.object({ status: z.literal('changed'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string(), known_fingerprint: z.string() }),
-])
-/** The host key a machine offers and where this computer stands on it. */
-export type HostKeyReport = z.infer<typeof HostKeySchema>
-
-/** Fetch the host key a machine offers and compare it with known_hosts. Rejects with the reason when it cannot be fetched. */
-export async function inspectHostKey(name: string): Promise<HostKeyReport> {
-  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
-  return HostKeySchema.parse(await invoke<unknown>('inspect_host_key', { name }))
-}
-
-/** `inspectHostKey` for a host that is not a machine yet: nothing is written, so Cancel leaves nothing behind. Rejects with the reason when the key cannot be fetched. */
-export async function inspectNewHost(target: string, port?: number): Promise<HostKeyReport> {
-  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
-  return HostKeySchema.parse(await invoke<unknown>('inspect_new_host', { target, port: port ?? null }))
-}
-
-/** `trustHostKey` for a host that is not a machine yet: the fingerprint shown is added to known_hosts only when it is still that key and is new. */
-export async function trustNewHost(target: string, fingerprint: string, port?: number): Promise<void> {
-  if (isTauri()) await invoke('trust_new_host', { target, fingerprint, port: port ?? null })
-}
-
-/** Add the key whose fingerprint was shown to known_hosts; the machine is dialled again. The host refuses a key that changed or no longer matches. */
-export async function trustHostKey(name: string, fingerprint: string): Promise<void> {
-  if (isTauri()) await invoke('trust_host_key', { name, fingerprint })
 }
 
 /** Open ssh in a session on this computer for a machine that needs a login, so its prompts can be answered. */

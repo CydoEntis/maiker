@@ -1,16 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { errorMessage } from '@/lib/error-message'
-import { reachedOf, savedNameOf, stageAfterAdd, stageAfterFailure, type AddRequest, type HostResult, type Stage } from '../model/addStage'
+import { reachedOf, savedNameOf, stageAfterAdd, stageAfterFailure, type AddRequest, type Stage } from '../model/addStage'
 import type { MachinesInfo } from './DesktopSettings'
 
 /** The steps the host takes for one machine, in the order they are asked. */
 export type AddRun = {
   stage: Stage
-  host: HostResult
   /** Asks the whole sequence again from the start (a machine that could not be reached). */
   retry: () => void
-  /** Trusts the host key that was shown, then goes on. */
-  trust: () => void
   /** Puts Maiker on the saved machine (or brings it up to date), showing how far it has got. */
   setUpHelper: (action: 'install' | 'update') => void
   /** Takes a saved machine of the same name out, then starts the whole run again from the top. */
@@ -22,15 +19,14 @@ export type AddRun = {
 }
 
 /**
- * Runs adding one machine: look at its host key (nothing is written yet), ask the host to add it with the helper installed when
- * it is missing, and follow where that goes. Only the latest run may change the screen. When this goes away with a machine saved
+ * Runs adding one machine: ask the host to add it with the helper installed when it is missing, and follow where that goes. Nothing
+ * asks about its host key: ssh records a new one itself, and the host refuses a changed one without saving anything. Only the latest run may change the screen. When this goes away with a machine saved
  * that never connected, the machine is taken out again, so a Cancel or a closed dialog leaves nothing unseen behind; one that
  * connected stays.
  */
 export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   const { add, list } = machines
   const [stage, setStage] = useState<Stage>({ kind: 'checking' })
-  const [host, setHost] = useState<HostResult>('unchecked')
   const ticket = useRef(0)
   const saved = useRef<string | null>(null)
   const latest = useRef({ stage, onRemove: machines.onRemove, onCancel: add.onCancel })
@@ -40,9 +36,9 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
   const inputs = useRef({ add, request })
   useEffect(() => { inputs.current = { add, request } })
 
-  const connect = useCallback((seen: HostResult, run: number) => {
+  const begin = useCallback(() => {
     const { add, request } = inputs.current
-    setHost(seen)
+    const run = ++ticket.current
     setStage({ kind: 'adding', helper: false, action: 'install', percent: null })
     add.onAdd(request.target, request.name, request.port ?? undefined, { keyFile: request.keyFile, installHelper: true }).then(
       (result) => {
@@ -56,22 +52,6 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
       (error: unknown) => { if (run === ticket.current) setStage(stageAfterFailure(errorMessage(error, 'Could not add the machine'))) },
     )
   }, [])
-
-  const begin = useCallback(() => {
-    const { add, request } = inputs.current
-    const run = ++ticket.current
-    setStage({ kind: 'checking' })
-    // A host whose key cannot be fetched here (a jump host, say) is still added as before: ssh checks the key itself.
-    void add.inspect(request.target, request.port ?? undefined).catch((error: unknown) => {
-      console.warn('Could not look at the host key before adding', error)
-      return null
-    }).then((report) => {
-      if (run !== ticket.current) return
-      if (report?.status === 'changed') setStage({ kind: 'changed', report })
-      else if (report?.status === 'unknown') setStage({ kind: 'trust', report, trusting: false, problem: null })
-      else connect(report === null ? 'unchecked' : 'known', run)
-    })
-  }, [connect])
 
   // Deferred so that the double mount of development builds asks the host once, not twice.
   useEffect(() => {
@@ -105,17 +85,6 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
     if (last.kind === 'checking' || last.kind === 'adding') onCancel()
     if (saved.current !== null) void onRemove(saved.current)
   }, [])
-
-  const trust = () => {
-    if (stage.kind !== 'trust' || stage.trusting) return
-    const { report } = stage
-    const run = ticket.current
-    setStage({ ...stage, trusting: true, problem: null })
-    add.trust(request.target, report.fingerprint, request.port ?? undefined).then(
-      () => { if (run === ticket.current) connect('trusted', run) },
-      (error: unknown) => { if (run === ticket.current) setStage({ kind: 'trust', report, trusting: false, problem: errorMessage(error, 'Could not trust the key') }) },
-    )
-  }
 
   const setUpHelper = (action: 'install' | 'update') => {
     const before = stage
@@ -152,5 +121,5 @@ export function useAddRun(request: AddRequest, machines: MachinesInfo): AddRun {
 
   const keep = () => { saved.current = null }
 
-  return { stage: shown, host, retry: begin, trust, setUpHelper, removeSaved, retrySaved, keep }
+  return { stage: shown, retry: begin, setUpHelper, removeSaved, retrySaved, keep }
 }

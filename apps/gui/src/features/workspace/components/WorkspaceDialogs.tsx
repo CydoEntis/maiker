@@ -1,5 +1,5 @@
 import { extensionProjects } from '@/features/extensions/projects'
-import { inspectHostKey, inspectNewHost, listenMachineUpdateProgress, listSshHosts, machineActivity, trustHostKey, trustNewHost } from '@/api/machines'
+import { listenMachineUpdateProgress, listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings, type MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
@@ -46,7 +46,7 @@ export function WorkspaceDialogs() {
   const openWorktree = useOpenWorktreeDialog()
   const fixed = addMachineFor === null ? null : heads.find((head) => head.name === addMachineFor) ?? null
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
-  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, inspect: inspectNewHost, trust: trustNewHost, onProgress: listenMachineUpdateProgress, open: () => { setAddMachineOpen(true) } } }
+  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, onProgress: listenMachineUpdateProgress, open: () => { setAddMachineOpen(true) } } }
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}

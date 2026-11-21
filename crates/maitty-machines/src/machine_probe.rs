@@ -1,7 +1,8 @@
 //! A look at a machine over ssh before it is added: log in with what ssh already has (keys,
-//! an agent, a known host), never asking anyone anything, and run the app's `--version`
-//! there. A result tells the dialog whether to add the machine straight away, to open a
-//! terminal for a login that needs a person, or to show why the machine cannot be reached.
+//! an agent), never asking anyone anything, and run the app's `--version` there. A host key ssh
+//! has not seen is recorded by ssh on the way (`new_host_keys`); a changed one is refused. A
+//! result tells the dialog whether to add the machine straight away, to open a terminal for a
+//! login that needs a person, or to show why the machine cannot be added.
 //!
 //! It blocks, so a window runs it on a background thread; setting `cancel` ends it.
 

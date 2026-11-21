@@ -495,9 +495,9 @@ Closing the window, or losing the connection, never stops anything over there.
 
 Leader `w` (or `Machines` in the command palette) lists the computers maiker reaches over ssh and
 adds more. Pick a host from your `~/.ssh/config` and press Enter: if ssh logs in on its own (a key, an
-agent, a known host) the machine is added and connecting in that one step. If ssh needs you (a password, a
-code, a host key you have not accepted) it opens in a popup, you answer, and the machine connects when the
-popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
+agent) the machine is added and connecting in that one step. A machine ssh has not seen before has its host
+key recorded by ssh with no question; one whose key changed is refused and not added. If ssh needs you (a
+password, a code) it opens in a popup, you answer, and the machine connects when the popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
 the agent there.
 
 Each machine in the dialog shows how it stands; when it is down the reason and what to do about it are written
@@ -587,7 +587,8 @@ A machine you add only needs the `maiker` program. There is no desktop app on it
   `maiker machine update <name> --install` does this over ssh for you, so you do not need to log in and
   install it by hand. A Windows machine cannot be the remote yet.
 - **A way in.** ssh must get in without asking you anything: a key (or your ssh agent) for that user. Run plain
-  `ssh <target>` once first, so its host key is known and you can see that it works.
+  `ssh <target>` once first to see that it works. Maiker records a new machine's host key the first time it
+  connects (unless your ssh config says otherwise) and refuses one that changed.
 - **maiker where ssh finds it.** Maiker looks in `~/.local/bin` (where it installs itself) first, then on the
   PATH ssh gives it. Only a copy kept somewhere else needs `remote_cmd` set to its full path.
 - **A version close enough.** This computer, the machine and any desktop app talk when their versions are the
@@ -814,7 +815,8 @@ its own. An Inbox row from another machine says `· on build`.
   keep running on it and the layout you saved is kept.
 - **Add a machine** lists the hosts in `~/.ssh/config` that are not machines yet, or takes `user@host`. The
   desktop app first looks at the machine over ssh without asking anything (12 seconds at most; *Cancel* ends
-  it) and adds it only when ssh could reach it. If ssh needs you to type a password or accept a host key, the
+  it) and adds it only when ssh could reach it; a new host key is recorded by ssh without a question, and a
+  machine whose key changed is not added. If ssh needs you to type a password or a code, the
   machine is added and ssh opens in a session named `ssh <name>`; the machine connects when that session
   closes. On Windows use ssh keys or an agent: password prompts work in that session but are not remembered.
   A machine whose app is missing or old is added too; its header then says `not installed` or `needs update`.

@@ -1,4 +1,4 @@
-import type { Added, HostKeyReport } from '@/api/machines'
+import type { Added } from '@/api/machines'
 
 /** What the person typed, as Add a remote machine sends it. `entry` is the raw text, kept so Change address comes back to it. */
 export type AddRequest = {
@@ -17,9 +17,6 @@ export type AddRequest = {
 
 type Added1 = Extract<Added, { outcome: 'added' }>
 type Login = Extract<Added, { outcome: 'login' }>
-
-/** How the host key stood: already known, trusted just now, or not looked at (the host would not give it). */
-export type HostResult = 'known' | 'trusted' | 'unchecked'
 
 /** What adding the machine found out. Every field is only what the host said. */
 export type ReachedMachine = {
@@ -48,10 +45,8 @@ export type MachineFacts = {
 
 /** Where the add is. Each one maps to a step of the checklist (`positionOf` in AddRun). */
 export type Stage =
-  /** Reaching the machine and asking it for its host key. */
+  /** Reaching the machine, before the host is asked to add it. */
   | { kind: 'checking' }
-  | { kind: 'trust'; report: Extract<HostKeyReport, { status: 'unknown' }>; trusting: boolean; problem: string | null }
-  | { kind: 'changed'; report: Extract<HostKeyReport, { status: 'changed' }> }
   /** Signing in and, once the host says how far it has got, putting the helper on. */
   | { kind: 'adding'; helper: boolean; action: 'install' | 'update'; percent: number | null }
   | { kind: 'no-answer'; message: string }
@@ -61,8 +56,6 @@ export type Stage =
   | { kind: 'removing'; name: string }
   /** A machine saved by an earlier try, dialled again: the checklist follows what the host says of it. */
   | { kind: 'saved'; name: string }
-  /** ssh refused the host key: the machine is saved, and `message` is the host's sentence for it. */
-  | { kind: 'unverified'; name: string; message: string }
   | { kind: 'key'; login: Login }
   /** `message` is the host's sentence for what is still wrong there. */
   | { kind: 'helper'; reason: 'missing' | 'older' | 'not-running'; added: Added1; message: string | null }
@@ -94,7 +87,7 @@ export function stageAfterAdd(result: Added, request: AddRequest): Stage | null 
   switch (result.outcome) {
     case 'cancelled': return null
     case 'needs-name': return { kind: 'no-name' }
-    case 'login': return result.failure === 'host-key-changed' ? { kind: 'unverified', name: result.name, message: result.message } : { kind: 'key', login: result }
+    case 'login': return { kind: 'key', login: result }
     case 'added': {
       // The helper was missing and add_machine put it on: the machine is as good as one that had it.
       const putOn = result.reach === 'missing' && result.helper_install?.installed === true
@@ -116,7 +109,6 @@ export function stageAfterFailure(message: string): Stage {
 /** The name of a machine the host has saved for this add, and which therefore must go again if it never connects. */
 export function savedNameOf(stage: Stage): string | null {
   if (stage.kind === 'key') return stage.login.name
-  if (stage.kind === 'unverified') return stage.name
   if (stage.kind === 'helper') return stage.added.name
   return null
 }

@@ -1,17 +1,14 @@
 import { Button } from '@/components/ui/button'
-import { addressOf, type AddRequest, type HostResult, type MachineFacts, type Stage } from '../model/addStage'
+import { addressOf, type AddRequest, type MachineFacts, type Stage } from '../model/addStage'
 import { UPDATE_WORDS, type MachineHead } from '@/features/workspace/model/machines'
 import { stoppedOnHostKey } from '../model/machineRows'
 import { AddChecklist, type Position, type StepId } from './AddChecklist'
 import { HelperProgressBody, NoAnswerBody, StepBody } from './AddBodies'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
 import type { MachinesInfo } from './DesktopSettings'
-import { HostKeyBody } from './HostKeyBody'
 import { KeyStep } from './KeyStep'
 import { MachineAdded } from './MachineAdded'
 import { useAddRun, type AddRun as Run } from './useAddRun'
-
-const HOST_WORDS: Record<HostResult, string> = { known: 'Known computer', trusted: 'Trusted just now', unchecked: 'Checked while signing in' }
 
 type Props = {
   request: AddRequest
@@ -30,11 +27,10 @@ type Props = {
   onStart: (name: string, label: string, machine: number) => void
 }
 
-function resultsOf(stage: Stage, request: AddRequest, host: HostResult): Partial<Record<StepId, string>> {
+function resultsOf(stage: Stage, request: AddRequest): Partial<Record<StepId, string>> {
   const added = stage.kind === 'helper' ? stage.added : null
   return {
     reach: `Reached ${request.host}${added?.reach_ms == null ? '' : ` · ${String(added.reach_ms)} ms`}`,
-    host: HOST_WORDS[host],
     key: added?.key == null ? 'Signed in' : `Signed in with ${added.key}`,
   }
 }
@@ -57,9 +53,6 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
     }
     case 'removing': return { at: 'reach', state: 'running', label: `Removing ${stage.name}…`, body: <StepBody text={`Taking the saved ${stage.name} out, then starting again.`} /> }
     case 'saved': return savedPosition(stage.name, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
-    case 'trust': return { at: 'host', state: 'needs', label: `First time connecting to ${request.fromConfig ? request.name : host}`, body: <HostKeyBody report={stage.report} trusting={stage.trusting} problem={stage.problem} onTrust={run.trust} onCopy={machines.onCopyCommand} onCancel={onClose} /> }
-    case 'changed': return { at: 'host', state: 'failed', label: `${host}'s identity changed since you last connected`, body: <HostKeyBody report={stage.report} trusting={false} problem={null} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
-    case 'unverified': return { at: 'host', state: 'needs', label: `${host}'s host key has changed`, body: <StepBody text={stage.message}><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Try again</Button></StepBody> }
     case 'adding': {
       if (!stage.helper) return { at: 'key', state: 'running' }
       const text = stage.action === 'install' ? `Not installed yet. Copying Maiker${appVersion === null ? '' : ` ${appVersion}`} to ${request.name}…` : `Updating Maiker on ${request.name}…`
@@ -92,7 +85,7 @@ function savedPosition(name: string, { request, machines, run, onChangeAddress }
 
 function loginPosition(name: string, live: MachineHead, request: AddRequest, machines: MachinesInfo, run: Run): Position {
   if (stoppedOnHostKey(live)) {
-    return { at: 'host', state: 'needs', label: `${request.host}'s host key has changed`, body: <StepBody text={live.why ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
+    return { at: 'reach', state: 'failed', label: `${request.host}'s host key has changed`, body: <StepBody text={live.why ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
   }
   return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? request.target}`, body: <KeyStep message={live.why ?? ''} command={live.fixCommand} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.retrySaved(name) }} /> }
 }
@@ -127,7 +120,7 @@ export function AddRun({ request, machines, facts, appVersion = null, onChangeAd
   const position = positionOf(stage, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
   return (
     <AddMachineFrame title={`Connecting to ${request.name}`} address={addressOf(request)}>
-      <FrameBody><AddChecklist host={request.host} user={request.user} position={position} results={resultsOf(stage, request, run.host)} /></FrameBody>
+      <FrameBody><AddChecklist host={request.host} user={request.user} position={position} results={resultsOf(stage, request)} /></FrameBody>
       <FrameFoot start={<Button variant="ghost" size="lg" onClick={onChangeAddress}>← Change address</Button>}>
         <Button variant="ghost" size="lg" onClick={onClose}>Cancel</Button>
       </FrameFoot>

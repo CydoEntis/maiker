@@ -33,11 +33,28 @@
 //! was started), so a test can count the dials and kill the connection the way a dead link does.
 //! `--argv-log=<path>` also records each `proxy` call's arguments (see `capture-argv`).
 //! Like ssh, it passes `--attach-only` on to `maiker proxy` when the remote command asks for it.
+//!
+//! It answers ssh's two local questions, which contact no machine, before anything else and
+//! records no call for them: `-V` prints an OpenSSH version line on stderr (`--openssh=<line>`
+//! picks another, an older one say), and `-G` prints a resolved config whose
+//! `stricthostkeychecking` is `ask`, ssh's default, or what `--config-strict=<value>` says the
+//! person's own config sets. With `--known-hosts=<path>` and `--host-key=<base64>` (or
+//! `AGENT_FAKE_SSH_KNOWN_HOSTS` and `AGENT_FAKE_SSH_HOST_KEY`) it checks the machine's ed25519 key
+//! the way OpenSSH does before it logs in: a key on record for the host goes on; a different one
+//! is refused with ssh's warning and exit 255, and nothing is written; an unseen one is added to
+//! the file under `StrictHostKeyChecking=accept-new` (the first `-o` value wins, as in ssh) and
+//! refused otherwise, since the shim never asks.
 
 use std::io::{IsTerminal, Read, Write};
 use std::process::{Command, Stdio};
 
 const VERSION: &str = "maiker 0.0.0-fake\n";
+/// What `-V` prints unless `--openssh=` says otherwise.
+const OPENSSH_VERSION: &str = "OpenSSH_9.9p1, fake";
+/// The setting's value when nothing set it, as `ssh -G` prints it.
+const SSH_DEFAULT_STRICT: &str = "ask";
+const HOST_KEY_TYPE: &str = "ssh-ed25519";
+const HOST_KEY_FAILED: &str = "Host key verification failed.";
 const FOUND_AT: &str = "/fake/bin/maiker\n";
 const NOISE: &str =
     "Last login: Mon Nov  2 09:14:07 2026 from 10.0.0.2\nWelcome to the build box\n";
@@ -58,6 +75,13 @@ struct Own {
     asks_version: bool,
     /// The remote command (the last argument) is the `command -v maiker` script.
     asks_where: bool,
+    /// What `-V` prints.
+    openssh: String,
+    /// What the person's own config sets `StrictHostKeyChecking` to, as `-G` prints it.
+    config_strict: String,
+    /// The known_hosts file the host key is checked against, and the key the machine offers.
+    known_hosts: Option<std::path::PathBuf>,
+    host_key: Option<String>,
 }
 
 fn own(args: &[String]) -> Own {
@@ -75,6 +99,10 @@ fn own(args: &[String]) -> Own {
         asks_where: args
             .last()
             .is_some_and(|last| last.contains("command -v maiker")),
+        openssh: OPENSSH_VERSION.into(),
+        config_strict: SSH_DEFAULT_STRICT.into(),
+        known_hosts: maitty_shared::brand::env_var_os("FAKE_SSH_KNOWN_HOSTS").map(Into::into),
+        host_key: maitty_shared::brand::env_var("FAKE_SSH_HOST_KEY").ok(),
     };
     for arg in args {
         if let Some(mode) = arg.strip_prefix("--mode=") {
@@ -87,6 +115,14 @@ fn own(args: &[String]) -> Own {
             own.home = Some(path.into());
         } else if let Some(path) = arg.strip_prefix("--argv-log=") {
             own.argv_log = Some(path.into());
+        } else if let Some(line) = arg.strip_prefix("--openssh=") {
+            own.openssh = line.into();
+        } else if let Some(value) = arg.strip_prefix("--config-strict=") {
+            own.config_strict = value.into();
+        } else if let Some(path) = arg.strip_prefix("--known-hosts=") {
+            own.known_hosts = Some(path.into());
+        } else if let Some(key) = arg.strip_prefix("--host-key=") {
+            own.host_key = Some(key.into());
         } else if let Some((key, value)) = arg
             .strip_prefix("--env=")
             .and_then(|pair| pair.split_once('='))
@@ -100,6 +136,14 @@ fn own(args: &[String]) -> Own {
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let own = own(&args);
+    if args.iter().any(|arg| arg == "-V") {
+        eprintln!("{}", own.openssh);
+        return;
+    }
+    if args.iter().any(|arg| arg == "-G") {
+        print_stdout(resolved_config(&own, host_of(&args)).as_bytes());
+        return;
+    }
     if let Some(log) = maitty_shared::brand::env_var_os("FAKE_SSH_LOG") {
         let mut text = args.join("\n");
         text.push('\n');
@@ -110,6 +154,9 @@ fn main() {
         "proxy" | "noise" | "old" | "require-pipes" | "capture-argv"
     ) {
         record_call(&own, 0);
+    }
+    if !host_key_passes(&own, &args) {
+        std::process::exit(255);
     }
     if own.asks_version && matches!(own.mode.as_str(), "proxy" | "noise" | "old") {
         print_stdout(VERSION.as_bytes());
@@ -183,6 +230,75 @@ fn main() {
             std::process::exit(2);
         }
     }
+}
+
+/// The host ssh is pointed at: the word after `--`.
+fn host_of(args: &[String]) -> &str {
+    args.iter()
+        .position(|arg| arg == "--")
+        .and_then(|dashes| args.get(dashes + 1))
+        .map_or("box", String::as_str)
+}
+
+/// What `ssh -G` would print for the host: only the lines the app reads.
+fn resolved_config(own: &Own, host: &str) -> String {
+    format!(
+        "hostname {host}\nport 22\nstricthostkeychecking {}\nproxyjump none\n",
+        own.config_strict
+    )
+}
+
+/// The first `-o StrictHostKeyChecking=` on the line (ssh keeps the first value), else the
+/// person's config.
+fn strict_setting<'a>(own: &'a Own, args: &'a [String]) -> &'a str {
+    args.windows(2)
+        .filter(|pair| pair[0] == "-o")
+        .find_map(|pair| pair[1].strip_prefix("StrictHostKeyChecking="))
+        .unwrap_or(&own.config_strict)
+}
+
+/// OpenSSH's host-key check before the login, against `--known-hosts=`. Says whether to go on.
+fn host_key_passes(own: &Own, args: &[String]) -> bool {
+    let (Some(file), Some(key)) = (&own.known_hosts, &own.host_key) else {
+        return true;
+    };
+    let host = host_of(args);
+    let offered = format!("{HOST_KEY_TYPE} {key}");
+    let text = std::fs::read_to_string(file).unwrap_or_default();
+    let on_record: Vec<&str> = text
+        .lines()
+        .filter_map(|line| line.strip_prefix(host)?.strip_prefix(' '))
+        .map(str::trim)
+        .collect();
+    if on_record.contains(&offered.as_str()) {
+        return true;
+    }
+    let setting = strict_setting(own, args);
+    let checks_off = matches!(setting, "no" | "off" | "false");
+    if !on_record.is_empty() {
+        eprintln!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        eprintln!("@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @");
+        eprintln!("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@");
+        if checks_off {
+            return true;
+        }
+        eprintln!("Host key for {host} has changed and you have requested strict checking.");
+        eprintln!("{HOST_KEY_FAILED}");
+        return false;
+    }
+    if !(checks_off || setting == "accept-new") {
+        eprintln!("No {HOST_KEY_TYPE} host key is known for {host} and you have requested strict checking.");
+        eprintln!("{HOST_KEY_FAILED}");
+        return false;
+    }
+    let mut out = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(file)
+        .expect("open the known_hosts file");
+    writeln!(out, "{host} {offered}").expect("write the known_hosts file");
+    eprintln!("Warning: Permanently added '{host}' (ED25519) to the list of known hosts.");
+    true
 }
 
 fn log_argv(own: &Own, args: &[String]) {

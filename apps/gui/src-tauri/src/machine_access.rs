@@ -1,57 +1,14 @@
-//! How a person gets a machine to log in from the window, without a terminal: look at its host key
-//! and trust it (only when it is new), and set the user it connects as. The key work is in
-//! `maitty_machines::host_key`; here it is run off the UI thread and tied to a machine by name.
+//! How a person gets a machine to log in from the window, without a terminal: set the user it
+//! connects as, and the password-once key setup. A machine's host key is never asked about here: ssh
+//! records a new one itself and refuses a changed one (`maitty_machines::new_host_keys`). The work is
+//! in `maitty_machines`; here it is run off the UI thread and tied to a machine by name.
 
-use maitty_machines::host_key::{self, Inspection, Standing, TOOL_LIMIT, Tools};
+use maitty_machines::host_key::{self, Standing, TOOL_LIMIT, Tools};
 use maitty_machines::key_login;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use maitty_machines::machine_config::set_target;
 use maitty_machines::machine_target::{build_target, split_target, valid_user};
 use serde::Serialize;
-
-/// The longest fingerprint text accepted back from the window: `SHA256:` and 43 base64 characters.
-const MOST_FINGERPRINT_CHARS: usize = 64;
-
-/// What the window is shown about a machine's host key. A `changed` key has no way to be trusted
-/// from here.
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(tag = "status", rename_all = "kebab-case")]
-pub enum HostKeyReport {
-    /// A key this computer has never seen for the host.
-    Unknown { host: String, port: u16, key_type: String, fingerprint: String },
-    /// The key is already trusted: the login failed for another reason.
-    Trusted { host: String, port: u16, key_type: String, fingerprint: String },
-    /// The machine offers a key that differs from the one on record.
-    Changed { host: String, port: u16, key_type: String, fingerprint: String, known_fingerprint: String },
-}
-
-pub fn report_of(seen: &Inspection) -> HostKeyReport {
-    let (host, port, key_type, fingerprint) = (
-        seen.host.clone(),
-        seen.port,
-        seen.key.key_type.clone(),
-        seen.fingerprint.clone(),
-    );
-    match &seen.standing {
-        Standing::Unknown => HostKeyReport::Unknown { host, port, key_type, fingerprint },
-        Standing::Trusted => HostKeyReport::Trusted { host, port, key_type, fingerprint },
-        Standing::Changed { known_fingerprint } => HostKeyReport::Changed {
-            host,
-            port,
-            key_type,
-            fingerprint,
-            known_fingerprint: known_fingerprint.clone(),
-        },
-    }
-}
-
-/// Whether `text` is shaped like the fingerprint the window was given.
-pub fn is_fingerprint(text: &str) -> bool {
-    text.len() <= MOST_FINGERPRINT_CHARS
-        && text
-            .strip_prefix("SHA256:")
-            .is_some_and(|rest| !rest.is_empty() && rest.chars().all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '/')))
-}
 
 /// The ssh program, its leading arguments and the target of the machine called `name`.
 fn ssh_of(wire: &crate::terminal_stream::Wire, name: &str) -> Result<(Vec<String>, String), String> {
@@ -64,40 +21,8 @@ fn ssh_of(wire: &crate::terminal_stream::Wire, name: &str) -> Result<(Vec<String
         .ok_or_else(|| format!("{name} is no longer in the list"))?;
     let (ssh, target) = route
         .ssh_parts()
-        .ok_or_else(|| format!("{name} is not reached over ssh, so it has no host key to look at"))?;
+        .ok_or_else(|| format!("{name} is not reached over ssh"))?;
     Ok((ssh.to_vec(), target.to_string()))
-}
-
-/// Look at the host key a machine offers and whether this computer knows it. Fetching can take
-/// seconds, so it runs off the UI thread.
-#[tauri::command]
-pub async fn inspect_host_key(wire: tauri::State<'_, crate::terminal_stream::Wire>, name: String) -> Result<HostKeyReport, String> {
-    let (ssh, target) = ssh_of(&wire, &name)?;
-    let seen = tauri::async_runtime::spawn_blocking(move || host_key::inspect(&ssh, &target, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not look at the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))?;
-    Ok(report_of(&seen))
-}
-
-/// Trust the key whose fingerprint the person was shown: it is fetched again and added only when
-/// it is still that key and is new. Then the machine is dialled at once.
-#[tauri::command]
-pub async fn trust_host_key(
-    wire: tauri::State<'_, crate::terminal_stream::Wire>,
-    name: String,
-    fingerprint: String,
-) -> Result<(), String> {
-    if !is_fingerprint(&fingerprint) {
-        return Err("That is not a fingerprint".to_string());
-    }
-    let (ssh, target) = ssh_of(&wire, &name)?;
-    tauri::async_runtime::spawn_blocking(move || host_key::trust(&ssh, &target, &fingerprint, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not trust the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))?;
-    wire.handle()?.retry(&name);
-    Ok(())
 }
 
 /// The user name this computer's ssh would connect as when a machine names none.
@@ -143,7 +68,7 @@ pub async fn set_machine_user(wire: tauri::State<'_, crate::terminal_stream::Wir
 pub enum KeyLoginReport {
     /// This computer cannot do it; `reason` says why and the terminal is the way.
     Unavailable { reason: String },
-    /// The machine's host key is not trusted yet: the host key card comes first.
+    /// The machine's host key is not on record yet: it has to connect once first, which records it.
     HostKeyNotTrusted,
     /// There is no key here. Creating one is the person's choice; it will be made at `path`.
     NoKey { path: String },
@@ -232,7 +157,7 @@ pub async fn set_up_key_login(
     let (ssh, target) = ssh_of(&wire, &name)?;
     let outcome = tauri::async_runtime::spawn_blocking(move || -> Result<(key_login::PublicKey, key_login::Installed), String> {
         if !host_key_trusted(&ssh, &target)? {
-            return Err("Trust the machine's host key first; the password is never sent to a host this computer does not trust.".to_string());
+            return Err("Connect to the machine once first, so its host key is on record; the password is never sent to a host this computer does not know.".to_string());
         }
         let key = match key_login::local_key(&ssh_dir()?) {
             key_login::LocalKey::Ready { key, .. } => key,
@@ -271,15 +196,6 @@ pub async fn set_up_key_login(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use maitty_machines::host_key::HostKey;
-
-    #[test]
-    fn a_fingerprint_from_the_window_must_be_shaped_like_one() {
-        assert!(is_fingerprint("SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"));
-        for bad in ["", "SHA256:", "MD5:aa:bb", "SHA256:a b", "SHA256:x;rm", &format!("SHA256:{}", "a".repeat(80))] {
-            assert!(!is_fingerprint(bad), "{bad}");
-        }
-    }
 
     #[test]
     fn what_key_setup_tells_the_window_has_no_place_for_the_password() {
@@ -292,22 +208,5 @@ mod tests {
     #[test]
     fn the_local_user_name_is_only_one_ssh_could_use() {
         assert!(local_user_name().is_none_or(|user| valid_user(&user)));
-    }
-
-    #[test]
-    fn a_changed_key_reaches_the_window_as_changed_with_both_prints() {
-        let key = HostKey { key_type: "ssh-ed25519".into(), body: "x".into() };
-        let seen = Inspection {
-            host: "box".into(),
-            port: 22,
-            fingerprint: key.fingerprint(),
-            key,
-            standing: Standing::Changed { known_fingerprint: "SHA256:old".into() },
-            known_hosts: std::path::PathBuf::from("known_hosts"),
-        };
-        match report_of(&seen) {
-            HostKeyReport::Changed { known_fingerprint, .. } => assert_eq!(known_fingerprint, "SHA256:old"),
-            other => panic!("{other:?}"),
-        }
     }
 }

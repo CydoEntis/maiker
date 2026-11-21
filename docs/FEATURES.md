@@ -112,6 +112,7 @@ conversation continuity are planned in phases 34–37:
 - CI: test and clippy on Linux and Windows, a macOS check — shipped — `.github/workflows/ci.yml`
 - Config sync across machines (local file never synced) — shipped — `crates/maitty-core/src/sync.rs`
 - SSH remotes (`--remote host`) — shipped — `crates/maitty-core/src/ipc.rs` `connect_remote`
+- A new machine's host key is trusted on first connection with no question (ssh's own `accept-new`, only in place of ssh's default; a changed key is refused and the machine is not added), from both apps; the desktop app's host-key step and fingerprint screens are gone (ADR 0017) — built 2026-11-21, not yet seen on screen — `crates/maitty-machines/src/new_host_keys.rs`, `machine_probe.rs`
 - `maiker doctor` — shipped — `crates/maitty-terminal-client/src/cli.rs`
 - Dark and light themes are two remembered slots and an appearance switch; the browser has a Dark and a Light tab; Vim, PaperColor Light, Flexoki Light, Selenized Light and Modus Operandi are added — phase 40 — `crates/maitty-settings/src/theme.rs`, `crates/maitty-terminal-client/src/client/themes.rs`
 - A Codex pane's working, needs-you and finished come from Codex's own hooks, with the screen guess only as a per-pane fallback; needs-you and finished never ring for the pane you are looking at, and needs-you stays quiet for 2 minutes after it rings — phase 39 — `crates/adapters/maitty-provider-codex/src/status_hooks.rs`, `crates/maitty-core/src/daemon/status.rs`

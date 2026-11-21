@@ -229,11 +229,12 @@ impl App {
             Probe::Ready { version } => {
                 self.machine_added(&def, Added::Connect, &version, Outcome::Ready(version.clone()))
             }
+            // A changed host key is refused by ssh, so nothing is added (ADR 0017).
+            Probe::Failed(
+                failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. }),
+            ) => say(sentence_here(&failure, &Subject::of_def(&def)), true),
             Probe::Failed(failure) if failure.is_login() => {
                 self.machine_added(&def, Added::Login(failure), "", Outcome::Login)
-            }
-            Probe::Failed(failure @ FailureClass::Unreachable(_)) => {
-                say(sentence_here(&failure, &Subject::of_def(&def)), true)
             }
             // Reached, but the app is missing, old, or not running: the connection's own state
             // says which, with the fix, once it dials.

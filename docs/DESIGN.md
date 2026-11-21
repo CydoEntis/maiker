@@ -398,11 +398,12 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.")
   under the line that says Maiker connects with your keys and never asks for or keeps passwords, a closed **Port and key** row (a
   Port box and a Key file box, placeholder `~/.ssh/id_ed25519`), and the `~/.ssh/config` hosts as rows (one already added is dimmed and says "Already added" where Connect would be); its foot is Cancel. After
-  Connect the same card shows the checklist (`Steps`, `AddChecklist`): **Reach**, **Check it's the right computer**, **Sign in with
-  your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
-  computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that
-  needs the person is an amber step with one main fix: a new host ("First time connecting to <host>", `ED25519 · SHA256:…`,
-  **Trust and continue**; a changed key has no Trust), a machine that would not sign in ("Couldn't sign in to <user@host>": the host's one sentence with the fix, ssh's own reason
+  Connect the same card shows the checklist (`Steps`, `AddChecklist`): **Reach**, **Sign in with your key**, **Set up the Maiker
+  helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Signed in with id_ed25519"); the foot is
+  **← Change address** (back to what was typed) and **Cancel**. There is no host-key step and no fingerprint: ssh records a new
+  host's key, and a changed one is refused at Reach in the host's sentence ("<name>'s host key has changed, …", naming the
+  `ssh-keygen -R` that clears the old key) with **Try again** and never a Trust; nothing is added. A step that needs the person is
+  an amber step with one main fix: a machine that would not sign in ("Couldn't sign in to <user@host>": the host's one sentence with the fix, ssh's own reason
   when it gave one, a Copy line for the command the sentence names and **Try again**; no terminal, no command preview, no
   password anywhere in Maiker), a host that does not answer ("Couldn't reach <host>", the host's one sentence, **Try again** and
   **Edit the address**). Every failure's words are the host's shared sentence, the same as the terminal app's. A missing helper is not a question: it installs as a step with a
@@ -428,7 +429,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   then settings rows (Name, saved as you type as the sidebar nickname; Address; Maiker; Copy to your clipboard and
   Notifications, two switches). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
   Nothing on <name> is deleted.", **Remove** and Cancel). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
-  a mark or teal spinner, one sentence, an optional command or fingerprint with Copy, the actions, and raw output behind
+  a mark or teal spinner, one sentence, an optional command with Copy, the actions, and raw output behind
   Details. **Add a machine** is the dialog described above, never a page here. The key terminal (`KeyTerminal.tsx`, a 150px well `.mx-key-term`, inside the amber key step) has the command typed and not run, takes keyboard focus and shows a one-line hint ("Press Enter, then type the password here. It goes to ssh like any terminal input; Maiker does not read or keep it."); the machine is dialled every 5 seconds (up to 10 minutes) until it connects and the checklist then carries on by itself. Esc goes to the terminal while it has focus and closes the dialog anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's close button is always there. Whatever closes the dialog ends the shell. On Windows the typed line is the PowerShell one. **Fix this machine** is the same dialog opened from a down machine's red dot in the sidebar, titled "Fix <name>", with no address field: the checklist stopped at the step that failed (the key step, the host-key step, or Reach with the host's reason and a primary **Try again**), and **Open in Settings** in the foot.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
   (not Usage, which holds figures): while it has text the body is the pages' groups, each titled "Page · Group", whole
