@@ -30,6 +30,7 @@ import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import type { PickedFolder } from '../model/folderPick'
 import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
 import { copyText } from '@/lib/clipboard'
+import { AcpAgentsDialog, type OtherAgent } from './AcpAgentsDialog'
 
 /** The branch a session starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
 export type BranchChoice = { name: string; create: boolean; worktree: boolean }
@@ -40,7 +41,7 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
  * `bypass` is this session's Bypass Permissions choice over Settings, and `name` a name for it; without one the first
  * message names the session.
  */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; name?: string; bypass?: boolean | undefined }
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0019); the model, effort and mode are then its own. */ acp?: string; name?: string; bypass?: boolean | undefined }
 
 /** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
 export type NewChatSeed = { folder: string; message: string; agent?: ChatAgent }
@@ -102,6 +103,8 @@ type Props = {
   seed?: NewChatSeed | null
   /** Before the where chips: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
+  /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0019). */
+  otherAgents?: boolean
 }
 
 /** The key the first message's files are kept under: no conversation exists yet, and a real one is never negative. */
@@ -148,7 +151,7 @@ const refused = (): Promise<boolean> => Promise.resolve(false)
  * in. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it in the background and keeps the draft
  * for the next one, Esc discards it. A plain shell is "New terminal", not here.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, otherAgents = false, leading }: Props) {
   // On another machine the session is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -228,7 +231,11 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null
   }, [explicit, treeMode, suggested])
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
-  const agentMissing = !remote && !isInstalled(agent)
+  // Another agent, run over ACP in place of the one picked: only for a chat on this computer.
+  const [other, setOther] = useState<OtherAgent | null>(null)
+  const [othersOpen, setOthersOpen] = useState(false)
+  const acp = otherAgents && !remote ? other : null
+  const agentMissing = !remote && acp === null && !isInstalled(agent)
 
   // The message box takes the keys when the draft opens, and again after a start that did not go through.
   useEffect(() => { if (!starting) focusBox() }, [folder, starting])
@@ -252,7 +259,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   useWarmAgent(onWarm, warmSpec, starting || background.pending > 0)
   const requestFor = (task: string): NewChatRequest => ({
     folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), bypass,
-    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null,
+    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null, ...(acp === null ? {} : { acp: acp.id }),
   })
   const empty = message.trim() === '' && attachments.length === 0
   // Why the box cannot start anything now, said in its own place; typing stays open.
@@ -486,11 +493,27 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     error: null, sendText: refused, sendReply: refused, echo: null,
   }
   const notes = (
+    <>
     <StartNotes error={error} treeLine={treeLine} syncNote={syncNote} onUpdate={updateFirst} onUseWorktree={() => { setWorkIn('tree') }} onFix={() => { setBranchOpen(true) }} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
       machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }} geminiLine={agent === 'gemini'}
       clone={cloning} onUseFolder={(path) => { setCloning(null); openFolder(path) }} onDismissClone={() => { setCloning(null) }}
       onPickAnotherFolder={cloner === null || cloning === null ? undefined : () => { const again = cloning; setCloning(null); openCloneWindow({ start: 'link', address: again.address, parent: again.parent }) }}
       onOpenGitHubSettings={cloner?.onOpenGitHubSettings} />
+    {otherAgents && !remote && (acp === null ? (
+      <p className="mx-nsd-note">
+        {'Want another agent? '}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOthersOpen(true) }}>Other agents…</button>
+      </p>
+    ) : (
+      <p className="mx-nsd-note" role="status">
+        {`This session starts ${acp.name} over ACP, with its own model and permission settings. `}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOthersOpen(true) }}>Change</button>
+        {' '}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOther(null) }}>{`Use ${AGENT_LABEL[agent]} instead`}</button>
+      </p>
+    ))}
+    {othersOpen && <AcpAgentsDialog onPick={(picked) => { setOther(picked); setOthersOpen(false) }} onCancel={() => { setOthersOpen(false) }} />}
+    </>
   )
   const status = starting ? 'working' : 'idle'
   return (

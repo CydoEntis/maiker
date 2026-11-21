@@ -178,6 +178,11 @@ enum Cmd {
         #[command(subcommand)]
         cmd: ConfigCmd,
     },
+    /// The agents that run as a chat over ACP: list them, install one from the ACP registry, remove one.
+    Agents {
+        #[command(subcommand)]
+        cmd: cli::agents::Cmd,
+    },
     /// Create a git worktree for a branch and open it as a workspace.
     Worktree {
         /// Branch for the worktree (with --move, optional: named for you).
@@ -668,6 +673,7 @@ pub(crate) fn run() {
             Ok(())
         }
         Some(Cmd::Integrate { agent, uninstall }) => cli::integrate(agent.as_deref(), uninstall),
+        Some(Cmd::Agents { cmd }) => cli::agents::run(cmd),
         Some(Cmd::Config { cmd }) => match cmd {
             ConfigCmd::Path => {
                 println!("{}", config::config_path().display());

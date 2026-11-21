@@ -209,10 +209,16 @@ impl Daemon {
         }
     }
 
+    /// The program of the agent `name`: the config's entry, else the one installed from the ACP
+    /// registry (ADR 0019). The installed list is one small file, read when a chat starts.
     fn acp_program(&self, name: &str) -> Result<AcpProgram> {
-        let agent = self.cfg.acp_agent(name).ok_or_else(|| {
-            anyhow::anyhow!("The config has no agent named `{name}` that runs over ACP (`acp = true`)")
-        })?;
+        let agent = self
+            .cfg
+            .acp_agent(name)
+            .or_else(|| installed_agent(name, crate::acp_registry::installed(&crate::config::data_dir())))
+            .ok_or_else(|| {
+                anyhow::anyhow!("No agent named `{name}` runs over ACP here: it is not installed (`agents install {name}`) and the config has no entry for it (`acp = true`)")
+            })?;
         let executable = crate::proc::resolve_executable_path(Path::new(&agent.command))
             .ok()
             .filter(|path| path.is_file())
@@ -339,5 +345,46 @@ fn same_variable(one: &std::ffi::OsStr, other: &std::ffi::OsStr) -> bool {
         one.to_string_lossy().eq_ignore_ascii_case(&other.to_string_lossy())
     } else {
         one == other
+    }
+}
+
+/// The agent `name` as the ACP registry's install recorded it, if it was installed.
+fn installed_agent(
+    name: &str,
+    mut installed: std::collections::BTreeMap<String, crate::acp_registry::Installed>,
+) -> Option<crate::config::AcpAgent> {
+    let kept = installed.remove(name)?;
+    Some(crate::config::AcpAgent {
+        name: name.to_owned(),
+        command: kept.command.to_string_lossy().into_owned(),
+        args: kept.args,
+        env: kept.env,
+    })
+}
+
+#[cfg(test)]
+mod installed_agent_tests {
+    use super::installed_agent;
+    use crate::acp_registry::Installed;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn an_installed_agent_runs_the_program_and_arguments_its_install_recorded() {
+        let kept = Installed {
+            name: "Demo".into(),
+            version: "1.0.0".into(),
+            command: "/data/acp-agents/demo/1.0.0/demo".into(),
+            args: vec!["acp".into()],
+            env: BTreeMap::from([("MODE".into(), "acp".into())]),
+        };
+        let installed = BTreeMap::from([("demo".to_owned(), kept)]);
+
+        let agent = installed_agent("demo", installed.clone()).unwrap();
+
+        assert_eq!(agent.name, "demo");
+        assert_eq!(agent.command, "/data/acp-agents/demo/1.0.0/demo");
+        assert_eq!(agent.args, ["acp"]);
+        assert_eq!(agent.env.get("MODE").map(String::as_str), Some("acp"));
+        assert!(installed_agent("other", installed).is_none());
     }
 }

@@ -235,7 +235,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     const { agent, model, reasoning } = request
     // A saved conversation is resumed with no mode picked for it, so it opens in the agent's usual one.
     const picked = request.resume === null ? request.mode : START_MODE[agent]
-    const permissions = hasAbility(agent, 'structuredChat') ? chatPermissions(agent, picked, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
+    // Another agent picked for the session runs over ACP by its id, whatever the draft's own agent is (ADR 0019).
+    const permissions = request.acp === undefined && hasAbility(agent, 'structuredChat') ? chatPermissions(agent, picked, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
     if (permissions === null) throw new Error(`${agentLabel(agent)} cannot start a chat in this permission mode yet. Pick another mode.`)
     const mode: StartMode = background ? 'background' : 'alongside'
     if (!beginStart(mode)) throw new Error(ANOTHER_START_RUNNING)
@@ -243,7 +244,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       // A saved conversation opens as a chat on the agent's own session, with what was said before as its history.
       const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
         ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions) : await resumeChatSession(request.folder, agent, request.resume, permissions)
-        : await startAcpChat(request.folder, agent)
+        : await startAcpChat(request.folder, request.acp ?? agent)
       const id = String(started.id)
       const choice: WireChoice = permissions === undefined ? {} : { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
       if (permissions !== undefined) {
@@ -274,7 +275,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
       await submitMessage({ id, generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
         updateComposer(started.id, (state) => ({ ...state, draft: request.message }))
-        toast.failed(`The chat started, but ${agentLabel(agent)} did not take the first message`, error)
+        toast.failed(`The chat started, but ${request.acp ?? agentLabel(agent)} did not take the first message`, error)
       })
     } finally {
       endStart(mode)
@@ -407,6 +408,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     let folder = request.folder
     if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
+    if (request.acp !== undefined && !chatView) throw new Error('An agent from the ACP registry starts only in the Chat view. Switch to it in Settings.')
     // In the Chat view a session is a chat with no terminal behind it (ADR 0018), a saved conversation included.
     if (chatView) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`

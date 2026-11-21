@@ -1,3 +1,4 @@
+mod acp_agents;
 mod add_machine;
 mod browse;
 mod file_get;
@@ -1805,6 +1806,9 @@ pub fn run() {
             daemon_log::open_daemon_log,
             daemon_log::export_daemon_log,
             highlight::highlight_file,
+            acp_agents::acp_agents,
+            acp_agents::install_acp_agent,
+            acp_agents::remove_acp_agent,
             machine_update::update_machine,
             machine_update::machine_activity,
             terminal_stream::start_session_on_machine,

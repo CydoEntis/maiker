@@ -1,3 +1,4 @@
+pub mod acp_registry;
 pub mod alert;
 pub mod brand;
 pub mod config;

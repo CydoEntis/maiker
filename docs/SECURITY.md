@@ -963,6 +963,38 @@ app installs nothing. Running a downloaded script is running remote code as the 
 - **Limits that remain.** The vendors' scripts are trusted as much as their domains; there is no checksum
   of the script here. npm and curl come from this computer's PATH.
 
+## Project-specific: installing an agent from the ACP registry
+
+`maiker agents install <id>` (`crates/maitty-core/src/acp_registry.rs`, ADR 0019) installs an agent that
+runs over ACP from the public ACP registry. The owner approved this; unlike the installer above, what it
+installs is chosen by a file fetched at run time, so the file is untrusted input and the rules are checks,
+not a list:
+
+- **One registry, fixed in code.** The index is fetched from one `https://` address in the source, at most
+  1 MiB, in 30 seconds. No setting, argument or input names another.
+- **Only a name comes in.** The window and the command line give an agent's id (`acp_agent_name`: lowercase
+  letters, digits, `-`, `_`). Addresses, programs and arguments come from the registry entry of that id.
+- **Every entry is checked before it is listed.** Id, name and version shapes; a download address that is
+  plain `https://` with no user name; a program path that stays inside the agent's folder (no root, drive
+  or `..`); at most 32 arguments and variables, each bounded, no control characters, no variable that is
+  this app's own identity. An entry that fails is left out.
+- **A checksum or nothing.** A download is installed only when the registry gives its SHA-256, and the file
+  is hashed and compared before anything is unpacked. A mismatch installs nothing. An entry with no checksum
+  is refused.
+- **An archive is listed before it is unpacked.** Any entry that is absolute or holds `..` refuses the
+  whole archive. The program the registry names must resolve to a file inside the agent's folder.
+- **npm at an exact version.** An npm agent is `npm install --global --prefix <the agent's folder>
+  <name>@<exact version>`, as arguments; the package's own `package.json` must name that package and
+  version. Its install scripts run, as with any npm install.
+- **No shell line is built.** curl, tar, unzip and npm are run as programs with arguments.
+- **Never elevated, and bounded.** It runs as the person, writes only under the app's data folder
+  (`acp-agents/`), and stops a download after 20 minutes or 1 GiB.
+- **Staged.** Everything is made in a folder beside the final one, which takes its place only when all
+  checks passed; a failure leaves the version installed before.
+- **Limits that remain.** The registry and each agent's publisher are trusted: the checksum proves the
+  download is the one the registry described, not that it is harmless. A link inside an archive is not
+  inspected beyond the program itself. curl, tar, unzip, npm and node come from this computer.
+
 ## Project-specific: the message the daemon sends by itself
 
 With `restore.continue_turn` on, the daemon sends one fixed message, `Continue where you left off.`,

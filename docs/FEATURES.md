@@ -27,6 +27,7 @@ conversation continuity are planned in phases 34–37:
 - Trusted status reports (process tree or `AGENT_PANE_TOKEN`) — shipped — `crates/maitty-core/src/daemon/term.rs`, `crates/maitty-terminal-client/src/cli.rs`
 - Agent kinds: Claude, Codex, Gemini, OpenCode, Cursor, Copilot, Amp, Qwen, Aider, Goose, Crush, Droid, Pi, Kiro, Grok, custom `[[agents]]` — shipped — `crates/maitty-core/src/config.rs`
 - New agent task box (project, worktree, agent, model, effort), presets and recipes as its choices, prewarm — shipped — `crates/maitty-terminal-client/src/client/screen/dialogs.rs`, `crates/maitty-terminal-client/src/client/recipes.rs`
+- Agents from the ACP registry: `maiker agents list`, `install <id>`, `remove <id>`, and **Other agents…** on the desktop's New session draft (Chat view), which run them as chats over ACP — shipped — `crates/maitty-core/src/acp_registry.rs`, `crates/maitty-terminal-client/src/cli/agents.rs`, `apps/gui/src/features/workspace/components/AcpAgentsDialog.tsx`
 - Agents talk to agents (MCP server `maiker mcp`) — shipped — `crates/maitty-terminal-client/src/cli/mcp.rs`
 - `maiker send --wait`, `maiker wait`, `maiker read` — shipped — `crates/maitty-terminal-client/src/cli.rs`
 - At most a set number of helpers working at once (`[sessions] helpers_at_once`; an old `[mcp]` value is read as a fallback) — shipped 0.25.0 — `Daemon::starting` in `crates/maitty-core/src/daemon/mod.rs`

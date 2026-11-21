@@ -375,6 +375,13 @@ each. `command`, `args` or `env` on an entry without `acp = true` is refused, so
 `acp = true` shows. `enabled = false` switches the entry off. The entry's other keys (`process`,
 patterns, `resume`) still describe the same agent in a terminal.
 
+An agent can also be installed from the ACP registry instead of written here
+([stack/acp.md](stack/acp.md#project-specific-the-registry)): `maiker agents list` shows the
+registry's agents and which are installed, `maiker agents install <id>` installs one under
+`<data folder>/acp-agents/`, and `maiker agents remove <id>` takes it off. The daemon starts a
+name from this file first and from the installed ones second. Installing needs `curl` and `tar`
+(and `unzip` for a zip outside Windows); an npm agent needs Node.js and npm.
+
 ## Project-specific: removed config keys
 
 Removed `[ui]` keys. `pane_colors`, `tab_gap` and `tool_rail` no longer exist: the TUI draws one accent focus border,

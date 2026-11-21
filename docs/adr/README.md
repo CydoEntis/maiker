@@ -43,3 +43,4 @@ holds the history; an ADR states only what is true now.
 | [0016](0016-one-provider-contract-with-no-io.md) | Every provider is one dialect with no I/O, named in one registry (proposed) |
 | [0017](0017-acp-for-agents-without-an-adapter.md) | ACP is for agents without an adapter, and what it claims is labelled (proposed) |
 | [0018](0018-the-chat-view-talks-to-the-agent-directly.md) | The chat view talks to the agent directly, never through a terminal (proposed) |
+| [0019](0019-acp-agents-are-installed-from-the-registry.md) | Agents run over ACP are installed from the ACP registry (proposed) |

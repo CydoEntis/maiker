@@ -116,7 +116,7 @@ async fn a_client_names_an_acp_agent_and_never_its_program() {
             let unknown = exchange(session, 610, start(StartTarget::Acp { agent: "nobody".into(), cwd }), None).await;
             let chosen = exchange(session, 611, start(StartTarget::Create(program)), None).await;
 
-            assert!(matches!(&unknown, ServerMsg::Error(why) if why.contains("no agent named `nobody`")), "{unknown:?}");
+            assert!(matches!(&unknown, ServerMsg::Error(why) if why.contains("No agent named `nobody` runs over ACP here: it is not installed")), "{unknown:?}");
             assert!(matches!(&chosen, ServerMsg::Error(why) if why.contains("started by its name")), "{chosen:?}");
             assert!(session.daemon.conversations.is_empty() && session.daemon.pending_starts.is_empty());
         })
