@@ -92,8 +92,8 @@ history from them yet, so `history_replay` is never claimed.
 
 An ACP agent is an `[[agents]]` entry with `acp = true`. The entry names the program and its
 arguments; Maiker does not guess an agent's ACP flag. The keys and their checks are in
-[ENVIRONMENT](../ENVIRONMENT.md) once the daemon reads them (MAITTY-493); until then no agent
-runs through ACP.
+[ENVIRONMENT](../ENVIRONMENT.md#project-specific-agents-run-over-acp). The config is read and
+checked; the daemon does not start an agent from it yet (MAITTY-491).
 
 ## Project-specific: what is verified
 

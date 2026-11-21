@@ -41,6 +41,77 @@ pub struct AgentDef {
     /// The agent's own flag that starts it without permission prompts (`--dangerously-skip-permissions`),
     /// added when `[permissions.bypass]` has it on. None: the agent has no such flag, and nothing is added.
     pub bypass_flag: Option<String>,
+    /// The agent can be run as a chat over the Agent Client Protocol, started with `command` and
+    /// `args` (`docs/stack/acp.md`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub acp: bool,
+    /// The program that speaks ACP on its standard input and output. Only with `acp = true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// The arguments that put `command` in ACP mode, each passed as it is, with no shell.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// Variables set for the ACP process, over the ones it inherits.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+}
+
+/// The longest name an ACP agent may have: it names the agent in every conversation it runs.
+pub const ACP_NAME_MAX: usize = 32;
+/// The agents with an adapter of their own, which are never run over ACP (ADR 0017).
+pub const NATIVE_CHAT_AGENTS: [&str; 2] = ["claude", "codex"];
+const ACP_ARGS_MAX: usize = 32;
+const ACP_ENV_MAX: usize = 32;
+const ACP_VALUE_MAX_BYTES: usize = 4096;
+
+/// Refuse an `[[agents]]` entry whose ACP keys could never start an agent, or would start
+/// something other than what was written, so a mistake shows when the config loads.
+pub fn validate_agents(agents: &[AgentDef]) -> Result<()> {
+    for (i, agent) in agents.iter().enumerate() {
+        let place = format!("[[agents]] #{} ({})", i + 1, agent.name);
+        if !agent.acp {
+            anyhow::ensure!(
+                agent.command.is_none() && agent.args.is_empty() && agent.env.is_empty(),
+                "{place}: `command`, `args` and `env` are only for an agent with `acp = true`"
+            );
+            continue;
+        }
+        let name = &agent.name;
+        anyhow::ensure!(
+            !name.is_empty()
+                && name.len() <= ACP_NAME_MAX
+                && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_'),
+            "{place}: an agent with `acp = true` needs a `name` of lowercase letters, digits, `-` or `_`, at most {ACP_NAME_MAX} long"
+        );
+        anyhow::ensure!(
+            !NATIVE_CHAT_AGENTS.contains(&name.as_str()),
+            "{place}: {name} has its own chat support and is not run over ACP; remove `acp = true`"
+        );
+        let command = agent.command.as_deref().unwrap_or_default();
+        anyhow::ensure!(!command.trim().is_empty(), "{place}: `acp = true` needs a `command`, the program to run");
+        anyhow::ensure!(
+            !command.starts_with('-'),
+            "{place}: `command` is the program alone; put `{command}` in `args`"
+        );
+        anyhow::ensure!(agent.args.len() <= ACP_ARGS_MAX, "{place}: `args` has more than {ACP_ARGS_MAX} entries");
+        anyhow::ensure!(agent.env.len() <= ACP_ENV_MAX, "{place}: `env` has more than {ACP_ENV_MAX} entries");
+        let plain = |text: &str| text.len() <= ACP_VALUE_MAX_BYTES && !text.chars().any(char::is_control);
+        anyhow::ensure!(
+            plain(command) && agent.args.iter().all(|arg| plain(arg)),
+            "{place}: `command` and `args` must be plain text, with no control characters, at most {ACP_VALUE_MAX_BYTES} bytes each"
+        );
+        for (key, value) in &agent.env {
+            let named = key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            anyhow::ensure!(named, "{place}: `env` has a name that is not a variable name (letters, digits and `_`)");
+            anyhow::ensure!(plain(value), "{place}: `env.{key}` must be plain text, with no control characters");
+        }
+        anyhow::ensure!(
+            !agents[..i].iter().any(|other| other.acp && other.name == *name),
+            "{place}: another `[[agents]]` entry with `acp = true` is already named {name}"
+        );
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -988,6 +1059,53 @@ mod tests {
         Preset, Quick, Recipe, Restore, Rounding, Sessions, Snapshots, Ui, Worktree, same_path,
         size_cells, validate_checks, validate_cursor, validate_sessions,
     };
+
+    fn agents_problem(entry: &str) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct File {
+            agents: Vec<AgentDef>,
+        }
+        let file: File = toml::from_str(&format!("[[agents]]\n{entry}\n")).unwrap();
+        super::validate_agents(&file.agents).err().map(|e| e.to_string())
+    }
+
+    #[test]
+    fn an_acp_agent_with_a_program_passes_and_an_ordinary_entry_is_left_alone() {
+        assert_eq!(agents_problem("name = 'gemini'\nacp = true\ncommand = 'gemini'\nargs = ['--experimental-acp']\nenv = { A_1 = 'x' }"), None);
+        assert_eq!(agents_problem("name = 'goose'\nenabled = false"), None);
+    }
+
+    #[test]
+    fn an_acp_entry_that_could_not_start_what_was_written_is_refused_with_the_reason() {
+        for (entry, reason) in [
+            ("name = 'x'\nacp = true", "needs a `command`"),
+            ("name = 'x'\nacp = true\ncommand = '--acp'", "is the program alone"),
+            ("name = 'claude'\nacp = true\ncommand = 'claude'", "has its own chat support"),
+            ("name = 'My Agent'\nacp = true\ncommand = 'x'", "needs a `name` of lowercase"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nargs = [\"a\\nb\"]", "no control characters"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { '1A' = 'v' }", "not a variable name"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { A = \"a\\u0007\" }", "`env.A` must be plain text"),
+            ("name = 'x'\ncommand = 'x'", "only for an agent with `acp = true`"),
+            ("name = 'x'\nargs = ['a']", "only for an agent with `acp = true`"),
+        ] {
+            let problem = agents_problem(entry).unwrap_or_default();
+            assert!(problem.contains(reason), "{entry}: {problem}");
+        }
+    }
+
+    #[test]
+    fn two_acp_agents_of_one_name_are_refused() {
+        let problem = agents_problem("name = 'x'\nacp = true\ncommand = 'a'\n[[agents]]\nname = 'x'\nacp = true\ncommand = 'b'").unwrap();
+
+        assert!(problem.contains("already named x"), "{problem}");
+    }
+
+    #[test]
+    fn an_entry_written_back_carries_no_acp_keys_it_never_had() {
+        let written = toml::to_string(&AgentDef { name: "goose".into(), ..AgentDef::default() }).unwrap();
+
+        assert!(!written.contains("acp") && !written.contains("command") && !written.contains("env"), "{written}");
+    }
 
     #[test]
     fn display_detection_and_alert_settings_keep_their_defaults_and_serde_shape() {

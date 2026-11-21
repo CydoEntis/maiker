@@ -860,6 +860,11 @@ The agent runs with the user's permissions, so the window's start path is narrow
   repository and a valid branch name (`branch_agent::branch_problem`), and the worktree is made by the daemon
   (`create_trusted_worktree`: the trust copy and the repo's allowed setup hook only). The window never builds a
   path or runs git. A start for another machine is refused in the window.
+- **An ACP agent's program** comes only from the user's own config (`[[agents]]` with `acp = true`;
+  [ENVIRONMENT](ENVIRONMENT.md#project-specific-agents-run-over-acp)), never from a client's message or a
+  repository. It is the program alone with its arguments as a list, so nothing passes through a shell, and its
+  `env` can neither set this app's identity variables nor be logged. What such an agent may ask of the daemon is in
+  [stack/acp.md](stack/acp.md).
 - **Status** comes only from the daemon's events for the current generation; a superseded generation's command
   changes nothing.
 - **User-input answers** (including a question marked secret) are relayed once, typed hidden, and never recorded

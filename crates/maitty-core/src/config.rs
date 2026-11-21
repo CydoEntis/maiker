@@ -13,7 +13,7 @@ pub use maitty_settings::config::{
     Quick, QuickAgent, Recipe,
     Restore, Rounding, SIDEBAR_TABS, SIZES, SPINNERS, Sessions, Snapshots, Ui, Worktree, same_path,
     size_cells, validate_check, validate_checks, validate_cursor, validate_machines,
-    bypass_agents, validate_sessions,
+    bypass_agents, validate_agents, validate_sessions,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -314,6 +314,7 @@ pub fn agent_from_command(program: &str, args: &[String]) -> Option<AgentDef> {
         resume_last: None,
         enabled: None,
         bypass_flag: None,
+        ..AgentDef::default()
     })
 }
 
@@ -537,6 +538,7 @@ fn agent(
         resume_last: None,
         enabled: None,
         bypass_flag: None,
+        ..AgentDef::default()
     }
 }
 
@@ -1080,6 +1082,8 @@ impl Config {
         cfg.ui.fold_legacy_sizes();
         validate_spinner(&cfg.ui.spinner)?;
         validate_checks(&cfg.check)?;
+        validate_agents(&cfg.agents)?;
+        refuse_identity_env(&cfg.agents)?;
         validate_machines(&cfg.machines)?;
         validate_sessions(&cfg.sessions)?;
         validate_cursor(&cfg.ui)?;
@@ -1387,6 +1391,27 @@ impl Config {
         }
     }
 
+    /// The agents that can be run as a chat over ACP, as the config names them. A disabled entry
+    /// is not one.
+    pub fn acp_agents(&self) -> Vec<AcpAgent> {
+        self.agents
+            .iter()
+            .filter(|agent| agent.acp && agent.enabled != Some(false))
+            .filter_map(|agent| {
+                Some(AcpAgent {
+                    name: agent.name.clone(),
+                    command: agent.command.clone()?,
+                    args: agent.args.clone(),
+                    env: agent.env.clone(),
+                })
+            })
+            .collect()
+    }
+
+    pub fn acp_agent(&self, name: &str) -> Option<AcpAgent> {
+        self.acp_agents().into_iter().find(|agent| agent.name == name)
+    }
+
     pub fn agent_defs(&self) -> Vec<CompiledAgent> {
         let mut defs: Vec<AgentDef> = if self.agents_replace_defaults {
             Vec::new()
@@ -1455,6 +1480,28 @@ impl Config {
             })
             .collect()
     }
+}
+
+/// The daemon's own identity is never a provider's to hold, so an ACP agent cannot be given it.
+fn refuse_identity_env(agents: &[AgentDef]) -> Result<()> {
+    for agent in agents.iter().filter(|agent| agent.acp) {
+        anyhow::ensure!(
+            !agent.env.keys().any(|name| crate::ipc::is_identity_env(name)),
+            "[[agents]] ({}): `env` sets a variable that is this app's own",
+            agent.name
+        );
+    }
+    Ok(())
+}
+
+/// An agent run as a chat over ACP: the program, its arguments and the variables set for it.
+/// `env` can hold credentials, so it is never logged.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AcpAgent {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -2870,6 +2917,41 @@ alt_arrows = true").unwrap();
         assert!(c.started_bypassed("claude", once));
         assert!(!c.started_bypassed("claude", "claude 'go'"));
         assert!(!c.started_bypassed("codex", once), "another agent's flag says nothing");
+    }
+
+    #[test]
+    fn an_acp_agent_is_read_with_its_program_arguments_and_variables_unless_disabled() {
+        let c: Config = toml::from_str(
+            "[[agents]]\nname = \"gemini\"\nacp = true\ncommand = \"gemini\"\nargs = [\"--experimental-acp\"]\nenv = { GEMINI_SANDBOX = \"false\" }\n\n[[agents]]\nname = \"opencode\"\nacp = true\ncommand = \"opencode\"\nargs = [\"acp\"]\nenabled = false\n",
+        )
+        .unwrap();
+
+        let agents = c.acp_agents();
+
+        assert_eq!(agents.len(), 1);
+        assert_eq!((agents[0].name.as_str(), agents[0].command.as_str()), ("gemini", "gemini"));
+        assert_eq!(agents[0].args, ["--experimental-acp"]);
+        assert_eq!(agents[0].env.get("GEMINI_SANDBOX").map(String::as_str), Some("false"));
+        assert!(c.acp_agent("opencode").is_none() && c.acp_agent("claude").is_none());
+        assert!(c.agent_defs().iter().any(|agent| agent.name == "gemini"), "it is still detected in a terminal");
+    }
+
+    #[test]
+    fn an_acp_agent_cannot_be_given_this_apps_own_identity() {
+        let with = |name: &str| {
+            let c: Config = toml::from_str(&format!(
+                "[[agents]]\nname = \"x\"\nacp = true\ncommand = \"x\"\nenv = {{ {name} = \"1\" }}\n"
+            ))
+            .unwrap();
+            refuse_identity_env(&c.agents).map_err(|e| e.to_string())
+        };
+
+        let own = crate::ipc::identity_env().remove(0);
+
+        let refused = with(&own).unwrap_err();
+
+        assert!(refused.contains("this app's own"), "{refused}");
+        assert!(with("MY_KEY").is_ok());
     }
 
     #[test]

@@ -352,6 +352,26 @@ removes the alias spelling of the same key, so the file keeps loading. A value o
 table is refused before the file is opened. A key set in `config.local.toml` still overrides
 what is written to `config.toml`.
 
+## Project-specific: agents run over ACP
+
+An `[[agents]]` entry with `acp = true` names an agent that can be run as a chat over the Agent
+Client Protocol ([stack/acp.md](stack/acp.md)). The keys are read when the config loads
+(`validate_agents`), and a bad entry refuses the whole file with a message that names the entry
+and the reason. The daemon does not start such an agent yet.
+
+| Key | Meaning and checks |
+| --- | --- |
+| `name` | the agent's name: lowercase letters, digits, `-` or `_`, at most 32. Not `claude` or `codex`, which have their own chat support. Two ACP entries may not share a name |
+| `acp` | `true` to offer the agent as an ACP chat |
+| `command` | the program to run, alone. Required; not empty; does not start with `-` (flags go in `args`) |
+| `args` | the arguments that put the program in ACP mode, each passed as written, with no shell. At most 32 |
+| `env` | variables set for the process, over the ones it inherits. Names are letters, digits and `_`; at most 32. A name that is this app's own identity is refused. Values are never logged |
+
+`command`, `args` and `env` values are plain text: no control characters, at most 4096 bytes
+each. `command`, `args` or `env` on an entry without `acp = true` is refused, so a missing
+`acp = true` shows. `enabled = false` switches the entry off. The entry's other keys (`process`,
+patterns, `resume`) still describe the same agent in a terminal.
+
 ## Project-specific: removed config keys
 
 Removed `[ui]` keys. `pane_colors`, `tab_gap` and `tool_rail` no longer exist: the TUI draws one accent focus border,
