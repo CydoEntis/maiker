@@ -165,7 +165,7 @@ impl Daemon {
                 let state = self.conversation_states.entry(id).or_default();
                 state.status = Status::Working;
                 state.error = None;
-                let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { params: send_params(&thread, &text, &format!("{}-{generation}-{operation}", id.0), &choice) }).map_err(|e| (token, e.to_string()));
+                let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { session: thread, text, message: format!("{}-{generation}-{operation}", id.0), choice }).map_err(|e| (token, e.to_string()));
                 if sent.is_ok() {
                     self.snapshot_conversation_turn(id, "before");
                 }

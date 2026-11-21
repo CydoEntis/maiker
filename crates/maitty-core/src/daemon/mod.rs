@@ -39,6 +39,7 @@ mod persist;
 mod pr;
 #[cfg(unix)]
 mod provider_groups;
+mod providers;
 mod reopen;
 mod pull_request;
 mod repeats;

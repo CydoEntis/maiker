@@ -72,19 +72,19 @@ impl Daemon {
         if !approval.choices.contains(&decision) {
             bail!("That decision is not available for this provider request");
         }
-        let response = if approval.kind == crate::conversation::ApprovalRequestKind::Permission {
-            maitty_provider_codex::requests::permission_response(decision, approval.permissions.as_ref())?
+        let permissions = if approval.kind == crate::conversation::ApprovalRequestKind::Permission {
+            // A permission is granted as the profile it asked for, so there must be one.
+            Some(approval.permissions.clone().ok_or_else(|| {
+                anyhow::anyhow!("Permission request has no requested profile")
+            })?)
         } else {
-            maitty_provider_codex::requests::decision_response(decision)
+            None
         };
         self.conversation_runtimes.request(
             id,
             generation,
             0,
-            Rpc::Answer {
-                request_id: request_id.clone().into(),
-                response,
-            },
+            Rpc::Answer { request: request_id.clone(), decision, permissions },
         )?;
         if let Some(state) = self.conversation_states.get_mut(&id) {
             state.command_hashes.remove(&request_id);
@@ -292,10 +292,7 @@ impl Daemon {
             id,
             generation,
             0,
-            Rpc::Answer {
-                request_id: request_id.clone().into(),
-                response: maitty_provider_codex::requests::user_input_response(answers),
-            },
+            Rpc::AnswerInput { request: request_id.clone(), answers },
         )?;
         if let Some(state) = self.conversation_states.get_mut(&id) {
             state.approvals.remove(&request_id);

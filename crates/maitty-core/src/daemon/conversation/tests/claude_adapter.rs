@@ -41,7 +41,7 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     requests
         .send(super::runtime::Command {
             token: 1,
-            request: super::super::runtime::Rpc::Start { params: json!({}) },
+            request: claude_open(),
         })
         .await
         .unwrap();
@@ -56,7 +56,7 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     requests
         .send(super::runtime::Command {
             token: 2,
-            request: super::super::runtime::Rpc::Turns { params: json!({}) },
+            request: super::super::runtime::Rpc::ReadHistory { session: "fixture-session".into(), cursor: None, limit: 8 },
         })
         .await
         .unwrap();
@@ -71,12 +71,7 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -137,7 +132,7 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     drop(directory);
 }
 
-async fn exercise_claude_approval(scenario: &str, decision: &str) {
+async fn exercise_claude_approval(scenario: &str, decision: ApprovalDecision) {
     let directory = crate::daemon::persist::scratch_dir();
     let (launch, owner) = claude_launch(directory.path(), Some(scenario));
     let (task, stop, requests, mut received) = start_claude_adapter(launch, owner).await;
@@ -145,12 +140,7 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -194,10 +184,7 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
     requests
         .send(super::runtime::Command {
             token: 4,
-            request: super::super::runtime::Rpc::Answer {
-                request_id: id,
-                response: json!({"decision":decision}),
-            },
+            request: super::super::runtime::Rpc::Answer { request: id.into(), decision, permissions: None },
         })
         .await
         .unwrap();
@@ -211,7 +198,7 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
 
 #[tokio::test]
 async fn claude_adapter_allows_a_host_approved_tool() {
-    exercise_claude_approval("approval", "accept").await;
+    exercise_claude_approval("approval", ApprovalDecision::Accept).await;
 }
 
 #[test]
@@ -262,12 +249,7 @@ async fn claude_edit_call_and_approval_carry_input_diff_and_a_link_to_the_tool_s
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -284,8 +266,9 @@ async fn claude_edit_call_and_approval_carry_input_diff_and_a_link_to_the_tool_s
                     .send(super::runtime::Command {
                         token: 4,
                         request: super::super::runtime::Rpc::Answer {
-                            request_id: id,
-                            response: json!({"decision":"accept"}),
+                            request: id.into(),
+                            decision: ApprovalDecision::Accept,
+                            permissions: None,
                         },
                     })
                     .await
@@ -354,12 +337,7 @@ async fn claude_write_of_a_secret_file_and_an_echoed_token_are_masked_in_history
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -376,8 +354,9 @@ async fn claude_write_of_a_secret_file_and_an_echoed_token_are_masked_in_history
                     .send(super::runtime::Command {
                         token: 4,
                         request: super::super::runtime::Rpc::Answer {
-                            request_id: id,
-                            response: json!({"decision":"accept"}),
+                            request: id.into(),
+                            decision: ApprovalDecision::Accept,
+                            permissions: None,
                         },
                     })
                     .await
@@ -425,7 +404,7 @@ async fn claude_write_of_a_secret_file_and_an_echoed_token_are_masked_in_history
 
 #[tokio::test]
 async fn claude_adapter_denies_a_host_declined_tool() {
-    exercise_claude_approval("approval-decline", "decline").await;
+    exercise_claude_approval("approval-decline", ApprovalDecision::Decline).await;
 }
 
 #[tokio::test]
@@ -437,12 +416,7 @@ async fn a_late_claude_init_naming_another_session_ends_the_turn() {
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -467,12 +441,7 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     requests
         .send(super::runtime::Command {
             token: 3,
-            request: super::super::runtime::Rpc::Send {
-                params: json!({
-                    "threadId":"fixture-session",
-                    "input":[{"type":"text","text":"hello fake Claude"}]
-                }),
-            },
+            request: claude_message(Default::default()),
         })
         .await
         .unwrap();
@@ -499,9 +468,7 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     requests
         .send(super::runtime::Command {
             token: 4,
-            request: super::super::runtime::Rpc::Interrupt {
-                params: json!({"threadId":"fixture-session","turnId":turn_id}),
-            },
+            request: super::super::runtime::Rpc::Interrupt { session: "fixture-session".into(), turn: turn_id },
         })
         .await
         .unwrap();

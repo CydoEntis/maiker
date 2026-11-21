@@ -245,7 +245,7 @@ impl crate::daemon::Daemon {
             if !self.shown_to(follower.term, self.surface_of(client)) {
                 return Err(no_such());
             }
-            if follower.provider != crate::conversation::Provider::Claude {
+            if !crate::daemon::providers::adapter(follower.provider).side_questions {
                 return Err(SideAnswer::NotSupported);
             }
             let (session, transcript, model) = follower.side_parts();
@@ -260,7 +260,7 @@ impl crate::daemon::Daemon {
             });
         }
         let record = self.conversations.iter().find(|c| c.id == id).ok_or_else(no_such)?;
-        if record.binding.provider != crate::conversation::Provider::Claude {
+        if !crate::daemon::providers::adapter(record.binding.provider).side_questions {
             return Err(SideAnswer::NotSupported);
         }
         checked(Target {

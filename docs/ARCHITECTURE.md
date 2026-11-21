@@ -272,10 +272,20 @@ and events it exchanges with the daemon. It also holds what every adapter needs 
 provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
 (`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
 contract from the open connection on, and `ClaudeDialect` (`maitty-provider-claude/src/dialect.rs`)
-implements it whole. The daemon does not run dialects yet (MAITTY-485): it calls the Codex
-crate's functions directly, and its Claude loop hands it the same typed events the dialect
-emits. Both reach one place in the daemon (`conversation_reported`, `conversation_asked`), so
-a turn's status and history are decided the same way for every provider.
+implements it whole. Both providers' events reach one place in the daemon
+(`conversation_reported`, `conversation_asked`), so a turn's status and history are decided the
+same way for every provider.
+
+The daemon names a provider in one file, `daemon/providers.rs`: an `Adapter` per agent holds
+everything that differs (whether and how its chat runs, where its saved history is read from,
+its transcript format and naming, its command list, side questions). Code elsewhere reads a
+field and never compares a `Provider`; a new agent is a new entry. The daemon's commands to a
+provider (`runtime::Rpc`) are in no provider's words. `conversation/dialect_runtime.rs` runs any
+`ProviderDialect`: it owns the process and pipes and carries out the dialect's steps. Codex and
+Claude still run in their own loops (`runtime.rs`, `claude.rs`), which hold what the generic
+runner has not learned: Codex's handshake and version checks, and Claude's process started ahead
+of the next message. No registered agent uses the generic runner yet, so it is built only for
+its tests, where a made-up third dialect runs a turn through it.
 JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.
 Completing the package split is tracked by

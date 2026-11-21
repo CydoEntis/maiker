@@ -201,3 +201,29 @@ pub fn started_turn(value: &Value) -> Result<String> {
     }
     Ok(turn_id)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_picked_model_and_effort_ride_on_the_codex_turn_start_and_nothing_else_changes() {
+        let plain = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default());
+        assert!(plain.get("model").is_none() && plain.get("effort").is_none());
+        let picked = turn_start_params(
+            "thread",
+            "hi",
+            "1-1-1",
+            &TurnChoice { model: Some("gpt-x".into()), effort: Some("high".into()) },
+        );
+        assert_eq!(picked["model"], "gpt-x");
+        assert_eq!(picked["effort"], "high");
+        // Permissions are set when the thread starts and are not part of a turn's parameters.
+        for key in ["approvalPolicy", "sandbox", "sandboxPolicy", "cwd"] {
+            assert!(picked.get(key).is_none(), "{key}");
+        }
+        let mut stripped = picked.clone();
+        stripped.as_object_mut().unwrap().retain(|key, _| key != "model" && key != "effort");
+        assert_eq!(stripped, plain);
+    }
+}

@@ -18,14 +18,7 @@ impl Daemon {
         else {
             return Ok(());
         };
-        let rpc = match expected {
-            Some(thread) => Rpc::Resume {
-                params: maitty_provider_codex::requests::thread_resume_params(settings, thread),
-            },
-            None => Rpc::Start {
-                params: maitty_provider_codex::requests::thread_start_params(settings),
-            },
-        };
+        let rpc = Rpc::Open { settings: Box::new(settings.clone()), session: expected.clone() };
         self.conversation_runtimes
             .request(id, *generation, token, rpc)
     }
@@ -336,11 +329,6 @@ impl Daemon {
                     Some(Value::String(cursor))
                         if !cursor.is_empty() && cursors.insert(cursor.clone()) =>
                     {
-                        let params = maitty_provider_codex::requests::turns_list_params(
-                            &thread,
-                            Some(cursor),
-                            history::MAX_READ_ENTRIES,
-                        );
                         self.conversation_requests.insert(
                             token,
                             Pending::Hydration {
@@ -358,7 +346,11 @@ impl Daemon {
                             id,
                             generation,
                             token,
-                            Rpc::Turns { params },
+                            Rpc::ReadHistory {
+                                session: thread,
+                                cursor: Some(cursor.clone()),
+                                limit: history::MAX_READ_ENTRIES,
+                            },
                         )?;
                     }
                     None | Some(Value::Null) => {

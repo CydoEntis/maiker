@@ -382,9 +382,7 @@ impl Daemon {
                     anyhow::anyhow!("The running turn is not identified yet; try again in a moment")
                 })?;
             let text = self.conversation_queues[&id][position].text.clone();
-            let mut request =
-                maitty_provider_codex::turn_steer_request(0, &thread, &turn_id, &text);
-            let params = request["params"].take();
+            let steered_turn = turn_id.clone();
             let token = self.conversation_token(Pending::Steering {
                 client,
                 id,
@@ -394,7 +392,12 @@ impl Daemon {
             })?;
             if let Err(error) =
                 self.conversation_runtimes
-                    .request(id, generation, token, Rpc::Steer { params })
+                    .request(
+                        id,
+                        generation,
+                        token,
+                        Rpc::Steer { session: thread, turn: steered_turn, text },
+                    )
             {
                 self.conversation_requests.remove(&token);
                 return Err(error);

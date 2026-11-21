@@ -147,11 +147,7 @@ impl Followed {
 }
 
 fn format_of(provider: Provider) -> Format {
-    match provider {
-        Provider::Claude => Format::Claude,
-        Provider::Codex => Format::Codex,
-        Provider::Gemini => Format::Gemini,
-    }
+    crate::daemon::providers::adapter(provider).transcript
 }
 
 fn provider_of(agent: Option<&str>) -> Option<Provider> {
@@ -230,8 +226,8 @@ impl Daemon {
             .filter_map(|t| {
                 let provider = provider_of(t.agent.as_deref())?;
                 let session = t.session.clone().filter(|s| !s.trim().is_empty())?;
-                // Claude's and Gemini's hooks name the file; without it the daemon would have to guess.
-                (provider == Provider::Codex || t.transcript.is_some())
+                // Where hooks name the file, the daemon would have to guess without it.
+                (crate::daemon::providers::adapter(provider).find_transcript.is_some() || t.transcript.is_some())
                     .then_some((t.id, provider, session))
             })
             .collect()
@@ -593,7 +589,8 @@ fn resolve_path(
 ) -> Result<PathBuf, ReadFailure> {
     match hint.map(|path| checked_path(path, provider, session, home)) {
         Some(Ok(path)) => Ok(path),
-        Some(Err(failure)) if provider != Provider::Codex => Err(failure),
+        // A file the hooks named is the only one that may be read; it is never looked for.
+        Some(Err(failure)) if crate::daemon::providers::adapter(provider).find_transcript.is_none() => Err(failure),
         _ => checked_path(&find().ok_or(ReadFailure::NotFound)?, provider, session, home),
     }
 }
@@ -678,19 +675,16 @@ fn read_new(
     })
 }
 
-/// How much of a Gemini session id its transcript file name carries.
-const GEMINI_ID_CHARS: usize = 8;
-
 /// The user's home folder, the only place a followed transcript may be read from.
 pub(in crate::daemon) fn user_home() -> Option<PathBuf> {
     directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf())
 }
 
-/// A Codex rollout file for a session id, found among its recent session files.
+/// A session's transcript found by its id, for an agent whose hooks do not name the file.
 fn find_by_session(provider: Provider, session: &str) -> Option<PathBuf> {
-    (provider == Provider::Codex)
-        .then(|| crate::daemon::usage::codex_file_for(session))
-        .flatten()
+    crate::daemon::providers::adapter(provider)
+        .find_transcript
+        .and_then(|find| find(session))
 }
 
 /// The real path of `path` if it may be read as `session`'s transcript, else why not.
@@ -722,17 +716,8 @@ pub(super) fn checked_path(
     let stem = name
         .strip_suffix(".jsonl")
         .ok_or(ReadFailure::Refused("The transcript is not a .jsonl file"))?;
-    let named_for_session = match provider {
-        Provider::Claude => stem == session,
-        Provider::Codex => stem.starts_with("rollout-") && stem.ends_with(session),
-        // `session-<time>-<first 8 of the session id>`.
-        Provider::Gemini => {
-            stem.starts_with("session-")
-                && session
-                    .get(..GEMINI_ID_CHARS)
-                    .is_some_and(|short| stem.ends_with(short))
-        }
-    };
+    let named_for_session =
+        (crate::daemon::providers::adapter(provider).transcript_is_sessions)(stem, session);
     if !named_for_session {
         return Err(ReadFailure::Refused("The transcript is not this session's"));
     }

@@ -53,17 +53,8 @@ async fn wait_for(executable: &Path, kind: &str, count: usize) -> Vec<u32> {
 }
 
 fn message(token: u64, model: Option<&str>) -> super::runtime::Command {
-    let mut params = json!({
-        "threadId":"fixture-session",
-        "input":[{"type":"text","text":"hello fake Claude"}]
-    });
-    if let Some(model) = model {
-        params["model"] = json!(model);
-    }
-    super::runtime::Command {
-        token,
-        request: super::runtime::Rpc::Send { params },
-    }
+    let choice = crate::conversation::TurnChoice { model: model.map(str::to_owned), effort: None };
+    super::runtime::Command { token, request: claude_message(choice) }
 }
 
 /// Reads the turn's events up to its end, and gives its id.
@@ -157,7 +148,8 @@ async fn interrupt(
         .send(super::runtime::Command {
             token: 4,
             request: super::runtime::Rpc::Interrupt {
-                params: json!({"threadId":"fixture-session","turnId":turn}),
+                session: "fixture-session".into(),
+                turn: turn.expect("the turn started"),
             },
         })
         .await
