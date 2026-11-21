@@ -12,7 +12,7 @@ const CLOSE_REFUSED_TOAST = 'close-project-refused'
 export type ProjectActions = {
   /** Opens the new-chat draft on `machine`, its folder set to the project's. */
   onNewSession: (machine: number, project: OpenedProject) => void
-  /** Opens the New worktree dialog off `from`, a session of this computer in the project's repository (`worktreeSourceOf`). */
+  /** Opens the New worktree dialog off `from`, a session in the project's repository on the project's machine (`worktreeSourceOf`). */
   onNewWorktree: (from: SessionView) => void
   /** Opens the Open worktree dialog: the project's linked worktrees, to start a session in one. `name` is the heading's. */
   onOpenWorktree: (machine: number, project: OpenedProject, name: string) => void

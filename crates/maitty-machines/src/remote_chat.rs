@@ -61,6 +61,18 @@ pub fn vet_worktree_reply(reply: Reply) -> Result<Reply, String> {
     if plain { Ok(Reply::Text(folder)) } else { Err("its folder is not a plain absolute path".into()) }
 }
 
+/// What another machine's daemon may answer while a worktree is made off one of its panes
+/// (`Command::NewWorktree`, from a project heading): its list, cleaned like a snapshot, which is read
+/// only for the workspace that holds the pane, then the acknowledgement that the worktree was made
+/// and its session opened. That session reaches the window as the machine's own list does.
+pub fn vet_new_worktree_reply(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::List(snapshot) => crate::remote_snapshot::sanitize_snapshot(snapshot).map(Reply::List).map_err(String::from),
+        Reply::Ok => Ok(Reply::Ok),
+        _ => Err("it is not a session list or a worktree made".into()),
+    }
+}
+
 /// `text` cut to at most `max` bytes, on a character boundary.
 fn cut_to(mut text: String, max: usize) -> String {
     let mut end = max.min(text.len());
@@ -147,6 +159,18 @@ mod tests {
         }
         assert!(folder(&format!("/{}", "a".repeat(5000))).is_err());
         assert!(vet_worktree_reply(Reply::Ok).is_err());
+    }
+
+    #[test]
+    fn a_worktree_made_off_a_pane_of_another_machine_takes_only_its_list_cleaned_and_an_acknowledgement() {
+        use maitty_shared::protocol::Snapshot;
+        assert!(matches!(vet_new_worktree_reply(Reply::Ok), Ok(Reply::Ok)));
+        let listed = Snapshot { daemon_version: "0.81\x1b[2J".into(), ..Snapshot::default() };
+        let Ok(Reply::List(cleaned)) = vet_new_worktree_reply(Reply::List(listed)) else { panic!("a list passes") };
+        assert!(!cleaned.daemon_version.contains('\x1b'), "{}", cleaned.daemon_version);
+        for other in [Reply::Text("/home/me/.maitty/worktrees/app/x".into()), Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }] {
+            assert!(vet_new_worktree_reply(other).is_err(), "only a list or an acknowledgement");
+        }
     }
 
     #[test]

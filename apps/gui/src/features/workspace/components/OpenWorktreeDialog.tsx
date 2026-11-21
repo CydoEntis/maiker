@@ -1,5 +1,6 @@
 import { useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { messageOf } from '@/features/inspect/useRepoQuery'
 import type { OpenedProject } from '../model/openedProjects'
@@ -13,6 +14,8 @@ import { windowRoot } from './windowRoot'
 /** The worktree mark's size in a row, beside its 13.5px name. */
 const ROW_ICON_PX = 16
 const MISSING_TIP = 'Its folder is gone. New worktree… lists it under Other worktrees, to make again or to remove.'
+/** Another machine's worktrees are not made again or removed from here, so its tip says only what is wrong. */
+const MISSING_THERE_TIP = 'Its folder is gone.'
 
 type Props = {
   /** The machine the project is on, and the project: a git repository's main checkout. */
@@ -38,7 +41,7 @@ function stateWords(choice: WorktreeChoice): string {
   return `In use by ${rowTitle(choice.session)}${more} · Show`
 }
 
-function Row({ choice, onStart, onShow }: { choice: WorktreeChoice } & Pick<Props, 'onStart' | 'onShow'>) {
+function Row({ choice, missingTip, onStart, onShow }: { choice: WorktreeChoice; missingTip: string } & Pick<Props, 'onStart' | 'onShow'>) {
   const missing = choice.kind === 'missing'
   const pick = () => {
     if (choice.kind === 'running') onShow(choice.session.id)
@@ -47,7 +50,7 @@ function Row({ choice, onStart, onShow }: { choice: WorktreeChoice } & Pick<Prop
   return (
     <li>
       {/* aria-disabled rather than disabled: a missing worktree stays reachable by Tab, so its tooltip says why. */}
-      <button type="button" className="mx-recent-row" aria-disabled={missing} title={missing ? MISSING_TIP : choice.worktree.path} onClick={pick}>
+      <button type="button" className="mx-recent-row" aria-disabled={missing} title={missing ? missingTip : choice.worktree.path} onClick={pick}>
         <Icon name="worktree" size={ROW_ICON_PX} />
         <span className="mx-recent-text">
           <span className="mx-recent-title">{choice.name}</span>
@@ -90,7 +93,7 @@ export function OpenWorktreeDialog({ machine, project, name, sessions, onNewWork
     if (choices.length === 0) return <NoneYet name={name} canMake={onNewWorktree !== null} />
     return (
       <ul className="mx-recent-list" aria-label={`Worktrees of ${name}`}>
-        {choices.map((choice) => <Row key={choice.worktree.path} choice={choice} onStart={onStart} onShow={onShow} />)}
+        {choices.map((choice) => <Row key={choice.worktree.path} choice={choice} missingTip={machine === LOCAL_MACHINE ? MISSING_TIP : MISSING_THERE_TIP} onStart={onStart} onShow={onShow} />)}
       </ul>
     )
   }

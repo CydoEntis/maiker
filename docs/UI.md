@@ -380,14 +380,18 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    open, in any spelling, selects that project and adds nothing.
    A project heading's buttons and right-click menu (`components/projectMenu.ts`, `ProjectHeadActions`; the ⋯ button opens
    the menu from the keyboard) offer **New session** (the new-chat draft on the project's machine with its folder), **New
-   worktree…**, **Open worktree…** (menu only) and **Close project**. New worktree opens the New worktree dialog off a session of this computer in the
+   worktree…**, **Open worktree…** (menu only) and **Close project**. New worktree opens the New worktree dialog off a live session in the
    project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
-   from a session's terminal: a remote project, a plain folder and a git project with no session of this computer have
-   none. Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
+   from a session's terminal: a plain folder and a git project with no live session have none. On another machine the
+   project's machine makes it: the dialog lists that machine's branches and worktrees by the repository's folder
+   (`loadFolderBranches`, since a remote pane's repository questions are not asked), shows no existing-worktrees section
+   (removing and merging stay this computer's), and the host sends the request to that machine's daemon; a machine that
+   is down or needs an update is refused by name (`<machine> is not connected`) under the field, and nothing is made.
+   Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
    (`useProjectActions`). Close project is `useOpenedProjects().close`: while a listed session is in the project (put-away
    ones too) it is refused and a toast names the sessions in the way; ended sessions are never in the sidebar's list, so a
    closed project is not opened again by one. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
-   `model/projectWorktrees.ts`) is offered on a project of this computer unless its sessions show it is a plain folder
+   `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through
    `loadFolderBranches`), and since git's listing does not say a worktree's folder was deleted, each folder is looked for
@@ -395,8 +399,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    draft in its folder on the project's machine; one a session of that machine runs in (its checkout is the worktree, or its
    folder is inside it when the daemon gave no checkout, compared as `samePath`/`inFolder` compare, put-away sessions
    included) says so and shows that session instead. An empty list says so and offers New worktree… when the project has a
-   session to make it from, else says to start one first. The code takes the machine throughout; only `offersOpenWorktree`
-   keeps it to this computer. The sidebar draws `machines` as its tree (item 2) and
+   session to make it from, else says to start one first. A missing worktree on another machine says only that its folder
+   is gone, since remaking it is this computer's only. The sidebar draws `machines` as its tree (item 2) and
    unfolds and marks `selected`.
 
 ## Project-specific: usage and cost page (desktop)

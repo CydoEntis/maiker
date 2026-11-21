@@ -103,7 +103,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
 
   const createWorktree = useCallback(async (from: SessionView, branch: string, base: string | null) => {
     const known = new Set(sessions.map((session) => session.id))
-    await newWorktreeSession(from.pane, branch, base)
+    await newWorktreeSession(from.pane, branch, base, from.machine)
     const id = await newSessionSince(known)
     setWorktreeFrom(null)
     if (id) movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })

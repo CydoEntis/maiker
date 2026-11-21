@@ -782,10 +782,17 @@ typed is the agent's own resume template with the entry's conversation id, which
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
 follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
 command is a worktree command, so a window sends it to this computer's daemon only (API_PATTERNS
-"client routing"; remote worktree management is out of scope, ADR 0007). `BranchWorktree` is the one
-exception: the desktop app asks another machine's daemon to make a new chat's worktree in its own
-checkout, and takes back only the folder, one plain absolute path (`remote_chat::vet_worktree_reply`),
-which becomes the folder a session starts in there. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+"client routing"; remote worktree management is out of scope, ADR 0007). Two requests make a worktree
+on another machine, and nothing else manages one there. `BranchWorktree`: the desktop app asks that machine's
+daemon to make a new chat's worktree in its own checkout, and takes back only the folder, one plain absolute
+path (`remote_chat::vet_worktree_reply`), which becomes the folder a session starts in there.
+`NewWorktree` off a pane (a project heading's New worktree, `new_worktree_session`): the host asks that
+daemon for its `List`, reads only the workspace holding the pane, and sends `NewWorktree` with no command,
+agent, split or `from`, so the daemon decides the folder from its own workspace and starts there what its
+own `[worktree] command` (else its shell) says; it takes back only that `List`, cleaned like a snapshot, and `Ok` (`remote_chat::vet_new_worktree_reply`),
+and the new session arrives in that machine's list like any other. Both need the remote daemon's own
+`Start` grant, and a machine that takes no requests (down, needing an update or turned away) is refused
+before anything is sent. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
 
 ## Project-specific: followed transcripts
 

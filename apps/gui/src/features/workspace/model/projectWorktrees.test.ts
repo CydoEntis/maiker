@@ -59,8 +59,12 @@ describe('where Open worktree is offered', () => {
     expect(offersOpenWorktree(SHOP, [])).toBe(true)
   })
 
-  it('is not on a plain folder or on another machine', () => {
+  it('is not on a plain folder', () => {
     expect(offersOpenWorktree({ machineName: null, folder: '/home/me/notes' }, [session(1, 'Notes', '/home/me/notes', { repo: null })])).toBe(false)
-    expect(offersOpenWorktree({ machineName: 'devbox', folder: '/srv/api' }, [])).toBe(false)
+  })
+
+  it('is on another machine\'s project too, whose own daemon lists its worktrees', () => {
+    expect(offersOpenWorktree({ machineName: 'devbox', folder: '/srv/api' }, [])).toBe(true)
+    expect(offersOpenWorktree({ machineName: 'devbox', folder: '/srv/notes' }, [session(1, 'Notes', '/srv/notes', { repo: null, machine: 4, machineName: 'devbox' })])).toBe(false)
   })
 })

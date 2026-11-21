@@ -793,6 +793,8 @@ async fn remove_worktrees(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// A worktree on `branch` made off pane `term` by the daemon that owns the pane, which opens a session in it: this
+/// computer's when `machine` is absent, else that machine's, so a project heading's New worktree works there too.
 #[tauri::command]
 async fn new_worktree_session(
     app: tauri::AppHandle,
@@ -802,8 +804,8 @@ async fn new_worktree_session(
     branch: String,
     base: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "Worktrees")?;
-    maitty_desktop_client::new_worktree_session(term, branch, base, daemon_executable(&app)?)
+    let daemon = wire.new_worktree_daemon(machine, || daemon_executable(&app))?;
+    maitty_desktop_client::new_worktree_session(term, branch, base, daemon)
         .await
         .map_err(|error| format!("{error:#}"))
 }

@@ -1197,14 +1197,16 @@ pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest
 
 /// `git worktree add` for `branch` next to the repository `term` is in (new from `base`, or the
 /// repo's HEAD); the daemon opens it as a new session. `branch` names an existing branch to
-/// check it out instead.
+/// check it out instead. `daemon` is the one that owns the pane: this computer's, or another
+/// machine's, whose list is asked of it for the pane's workspace.
 pub async fn new_worktree_session(
     term: u32,
     branch: String,
     base: Option<String>,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
-    let snapshot = match request(ClientMsg::Query(Query::List), daemon_executable.clone()).await? {
+    let daemon = daemon.into();
+    let snapshot = match request(ClientMsg::Query(Query::List), daemon.clone()).await? {
         Reply::List(snapshot) => snapshot,
         _ => bail!("The Maiker service gave an answer this app does not understand (session list). Restart the service in Settings, or update the app so both are the same version."),
     };
@@ -1230,7 +1232,7 @@ pub async fn new_worktree_session(
             agent: None,
             prompt: None,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {

@@ -1,5 +1,8 @@
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { loadFolderBranches, localBranches } from '@/api/folderGit'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
@@ -18,12 +21,30 @@ const CURRENT_COMMIT = 'the current commit'
 const CURRENT_COMMIT_LABEL = 'The current commit'
 const currentCommitLabel = (branch: string | undefined) => (branch === undefined ? CURRENT_COMMIT_LABEL : `${CURRENT_COMMIT_LABEL} of ${branch}`)
 
+/** The names a new worktree's branch cannot take or may start from: the repository's branches, and the ones its worktrees have out. */
+type BranchLists = { branches: string[]; worktreeBranches: string[] }
+
+/** Another machine's lists, from its own daemon by the repository's folder; a folder not in git has none. */
+async function branchListsOn(machine: number, folder: string): Promise<BranchLists> {
+  const listing = await loadFolderBranches(machine, folder)
+  if (listing === null) return { branches: [], worktreeBranches: [] }
+  return {
+    branches: localBranches(listing).map((branch) => branch.name),
+    worktreeBranches: listing.worktrees.flatMap((worktree) => (worktree.branch === null ? [] : [worktree.branch])),
+  }
+}
+
 type Props = {
   /** The daemon's pane number of the session the worktree is made from. */
   term: number
   repoName: string
-  /** The machine the session is on; worktrees are managed on this computer only. */
+  /** The machine the session is on, whose daemon makes the worktree. Other worktrees are managed on this computer only. */
   machine: number
+  /**
+   * The repository's folder on that machine. Another machine's branches are listed by folder from its own daemon, since
+   * questions about its pane's repository are not asked from here (`remote_repo::may_ask`).
+   */
+  folder?: string
   /** What the session is working on (its name or last prompt): the suggested name comes from it; empty gives a made-up two-word name. */
   task?: string
   /** The branch the session is on: "the current commit" is that branch's tip, and the menu says so. */
@@ -35,7 +56,7 @@ type Props = {
 }
 
 /** ⌘⇧N: a new branch in a folder of its own next to the repo, with a session open in it. */
-export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBranch, move, onCreate, onCancel }: Props) {
+export function NewWorktreeDialog({ term, repoName, machine, folder, task = '', fromBranch, move, onCreate, onCancel }: Props) {
   const [branch, setBranch] = useState('')
   const [touched, setTouched] = useState(false)
   const [base, setBase] = useState(CURRENT_COMMIT)
@@ -45,8 +66,14 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
   const [working, setWorking] = useState(false)
   const [moving, setMoving] = useState(false)
   const input = useRef<HTMLInputElement>(null)
-  const branches = useRepoQuery(term, ['branches'], () => repoBranches(term))
-  const worktrees = useRepoQuery(term, ['worktrees'], () => repoWorktrees(term))
+  const remote = machine !== LOCAL_MACHINE
+  const branches = useRepoQuery(term, ['branches'], () => repoBranches(term), false, !remote)
+  const worktrees = useRepoQuery(term, ['worktrees'], () => repoWorktrees(term), false, !remote)
+  const there = useQuery({ queryKey: ['new-worktree-branches', machine, folder], queryFn: () => branchListsOn(machine, folder ?? ''), enabled: remote && folder !== undefined, retry: false })
+  const here = useMemo(() => branches.data !== undefined && worktrees.data !== undefined
+    ? { branches: branches.data.map((candidate) => candidate.name), worktreeBranches: worktrees.data.map((entry) => entry.branch) }
+    : undefined, [branches.data, worktrees.data])
+  const known: BranchLists | undefined = remote ? there.data : here
 
   useEffect(() => {
     input.current?.focus()
@@ -56,9 +83,7 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
   }, [])
 
   // A name is offered once the taken ones are known, selected so typing replaces it; one you have started is left alone.
-  const taken = useMemo(() => branches.data !== undefined && worktrees.data !== undefined
-    ? [...branches.data.map((candidate) => candidate.name), ...worktrees.data.map((entry) => entry.branch)]
-    : null, [branches.data, worktrees.data])
+  const taken = useMemo(() => known === undefined ? null : [...known.branches, ...known.worktreeBranches], [known])
   const suggested = useRef(false)
   useEffect(() => {
     if (taken === null || touched || suggested.current) return
@@ -69,7 +94,7 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
   }, [taken, touched, task])
 
   const name = branch.trim()
-  const existing = branches.data?.some((candidate) => candidate.name === name) ?? false
+  const existing = known?.branches.includes(name) ?? false
   const problem = checked ? branchNameProblem(name) : null
   const shown = error ?? problem
 
@@ -119,7 +144,7 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
                       </SelectTrigger>
                       <SelectContent container={document.querySelector<HTMLElement>('.mx-app')} className="mx-wt-menu">
                         <SelectItem value={CURRENT_COMMIT} text={currentCommitLabel(fromBranch)} className="min-h-8" />
-                        {branches.data?.map((candidate) => <SelectItem key={candidate.name} value={candidate.name} text={candidate.name} className="mx-wt-branch min-h-8" />)}
+                        {known?.branches.map((candidate) => <SelectItem key={candidate} value={candidate} text={candidate} className="mx-wt-branch min-h-8" />)}
                       </SelectContent>
                     </Select>
                     <small id="mx-wt-base-hint" className="mx-wt-hint">The new branch starts from this commit.</small>
@@ -135,7 +160,8 @@ export function NewWorktreeDialog({ term, repoName, machine, task = '', fromBran
                 </div>
               )}
             </section>
-            {worktrees.data && worktrees.data.length > 1 && (
+            {/* Removing, merging and remaking a worktree are this computer's only: the host refuses them for another machine. */}
+            {!remote && worktrees.data && worktrees.data.length > 1 && (
               <WorktreeManager worktrees={worktrees.data} machine={machine} repoName={repoName} onChanged={() => { void worktrees.refetch() }} />
             )}
           </div>

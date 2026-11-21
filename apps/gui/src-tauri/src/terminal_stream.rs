@@ -292,6 +292,17 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
     }
 
+    /// Where a new worktree made off a pane goes (`new_worktree_session`, a project heading's New
+    /// worktree): the daemon that owns the pane, taking from another machine only its list, to find
+    /// the pane's workspace, and the acknowledgement that the worktree was made.
+    pub fn new_worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_new_worktree_reply)
+    }
+
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
     /// them; another machine's is asked only what `remote_repo::may_ask` allows (what changed and
     /// its diff, a folder's listing, a markdown document), and any other question is refused here

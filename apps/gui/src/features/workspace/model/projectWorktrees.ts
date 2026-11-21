@@ -15,13 +15,12 @@ export type WorktreeChoice =
   | { readonly kind: 'missing'; readonly worktree: ListedWorktree; readonly name: string }
 
 /**
- * Whether a project's menu offers Open worktree: a project of this computer that may be a git repository. Worktrees are
- * listed from the machine's daemon (`loadFolderBranches`), which needs no session, so a project with no session is offered
- * it and the dialog says when its folder is not in git; one whose sessions all run outside git is a plain folder.
- * Other machines wait for worktree actions to work there.
+ * Whether a project's menu offers Open worktree: a project, on any machine, that may be a git repository. Worktrees are
+ * listed from the project's machine's daemon (`loadFolderBranches`), which needs no session, so a project with no session
+ * is offered it and the dialog says when its folder is not in git; one whose sessions all run outside git is a plain folder.
  */
-export function offersOpenWorktree(project: OpenedProject, sessions: readonly SessionView[]): boolean {
-  return project.machineName === null && (sessions.length === 0 || sessions.some((session) => session.repoRoot !== null))
+export function offersOpenWorktree(_project: OpenedProject, sessions: readonly SessionView[]): boolean {
+  return sessions.length === 0 || sessions.some((session) => session.repoRoot !== null)
 }
 
 /**

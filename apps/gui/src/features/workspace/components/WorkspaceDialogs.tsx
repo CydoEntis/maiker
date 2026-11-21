@@ -79,6 +79,7 @@ export function WorkspaceDialogs() {
                 term={worktreeFrom.pane}
                 repoName={worktreeFrom.repoName ?? worktreeFrom.cwdLabel}
                 machine={worktreeFrom.machine}
+                folder={worktreeFrom.repoRoot ?? worktreeFrom.cwd}
                 task={sessionTask(worktreeFrom)}
                 {...(worktreeFrom.branch === null ? {} : { fromBranch: worktreeFrom.branch })}
                 {...(abilitiesOf(worktreeFrom.process).moveToWorktree ? { move: { blocked: moveRefusal(worktreeFrom), run: async (branch: string) => { setWorktreeFrom(null); await moveToWorktree(worktreeFrom, branch) } } } : {})}
@@ -93,6 +94,7 @@ export function WorkspaceDialogs() {
                 term={projectWorktreeFrom.pane}
                 repoName={projectWorktreeFrom.repoName ?? projectWorktreeFrom.cwdLabel}
                 machine={projectWorktreeFrom.machine}
+                folder={projectWorktreeFrom.repoRoot ?? projectWorktreeFrom.cwd}
                 {...(projectWorktreeFrom.branch === null ? {} : { fromBranch: projectWorktreeFrom.branch })}
                 onCreate={async (branch, base) => { await createWorktree(projectWorktreeFrom, branch, base); setProjectWorktreeFrom(null) }}
                 onCancel={() => { setProjectWorktreeFrom(null) }}

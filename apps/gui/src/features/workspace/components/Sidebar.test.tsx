@@ -949,12 +949,18 @@ describe('a project heading', () => {
     expect(menuItems()).toEqual(['New session', 'Open worktree…', 'Close project'])
   })
 
-  it('offers no New or Open worktree on another machine\'s git project, where worktrees are not managed yet', async () => {
-    showProjects([session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })], [], { machines: [LOCAL_HEAD, DEVBOX] })
-    expect(screen.queryByRole('button', { name: 'New worktree in api' })).toBeNull()
+  it('offers New and Open worktree on another machine\'s git project, and both act on that machine', async () => {
+    const user = userEvent.setup()
+    const there = session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })
+    const actions = showProjects([there], [], { machines: [LOCAL_HEAD, DEVBOX] })
+    await user.click(screen.getByRole('button', { name: 'New worktree in api' }))
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(there)
+    expect(there.machine).toBe(4)
     fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
     await screen.findByRole('menu', { name: 'api' })
-    expect(menuItems()).toEqual(['New session', 'Close project'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
+    await user.click(screen.getByRole('menuitem', { name: 'Open worktree…' }))
+    expect(actions.onOpenWorktree).toHaveBeenCalledWith(4, { machineName: 'devbox', folder: '/srv/api' }, 'api')
   })
 
   it('shows a plain-folder project New session and Close project only, on its buttons and in its menu', async () => {

@@ -1,13 +1,15 @@
 import { z } from 'zod'
 import { invoke, isTauri } from '@tauri-apps/api/core'
+import { LOCAL_MACHINE } from '@/api/machines'
 
 /**
  * Make a worktree for `branch` next to the repository `term` is in and open a session in it. A
  * branch that already exists is checked out; a new one starts from `base` (null: the current commit).
+ * The daemon of `machine`, the pane's own, makes it (this computer's, 0, when absent).
  */
-export async function newWorktreeSession(term: number, branch: string, base: string | null): Promise<void> {
+export async function newWorktreeSession(term: number, branch: string, base: string | null, machine: number = LOCAL_MACHINE): Promise<void> {
   if (!isTauri()) throw new Error('Worktrees are only available in the desktop app')
-  await invoke('new_worktree_session', { term, branch, base })
+  await invoke('new_worktree_session', { term, branch, base, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
 }
 
 const StandingSchema = z.object({

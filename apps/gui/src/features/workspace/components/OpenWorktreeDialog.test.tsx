@@ -121,3 +121,44 @@ describe('Open worktree', () => {
     expect(onCancel).toHaveBeenCalled()
   })
 })
+
+describe('Open worktree on another machine', () => {
+  const API = { machineName: 'devbox', folder: '/srv/api' }
+  const THERE = { path: '/home/dev/.maiker/worktrees/api/feat-x', branch: 'feat/x', main: false, when: null }
+  const GONE = { path: '/home/dev/.maiker/worktrees/api/old', branch: 'old', main: false, when: null }
+
+  function openOnDevbox(more: { sessions?: SessionView[] } = {}) {
+    machine.listing = () => Promise.resolve(listing({ ...MAIN, path: API.folder }, THERE, GONE))
+    machine.gone = new Set([GONE.path])
+    machine.asked = []
+    const calls = { onStart: vi.fn(), onShow: vi.fn(), onCancel: vi.fn(), onNewWorktree: vi.fn() }
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <OpenWorktreeDialog machine={4} project={API} name="api" sessions={more.sessions ?? []} {...calls} />
+      </QueryClientProvider>,
+    )
+    return calls
+  }
+
+  it('lists the worktrees that machine\'s daemon has, and starts a draft in one there', async () => {
+    const { onStart } = openOnDevbox()
+    fireEvent.click(await screen.findByRole('button', { name: /feat-x/ }))
+    expect(machine.asked).toEqual([[4, '/srv/api']])
+    expect(onStart).toHaveBeenCalledWith(THERE.path)
+  })
+
+  it('shows a session of that machine running in a worktree, not one of this computer in the same folder', async () => {
+    const here = agentIn(2, 'Here', THERE.path)
+    const there = agentIn(3, 'There', THERE.path, { machine: 4, machineName: 'devbox' })
+    const { onShow } = openOnDevbox({ sessions: [here, there] })
+    fireEvent.click(await screen.findByRole('button', { name: /feat-x/ }))
+    expect(onShow).toHaveBeenCalledWith(there.id)
+  })
+
+  it('marks a missing worktree without sending you to remake it from here, which is this computer\'s only', async () => {
+    openOnDevbox()
+    const row = await screen.findByRole('button', { name: /old/ })
+    expect(row.textContent).toContain('Folder missing')
+    expect(row.title).toBe('Its folder is gone.')
+  })
+})

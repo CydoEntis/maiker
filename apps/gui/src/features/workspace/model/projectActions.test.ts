@@ -22,11 +22,15 @@ describe('the session a project\'s New worktree is made from', () => {
     expect(worktreeSourceOf([linked])).toBe(linked)
   })
 
-  it('is none outside git, on another machine, or for an ended session', () => {
+  it('is none outside git or for an ended session', () => {
     expect(worktreeSourceOf([session(1, 'Plain')])).toBeNull()
-    expect(worktreeSourceOf([session(2, 'There', { ...IN_REPO, machine: 4, machineName: 'devbox' })])).toBeNull()
     expect(worktreeSourceOf([{ ...session(3, 'Gone', IN_REPO), ended: true }])).toBeNull()
     expect(worktreeSourceOf([])).toBeNull()
+  })
+
+  it('is a session of another machine in its repository, whose own daemon makes the worktree', () => {
+    const there = session(2, 'There', { ...IN_REPO, machine: 4, machineName: 'devbox' })
+    expect(worktreeSourceOf([there])).toBe(there)
   })
 })
 
