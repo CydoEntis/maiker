@@ -460,7 +460,7 @@ conversation registry and fences every incoming event by conversation,
 generation and connection identity. Runtime ownership never belongs to a client
 or PTY. Disposal remains pending until the root is reaped; disconnect does not
 dispose it. Synthetic fixtures and real fake-provider child tests live beside it.
-`commands.rs` owns authenticated start/send/read admission, operation receipts,
+`commands.rs` and the topic files in `commands/` own authenticated start/send/read admission, operation receipts,
 durability barriers and native paging. Actors correlate typed requests with exact
 JSON-RPC IDs on the existing connection; closing a client leaves its runtime alive.
 Only an explicit conversation start launches a selected provider.
