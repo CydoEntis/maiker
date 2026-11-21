@@ -113,8 +113,16 @@ fn gh_then_public<T>(
     })
 }
 
+/// What the updater answers in a test build. A test that presses the Update key runs the real
+/// background task, and that once downloaded a release over the test program itself, so the
+/// entry points that reach the network or replace a program stop here.
+const OFFLINE_IN_TESTS: &str = "a test build reaches no release and installs nothing";
+
 /// The newest release's tag, e.g. `v0.3.0`.
 pub fn latest_tag() -> Result<String, String> {
+    if cfg!(test) {
+        return Err(OFFLINE_IN_TESTS.into());
+    }
     gh_then_public(
         gh_signed_in(),
         || {
@@ -361,6 +369,9 @@ fn wants_restart(answer: &str, default: bool) -> bool {
 /// Install the newest release over this one without printing (from inside the app, whose
 /// screen printing would garble). Returns the version installed and where it went.
 pub fn install_latest() -> Result<(String, PathBuf)> {
+    if cfg!(test) {
+        bail!("{OFFLINE_IN_TESTS}")
+    }
     let tag = latest_tag().map_err(|e| anyhow::anyhow!(e))?;
     let Some(target) = target() else {
         bail!("there's no release build for this machine; build from source")
@@ -585,6 +596,9 @@ pub fn tidy() {
 /// What changed since this build: the `- ` lines of every newer release's notes, newest
 /// release first. Empty when GitHub can't be reached. Slow (network): off the UI thread.
 pub fn changes_since_this() -> Vec<String> {
+    if cfg!(test) {
+        return Vec::new();
+    }
     let path = format!("repos/{REPO}/releases?per_page={RELEASES_LOOKED_AT}");
     let json = gh_then_public(
         gh_signed_in(),
@@ -643,6 +657,17 @@ fn changes_in(json: &str, current: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::installed_executable::installed_path;
+
+    #[test]
+    fn a_test_build_reaches_no_release_and_replaces_no_program() {
+        let this_program = std::env::current_exe().unwrap();
+        let before = std::fs::metadata(&this_program).unwrap().len();
+
+        assert_eq!(latest_tag().unwrap_err(), OFFLINE_IN_TESTS);
+        assert_eq!(install_latest().unwrap_err().to_string(), OFFLINE_IN_TESTS);
+        assert!(changes_since_this().is_empty());
+        assert_eq!(std::fs::metadata(&this_program).unwrap().len(), before);
+    }
 
     /// A key and a signature made for this test with the same tool the release uses; the private
     /// half was thrown away.
