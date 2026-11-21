@@ -118,3 +118,28 @@ export function waitingSessions(heads: readonly MachineHead[], machines: readonl
     return entry === undefined ? [] : [entry]
   })
 }
+
+/**
+ * Whether a session finished and has not been opened since: the daemon keeps a finished agent `done` until the person looks
+ * at it, and looking (or Mark as done) turns it idle (`markSeenOnDaemon`), so no second "seen" record is kept here.
+ */
+export function finishedUnseen(session: SessionView): boolean {
+  return session.status === 'done'
+}
+
+/** What a folded heading counts of the sessions under it: those that wait on you, and those that finished unseen. */
+export type FoldCounts = { readonly needs: number; readonly finished: number }
+
+function countsOf(sessions: readonly SessionView[]): FoldCounts {
+  return { needs: sessions.filter(waitsOnYou).length, finished: sessions.filter(finishedUnseen).length }
+}
+
+/** A project's counts, over the sessions the tree lists under it (put-away and filtered-out ones are not under it). */
+export function projectFoldCounts(project: ProjectNode): FoldCounts {
+  return countsOf(project.sections.flatMap((section) => section.sessions))
+}
+
+/** A machine's counts: the sum of its projects', folded or not. */
+export function machineFoldCounts(machine: MachineNode): FoldCounts {
+  return machine.projects.map(projectFoldCounts).reduce((total, counts) => ({ needs: total.needs + counts.needs, finished: total.finished + counts.finished }), { needs: 0, finished: 0 })
+}

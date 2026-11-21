@@ -61,6 +61,11 @@
 /* The project last opened or picked: the picked row's fill, so it reads as chosen on every theme. */
 .mx-project-head.is-selected, .mx-project-head.is-selected:hover { background: var(--m-card-sel); color: var(--fg); }
 .mx-project-name { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+/* A folded heading's counts of what is hidden under it: needs you, then finished unseen, each a number on a tint of its
+   status colour, so the two read apart at a glance and the same on every theme. Only a folded heading has them. */
+.mx-fold-badge { flex: none; min-width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; padding: 0 4px; border-radius: var(--r-badge); font: 600 10.5px var(--mono); letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.mx-fold-badge.is-needs { color: var(--needs); background: color-mix(in oklab, var(--needs) 16%, transparent); }
+.mx-fold-badge.is-done { color: var(--done); background: color-mix(in oklab, var(--done) 16%, transparent); }
 /* A status heading lines up with the project's folder mark: the heading's 10px padding, the 12px caret and its 6px gap. */
 .mx-status-head { display: flex; align-items: center; gap: 6px; height: calc(22px * var(--pad, 1)); padding: 0 10px 0 28px; font-size: calc(11px * var(--sidebar-text, 1)); font-weight: 600; color: var(--muted); white-space: nowrap; }
 .mx-status-head.is-needs { color: var(--needs); }

@@ -1093,3 +1093,75 @@ describe('the group cards', () => {
   })
 })
 
+
+describe('the counts on a folded heading', () => {
+  const SHOP = { cwd: '/home/me/shop', folder: '/home/me/shop' }
+  const DOCS = { cwd: '/home/me/docs', folder: '/home/me/docs' }
+  const NOW = Math.floor(Date.now() / 1000)
+  const limited = { details: { since: NOW, resumeAt: NOW + 3600 } as NonNullable<Conversation['details']> }
+  const agent = (pane: number, place: typeof SHOP, extra: Partial<Conversation> = {}) => session(pane, { ...place, agent: 'claude', named: true, title: `S${String(pane)}`, ...extra })
+  const badges = (head: HTMLElement) => Array.from(head.querySelectorAll('.mx-fold-badge')).map((badge) => [badge.getAttribute('aria-label'), badge.textContent, badge.className])
+  const fold = async (name: string | RegExp) => { await userEvent.click(screen.getByRole('button', { name, expanded: true })) }
+
+  it('shows a folded project how many of its sessions need you, in the needs colour, and none while it is unfolded', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'needs-you' }), agent(3, SHOP, { status: 'done', ...limited }), agent(4, SHOP, { status: 'working' })])
+    expect(document.querySelector('.mx-fold-badge')).toBeNull()
+    await fold('shop')
+    const head = screen.getByRole('button', { name: /^shop/, expanded: false })
+    // The one held by its plan limit waits on the limit, not on you, as in the Needs you strip.
+    expect(badges(head)).toEqual([['2 sessions need you', '2', 'mx-fold-badge is-needs']])
+    expect(within(head).getByRole('img', { name: '2 sessions need you' })).toBeInTheDocument()
+  })
+
+  it('shows a folded machine the sum of its projects\' counts, folded or not', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' }), agent(3, DOCS, { status: 'needs-you' }), agent(4, DOCS, { status: 'done' }), agent(5, DOCS, { status: 'done' })])
+    await fold('shop')
+    await fold(/^This computer/)
+    const head = screen.getByRole('button', { name: /^This computer/, expanded: false })
+    expect(badges(head)).toEqual([
+      ['2 sessions need you', '2', 'mx-fold-badge is-needs'],
+      ['3 finished sessions not opened yet', '3', 'mx-fold-badge is-done'],
+    ])
+  })
+
+  it('counts the finished sessions not opened since, in the done colour, and one fewer once one is opened', async () => {
+    const finished = [agent(1, SHOP, { status: 'done' }), agent(2, SHOP, { status: 'done' }), agent(3, SHOP)]
+    const view = show(finished)
+    await fold('shop')
+    const head = () => screen.getByRole('button', { name: /^shop/, expanded: false })
+    expect(badges(head())).toEqual([['2 finished sessions not opened yet', '2', 'mx-fold-badge is-done']])
+    // Opening a finished session is what turns it idle on the service; the sidebar is drawn again from that list.
+    const opened = [agent(1, SHOP), finished[1], finished[2]].filter((row): row is SessionView => row !== undefined)
+    view.again({ sessions: opened, projects: groupByProject(opened, []).machines, focusedId: 't1' })
+    expect(badges(head())).toEqual([['1 finished session not opened yet', '1', 'mx-fold-badge is-done']])
+    expect(within(head()).getByRole('img', { name: '1 finished session not opened yet' })).toBeInTheDocument()
+  })
+
+  it('never shows a zero: a folded group with nothing waiting has no badge, and one with only needs you has no finished badge', async () => {
+    show([agent(1, SHOP, { status: 'working' }), agent(2, SHOP), agent(3, DOCS, { status: 'needs-you' })])
+    await fold('shop')
+    await fold('docs')
+    expect(screen.getByRole('button', { name: 'shop', expanded: false }).querySelector('.mx-fold-badge')).toBeNull()
+    expect(badges(screen.getByRole('button', { name: /^docs/, expanded: false }))).toEqual([['1 session needs you', '1', 'mx-fold-badge is-needs']])
+  })
+
+  it('names each badge for what it counts, so the heading reads its name and then its counts', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' })])
+    await fold('shop')
+    expect(screen.getByRole('button', { name: 'shop 1 session needs you 1 finished session not opened yet', expanded: false })).toBeInTheDocument()
+  })
+  it('keeps the counts in the folding button, apart from the heading\'s actions beside it, which still act on the project', async () => {
+    const user = userEvent.setup()
+    const projectActions = { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onClose: vi.fn() } satisfies ProjectActions
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' })], { projectActions })
+    await fold('shop')
+    const toggle = screen.getByRole('button', { name: 'shop 1 session needs you 1 finished session not opened yet', expanded: false })
+    expect(toggle).toHaveClass('mx-project-toggle')
+    const heading = toggle.closest('.mx-project-head') as HTMLElement
+    expect(within(heading).getAllByRole('img').every((badge) => toggle.contains(badge))).toBe(true)
+    await user.click(within(heading).getByRole('button', { name: 'New session in shop' }))
+    expect(projectActions.onNewSession).toHaveBeenLastCalledWith(0, { machineName: null, folder: '/home/me/shop' })
+    await user.click(within(heading).getByRole('button', { name: 'More for shop' }))
+    expect(await screen.findByRole('menu', { name: 'shop' })).toBeInTheDocument()
+  })
+})
