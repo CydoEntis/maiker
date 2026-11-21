@@ -478,14 +478,12 @@ mod tests {
     #[cfg(unix)]
     mod fake_cli {
         use super::*;
-        use std::os::unix::fs::PermissionsExt;
 
         /// A fake agent in a folder of its own: `login` prints `printed` then waits (or ends), and `status` says what it says.
         fn fake(dir: &std::path::Path, login_body: &str, status_body: &str) -> Cli {
             let program = dir.join("fake-agent");
             let script = format!("#!/bin/sh\ncase \"$1\" in\n  login) {login_body} ;;\n  status) {status_body} ;;\nesac\n");
-            std::fs::write(&program, script).unwrap();
-            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(&program, &script);
             Cli { program, login: &["login"], status: &["status"], style: StatusStyle::Line }
         }
 

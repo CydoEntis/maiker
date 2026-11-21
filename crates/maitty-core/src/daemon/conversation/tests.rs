@@ -51,11 +51,12 @@ fn compiled(cell: &'static std::sync::OnceLock<PathBuf>, source: &str) -> &'stat
 
 /// `built` under `name` in a fixture's folder, where the program looks for its fixture. A link
 /// costs nothing and is a file the scanner has already read; a copy is for a folder that cannot
-/// hold one.
+/// hold one, and for a built program another user left in the shared temporary folder, which
+/// Linux lets nobody else link.
 fn placed(built: &Path, root: &Path, name: &str) -> PathBuf {
     let executable = root.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     if std::fs::hard_link(built, &executable).is_err() {
-        std::fs::copy(built, &executable).unwrap();
+        crate::test_support::copy_program(built, &executable);
     }
     executable
 }

@@ -45,3 +45,15 @@ pub(crate) fn write_program(path: &std::path::Path, script: &str) {
     #[cfg(not(unix))]
     std::fs::write(path, script).unwrap();
 }
+
+/// A copy of the program `from` at `to`, for a test to run. On Unix another process makes it, for the reason
+/// `write_program` gives; elsewhere it is copied directly.
+pub(crate) fn copy_program(from: &std::path::Path, to: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        let copied = std::process::Command::new("cp").arg(from).arg(to).status().unwrap();
+        assert!(copied.success(), "copying {} to {}", from.display(), to.display());
+    }
+    #[cfg(not(unix))]
+    std::fs::copy(from, to).unwrap();
+}

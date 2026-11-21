@@ -403,12 +403,10 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn a_fake_claude_reads_the_ask_on_stdin_and_its_answer_comes_back() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("maitty-side-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let fake = dir.join("claude");
-        std::fs::write(&fake, "#!/bin/sh\nprintf 'args:%s\\n' \"$*\"; printf 'asked:'; cat\n").unwrap();
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_support::write_program(&fake, "#!/bin/sh\nprintf 'args:%s\\n' \"$*\"; printf 'asked:'; cat\n");
         let target = Target { executable: fake.clone(), cwd: dir.clone(), session: SESSION.into(), model: None, config_root: None };
 
         let answer = super::answer(target.clone(), SideAsk::Command(SideCommand::Goal)).await;

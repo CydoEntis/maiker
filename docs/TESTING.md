@@ -135,6 +135,11 @@ Live checks use a nested
 server: `AGENT_SOCKET=test maiker`, then `maiker send` / `maiker read` against it.
 Tests never touch the user's real config (`AGENT_CONFIG` or in-memory configs).
 
+A test in `maitty-core` that writes or copies a program and then runs it uses `test_support::write_program` or
+`copy_program`, never `std::fs::write` or `std::fs::copy`: a file this process holds open for writing can be
+inherited by a program another test thread starts at that moment, and running the new one then fails with
+"text file busy" on Unix.
+
 A daemon test that finds a pane by its folder names that folder canonically
 (`clean_path(root.canonicalize())`). The pane's shell reports the folder's real name at its first
 prompt, and the temp folder can be spelled another way (an 8.3 name such as `RUNNER~1` on Windows).

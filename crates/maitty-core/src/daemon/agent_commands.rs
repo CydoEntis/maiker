@@ -94,20 +94,17 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn the_commands_are_the_ones_the_agent_on_this_machine_lists() {
-        use std::os::unix::fs::PermissionsExt;
         let bin = std::env::temp_dir().join(format!("maitty-ask-commands-{}", std::process::id()));
         std::fs::create_dir_all(&bin).unwrap();
         let script = bin.join("claude");
-        std::fs::write(
+        crate::test_support::write_program(
             &script,
             concat!(
                 "#!/bin/sh\nread line\n",
                 r#"printf '%s\n' '{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success","response":{"commands":[{"name":"compact","description":"Summarize"},{"name":"pdf","description":"Reads PDFs","argumentHint":"<file>"}]}}}'"#,
                 "\nsleep 5\n"
             ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let listed = ask(Provider::Claude, &std::env::temp_dir(), Some(bin.as_os_str())).await.unwrap();
         std::fs::remove_dir_all(&bin).unwrap();
         assert_eq!(listed.iter().map(|command| command.name.as_str()).collect::<Vec<_>>(), ["compact", "pdf"]);
