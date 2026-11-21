@@ -1601,8 +1601,9 @@ async fn end_conversation(
 }
 
 /// A chat session (ADR 0003): a structured Claude or Codex conversation the daemon owns, in `cwd` or,
-/// with `branch`, in a new worktree of the project at `cwd`. The session asks before a tool use the
-/// provider does not allow by itself, unless `full_access` is true (the provider's skip-permissions mode).
+/// with `branch`, in a new worktree of the project at `cwd`.
+/// `permissions` is the posture picked for it (ADR 0018): read-only, workspace-write, which asks before a
+/// tool use the provider does not allow by itself, or full-access, the provider's skip-permissions mode.
 #[tauri::command]
 async fn start_chat_session(
     app: tauri::AppHandle,
@@ -1611,14 +1612,16 @@ async fn start_chat_session(
     cwd: PathBuf,
     provider: maitty_shared::conversation::Provider,
     branch: Option<String>,
-    full_access: Option<bool>,
+    permissions: String,
 ) -> Result<serde_json::Value, String> {
     wire.require_local(machine, "A chat session")?;
+    let permissions = maitty_desktop_client::Permissions::parse(&permissions)
+        .map_err(|error| format!("{error:#}"))?;
     maitty_desktop_client::start_chat_session(
         cwd,
         provider,
         branch,
-        full_access.unwrap_or(false),
+        permissions,
         daemon_executable(&app)?,
     )
         .await

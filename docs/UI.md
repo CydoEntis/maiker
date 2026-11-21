@@ -1392,6 +1392,17 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   can show its terminal log over the chat (`WorkspacePane`), carrying the box's text into the agent's prompt as before
   (`carryDraftToTerminal`), and **Back to chat** in the pane's ⋯ menu puts the chat back. A shell's ⋯ menu offers
   **Start a Claude chat here**, **Start a Codex chat here** and **Start Gemini here**.
+- **What the draft starts in the Chat view** ([ADR 0018](adr/0018-the-chat-view-talks-to-the-agent-directly.md), proposed).
+  Sending the New session draft for Claude Code or Codex on this computer starts a chat session the daemon owns, with no
+  terminal behind it (`startDirectChat` in `useSessionStarts`, the host's `start_chat_session`): no agent is started ahead
+  of the first message, and nothing the agent draws on a terminal (an update menu, the trust-folder question) can stand in
+  the chat's way. The page stays until the daemon has answered, then closes in the update that opens the chat; the first
+  message is an ordinary send with the model and effort picked, and a send that fails puts the words in the chat's box. The
+  mode picked becomes the daemon's posture (`chatPermissions` in `model/newChatHost.ts`): Claude's Default and Codex's Auto
+  ask first, Plan and Read only change nothing, Bypass permissions and Full access ask about nothing, and the agent's Bypass
+  Permissions switch is read as it is for a terminal start. The daemon has no posture for Claude's Accept edits and Auto, so
+  the draft refuses them in a line and starts nothing. Still the agent's own session shown as its chat: Gemini, a saved
+  conversation that is resumed, a start on another machine, and every start in the Terminal view.
 - **Keyboard.** While the chat covers a pane its terminal is not focused (`TerminalView focused` is false) and is
   hidden from Tab and screen readers. The chat adds no layer to the Esc ladder.
 - **Selecting.** In a terminal pane, releasing the mouse on a selection copies it and a "Copied" toast says so

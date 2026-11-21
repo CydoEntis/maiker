@@ -24,11 +24,13 @@ describe('chat sessions', () => {
   it('starts a chat session that asks first, unless full access is requested', async () => {
     await expect(startChatSession('/work/app', 'claude')).resolves.toEqual({ id: 44, generation: 1 })
     await startChatSession('/work/app', 'codex', 'agent/x')
-    await startChatSession('/work/app', 'claude', null, true)
+    await startChatSession('/work/app', 'claude', null, 'full-access')
+    await startChatSession('/work/app', 'codex', null, 'read-only')
     expect(vi.mocked(invoke).mock.calls).toEqual([
-      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, fullAccess: false }],
-      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: 'agent/x', fullAccess: false }],
-      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, fullAccess: true }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, permissions: 'workspace-write' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: 'agent/x', permissions: 'workspace-write' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, permissions: 'full-access' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: null, permissions: 'read-only' }],
     ])
   })
 
