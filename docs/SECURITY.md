@@ -168,7 +168,9 @@ password or token from it. SSH is set up outside Maiker for now: Add a remote ma
 has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. A refused key's one-line failure only says so and offers a
 one-line key-copy command to copy and run in the person's own terminal. The command comes from the host
 (`link_failure::fix_command`), which gives none for a target that is not one plain word (`check_target`). A changed host key is
-refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it.
+refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it. A new key the
+person's own strict config refused is not called changed: its sentence gives the `ssh -o StrictHostKeyChecking=ask <target>` line
+to run in their own terminal, where ssh shows the fingerprint and the person answers; Maiker accepts nothing itself.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
@@ -503,8 +505,8 @@ host` already runs, and the person added that machine to use it. The CLI's `--on
 or the far side prints (its last stderr line) is untrusted: it is stripped of control characters,
 so no escape sequence reaches the terminal, and cut to 200 characters before it is shown. The
 failure is classified from ssh's exit status and the stream, not its wording, apart from a few
-fixed tokens that mark a login ssh could not do without a person or a changed host key
-(`link_failure::classify`). A host name taken from ssh's words for the `ssh-keygen -R` command is kept
+fixed tokens that mark a login ssh could not do without a person or a host key ssh refused; only
+`REMOTE HOST IDENTIFICATION HAS CHANGED` marks a changed one (`link_failure::classify`). A host name taken from ssh's words for the `ssh-keygen -R` command is kept
 only when it is a plain host. Typing
 for a machine that is down is dropped, never queued and replayed.
 
@@ -1187,8 +1189,15 @@ Host keys ([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md), `new_
   anywhere; tests pin this.
 - **A refused key adds nothing.** A machine whose host key ssh refused while it was being added is not
   written, from the desktop app or the terminal app (`machine_probe` yields
-  `FailureClass::HostKeyChanged`). A refused key, while adding or on a configured machine, is said in
-  the shared sentence (above: how to check it and the `ssh-keygen -R` that clears the old key) with Try
-  again; nothing offers to trust it.
+  `FailureClass::HostKeyChanged` or `FailureClass::HostKeyUnknown`). A changed key, while adding or on a
+  configured machine, is said in the shared sentence (above: how to check it and the `ssh-keygen -R`
+  that clears the old key) with Try again; nothing offers to trust it.
+- **A new key under a strict config is not a changed key.** When the person's own config sets
+  `StrictHostKeyChecking=yes` (kept, above), ssh refuses a key it has never seen with `Host key
+  verification failed.` and no `REMOTE HOST IDENTIFICATION HAS CHANGED` banner. That is
+  `HostKeyUnknown`: its sentence never suggests `ssh-keygen -R`, which could lead someone to delete a
+  good key, and gives `ssh -o StrictHostKeyChecking=ask <target>` to run once in a terminal. That line
+  makes ssh show the fingerprint and ask the person (it still refuses a changed key); Maiker runs it
+  nowhere itself and writes no key.
 - The terminal sign-in line (`first_login_command`) carries no setting: a person is there to answer
   ssh, and the probe before it has already had ssh record a new key.

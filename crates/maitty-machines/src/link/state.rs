@@ -20,7 +20,7 @@ pub enum ConnectionState {
         since: Instant,
     },
     /// ssh needs a login it cannot do without a person: a refused key, a password or second
-    /// code, or a changed host key (`FailureClass::is_login`).
+    /// code, or a host key ssh refused, changed or not yet known (`FailureClass::is_login`).
     NeedsLogin {
         failure: FailureClass,
     },
@@ -311,6 +311,13 @@ mod tests {
                 failure: FailureClass::HostKeyChanged { known_as: None }
             },
             "a changed host key waits for a person, it is not redialled"
+        );
+        assert_eq!(
+            then(FailureClass::HostKeyUnknown),
+            NeedsLogin {
+                failure: FailureClass::HostKeyUnknown
+            },
+            "a new host key the person's config refused waits for a person too"
         );
         assert_eq!(
             then(FailureClass::NeedsPerson(SAID.into())),

@@ -401,16 +401,17 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Add would be). After Add a status block (`StatusBlock`) under the field is one line with the teal spinner: "Connecting to
   <host>…", or "Connecting to <host> and setting up Maiker there…" while Maiker is installed; the field is read-only and the host
   rows wait at 55% opacity, and the foot's Cancel stops the add and gives the field back. When the machine is in the dialog
-  closes and the sidebar lists it. Otherwise the block is the host's one sentence (red ×, or amber ! for a key refused or a login
-  that needs a person; never a step label, so a changed host key is never called unreachable), a Copy line for the command it
-  names (`ssh-copy-id`, `ssh-keygen -R`), **Try again** as the neutral primary and, for a login that needs a person, **Sign in in a
+  closes and the sidebar lists it. Otherwise the block is the host's one sentence (red ×, or amber ! for a key refused, a login
+  that needs a person or a new host key the person's ssh settings left for them to accept; never a step label, so a changed host
+  key is never called unreachable), a Copy line for the command it names (`ssh-copy-id`, `ssh-keygen -R`,
+  `ssh -o StrictHostKeyChecking=ask <target>`), **Try again** as the neutral primary and, for a login that needs a person, **Sign in in a
   terminal**. There is no checklist, no host-key or key screen and no "Machine added" card. A host of the SSH config list that is
   already a machine opens Settings › Remote machines, connected or not; the dialog never mends a machine. The dialog mounts in the
   window root (`.mx-app`), where the corner and role tokens live: the frame, the wells and the buttons take `--r-panel` and
   `--r-control` and are rounded in Rounded mode. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
-  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Can't reach it · 14 min", "N sessions ·
+  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Host key not accepted yet", "Can't reach it · 14 min", "N sessions ·
   older Maiker", "Maiker not installed"), at most one outlined button (Fix opens the row's fold; Retry, Update and Install
   run in place and say Retrying… or Updating… meanwhile), then **More** and **Remove** as text buttons. Order: failed, then to update, then connecting, then just
   added, then connected by sessions. A search field shows past 12 machines. A "This computer" line with **Details**

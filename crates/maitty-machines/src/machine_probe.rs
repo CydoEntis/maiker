@@ -297,7 +297,7 @@ mod tests {
         );
         assert_eq!(
             finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::HostKeyChanged { known_as: None })
+            Probe::Failed(FailureClass::HostKeyUnknown)
         );
     }
 

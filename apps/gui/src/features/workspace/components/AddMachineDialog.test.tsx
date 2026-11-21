@@ -212,6 +212,8 @@ describe('a failure', () => {
   const CHANGED = "100.78.214.15's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '100.78.214.15'` in a terminal and try again."
   const unreachable: Added = { outcome: 'failed', message: UNREACHED, failure: 'unreachable', fix_command: null }
   const changed: Added = { outcome: 'failed', message: CHANGED, failure: 'host-key-changed', fix_command: "ssh-keygen -R '100.78.214.15'" }
+  const UNKNOWN = "100.78.214.15's host key isn't known yet and your ssh settings won't record a new one on their own: run `ssh -o StrictHostKeyChecking=ask dev@100.78.214.15` once in a terminal, check the fingerprint it shows and answer yes, then try again."
+  const unknown: Added = { outcome: 'failed', message: UNKNOWN, failure: 'host-key-unknown', fix_command: 'ssh -o StrictHostKeyChecking=ask dev@100.78.214.15' }
   // The machine the host saved for a login it could not do, as the window then lists it.
   const savedHead: MachineHead = { ...connectedHead(), chip: { glyph: '!', word: 'needs login', tone: 'bad' }, target: 'dev@100.78.214.15' }
 
@@ -230,6 +232,16 @@ describe('a failure', () => {
     expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Copy the command' }))
     expect(machines.onCopyCommand).toHaveBeenCalledWith("ssh-keygen -R '100.78.214.15'")
+  })
+
+  it('says a new host key the person\'s ssh settings refused in its sentence, with the ssh line to copy and nothing to remove', async () => {
+    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(unknown)) })
+    const { user } = await connectTo(machines)
+    expect(await screen.findByText(UNKNOWN)).toBeInTheDocument()
+    expect(screen.queryByText(/has changed|ssh-keygen/)).toBeNull()
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy the command' }))
+    expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh -o StrictHostKeyChecking=ask dev@100.78.214.15')
   })
 
   it('says a refused key in the host\'s sentence, with its command to copy and no password or terminal', async () => {

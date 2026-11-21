@@ -818,7 +818,8 @@ its own. An Inbox row from another machine says `· on build`.
   terminal, it works here. A spinner says *Connecting to <name>…* while the desktop app looks at the machine
   over ssh without asking anything (12 seconds at most; *Cancel* ends it) and puts Maiker on it when it is
   missing; then the dialog closes and the machine is in the sidebar. A new host key is recorded by ssh without a
-  question; a machine whose key changed is not added. When something fails, one sentence says what and how to
+  question; a machine whose key changed is not added, nor one whose new key your own ssh config won't let ssh
+record (the sentence then gives the `ssh` line to run once in a terminal to accept it). When something fails, one sentence says what and how to
   fix it, with the command to copy (such as `ssh-copy-id`) and **Try again**. If ssh needs you to type a
   password or a code, **Sign in in a terminal** opens ssh in a session named `ssh <name>`; the machine
   connects once you have signed in. On Windows use ssh keys or an agent: password prompts work in that session

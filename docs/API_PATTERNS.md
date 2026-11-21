@@ -1458,9 +1458,12 @@ as fast as it ends.
 type (`OtherVersion` is `Update`, or `UpdateHere` when the far side is newer), ssh's exit status, and
 whether the far side ever sent its stream marker or a frame. Exit 127 is `Install`. Exit
 `NO_DAEMON_EXIT` (74) is `NoDaemon`. Exit 255 with nothing received is read for a few fixed tokens,
-the only place ssh's words are read: `REMOTE HOST IDENTIFICATION HAS CHANGED` or `Host key
-verification failed` is `HostKeyChanged` (with the host as `known_hosts` names it, from ssh's own
-`ssh-keygen -R` line when it is a plain host); `Permission denied` or `Too many authentication
+the only place ssh's words are read: `REMOTE HOST IDENTIFICATION HAS CHANGED` is `HostKeyChanged`
+(with the host as `known_hosts` names it, from ssh's own `ssh-keygen -R` line when it is a plain
+host), and only that banner means the key changed; `Host key verification failed` without it is
+`HostKeyUnknown`, a key ssh has never seen that the person's own `StrictHostKeyChecking=yes` (kept,
+ADR 0017) or an ssh too old for `accept-new` refused (ssh adds `No <type> host key is known for
+<host>`). Both are logins (`is_login`): the machine waits for a person. `Permission denied` or `Too many authentication
 failures` is `NeedsPerson` when the key already worked (`partial success`) or the methods ssh lists
 hold no `publickey`, else `KeyRefused`. Everything else is `Unreachable` with ssh's last stderr
 line, control characters removed and cut to 200 characters. The connection state carries the class
@@ -1472,7 +1475,11 @@ worded: one sentence that names the machine and gives the exact fix, never an in
 app (no helper, probe or daemon), and never an offer to accept a changed host key. `Subject` is the
 machine's name, target and port (`Subject::of` a `Machine`, `Subject::of_def` a `MachineDef`);
 `ClientOs` picks the fix for the system the person types on (`ssh-copy-id` on Linux and macOS, the
-PowerShell line that does the same on Windows). `fix_command` is the one command a sentence names,
+PowerShell line that does the same on Windows). `HostKeyChanged` gives `ssh-keygen -R '<host>'` after
+confirming the change; `HostKeyUnknown` gives `ssh -o StrictHostKeyChecking=ask [-p <port>] <target>`
+to run once in a terminal, check the fingerprint and answer yes (the same on Windows; on the command
+line the option comes before the person's config, so ssh asks where their config would refuse), and
+never names `ssh-keygen` or a changed key. `fix_command` is the one command a sentence names,
 for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
 `doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
 `message`) show these sentences and write none of their own. `is_failure_sentence` tells such a

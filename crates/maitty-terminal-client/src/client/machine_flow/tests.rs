@@ -467,6 +467,25 @@ fn a_changed_host_key_adds_nothing_and_says_the_shared_sentence() {
 }
 
 #[test]
+fn a_new_host_key_a_strict_config_refuses_adds_nothing_and_says_to_accept_it_in_a_terminal() {
+    let mut h = Harness::new("proxy");
+    let known_hosts = h.sandbox.dir.join("known_hosts");
+    h.app.machine_flow.ssh.extend([
+        format!("--known-hosts={}", known_hosts.display()),
+        "--host-key=AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl".to_owned(),
+        "--config-strict=yes".to_owned(),
+    ]);
+    h.add_by_enter("box");
+    h.next_bg();
+    assert_eq!(h.notice(), sentence_for(&FailureClass::HostKeyUnknown));
+    assert!(h.notice().contains("`ssh -o StrictHostKeyChecking=ask box` once in a terminal"), "{}", h.notice());
+    assert!(h.view().notice.as_ref().unwrap().error);
+    assert!(matches!(h.view().step, MachineStep::Browse));
+    assert!(h.local_config().is_none() && h.app.cfg.machines.is_empty());
+    assert!(!known_hosts.exists(), "nothing was written");
+}
+
+#[test]
 fn a_probe_that_hangs_is_ended_at_the_limit_and_ssh_is_gone() {
     let mut h = Harness::new("hang");
     h.app.machine_flow.probe_limit = Duration::from_millis(400);

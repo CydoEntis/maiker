@@ -143,9 +143,9 @@ function AddStatus({ state, machines, onRetry }: { state: AddState; machines: Ma
   )
 }
 
-/** Amber for a login only the person can finish, red for anything else. */
+/** Amber for a login only the person can finish (a new host key is theirs to accept), red for anything else. */
 function toneOf(failure: AddFailure): 'needs' | 'bad' {
-  return failure.kind === 'key-refused' || failure.kind === 'needs-person' ? 'needs' : 'bad'
+  return failure.kind === 'key-refused' || failure.kind === 'needs-person' || failure.kind === 'host-key-unknown' ? 'needs' : 'bad'
 }
 
 /** The machine a host of the SSH config was added as: by its target, or by its name. */
