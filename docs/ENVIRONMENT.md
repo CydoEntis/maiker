@@ -364,7 +364,7 @@ longer in the config cannot be continued.
 
 | Key | Meaning and checks |
 | --- | --- |
-| `name` | the agent's name: lowercase letters, digits, `-` or `_`, at most 32. Not `claude` or `codex`, which have their own chat support. Two ACP entries may not share a name |
+| `name` | the agent's name: lowercase letters, digits, `-` or `_`, at most 32. Two ACP entries may not share a name. `claude` and `codex` need no entry: each has a built-in helper ([stack/acp.md](stack/acp.md#project-specific-configuration)), which an entry of that name replaces |
 | `acp` | `true` to offer the agent as an ACP chat |
 | `command` | the program to run, alone. Required; not empty; does not start with `-` (flags go in `args`) |
 | `args` | the arguments that put the program in ACP mode, each passed as written, with no shell. At most 32 |

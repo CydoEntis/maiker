@@ -208,7 +208,12 @@ impl Daemon {
         let executable = crate::proc::resolve_executable_path(Path::new(&agent.command))
             .ok()
             .filter(|path| path.is_file())
-            .ok_or_else(|| anyhow::anyhow!("The program `{}` of agent `{name}` was not found", agent.command))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "The program `{}` that runs {name} as a chat was not found. Install it, or name another with `command` in the config (docs/stack/acp.md)",
+                    agent.command
+                )
+            })?;
         Ok(AcpProgram {
             executable,
             arguments: agent.args.iter().map(Into::into).collect(),
