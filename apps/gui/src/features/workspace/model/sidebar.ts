@@ -64,6 +64,15 @@ export function isShell(session: Pick<SessionView, 'process'>): boolean {
   return session.process === SHELL_PROCESS
 }
 
+/**
+ * Whether the Chat view leaves this session out: a plain shell there is the dock under a chat, not a session of its
+ * own. A helper an agent started is never left out, whatever is running in it: its starter waits on it, and a helper
+ * between its shell opening and its agent being recognised reads as a shell.
+ */
+export function leftOutOfChatView(session: Pick<SessionView, 'process' | 'startedBy'>): boolean {
+  return isShell(session) && session.startedBy === null
+}
+
 /** What a row calls an agent session that has no name and has not been sent a message: nothing in it says more. */
 export const NEW_SESSION = 'New session'
 

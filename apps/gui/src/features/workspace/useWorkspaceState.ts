@@ -30,7 +30,7 @@ import { useAgentExits } from './useAgentExits'
 import { readMachineNicknames } from '@/data/machineNicknames'
 import type { OpenSubagent } from './model/subagents'
 import { useSharedSettings } from '@/features/settings/sharedSettings'
-import { isShell } from './model/sidebar'
+import { leftOutOfChatView } from './model/sidebar'
 import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type Layout, MAX_PANES, openArrangement, removeSessions, type SplitDirection, splitPane, visibleSessionIds } from './model/layout'
 import { LAYOUT_RESET_NOTICE, readLayout, writeLayout } from './model/layoutStorage'
 import { byPriority } from './model/attentionOrder'
@@ -205,13 +205,13 @@ export function useWorkspaceState() {
   const agentTerminals = useMemo(() => liveAgentTerminals(savedAgentTerminals, new Set(sessionMap.keys())), [savedAgentTerminals, sessionMap])
   const ownedTerminals = useMemo(() => ownedTerminalIds(agentTerminals), [agentTerminals])
   // A shell pane left open from the Terminal view is taken out of the Chat view's layout (state adjusted while rendering, as it follows from the view); the shell itself keeps running.
-  const shellPanes = chatView ? layout.arrangements.flatMap((tab) => tab.panes.map((pane) => pane.sessionId)).filter((id) => { const session = sessionMap.get(id); return session !== undefined && isShell(session) && !ownedTerminals.has(id) }) : []
+  const shellPanes = chatView ? layout.arrangements.flatMap((tab) => tab.panes.map((pane) => pane.sessionId)).filter((id) => { const session = sessionMap.get(id); return session !== undefined && leftOutOfChatView(session) && !ownedTerminals.has(id) }) : []
   if (shellPanes.length > 0) setLayout(removeSessions(layout, new Set(shellPanes)))
   // A session the daemon lists a moment before its pane exists would show in the sidebar and then jump once placed.
   const sidebarSessions = useMemo(() => {
     // A terminal made by splitting a pane is listed like any other: hiding it left panes on screen with an empty sidebar.
-    // In the Chat view a plain shell is not a session of its own (a terminal is the dock under a chat): it keeps running and is listed again in the Terminal view.
-    const listed = ordered.filter((session) => !ownedTerminals.has(session.id) && !(chatView && isShell(session)))
+    // In the Chat view a plain shell is not a session of its own (a terminal is the dock under a chat): it keeps running and is listed again in the Terminal view. A helper is always listed.
+    const listed = ordered.filter((session) => !ownedTerminals.has(session.id) && !(chatView && leftOutOfChatView(session)))
     if (startedFrom === null) return listed
     return listed.filter((session) => startedFrom.has(session.id) || openIds.has(session.id))
   }, [ordered, startedFrom, openIds, ownedTerminals, chatView])

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { toSessionView, type SessionView } from './session'
-import { byLatestChange, byUrgency, inProject, isFreshSession, projectChoices, projectColor, placeLine, rowTitle, rowWord, splitPutAway, statusSections } from './sidebar'
+import { byLatestChange, byUrgency, inProject, isFreshSession, leftOutOfChatView, projectChoices, projectColor, placeLine, rowTitle, rowWord, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -137,6 +137,19 @@ describe('shells', () => {
   it('sit with what needs you while they ask', () => {
     const all = [session(1, { status: 'needs-you' }), session(2)]
     expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t1']], ['idle', ['t2']]])
+  })
+})
+
+describe('the Chat view', () => {
+  const details = { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } }
+
+  it('leaves out a plain shell and lists an agent', () => {
+    expect(leftOutOfChatView(session(1))).toBe(true)
+    expect(leftOutOfChatView(session(2, { agent: 'claude' }))).toBe(false)
+  })
+
+  it('lists a helper even while it reads as a shell', () => {
+    expect(leftOutOfChatView(session(1, { details: { ...details, startedBy: '7' } }))).toBe(false)
   })
 })
 
