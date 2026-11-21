@@ -337,13 +337,26 @@ describe('a session row', () => {
       const card = screen.getByRole('tooltip')
       expect(card).toHaveTextContent('Growth')
       expect(card).toHaveTextContent('Needs you')
-      expect(card).toHaveTextContent('Claude · This computer')
+      // With this computer alone the tree names no machine, so neither does the card.
+      expect(card.querySelector('.mx-hover-who')).toHaveTextContent(/^Claude$/)
       expect(card).toHaveAttribute('data-open', 'true')
       fireEvent.mouseLeave(row)
       // Hidden at once, kept mounted a moment so the next row's card needs no delay, then gone.
       expect(screen.getByRole('tooltip', { hidden: true })).toHaveAttribute('data-open', 'false')
       act(() => { vi.advanceTimersByTime(250) })
       expect(screen.queryByRole('tooltip', { hidden: true })).toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('says on the card where the agent runs once a remote machine is configured', () => {
+    vi.useFakeTimers()
+    try {
+      show([session(1, { agent: 'claude', named: true, title: 'Growth' })], { machines: [LOCAL_HEAD, DEVBOX] })
+      fireEvent.mouseEnter(screen.getByRole('button', { name: /^Growth,/ }).closest('.mx-row-wrap') as HTMLElement)
+      act(() => { vi.advanceTimersByTime(450) })
+      expect(screen.getByRole('tooltip')).toHaveTextContent('Claude · This computer')
     } finally {
       vi.useRealTimers()
     }
@@ -679,7 +692,7 @@ describe('with this computer alone', () => {
     const onShowSession = vi.fn()
     show([session(1, { ...SHOP, agent: 'claude', named: true, title: 'Asking', status: 'needs-you' })], { onShowSession })
     await user.click(screen.getByRole('button', { name: 'shop', expanded: true }))
-    await user.click(within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', { name: 'Asking on This computer in shop' }))
+    await user.click(within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', { name: 'Asking in shop' }))
     expect(onShowSession).toHaveBeenCalledWith('t1')
     expect(screen.getByRole('button', { name: 'shop' })).toHaveAttribute('aria-expanded', 'true')
   })
@@ -875,6 +888,13 @@ describe('the Needs you strip', () => {
     expect(stripRows().map((row) => row.getAttribute('aria-label'))).toEqual(['Newer ask on devbox in api', 'Older ask on This computer in shop'])
     expect(stripRows().map((row) => row.querySelector('.mx-row-sub')?.textContent)).toEqual(['devbox·api', 'This computer·shop'])
     expect(within(strip()).getByText('2')).toBeTruthy()
+  })
+
+  it('names no machine on a row while there are no machine headings', () => {
+    show(asking().slice(0, 1))
+    const [row] = stripRows()
+    expect(row).toHaveAttribute('aria-label', 'Older ask in shop')
+    expect(row?.querySelector('.mx-row-sub')?.textContent).toBe('shop')
   })
 
   it('opens a session from the strip and unfolds its machine and project', async () => {

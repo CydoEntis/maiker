@@ -8,7 +8,7 @@ import { type HelperCount } from '../model/helpers'
 import { AppIcon, Icon, type IconName } from './glyphs'
 import { Ago } from './times'
 
-type Props = { session: SessionView; starter: string | null; helpers: HelperCount | null; place: CardPlace; open: boolean; cold: boolean; portalContainer: HTMLElement | null }
+type Props = { session: SessionView; namesMachine: boolean; starter: string | null; helpers: HelperCount | null; place: CardPlace; open: boolean; cold: boolean; portalContainer: HTMLElement | null }
 
 /** One line of the card: its icon hangs in the margin left of the text, and a screen reader hears what it is. */
 function CardRow({ icon, what, children }: { icon: IconName; what: string; children: ReactNode }) {
@@ -26,9 +26,9 @@ function CardRow({ icon, what, children }: { icon: IconName; what: string; child
  * pull request, and who runs it and when it last moved. It only tells; it takes no pointer input, so it can never be
  * in the way of the next row.
  */
-function RowHoverCardView({ session, starter, helpers, place, open, cold, portalContainer }: Props) {
+function RowHoverCardView({ session, namesMachine, starter, helpers, place, open, cold, portalContainer }: Props) {
   // The place is known before the first draw (worked out from the row), so the card is never drawn hidden, measured and moved.
-  const text = hoverCardText(session, rowTitle(session), starter, helpers)
+  const text = hoverCardText(session, rowTitle(session), namesMachine, starter, helpers)
   return (
     <WindowPortal container={portalContainer}>
     <div role="tooltip" className={`mx-hover-card${cold ? ' is-cold' : ''}`} data-float data-open={open} style={place satisfies CSSProperties}>

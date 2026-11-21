@@ -9,6 +9,8 @@ import { Ago } from './times'
 type Props = {
   /** What waits on the person, the latest first (`waitingSessions`). Nothing is drawn while it is empty. */
   waiting: readonly WaitingSession[]
+  /** Whether a row names its machine: only while the tree heads its projects with theirs (`showsMachineHeadings`). */
+  namesMachine: boolean
   focusedId: string | null
   onOpen: (entry: WaitingSession) => void
   onContextMenu: (event: MouseEvent, entry: WaitingSession) => void
@@ -17,9 +19,10 @@ type Props = {
 /**
  * Every session that waits on the person, pinned above the tree: outside its scrolling list and whatever is folded, so
  * nothing that needs you is out of sight. Each row says where the session is (machine · project), since no heading above
- * it does; the session is still listed in its own project too.
+ * it does; with this computer alone there is no other place it could be, so the row gives the project only. The session
+ * is still listed in its own project too.
  */
-export function NeedsYouStrip({ waiting, focusedId, onOpen, onContextMenu }: Props) {
+export function NeedsYouStrip({ waiting, namesMachine, focusedId, onOpen, onContextMenu }: Props) {
   if (waiting.length === 0) return null
   return (
     <section className="mx-needs-strip" aria-label="Needs you">
@@ -28,13 +31,13 @@ export function NeedsYouStrip({ waiting, focusedId, onOpen, onContextMenu }: Pro
         <span className="mx-section-count mono">{waiting.length}</span>
       </div>
       <div className="mx-rows mx-needs-rows" role="list" aria-label="Sessions that need you">
-        {waiting.map((entry) => <WaitingRow key={entry.session.id} entry={entry} selected={entry.session.id === focusedId} onOpen={onOpen} onContextMenu={onContextMenu} />)}
+        {waiting.map((entry) => <WaitingRow key={entry.session.id} entry={entry} namesMachine={namesMachine} selected={entry.session.id === focusedId} onOpen={onOpen} onContextMenu={onContextMenu} />)}
       </div>
     </section>
   )
 }
 
-function WaitingRow({ entry, selected, onOpen, onContextMenu }: { entry: WaitingSession; selected: boolean } & Pick<Props, 'onOpen' | 'onContextMenu'>) {
+function WaitingRow({ entry, namesMachine, selected, onOpen, onContextMenu }: { entry: WaitingSession; selected: boolean } & Pick<Props, 'namesMachine' | 'onOpen' | 'onContextMenu'>) {
   const { session, machine, project } = entry
   const title = rowTitle(session)
   const word = rowWord(session)
@@ -44,7 +47,7 @@ function WaitingRow({ entry, selected, onOpen, onContextMenu }: { entry: Waiting
       <button
         type="button"
         className={`mx-row${session.status === 'needs' ? ' is-needs' : ''}${selected ? ' is-selected' : ''}`}
-        aria-label={`${title} on ${where} in ${project.name}`}
+        aria-label={namesMachine ? `${title} on ${where} in ${project.name}` : `${title} in ${project.name}`}
         aria-current={selected ? 'page' : undefined}
         onClick={() => { onOpen(entry) }}
         onContextMenu={(event) => { onContextMenu(event, entry) }}
@@ -59,8 +62,8 @@ function WaitingRow({ entry, selected, onOpen, onContextMenu }: { entry: Waiting
           <span className="mx-row-sub">
             <span className="mx-row-folder"><MachineIcon remote={machine.name !== null} size={12} /></span>
             {/* The accent marks another machine, as on every row; this computer's name is said plainly. */}
-            <span className={machine.name === null ? 'mx-row-here' : 'mx-row-machine'}>{where}</span>
-            <span className="mx-row-slash" aria-hidden="true">·</span>
+            {namesMachine && <span className={machine.name === null ? 'mx-row-here' : 'mx-row-machine'}>{where}</span>}
+            {namesMachine && <span className="mx-row-slash" aria-hidden="true">·</span>}
             <span className="mx-row-project-name">{project.name}</span>
           </span>
         </span>

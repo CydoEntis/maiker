@@ -349,7 +349,7 @@ function Expanded(props: SidebarProps) {
         <button type="button" className="mx-head-button" aria-label="Open a project" title="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(localMachine) }}><Icon name="plus" size={15} /></button>
       </div>
       {/* Outside the scrolling list, so it stays in view while the tree scrolls. */}
-      <NeedsYouStrip waiting={waiting} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
+      <NeedsYouStrip waiting={waiting} namesMachine={headed} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
       <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
         <section aria-label="Agents" className="mx-machines">
           {tree.map(headed ? machineSection : topProjects)}
@@ -369,7 +369,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={16} /></button>
       </div>
-      <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
+      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={headed} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
@@ -638,7 +638,7 @@ function Rail(props: SidebarProps) {
         <button type="button" className="mx-head-button is-rail" aria-label="Remote machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
       </div>
-      <RowHoverHost controller={hover} sessions={props.sessions} portalContainer={props.portalContainer} />
+      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={showsMachineHeadings(props.machines)} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
