@@ -14,7 +14,6 @@ mod machine;
 pub mod reach;
 pub mod host_key;
 pub mod key_file;
-pub mod key_login;
 pub mod machine_config;
 pub mod machine_target;
 pub mod machine_ids;

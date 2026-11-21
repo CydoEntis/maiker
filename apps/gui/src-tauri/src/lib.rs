@@ -1718,7 +1718,6 @@ pub fn run() {
         .manage(terminal_stream::Wire::default())
         .manage(performance::ProcessStats::default())
         .manage(add_machine::AddProbe::default())
-        .manage(machine_access::KeySetup::default())
         .manage(file_send::Transfers::default())
         .setup(|app| {
             // The development server's origin is let in only by a debug build.
@@ -1791,8 +1790,6 @@ pub fn run() {
             agent_install::install_agent,
             reveal::reveal_in_explorer,
             machine_access::local_user_name,
-            machine_access::inspect_key_login,
-            machine_access::set_up_key_login,
             machine_access::set_machine_user,
             file_send::send_files_to_machine,
             browse::list_remote_folder,

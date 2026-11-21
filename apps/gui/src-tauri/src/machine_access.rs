@@ -1,17 +1,14 @@
-//! How a person gets a machine to log in from the window, without a terminal: set the user it
-//! connects as, and the password-once key setup. A machine's host key is never asked about here: ssh
-//! records a new one itself and refuses a changed one (`maitty_machines::new_host_keys`). The work is
-//! in `maitty_machines`; here it is run off the UI thread and tied to a machine by name.
+//! How a person changes the user a machine connects as from the window, without a terminal. Keys
+//! and host keys are the person's own ssh setup (ADR 0017): ssh records a new host key itself and
+//! refuses a changed one (`maitty_machines::new_host_keys`). The work is in `maitty_machines`; here
+//! it is run off the UI thread and tied to a machine by name.
 
-use maitty_machines::host_key::{self, Standing, TOOL_LIMIT, Tools};
-use maitty_machines::key_login;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use maitty_machines::machine_config::set_target;
 use maitty_machines::machine_target::{build_target, split_target, valid_user};
-use serde::Serialize;
 
-/// The ssh program, its leading arguments and the target of the machine called `name`.
-fn ssh_of(wire: &crate::terminal_stream::Wire, name: &str) -> Result<(Vec<String>, String), String> {
+/// The ssh target of the machine called `name`.
+fn target_of(wire: &crate::terminal_stream::Wire, name: &str) -> Result<String, String> {
     let handle = wire.handle()?;
     let id = handle
         .id_of(name)
@@ -19,10 +16,10 @@ fn ssh_of(wire: &crate::terminal_stream::Wire, name: &str) -> Result<(Vec<String
     let route = handle
         .route(id)
         .ok_or_else(|| format!("{name} is no longer in the list"))?;
-    let (ssh, target) = route
+    let (_, target) = route
         .ssh_parts()
         .ok_or_else(|| format!("{name} is not reached over ssh"))?;
-    Ok((ssh.to_vec(), target.to_string()))
+    Ok(target.to_string())
 }
 
 /// The user name this computer's ssh would connect as when a machine names none.
@@ -39,7 +36,7 @@ pub fn local_user_name() -> Option<String> {
 /// stopped and started from the entry, so its sessions are shown again once it connects.
 #[tauri::command]
 pub async fn set_machine_user(wire: tauri::State<'_, crate::terminal_stream::Wire>, name: String, user: String) -> Result<(), String> {
-    let (_, target) = ssh_of(&wire, &name)?;
+    let target = target_of(&wire, &name)?;
     let (_, host) = split_target(&target);
     let new_target = build_target(&user, host)?;
     let file = config_path().with_file_name("config.local.toml");
@@ -62,148 +59,9 @@ pub async fn set_machine_user(wire: tauri::State<'_, crate::terminal_stream::Wir
     Ok(())
 }
 
-/// What the "Set up key login" dialog is told before it asks for anything.
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(tag = "status", rename_all = "kebab-case")]
-pub enum KeyLoginReport {
-    /// This computer cannot do it; `reason` says why and the terminal is the way.
-    Unavailable { reason: String },
-    /// The machine's host key is not on record yet: it has to connect once first, which records it.
-    HostKeyNotTrusted,
-    /// There is no key here. Creating one is the person's choice; it will be made at `path`.
-    NoKey { path: String },
-    /// The key here has a passphrase, which Maiker does not handle.
-    Encrypted { path: String },
-    /// Something is at the usual place that cannot be used or safely replaced.
-    Blocked { reason: String },
-    Ready { path: String, key_type: String, fingerprint: String },
-}
-
-/// What setting up came to. Never carries the password.
-#[derive(Debug, Serialize, PartialEq, Eq)]
-#[serde(tag = "outcome", rename_all = "kebab-case")]
-pub enum KeySetupResult {
-    /// The key is on the machine and a key login worked. `added` is false when it was there already.
-    Installed { added: bool, fingerprint: String },
-    WrongPassword { attempts_left: u32 },
-    /// Too many wrong passwords in a row for this machine.
-    Stopped,
-    /// Could not be done safely: why, and the exact steps to do it by hand.
-    Manual { reason: String, steps: String },
-    /// The key was put there but a key login still failed.
-    NotVerified { message: String, steps: String },
-}
-
-/// Wrong passwords typed per machine, in memory only.
-#[derive(Default)]
-pub struct KeySetup(std::sync::Mutex<key_login::Attempts>);
-
-fn ssh_dir() -> Result<std::path::PathBuf, String> {
-    key_login::default_ssh_dir()
-        .ok_or_else(|| "Could not find your home folder".to_string())
-}
-
-/// Whether the machine's host key is trusted already: the password step never runs before that.
-fn host_key_trusted(ssh: &[String], target: &str) -> Result<bool, String> {
-    let seen = host_key::inspect(ssh, target, &Tools::default(), TOOL_LIMIT).map_err(|error| format!("{error:#}"))?;
-    Ok(seen.standing == Standing::Trusted)
-}
-
-/// What the dialog needs to know: whether this can run, the host key, and the key on this computer.
-#[tauri::command]
-pub async fn inspect_key_login(wire: tauri::State<'_, crate::terminal_stream::Wire>, name: String) -> Result<KeyLoginReport, String> {
-    if let Some(reason) = key_login::unavailable_reason() {
-        return Ok(KeyLoginReport::Unavailable { reason: reason.to_string() });
-    }
-    let (ssh, target) = ssh_of(&wire, &name)?;
-    tauri::async_runtime::spawn_blocking(move || -> Result<KeyLoginReport, String> {
-        if !host_key_trusted(&ssh, &target)? {
-            return Ok(KeyLoginReport::HostKeyNotTrusted);
-        }
-        Ok(match key_login::local_key(&ssh_dir()?) {
-            key_login::LocalKey::Ready { path, key } => KeyLoginReport::Ready {
-                path: path.display().to_string(),
-                key_type: key.key.key_type.clone(),
-                fingerprint: key.fingerprint(),
-            },
-            key_login::LocalKey::Encrypted { path } => KeyLoginReport::Encrypted { path: path.display().to_string() },
-            key_login::LocalKey::Missing { path } => KeyLoginReport::NoKey { path: path.display().to_string() },
-            key_login::LocalKey::Blocked { reason } => KeyLoginReport::Blocked { reason },
-        })
-    })
-    .await
-    .map_err(|error| format!("Could not look at the key: {error}"))?
-}
-
-/// Install this computer's public key on a machine, using the account password once. The password
-/// is taken into a `Secret` at once (the argument is emptied), used for the ssh steps through a
-/// one-shot askpass helper, and wiped; it is never echoed back, logged or stored. `create_key`
-/// says the person agreed to make a new key when there is none.
-#[tauri::command]
-pub async fn set_up_key_login(
-    wire: tauri::State<'_, crate::terminal_stream::Wire>,
-    attempts: tauri::State<'_, KeySetup>,
-    name: String,
-    password: String,
-    create_key: bool,
-) -> Result<KeySetupResult, String> {
-    let secret = key_login::Secret::new(password).map_err(|error| format!("{error:#}"))?;
-    if let Some(reason) = key_login::unavailable_reason() {
-        return Err(reason.to_string());
-    }
-    if !attempts.0.lock().map_err(|_| "Key setup is busy".to_string())?.allowed(&name) {
-        return Ok(KeySetupResult::Stopped);
-    }
-    let (ssh, target) = ssh_of(&wire, &name)?;
-    let outcome = tauri::async_runtime::spawn_blocking(move || -> Result<(key_login::PublicKey, key_login::Installed), String> {
-        if !host_key_trusted(&ssh, &target)? {
-            return Err("Connect to the machine once first, so its host key is on record; the password is never sent to a host this computer does not know.".to_string());
-        }
-        let key = match key_login::local_key(&ssh_dir()?) {
-            key_login::LocalKey::Ready { key, .. } => key,
-            key_login::LocalKey::Missing { path } if create_key => {
-                key_login::create_key("ssh-keygen", &path, key_login::STEP_LIMIT).map_err(|error| format!("{error:#}"))?;
-                match key_login::local_key(&ssh_dir()?) {
-                    key_login::LocalKey::Ready { key, .. } => key,
-                    _ => return Err("The new key could not be read back".to_string()),
-                }
-            }
-            key_login::LocalKey::Missing { .. } => return Err("There is no key yet; agree to create one first".to_string()),
-            key_login::LocalKey::Encrypted { path } => {
-                return Err(format!("{} has a passphrase. Maiker does not handle passphrases here; use the terminal.", path.display()));
-            }
-            key_login::LocalKey::Blocked { reason } => return Err(reason),
-        };
-        let done = key_login::install(&ssh, &target, &secret, &key).map_err(|error| format!("{error:#}"))?;
-        Ok((key, done))
-    })
-    .await
-    .map_err(|error| format!("Could not set up the key: {error}"))??;
-    let (key, done) = outcome;
-    let mut counts = attempts.0.lock().map_err(|_| "Key setup is busy".to_string())?;
-    Ok(match done {
-        key_login::Installed::WrongPassword => KeySetupResult::WrongPassword { attempts_left: counts.wrong(&name) },
-        key_login::Installed::Done { added } => {
-            counts.forget(&name);
-            wire.handle()?.retry(&name);
-            KeySetupResult::Installed { added, fingerprint: key.fingerprint() }
-        }
-        key_login::Installed::Manual { reason, steps } => KeySetupResult::Manual { reason, steps },
-        key_login::Installed::NotVerified { message } => KeySetupResult::NotVerified { message, steps: key_login::manual_steps(&key, None) },
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn what_key_setup_tells_the_window_has_no_place_for_the_password() {
-        let told = serde_json::to_string(&KeySetupResult::WrongPassword { attempts_left: 2 }).unwrap();
-        assert_eq!(told, r#"{"outcome":"wrong-password","attempts_left":2}"#);
-        let manual = serde_json::to_string(&KeySetupResult::Manual { reason: "r".into(), steps: "s".into() }).unwrap();
-        assert!(!manual.contains("password"));
-    }
 
     #[test]
     fn the_local_user_name_is_only_one_ssh_could_use() {
