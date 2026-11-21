@@ -271,13 +271,20 @@ impl AcpDialect {
         ensure!(asked.session_id == *session, "The agent asked on another session");
         ensure!(!self.permissions.contains_key(&id), "The agent asked twice under one id");
         ensure!(self.permissions.len() < MAX_OPEN_PERMISSIONS, "The agent has too many requests open");
+        // The first option of each kind is the one an answer sends back, so it is the one named.
         let mut choices = Vec::new();
+        let mut choice_labels = Vec::new();
         for option in &asked.options {
             if let Some(decision) = decision_of(option.kind)
                 && !choices.contains(&decision)
             {
                 choices.push(decision);
+                choice_labels.push(label(&option.name));
             }
+        }
+        // A name that cleans to nothing would be a button with no words: none are shown then.
+        if choice_labels.iter().any(String::is_empty) {
+            choice_labels.clear();
         }
         let call = &asked.tool_call;
         let what = approval_text(&label(call.title.as_deref().unwrap_or_default()));
@@ -296,9 +303,10 @@ impl AcpDialect {
             choices,
             // The command is the agent's title for it, not the exact text it will run.
             can_remember: false,
+            choice_labels,
         };
         self.permissions.insert(id, asked.options);
-        Ok(vec![Step::Emit(ProviderEvent::ApprovalRequested { request, command_hash: None })])
+        Ok(vec![Step::Emit(ProviderEvent::ApprovalRequested { request: Box::new(request), command_hash: None })])
     }
 }
 

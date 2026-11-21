@@ -125,7 +125,8 @@ pub enum ProviderEvent {
     /// The provider waits for a person: an approval or questions. `command_hash` is what a
     /// remembered answer to a command holds to, from the command exactly as sent.
     ApprovalRequested {
-        request: ApprovalRequest,
+        // Boxed: a request is far larger than any other event.
+        request: Box<ApprovalRequest>,
         command_hash: Option<String>,
     },
     /// The provider asked something this project cannot answer. It is left unanswered.

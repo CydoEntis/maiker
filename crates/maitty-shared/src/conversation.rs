@@ -242,6 +242,11 @@ pub struct ApprovalRequest {
     /// predates it, which then offers no such choice.
     #[serde(default)]
     pub can_remember: bool,
+    /// The provider's own name for each of `choices`, in the same order, for a provider that
+    /// names its options. They pair with `choices` only while the two are as long as each
+    /// other; empty from a provider that names none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choice_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -757,6 +762,21 @@ pub mod tests {
         assert_eq!(validate_registry(&[saved]), Ok(()));
         assert_eq!(validate_registry(&[unnamed]), Err(IdentityError::IncompleteBinding));
         assert_eq!(validate_registry(&[other_agent]), Err(IdentityError::IncompleteBinding));
+    }
+
+    #[test]
+    fn an_approval_from_before_option_names_reads_with_none_and_writes_as_it_did() {
+        let old = serde_json::json!({
+            "request_id": 4, "kind": "Command", "item_id": null, "turn_id": null, "command": "ls",
+            "reason": null, "cwd": null, "changes": [], "questions": [], "choices": ["Accept", "Decline"]
+        });
+
+        let read: ApprovalRequest = serde_json::from_value(old).unwrap();
+        let named = ApprovalRequest { choice_labels: vec!["Allow".into(), "Reject".into()], ..read.clone() };
+
+        assert!(read.choice_labels.is_empty());
+        assert!(serde_json::to_value(&read).unwrap().get("choice_labels").is_none());
+        assert_eq!(serde_json::to_value(&named).unwrap()["choice_labels"], serde_json::json!(["Allow", "Reject"]));
     }
 
     #[test]

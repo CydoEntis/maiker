@@ -138,6 +138,8 @@ client, and a peer from before 121 cannot decode one that holds an ACP conversat
 121 and every older peer is refused (test: `a_peer_from_before_acp_is_refused_because_it_cannot_read_an_acp_conversation`).
 As with 115, the `*_SINCE` gates and `introduced_in` arms of 116 to 119 became dead and were removed; the lines below
 that name them record when each message appeared. 120 belongs to a change that landed beside this one.
+`ApprovalRequest.choice_labels` (defaulted; a test reads the shape from before it) holds a provider's own names for
+`choices`, in the same order; they pair only while the two are as long as each other.
 
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each

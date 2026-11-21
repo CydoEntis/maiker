@@ -219,6 +219,7 @@ fn only_the_most_recent_answered_approvals_are_kept() {
         permissions: None,
         choices: vec![ApprovalDecision::Accept, ApprovalDecision::Decline],
         can_remember: false,
+        choice_labels: Vec::new(),
     };
     let mut state = super::super::State::default();
     for n in 0..70 {
