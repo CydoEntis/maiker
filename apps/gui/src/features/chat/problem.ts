@@ -80,7 +80,8 @@ export function problemWords(problem: ChatProblem, now: number): ProblemWords {
       const how = killed !== undefined
         ? `${problem.agent} stopped in the middle of a step. ${killed}.`
         : `${problem.agent}${problem.code === PLAIN_EXIT ? ` exited with code ${String(PLAIN_EXIT)}` : ' exited'} in the middle of a step.`
-      const carry = problem.onRestart === null ? 'The terminal log has the reason.' : 'Restart to carry on from the last message.'
+      // A chat the daemon owns has no terminal to restart or to read (ADR 0018): its reason is the line under its box.
+      const carry = problem.onRestart !== null ? 'Restart to carry on from the last message.' : problem.onViewLog !== null ? 'The terminal log has the reason.' : 'The reason is under the message box.'
       return {
         title: `${problem.agent} stopped`,
         reason: `${how} Your messages and changes are safe. ${carry}`,

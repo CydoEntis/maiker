@@ -95,9 +95,17 @@ impl Daemon {
                     _ => "unknown",
                 };
                 let id = pending.conversation();
-                let over_acp = self.conversations.iter().map(|c| (c.id, c.binding.provider))
+                let provider = self.conversations.iter().map(|c| (c.id, c.binding.provider))
                     .chain(self.pending_starts.iter().map(|p| (p.id, p.settings.provider)))
-                    .any(|(other, provider)| other == id && provider == Provider::Acp);
+                    .find_map(|(other, provider)| (other == id).then_some(provider));
+                let over_acp = provider == Some(Provider::Acp);
+                // The person reads this line under their chat: it names the agent they are talking to.
+                let who = match provider {
+                    Some(Provider::Claude) => "Claude",
+                    Some(Provider::Gemini) => "Gemini",
+                    Some(Provider::Acp) => "The agent",
+                    Some(Provider::Codex) | None => "Codex",
+                };
                 let reason = match (&pending, over_acp) {
                     (Pending::Opening { expected: Some(_), .. }, true) => format!(
                         "The agent did not continue the saved conversation (error {}); it can only when the agent says it loads sessions",
@@ -106,7 +114,7 @@ impl Daemon {
                     (Pending::Opening { .. }, true) => {
                         format!("The agent did not open a conversation (error {}); nothing was sent again", error.code)
                     }
-                    _ => format!("Codex rejected {stage} (RPC error {}); no fallback or automatic resend was attempted", error.code),
+                    _ => format!("{who} rejected {stage} (RPC error {}); no fallback or automatic resend was attempted", error.code),
                 };
                 self.conversation_fail(pending, reason);
                 return Ok(());
