@@ -678,7 +678,7 @@
 .mx-app[data-motion="reduced"] .mx-mach-spin { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-mach-spin { animation: none; } }
 
-/* Settings › Remote machines (docs/UI.md): a list with one line per machine, a machine's page, and Add a machine. Colour only
+/* Settings › Remote machines (docs/UI.md): a list with one line per machine, its settings folded under More, and Add a machine. Colour only
    ever says status: green connected, amber needs you, red failed, teal working. The one filled button is the neutral primary,
    filled with the text colour; no button is filled with a status colour or the accent. */
 .mx-rm, .mx-rm-page { display: flex; flex-direction: column; gap: 12px; }
@@ -697,9 +697,8 @@
 .mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }
 .mx-rm-list { border-top: 1px solid var(--line); }
 .mx-rm-item { border-bottom: 1px solid var(--line); }
-.mx-rm-row { display: grid; grid-template-columns: 14px minmax(90px, 140px) minmax(0, 1fr) auto 72px; align-items: center; column-gap: 12px; min-height: 39px; padding: 0 6px; cursor: pointer; }
+.mx-rm-row { display: grid; grid-template-columns: 14px minmax(90px, 140px) minmax(0, 1fr) auto 72px auto auto; align-items: center; column-gap: 12px; min-height: 39px; padding: 0 6px; cursor: pointer; }
 .mx-rm-row:hover { background: var(--m-hover); }
-.mx-rm-row.is-current { background: var(--m-raise); box-shadow: inset 2px 0 0 var(--fg); }
 .mx-rm-name { min-width: 0; text-align: left; font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-rm-addr { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-rm-line { font-size: 12.5px; color: var(--fg2); text-align: right; white-space: nowrap; }
@@ -767,17 +766,10 @@
 .mx-rm-host.is-added .mx-rm-hostname, .mx-rm-host.is-added .mx-rm-hostaddr { color: var(--dim); }
 .mx-rm-host.is-added .mx-rm-hostgo { opacity: 1; color: var(--muted); }
 
-.mx-rm-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--fg); }
-.mx-rm-status { border-top: 1px solid var(--line); }
-.mx-rm-rows { border-top: 1px solid var(--line); }
-.mx-rm-prow { display: flex; align-items: center; gap: 16px; min-height: 46px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--fg); }
-.mx-rm-prow > label, .mx-rm-prow > .mx-rm-k { flex: 0 0 120px; }
-.mx-rm-value { flex: 1; min-width: 0; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-rm-value.mono { font-size: 12px; }
-.mx-rm-nameinput { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
-.mx-rm-ptext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 6px 0; }
-.mx-rm-ptext > :last-child { font-size: 12px; color: var(--dim); }
-.mx-rm-pbuttons { display: flex; align-items: center; gap: 6px; }
+/* A machine's More fold: plain settings rows under its row, indented past the mark so they read as the machine's. */
+.mx-rm-fold { padding: 0 6px 6px 32px; }
+.mx-rm-foldvalue { font-size: 12.5px; color: var(--fg2); text-align: right; }
+.mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
 .mx-rm-quiet { padding: 0; font-size: 12.5px; color: var(--dim); }
 .mx-rm-quiet:hover { color: var(--danger); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }

@@ -831,7 +831,7 @@ could not get in, the machine has a newer maiker than this app, which is never d
 Windows machine, which cannot be a remote yet). After a success the machine is dialled again. The exact command
 is still shown with a **Copy command** button, to run in a terminal instead.
 
-Each machine on that page has two switches. **Copy to your clipboard** (what that machine's sessions ask to
+Each machine there has two switches (in the desktop app, under the machine's **More**). **Copy to your clipboard** (what that machine's sessions ask to
 copy is put on your clipboard) is on until you turn it off. **Notifications** (its notices, and a notice when
 its sessions need you or finish, each starting with `[name]`) is off until you turn it on. They are written to
 the machine's entry in `config.local.toml`, as `clipboard = false` and `notices = true`. The desktop app plays

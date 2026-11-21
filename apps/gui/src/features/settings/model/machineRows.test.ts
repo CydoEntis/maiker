@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { machineHeads, type MachineHead, type RemoteMachine } from '@/features/workspace/model/machines'
-import { matching, maikerLine, ordered, pageStatusOf, rowOf, stoppedOnHostKey, updatable } from './machineRows'
+import { matching, maikerLine, ordered, foldStatusOf, rowOf, stoppedOnHostKey, updatable } from './machineRows'
 
 type State = RemoteMachine['state']
 
@@ -76,17 +76,17 @@ describe('finding machines', () => {
   })
 })
 
-describe("a machine's page status", () => {
+describe("a machine's fold status", () => {
   it('says connected with the sessions', () => {
-    expect(pageStatusOf(head('box', 'connected'), 2)).toMatchObject({ glyph: '●', lead: 'Connected · 2 sessions', action: null })
+    expect(foldStatusOf(head('box', 'connected'), 2)).toMatchObject({ glyph: '●', lead: 'Connected · 2 sessions', action: null })
   })
 
   it('gives the ssh-copy-id command for a rejected key', () => {
-    expect(pageStatusOf(head('box', 'needs-login'), 0)).toMatchObject({ lead: 'Key rejected.', command: 'ssh-copy-id me@box.lan', action: 'retry' })
+    expect(foldStatusOf(head('box', 'needs-login'), 0)).toMatchObject({ lead: 'Key rejected.', command: 'ssh-copy-id me@box.lan', action: 'retry' })
   })
 
-  it('leaves the time to the page, so it keeps counting', () => {
-    expect(pageStatusOf(head('box', 'unreachable', { why: 'no answer' }), 0)).toMatchObject({ lead: "Can't reach it", more: 'no answer', showsSince: true, action: 'retry' })
+  it('leaves the time to the fold, so it keeps counting', () => {
+    expect(foldStatusOf(head('box', 'unreachable', { why: 'no answer' }), 0)).toMatchObject({ lead: "Can't reach it", more: 'no answer', showsSince: true, action: 'retry' })
   })
 })
 

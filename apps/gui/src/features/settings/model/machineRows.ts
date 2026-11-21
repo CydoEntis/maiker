@@ -12,7 +12,7 @@ export const UPDATE_ALL_FROM = 2
 export type Glyph = '●' | '○' | '!' | '×'
 export type Tone = 'ok' | 'quiet' | 'needs' | 'bad'
 
-/** What a row's one button does: Fix opens the page, the others run in place. */
+/** What a row's one button does: Fix opens the row's More fold, the others run in place. */
 export type RowAction = 'fix' | 'retry' | 'update' | 'install'
 
 export type MachineRow = {
@@ -110,22 +110,22 @@ export function updatable(heads: readonly MachineHead[]): MachineHead[] {
   return heads.filter((head) => head.updateAction === 'update')
 }
 
-export type PageStatus = {
+export type FoldStatus = {
   glyph: Glyph
   tone: Tone
   /** The sentence in the text colour. */
   lead: string
   /** The sentence after it, in the second colour. */
   more: string | null
-  /** The lead is followed by " for 14 min.": the page adds it, so the time stays live. */
+  /** The lead is followed by " for 14 min.": the fold adds it, so the time stays live. */
   showsSince: boolean
   /** A command to run once in a terminal, with a Copy button. */
   command: string | null
   action: 'retry' | null
 }
 
-/** What the machine's own page says at the top, from the same state as its row. */
-export function pageStatusOf(head: MachineHead, sessions: number | null): PageStatus {
+/** What a machine's More fold says at the top, from the same state as its row. */
+export function foldStatusOf(head: MachineHead, sessions: number | null): FoldStatus {
   const word = head.chip?.word
   if (word === 'needs login') {
     const command = head.target === null ? null : `ssh-copy-id ${head.target}`
@@ -145,7 +145,7 @@ export function pageStatusOf(head: MachineHead, sessions: number | null): PageSt
   return { glyph: '○', tone: 'quiet', lead: head.chip === null ? 'Connecting…' : `${capitalised(head.chip.word)}…`, more: null, showsSince: false, command: null, action: null }
 }
 
-/** What the page's Maiker row says of the app on the machine. */
+/** What the fold's Maiker row says of the app on the machine. */
 export function maikerLine(head: MachineHead, thisVersion: string | null): string {
   if (head.updateAction === 'install') return 'Not installed'
   if (head.updateAction === 'update') return thisVersion === null ? "Older than this computer's" : `Older · this computer has ${thisVersion}`

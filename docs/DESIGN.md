@@ -391,8 +391,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   sidebar settings sit in Appearance, the daemon's in Remote machines ("This computer") and the approved commands in
   Permissions. **Usage** and **Performance** have no nav item: Ctrl+Shift+U and Ctrl+Shift+P or the palette open them,
   and they take the whole dialog, with no nav (Usage's groups run full width).
-  **Remote machines** (`MachinesPage.tsx`) is one list, a machine's page, or this computer's details, one at a time in the
-  same pane; **+ Add machine** here, the sidebar's **+ Remote machine** (foot or rail) and the palette all open the
+  **Remote machines** (`MachinesPage.tsx`) is one list or this computer's details, one at a time in the
+  same pane; there is no page per machine; **+ Add machine** here, the sidebar's **+ Remote machine** (foot or rail) and the palette all open the
   same flow as one dialog (`AddMachineDialog`, a fixed-size 600 x 560 `.mx-rename.mx-addmachine` card in every state: a header with a
   server mark, the title, the address in mono and a close button; a scrolling body; a foot). The first step is one mono `Address`
   field with **Connect**, a hint line ("Type user@host, an IP address, or a name from your SSH config. Add :port if it is not 22.")
@@ -419,12 +419,15 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
   `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·
-  older Maiker", "Maiker not installed") and at most one outlined button (Fix opens its page; Retry, Update and Install
-  run in place and say Retrying… or Updating… meanwhile). Order: failed, then to update, then connecting, then just
+  older Maiker", "Maiker not installed"), at most one outlined button (Fix opens the row's fold; Retry, Update and Install
+  run in place and say Retrying… or Updating… meanwhile), then **More** and **Remove** as text buttons. Order: failed, then to update, then connecting, then just
   added, then connected by sessions. A search field shows past 12 machines. A "This computer" line with **Details**
-  sits under the list. A machine's page is **← All machines**, its name, one status block, and 46px plain rows (Name,
-  saved as you type as the sidebar nickname; Address; Maiker with its Update; Copy to your clipboard; Notifications;
-  **Remove…**, which asks in place). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
+  sits under the list. **More** (or a click on the row) folds the machine's settings open under its row, one fold at a
+  time (`MachineFold.tsx`, indented past the mark): for a failed machine first its status block (the reason, how long,
+  raw output behind Details; a rejected login adds the key command with Copy, **Try again** and **Open a terminal**),
+  then settings rows (Name, saved as you type as the sidebar nickname; Address; Maiker; Copy to your clipboard and
+  Notifications, two switches). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
+  Nothing on <name> is deleted.", **Remove** and Cancel). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
   a mark or teal spinner, one sentence, an optional command or fingerprint with Copy, the actions, and raw output behind
   Details. **Add a machine** is the dialog described above, never a page here. The key terminal (`KeyTerminal.tsx`, a 150px well `.mx-key-term`, inside the amber key step) has the command typed and not run, takes keyboard focus and shows a one-line hint ("Press Enter, then type the password here. It goes to ssh like any terminal input; Maiker does not read or keep it."); the machine is dialled every 5 seconds (up to 10 minutes) until it connects and the checklist then carries on by itself. Esc goes to the terminal while it has focus and closes the dialog anywhere else; Ctrl+Tab leaves the terminal for the Copy button, and the dialog's close button is always there. Whatever closes the dialog ends the shell. On Windows the typed line is the PowerShell one. **Fix this machine** is the same dialog opened from a down machine's red dot in the sidebar, titled "Fix <name>", with no address field: the checklist stopped at the step that failed (the key step, the host-key step, or Reach with the host's reason and a primary **Try again**), and **Open in Settings** in the foot.
   **Search settings**, a 30px field under the nav's title, looks through every page in nav order and Performance
