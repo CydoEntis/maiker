@@ -876,6 +876,7 @@ mod tests {
         assert!(verified_version("2.1.314"));
         assert!(verified_version("2.1.316"));
         assert!(verified_version("2.1.327"));
+        assert!(verified_version("2.1.330"));
         assert!(!verified_version("2.1.313"));
         assert!(!verified_version("2.1.31"));
     }

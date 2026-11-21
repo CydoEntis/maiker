@@ -72,8 +72,17 @@ of the exact session (it recalled the first turn) and the result frames with `us
 are ignored. Two shapes, also seen on 2.1.325: `system`/`init` arrives after the user message,
 not before the initialize answer, so the adapter checks its session during the turn too; and an
 interrupted turn ends with `is_error: true`, `subtype: "error_during_execution"`, which the adapter
-reports as `interrupted` once Claude acknowledged the interrupt. Verified versions:
-2.1.312, 2.1.314, 2.1.316 and 2.1.327 (`VERIFIED_VERSIONS` in `maitty-provider-claude`).
+reports as `interrupted` once Claude acknowledged the interrupt.
+Claude Code 2.1.330 passed on Linux on 2026-11-20 (`--model haiku`, a scratch project) through the
+adapter's launch arguments, parser and turn projector, not through a daemon: three processes on one
+session, a Bash `can_use_tool` request approved (the file was written), one denied after
+`--resume`, and an interrupt after a second `--resume`. All 97 frames parsed and the projector
+ended the turns as completed, completed and interrupted. Both `can_use_tool` requests carried
+`tool_use_id`, so an approval links to its tool step by that id; the request-id fallback in
+`approval_request` stays for a request without one. The request also carries `description`,
+`display_name`, `blocked_path` and `permission_suggestions`, which the adapter does not read.
+Verified versions: 2.1.312, 2.1.314, 2.1.316, 2.1.327 and 2.1.330 (`VERIFIED_VERSIONS` in
+`maitty-provider-claude`).
 A Claude chat with history is not taken up again after a daemon restart; that is the daemon's
 history rule, not a version limit.
 
@@ -89,5 +98,5 @@ version, so a chat does not start on it):
   servers from `<config root>/.claude.json`, not from `~/.claude.json`. `integrate` registers
   Maiker's server in `~/.claude.json` for the default root, so a chat on the default root loads
   no Maiker tool server and starts no helper.
-Native Linux/Omarchy and macOS checks, plus daemon recovery after interruption,
-remain open; keep those as release acceptance items in the roadmap.
+A Claude chat in the desktop app on 2.1.330 (approve, decline, Stop, close the window, reopen),
+native Linux/Omarchy and macOS checks, and daemon recovery after interruption remain open.
