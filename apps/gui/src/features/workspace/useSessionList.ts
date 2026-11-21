@@ -11,13 +11,14 @@ import { rememberSessions, withEnded } from './model/ended'
 import { remoteTerminals } from './model/machines'
 import type { ChatAgent } from './model/chatView'
 import type { Layout } from './model/layout'
+import { isListedChatSession } from './model/chatSession'
 import { keepLabels, nextResumeAt, type SessionView, toSessionView } from './model/session'
 
 /** The longest wait a browser timer takes (a signed 32-bit count of milliseconds); a longer one fires at once. */
 const MAX_TIMER_MS = 2_147_483_647
 
-/** Terminal sessions only. The terminal experiment has no chat view, so a chat the daemon owns stays running but is not listed. */
-const isInSidebar = (item: Conversation): boolean => item.kind === 'terminal'
+/** Terminal sessions, and the chats the daemon owns with no terminal (ADR 0018): what the Chat view starts must be listed, or it runs where nobody sees it. */
+const isInSidebar = (item: Conversation): boolean => item.kind === 'terminal' || isListedChatSession(item)
 
 /** This window closed the session, or the daemon said why it left: its row goes at once. */
 const leftWithReason = (id: string): boolean => wasClosed(id) || daemonSaidRemoved(id)

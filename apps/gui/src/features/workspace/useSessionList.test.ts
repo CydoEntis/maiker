@@ -177,3 +177,29 @@ describe('a session of another machine the next list leaves out', () => {
     warn.mockRestore()
   })
 })
+
+// ADR 0018: the Chat view starts chats the daemon owns, with no terminal. One that is not listed runs where nobody sees it.
+describe('a chat the daemon owns with no terminal', () => {
+  const chat = (id: string, archived = false): Conversation => ({
+    id, generation: 1, execution: 'Structured', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', repo: null, branch: 'working tree', provider: 'Claude', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude',
+    chat: { conversation: Number(id), generation: 1 }, archived, details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } },
+  })
+  // Made once: a list that is new on every render would be a new list to the hook each time.
+  const listOf = (...items: Conversation[]) => ({ ...PROPS, sessionsQuery: { data: items } as UseQueryResult<Conversation[]> })
+
+  it('is listed beside the terminal sessions', () => {
+    const props = listOf(terminal('t1'), chat('5'))
+
+    const { result } = renderHook(() => useSessionList(props))
+
+    expect(result.current.sessions.map((session) => session.id)).toEqual(['t1', '5'])
+  })
+
+  it('is not listed once it is put away', () => {
+    const props = listOf(chat('5', true))
+
+    const { result } = renderHook(() => useSessionList(props))
+
+    expect(result.current.sessions).toEqual([])
+  })
+})
