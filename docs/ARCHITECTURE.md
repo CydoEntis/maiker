@@ -264,7 +264,10 @@ configuration projection and completion-event mapping live in
 Claude stream parsing, version checks, session IDs, launch arguments, frame
 limit, hook event definitions, command-group projection and replacement,
 ownership, stale-hook projection, native event mapping and status-line config
-policy live in `maitty-provider-claude`. JSONC configuration editing remains in
+policy live in `maitty-provider-claude`. `maitty-provider` holds the contract an adapter
+implements: the `ProviderDialect` trait, a state machine with no I/O, and the commands, steps
+and events it exchanges with the daemon. No adapter implements it yet (MAITTY-483, MAITTY-484).
+JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.
 Completing the package split is tracked by
 [ADR 0004](adr/0004-client-split-and-desktop-host.md).
@@ -321,7 +324,7 @@ crates/
   maitty-machines/                the `[[machines]]` definition and its checks and edits, the ssh line, failure classes, dial, connection registry and link supervisors, the cleaning and policy for what another machine sends, the daemon-id store, the `~/.ssh/config` parser, the reader of this computer's machine list (`local_machines`: `config.local.toml`, as both apps read it), and the atomic state-file helpers (`write_atomic`, `read_state`, which `maitty-core` re-exports), shared by both apps
   maitty-highlight/               syntax highlighting for file previews, shared by both apps (STACK: syntect)
   maitty-test-support/            test-only helpers shared across crates: building and locating the fake-ssh shim, running a command with a time limit
-  adapters/                       Codex, Claude and future provider adapters
+  adapters/                       the provider contract (`maitty-provider`) and the Codex, Claude and future provider adapters
 scripts/                          repository checks, e.g. `check-gui-deps.sh` (the desktop app's dependency rule)
 docs/                             architecture, roadmap and design specs
 ```

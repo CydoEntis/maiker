@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 
+pub mod capabilities;
 pub mod history;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
