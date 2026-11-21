@@ -4342,6 +4342,7 @@ async fn a_provider_stopped_cleanly_leaves_no_entry_in_the_record() {
 mod queue;
 mod send_now;
 mod continue_turn;
+mod provider_crash;
 mod branch_chat;
 mod claude_chat;
 mod claude_warm;

@@ -45,7 +45,7 @@ async fn settle(session: &mut TestSession, id: ConversationId) {
     .expect("the conversation resumes");
 }
 
-async fn turns_started(session: &TestSession) -> usize {
+pub(super) async fn turns_started(session: &TestSession) -> usize {
     let path = session.fixture.directory.path().join("requests");
     tokio::fs::read_to_string(path)
         .await
