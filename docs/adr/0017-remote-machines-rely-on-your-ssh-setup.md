@@ -36,8 +36,8 @@ reach through `crates/maitty-machines`).
   take those sentences from one shared set in `crates/maitty-machines`, so the two never disagree.
 - **One fallback for a login ssh cannot finish alone.** A login that needs a password or a second code
   (Duo, an OTP) keeps the existing "sign in in a terminal" button; nothing else asks for credentials.
-- **Settings shows remote machines as one short list**, with no page per machine. A remote daemon's
-  clipboard and notice grants stay off by default, as 0007 requires.
+- **Settings shows remote machines as one short list**, with no page per machine. Clipboard and
+  notice grants keep 0007's defaults: clipboard on, notices off.
 
 ## Alternatives considered
 

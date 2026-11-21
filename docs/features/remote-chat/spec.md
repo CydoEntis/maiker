@@ -80,8 +80,8 @@ A remote daemon is untrusted (ADR 0007). Everything a remote conversation suppli
   conversation, with no raw HTML.
 - A link in a remote conversation opens only after the person confirms the address. An image or
   path in it is never fetched or opened on its own.
-- Clipboard writes, notices and sounds from a remote conversation stay off unless that machine
-  opts in, as for its terminal.
+- Clipboard writes from a remote conversation follow that machine's `clipboard` grant (on unless
+  turned off), and its notices and sounds stay off unless it opts in, as for its terminal.
 - A remote conversation's `generation` and ids are used only for requests to that machine's
   lines; they never address another machine's conversations. Ids are kept by machine and
   conversation together, as panes are.

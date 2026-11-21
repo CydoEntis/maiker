@@ -30,8 +30,10 @@ People run agents on more than one computer and want one window over all of them
   `tar` (no library). One pulled here is unpacked only after its listing is checked: plain files and
   folders only, nothing outside its one top folder, no name this computer cannot store safely. One
   sent from here is unpacked in the machine's private cache folder.
-- **A remote daemon is untrusted.** Its clipboard writes, notices and sounds are off unless that
-  machine opts in. Every string it supplies is cleaned before display. Only the line after a
+- **A remote daemon is untrusted.** Its notices and sounds are off unless that machine opts in.
+  Its clipboard writes are on for a machine you added (copying on a remote machine and pasting
+  here is the point of adding it) until its entry says `clipboard = false`, cut to 64 KiB, and
+  each copy says which machine made it. Every string it supplies is cleaned before display. Only the line after a
   marker, and only an absolute path, is taken from a script's output.
 - **Updating a machine replaces its daemon.** `maiker machine update <name>` installs the new file
   and restarts the far daemon so the two ends match. Without `--restart` it restarts only an idle
