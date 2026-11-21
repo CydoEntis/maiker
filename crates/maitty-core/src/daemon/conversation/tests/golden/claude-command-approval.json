@@ -1,0 +1,129 @@
+{
+  "steps": [
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "created",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Idle"
+    },
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [
+        {
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Running"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "User",
+              "text": "hello fake Claude"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "<id 2>",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the provider asked",
+      "open_requests": [
+        {
+          "can_remember": true,
+          "changes": [],
+          "choices": [
+            "Accept",
+            "Decline"
+          ],
+          "command": "echo hello",
+          "cwd": null,
+          "item_id": "tool-request",
+          "kind": "Command",
+          "permissions": null,
+          "questions": [],
+          "reason": null,
+          "request_id": "tool-request",
+          "turn_id": "<id 1>"
+        }
+      ],
+      "recovery": "Running",
+      "status": "Blocked"
+    },
+    {
+      "answered_requests": [
+        {
+          "answered_at_ms": "<time>",
+          "decision": "Accept",
+          "request": {
+            "can_remember": true,
+            "changes": [],
+            "choices": [
+              "Accept",
+              "Decline"
+            ],
+            "command": "echo hello",
+            "cwd": null,
+            "item_id": "tool-request",
+            "kind": "Command",
+            "permissions": null,
+            "questions": [],
+            "reason": null,
+            "request_id": "tool-request",
+            "turn_id": "<id 1>"
+          }
+        }
+      ],
+      "error": null,
+      "history": [
+        {
+          "completed_at_ms": "<time>",
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "User",
+              "text": "hello fake Claude"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "<id 2>",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the turn ended",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Done"
+    }
+  ]
+}

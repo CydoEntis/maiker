@@ -156,6 +156,16 @@ push `{ after, event, payload }` (milliseconds since the last step, `list_sessio
 `copy(JSON.stringify({ source: 'recorded …', steps }))`, and drop the edits. Set `source` to say
 where and when it was recorded, and update the pane numbers the test names for its scenario.
 
+### Chat turn records
+
+`crates/maitty-core/src/daemon/conversation/tests/golden.rs` runs whole turns (a message, tools,
+an approval, a cancel) against the fake Codex and Claude programs and compares what a person
+would see (history, open and answered requests, status) with a saved record in `tests/golden/`.
+The records are what a provider adapter must keep producing while the code behind it changes.
+Clock readings and identities the daemon makes up are replaced by placeholders. When behaviour
+is meant to change, rewrite the records with `GOLDEN_UPDATE=1 cargo test -p maitty-core golden`
+and review the diff like code. Never rewrite one only to make a test pass.
+
 ## Project-specific: testing over ssh (fake-ssh)
 
 Anything that reaches another machine is tested through a stand-in for `ssh`, never a real
