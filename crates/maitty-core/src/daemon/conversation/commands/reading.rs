@@ -2,6 +2,15 @@
 
 use super::*;
 
+/// Whether the provider's saved history is the transcript file it writes, and not asked for.
+fn reads_transcript(provider: Provider) -> bool {
+    use crate::daemon::providers::{HistorySource, adapter};
+    adapter(provider)
+        .structured
+        .as_ref()
+        .is_some_and(|structured| structured.history == HistorySource::Transcript)
+}
+
 impl Daemon {
     pub(in crate::daemon) fn begin_hydration(
         &mut self,
@@ -15,14 +24,10 @@ impl Daemon {
             .iter()
             .find(|c| c.id == id && c.generation == generation)
             .ok_or_else(|| anyhow::anyhow!("No current conversation"))?;
-        if c.binding.provider == Provider::Claude {
+        if reads_transcript(c.binding.provider) {
             return self.begin_claude_history_hydration(id, generation, read, started);
         }
-        let params = maitty_provider_codex::requests::turns_list_params(
-            &c.binding.session_id,
-            None,
-            history::MAX_READ_ENTRIES,
-        );
+        let session = c.binding.session_id.clone();
         let mut history = History::new(id);
         history.revision = self
             .conversation_states
@@ -40,7 +45,12 @@ impl Daemon {
             bytes: 0,
         })?;
         self.conversation_runtimes
-            .request(id, generation, token, Rpc::Turns { params })
+            .request(
+                id,
+                generation,
+                token,
+                Rpc::ReadHistory { session, cursor: None, limit: history::MAX_READ_ENTRIES },
+            )
     }
 
     pub(super) fn begin_claude_history_hydration(
@@ -53,7 +63,7 @@ impl Daemon {
         let Some(conversation) = self.conversations.iter().find(|conversation| {
             conversation.id == id
                 && conversation.generation == generation
-                && conversation.binding.provider == Provider::Claude
+                && reads_transcript(conversation.binding.provider)
         }) else {
             bail!("Claude conversation identity changed during history hydration");
         };

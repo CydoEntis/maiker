@@ -84,9 +84,7 @@ impl Daemon {
             id,
             generation,
             token,
-            Rpc::Interrupt {
-                params: maitty_provider_codex::requests::turn_interrupt_params(&thread_id, &turn_id),
-            },
+            Rpc::Interrupt { session: thread_id, turn: turn_id.clone() },
         );
         if let Err(error) = request {
             self.conversation_requests.remove(&token);

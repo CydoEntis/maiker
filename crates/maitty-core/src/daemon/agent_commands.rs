@@ -5,18 +5,10 @@
 
 use maitty_agent_ask::{claude, codex};
 use maitty_shared::agent_commands::AgentCommand;
+use super::providers::CommandList;
 use maitty_shared::conversation::Provider;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-
-/// The agents that can be asked, by the name of their program. Gemini has no list to ask for.
-fn program(agent: Provider) -> Option<&'static str> {
-    match agent {
-        Provider::Claude => Some("claude"),
-        Provider::Codex => Some("codex"),
-        Provider::Gemini => None,
-    }
-}
 
 /// The folder the agent is started in: the one named when it is an absolute path to a folder that
 /// exists, so the project's commands and skills are among those listed, and the home folder
@@ -50,13 +42,14 @@ pub(super) async fn answer(agent: Provider, folder: String) -> Result<Vec<AgentC
 }
 
 async fn ask(agent: Provider, start: &Path, search: Option<&OsStr>) -> Result<Vec<AgentCommand>, String> {
-    let Some(name) = program(agent) else {
+    // An agent with no list to ask for has no commands.
+    let Some(commands) = &super::providers::adapter(agent).commands else {
         return Ok(Vec::new());
     };
-    let executable = find_program(name, search)?;
-    match agent {
-        Provider::Claude => claude::ask_commands(&executable, start).await,
-        _ => codex::ask_skills(&executable, start).await,
+    let executable = find_program(commands.program, search)?;
+    match commands.list {
+        CommandList::SlashCommands => claude::ask_commands(&executable, start).await,
+        CommandList::Skills => codex::ask_skills(&executable, start).await,
     }
 }
 

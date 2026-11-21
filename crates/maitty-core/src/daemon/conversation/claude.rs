@@ -423,19 +423,19 @@ pub(super) async fn run(
                     return;
                 };
                 match command.request {
-                    super::runtime::Rpc::Start { .. } | super::runtime::Rpc::Resume { .. } => {
+                    super::runtime::Rpc::Open { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Ok(serde_json::json!({"thread":{"id":session}})),
                         }).await;
                     }
-                    super::runtime::Rpc::Turns { .. } => {
+                    super::runtime::Rpc::ReadHistory { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Ok(serde_json::json!({"data":[],"nextCursor":null})),
                         }).await;
                     }
-                    super::runtime::Rpc::Send { params } => {
+                    super::runtime::Rpc::Send { session: target, text, choice, .. } => {
                         match run_turn(
                             TurnContext {
                                 launch: &launch,
@@ -450,7 +450,7 @@ pub(super) async fn run(
                                 warm: &mut warm,
                             },
                             command.token,
-                            params,
+                            Message { session: target, text, choice },
                         ).await {
                             Ok((mut client, choice)) => {
                                 awaiting_first_message = false;
@@ -491,7 +491,7 @@ pub(super) async fn run(
                             }
                         }
                     }
-                    super::runtime::Rpc::Answer { .. } | super::runtime::Rpc::Interrupt { .. } | super::runtime::Rpc::Steer { .. } => {
+                    super::runtime::Rpc::Answer { .. } | super::runtime::Rpc::AnswerInput { .. } | super::runtime::Rpc::Interrupt { .. } | super::runtime::Rpc::Steer { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Err(super::transport::RpcError::adapter_failure(-32001)),
@@ -583,22 +583,17 @@ struct TurnContext<'a> {
     warm: &'a mut Option<Warm>,
 }
 
-/// The model and effort the user picked for this message, read back from its start parameters.
-/// They are checked again here because they end up on a command line.
-fn turn_choice(params: &Value) -> Result<TurnChoice> {
-    let field = |name: &str| params.get(name).and_then(Value::as_str).map(str::to_owned);
-    let choice = TurnChoice {
-        model: field("model"),
-        effort: field("effort"),
-    };
-    choice.validate().map_err(anyhow::Error::msg)?;
-    Ok(choice)
+/// A person's message for a session, with the model and effort picked for it.
+struct Message {
+    session: String,
+    text: String,
+    choice: TurnChoice,
 }
 
 async fn run_turn(
     context: TurnContext<'_>,
     token: u64,
-    params: Value,
+    message: Message,
 ) -> std::result::Result<(Client, TurnChoice), TurnFailure> {
     let TurnContext {
         launch,
@@ -612,25 +607,24 @@ async fn run_turn(
         stop,
         warm,
     } = context;
-    if params.get("threadId").and_then(Value::as_str) != Some(session) {
+    let Message { session: target, text, choice } = message;
+    if target != session {
         return Err(TurnFailure::BeforeStart {
             token,
             error: anyhow::anyhow!("Claude send targets a different session identity"),
         });
     }
-    let text = params
-        .get("input")
-        .and_then(Value::as_array)
-        .and_then(|items| items.first())
-        .filter(|item| item.get("type").and_then(Value::as_str) == Some("text"))
-        .and_then(|item| item.get("text").and_then(Value::as_str))
-        .filter(|text| !text.is_empty())
-        .context("Claude send has no text input")
-        .map_err(|error| TurnFailure::BeforeStart { token, error })?
-        .to_owned();
+    if text.is_empty() {
+        return Err(TurnFailure::BeforeStart {
+            token,
+            error: anyhow::anyhow!("Claude send has no text input"),
+        });
+    }
     let (_, executable, cwd) = launch.paths();
-    let choice = turn_choice(&params)
-        .map_err(|error| TurnFailure::BeforeStart { token, error })?;
+    // Checked again here because the model and effort end up on a command line.
+    choice
+        .validate()
+        .map_err(|error| TurnFailure::BeforeStart { token, error: anyhow::Error::msg(error) })?;
     let args = command_arguments_for_turn(session, !awaiting_first_message, settings, &choice);
     let mut client = match take_warm(warm, &args, session).await {
         Some(client) => client,
@@ -694,18 +688,18 @@ async fn run_turn(
                     return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude command channel closed during a turn") });
                 };
                 match command.request {
-                    super::runtime::Rpc::Answer { request_id, response } => {
-                        let super::transport::RequestId::Text(request_id) = request_id else {
+                    super::runtime::Rpc::Answer { request, decision, .. } => {
+                        let crate::conversation::ProviderRequestId::Text(request_id) = request else {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval ID is not textual") });
                         };
                         let Some(input) = approvals.remove(&request_id) else {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval is stale") });
                         };
-                        let decision = response.get("decision").and_then(Value::as_str);
+                        use crate::conversation::ApprovalDecision;
                         let (behavior, message) = match decision {
-                            Some("accept") => ("allow", None),
-                            Some("decline") => ("deny", Some("The user declined this action.")),
-                            _ => return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude approval decision") }),
+                            ApprovalDecision::Accept => ("allow", None),
+                            ApprovalDecision::Decline => ("deny", Some("The user declined this action.")),
+                            ApprovalDecision::AcceptForSession | ApprovalDecision::Cancel => return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude approval decision") }),
                         };
                         let mut answer = serde_json::json!({"behavior":behavior,"updatedInput":input});
                         if let Some(message) = message { answer["message"] = Value::String(message.into()); }
@@ -713,9 +707,8 @@ async fn run_turn(
                             .await
                             .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     }
-                    super::runtime::Rpc::Interrupt { params } => {
-                        if params.get("threadId").and_then(Value::as_str) != Some(session)
-                            || params.get("turnId").and_then(Value::as_str) != Some(turn_id.as_str()) {
+                    super::runtime::Rpc::Interrupt { session: target, turn } => {
+                        if target != session || turn != turn_id {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude interruption targets a stale turn") });
                         }
                         let request_id = format!("interrupt-{}", command.token);
@@ -806,7 +799,7 @@ async fn run_turn(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_output_frame, turn_choice, verified_version};
+    use super::{parse_output_frame, verified_version};
     use crate::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox};
     use crate::conversation::TurnChoice;
     use maitty_provider_claude::{
@@ -927,16 +920,6 @@ mod tests {
         };
         // Everything but the model and effort, permissions included, is identical.
         assert_eq!(without_choice(&plain), without_choice(&picked));
-    }
-
-    #[test]
-    fn a_turns_choice_is_read_from_its_parameters_and_checked() {
-        let choice = turn_choice(&json!({"threadId":"t","model":"sonnet","effort":"high"})).unwrap();
-        assert_eq!(choice.model.as_deref(), Some("sonnet"));
-        assert_eq!(choice.effort.as_deref(), Some("high"));
-        assert!(turn_choice(&json!({"threadId":"t"})).unwrap().is_empty());
-        assert!(turn_choice(&json!({"model":"--add-dir"})).is_err());
-        assert!(turn_choice(&json!({"effort":"warp"})).is_err());
     }
 
     #[test]

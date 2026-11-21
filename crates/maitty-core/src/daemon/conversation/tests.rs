@@ -26,7 +26,7 @@ use tokio::sync::mpsc;
 /// that source. Each fixture used to compile its own: some sixty compilers at once, and as many
 /// new programs for a virus scanner to read, left Windows too busy to stop a process within five
 /// seconds or to let go of a fixture's folder within a minute.
-fn compiled(cell: &'static std::sync::OnceLock<PathBuf>, source: &str) -> &'static Path {
+pub(super) fn compiled(cell: &'static std::sync::OnceLock<PathBuf>, source: &str) -> &'static Path {
     cell.get_or_init(|| {
         use std::hash::{Hash, Hasher};
         let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/daemon/conversation/fixtures").join(source);
@@ -64,7 +64,7 @@ fn compiled(cell: &'static std::sync::OnceLock<PathBuf>, source: &str) -> &'stat
 /// costs nothing and is a file the scanner has already read; a copy is for a folder that cannot
 /// hold one, and for a built program another user left in the shared temporary folder, which
 /// Linux lets nobody else link.
-fn placed(built: &Path, root: &Path, name: &str) -> PathBuf {
+pub(super) fn placed(built: &Path, root: &Path, name: &str) -> PathBuf {
     let executable = root.join(format!("{name}{}", std::env::consts::EXE_SUFFIX));
     if std::fs::hard_link(built, &executable).is_err() {
         crate::test_support::copy_program(built, &executable);
@@ -675,7 +675,7 @@ async fn start_claude_thread(
     requests
         .send(super::runtime::Command {
             token: 1,
-            request: super::runtime::Rpc::Start { params: json!({}) },
+            request: claude_open(),
         })
         .await
         .unwrap();
@@ -791,3 +791,31 @@ mod delivery;
 mod process;
 mod resume;
 mod golden;
+
+/// Asks the Claude adapter to take up its conversation.
+fn claude_open() -> super::runtime::Rpc {
+    super::runtime::Rpc::Open { settings: Box::new(claude_settings()), session: None }
+}
+
+pub(super) fn claude_settings() -> crate::conversation::LaunchSettings {
+    crate::conversation::LaunchSettings {
+        provider: crate::conversation::Provider::Claude,
+        executable: PathBuf::from("claude"),
+        config_root: PathBuf::from("config"),
+        cwd: PathBuf::from("workspace"),
+        model: None,
+        model_provider: None,
+        approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+        sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+    }
+}
+
+/// The message every Claude adapter test sends to the fake's session.
+fn claude_message(choice: crate::conversation::TurnChoice) -> super::runtime::Rpc {
+    super::runtime::Rpc::Send {
+        session: "fixture-session".into(),
+        text: "hello fake Claude".into(),
+        message: "message-1".into(),
+        choice,
+    }
+}

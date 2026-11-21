@@ -58,7 +58,7 @@ impl Launch {
         self.settings().map_or_else(
             || match &self.identity {
                 LaunchIdentity::Existing(conversation) => conversation.binding.provider,
-                LaunchIdentity::Pending(_) => Provider::Codex,
+                LaunchIdentity::Pending(_) => Provider::default(),
             },
             |settings| settings.provider,
         )
@@ -127,8 +127,10 @@ impl Launch {
     pub(super) async fn validate(mut self) -> Result<Self> {
         tokio::task::spawn_blocking(move || {
             let provider = self.provider();
-            // Gemini's chat is read from its terminal's transcript (follow.rs); it has no structured runtime.
-            if provider == Provider::Gemini { bail!("Gemini has no structured chat runtime"); }
+            // An agent whose chat is only read from its terminal's transcript (follow.rs) has no runtime to start.
+            let Some(structured) = &crate::daemon::providers::adapter(provider).structured else {
+                bail!("{} has no structured chat runtime", provider.agent_name());
+            };
             if let LaunchIdentity::Existing(c) = &self.identity {
                 validate_registry(std::slice::from_ref(c)).map_err(|_| anyhow::anyhow!("Invalid structured conversation binding"))?;
                 if c.binding.provider != provider || c.binding.profile.is_some() {
@@ -167,12 +169,7 @@ impl Launch {
                 if key.is_empty() || key.to_string_lossy().contains(['=', '\0']) || value.to_string_lossy().contains('\0') {
                     bail!("Invalid effective provider environment");
                 }
-                let config_variable = match provider {
-                    Provider::Codex => "CODEX_HOME",
-                    Provider::Claude => "CLAUDE_CONFIG_DIR",
-                    Provider::Gemini => unreachable!("refused above"),
-                };
-                if key.to_string_lossy().eq_ignore_ascii_case(config_variable)
+                if key.to_string_lossy().eq_ignore_ascii_case(structured.config_variable)
                     && std::fs::canonicalize(Path::new(value)).ok().as_ref() != Some(&home) {
                     bail!("Effective environment disagrees with selected provider configuration root");
                 }

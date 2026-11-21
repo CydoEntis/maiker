@@ -43,7 +43,7 @@ pub(in crate::daemon) struct QueuedSend {
     choice: TurnChoice,
 }
 
-use maitty_provider_codex::requests::{identifier, turn_start_params as send_params};
+use maitty_provider_codex::requests::identifier;
 
 const MAX_HYDRATION_ENTRIES: usize = 100_000;
 const MAX_HYDRATION_BYTES: usize = 32 * 1024 * 1024;
@@ -183,11 +183,11 @@ fn validate_response(
     settings: &mut LaunchSettings,
     expected: Option<&str>,
 ) -> Result<String> {
-    // Claude's adapter answers with the session alone: it has no sandbox or model to echo.
-    if settings.provider == Provider::Claude {
-        return maitty_provider_codex::requests::thread_id(value, expected);
-    }
-    maitty_provider_codex::requests::validate_thread(value, settings, expected)
+    let structured = crate::daemon::providers::adapter(settings.provider)
+        .structured
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("{} has no structured chat runtime", settings.provider.agent_name()))?;
+    (structured.opened)(value, settings, expected)
 }
 
 mod approvals;
@@ -430,26 +430,5 @@ mod native_resume_tests {
         assert!(is_complete);
         assert_eq!(history.completeness, Completeness::Complete);
         assert_eq!(history.entries, cached.entries);
-    }
-
-    #[test]
-    fn a_picked_model_and_effort_ride_on_the_codex_turn_start_and_nothing_else_changes() {
-        let plain = send_params("thread", "hi", "1-1-1", &TurnChoice::default());
-        assert!(plain.get("model").is_none() && plain.get("effort").is_none());
-        let picked = send_params(
-            "thread",
-            "hi",
-            "1-1-1",
-            &TurnChoice { model: Some("gpt-x".into()), effort: Some("high".into()) },
-        );
-        assert_eq!(picked["model"], "gpt-x");
-        assert_eq!(picked["effort"], "high");
-        // Permissions are set when the thread starts and are not part of a turn's parameters.
-        for key in ["approvalPolicy", "sandbox", "sandboxPolicy", "cwd"] {
-            assert!(picked.get(key).is_none(), "{key}");
-        }
-        let mut stripped = picked.clone();
-        stripped.as_object_mut().unwrap().retain(|key, _| key != "model" && key != "effort");
-        assert_eq!(stripped, plain);
     }
 }
