@@ -823,8 +823,8 @@ Protocol 119 adds four things, none of which an older peer is ever sent, so `COM
   `createFolderBranch`, `checkoutRemoteBranch`). The older `git_branches` host command still reads this computer's
   local branches directly. Rules: [SECURITY](SECURITY.md#project-specific-a-folders-branches-and-what-a-machine-is).
 - `Query::MachineFacts { tag }` with `Reply::MachineFacts { tag, facts }` (`MACHINE_FACTS_SINCE`): host name, system,
-  architecture, cores and the agent programs installed with their versions. Safe to ask twice. The host raises a
-  `machine-facts` event `{machine, tag, answer}`; `apps/gui/src/api/machineFacts.ts` wraps it.
+  architecture, cores and the agent programs installed with their versions. Safe to ask twice. No client asks it
+  now (the desktop app's "Machine added" page that showed it is gone); the daemon still answers it.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 

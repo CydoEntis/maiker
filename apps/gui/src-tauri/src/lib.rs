@@ -13,7 +13,6 @@ mod export;
 mod highlight;
 #[cfg(target_os = "linux")]
 mod linux_gpu;
-mod machine_access;
 mod machine_update;
 mod machines;
 mod changes;
@@ -1789,8 +1788,6 @@ pub fn run() {
             agent_install::agent_install_command,
             agent_install::install_agent,
             reveal::reveal_in_explorer,
-            machine_access::local_user_name,
-            machine_access::set_machine_user,
             file_send::send_files_to_machine,
             browse::list_remote_folder,
             browse::index_remote_files,
@@ -1818,7 +1815,6 @@ pub fn run() {
             terminal_stream::ask_machine_list,
             terminal_stream::clone_repository,
             terminal_stream::folder_git,
-            terminal_stream::machine_facts,
             terminal_stream::agent_sign_in,
             terminal_stream::github_accounts,
             terminal_stream::github_repos,

@@ -62,8 +62,6 @@ const REPOSITORY_CLONED_EVENT: &str = "repository-cloned";
 const CLONE_PROGRESS_EVENT: &str = "clone-progress";
 /// What a folder's branches request found or did on a machine: `{machine, tag, state, why, listing, branch}`.
 const FOLDER_GIT_EVENT: &str = "folder-git";
-/// What a machine says it is: `{machine, tag, answer}`, `answer` its `MachineFacts`.
-const MACHINE_FACTS_EVENT: &str = "machine-facts";
 /// Who a machine says is signed in to GitHub there: `{machine, tag, report}`.
 const GITHUB_ACCOUNTS_EVENT: &str = "github-accounts";
 /// The repositories a machine's GitHub account can clone: `{machine, tag, state, why, listed}`.
@@ -543,12 +541,6 @@ impl Wire {
         self.send(machine_of(machine), ClientMsg::Query(Query::FolderGit { folder: folder.to_owned(), request, tag }))
     }
 
-    /// Ask a machine's daemon (this computer's when none is named) what it is: system, cores, host name and the
-    /// agents installed. The answer comes back as a `machine-facts` event carrying `tag`.
-    pub fn machine_facts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
-        self.send(machine_of(machine), ClientMsg::Query(Query::MachineFacts { tag }))
-    }
-
     /// Ask this computer's daemon to start, stop or read an agent's sign-in. The answer comes back as an
     /// `agent-sign-in` event carrying `tag`. The window sends only which agent and which of the three; the
     /// daemon owns the command and what it prints.
@@ -731,13 +723,6 @@ pub fn folder_git(
     tag: u64,
 ) -> Result<(), String> {
     wire.folder_git(machine, &folder, request, tag)
-}
-
-/// Asks a machine (this computer when `machine` is left out) what it is. The answer arrives as a `machine-facts`
-/// event with the same `tag`.
-#[tauri::command]
-pub fn machine_facts(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
-    wire.machine_facts(machine, tag)
 }
 
 /// Starts, stops or reads an agent's sign-in on this computer. The answer arrives as an `agent-sign-in` event
@@ -1023,12 +1008,6 @@ pub enum Reaction {
         tag: u64,
         outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
     },
-    /// What a machine says it is, for the window that asked.
-    MachineFacts {
-        machine: MachineId,
-        tag: u64,
-        facts: maitty_shared::protocol::MachineFacts,
-    },
     /// Where this computer's agent sign-in stands, for the window that asked.
     AgentSignIn {
         tag: u64,
@@ -1167,7 +1146,6 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
             Out::CloneProgress { machine, tag, phase, percent } => Some(Reaction::CloneProgress { machine, tag, phase, percent }),
             Out::FolderGit { machine, tag, outcome } => Some(Reaction::FolderGit { machine, tag, outcome }),
-            Out::MachineFacts { machine, tag, facts } => Some(Reaction::MachineFacts { machine, tag, facts }),
             Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
@@ -1443,9 +1421,6 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             }
             Reaction::FolderGit { machine, tag, outcome } => {
                 let _ = app.emit(FOLDER_GIT_EVENT, folder_git_out(machine, tag, outcome));
-            }
-            Reaction::MachineFacts { machine, tag, facts } => {
-                let _ = app.emit(MACHINE_FACTS_EVENT, TaggedAnswer { machine: machine.0, tag, answer: facts });
             }
             Reaction::AgentSignIn { tag, agent, state } => {
                 let _ = app.emit(AGENT_SIGN_IN_EVENT, agent_sign_in_answer(tag, agent, state));

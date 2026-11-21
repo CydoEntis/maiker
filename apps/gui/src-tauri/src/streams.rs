@@ -129,12 +129,6 @@ pub enum Out {
         tag: u64,
         outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
     },
-    /// What a machine says it is, already cleaned.
-    MachineFacts {
-        machine: MachineId,
-        tag: u64,
-        facts: maitty_shared::protocol::MachineFacts,
-    },
     /// Where this computer's agent sign-in stands.
     AgentSignIn {
         tag: u64,
@@ -299,9 +293,6 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::FolderGit { tag, outcome }) => {
                 out.push(Out::FolderGit { machine, tag, outcome });
-            }
-            ServerMsg::Reply(Reply::MachineFacts { tag, facts }) => {
-                out.push(Out::MachineFacts { machine, tag, facts });
             }
             // This computer's only: a link and a code another machine's login printed are not for this window.
             ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state }) if machine == MachineId::LOCAL => {
