@@ -47,6 +47,8 @@ const ConversationSummarySchema = z.object({
   branch: z.string().nullable().default(null),
   // The helpers a chat session's provider reported starting (ADR 0010); empty from an older daemon.
   helpers: z.array(SubagentActivitySchema).default([]),
+  // The helpers the chat asked to start and waits on the person for (`ConversationSummary.helper_ask`, ADR 0016); empty from an older daemon.
+  helper_ask: z.array(z.string()).default([]),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -148,6 +150,8 @@ const TerminalSessionSchema = z.object({
   helper_ask: z.array(z.string()).default([]),
   // The pane whose agent started this one (`TermInfo.started_by`); null when a person did, and from an older daemon.
   started_by: z.number().int().nullable().default(null),
+  // The chat whose agent started this one (`TermInfo.started_by_chat`, ADR 0016); never set with `started_by`.
+  started_by_chat: z.number().int().nonnegative().nullable().default(null),
   // The agent's subagents as its runtime reports them (`TermInfo.subagent_activity`); times are unix seconds.
   subagent_activity: z.array(SubagentActivitySchema).default([]),
 })
@@ -515,8 +519,16 @@ function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): C
     .filter(isTerminalSession)
   // A conversation that belongs to a pane in this list is that session's chat, not a session of its own.
   const shownPanes = new Set(listed.map((term) => term.id))
+  // The session a chat is listed as: its pane's when it has one in this list, else its own (this computer's chats only).
+  const paneOfChat = new Map(links.flatMap((summary) => (summary.native_term !== null && shownPanes.has(summary.native_term) ? [[summary.id, summary.native_term] as const] : [])))
+  const sessionOfChat = (chat: number | null): string | null => {
+    if (chat === null) return null
+    const pane = paneOfChat.get(chat)
+    if (pane !== undefined) return terminalSessionId(pane, machine?.name ?? null)
+    return machine === undefined && summaries.some((summary) => summary.id === chat) ? String(chat) : null
+  }
   const terminals = listed
-    .map((term) => toTerminalConversation(term, snapshot.workspaces, machine, chatOf.get(term.id), term.agent === null ? undefined : limitsOf.get(term.agent), secretsOf.get(term.id) ?? []))
+    .map((term) => toTerminalConversation(term, snapshot.workspaces, machine, chatOf.get(term.id), term.agent === null ? undefined : limitsOf.get(term.agent), secretsOf.get(term.id) ?? [], sessionOfChat(term.started_by_chat)))
   // Another machine's conversations are only the chats of its panes; it has no session list of its own here.
   if (machine !== undefined) return terminals
   return [
@@ -1122,7 +1134,12 @@ export async function undoCloseSession(conversation: Pick<Conversation, 'id'>): 
 export async function answerHelpers(conversation: Pick<Conversation, 'id'>, choice: 'allow' | 'always' | 'no'): Promise<void> {
   if (!isDesktop()) return
   const pane = addressOf(conversation.id)
-  if (pane !== null) await invokeParsed('answer_helpers', NullSchema, { term: pane.term, choice, ...machineArgs(pane) })
+  if (pane !== null) {
+    await invokeParsed('answer_helpers', NullSchema, { term: pane.term, choice, ...machineArgs(pane) })
+    return
+  }
+  // A chat with no pane asks as itself (ADR 0016). Only this computer lists such chats.
+  await invokeParsed('answer_chat_helpers', NullSchema, { id: Number(conversation.id), choice })
 }
 
 /** The user is looking at this pane: a finished agent's "done" becomes idle, as when the terminal app focuses it. */
@@ -1421,7 +1438,7 @@ export async function resumeConversation(conversation: Conversation): Promise<{ 
   })
 }
 
-function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, chat?: Conversation['chat'], limits: readonly z.infer<typeof PlanLimitSchema>[] = [], secrets: readonly z.infer<typeof SecretAskSchema>[] = []): Conversation {
+function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, chat?: Conversation['chat'], limits: readonly z.infer<typeof PlanLimitSchema>[] = [], secrets: readonly z.infer<typeof SecretAskSchema>[] = [], startedByChat: string | null = null): Conversation {
   const folder = term.root ?? term.cwd
   const repo = term.root ? (term.root.split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null
   const workspace = workspaces.find((candidate) => candidate.cwd === folder || candidate.cwd === term.cwd)
@@ -1487,7 +1504,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),
       limits: limits.map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })),
       helperAsk: term.helper_ask,
-      startedBy: term.started_by === null ? null : terminalSessionId(term.started_by, machine?.name ?? null),
+      startedBy: term.started_by === null ? startedByChat : terminalSessionId(term.started_by, machine?.name ?? null),
       subagents: term.subagent_activity.map(toSubagentDetail),
     },
     ...(chat ? { chat } : {}),
@@ -1539,7 +1556,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           agent: summary.provider.toLowerCase(),
           process: summary.provider.toLowerCase(),
           chat: { conversation: summary.id, generation: summary.generation },
-          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: summary.helpers.map(toSubagentDetail) },
+          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail) },
         }
       : {}),
   }

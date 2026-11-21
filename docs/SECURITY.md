@@ -278,7 +278,7 @@ that has been given to another process is never signalled; ids 0 and 1 and negat
 
 An agent can start helpers only if you say so. Who is asking is proven the way status reports are
 (the pane's `AGENT_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
-refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
+refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`, and `answer_chat_helpers` for a chat, which takes the chat's number and is refused in words by a service too old to read it), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
 `helper-projects.json` in Maiker's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
 

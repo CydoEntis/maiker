@@ -1119,6 +1119,15 @@ async fn answer_helpers(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// The person's answer to a chat that asked to start helpers (ADR 0016): `allow`, `always` or `no`.
+#[tauri::command]
+async fn answer_chat_helpers(id: u64, choice: String) -> Result<serde_json::Value, String> {
+    let choice = maitty_desktop_client::helper_choice(&choice).map_err(|error| format!("{error:#}"))?;
+    maitty_desktop_client::answer_chat_helpers(id, choice)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// Does something to a pane's checks: `rerun`, `override` (with a reason), `undo` an override, or `approve` a
 /// repo's check command (`choice`: `once`, `always` or `never`; `command` is the one the person was shown). Works for
 /// a pane on another machine as well: the checks are that machine's daemon's.
@@ -1853,6 +1862,7 @@ pub fn run() {
             send_when_agent_ready,
             mark_terminal_seen,
             answer_helpers,
+            answer_chat_helpers,
             check_action,
             answer_secret,
             handoff_brief,

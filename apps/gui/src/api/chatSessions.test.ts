@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { Conversation } from '@/data/preview'
-import { closeChatSession, conversationsFromSnapshot, startChatSession } from './daemon'
+import { answerHelpers, closeChatSession, conversationsFromSnapshot, startChatSession } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -66,6 +66,34 @@ describe('chat sessions', () => {
     expect(here.map((item) => [item.id, item.details?.startedBy])).toEqual([['t7', null], ['t8', 't7']])
     const there = conversationsFromSnapshot({ terms, workspaces: [], conversations: [] }, { id: 4, name: 'build' })
     expect(there.map((item) => [item.id, item.details?.startedBy])).toEqual([['build/t7', null], ['build/t8', 'build/t7']])
+  })
+
+  it('lists what a chat asked to start helpers for, names the chat on a helper it started, and reads neither from an older daemon', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const asking = summary({ helper_ask: ['Review the diff', 'Write the tests'] })
+    const [chat, helper, stranger] = conversationsFromSnapshot({ terms: { '8': term(8, { started_by_chat: 44 }), '9': term(9, { started_by_chat: 404 }) }, workspaces: [], conversations: [asking] })
+    expect(chat?.details?.helperAsk).toEqual(['Review the diff', 'Write the tests'])
+    expect([helper?.id, helper?.details?.startedBy]).toEqual(['t8', '44'])
+    // A chat this list does not hold started nothing that can be shown as its helper.
+    expect(stranger?.details?.startedBy).toBeNull()
+    const [older] = conversationsFromSnapshot(snapshot([summary()]))
+    expect(older?.details?.helperAsk).toEqual([])
+  })
+
+  it('names the pane of a chat that has one as the starter of that chat\'s helper', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const followed = summary({ id: 9, execution: 'Native', native_term: 7 })
+    const listed = conversationsFromSnapshot({ terms: { '7': term(7), '8': term(8, { started_by_chat: 9 }) }, workspaces: [], conversations: [followed] })
+    expect(listed.map((item) => [item.id, item.details?.startedBy])).toEqual([['t7', null], ['t8', 't7']])
+  })
+
+  it('answers a chat\'s helper request as the chat, and a pane\'s as the pane', async () => {
+    await answerHelpers({ id: '44' }, 'always')
+    await answerHelpers({ id: 't7' }, 'no')
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['answer_chat_helpers', { id: 44, choice: 'always' }],
+      ['answer_helpers', expect.objectContaining({ term: 7, choice: 'no' })],
+    ])
   })
 
   it('reads a summary from before the repository and branch were named', () => {

@@ -1556,6 +1556,22 @@ pub async fn answer_helpers(
     }
 }
 
+/// The person's answer to a chat that asked to start helpers (ADR 0016). A service older than
+/// `CHAT_HELPERS_SINCE` is refused in words here: it could not read the command.
+pub async fn answer_chat_helpers(
+    conversation: u64,
+    choice: maitty_shared::protocol::HelperChoice,
+) -> Result<Value> {
+    let message = ClientMsg::Command(Command::AnswerChatHelpers {
+        conversation: maitty_shared::conversation::ConversationId(conversation),
+        choice,
+    });
+    match ask_running_daemon_if_it_reads(&message).await? {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("The Maiker service gave an answer this app does not understand (helper answer). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
 /// What the person chose for a repo-supplied check command: `once`, `always` or `never`.
 pub fn approval_choice(word: &str) -> Result<maitty_shared::protocol::ApprovalChoice> {
     use maitty_shared::protocol::ApprovalChoice;
