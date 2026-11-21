@@ -1,7 +1,8 @@
 //! Why a connection to another machine failed, told from ssh's exit status and from whether
 //! the far side ever spoke, not from ssh's wording: its words change with version and locale.
 //! `classify` is the only place that reads ssh's text, and only for the few tokens that mark a
-//! login ssh could not finish alone or a host key ssh refused.
+//! login ssh could not finish alone, a host key ssh refused, or a machine that hung up before
+//! ssh could sign in.
 //!
 //! `sentence` is the only place that words a failure: one sentence that names the machine and
 //! says what to do. The terminal app and the desktop app both show it, so they never disagree
@@ -32,6 +33,16 @@ const ASK_FOR_NEW_KEY: &str = "-o StrictHostKeyChecking=ask";
 const PARTIAL_SUCCESS: &str = "partial success";
 /// The method name ssh lists in `Permission denied (publickey,password)` when a key may log in.
 const KEY_METHOD: &str = "publickey";
+/// ssh's last line when the far side took the connection and then ended it, before or during
+/// the hello: `Connection closed by <host> port <n>`, or `reset` when it did not wait to read.
+/// This is what sshd's `MaxStartups` and `PerSourcePenalties` (OpenSSH 9.8+) look like from here.
+const HUNG_UP: [&str; 2] = ["Connection closed by ", "Connection reset by "];
+/// The host ssh names in `HUNG_UP` when it reached the machine through a proxy or a jump host:
+/// the hang-up is then the proxy's, which also hangs up when the machine behind it is down.
+const PROXY_PEER: &str = "UNKNOWN";
+/// ssh's own line about a hello the far side never sent, the only line that may come before
+/// `HUNG_UP` for a machine that ended the connection at once (`ssh_` before OpenSSH 8.0).
+const HELLO_EXCHANGE: [&str; 2] = ["kex_exchange_identification:", "ssh_exchange_identification:"];
 /// ssh's port when none is given; `known_hosts` names a host on another port `[host]:port`.
 const DEFAULT_SSH_PORT: u16 = 22;
 /// On Windows there is no `ssh-copy-id`; the key is the one `ssh-keygen` makes by default.
@@ -90,6 +101,9 @@ pub enum FailureClass {
     NoDaemon,
     /// The machine did not answer, with why.
     Unreachable(String),
+    /// The machine took the connection and ended it before ssh could sign in: it may be
+    /// refusing new connections for a while (after failed sign-ins, or too many at once).
+    RefusingConnections,
     /// The window turned the machine away (a different machine answers at its name), with why.
     Refused(String),
 }
@@ -127,6 +141,7 @@ impl FailureClass {
             FailureClass::InstallFailed(_) => "install-failed",
             FailureClass::NoDaemon => "not-running",
             FailureClass::Unreachable(_) => "unreachable",
+            FailureClass::RefusingConnections => "refusing-connections",
             FailureClass::Refused(_) => "refused",
         }
     }
@@ -158,8 +173,32 @@ pub fn classify(error: &anyhow::Error) -> FailureClass {
                 FailureClass::KeyRefused(last_line(end))
             }
         }
+        _ if from_ssh && hung_up_at_once(&end.said) => FailureClass::RefusingConnections,
         _ => FailureClass::Unreachable(last_line(end)),
     }
+}
+
+/// The far side took the connection and ended it with nothing else said: ssh's last line is
+/// `HUNG_UP` naming the machine itself (not a proxy), and only ssh's line about the hello may
+/// come before it. A line that a host key was added, or any other, means the hello got further.
+/// A firewall ban (fail2ban's usual one) is not this: it refuses or drops the connection, which
+/// reads as any machine that is off or unreachable.
+fn hung_up_at_once(said: &str) -> bool {
+    let lines: Vec<&str> = said.lines().map(str::trim).filter(|line| !line.is_empty()).collect();
+    let Some((last, before)) = lines.split_last() else {
+        return false;
+    };
+    let names_the_machine = HUNG_UP
+        .iter()
+        .find_map(|words| last.strip_prefix(words))
+        .and_then(|rest| rest.rsplit_once(" port "))
+        .is_some_and(|(host, port)| {
+            !host.is_empty() && !host.contains(' ') && host != PROXY_PEER && port.parse::<u16>().is_ok()
+        });
+    names_the_machine
+        && before
+            .iter()
+            .all(|line| HELLO_EXCHANGE.iter().any(|prefix| line.starts_with(prefix)))
 }
 
 fn says_any(said: &str, tokens: &[&str]) -> bool {
@@ -315,6 +354,9 @@ pub fn sentence(failure: &FailureClass, subject: &Subject<'_>, os: ClientOs) -> 
             let check = format!("Can't reach {name}: check the name or address, and that the machine is on");
             if why.is_empty() { format!("{check}.") } else { format!("{check} ({why}).") }
         }
+        FailureClass::RefusingConnections => format!(
+            "{name} may be refusing new connections for a while, after failed sign-ins or too many at once: wait a few minutes and try again, and if it keeps happening, check its sshd and fail2ban settings."
+        ),
         FailureClass::KeyRefused(_) => match (command, os) {
             (Some(command), ClientOs::Unix) => {
                 format!("{name} refused your key: run `{command}` in a terminal, then try again.")
@@ -376,6 +418,7 @@ pub fn is_failure_sentence(line: &str, name: &str) -> bool {
     let subject = Subject { name, target: None, port: None };
     let every = [
         FailureClass::Unreachable(String::new()),
+        FailureClass::RefusingConnections,
         FailureClass::KeyRefused(String::new()),
         FailureClass::NeedsPerson(String::new()),
         FailureClass::HostKeyChanged { known_as: None },
@@ -575,6 +618,53 @@ mod tests {
     }
 
     #[test]
+    fn a_machine_that_hangs_up_before_ssh_signs_in_may_be_refusing_connections() {
+        // What OpenSSH 10.5 printed against sshd's MaxStartups and PerSourcePenalties, and what
+        // older clients print for the same hang-up.
+        for said in [
+            "Connection closed by 10.0.0.5 port 22\n",
+            "kex_exchange_identification: read: Connection reset by peer\r\nConnection reset by 10.0.0.5 port 22\r\n",
+            "kex_exchange_identification: Connection closed by remote host\nConnection closed by box.lan port 2222\n",
+            "ssh_exchange_identification: read: Connection reset by peer\nConnection reset by 2001:db8::5 port 22\n",
+        ] {
+            assert_eq!(class(Some(255), said), FailureClass::RefusingConnections, "{said}");
+        }
+        assert!(!FailureClass::RefusingConnections.is_login(), "it is dialled again, not left for a person");
+    }
+
+    #[test]
+    fn a_machine_that_is_off_or_behind_a_proxy_is_never_read_as_refusing() {
+        for said in [
+            "ssh: connect to host 10.0.0.5 port 22: Connection refused",
+            "ssh: connect to host 10.0.0.5 port 22: Connection timed out",
+            "ssh: connect to host 10.0.0.5 port 22: No route to host",
+            "ssh: Could not resolve hostname box: Name or service not known",
+            // A proxy or jump host hangs up for a machine behind it that is down.
+            "Connection closed by UNKNOWN port 65535",
+            "ssh: connect to host 10.0.0.5 port 22: Connection refused\nConnection closed by UNKNOWN port 65535",
+            "channel 0: open failed: connect failed: Connection refused\nstdio forwarding failed\nkex_exchange_identification: Connection closed by remote host\nConnection closed by UNKNOWN port 65535",
+            // Not an ssh server, or one that never said hello.
+            "kex_exchange_identification: banner line contains invalid characters\nbanner exchange: Connection to 10.0.0.5 port 22: invalid format",
+            "Connection timed out during banner exchange\nConnection to 10.0.0.5 port 22 timed out",
+            // The hello got further: the host key was taken, so it was not turned away at once.
+            "Warning: Permanently added '10.0.0.5' (ED25519) to the list of known hosts.\nConnection closed by 10.0.0.5 port 22",
+        ] {
+            assert!(is_unreachable(&class(Some(255), said)), "{said}");
+        }
+        let hung_up = "Connection closed by 10.0.0.5 port 22";
+        assert!(is_unreachable(&class(Some(1), hung_up)), "only ssh's own failure");
+        assert!(is_unreachable(&classify(&ssh_ended(Some(255), hung_up, true))), "it streamed");
+        let custom = anyhow::anyhow!("closed").context(SshEnd {
+            code: Some(255),
+            said: hung_up.into(),
+            streamed: false,
+            message: hung_up.into(),
+            custom: true,
+        });
+        assert!(is_unreachable(&classify(&custom)), "a custom transport's words mean nothing");
+    }
+
+    #[test]
     fn what_ssh_said_is_cleaned_before_it_can_be_shown() {
         let said = "ssh: \u{1b}[31mred\u{1b}[0m \u{7}bell\r\n\u{1b}]0;title\u{7}\n";
         let FailureClass::Unreachable(why) = class(Some(255), said) else {
@@ -635,6 +725,20 @@ mod sentences {
             unix(&FailureClass::Unreachable(String::new())),
             "Can't reach box: check the name or address, and that the machine is on."
         );
+    }
+
+    #[test]
+    fn a_machine_refusing_connections_says_to_wait_and_where_to_look_if_it_lasts() {
+        let refusing = FailureClass::RefusingConnections;
+        let said = unix(&refusing);
+        assert_eq!(
+            said,
+            "box may be refusing new connections for a while, after failed sign-ins or too many at once: wait a few minutes and try again, and if it keeps happening, check its sshd and fail2ban settings."
+        );
+        assert_eq!(sentence(&refusing, &BOX, ClientOs::Windows), said);
+        assert_eq!(fix_command(&refusing, &BOX, ClientOs::Unix), None);
+        assert_eq!(refusing.kind(), "refusing-connections");
+        assert!(!unix(&FailureClass::Unreachable(String::new())).contains("refusing"));
     }
 
     #[test]
@@ -770,6 +874,7 @@ mod sentences {
     fn a_sentence_is_told_from_other_words_by_its_opening() {
         for failure in [
             FailureClass::Unreachable("no route".into()),
+            FailureClass::RefusingConnections,
             FailureClass::KeyRefused(String::new()),
             FailureClass::HostKeyUnknown,
             FailureClass::InstallFailed("x".into()),
@@ -786,6 +891,7 @@ mod sentences {
     fn no_sentence_names_an_internal_part_of_the_app() {
         let all = [
             FailureClass::Unreachable("x".into()),
+            FailureClass::RefusingConnections,
             FailureClass::KeyRefused("x".into()),
             FailureClass::NeedsPerson("x".into()),
             FailureClass::HostKeyChanged { known_as: None },

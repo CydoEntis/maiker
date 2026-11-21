@@ -448,6 +448,17 @@ fn a_bad_host_shows_ssh_s_error_adds_nothing_and_does_not_hang() {
 }
 
 #[test]
+fn a_machine_refusing_connections_adds_nothing_and_says_to_wait() {
+    let mut h = Harness::new("refusing");
+    h.add_by_enter("box");
+    h.next_bg();
+    assert_eq!(h.notice(), sentence_for(&FailureClass::RefusingConnections));
+    assert!(h.view().notice.as_ref().unwrap().error);
+    assert!(matches!(h.view().step, MachineStep::Browse));
+    assert!(h.local_config().is_none() && h.app.cfg.machines.is_empty());
+}
+
+#[test]
 fn a_changed_host_key_adds_nothing_and_says_the_shared_sentence() {
     let mut h = Harness::new("proxy");
     let known_hosts = h.sandbox.dir.join("known_hosts");

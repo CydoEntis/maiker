@@ -230,9 +230,11 @@ impl App {
             Probe::Ready { version } => {
                 self.machine_added(&def, Added::Connect(None), &version, Outcome::Ready(version.clone()))
             }
-            // A host key ssh refused, changed or not yet known, adds nothing (ADR 0017).
+            // A host key ssh refused, changed or not yet known, adds nothing (ADR 0017), and nor
+            // does a machine that was never signed in to because it refuses connections for now.
             Probe::Failed(
                 failure @ (FailureClass::Unreachable(_)
+                | FailureClass::RefusingConnections
                 | FailureClass::HostKeyChanged { .. }
                 | FailureClass::HostKeyUnknown),
             ) => say(sentence_here(&failure, &Subject::of_def(&def)), true),

@@ -86,7 +86,7 @@ export const MACHINE_KINDS = ['connecting', 'connected', 'reconnecting', 'needs-
 export type MachineKind = (typeof MACHINE_KINDS)[number]
 
 /** Which failure a machine has, as the host names it (`FailureClass::kind` in crates/maitty-machines): buttons are picked by it, never by the words. */
-export const FAILURE_KINDS = ['key-refused', 'needs-person', 'host-key-changed', 'host-key-unknown', 'update', 'update-here', 'install', 'install-failed', 'not-running', 'unreachable', 'refused'] as const
+export const FAILURE_KINDS = ['key-refused', 'needs-person', 'host-key-changed', 'host-key-unknown', 'update', 'update-here', 'install', 'install-failed', 'not-running', 'unreachable', 'refusing-connections', 'refused'] as const
 export type FailureKind = (typeof FAILURE_KINDS)[number]
 
 const MachineStateSchema = z.object({

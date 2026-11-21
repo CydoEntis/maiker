@@ -5,7 +5,8 @@
 //! `AGENT_FAKE_SSH_MAITTY` names the `maiker` to run. `AGENT_FAKE_SSH_MODE` picks the
 //! behaviour: `proxy` (default), `auth-fail` (the machine refuses the key), `needs-person` (the
 //! machine offers no key login, only a password or a code), `noise`, `noise-only`, `noise-flood`, `old`, `hang`,
-//! `mismatch` (an older daemon), `mismatch-newer`, `exit`, `unreachable` (ssh cannot connect), `not-installed` (the remote has no
+//! `mismatch` (an older daemon), `mismatch-newer`, `exit`, `unreachable` (ssh cannot connect), `refusing` (the
+//! machine hangs up before signing in, as sshd's `MaxStartups` does), `not-installed` (the remote has no
 //! app), `capture-hello`, `require-pipes`, `capture-argv`.
 //! The shim also stands in for a machine's custom transport (`via`): it is then the program,
 //! the settings are its own arguments, and the remote command is its last argument.
@@ -207,6 +208,11 @@ fn main() {
         }
         "unreachable" => {
             eprintln!("ssh: connect to host box port 22: Connection refused");
+            std::process::exit(255);
+        }
+        "refusing" => {
+            eprintln!("kex_exchange_identification: read: Connection reset by peer");
+            eprintln!("Connection reset by 192.0.2.10 port 22");
             std::process::exit(255);
         }
         "not-installed" => {

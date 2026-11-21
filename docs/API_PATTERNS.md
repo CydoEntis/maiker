@@ -1479,7 +1479,18 @@ PowerShell line that does the same on Windows). `HostKeyChanged` gives `ssh-keyg
 confirming the change; `HostKeyUnknown` gives `ssh -o StrictHostKeyChecking=ask [-p <port>] <target>`
 to run once in a terminal, check the fingerprint and answer yes (the same on Windows; on the command
 line the option comes before the person's config, so ssh asks where their config would refuse), and
-never names `ssh-keygen` or a changed key. `fix_command` is the one command a sentence names,
+never names `ssh-keygen` or a changed key. `RefusingConnections` is a machine that took the
+connection and hung up before ssh could sign in: ssh's last line is `Connection closed by <host> port
+<n>` or `Connection reset by <host> port <n>`, with nothing before it but ssh's
+`kex_exchange_identification:` line, which is how sshd's `MaxStartups` and `PerSourcePenalties`
+(OpenSSH 9.8+) read from the client. Its sentence says the machine may be refusing new connections for a
+while, after failed sign-ins or too many at once, to wait a few minutes and try again, and to check its
+sshd and fail2ban settings if it lasts. What can't be told apart stays `Unreachable`: a firewall ban (how
+fail2ban usually bans) refuses or drops the connection like a machine that is off; a hang-up named
+`UNKNOWN port 65535` is a proxy's or jump host's, which also hangs up when the machine behind it is down;
+and a hang-up after other lines (a host key added) got past the door. Its dials carry on like an
+unreachable machine's (a redial that meets it counts as a reconnect blip), and adding a machine that
+refuses adds nothing, like one that can't be reached. `fix_command` is the one command a sentence names,
 for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
 `doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
 `message`) show these sentences and write none of their own. `is_failure_sentence` tells such a
