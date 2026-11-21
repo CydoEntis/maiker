@@ -2,7 +2,7 @@ import { baseName } from './folderPick'
 import type { MachineHead } from './machines'
 import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
 import type { SessionView } from './session'
-import { sectionOf, sortedBy, statusSections, type HeldRow, type StatusSection } from './sidebar'
+import { byLatestChange, sectionOf, statusSections, type HeldRow, type StatusSection } from './sidebar'
 
 /**
  * A project with fewer sessions than this lists them under no status heading: with one or two rows the dot on each row
@@ -66,7 +66,7 @@ export function sidebarTree(heads: readonly MachineHead[], machines: readonly Ma
     const projects = machines.find((machine) => sameMachineName(machine.machineName, head.name))?.projects ?? []
     const nodes = projects.map((entry): ProjectNode => {
       const sessions = entry.sessions.filter(shown)
-      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections: statusSections(sessions, held, 'recent'), count: sessions.length }
+      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections: statusSections(sessions, held), count: sessions.length }
     })
     return { head, key: machineFoldKey(head.name), projects: nodes, count: nodes.reduce((total, node) => total + node.count, 0) }
   })
@@ -113,8 +113,33 @@ export function waitsOnYou(session: SessionView): boolean {
 export function waitingSessions(heads: readonly MachineHead[], machines: readonly MachineProjects[]): WaitingSession[] {
   const placed = new Map(sidebarTree(heads, machines, waitsOnYou, null).flatMap((machine) => machine.projects.flatMap((project) =>
     project.sections.flatMap((section) => section.sessions.map((session) => [session.id, { session, machine: machine.head, project }] as const)))))
-  return sortedBy([...placed.values()].map((entry) => entry.session), 'recent').flatMap((session) => {
+  return byLatestChange([...placed.values()].map((entry) => entry.session)).flatMap((session) => {
     const entry = placed.get(session.id)
     return entry === undefined ? [] : [entry]
   })
+}
+
+/**
+ * Whether a session finished and has not been opened since: the daemon keeps a finished agent `done` until the person looks
+ * at it, and looking (or Mark as done) turns it idle (`markSeenOnDaemon`), so no second "seen" record is kept here.
+ */
+export function finishedUnseen(session: SessionView): boolean {
+  return session.status === 'done'
+}
+
+/** What a folded heading counts of the sessions under it: those that wait on you, and those that finished unseen. */
+export type FoldCounts = { readonly needs: number; readonly finished: number }
+
+function countsOf(sessions: readonly SessionView[]): FoldCounts {
+  return { needs: sessions.filter(waitsOnYou).length, finished: sessions.filter(finishedUnseen).length }
+}
+
+/** A project's counts, over the sessions the tree lists under it (put-away and filtered-out ones are not under it). */
+export function projectFoldCounts(project: ProjectNode): FoldCounts {
+  return countsOf(project.sections.flatMap((section) => section.sessions))
+}
+
+/** A machine's counts: the sum of its projects', folded or not. */
+export function machineFoldCounts(machine: MachineNode): FoldCounts {
+  return machine.projects.map(projectFoldCounts).reduce((total, counts) => ({ needs: total.needs + counts.needs, finished: total.finished + counts.finished }), { needs: 0, finished: 0 })
 }

@@ -32,7 +32,7 @@ import type { AddMachineOptions, Added, Grant, HostChoice, HostKeyReport, Machin
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type SidebarOrder, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
+import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
 
@@ -519,8 +519,6 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
 }
 
 const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
-const ORDER_OPTIONS: ReadonlyArray<readonly [SidebarOrder, string]> = [['creation', 'Creation'], ['priority', 'Priority']]
-const GROUP_OPTIONS = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']] as const
 const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
 const SIDE_OPTIONS = [['left', 'Left'], ['right', 'Right']] as const
 const TOAST_POSITION_OPTIONS = [['bottom', 'Bottom right'], ['top', 'Top right']] as const
@@ -751,7 +749,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
   )
 }
 
-/** What the sidebar lists, in what order, where and how large. */
+/** Whether the sidebar heads each status, which side it sits on, and how large it is. */
 function SidebarSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
   return (
     <>
@@ -759,15 +757,6 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
         <Row label="Show status headings" detail="In a project of three sessions or more, a heading over Needs you, Working, Done and Idle. Off, the sessions keep the same order under no heading.">
           <Switch aria-label="Show status headings" checked={preferences.sidebarStatusHeadings} onCheckedChange={(value) => { update('sidebarStatusHeadings', value) }} />
         </Row>
-        <Row label="Group sessions by" detail="Status lists what needs you first, then what is working, finished and idle. Project and Machine put each under its own heading.">
-          <SegmentedChoice label="Group sessions by" value={preferences.sidebarGroup} options={GROUP_OPTIONS} onChange={(value) => { update('sidebarGroup', value) }} />
-        </Row>
-        {/* The order applies only to the machine grouping, so the choice is offered only there. */}
-        {preferences.sidebarGroup === 'machine' && (
-          <Row label="Session order" detail="Creation keeps every row where it was put. Priority moves a session that needs you to the top.">
-            <SegmentedChoice label="Session order" value={preferences.sidebarOrder} options={ORDER_OPTIONS} onChange={(value) => { update('sidebarOrder', value) }} />
-          </Row>
-        )}
         <Row label="Sidebar position" detail="Which side of the window the sidebar sits on. Inspect opens from the other side.">
           <SegmentedChoice label="Sidebar position" value={preferences.sidebarSide} options={SIDE_OPTIONS} onChange={(value) => { update('sidebarSide', value) }} />
         </Row>

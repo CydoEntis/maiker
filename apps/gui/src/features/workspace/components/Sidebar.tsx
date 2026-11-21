@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { folderNameOf, STATUS_WORD, type SessionView } from '../model/session'
-import { DEFAULT_SIDEBAR_SORT, inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
+import { inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
-import { machineFoldKey, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
+import { machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
 import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
@@ -18,6 +18,7 @@ import { helperLinks } from '../model/helpers'
 import { StartMenu } from './StartMenu'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { NeedsYouStrip } from './NeedsYouStrip'
+import { FoldBadges } from './FoldBadges'
 import { RowHoverHost } from './RowHoverHost'
 import { useHoverController } from './useHoverController'
 import { flipKey } from './flipKey'
@@ -452,6 +453,7 @@ function ProjectSection({ node, open, onToggle, headings, selected, head, render
           <span className={`mx-caret-wrap${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
           <FolderMark size={14} />
           <span className="mx-project-name">{node.name}</span>
+          <FoldBadges counts={projectFoldCounts(node)} folded={!open} />
         </button>
         {head?.actions}
       </div>
@@ -521,6 +523,7 @@ function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onCon
           <span className="mx-machine-icon" aria-hidden="true"><MachineIcon remote={head.name !== null} /></span>
           <span className="mx-machine-name">{title}</span>
           <span className="mx-machine-count">{node.count}</span>
+          <FoldBadges counts={machineFoldCounts(node)} folded={!open} />
         </button>
         {progress !== undefined
           ? <span className="mx-machine-pct mono">{String(progress)}%</span>
@@ -585,7 +588,7 @@ function Rail(props: SidebarProps) {
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
+  const sections = statusSections(splitPutAway(props.sessions).listed)
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">

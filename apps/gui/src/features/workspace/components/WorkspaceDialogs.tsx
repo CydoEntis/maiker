@@ -35,12 +35,15 @@ import { folderExists } from '../model/startFolder'
 import { OpenProjectDialog } from '@/features/open-project/OpenProjectDialog'
 import { projectOfFolder } from '../projectOfFolder'
 import { ProjectFolderPicker } from './ProjectFolderPicker'
+import { OpenWorktreeDialog } from './OpenWorktreeDialog'
+import { useOpenWorktreeDialog } from '../useProjectActions'
 import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
   const { addMachineFor, signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
+  const openWorktree = useOpenWorktreeDialog()
   const fixed = addMachineFor === null ? null : heads.find((head) => head.name === addMachineFor) ?? null
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
   const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, inspect: inspectNewHost, trust: trustNewHost, onProgress: listenMachineUpdateProgress, open: () => { setAddMachineOpen(true) } } }
@@ -76,6 +79,7 @@ export function WorkspaceDialogs() {
                 term={worktreeFrom.pane}
                 repoName={worktreeFrom.repoName ?? worktreeFrom.cwdLabel}
                 machine={worktreeFrom.machine}
+                folder={worktreeFrom.repoRoot ?? worktreeFrom.cwd}
                 task={sessionTask(worktreeFrom)}
                 {...(worktreeFrom.branch === null ? {} : { fromBranch: worktreeFrom.branch })}
                 {...(abilitiesOf(worktreeFrom.process).moveToWorktree ? { move: { blocked: moveRefusal(worktreeFrom), run: async (branch: string) => { setWorktreeFrom(null); await moveToWorktree(worktreeFrom, branch) } } } : {})}
@@ -83,12 +87,14 @@ export function WorkspaceDialogs() {
                 onCancel={() => { setWorktreeFrom(null) }}
               />
             )}
+            {openWorktree && <OpenWorktreeDialog {...openWorktree} />}
             {/* From a project heading: the session only lends its repository, so no name from its task and no move of its chat. */}
             {projectWorktreeFrom && (
               <NewWorktreeDialog
                 term={projectWorktreeFrom.pane}
                 repoName={projectWorktreeFrom.repoName ?? projectWorktreeFrom.cwdLabel}
                 machine={projectWorktreeFrom.machine}
+                folder={projectWorktreeFrom.repoRoot ?? projectWorktreeFrom.cwd}
                 {...(projectWorktreeFrom.branch === null ? {} : { fromBranch: projectWorktreeFrom.branch })}
                 onCreate={async (branch, base) => { await createWorktree(projectWorktreeFrom, branch, base); setProjectWorktreeFrom(null) }}
                 onCancel={() => { setProjectWorktreeFrom(null) }}

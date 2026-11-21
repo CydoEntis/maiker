@@ -329,10 +329,9 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    fourth level: a worktree's session is a row of its repository's project, `project / worktree` on its second line.
    Machines and projects fold from their headings; which are folded is kept by name and folder in
    `maiker.gui.sidebar-folds.v1` (`data/sidebarFolds.ts`), so a fold survives a restart, and a project heading is its own
-   component (`ProjectSection`) with its actions (item 5). The tree draws `useOpenedProjects().machines` and adds
+   component (`ProjectSection`) with its actions (item 5). A folded machine or project heading shows its needs-you and finished-unseen counts (`FoldBadges`, from `projectFoldCounts` and `machineFoldCounts` over the sessions the tree lists under it; finished-unseen is the service's `done`, which opening the session clears), never a zero and never on an unfolded heading. The tree draws `useOpenedProjects().machines` and adds
    nothing itself; when `selected` changes, that project and its machine unfold and the project's heading is marked. Above the tree and outside its scrolling list, the **Needs you strip** (`NeedsYouStrip`, from `waitingSessions`) lists every session waiting on you on every machine and in every project, whatever is folded and whatever the project filter, the latest to start waiting first, each with its machine and project; a click opens the session and unfolds its machine and project (dropping a filter on another project), and the session stays in its project too. With none waiting the strip is not drawn. The header's filter button narrows the tree to one project
-   (its Group and Sort rows are not shown); Settings › Appearance still shows Group sessions by and Session order
-   (`sidebarGroup`, `sidebarOrder`), which the tree reads neither of. The terminals
+   and does nothing else; there is no choice of grouping or order, in the menu or in Settings. The terminals
    (no agent in them) are one **Terminals** section stuck at the bottom over the foot, at most a third of the height
    (`TerminalsSection`; its rows scroll inside), with a count and a fold (no `+`; the section is not drawn while no terminal is open, and the header's terminal button starts one); the 52px rail shows one
    terminal glyph with the count instead. The section is outside the scrolling list, so it never scrolls away. The session
@@ -380,13 +379,27 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    open, in any spelling, selects that project and adds nothing.
    A project heading's buttons and right-click menu (`components/projectMenu.ts`, `ProjectHeadActions`; the ⋯ button opens
    the menu from the keyboard) offer **New session** (the new-chat draft on the project's machine with its folder), **New
-   worktree…** and **Close project**. New worktree opens the New worktree dialog off a session of this computer in the
+   worktree…**, **Open worktree…** (menu only) and **Close project**. New worktree opens the New worktree dialog off a live session in the
    project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
-   from a session's terminal: a remote project, a plain folder and a git project with no session of this computer have
-   none. Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
+   from a session's terminal: a plain folder and a git project with no live session have none. On another machine the
+   project's machine makes it: the dialog lists that machine's branches and worktrees by the repository's folder
+   (`loadFolderBranches`, since a remote pane's repository questions are not asked), shows no existing-worktrees section
+   (removing and merging stay this computer's), and the host sends the request to that machine's daemon; a machine that
+   is down or needs an update is refused by name (`<machine> is not connected`) under the field, and nothing is made.
+   Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
    (`useProjectActions`). Close project is `useOpenedProjects().close`: while a listed session is in the project (put-away
    ones too) it is refused and a toast names the sessions in the way; ended sessions are never in the sidebar's list, so a
-   closed project is not opened again by one. The sidebar draws `machines` as its tree (item 2) and
+   closed project is not opened again by one. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
+   `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
+   (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
+   needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through
+   `loadFolderBranches`), and since git's listing does not say a worktree's folder was deleted, each folder is looked for
+   with `listFolders` and one that is gone is listed as missing and cannot be picked. Picking a worktree starts the new-chat
+   draft in its folder on the project's machine; one a session of that machine runs in (its checkout is the worktree, or its
+   folder is inside it when the daemon gave no checkout, compared as `samePath`/`inFolder` compare, put-away sessions
+   included) says so and shows that session instead. An empty list says so and offers New worktree… when the project has a
+   session to make it from, else says to start one first. A missing worktree on another machine says only that its folder
+   is gone, since remaking it is this computer's only. The sidebar draws `machines` as its tree (item 2) and
    unfolds and marks `selected`.
 
 ## Project-specific: usage and cost page (desktop)

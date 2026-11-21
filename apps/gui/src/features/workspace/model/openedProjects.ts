@@ -61,6 +61,16 @@ export function sameProject(a: OpenedProject, b: OpenedProject): boolean {
   return sameMachine(a.machineName, b.machineName) && pathKey(a.folder) === pathKey(b.folder)
 }
 
+/** `path` is `folder` or under it, in any spelling the machine's file system takes for the same folder. */
+export function inFolder(folder: string, path: string): boolean {
+  return contains(pathKey(folder), pathKey(path))
+}
+
+/** `a` and `b` name the same folder, in any spelling the machine's file system takes for it. */
+export function samePath(a: string, b: string): boolean {
+  return pathKey(a) === pathKey(b)
+}
+
 /**
  * The opened project a session belongs to, or the folder that would be opened for it when none fits. A session in git
  * belongs to its repository's main checkout (`repoRoot`, which the daemon gives as the main checkout for a linked

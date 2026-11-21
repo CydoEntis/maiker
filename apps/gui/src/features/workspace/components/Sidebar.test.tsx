@@ -804,7 +804,7 @@ describe('the Needs you strip', () => {
   it('drops the project filter when it picks a session of another project, so its project is there to unfold', async () => {
     const user = userEvent.setup()
     show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^shop/ }))
     expect(screen.queryByRole('button', { name: 'api', expanded: true })).toBeNull()
     expect(stripRows()).toHaveLength(2)
@@ -894,8 +894,8 @@ describe('the top of the sidebar', () => {
   it('keeps the filter button for the project filter alone: no Group or Sort row', async () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'A' })])
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
-    expect(screen.getByRole('dialog', { name: 'Group, sort and filter' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
+    expect(screen.getByRole('dialog', { name: 'Filter by project' })).toBeTruthy()
     expect(screen.queryByRole('radiogroup', { name: 'Group' })).toBeNull()
     expect(screen.queryByRole('radiogroup', { name: 'Sort' })).toBeNull()
   })
@@ -904,11 +904,11 @@ describe('the top of the sidebar', () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'Alpha', cwd: '/home/me/shop', folder: '/home/me/shop' }), session(2, { agent: 'claude', named: true, title: 'Beta', cwd: '/home/me/docs', folder: '/home/me/docs' })])
     const names = () => screen.getAllByRole('button', { name: /^(Alpha|Beta),/ }).map((row) => row.querySelector('.mx-row-name')?.textContent)
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^docs/ }))
     expect(names()).toEqual(['Beta'])
     expect(screen.queryByRole('button', { name: 'shop', expanded: true })).toBeNull()
-    expect(screen.getByRole('dialog', { name: 'Group, sort and filter' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Filter by project' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /^All projects/ }))
     expect(names()).toEqual(['Alpha', 'Beta'])
   })
@@ -920,7 +920,7 @@ describe('the top of the sidebar', () => {
       session(2, { named: true, title: 'B1', cwd: '/home/me/busy' }),
       session(3, { named: true, title: 'B2', cwd: '/home/me/busy' }),
     ])
-    await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
+    await user.click(screen.getByRole('button', { name: /^Filter by project/ }))
     const group = screen.getByRole('group', { name: 'Show projects' })
     expect(within(group).getAllByRole('button').map((button) => button.querySelector('.mx-grp-name')?.textContent)).toEqual(['All projects', 'busy', 'solo'])
     await user.type(screen.getByRole('textbox', { name: 'Filter projects' }), 'so')
@@ -954,7 +954,7 @@ describe('a project heading', () => {
   ]
   /** The window's actions, with Close project deciding as the window does, over `sessions`. */
   function actionsOver(sessions: readonly SessionView[], opened: readonly OpenedProject[]) {
-    return { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onClose: vi.fn((project: OpenedProject) => closeProject(opened, project, sessions)) } satisfies ProjectActions
+    return { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onClose: vi.fn((project: OpenedProject) => closeProject(opened, project, sessions)) } satisfies ProjectActions
   }
   function showProjects(sessions: SessionView[], opened: readonly OpenedProject[], more: Partial<SidebarProps> = {}) {
     const grouping = groupByProject(sessions, opened)
@@ -986,12 +986,33 @@ describe('a project heading', () => {
     expect(actions.onNewWorktree).toHaveBeenCalledTimes(2)
   })
 
-  it('offers no New worktree on another machine\'s git project, where worktrees are not managed yet', async () => {
-    showProjects([session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })], [], { machines: [LOCAL_HEAD, DEVBOX] })
-    expect(screen.queryByRole('button', { name: 'New worktree in api' })).toBeNull()
+  it('offers Open worktree on a git project of this computer, and asks the window to open its list', async () => {
+    const user = userEvent.setup()
+    const actions = showProjects(inShop(), [])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Open worktree…' }))
+    expect(actions.onOpenWorktree).toHaveBeenCalledWith(0, SHOP, 'shop')
+  })
+
+  it('offers Open worktree on a project of this computer with no session yet, since the list needs none', async () => {
+    showProjects([], [SHOP])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await screen.findByRole('menu', { name: 'shop' })
+    expect(menuItems()).toEqual(['New session', 'Open worktree…', 'Close project'])
+  })
+
+  it('offers New and Open worktree on another machine\'s git project, and both act on that machine', async () => {
+    const user = userEvent.setup()
+    const there = session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })
+    const actions = showProjects([there], [], { machines: [LOCAL_HEAD, DEVBOX] })
+    await user.click(screen.getByRole('button', { name: 'New worktree in api' }))
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(there)
+    expect(there.machine).toBe(4)
     fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
     await screen.findByRole('menu', { name: 'api' })
-    expect(menuItems()).toEqual(['New session', 'Close project'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
+    await user.click(screen.getByRole('menuitem', { name: 'Open worktree…' }))
+    expect(actions.onOpenWorktree).toHaveBeenCalledWith(4, { machineName: 'devbox', folder: '/srv/api' }, 'api')
   })
 
   it('shows a plain-folder project New session and Close project only, on its buttons and in its menu', async () => {
@@ -1031,7 +1052,7 @@ describe('a project heading', () => {
     screen.getByRole('button', { name: 'More for shop' }).focus()
     await user.keyboard('{Enter}')
     await screen.findByRole('menu', { name: 'shop' })
-    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Close project'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
     await waitForFocus('New session')
     await user.keyboard('{ArrowDown}{Enter}')
     expect(actions.onNewWorktree).toHaveBeenCalledWith(sessions[1])
@@ -1110,7 +1131,7 @@ describe('the filter button', () => {
   it('stays plain on the default filter, and turns to the accent once a project is picked', async () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'A', repo: 'alpha' }), session(2, { agent: 'claude', named: true, title: 'B', repo: 'beta' })])
-    const button = () => screen.getByRole('button', { name: /^Filter and group/ })
+    const button = () => screen.getByRole('button', { name: /^Filter by project/ })
     expect(button()).toHaveAttribute('data-on', 'false')
     await user.click(button())
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^alpha/ }))
@@ -1145,3 +1166,75 @@ describe('the group cards', () => {
   })
 })
 
+
+describe('the counts on a folded heading', () => {
+  const SHOP = { cwd: '/home/me/shop', folder: '/home/me/shop' }
+  const DOCS = { cwd: '/home/me/docs', folder: '/home/me/docs' }
+  const NOW = Math.floor(Date.now() / 1000)
+  const limited = { details: { since: NOW, resumeAt: NOW + 3600 } as NonNullable<Conversation['details']> }
+  const agent = (pane: number, place: typeof SHOP, extra: Partial<Conversation> = {}) => session(pane, { ...place, agent: 'claude', named: true, title: `S${String(pane)}`, ...extra })
+  const badges = (head: HTMLElement) => Array.from(head.querySelectorAll('.mx-fold-badge')).map((badge) => [badge.getAttribute('aria-label'), badge.textContent, badge.className])
+  const fold = async (name: string | RegExp) => { await userEvent.click(screen.getByRole('button', { name, expanded: true })) }
+
+  it('shows a folded project how many of its sessions need you, in the needs colour, and none while it is unfolded', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'needs-you' }), agent(3, SHOP, { status: 'done', ...limited }), agent(4, SHOP, { status: 'working' })])
+    expect(document.querySelector('.mx-fold-badge')).toBeNull()
+    await fold('shop')
+    const head = screen.getByRole('button', { name: /^shop/, expanded: false })
+    // The one held by its plan limit waits on the limit, not on you, as in the Needs you strip.
+    expect(badges(head)).toEqual([['2 sessions need you', '2', 'mx-fold-badge is-needs']])
+    expect(within(head).getByRole('img', { name: '2 sessions need you' })).toBeInTheDocument()
+  })
+
+  it('shows a folded machine the sum of its projects\' counts, folded or not', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' }), agent(3, DOCS, { status: 'needs-you' }), agent(4, DOCS, { status: 'done' }), agent(5, DOCS, { status: 'done' })])
+    await fold('shop')
+    await fold(/^This computer/)
+    const head = screen.getByRole('button', { name: /^This computer/, expanded: false })
+    expect(badges(head)).toEqual([
+      ['2 sessions need you', '2', 'mx-fold-badge is-needs'],
+      ['3 finished sessions not opened yet', '3', 'mx-fold-badge is-done'],
+    ])
+  })
+
+  it('counts the finished sessions not opened since, in the done colour, and one fewer once one is opened', async () => {
+    const finished = [agent(1, SHOP, { status: 'done' }), agent(2, SHOP, { status: 'done' }), agent(3, SHOP)]
+    const view = show(finished)
+    await fold('shop')
+    const head = () => screen.getByRole('button', { name: /^shop/, expanded: false })
+    expect(badges(head())).toEqual([['2 finished sessions not opened yet', '2', 'mx-fold-badge is-done']])
+    // Opening a finished session is what turns it idle on the service; the sidebar is drawn again from that list.
+    const opened = [agent(1, SHOP), finished[1], finished[2]].filter((row): row is SessionView => row !== undefined)
+    view.again({ sessions: opened, projects: groupByProject(opened, []).machines, focusedId: 't1' })
+    expect(badges(head())).toEqual([['1 finished session not opened yet', '1', 'mx-fold-badge is-done']])
+    expect(within(head()).getByRole('img', { name: '1 finished session not opened yet' })).toBeInTheDocument()
+  })
+
+  it('never shows a zero: a folded group with nothing waiting has no badge, and one with only needs you has no finished badge', async () => {
+    show([agent(1, SHOP, { status: 'working' }), agent(2, SHOP), agent(3, DOCS, { status: 'needs-you' })])
+    await fold('shop')
+    await fold('docs')
+    expect(screen.getByRole('button', { name: 'shop', expanded: false }).querySelector('.mx-fold-badge')).toBeNull()
+    expect(badges(screen.getByRole('button', { name: /^docs/, expanded: false }))).toEqual([['1 session needs you', '1', 'mx-fold-badge is-needs']])
+  })
+
+  it('names each badge for what it counts, so the heading reads its name and then its counts', async () => {
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' })])
+    await fold('shop')
+    expect(screen.getByRole('button', { name: 'shop 1 session needs you 1 finished session not opened yet', expanded: false })).toBeInTheDocument()
+  })
+  it('keeps the counts in the folding button, apart from the heading\'s actions beside it, which still act on the project', async () => {
+    const user = userEvent.setup()
+    const projectActions = { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onClose: vi.fn() } satisfies ProjectActions
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' })], { projectActions })
+    await fold('shop')
+    const toggle = screen.getByRole('button', { name: 'shop 1 session needs you 1 finished session not opened yet', expanded: false })
+    expect(toggle).toHaveClass('mx-project-toggle')
+    const heading = toggle.closest('.mx-project-head') as HTMLElement
+    expect(within(heading).getAllByRole('img').every((badge) => toggle.contains(badge))).toBe(true)
+    await user.click(within(heading).getByRole('button', { name: 'New session in shop' }))
+    expect(projectActions.onNewSession).toHaveBeenLastCalledWith(0, { machineName: null, folder: '/home/me/shop' })
+    await user.click(within(heading).getByRole('button', { name: 'More for shop' }))
+    expect(await screen.findByRole('menu', { name: 'shop' })).toBeInTheDocument()
+  })
+})

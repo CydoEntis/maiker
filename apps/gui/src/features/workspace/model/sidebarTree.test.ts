@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { machineFoldKey, projectFoldKey, projectName, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
+import { finishedUnseen, machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, projectName, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 
@@ -94,5 +94,31 @@ describe('the sessions that wait on you', () => {
     expect([held.status, exited.status]).toEqual(['limited', 'error'])
     expect([held, exited].map(waitsOnYou)).toEqual([false, false])
     expect(waitingSessions([LOCAL_HEAD], groupByProject([held, exited], []).machines)).toEqual([])
+  })
+})
+
+describe('what a folded heading counts', () => {
+  const NOW = Math.floor(Date.now() / 1000)
+
+  it('counts in a project what waits on you and what finished unseen, and sums a machine\'s projects', () => {
+    const sessions = [
+      session(1, '/home/me/shop', { status: 'needs-you' }),
+      session(2, '/home/me/shop', { status: 'done' }),
+      session(3, '/home/me/shop', { status: 'done', details: { since: NOW, resumeAt: NOW + 3600 } as NonNullable<Conversation['details']> }),
+      session(4, '/home/me/docs', { status: 'done' }),
+      session(5, '/home/me/docs', { status: 'working' }),
+      session(6, '/srv/api', { machine: 4, machineName: 'devbox', status: 'needs-you' }),
+    ]
+    const [here, there] = sidebarTree([LOCAL_HEAD, DEVBOX], groupByProject(sessions, []).machines, all, null)
+    expect(here?.projects.map((project) => [project.name, projectFoldCounts(project)])).toEqual([['shop', { needs: 1, finished: 1 }], ['docs', { needs: 0, finished: 1 }]])
+    expect(here === undefined ? null : machineFoldCounts(here)).toEqual({ needs: 1, finished: 2 })
+    expect(there === undefined ? null : machineFoldCounts(there)).toEqual({ needs: 1, finished: 0 })
+  })
+
+  it('counts only the sessions the tree lists, and a finished one only until it is opened, when it turns idle', () => {
+    const sessions = [session(1, '/home/me/shop', { status: 'done' }), session(2, '/home/me/shop', { status: 'done' })]
+    const [here] = sidebarTree([LOCAL_HEAD], groupByProject(sessions, []).machines, (row) => row.id === 't1', null)
+    expect(here === undefined ? null : machineFoldCounts(here)).toEqual({ needs: 0, finished: 1 })
+    expect([session(1, '/home/me/shop', { status: 'done' }), session(1, '/home/me/shop')].map(finishedUnseen)).toEqual([true, false])
   })
 })

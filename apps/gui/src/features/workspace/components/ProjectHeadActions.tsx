@@ -15,7 +15,7 @@ type Props = {
 
 /**
  * The buttons at the right of a project heading, shown while the pointer or focus is on it: New session, New worktree (a
- * git project of this computer), and ⋯ for the heading's menu, which also holds Close project.
+ * git project with a session in it, on any machine), and ⋯ for the heading's menu, which also holds Close project.
  */
 export function ProjectHeadActions({ name, commands, onMore }: Props) {
   const { newSession, newWorktree } = commands

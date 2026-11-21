@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { LOCAL_HEAD, type MachineHead } from './machines'
 import { toSessionView, type SessionView } from './session'
-import { byUrgency, inProject, isFreshSession, machineGroups, projectChoices, projectColor, projectGroups, placeLine, projectSections, rowTitle, rowWord, sortedBy, splitPutAway, statusSections } from './sidebar'
+import { byLatestChange, byUrgency, inProject, isFreshSession, projectChoices, projectColor, placeLine, rowTitle, rowWord, splitPutAway, statusSections } from './sidebar'
 
 vi.mock('@/api/daemon', () => ({ terminalOf: (id: string) => Number(id.slice(1)) }))
 
@@ -100,25 +99,6 @@ describe('a snoozed session', () => {
 
 })
 
-describe('machine groups', () => {
-  const devbox: MachineHead = { ...LOCAL_HEAD, key: 'machine-2', machine: 2, name: 'devbox', label: 'devbox' }
-
-  it('gives every machine its own sessions, and none at all when nothing runs', () => {
-    const groups = machineGroups([session(1), session(2, { machine: 2, machineName: 'devbox' })], [LOCAL_HEAD, devbox])
-    expect(groups.map((group) => [group.head.key, group.sessions.map((item) => item.id)])).toEqual([['machine-0', ['t1']], ['machine-2', ['t2']]])
-    expect(machineGroups([], [LOCAL_HEAD])).toEqual([])
-  })
-
-  it('keeps every machine header with no sessions anywhere once there is another machine', () => {
-    expect(machineGroups([], [LOCAL_HEAD, devbox]).map((group) => [group.head.key, group.sessions.length])).toEqual([['machine-0', 0], ['machine-2', 0]])
-  })
-
-  it('groups by project with each project’s needs-you count', () => {
-    const groups = projectGroups([session(1, { cwd: '/x/a', folder: '/x/a', status: 'needs-you' }), session(2, { cwd: '/x/b', folder: '/x/b' }), session(3, { cwd: '/x/a', folder: '/x/a' })])
-    expect(groups.map((group) => [group.name, group.sessions.length, group.needs])).toEqual([['a', 2, 1], ['b', 1, 0]])
-  })
-})
-
 describe('status sections', () => {
   it('lists needs you, working, finished and idle in that order, and leaves out a status nothing has', () => {
     const sections = statusSections([session(1, { agent: 'codex' }), session(2, { agent: 'claude', status: 'done' }), session(3, { agent: 'claude', status: 'needs-you' })])
@@ -149,10 +129,9 @@ describe('status sections', () => {
 })
 
 describe('shells', () => {
-  it('are ordinary rows: listed by status with the agents, and in the project sections, as created', () => {
+  it('are ordinary rows: listed by status with the agents', () => {
     const all = [session(3, { process: 'pnpm' }), session(1), session(2, { agent: 'claude' }), session(4, { details: exited })]
-    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t1', 't2', 't3', 't4']]])
-    expect(projectSections(all, [LOCAL_HEAD]).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't2', 't3', 't4'])
+    expect(statusSections(all).map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t4', 't3', 't2', 't1']]])
   })
 
   it('sit with what needs you while they ask', () => {
@@ -162,7 +141,6 @@ describe('shells', () => {
 })
 
 describe('projects', () => {
-  const devbox: MachineHead = { ...LOCAL_HEAD, key: 'machine-2', machine: 2, name: 'devbox', label: 'devbox' }
   const sessions = () => [session(1, { agent: 'claude', cwd: '/x/b', folder: '/x/b' }), session(2, { agent: 'claude', cwd: '/x/a', folder: '/x/a' }), session(3, { agent: 'claude', machine: 2, machineName: 'devbox', cwd: '/x/a', folder: '/x/a' })]
 
   it('lists every project by name with how many sessions it has', () => {
@@ -173,10 +151,6 @@ describe('projects', () => {
     expect(inProject(sessions(), 'a').map((item) => item.id)).toEqual(['t2', 't3'])
     expect(inProject(sessions(), null)).toHaveLength(3)
   })
-
-  it('gives a project on two machines a heading for each, this computer first', () => {
-    expect(projectSections(sessions(), [LOCAL_HEAD, devbox]).map((section) => [section.name, section.head.name, section.sessions.length])).toEqual([['a', null, 1], ['a', 'devbox', 1], ['b', null, 1]])
-  })
 })
 
 describe('putting a session away', () => {
@@ -186,7 +160,7 @@ describe('putting a session away', () => {
     const { listed, putAway } = splitPutAway([away(3, { agent: 'claude' }), session(1, { agent: 'claude' }), away(2), session(4)])
     expect(putAway.map((item) => item.id)).toEqual(['t2', 't3'])
     expect(listed.map((item) => item.id)).toEqual(['t1', 't4'])
-    expect(statusSections(listed).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t1', 't4'])
+    expect(statusSections(listed).flatMap((section) => section.sessions.map((item) => item.id))).toEqual(['t4', 't1'])
   })
 
   it('lists a put-away session that needs you under Needs you, still put away on the daemon', () => {
@@ -209,18 +183,16 @@ describe('sorting a heading’s rows', () => {
   const at = (pane: number, name: string, since: number | null) => session(pane, { agent: 'claude', named: true, title: name, ...(since === null ? {} : { details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since } }) })
   const rows = () => [at(1, 'Mid', 100), at(2, 'Zed', 300), at(3, 'Amy', 200)]
 
-  it('puts the session whose state changed last first, or the oldest session first, or A to Z', () => {
-    expect(sortedBy(rows(), 'recent').map((item) => item.id)).toEqual(['t2', 't3', 't1'])
-    expect(sortedBy(rows(), 'oldest').map((item) => item.id)).toEqual(['t1', 't2', 't3'])
-    expect(sortedBy(rows(), 'name').map((item) => item.id)).toEqual(['t3', 't1', 't2'])
+  it('puts the session whose state changed last first', () => {
+    expect(byLatestChange(rows()).map((item) => item.id)).toEqual(['t2', 't3', 't1'])
   })
 
   it('puts a session that never reported a change after the others, newest first', () => {
-    expect(sortedBy([at(1, 'A', null), at(2, 'B', 50), at(3, 'C', null)], 'recent').map((item) => item.id)).toEqual(['t2', 't3', 't1'])
+    expect(byLatestChange([at(1, 'A', null), at(2, 'B', 50), at(3, 'C', null)]).map((item) => item.id)).toEqual(['t2', 't3', 't1'])
   })
 
   it('applies inside every status section', () => {
-    const sections = statusSections([at(1, 'B', 10), at(2, 'A', 20)], null, 'name')
+    const sections = statusSections([at(1, 'A', 10), at(2, 'B', 20)])
     expect(sections.map((section) => section.sessions.map((item) => item.id))).toEqual([['t2', 't1']])
   })
 
