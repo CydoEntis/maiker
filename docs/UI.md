@@ -1062,7 +1062,9 @@ choice does), `client/machine_config.rs` (where `config.local.toml` is; the `[[m
   - *ssh refused its host key* (it differs from the one on record): nothing is added, and the shared sentence
     ("<name>'s host key has changed, so Maiker won't connect: … run `ssh-keygen -R '<host>'` …") is shown. A key ssh
     has not seen is no question: the probe's line carries `StrictHostKeyChecking=accept-new`, so ssh records it
-    (SECURITY.md, Host keys).
+    (SECURITY.md, Host keys). When the person's own ssh config is strict and refuses that new key, nothing is
+    added either and the sentence says the key isn't known yet, with the `ssh -o StrictHostKeyChecking=ask <target>`
+    line to run once in a terminal; it never says the key changed.
   - *ssh cannot reach it* (a bad host): the shared sentence ("Can't reach <name>: check the name or address,
     and that the machine is on (<ssh's last line, cleaned and cut>).") is shown under the lists, and nothing is added. Nothing hangs: every look ends at its limit, on `Esc`, or when
     ssh does.

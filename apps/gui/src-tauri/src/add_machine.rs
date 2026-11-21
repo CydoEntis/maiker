@@ -151,11 +151,14 @@ pub fn prepare(
                 reach: Reach::Answered,
             },
         }),
-        // A changed host key is refused by ssh, so the machine would never connect: nothing is
-        // added, and the sentence says how to clear the old key once the change is confirmed.
-        Probe::Failed(failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. })) => {
-            Ok(Prepare::Refused { def, failure })
-        }
+        // A host key ssh refused, changed or not yet known, means the machine would never connect:
+        // nothing is added, and the sentence says how to clear the old key once the change is
+        // confirmed, or how to accept a new one in a terminal.
+        Probe::Failed(
+            failure @ (FailureClass::Unreachable(_)
+            | FailureClass::HostKeyChanged { .. }
+            | FailureClass::HostKeyUnknown),
+        ) => Ok(Prepare::Refused { def, failure }),
         Probe::Failed(failure) if failure.is_login() => Ok(Prepare::Ready {
             def,
             how: How::Login { failure },
@@ -596,8 +599,14 @@ mod tests {
 
     #[test]
     fn a_config_that_refuses_new_host_keys_is_the_person_s_and_is_kept() {
-        let (looked, known_hosts) = look_with_keys(None, "true");
-        assert!(matches!(looked, Ok(Prepare::Refused { .. })), "{looked:?}");
+        let (looked, known_hosts) = look_with_keys(None, "yes");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&looked) else {
+            panic!("a failure");
+        };
+        assert!(message.starts_with("build.example's host key isn't known yet"), "{message}");
+        assert!(!message.contains("changed") && !message.contains("ssh-keygen"), "a good key is never to be removed: {message}");
+        assert_eq!(failure, "host-key-unknown");
+        assert_eq!(fix_command.as_deref(), Some("ssh -o StrictHostKeyChecking=ask build.example"));
         assert_eq!(known_hosts, None, "nothing was written");
     }
 

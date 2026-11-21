@@ -38,14 +38,15 @@ export function sessionWords(count: number): string {
   return count === 0 ? 'No sessions' : countWords(count)
 }
 
-/** Whether the machine stopped on its host key rather than on a key it was refused. */
+/** Whether the machine stopped on its host key (changed, or new and not accepted yet) rather than on a key it was refused. */
 export function stoppedOnHostKey(head: MachineHead): boolean {
-  return head.failure === 'host-key-changed'
+  return head.failure === 'host-key-changed' || head.failure === 'host-key-unknown'
 }
 
 /** The row's few words for a login ssh could not finish alone. The full sentence is the host's (`head.why`). */
 function loginWords(head: MachineHead): string {
-  if (stoppedOnHostKey(head)) return 'Host key changed'
+  if (head.failure === 'host-key-changed') return 'Host key changed'
+  if (head.failure === 'host-key-unknown') return 'Host key not accepted yet'
   return head.failure === 'needs-person' ? 'Needs a sign-in' : 'Key rejected'
 }
 

@@ -230,9 +230,11 @@ impl App {
             Probe::Ready { version } => {
                 self.machine_added(&def, Added::Connect(None), &version, Outcome::Ready(version.clone()))
             }
-            // A changed host key is refused by ssh, so nothing is added (ADR 0017).
+            // A host key ssh refused, changed or not yet known, adds nothing (ADR 0017).
             Probe::Failed(
-                failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. }),
+                failure @ (FailureClass::Unreachable(_)
+                | FailureClass::HostKeyChanged { .. }
+                | FailureClass::HostKeyUnknown),
             ) => say(sentence_here(&failure, &Subject::of_def(&def)), true),
             // The one login ssh cannot finish alone: a person answers it in the popup.
             Probe::Failed(failure @ FailureClass::NeedsPerson(_)) => {

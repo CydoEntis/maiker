@@ -1,7 +1,7 @@
 //! Why a connection to another machine failed, told from ssh's exit status and from whether
 //! the far side ever spoke, not from ssh's wording: its words change with version and locale.
 //! `classify` is the only place that reads ssh's text, and only for the few tokens that mark a
-//! login ssh could not finish alone or a host key that changed.
+//! login ssh could not finish alone or a host key ssh refused.
 //!
 //! `sentence` is the only place that words a failure: one sentence that names the machine and
 //! says what to do. The terminal app and the desktop app both show it, so they never disagree
@@ -18,12 +18,16 @@ const COMMAND_NOT_FOUND: i32 = 127;
 
 /// ssh's words for a login it could not finish without a person.
 const LOGIN_TOKENS: [&str; 2] = ["Permission denied", "Too many authentication failures"];
-/// ssh's words for a host key that is not the one on record. With `accept-new` a key ssh has
-/// never seen is recorded, not refused, so a refusal is a key that differs.
-const HOST_KEY_TOKENS: [&str; 2] = [
-    "REMOTE HOST IDENTIFICATION HAS CHANGED",
-    "Host key verification failed",
-];
+/// ssh's banner for a host key that is not the one on record. Only this means the key changed.
+const HOST_KEY_CHANGED: &str = "REMOTE HOST IDENTIFICATION HAS CHANGED";
+/// ssh's words for any host key it refused. Without the banner the key is one it has never seen,
+/// refused because the person's own config is strict (`StrictHostKeyChecking=yes`, which Maiker
+/// keeps) or because the ssh client is too old for `accept-new` and could not ask.
+const HOST_KEY_REFUSED: &str = "Host key verification failed";
+/// The option that makes ssh show a new host key's fingerprint and ask, whatever the person's
+/// config says: on the command line it comes before the config, and ssh keeps the first value.
+/// It still refuses a key that changed.
+const ASK_FOR_NEW_KEY: &str = "-o StrictHostKeyChecking=ask";
 /// ssh's word for a login whose first method (the key) worked and which wants another.
 const PARTIAL_SUCCESS: &str = "partial success";
 /// The method name ssh lists in `Permission denied (publickey,password)` when a key may log in.
@@ -71,6 +75,9 @@ pub enum FailureClass {
     /// The machine's host key is not the one on record, so ssh refused it. Carries the host as
     /// `known_hosts` names it, when ssh said so.
     HostKeyChanged { known_as: Option<String> },
+    /// ssh has never seen the machine's host key and the person's own settings do not let it
+    /// record one without asking, so it refused it. Nothing about the key is wrong.
+    HostKeyUnknown,
     /// The far side runs an older version of the app.
     Update,
     /// The far side runs a newer version of the app than this computer.
@@ -95,6 +102,7 @@ impl FailureClass {
             FailureClass::KeyRefused(_)
                 | FailureClass::NeedsPerson(_)
                 | FailureClass::HostKeyChanged { .. }
+                | FailureClass::HostKeyUnknown
         )
     }
 
@@ -112,6 +120,7 @@ impl FailureClass {
             FailureClass::KeyRefused(_) => "key-refused",
             FailureClass::NeedsPerson(_) => "needs-person",
             FailureClass::HostKeyChanged { .. } => "host-key-changed",
+            FailureClass::HostKeyUnknown => "host-key-unknown",
             FailureClass::Update => "update",
             FailureClass::UpdateHere => "update-here",
             FailureClass::Install => "install",
@@ -138,9 +147,10 @@ pub fn classify(error: &anyhow::Error) -> FailureClass {
     match end.code {
         Some(COMMAND_NOT_FOUND) => FailureClass::Install,
         Some(NO_DAEMON_EXIT) => FailureClass::NoDaemon,
-        _ if from_ssh && says_any(&end.said, &HOST_KEY_TOKENS) => FailureClass::HostKeyChanged {
+        _ if from_ssh && end.said.contains(HOST_KEY_CHANGED) => FailureClass::HostKeyChanged {
             known_as: known_hosts_name(&end.said),
         },
+        _ if from_ssh && end.said.contains(HOST_KEY_REFUSED) => FailureClass::HostKeyUnknown,
         _ if from_ssh && says_any(&end.said, &LOGIN_TOKENS) => {
             if needs_a_person(&end.said) {
                 FailureClass::NeedsPerson(last_line(end))
@@ -285,6 +295,10 @@ pub fn fix_command(failure: &FailureClass, subject: &Subject<'_>, os: ClientOs) 
             // Quoted: `[host]:port` is a pattern to an unquoted shell word.
             Some(format!("ssh-keygen -R '{host}'"))
         }
+        FailureClass::HostKeyUnknown => {
+            let target = subject.plain_target()?;
+            Some(format!("ssh {ASK_FOR_NEW_KEY} {}{target}", subject.port_flag()))
+        }
         FailureClass::Install => Some(format!("{APP_COMMAND} machine update {name} --install")),
         FailureClass::Update => Some(format!("{APP_COMMAND} machine update {name}")),
         _ => None,
@@ -324,6 +338,16 @@ pub fn sentence(failure: &FailureClass, subject: &Subject<'_>, os: ClientOs) -> 
                 "{name}'s host key has changed, so {APP_NAME} won't connect: confirm with whoever runs it that the change is expected, then {remove} and try again."
             )
         }
+        // The same words on Windows: `ssh` runs as it is in PowerShell.
+        FailureClass::HostKeyUnknown => {
+            let connect = match command {
+                Some(command) => format!("run `{command}` once in a terminal"),
+                None => "connect to it once with ssh in a terminal".to_string(),
+            };
+            format!(
+                "{name}'s host key isn't known yet and your ssh settings won't record a new one on their own: {connect}, check the fingerprint it shows and answer yes, then try again."
+            )
+        }
         FailureClass::Update => format!(
             "{name} runs an older {APP_NAME}: run `{}`, then try again.",
             command.unwrap_or_default()
@@ -355,6 +379,7 @@ pub fn is_failure_sentence(line: &str, name: &str) -> bool {
         FailureClass::KeyRefused(String::new()),
         FailureClass::NeedsPerson(String::new()),
         FailureClass::HostKeyChanged { known_as: None },
+        FailureClass::HostKeyUnknown,
         FailureClass::Update,
         FailureClass::UpdateHere,
         FailureClass::Install,
@@ -439,14 +464,25 @@ mod tests {
             FailureClass::HostKeyChanged { known_as: Some("[10.0.0.5]:2222".into()) }
         );
         assert_eq!(
-            class(Some(255), "Host key verification failed."),
+            class(Some(255), "WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!\nHost key verification failed."),
             FailureClass::HostKeyChanged { known_as: None }
         );
     }
 
     #[test]
+    fn a_new_host_key_a_strict_config_refused_has_not_changed() {
+        // What OpenSSH says with `StrictHostKeyChecking=yes` and the key not in known_hosts.
+        let strict = "No ED25519 host key is known for 10.0.0.5 and you have requested strict checking.\n\
+            Host key verification failed.\n";
+        assert_eq!(class(Some(255), strict), FailureClass::HostKeyUnknown);
+        // An ssh too old for `accept-new` that could not ask says only the last line.
+        assert_eq!(class(Some(255), "Host key verification failed.\r\n"), FailureClass::HostKeyUnknown);
+        assert!(FailureClass::HostKeyUnknown.is_login(), "it waits for a person, it is not redialled");
+    }
+
+    #[test]
     fn a_host_name_from_ssh_that_is_not_plain_is_not_put_in_a_command() {
-        let said = "  ssh-keygen -R 'box; rm -rf ~'\nHost key verification failed.";
+        let said = "REMOTE HOST IDENTIFICATION HAS CHANGED\n  ssh-keygen -R 'box; rm -rf ~'\nHost key verification failed.";
         assert_eq!(class(Some(255), said), FailureClass::HostKeyChanged { known_as: None });
     }
 
@@ -469,6 +505,7 @@ mod tests {
         assert!(is_unreachable(&class(Some(1), "Permission denied")));
         assert!(is_unreachable(&class(None, "Permission denied")));
         assert!(is_unreachable(&class(Some(1), "Host key verification failed.")));
+        assert!(is_unreachable(&class(Some(1), "REMOTE HOST IDENTIFICATION HAS CHANGED")));
     }
 
     #[test]
@@ -658,6 +695,29 @@ mod sentences {
     }
 
     #[test]
+    fn a_new_host_key_says_to_accept_it_once_with_ssh_and_never_to_remove_a_key() {
+        let unknown = FailureClass::HostKeyUnknown;
+        let said = unix(&unknown);
+        assert_eq!(
+            said,
+            "box's host key isn't known yet and your ssh settings won't record a new one on their own: run `ssh -o StrictHostKeyChecking=ask dev@10.0.0.5` once in a terminal, check the fingerprint it shows and answer yes, then try again."
+        );
+        assert!(!said.contains("changed") && !said.contains("ssh-keygen"), "{said}");
+        assert_eq!(sentence(&unknown, &BOX, ClientOs::Windows), said, "ssh runs as it is in PowerShell");
+        let on_2222 = Subject { port: Some(2222), ..BOX };
+        assert_eq!(
+            fix_command(&unknown, &on_2222, ClientOs::Unix).as_deref(),
+            Some("ssh -o StrictHostKeyChecking=ask -p 2222 dev@10.0.0.5")
+        );
+        let via = Subject { target: None, ..BOX };
+        assert_eq!(fix_command(&unknown, &via, ClientOs::Unix), None);
+        assert_eq!(
+            sentence(&unknown, &via, ClientOs::Unix),
+            "box's host key isn't known yet and your ssh settings won't record a new one on their own: connect to it once with ssh in a terminal, check the fingerprint it shows and answer yes, then try again."
+        );
+    }
+
+    #[test]
     fn an_older_app_there_gives_the_update_command() {
         assert_eq!(
             unix(&FailureClass::Update),
@@ -711,6 +771,7 @@ mod sentences {
         for failure in [
             FailureClass::Unreachable("no route".into()),
             FailureClass::KeyRefused(String::new()),
+            FailureClass::HostKeyUnknown,
             FailureClass::InstallFailed("x".into()),
             FailureClass::NoDaemon,
         ] {
@@ -728,6 +789,7 @@ mod sentences {
             FailureClass::KeyRefused("x".into()),
             FailureClass::NeedsPerson("x".into()),
             FailureClass::HostKeyChanged { known_as: None },
+            FailureClass::HostKeyUnknown,
             FailureClass::Update,
             FailureClass::UpdateHere,
             FailureClass::Install,
