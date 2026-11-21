@@ -201,5 +201,16 @@ pub fn file_change_previews(tool_name: &str, input: &Value) -> Option<Vec<Value>
     })])
 }
 
+/// A command is shown whole in the chat view, so the label keeps far more than a title would.
+const TOOL_LABEL_CHARS: usize = 2048;
+
+/// The label of a command step: the command itself, cleaned and bounded.
+pub fn command_label(command: Option<&str>) -> String {
+    command
+        .filter(|command| !command.trim().is_empty())
+        .map(|command| clean_text(command).chars().take(TOOL_LABEL_CHARS).collect())
+        .unwrap_or_else(|| "Run command".into())
+}
+
 #[cfg(test)]
 mod tests;

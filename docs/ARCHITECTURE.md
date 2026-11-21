@@ -271,8 +271,11 @@ implements: the `ProviderDialect` trait, a state machine with no I/O, and the co
 and events it exchanges with the daemon. It also holds what every adapter needs to make
 provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
 (`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
-contract from the open connection on. The daemon does not run dialects yet: it calls the Codex
-crate's functions directly (MAITTY-485).
+contract from the open connection on, and `ClaudeDialect` (`maitty-provider-claude/src/dialect.rs`)
+implements it whole. The daemon does not run dialects yet (MAITTY-485): it calls the Codex
+crate's functions directly, and its Claude loop hands it the same typed events the dialect
+emits. Both reach one place in the daemon (`conversation_reported`, `conversation_asked`), so
+a turn's status and history are decided the same way for every provider.
 JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.
 Completing the package split is tracked by

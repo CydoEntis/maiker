@@ -199,7 +199,7 @@ impl CodexDialect {
             && let Some((turn, item)) = approvals::subject(params)
             && let Some(changes) = params.get("changes").and_then(Value::as_array)
         {
-            let changes = approvals::file_change_previews(changes);
+            let changes = maitty_provider::approval::file_change_previews(changes);
             let subject = (turn.clone(), item.clone());
             match &changes {
                 Some(changes) => self.file_changes.insert(subject, changes.clone()),

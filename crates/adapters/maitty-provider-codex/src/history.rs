@@ -2,7 +2,7 @@
 //! keeps: cleaned, bounded, and with secret file content left out.
 
 use maitty_provider::redact;
-use maitty_provider::tool_input::{bound_input, clean_text};
+use maitty_provider::tool_input::{bound_input, clean_text, command_label};
 use maitty_shared::conversation::history::{Content, IncompleteReason, ItemState, Role};
 use serde_json::Value;
 
@@ -37,8 +37,6 @@ pub enum HistoryEvent {
 
 type Result<T> = std::result::Result<T, IncompleteReason>;
 const ERROR_MESSAGE_CHARS: usize = 1024;
-/// A command is shown whole in the chat view, so the label keeps far more than a title would.
-const TOOL_LABEL_CHARS: usize = 2048;
 /// A helper agent's title: the first line of the task it was given.
 const HELPER_TITLE_CHARS: usize = 120;
 /// Largest plan text kept for one plan item.
@@ -48,14 +46,6 @@ const MAX_REASONING_BYTES: usize = 64 * 1024;
 /// The item a provider's own summary of the earlier conversation arrives as. It is kept as a tool
 /// step of this kind, with the summary as its output.
 pub const CONTEXT_SUMMARY_ITEM: &str = "contextSummary";
-
-fn tool_label(item: &Value) -> String {
-    item.get("command")
-        .and_then(Value::as_str)
-        .filter(|command| !command.trim().is_empty())
-        .map(|command| clean_text(command).chars().take(TOOL_LABEL_CHARS).collect())
-        .unwrap_or_else(|| "Run command".into())
-}
 
 pub fn error_message(value: &Value) -> Result<String> {
     let message = text(value, "message")?;
@@ -164,7 +154,7 @@ pub fn event(thread: &str, method: &str, params: &Value) -> Result<Option<Histor
         }
         "commandExecution" => Content::Tool {
             kind: kind.into(),
-            label: tool_label(item),
+            label: command_label(item.get("command").and_then(Value::as_str)),
             output: item
                 .get("aggregatedOutput")
                 .and_then(Value::as_str)

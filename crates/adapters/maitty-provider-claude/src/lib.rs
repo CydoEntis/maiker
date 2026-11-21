@@ -3,8 +3,8 @@ use serde_json::Value;
 use maitty_shared::conversation::TurnChoice;
 use std::ffi::OsString;
 
-#[cfg(test)]
-mod dialect_spike;
+pub mod approvals;
+pub mod dialect;
 mod hooks;
 mod projection;
 pub use hooks::{
@@ -12,7 +12,7 @@ pub use hooks::{
     is_our_statusline, json_hook_group, replace_json_hook_group, runs_our_hook, stale_hooks,
     status_from_hook, update_statusline,
 };
-pub use projection::{MAX_PENDING_TOOLS, ProjectedEvent, TurnProjector};
+pub use projection::{MAX_PENDING_TOOLS, TurnProjector};
 
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
 const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327", "2.1.330"];

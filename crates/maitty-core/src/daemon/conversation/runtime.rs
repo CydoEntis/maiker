@@ -89,6 +89,8 @@ pub(in crate::daemon) enum Payload {
         method: String,
         params: Value,
     },
+    /// What an adapter that speaks the provider contract reported, already read.
+    Event(maitty_provider::ProviderEvent),
     Terminated {
         failure: Option<String>,
         reaped: bool,
