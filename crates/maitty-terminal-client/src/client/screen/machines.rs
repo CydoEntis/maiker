@@ -543,6 +543,14 @@ const HEIGHT: u16 = 26;
 const MOST_SUGGESTIONS: usize = 6;
 /// Your machines shown at once; the list follows the chosen one past them.
 const MOST_MACHINES: usize = 4;
+/// Columns before a machine row's icon, between its name, target and state, and after its last
+/// button.
+const ROW_LEAD: usize = 2;
+const ROW_GAP: usize = 2;
+const ROW_END: usize = 1;
+/// The target columns a machine row's buttons make room for: enough to tell `user@host` apart.
+/// A longer target is cut at what is left once every button has gone.
+const TARGET_ROOM: usize = 16;
 /// The most lines the chosen machine's fix takes before its end is cut.
 const DETAIL_LINES: usize = 2;
 /// Rows the dialog keeps for everything but the suggestions: the question, the input, the parse
@@ -886,46 +894,50 @@ fn draw_your_machines(
         let st = list_row(app, buf, rr, on, t);
         let state = format!("{} {}", row.glyph, row.word);
         let state_w = state.width();
-        // One button for each thing the keys do, at the row's right end.
+        // One button for each thing the keys do, at the row's right end. The install or update
+        // button is there only when the machine needs it, as the sidebar's chip is.
         let ground = st.bg.unwrap_or(t.card);
-        let buttons: Vec<(Vec<Seg>, char)> = [
-            (row.fix.map_or("update", AppFix::verb), 'u'),
-            ("reconnect", 'r'),
-            ("edit", 'e'),
-            ("remove", 'x'),
-        ]
-        .into_iter()
-        .map(|(label, key)| (chip(app, label, Chip::Action, ground, t), key))
-        .collect();
-        let buttons_w: usize = buttons.iter().map(|(b, _)| segs_width(b) as usize + 1).sum();
-        let target_w =
-            (inner.width as usize).saturating_sub(name_w + state_w + buttons_w + 13);
+        let mut buttons: Vec<(Vec<Seg>, char)> = row
+            .fix
+            .map(|fix| (fix.verb(), 'u'))
+            .into_iter()
+            .chain([("reconnect", 'r'), ("edit", 'e'), ("remove", 'x')])
+            .map(|(label, key)| (chip(app, label, Chip::Action, ground, t), key))
+            .collect();
+        let name = format!(
+            "{} {:<name_w$}",
+            machine_group::REMOTE_ICON,
+            truncate(&row.name, name_w)
+        );
+        let target_x = rr.x as usize + ROW_LEAD + name.width() + ROW_GAP;
+        let room = (rr.right() as usize)
+            .saturating_sub(target_x + ROW_GAP + state_w + ROW_GAP + ROW_END);
+        let widths: Vec<usize> = buttons.iter().map(|(b, _)| segs_width(b) as usize + 1).collect();
+        let (kept, target_w) = fit_buttons(room, row.target.width(), &widths);
+        buttons.truncate(kept);
+        let buttons_w: usize = widths[..kept].iter().sum();
         put(
             buf,
-            rr.x + 2,
+            rr.x + ROW_LEAD as u16,
             y,
             &[
                 seg(
-                    format!(
-                        "{} {:<name_w$}",
-                        machine_group::REMOTE_ICON,
-                        truncate(&row.name, name_w)
-                    ),
+                    name,
                     st.fg(if on { t.strong } else { t.text })
                         .add_modifier(Modifier::BOLD),
                 ),
                 seg(
-                    format!("  {}", truncate(&row.target, target_w)),
+                    format!("{:ROW_GAP$}{}", "", truncate(&row.target, target_w)),
                     st.fg(t.muted),
                 ),
             ],
             rr.right(),
         );
         hit(app, rr, ScreenHit::MachineRow(n));
-        let mut x = rr.right().saturating_sub(buttons_w as u16 + 1);
+        let mut x = rr.right().saturating_sub((buttons_w + ROW_END) as u16);
         put(
             buf,
-            x.saturating_sub(state_w as u16 + 2),
+            x.saturating_sub((state_w + ROW_GAP) as u16),
             y,
             &[seg(state, st.fg(row.color).add_modifier(Modifier::BOLD))],
             x,
@@ -973,6 +985,22 @@ fn draw_your_machines(
         }
     }
     y + 1 - inner.y
+}
+
+/// How many of a row's buttons (`widths`, each with the gap after it) stay, and the columns its
+/// target gets from `room`. Buttons go from the row's right end until the target has what it
+/// needs, up to `TARGET_ROOM`: their keys still work and the bar names them, while a target cut
+/// to a letter says nothing. The install or update button comes first, so it goes last.
+pub(in crate::client) fn fit_buttons(room: usize, target: usize, widths: &[usize]) -> (usize, usize) {
+    let want = target.min(TARGET_ROOM);
+    let mut kept = widths.len();
+    loop {
+        let left = room.saturating_sub(widths[..kept].iter().sum());
+        if left >= want || kept == 0 {
+            return (kept, left);
+        }
+        kept -= 1;
+    }
 }
 
 /// The input, its row tinted, with the cursor.

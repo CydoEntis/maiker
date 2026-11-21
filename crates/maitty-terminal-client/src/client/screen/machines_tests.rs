@@ -545,18 +545,77 @@ fn click_button(app: &mut App, text: &str, name: &str, label: &str) {
 }
 
 #[test]
-fn every_machine_row_has_its_own_buttons() {
-    for (w, h) in [(100, 30), (160, 45)] {
+fn every_machine_row_has_its_own_buttons_and_update_only_when_it_needs_one() {
+    for (w, h) in SIZES {
         let mut app = app_with(&[("build", "dev@build.lan"), ("gpu", "gpu")]);
         let (text, r, buf) = shown(&mut app, view(Some(hosts())), w, h);
         assert_box_whole(&text, r, &buf);
         for name in ["build", "gpu"] {
             let row = text.lines().find(|l| l.contains(&format!("⇄ {name}"))).unwrap();
-            for label in ["update", "reconnect", "edit", "remove"] {
+            for label in ["reconnect", "edit", "remove"] {
                 assert!(row.contains(&format!(" {label} ")), "{w}x{h}: {name} lacks {label}: {row}");
             }
+            assert!(!row.contains(" update "), "{w}x{h}: {name} needs no update: {row}");
         }
     }
+}
+
+/// The row of `name` in a frame, from its icon on.
+fn machine_row<'a>(text: &'a str, name: &str) -> &'a str {
+    let line = text
+        .lines()
+        .find(|l| l.contains(&format!("⇄ {name}")))
+        .unwrap_or_else(|| panic!("no row for {name}\n{text}"));
+    &line[line.find('⇄').unwrap()..]
+}
+
+#[test]
+fn a_target_that_fits_is_shown_whole_at_80_columns() {
+    use crate::client::link::ConnectionState;
+    use crate::link_failure::FailureClass;
+    for (w, h) in SIZES {
+        let mut app = app_with(&[("box", "box"), ("build", "dev@build.lan")]);
+        app.on_link_state(MachineId(40), "box".into(), ConnectionState::NeedsUpdate { failure: FailureClass::Update });
+        app.on_link_state(MachineId(41), "build".into(), ConnectionState::NeedsUpdate { failure: FailureClass::Update });
+        let (text, r, buf) = shown(&mut app, view(Some(hosts())), w, h);
+        assert_box_whole(&text, r, &buf);
+        let row = machine_row(&text, "box");
+        assert!(row.starts_with("⇄ box     box "), "{w}x{h}: box is cut: {row}");
+        for label in ["update", "reconnect", "edit", "remove"] {
+            assert!(row.contains(&format!(" {label} ")), "{w}x{h}: box lacks {label}: {row}");
+        }
+        // A target that needs a button's room gets it: the remove button gives way, its key stays.
+        let row = machine_row(&text, "build");
+        assert!(row.contains(" dev@build.lan "), "{w}x{h}: the target is cut: {row}");
+        assert!(row.contains(" update "), "{w}x{h}: the fix stays: {row}");
+        assert!(row.contains(" needs update "), "{w}x{h}: the state stays: {row}");
+    }
+}
+
+#[test]
+fn a_long_target_takes_the_buttons_room_before_it_is_cut() {
+    use crate::client::link::ConnectionState;
+    use crate::link_failure::FailureClass;
+    let target = "someone@a-very-long-hostname.example.com";
+    let mut app = app_with(&[("box", target)]);
+    app.on_link_state(MachineId(40), "box".into(), ConnectionState::NeedsUpdate { failure: FailureClass::Install });
+    let (text, r, buf) = shown(&mut app, view(Some(hosts())), 80, 24);
+    assert_box_whole(&text, r, &buf);
+    let row = machine_row(&text, "box");
+    assert!(row.contains(&target[..15]), "the target keeps what tells it apart: {row}");
+    assert!(row.contains(" needs update "), "the state stays: {row}");
+    assert!(row.contains(" install "), "the fix button goes last: {row}");
+    assert!(!row.contains(" remove "), "the buttons give way first: {row}");
+}
+
+#[test]
+fn buttons_go_from_the_right_until_the_target_has_its_room() {
+    let widths = [9, 12, 7, 9];
+    assert_eq!(fit_buttons(60, 3, &widths), (4, 23), "everything fits");
+    assert_eq!(fit_buttons(40, 12, &widths), (3, 12), "remove gives way");
+    assert_eq!(fit_buttons(30, 40, &widths), (1, 21), "a long target wants 16; the fix stays");
+    assert_eq!(fit_buttons(10, 40, &widths), (0, 10), "too narrow for any");
+    assert_eq!(fit_buttons(0, 3, &[]), (0, 0));
 }
 
 #[test]
@@ -659,3 +718,4 @@ fn c_turns_copies_off_at_once_and_asks_before_turning_them_on() {
     let (text, ..) = frame(&mut app, 160, 45);
     assert!(text.contains("Copying to your clipboard from build is now on."), "{text}");
 }
+
