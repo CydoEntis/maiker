@@ -2891,6 +2891,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "maitty-provider"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "maitty-shared",
+]
+
+[[package]]
 name = "maitty-provider-claude"
 version = "0.1.0"
 dependencies = [
