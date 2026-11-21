@@ -23,6 +23,10 @@ use serde_json::{Value, json};
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
+/// The workspace a worktree request names when the service has none open. The service does not
+/// read it for a request that names its repo; one too old to know that refuses the request.
+const NO_WORKSPACE: WsId = 0;
+
 fn norm(p: &Path) -> String {
     p.to_string_lossy()
         .replace('/', "\\")
@@ -682,10 +686,12 @@ impl Server {
             && crate::gitfs::head(&self.root).is_some();
         let branch = slug(prompt);
         let c = if worktree {
+            // With only chats open there is no workspace. The service reads `from`, not `ws`,
+            // when the repo is named, so the helper's worktree needs none.
             let ws = before
                 .active_ws
                 .or_else(|| before.workspaces.first().map(|w| w.id))
-                .ok_or(concat!(env!("APP_COMMAND"), " has nothing open"))?;
+                .unwrap_or(NO_WORKSPACE);
             let branch = if before
                 .terms
                 .values()

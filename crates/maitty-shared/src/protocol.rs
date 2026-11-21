@@ -983,7 +983,8 @@ pub enum Command {
     },
     /// `git worktree add` next to the workspace's repo, then open it as a new workspace.
     /// `split`: open the worktree as a pane beside this one instead of as a workspace.
-    /// `from`: the repo to branch from (default: the workspace's folder).
+    /// `from`: the repo to branch from (default: the workspace's folder). With `from` a folder
+    /// that exists, `ws` is not read, so a service with no workspace open can still be asked.
     /// `agent` / `prompt`: start a known agent preset in it with a first prompt, in place of
     /// `cmd` (naming both is an error). The daemon checks both and quotes the prompt itself.
     NewWorktree {

@@ -376,3 +376,35 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
     assert_eq!(crate::gitfs::head(&free).map(|h| h.branch).as_deref(), Some("free"));
     let _ = std::fs::remove_dir_all(&root);
 }
+
+#[test]
+fn a_worktree_request_that_names_its_repo_needs_no_workspace_open() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, _rx) = daemon_with(Config::default());
+    let root = scratch("worktree-no-workspace");
+    let repo = repo_in(&root);
+    assert!(d.workspaces.is_empty(), "only chats are open");
+    let before = d.pending_ops;
+
+    let unknown_workspace = 0;
+    let mut named = request(unknown_workspace, &repo, "helper/x", None, None);
+    if let Command::NewWorktree { cmd, .. } = &mut named {
+        *cmd = Some("true".into());
+    }
+    d.command(0, named).expect("the repo is named, so no workspace is needed");
+    assert_eq!(d.pending_ops, before + 1, "the worktree is being made");
+
+    let unnamed = Command::NewWorktree {
+        ws: unknown_workspace,
+        branch: "helper/y".into(),
+        base: None,
+        cmd: Some("true".into()),
+        split: None,
+        from: None,
+        agent: None,
+        prompt: None,
+    };
+    let refused = d.command(0, unnamed).unwrap_err();
+    assert!(format!("{refused:#}").contains("no workspace"), "{refused:#}");
+}

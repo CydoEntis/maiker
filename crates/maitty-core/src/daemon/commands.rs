@@ -575,11 +575,12 @@ impl Daemon {
                 };
                 let by =
                     self.starting(client, &helpers::task_label(cmd.as_deref(), Some(&branch)))?;
-                let ws_dir = self.ws_mut(ws)?.cwd.clone();
-                let dir = from
-                    .map(clean_path)
-                    .filter(|d| d.is_dir())
-                    .unwrap_or(ws_dir);
+                // A request that names its repo needs no workspace: a service with only chats
+                // open has none, and a chat's helper still gets its worktree.
+                let dir = match from.map(clean_path).filter(|d| d.is_dir()) {
+                    Some(dir) => dir,
+                    None => self.ws_mut(ws)?.cwd.clone(),
+                };
                 let template = self.cfg.worktree.dir.clone();
                 let from_default = self.cfg.worktree.base_on_default;
                 let cmd = cmd
