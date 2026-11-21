@@ -38,7 +38,7 @@ export function useAgentStarts({ sessionMap, endSessions, setAgentTerminals, onT
   startNewChat: (request: NewChatRequest) => Promise<void>
   /** Opens the New session draft on `machine`, with the agent and folder asked for; nothing is started until its first message is sent. */
   openDraft: (machine: number, seed: NewChatSeed) => void
-  /** The Chat view: an agent from the + menu opens the draft there. In the Terminal view it starts at once, in a terminal. */
+  /** The Chat view: an agent from the palette opens the draft there. In the Terminal view it starts at once, in a terminal. */
   chatView: boolean
   /** What a machine is called in a message; empty for this computer. */
   machineNameOf: (machine: number) => string

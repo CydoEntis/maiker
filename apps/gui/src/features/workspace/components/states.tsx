@@ -17,13 +17,12 @@ function LookingForSessions() {
   )
 }
 
-export function EmptyState({ hasSessions, chatView, listed, startFolderLabel, canStart, onNewSession, onChangeStartFolder }: {
+export function EmptyState({ hasSessions, chatView, listed, canStart, onNewSession, onChangeStartFolder }: {
   hasSessions: boolean
   /** The app is in the Chat view: a new session is an agent chat, never a plain terminal. */
   chatView: boolean
   /** The daemon has sent its first list. Until then nothing is said about sessions: there may be some running. */
   listed: boolean
-  startFolderLabel: string
   canStart: boolean
   onNewSession: () => void
   onChangeStartFolder: () => void
@@ -38,7 +37,7 @@ export function EmptyState({ hasSessions, chatView, listed, startFolderLabel, ca
           {hasSessions ? (
             <p>Your sessions keep running in the sidebar. Pick one to show it here, or start a new one.</p>
           ) : (
-            <p>A new session starts in <span className="mono">{startFolderLabel}</span>: {chatView ? 'an agent chat' : 'a terminal, or an agent'} like <span className="mono">claude</span> or <span className="mono">codex</span>. It shows up in the sidebar.</p>
+            <p>A session starts in a project. Open one, then start {chatView ? 'an agent chat' : 'a terminal, or an agent'} in it, like <span className="mono">claude</span> or <span className="mono">codex</span>. It shows up in the sidebar.</p>
           )}
         </div>
         <div className="mx-empty-actions">

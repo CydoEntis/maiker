@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -26,25 +25,19 @@ function session(pane: number, extra: Partial<Conversation> = {}): SessionView {
 }
 
 
-/** The window keeps which machine the + menu is open for; this stands in for it, starting from `startMenu`. */
-function Host(props: SidebarProps) {
-  const [startMenu, setStartMenu] = useState(props.startMenu)
-  return <Sidebar {...props} startMenu={startMenu} onStartMenu={(machine) => { setStartMenu(machine); props.onStartMenu(machine) }} />
-}
-
 function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const none = vi.fn()
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: groupByProject(sessions, []).machines, selectedProject: null, statusHeadings: true, focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none,
-    startMenu: null, onStartMenu: none, start: { installedAgents: ['claude', 'codex'], onAgent: none }, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
+    onOpenProject: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onBringBack: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none,
     ...more,
   }
-  const view = render(<Host {...props} />)
+  const view = render(<Sidebar {...props} />)
   // Draws the same sidebar again with some props changed, as the window does when the selection moves.
-  return { ...view, again: (next: Partial<SidebarProps>) => { view.rerender(<Host {...props} {...next} />) } }
+  return { ...view, again: (next: Partial<SidebarProps>) => { view.rerender(<Sidebar {...props} {...next} />) } }
 }
 
 // Folded headings are kept in this window's storage; each test starts with none.
@@ -172,7 +165,7 @@ describe('a machine that needs maiker installed or updated', () => {
     expect(screen.queryByRole('button', { name: /^New (session|agent chat) on / })).toBeNull()
     expect(screen.getByRole('img', { name: /^devbox is / })).toHaveAttribute('title', 'ssh: connection refused')
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
-    expect(screen.getByRole('menuitem', { name: 'New session here' })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('menuitem', { name: 'Open a project…' })).toHaveAttribute('aria-disabled', 'true')
     expect(screen.getByRole('menuitem', { name: /Not reachable: ssh: connection refused/ })).toBeTruthy()
   })
 
@@ -460,42 +453,36 @@ describe('a session row', () => {
 })
 
 describe('a machine heading', () => {
-  it('has its own + that opens the start menu on that machine, and offers the menu or a terminal from its right-click menu', async () => {
+  it('opens a project on its machine from its own + and its right-click menu, and offers a terminal there', async () => {
     const user = userEvent.setup()
-    const onStartMenu = vi.fn()
+    const onOpenProject = vi.fn()
     const onNewShell = vi.fn()
-    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onStartMenu, onNewShell })
-    await user.click(screen.getByRole('button', { name: 'Add a session to devbox' }))
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeTruthy()
-    expect(screen.getByText('On devbox')).toBeTruthy()
-    await user.keyboard('{Escape}')
+    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onOpenProject, onNewShell })
+    await user.click(screen.getByRole('button', { name: 'Open a project on This computer' }))
+    expect(onOpenProject).toHaveBeenLastCalledWith(0)
+    await user.click(screen.getByRole('button', { name: 'Open a project on devbox' }))
+    expect(onOpenProject).toHaveBeenLastCalledWith(4)
+    onOpenProject.mockClear()
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
-    await user.click(await screen.findByRole('menuitem', { name: 'New session here' }))
-    expect(onStartMenu).toHaveBeenCalledWith(4)
+    await user.click(await screen.findByRole('menuitem', { name: 'Open a project…' }))
+    expect(onOpenProject).toHaveBeenCalledWith(4)
     fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
     await user.click(await screen.findByRole('menuitem', { name: 'New terminal here' }))
     expect(onNewShell).toHaveBeenCalledWith(4)
   })
 
-  it('opens a project on its machine from its own +, this computer or another; the header\'s + does not offer it', async () => {
-    const user = userEvent.setup()
-    const onOpenProject = vi.fn()
-    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], onOpenProject })
-    await user.click(screen.getByRole('button', { name: 'Add a session to This computer' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Open a project…' }))
-    expect(onOpenProject).toHaveBeenLastCalledWith(0)
-    await user.click(screen.getByRole('button', { name: 'Add a session to devbox' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Open a project…' }))
-    expect(onOpenProject).toHaveBeenLastCalledWith(4)
-    await user.click(screen.getByRole('button', { name: 'New session' }))
-    await screen.findByRole('menu', { name: 'Start' })
-    expect(screen.queryByRole('menuitem', { name: 'Open a project…' })).toBeNull()
+  it('starts no session from a machine: a session is started from an opened project', async () => {
+    show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX] })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^devbox/ }))
+    await screen.findByRole('menuitem', { name: 'Open a project…' })
+    expect(screen.queryByRole('menuitem', { name: /New session/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^(New session|Add a session)/ })).toBeNull()
   })
 
   it('lists a connected saved machine with no sessions: its name, its own + and "No sessions yet"', () => {
     show([], { machines: [LOCAL_HEAD, DEVBOX] })
     expect(screen.getByRole('button', { name: /^devbox/ })).toBeTruthy()
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Add a session to devbox' }).disabled).toBe(false)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Open a project on devbox' }).disabled).toBe(false)
     expect(within(screen.getByRole('group', { name: 'Projects on devbox' }).parentElement as HTMLElement).getByText('No sessions yet')).toBeTruthy()
   })
 
@@ -510,7 +497,7 @@ describe('a machine heading', () => {
     show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why: 'connection refused', chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }], onFixMachine })
     expect(screen.getByText('Offline')).toBeTruthy()
     expect(screen.getByText('Offline').closest('.mx-machine-why')).toHaveAttribute('title', 'connection refused')
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Add a session to devbox' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Open a project on devbox' }).disabled).toBe(true)
     await user.click(screen.getByRole('button', { name: 'Fix devbox' }))
     expect(onFixMachine).toHaveBeenCalledWith(expect.objectContaining({ name: 'devbox' }))
   })
@@ -593,7 +580,7 @@ describe('a draft chat', () => {
 describe('with nothing running', () => {
   it('says how to start one, under no heading', () => {
     show([])
-    expect(screen.getByText('Chats and shells you start appear here, sorted by what needs you.')).toBeTruthy()
+    expect(screen.getByText('Open a project, then start a session in it. Sessions appear here, sorted by what needs you.')).toBeTruthy()
     expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
   })
 
@@ -834,23 +821,24 @@ describe('the Needs you strip', () => {
 })
 
 describe('the top of the sidebar', () => {
-  it('opens the start menu from New session, and the search from Search', async () => {
+  it('opens a project on this computer from its +, and the search from Search', async () => {
     const user = userEvent.setup()
     const onSearch = vi.fn()
-    show([], { onSearch })
-    await user.click(screen.getByRole('button', { name: /^New session/ }))
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeTruthy()
-    await user.keyboard('{Escape}')
+    const onOpenProject = vi.fn()
+    show([], { onSearch, onOpenProject })
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
+    expect(onOpenProject).toHaveBeenCalledWith(0)
+    expect(screen.queryByRole('menu')).toBeNull()
     await user.click(screen.getByRole('button', { name: /^Search/ }))
     expect(onSearch).toHaveBeenCalledTimes(1)
   })
 
-  it('is the design\'s rail: expand, search and new session on top, one status-icon row per chat in the list\'s groups, Settings below', async () => {
+  it('is the design\'s rail: expand, search and open a project on top, one status-icon row per chat in the list\'s groups, Settings below', async () => {
     const user = userEvent.setup()
     const onShowSession = vi.fn()
     const sessions = [session(1, { agent: 'claude', named: true, title: 'Waiting', status: 'needs-you' }), session(2, { agent: 'claude', named: true, title: 'Busy', status: 'working' })]
     show(sessions, { mode: 'rail', onShowSession, focusedId: sessions[0]?.id ?? null })
-    for (const name of ['Expand sidebar', 'Search', 'New session', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
+    for (const name of ['Expand sidebar', 'Search', 'Open a project', 'Settings']) expect(screen.getByRole('button', { name })).toBeTruthy()
     // No tile, no initials, no connection dot and no Recent sessions button (it is in the palette).
     expect(screen.queryByRole('button', { name: 'Recent sessions' })).toBeNull()
     expect(document.querySelector('.mx-daemon-dot, .mx-app-icon')).toBeNull()
@@ -864,20 +852,18 @@ describe('the top of the sidebar', () => {
     expect(await screen.findByRole('menuitem', { name: 'Open' })).toBeTruthy()
   })
 
-  it('has one plus button, in the header and the rail, that opens the start menu; no second terminal button', async () => {
+  it('has one plus button, in the header and the rail, that opens a project; no session or terminal button', async () => {
     const user = userEvent.setup()
-    const view = show([])
-    expect(screen.queryByRole('button', { name: 'New terminal' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'New session' }))
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeTruthy()
-    await user.keyboard('{Escape}')
+    const onOpenProject = vi.fn()
+    const view = show([], { onOpenProject })
+    expect(screen.queryByRole('button', { name: /^New (session|terminal)$/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
     view.again({ mode: 'rail' })
-    expect(screen.queryByRole('button', { name: 'New terminal' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'New session' }))
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeTruthy()
-    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('button', { name: /^New (session|terminal)$/ })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
+    expect(onOpenProject.mock.calls).toEqual([[0], [0]])
     view.again({ mode: 'rail', canStart: false })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'New session' }).disabled).toBe(true)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Open a project' }).disabled).toBe(true)
   })
 
   it('has a + Remote machine button in the foot and in the rail', async () => {
@@ -980,7 +966,7 @@ describe('a project heading', () => {
     const sessions = inShop()
     const actions = showProjects(sessions, [])
     await user.click(screen.getByRole('button', { name: 'New worktree in shop' }))
-    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(sessions[1])
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(0, SHOP, sessions[1])
     fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
     await user.click(await screen.findByRole('menuitem', { name: 'New worktree…' }))
     expect(actions.onNewWorktree).toHaveBeenCalledTimes(2)
@@ -994,11 +980,18 @@ describe('a project heading', () => {
     expect(actions.onOpenWorktree).toHaveBeenCalledWith(0, SHOP, 'shop')
   })
 
-  it('offers Open worktree on a project of this computer with no session yet, since the list needs none', async () => {
+  it('offers New and Open worktree on a project of this computer with no session yet, since neither needs one', async () => {
     showProjects([], [SHOP])
     fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
     await screen.findByRole('menu', { name: 'shop' })
-    expect(menuItems()).toEqual(['New session', 'Open worktree…', 'Close project'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
+  })
+
+  it('starts a new worktree from a project with no session, which has none to make it from', async () => {
+    const user = userEvent.setup()
+    const actions = showProjects([], [SHOP])
+    await user.click(screen.getByRole('button', { name: 'New worktree in shop' }))
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(0, SHOP, null)
   })
 
   it('offers New and Open worktree on another machine\'s git project, and both act on that machine', async () => {
@@ -1006,7 +999,7 @@ describe('a project heading', () => {
     const there = session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })
     const actions = showProjects([there], [], { machines: [LOCAL_HEAD, DEVBOX] })
     await user.click(screen.getByRole('button', { name: 'New worktree in api' }))
-    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(there)
+    expect(actions.onNewWorktree).toHaveBeenLastCalledWith(4, { machineName: 'devbox', folder: '/srv/api' }, there)
     expect(there.machine).toBe(4)
     fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
     await screen.findByRole('menu', { name: 'api' })
@@ -1055,7 +1048,7 @@ describe('a project heading', () => {
     expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
     await waitForFocus('New session')
     await user.keyboard('{ArrowDown}{Enter}')
-    expect(actions.onNewWorktree).toHaveBeenCalledWith(sessions[1])
+    expect(actions.onNewWorktree).toHaveBeenCalledWith(0, SHOP, sessions[1])
     screen.getByRole('button', { name: 'More for shop' }).focus()
     await user.keyboard('{Enter}')
     await waitForFocus('New session')
@@ -1087,6 +1080,25 @@ describe('New worktree', () => {
     fireEvent.contextMenu(screen.getByRole('button', { name: /^At home,/ }))
     expect(screen.getByRole('menuitem', { name: 'New worktree…' })).toHaveAttribute('aria-disabled', 'true')
   })
+
+  it('is offered for another machine\'s session in a repository, whose own service makes it', () => {
+    show([session(3, { machine: 4, machineName: 'devbox', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })], { machines: [LOCAL_HEAD, DEVBOX], onNewWorktree: vi.fn() })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^There,/ }))
+    expect(screen.getByRole('menuitem', { name: 'New worktree…' })).not.toHaveAttribute('aria-disabled', 'true')
+  })
+})
+
+describe('Open worktree', () => {
+  it('is in a session\'s menu, asks the window to list its project\'s worktrees, and is off outside a repository', async () => {
+    const user = userEvent.setup()
+    const onOpenWorktree = vi.fn()
+    show([session(1, { named: true, title: 'In repo', repo: 'app', branch: 'dev', folder: '/home/me/app', cwd: '/home/me/app' }), session(2, { named: true, title: 'At home' })], { onOpenWorktree })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^In repo,/ }))
+    await user.click(screen.getByRole('menuitem', { name: 'Open worktree…' }))
+    expect(onOpenWorktree).toHaveBeenCalledWith('t1')
+    fireEvent.contextMenu(screen.getByRole('button', { name: /^At home,/ }))
+    expect(screen.getByRole('menuitem', { name: 'Open worktree…' })).toHaveAttribute('aria-disabled', 'true')
+  })
 })
 
 describe('the key that decides when rows are measured to slide', () => {
@@ -1117,12 +1129,11 @@ describe('the key that decides when rows are measured to slide', () => {
 describe('one name for starting an agent', () => {
   const OLD = /^New (agent )?chat/i
 
-  it('is New session on the header button, the rail and a machine\'s menu, never New chat or New agent chat', () => {
-    const view = show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX] })
-    expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
+  it('is New session on a project\'s heading, never New chat or New agent chat, in the list or the rail', () => {
+    const view = show([session(2, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There' })], { machines: [LOCAL_HEAD, DEVBOX], projectActions: { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onClose: vi.fn() } })
+    expect(screen.getByRole('button', { name: /^New session in / })).toBeTruthy()
     for (const button of screen.getAllByRole('button')) expect(button.getAttribute('aria-label') ?? '').not.toMatch(OLD)
     view.again({ mode: 'rail' })
-    expect(screen.getByRole('button', { name: 'New session' })).toBeTruthy()
     for (const button of screen.getAllByRole('button')) expect(button.getAttribute('aria-label') ?? '').not.toMatch(OLD)
   })
 })
@@ -1157,12 +1168,12 @@ describe('hovering a row', () => {
 })
 
 describe('the group cards', () => {
-  it('gives a machine group a monitor or server icon and its own plus that opens the start menu on that machine', async () => {
-    show([session(1, { agent: 'claude', named: true, title: 'Here' })], { machines: [LOCAL_HEAD, DEVBOX] })
-    await userEvent.click(screen.getByRole('button', { name: 'Add a session to devbox' }))
-    expect(await screen.findByText('On devbox')).toBeInTheDocument()
-    await userEvent.keyboard('{Escape}')
-    expect(screen.getByRole('button', { name: 'Add a session to This computer' })).toBeInTheDocument()
+  it('gives a machine group a monitor or server icon and its own plus that opens a project on that machine', async () => {
+    const onOpenProject = vi.fn()
+    show([session(1, { agent: 'claude', named: true, title: 'Here' })], { machines: [LOCAL_HEAD, DEVBOX], onOpenProject })
+    await userEvent.click(screen.getByRole('button', { name: 'Open a project on devbox' }))
+    expect(onOpenProject).toHaveBeenCalledWith(4)
+    expect(screen.getByRole('button', { name: 'Open a project on This computer' })).toBeInTheDocument()
   })
 })
 

@@ -161,31 +161,41 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
-  it('opens the + menu from New session (Ctrl+Shift+T): there is no draft page and nothing starts until one is picked', async () => {
+  it('opens a project first from New session (Ctrl+Shift+T) when none is open: no draft page, and nothing starts', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
-    expect(await screen.findByRole('menu', { name: 'Start' })).toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /^Terminal/ })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
     expect(daemon.startChatSession).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
   })
 
-  it('opens the + menu from the empty state New session, and its Terminal starts a plain shell', async () => {
+  it('opens a project first from the empty state New session too', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
     await user.click(within(screen.getByRole('main', { name: 'Terminals' })).getByRole('button', { name: 'New session' }))
-    await user.click(await screen.findByRole('menuitem', { name: /^Terminal/ }))
 
-    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
-    expect(await screen.findByRole('region', { name: 'Shell in ~' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+  })
+
+  it('starts a terminal in a project\'s folder from the project\'s menu in the Terminal view', async () => {
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'a', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'New terminal' }))
+
+    await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })
 
   it('applies the saved density, text sizes and sidebar width, and a drag of the edge changes and saves the width', async () => {
@@ -846,7 +856,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     // The row says only that it is unknown; "last seen working" now lives in its tooltip and hover card.
     expect(screen.getByRole('button', { name: 'a, codex, offline' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Shell in ~/a' })).toHaveAttribute('data-input-disabled', 'true')
-    expect(screen.getByRole('button', { name: 'New session' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open a project' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'a, codex, offline' })).not.toHaveClass('mx-fx-working')
     // The sidebar's foot never says it a second time.
     expect(screen.queryByText(`Reconnecting to ${DAEMON_NAME}…`)).toBeNull()
@@ -1246,8 +1256,8 @@ describe('desktop overlays and pane tools', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    // Finishing the setup opens nothing after it: the + menu stays closed until the person opens it.
-    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
+    // Finishing the setup opens nothing after it.
+    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
     expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'chat' })
 
     app.unmount()
@@ -1383,79 +1393,50 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     daemon.daemonSaidRemoved.mockImplementation(() => false)
   })
 
-  async function openStartMenuFromEmptyState(user: ReturnType<typeof userEvent.setup>) {
+  it('says in the Chat view that a session started in a project is an agent chat, and offers no terminal in a project\'s menu', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    daemon.loadConversations.mockResolvedValueOnce([])
+    const view = renderDesktopApp()
     await screen.findByRole('heading', { name: 'No sessions running' })
-    await user.click(within(screen.getByRole('main', { name: 'Terminals' })).getByRole('button', { name: 'New session' }))
-    return screen.findByRole('menu', { name: 'Start' })
-  }
-
-  it('offers no Terminal from the empty state New session in the Chat view, and says it starts a chat', async () => {
-    setSettings({ openSessionsIn: 'chat' })
-    const user = userEvent.setup()
-    renderDesktopApp()
-
-    await openStartMenuFromEmptyState(user)
-
-    expect(screen.queryByRole('menuitem', { name: /^Terminal/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('menuitem', { name: /^Claude Code/ })).toBeInTheDocument()
     expect(screen.getByText(/an agent chat/)).toBeInTheDocument()
+
+    daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+    await act(async () => { await view.client.refetchQueries({ queryKey: ['conversations'] }) })
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'a', expanded: true }))
+    expect(await screen.findByRole('menuitem', { name: 'New session' })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: 'New terminal' })).not.toBeInTheDocument()
   })
 
-  it('keeps Terminal on the + menu in the Terminal view', async () => {
-    setSettings({ openSessionsIn: 'terminal' })
-    const user = userEvent.setup()
-    renderDesktopApp()
-
-    await openStartMenuFromEmptyState(user)
-
-    expect(screen.getByRole('menuitem', { name: /^Terminal/ })).toBeInTheDocument()
-  })
-
-  it('starts Claude Code from the + menu in the Terminal view at once, as an agent session, never typed into a shell', async () => {
-    setSettings({ openSessionsIn: 'terminal' })
-    const user = userEvent.setup()
-    renderDesktopApp()
-    await openStartMenuFromEmptyState(user)
-    daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
-
-    await user.click(screen.getByRole('menuitem', { name: /^Claude Code/ }))
-
-    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
-    expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
-    expect(daemon.sendTerminalInput).not.toHaveBeenCalled()
-  })
-
-  it('opens the draft from the + menu in the Chat view and starts nothing until the first message is sent', async () => {
+  it('opens the draft in the project of the session in front from New session, and starts nothing until the first message is sent', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await openStartMenuFromEmptyState(user)
+    await screen.findByRole('button', { name: 'a', expanded: true })
 
-    await user.click(screen.getByRole('menuitem', { name: /^Claude Code/ }))
+    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
     const draft = await screen.findByRole('region', { name: 'New session' })
     expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
-    expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Claude/ })).toBeInTheDocument()
-    expect(within(draft).getByRole('button', { name: `${HOME}: ${HOME.split('/').at(-1) ?? ''}` })).toBeInTheDocument()
-    expect(within(draft).queryByText(/Starting/)).not.toBeInTheDocument()
+    expect(within(draft).getByRole('button', { name: `${HOME}/a: a` })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
 
-    daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
     await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
-    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
+    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(`${HOME}/a`, expect.any(String), expect.any(Array)) })
     expect(daemon.startShellSession).not.toHaveBeenCalled()
   })
 
-  it('discards the draft opened from the + menu with Esc, starting nothing', async () => {
+  it('opens the draft in a project from the + on its heading, and discards it with Esc, starting nothing', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await openStartMenuFromEmptyState(user)
-    await user.click(screen.getByRole('menuitem', { name: /^Codex/ }))
+
+    await user.click(await screen.findByRole('button', { name: 'New session in a' }))
     const draft = await screen.findByRole('region', { name: 'New session' })
-    expect(within(draft).getByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
+    expect(within(draft).getByRole('button', { name: `${HOME}/a: a` })).toBeInTheDocument()
 
     await user.click(within(draft).getByRole('textbox', { name: /^Message / }))
     await user.keyboard('{Escape}')
@@ -1464,14 +1445,16 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
   })
 
-  it('runs an agent without a chat, OpenCode, in a new shell, typed and entered', async () => {
+  it('runs an agent without a chat, OpenCode, in a new shell, typed and entered, from the palette', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
     renderDesktopApp()
-    await openStartMenuFromEmptyState(user)
+    await screen.findByRole('heading', { name: 'No sessions running' })
     daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
-    await user.click(screen.getByRole('menuitem', { name: /^OpenCode/ }))
+    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    const box = within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox')
+    await user.type(box, 'Start OpenCode{Enter}')
 
     await waitFor(() => { expect(daemon.sendTerminalInput).toHaveBeenCalledWith({ id: 't5', generation: 0 }, 'opencode\r') })
     expect(daemon.startAgentSession).not.toHaveBeenCalled()

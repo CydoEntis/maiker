@@ -25,10 +25,10 @@ export function useOpenWorktreeState() {
 /** Opens the new-chat draft on `machine` with `folder` filled in, as every start from a project heading does. */
 function useDraftIn() {
   const { setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen } = useWorkspace()
-  return useCallback((machine: number, folder: string) => {
+  return useCallback((machine: number, folder: string, worktree = false) => {
     setSettingsSection(null)
     setNewChatMachine(machine)
-    setNewChatSeed({ folder, message: '' })
+    setNewChatSeed(worktree ? { folder, message: '', worktree } : { folder, message: '' })
     setNewChatOpen(true)
   }, [setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen])
 }
@@ -38,15 +38,20 @@ function useDraftIn() {
  * so the overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal } = useWorkspace()
   const draftIn = useDraftIn()
   const { close } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
     onNewSession: (machine, project) => { afterPick(); draftIn(machine, project.folder) },
-    onNewWorktree: (from) => { afterPick(); setProjectWorktreeFrom(from) },
+    onNewWorktree: (machine, project, from) => {
+      afterPick()
+      if (from === null) draftIn(machine, project.folder, true)
+      else setProjectWorktreeFrom(from)
+    },
+    onNewTerminal: chatView ? undefined : (machine, project) => { afterPick(); newTerminal(machine, project.folder) },
     onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
     onClose: close,
-  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close])
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, chatView, newTerminal])
 }
 
 /**
@@ -66,7 +71,11 @@ export function useOpenWorktreeDialog(): ComponentProps<typeof OpenWorktreeDialo
     project,
     name,
     sessions,
-    onNewWorktree: from === null ? null : () => { done(); setProjectWorktreeFrom(from) },
+    onNewWorktree: () => {
+      done()
+      if (from === null) draftIn(machine, project.folder, true)
+      else setProjectWorktreeFrom(from)
+    },
     onStart: (folder) => { done(); draftIn(machine, folder) },
     onShow: (sessionId) => { done(); showSessionById(sessionId) },
     onCancel: done,

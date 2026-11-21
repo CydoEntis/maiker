@@ -75,13 +75,40 @@ describe('Open worktree in the window', () => {
     expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith(null)
   })
 
-  it('hands over to New worktree made from the project\'s session, and offers none without one', () => {
+  it('hands over to New worktree made from the project\'s session, and without one to the draft with Own worktree on', () => {
     const main = onMain()
     const parts = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [main])
     renderHook(() => useOpenWorktreeDialog()).result.current?.onNewWorktree?.()
     expect(parts.setProjectWorktreeFrom).toHaveBeenCalledWith(main)
     expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith(null)
-    windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
-    expect(renderHook(() => useOpenWorktreeDialog()).result.current?.onNewWorktree).toBeNull()
+    const empty = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
+    renderHook(() => useOpenWorktreeDialog()).result.current?.onNewWorktree?.()
+    expect(empty.setProjectWorktreeFrom).not.toHaveBeenCalled()
+    expect(empty.setNewChatSeed).toHaveBeenCalledWith({ folder: SHOP.folder, message: '', worktree: true })
+    expect(empty.setOpenWorktreeFor).toHaveBeenCalledWith(null)
+  })
+})
+
+describe('a project heading\'s starts in the window', () => {
+  it('makes a new worktree from the project\'s session, and with none opens the draft with Own worktree on', () => {
+    const main = onMain()
+    const parts = windowWith(null, [main])
+    const { result } = renderHook(() => useProjectActions())
+    result.current(vi.fn()).onNewWorktree(0, SHOP, main)
+    expect(parts.setProjectWorktreeFrom).toHaveBeenCalledWith(main)
+    expect(parts.setNewChatOpen).not.toHaveBeenCalled()
+    result.current(vi.fn()).onNewWorktree(0, SHOP, null)
+    expect(parts.setNewChatMachine).toHaveBeenCalledWith(0)
+    expect(parts.setNewChatSeed).toHaveBeenCalledWith({ folder: SHOP.folder, message: '', worktree: true })
+    expect(parts.setNewChatOpen).toHaveBeenCalledWith(true)
+  })
+
+  it('starts a terminal in the project\'s folder in the Terminal view, and offers none in the Chat view', () => {
+    const newTerminal = vi.fn()
+    workspace.current = { ...windowWith(null, []), chatView: false, newTerminal }
+    renderHook(() => useProjectActions()).result.current(vi.fn()).onNewTerminal?.(4, { machineName: 'devbox', folder: '/srv/api' })
+    expect(newTerminal).toHaveBeenCalledWith(4, '/srv/api')
+    workspace.current = { ...windowWith(null, []), chatView: true, newTerminal }
+    expect(renderHook(() => useProjectActions()).result.current(vi.fn()).onNewTerminal).toBeUndefined()
   })
 })

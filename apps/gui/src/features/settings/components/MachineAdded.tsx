@@ -60,7 +60,7 @@ export function MachineAdded({ reached, facts: given, machine, onDone, onStart }
               <input data-bare ref={field} value={name} autoFocus autoComplete="off" spellCheck={false} className="h-full min-w-0 flex-1 bg-transparent text-sm font-medium text-(--fg) outline-none" onChange={(event) => { setTyped(event.target.value) }} />
             </span>
           </label>
-          <p className="m-0 text-xs text-(--dim)">This is how it appears in the sidebar and the + menu. You can rename it any time in Settings.</p>
+          <p className="m-0 text-xs text-(--dim)">This is how it appears in the sidebar. You can rename it any time in Settings.</p>
           <dl className="m-0 flex flex-col border-t border-(--line)">
             <Detail label="Address" value={reached.address} mono />
             {facts?.system !== undefined && <Detail label="System" value={facts.system} />}

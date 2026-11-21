@@ -1,6 +1,8 @@
 import { useCallback } from 'react'
 import { Panel } from '@/components/ui/panel'
-import { useInstalledAgents } from '../model/newChatHost'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { projectOfSession } from '../model/startProject'
+import { projectName } from '../model/sidebarTree'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
@@ -11,18 +13,25 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
-  const installedAgents = useInstalledAgents()
   const projectActionsFor = useProjectActions()
-  const start = {
-    installedAgents,
-    onAgent: startAgent,
+  // A session's own New worktree can move its chat into the new worktree, which only this computer's can; another
+  // machine's session lends its repository, as it does to its project's heading.
+  const newWorktreeFrom = (id: string) => {
+    const from = sessionMap.get(id)
+    if (from === undefined) return
+    if (from.machine === LOCAL_MACHINE) setWorktreeFrom(from)
+    else setProjectWorktreeFrom(from)
+  }
+  const openWorktreeOf = (id: string) => {
+    const from = sessionMap.get(id)
+    const placed = projectOfSession(openedProjects.machines, id)
+    if (from !== undefined && placed !== null) setOpenWorktreeFor({ machine: from.machine, project: placed.project, name: projectName(placed) })
   }
 
   // The sidebar, as the docked column or the 60px rail, or the full one inside the overlay of a narrow window.
-  // Two sidebars can be on screen (the rail and its drawer); the window's open + menu belongs to the one in front.
-  const renderSidebar = (mode: 'docked' | 'rail', afterPick: () => void, onToggle: () => void, holdsStartMenu: boolean) => (
+  const renderSidebar = (mode: 'docked' | 'rail', afterPick: () => void, onToggle: () => void) => (
     <Sidebar
       sessions={sidebarSessions}
       listed={sessionsListed}
@@ -45,9 +54,6 @@ export function WorkspaceSidebars() {
         setLiveSidebarWidth(null)
       }}
       onHoverSession={warmChat}
-      startMenu={holdsStartMenu ? startMenu : null}
-      onStartMenu={setStartMenu}
-      start={{ ...start, onAgent: (program, machine) => { afterPick(); start.onAgent(program, machine) } }}
       onNewShell={chatView ? undefined : (machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
       onOpenProject={(machine) => { afterPick(); setOpenProject(projectRequestFor(machine)) }}
@@ -67,7 +73,8 @@ export function WorkspaceSidebars() {
       onUnsnooze={unsnooze}
       onGetFile={setGetFileId}
       onSpecialists={setSpecialistsId}
-      onNewWorktree={(id) => { afterPick(); const from = sessionMap.get(id); if (from !== undefined) setWorktreeFrom(from) }}
+      onNewWorktree={(id) => { afterPick(); newWorktreeFrom(id) }}
+      onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}
       onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
       onRecentSessions={() => { afterPick(); setRecentOpen(true) }}
@@ -78,10 +85,10 @@ export function WorkspaceSidebars() {
   return (
     <>
       {/* Hidden, the sidebar leaves no rail: the pane header's Show sidebar button brings it back. */}
-      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar, !drawerShown)}
+      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar)}
             {!focusMode && drawerShown && (
               <Panel label="Sessions" onClose={() => { setDrawerOpen(false) }} scrimClassName="mx-drawer-scrim" className="mx-drawer">
-                {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) }, true)}
+                {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) })}
               </Panel>
             )}
     </>

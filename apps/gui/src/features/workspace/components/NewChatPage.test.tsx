@@ -446,6 +446,12 @@ describe('the New session draft', () => {
     expect(own).toBeChecked()
   })
 
+  it('opens with Own worktree on when its seed asks for a worktree, as a project\'s New worktree does', async () => {
+    dialog(undefined, { seed: { folder: '/dev/growth', message: '', worktree: true } })
+    await ready()
+    expect(await workingIn()).toBe('New worktree')
+  })
+
   it('has no Opens as control: no Chat or Terminal switch, and no plain-shell path', async () => {
     dialog()
     await ready()

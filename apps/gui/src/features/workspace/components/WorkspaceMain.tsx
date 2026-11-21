@@ -25,7 +25,7 @@ import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, openStartMenu, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, canStart, newSession, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
@@ -128,9 +128,8 @@ export function WorkspaceMain() {
                     hasSessions={sessions.length > 0}
                     chatView={chatView}
                     listed={sessionsListed}
-                    startFolderLabel={startFolderLabel}
                     canStart={canStart}
-                    onNewSession={() => { openStartMenu(focusedMachineNumber) }}
+                    onNewSession={() => { newSession() }}
                     onChangeStartFolder={() => { setSettingsSection('general') }}
                   />
                 )}

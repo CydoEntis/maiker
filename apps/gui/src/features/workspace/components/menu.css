@@ -9,8 +9,6 @@
 /* The menu itself holds focus while it is open; the rows show where you are, so the menu draws no focus underline of its own. */
 .mx-ctx:focus, .mx-ctx:focus-visible, .mx-ctx [role="menu"]:focus-visible { outline: none; box-shadow: none; }
 @keyframes mx-pop { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
-/* The + menu's pages sit in one wrapper that catches the number and back keys; it adds no box of its own. */
-.mx-start-body { display: contents; }
 .mx-ctx-heading { padding: 6px 10px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
 .mx-ctx-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .mx-ctx-item { height: 30px; display: flex; align-items: center; gap: 16px; padding: 0 10px; border-radius: var(--r-control); font-size: 13px; text-align: left; color: var(--fg2); outline: none; }
@@ -29,16 +27,3 @@
 .mx-ctx-label { flex: 1; white-space: nowrap; }
 .mx-ctx-hint { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 
-/* The + menu (the design's `.pmn`): 300px, 6px of room, a context line with its mark and a hairline under it, rows of 32px
-   with the mark in an 18px slot, the section label in plain small type. Its pages are one wrapper, so the same rules serve each. */
-.mx-ctx.is-start { width: 300px; padding: 6px; }
-.mx-ctx-context { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; padding: 6px 8px 8px; border-bottom: 1px solid var(--line); font-size: 11.5px; color: var(--dim); white-space: nowrap; }
-.mx-ctx-context > svg { flex: none; }
-.mx-ctx-context > span { overflow: hidden; text-overflow: ellipsis; }
-.mx-ctx.is-start .mx-ctx-heading { padding: 8px 8px 4px; font-size: 11.5px; font-weight: 400; letter-spacing: 0; text-transform: none; }
-.mx-ctx.is-start .mx-ctx-sep { margin: 4px 6px; }
-.mx-ctx.is-start .mx-ctx-item { height: 32px; gap: 10px; padding: 0 8px; font-size: 13.5px; color: var(--fg); }
-.mx-ctx.is-start .mx-ctx-item > :is(svg, .mx-app-icon) { flex: none; margin: 0 2px; }
-.mx-ctx.is-start .mx-ctx-item .mx-ctx-hint { font-size: 11.5px; }
-.mx-ctx.is-start .mx-ctx-item[data-disabled] { opacity: 1; color: var(--dim); }
-.mx-ctx.is-start .mx-ctx-back { height: 26px; gap: 4px; padding: 0 8px; font-size: 12px; color: var(--muted); }

@@ -43,7 +43,13 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
 export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; name?: string; bypass?: boolean | undefined }
 
 /** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
-export type NewChatSeed = { folder: string; message: string; agent?: ChatAgent }
+export type NewChatSeed = {
+  folder: string
+  message: string
+  agent?: ChatAgent
+  /** Start with Own worktree on: a project's New worktree, asked where no session is open to make one from. */
+  worktree?: boolean
+}
 
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
 export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
@@ -175,7 +181,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   // What was sent while the start runs, so the Starting card shows it where the box was.
   const [sent, setSent] = useState<string | null>(null)
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
-  const [workIn, setWorkIn] = useState<WorkIn>('auto')
+  const [workIn, setWorkIn] = useState<WorkIn>(seed?.worktree === true ? 'tree' : 'auto')
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<ExplainedError | null>(null)
   // A clone started from the project list's own row; the clone window has its own state.

@@ -363,17 +363,17 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // A shell in another machine's home folder, opened in the window when that machine lists it.
   const startRemoteShell = useCallback((machine: number) => startOnMachine({ machine, name: 'The machine' }, REMOTE_HOME), [startOnMachine])
 
-  // A plain shell in the start folder: terminal view only, whatever the default agent is.
-  // On another machine it starts in that machine's home folder.
-  const newTerminal = useCallback((machine?: number) => {
+  // A plain shell: terminal view only, whatever the default agent is. In `folder` (a project's) when one is given;
+  // otherwise the start folder, or on another machine that machine's home folder.
+  const newTerminal = useCallback((machine?: number, folder?: string) => {
     setSettingsSection(null)
     const target = machine ?? remoteTargetOf(focusedSession)?.machine ?? LOCAL_MACHINE
     if (target !== LOCAL_MACHINE) {
-      void startRemoteShell(target).then((id) => { if (id !== null) rememberShellStart(id) })
+      void startOnMachine({ machine: target, name: 'The machine' }, folder ?? REMOTE_HOME).then((id) => { if (id !== null) rememberShellStart(id) })
       return
     }
-    void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
-  }, [setSettingsSection, focusedSession, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
+    void runStart(async () => folder ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
+  }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
 
   // "New chat with summary" on a chat whose context is nearly full: the New session draft, on the same machine and folder, with
   // the summary as its first message to read and edit before it is sent.

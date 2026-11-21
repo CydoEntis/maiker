@@ -53,7 +53,7 @@ function contains(outer: string, inner: string): boolean {
 }
 
 /** Machine names are compared without regard to case, as the host registers them (`api/machines.ts`). */
-function sameMachine(a: string | null, b: string | null): boolean {
+export function sameMachine(a: string | null, b: string | null): boolean {
   return a === null || b === null ? a === b : a.toLowerCase() === b.toLowerCase()
 }
 
