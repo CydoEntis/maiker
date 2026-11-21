@@ -111,7 +111,7 @@ never by Maiker:
 | Agent | Program | Package |
 | --- | --- | --- |
 | `claude` | `claude-agent-acp` | `@agentclientprotocol/claude-agent-acp` |
-| `codex` | `codex-acp` | `@agentclientprotocol/codex-acp` or `@zed-industries/codex-acp` (both install `codex-acp`) |
+| `codex` | `codex-acp` | `@agentclientprotocol/codex-acp` (not `@zed-industries/codex-acp`, which installs the same name around an older Codex) |
 
 An `[[agents]]` entry named `claude` or `codex` with `acp = true` replaces the helper, and one
 with `enabled = false` switches it off. A helper that is not installed is not found when a chat
@@ -136,9 +136,10 @@ The dialect is tested against lines written by hand from the protocol's version 
 - **Claude Code** through `@agentclientprotocol/claude-agent-acp` 0.109.1: a chat started, two
   messages were answered and a file edit showed as a tool step. No approval was asked for,
   because that account's own Claude setting is the auto mode.
-- **Codex** through `@zed-industries/codex-acp` 0.16.0: the chat opened, and every message was
-  refused by the service ("model is not supported", the helper's bundled Codex being older than
-  the account's models). `@agentclientprotocol/codex-acp` has not been run.
+- **Codex** through `@agentclientprotocol/codex-acp` 2.9.0: a chat started, a message was
+  answered and a file was written through commands shown as tool steps. Through
+  `@zed-industries/codex-acp` 0.16.0 the chat opened and every message was refused by the
+  service ("model is not supported"): its bundled Codex is older than the account's models.
 
 Nothing has been run on Windows or macOS. Gemini CLI and OpenCode have not been run here;
 recording real output and pinning versions is MAITTY-469, MAITTY-496 and MAITTY-497.
