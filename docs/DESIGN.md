@@ -406,7 +406,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   key is never called unreachable), a Copy line for the command it names (`ssh-copy-id`, `ssh-keygen -R`,
   `ssh -o StrictHostKeyChecking=ask <target>`), **Try again** as the neutral primary and, for a login that needs a person, **Sign in in a
   terminal**. There is no checklist, no host-key or key screen and no "Machine added" card. A host of the SSH config list that is
-  already a machine opens Settings › Remote machines, connected or not; the dialog never mends a machine. The dialog mounts in the
+  already a machine, or a typed address that is one, opens Settings › Remote machines, connected or not; the dialog never mends a
+  machine. The dialog mounts in the
   window root (`.mx-app`), where the corner and role tokens live: the frame, the wells and the buttons take `--r-panel` and
   `--r-control` and are rounded in Rounded mode. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
@@ -1242,11 +1243,9 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   text button in the accent (11.5px), which opens the same question as the menu's Install Maiker or Update
   Maiker (`components/MachineUpdateDialog.tsx`, the Rename dialog's frame: what it needs, what it interrupts,
   Cancel, Update when idle, and the primary Install now or Update now); a machine's header shows even with no
-  sessions anywhere. With one machine there is no header. **Settings › Machines** is a card per machine (chip
-  in its tone, how long, what it needs in plain words or the fix in full, the primary **Install** or **Update**
-  in the accent, then **Copy command** with the command under the text as the secondary way, **Retry**, a
-  confirmed **Remove**) and an **Add a machine** card (a field, then the `~/.ssh/config` hosts as rows); its
-  states are loading, empty, error and checking, and it works with the keyboard alone.
+  sessions anywhere. With one machine there is no header. **Settings › Remote machines** is the one list described
+  under Settings (a row per machine with a fold under it, no page or card per machine, and **+ Add machine**, which
+  opens the add dialog); it works with the keyboard alone.
 
 ### Notification toasts
 
