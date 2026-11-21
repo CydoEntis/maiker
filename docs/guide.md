@@ -445,6 +445,14 @@ maiker conversation send --conversation 1 --generation 1 --operation 1 "Review t
 maiker conversation read --conversation 1 --limit 128
 ```
 
+An agent with no adapter of its own runs over ACP. Name it in the config (`[[agents]]` with
+`acp = true`, see `config.example.toml`), then start it by that name; the service picks the
+program:
+
+```powershell
+maiker conversation start --acp opencode --cwd C:\project
+```
+
 Commands print JSON. Start returns `conversation` and `generation`; use those
 values for send. Increment `--operation` for each new prompt. Repeating an
 acknowledged operation with identical text returns its receipt without sending
