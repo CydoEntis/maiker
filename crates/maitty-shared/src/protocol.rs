@@ -553,6 +553,10 @@ pub struct ConversationSummary {
     pub helper_ask: Vec<String>,
 }
 
+/// How the service's refusal starts while a session's request to start helpers waits on the
+/// person. The tool server looks for it to wait for the answer instead of failing the call.
+pub const HELPERS_AWAIT_OK: &str = "Starting helpers needs the user's OK";
+
 /// Which app a client is. A terminal session belongs to the app that started it, and only
 /// that app may list, type into or resize it (ADR 0004). Clients that don't say are terminal
 /// clients, which is what the terminal app has always been.

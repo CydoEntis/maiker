@@ -20,12 +20,27 @@ use crate::prompt::prompt_on;
 use crate::protocol::*;
 use anyhow::Result;
 use serde_json::{Value, json};
+use std::time::Duration;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
 
 /// The workspace a worktree request names when the service has none open. The service does not
 /// read it for a request that names its repo; one too old to know that refuses the request.
 const NO_WORKSPACE: WsId = 0;
+/// How long a start waits for the person to answer a request to start helpers before it tells
+/// the agent to try again later. Claude Code lets a tool call run this long; the other agents
+/// end a call after 30 to 60 seconds, so theirs must answer well inside that.
+const ASK_WAIT_CLAUDE: Duration = Duration::from_secs(600);
+const ASK_WAIT_OTHER: Duration = Duration::from_secs(20);
+const ASK_POLL: Duration = Duration::from_secs(1);
+
+fn ask_wait_for(client: &str) -> Duration {
+    if client.to_ascii_lowercase().contains("claude") {
+        ASK_WAIT_CLAUDE
+    } else {
+        ASK_WAIT_OTHER
+    }
+}
 
 fn norm(p: &Path) -> String {
     p.to_string_lossy()
@@ -79,6 +94,8 @@ pub(crate) struct Server {
     root: PathBuf,
     me: Option<TermId>,
     reach: Reach,
+    /// How long a start waits on the person's answer; zero until the agent has said who it is.
+    ask_wait: std::cell::Cell<Duration>,
 }
 
 fn text(s: impl Into<String>) -> Value {
@@ -212,6 +229,7 @@ impl Server {
             root,
             me,
             reach,
+            ask_wait: std::cell::Cell::new(Duration::ZERO),
         }
     }
 
@@ -719,7 +737,22 @@ impl Server {
                 cmd: Some(cmd),
             }
         };
-        cli::block_on(cli::request(ClientMsg::Command(c))).map_err(|e| format!("{e:#}"))?;
+        // While the person has not answered, the service refuses and holds the request on the
+        // session. Asking again is how the answer is found: the agent's call stays open on the
+        // prompt instead of failing before anyone could click.
+        let asked = std::time::Instant::now();
+        loop {
+            let refusal = match cli::block_on(cli::request(ClientMsg::Command(c.clone()))) {
+                Ok(_) => break,
+                Err(e) => format!("{e:#}"),
+            };
+            if !refusal.contains(HELPERS_AWAIT_OK)
+                || asked.elapsed() >= self.ask_wait.get()
+            {
+                return Err(refusal);
+            }
+            std::thread::sleep(ASK_POLL);
+        }
         // Wait for it to appear, then give the user back the session they were on.
         for _ in 0..60 {
             std::thread::sleep(std::time::Duration::from_millis(250));
@@ -849,12 +882,16 @@ pub fn run() -> Result<()> {
         let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
         let reply = match method {
-            "initialize" => Ok(json!({
+            "initialize" => {
+                let client = params.pointer("/clientInfo/name").and_then(Value::as_str);
+                server.ask_wait.set(ask_wait_for(client.unwrap_or_default()));
+                Ok(json!({
                 "protocolVersion": params.get("protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": env!("APP_COMMAND"), "version": env!("APP_VERSION") },
                 "instructions": concat!(env!("APP_COMMAND"), " runs your user's coding agents side by side. Use ", env!("APP_COMMAND"), "_list/read/send/start for helpers. Before UI, front-end or design work, call ", env!("APP_COMMAND"), "_references and open the images it lists: they are the user's reference screenshots and designs for this project. Don't answer prompts unless the user allows it; when you do, pass ", env!("APP_COMMAND"), "_answer the prompt id ", env!("APP_COMMAND"), "_list gave you.")
-            })),
+                }))
+            }
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tools() })),
             "tools/call" => {

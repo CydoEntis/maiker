@@ -248,7 +248,8 @@ impl Daemon {
             Starter::Chat(_) => {}
         }
         anyhow::bail!(
-            "Starting helpers needs the user's OK. Their {APP_COMMAND} row now says it wants to start {n} helper{}. Call {APP_COMMAND}_start for every helper you want so they all show, then try again later; don't start them another way.",
+            "{}. Their {APP_COMMAND} row now says it wants to start {n} helper{}. Call {APP_COMMAND}_start for every helper you want so they all show, then try again later; don't start them another way.",
+            crate::protocol::HELPERS_AWAIT_OK,
             if n == 1 { "" } else { "s" }
         )
     }
