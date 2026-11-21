@@ -63,8 +63,11 @@ pub enum Outcome {
     Ready(String),
     /// ssh needs a person to log in: a popup is open for it.
     Login,
-    /// It was reached, but its daemon is missing, old or not running: the connection says how
-    /// to fix it.
+    /// ssh could not sign in (the machine refused the key): the sentence under the checklist
+    /// says what to run.
+    SignInFailed,
+    /// It was reached, but its daemon is missing, old or not running: the sentence under the
+    /// checklist says how to fix it.
     Fix,
 }
 
@@ -1051,20 +1054,20 @@ fn draw_allow_clipboard(buf: &mut Buffer, inner: Rect, name: &str, t: &Theme) {
     }
 }
 
-/// The steps connecting takes, in order. `how` is None while ssh is being asked.
+/// The steps connecting takes, in order. `how` is None while ssh is being asked. A new host key
+/// is no step: ssh records it on the way, and a changed one adds nothing (ADR 0017). Why a step
+/// failed is the shared sentence under the list, never words of its own.
 fn checklist(who: &Parsed, how: Option<&Outcome>) -> Vec<Step> {
     let host = sanitize(&who.host, false);
     let user = who.user.clone().unwrap_or_else(|| "you".to_string());
     match how {
         None => vec![
             step(Mark::Running, format!("reach {host}"), ""),
-            step(Mark::Pending, "verify host key", ""),
             step(Mark::Pending, format!("sign in as {user}"), ""),
             step(Mark::Pending, "maitty-daemon", ""),
         ],
         Some(Outcome::Ready(version)) => vec![
             step(Mark::Done, format!("reach {host}"), ""),
-            step(Mark::Done, "verify host key", ""),
             step(Mark::Done, format!("sign in as {user}"), ""),
             step(Mark::Done, "maitty-daemon", version.clone()),
         ],
@@ -1077,14 +1080,15 @@ fn checklist(who: &Parsed, how: Option<&Outcome>) -> Vec<Step> {
             ),
             step(Mark::Pending, "maitty-daemon", ""),
         ],
+        Some(Outcome::SignInFailed) => vec![
+            step(Mark::Done, format!("reach {host}"), ""),
+            step(Mark::Failed, format!("sign in as {user}"), ""),
+            step(Mark::Pending, "maitty-daemon", ""),
+        ],
         Some(Outcome::Fix) => vec![
             step(Mark::Done, format!("reach {host}"), ""),
             step(Mark::Done, format!("sign in as {user}"), ""),
-            step(
-                Mark::Failed,
-                "maitty-daemon",
-                "the connection shows the fix",
-            ),
+            step(Mark::Failed, "maitty-daemon", ""),
         ],
     }
 }

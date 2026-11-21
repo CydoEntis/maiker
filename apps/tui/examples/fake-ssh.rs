@@ -3,7 +3,8 @@
 //! framing, handshake and failure paths run with no real server and no `sh`.
 //!
 //! `AGENT_FAKE_SSH_MAITTY` names the `maiker` to run. `AGENT_FAKE_SSH_MODE` picks the
-//! behaviour: `proxy` (default), `auth-fail`, `noise`, `noise-only`, `noise-flood`, `old`, `hang`,
+//! behaviour: `proxy` (default), `auth-fail` (the machine refuses the key), `needs-person` (the
+//! machine offers no key login, only a password or a code), `noise`, `noise-only`, `noise-flood`, `old`, `hang`,
 //! `mismatch` (an older daemon), `mismatch-newer`, `exit`, `unreachable` (ssh cannot connect), `not-installed` (the remote has no
 //! app), `capture-hello`, `require-pipes`, `capture-argv`.
 //! The shim also stands in for a machine's custom transport (`via`): it is then the program,
@@ -198,6 +199,10 @@ fn main() {
         "remote-sh" => std::process::exit(run_remote_sh(&own, &args)),
         "auth-fail" => {
             eprintln!("host@box: Permission denied (publickey).");
+            std::process::exit(255);
+        }
+        "needs-person" => {
+            eprintln!("host@box: Permission denied (password,keyboard-interactive).");
             std::process::exit(255);
         }
         "unreachable" => {

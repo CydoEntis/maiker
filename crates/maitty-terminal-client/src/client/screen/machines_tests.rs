@@ -338,13 +338,16 @@ fn checking_is_a_checklist_with_the_first_step_running() {
         for want in [
             "ADD MACHINE",
             "reach kingdom.lan",
-            "○ verify host key",
             "○ sign in as dev",
             "○ maitty-daemon",
             "Esc cancel",
         ] {
             assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
         }
+        assert!(
+            !said.contains("host key"),
+            "a new host key is no step: ssh records it (ADR 0017): {w}x{h}\n{text}"
+        );
     }
 }
 
@@ -368,10 +371,18 @@ fn an_added_machine_says_how_it_stands() {
             ],
         ),
         (
+            Outcome::SignInFailed,
+            [
+                "✓ reach kingdom.lan",
+                "✕ sign in as dev",
+                "○ maitty-daemon",
+            ],
+        ),
+        (
             Outcome::Fix,
             [
                 "✓ sign in as dev",
-                "✕ maitty-daemon the connection shows the fix",
+                "✕ maitty-daemon",
                 "Esc close",
             ],
         ),
@@ -397,6 +408,10 @@ fn an_added_machine_says_how_it_stands() {
             );
             for want in wants {
                 assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
+            }
+            // Why a step failed is the shared sentence under the list, never words of its own.
+            for gone in ["host key", "the connection shows the fix"] {
+                assert!(!said.contains(gone), "{w}x{h}: {gone:?}\n{text}");
             }
         }
     }

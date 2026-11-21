@@ -185,7 +185,8 @@ killed while the others are never touched.
 | `noise-only` | prints login text and exits, with no marker |
 | `noise-flood` | prints more login text than the client skips (over 64 KiB), with no marker |
 | `old` | behaves as a `proxy` from before the stream marker: the real proxy, minus the marker |
-| `auth-fail` | prints `Permission denied (publickey).` on stderr, exits 255 |
+| `auth-fail` | prints `Permission denied (publickey).` on stderr, exits 255 (a refused key) |
+| `needs-person` | prints `Permission denied (password,keyboard-interactive).` on stderr, exits 255 (a login that needs a person) |
 | `hang` | says nothing and never exits |
 | `mismatch` | answers the handshake with a protocol version one ahead |
 | `exit` | exits 0 at once, before any frame |
@@ -316,10 +317,11 @@ No test drives a real terminal, so look once with a nested server and the shim:
    `target = "box"`) and `config.toml` is untouched.
 4. `Tab`, `x`, Enter removes it: its group leaves the sidebar and the entry leaves the file, and the
    daemon's sessions are still there.
-5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=auth-fail`, start `maiker`, add `box` again. The probe
-   fails with a login, the dialog closes with the toast `ssh needs you to log in: use the popup`, and a popup runs the interactive line
+5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=needs-person`, start `maiker`, add `box` again. The probe
+   fails with a login that needs a person, the dialog closes with the toast `ssh needs you to log in: use the popup`, and a popup runs the interactive line
    (the shim prints `Permission denied` and the popup closes). The machine then shows `needs login`
-   with its fix. Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
+   with its fix. With `auth-fail` (a refused key) no popup opens: the dialog stays on `MACHINE ADDED` with
+   `✕ sign in as you` and says "Added box. box refused your key: run `ssh-copy-id box` in a terminal, then try again." Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
    ssh's `Connection refused` line. `hang` shows `Checking box…` until `Esc` (or 12 s).
 6. With a real host (no shim): leader `w`, pick a host from your `~/.ssh/config`, answer ssh's
    prompts in the popup if it opens one.

@@ -416,7 +416,7 @@ ssh's login words.
 The Machines dialog adds two more ssh command lines, built beside the first in `ssh_command.rs` with the same
 target check, hardening and `--`: a probe (`BatchMode`, `ConnectTimeout=8`, stdin closed, output read to
 64 KiB and cleaned) and a first login (no `BatchMode`, so ssh can ask) that runs in a popup pane on this
-computer. A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
+computer, only for a login that needs a person (a password or a second code; ADR 0017). A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
 holds whitespace or a control character is refused with the loader's message, and nothing is spawned or
 written. A pane's shell reads the first-login line, so each word is a plain word (letters, digits and
 `_./-~:=,+@`, with a Windows path's backslashes on Windows) or one single-quoted word; a word with a quote or a
