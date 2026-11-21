@@ -28,6 +28,7 @@ const daemon = vi.hoisted(() => ({
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
   startAgentSession: vi.fn<(folder: string, agent: string, flags: readonly string[]) => Promise<void>>(),
   startAcpChat: vi.fn<(folder: string, agent: string) => Promise<{ id: number; generation: number }>>(),
+  startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string) => Promise<{ id: number; generation: number }>>(),
   archiveConversationOnDaemon: vi.fn<(conversation: { id: string }, archived: boolean) => Promise<void>>(),
   closeSessionWithUndo: vi.fn<(conversation: { id: string }) => Promise<void>>(),
   undoCloseSession: vi.fn<(conversation: { id: string }) => Promise<void>>(),
@@ -1426,13 +1427,13 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     // What the daemon lists once it has started the chat: a conversation of its own, with no pane.
     const chat: Conversation = { id: '5', generation: 1, execution: 'Structured', title: 'fix the cart', named: true, project: 'a', folder: `${HOME}/a`, cwd: `${HOME}/a`, repo: null, branch: 'working tree', provider: 'Claude', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude', process: 'claude', chat: { conversation: 5, generation: 1 }, details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } } }
     daemon.loadConversations.mockResolvedValue([chat])
-    daemon.startAcpChat.mockResolvedValue({ id: 5, generation: 1 })
+    daemon.startChatSession.mockResolvedValue({ id: 5, generation: 1 })
     daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
     daemon.submitMessage.mockResolvedValue(null)
     await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
     // ADR 0018: the Chat view starts a chat the daemon owns, never the agent's terminal program.
-    await waitFor(() => { expect(daemon.startAcpChat).toHaveBeenCalledWith(`${HOME}/a`, 'claude') })
+    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(`${HOME}/a`, 'claude', null, expect.stringMatching(/^(workspace-write|full-access)$/)) })
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
     // The chat it started is listed and is what the window shows: it must never run where nobody sees it.

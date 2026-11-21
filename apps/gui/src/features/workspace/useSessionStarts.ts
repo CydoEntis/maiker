@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
 import { DEFAULT_PICK, everywhereModel, writeChoice } from '@/features/chat/agentChoice'
-import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
@@ -18,7 +18,7 @@ import { entrustFirstMessage, holdFirstMessage, holdStartChoice } from '@/featur
 import { connectAgentOnce } from './model/agentHooks'
 import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
-import type { ChatAgent, StructuredAgent } from './model/chatView'
+import type { ChatAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
 import type { NewChatRequest, NewChatSeed, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
@@ -124,12 +124,18 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
   }, [queryClient, setLayout])
 
-  // A chat session in `path`, opened in a layout of its own. Chats are this computer's: another machine's shell asks first.
-  const startChat = useCallback((path: string, agent: StructuredAgent, fullAccess: boolean) =>
-    startChatSession(path, agent, null, fullAccess ? 'full-access' : 'workspace-write').then((started) => {
-      if (fullAccess) rememberConversationPermissions(String(started.id), 'full-access')
-      return openStartedChat(started, '')
-    }).then(() => { flash(`${agentLabel(agent)} chat started`) }), [openStartedChat, flash])
+  // A chat session in `path`, opened in a layout of its own: Claude Code and Codex through their own adapters, any other
+  // agent over ACP, where its own settings decide what it may do (ADR 0018). Chats are this computer's: another machine's
+  // shell asks first.
+  const startChat = useCallback((path: string, agent: ChatAgent, fullAccess: boolean) => {
+    const started = hasAbility(agent, 'structuredChat')
+      ? startChatSession(path, agent, null, fullAccess ? 'full-access' : 'workspace-write').then((chat) => {
+        if (fullAccess) rememberConversationPermissions(String(chat.id), 'full-access')
+        return chat
+      })
+      : startAcpChat(path, agent)
+    return started.then((chat) => openStartedChat(chat, '')).then(() => { flash(`${agentLabel(agent)} chat started`) })
+  }, [openStartedChat, flash])
 
 
   // What the New session draft asks for: a structured chat in the folder, with the model and effort picked, and its first message.
@@ -214,27 +220,34 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
     if (!online) return
     // A chat with no terminal has no agent to start ahead: its start is the daemon's, on the first message (ADR 0018).
-    if (chatView && hasAbility(spec.agent, 'structuredChat')) return
+    if (chatView) return
     void connectAgentOnce(spec.agent)
       .catch((error: unknown) => { console.warn(`Could not connect ${spec.agent}'s status hooks`, error) })
       .then(() => prewarmAgentSession(spec.folder, spec.agent, startWords(spec.agent, launchFlags(spec.agent, spec.model, spec.reasoning, spec.mode), spec.bypass)))
       .catch((error: unknown) => { console.warn(`Could not start ${spec.agent} ahead of the first message`, error) })
   }, [online, startWords, chatView])
 
-  // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0018). The start
-  // answers once the agent is up, so the page stays until then, and the first message is an ordinary send after it.
-  const startDirectChat = useCallback(async (request: NewChatRequest & { agent: StructuredAgent }, { background = false, onPlaced }: NewChatStartOptions): Promise<void> => {
+  // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0018). Claude Code
+  // and Codex run through their own adapters, with the mode, model and effort picked; any other agent runs over ACP by
+  // its name, where its own settings decide those. The start answers once the agent is up, so the page stays until
+  // then, and the first message is an ordinary send after it.
+  const startDirectChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions): Promise<void> => {
     const { agent, model, reasoning } = request
-    const permissions = chatPermissions(agent, request.mode, request.bypass ?? bypasses({ bypassOff }, agent))
+    const permissions = hasAbility(agent, 'structuredChat') ? chatPermissions(agent, request.mode, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
     if (permissions === null) throw new Error(`${agentLabel(agent)} cannot start a chat in this permission mode yet. Pick another mode.`)
     const mode: StartMode = background ? 'background' : 'alongside'
     if (!beginStart(mode)) throw new Error(ANOTHER_START_RUNNING)
     try {
-      const started = await startChatSession(request.folder, agent, null, permissions)
+      const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
+        ? await startChatSession(request.folder, agent, null, permissions)
+        : await startAcpChat(request.folder, agent)
       const id = String(started.id)
-      rememberConversationPermissions(id, permissions)
-      // The chat's own model and effort chips read this, and the first message carries it to the daemon.
-      writeChoice(started.id, { model, reasoning })
+      const choice: WireChoice = permissions === undefined ? {} : { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
+      if (permissions !== undefined) {
+        rememberConversationPermissions(id, permissions)
+        // The chat's own model and effort chips read this, and the first message carries it to the daemon.
+        writeChoice(started.id, { model, reasoning })
+      }
       const named = request.name ?? (request.message === '' ? '' : nameFromMessage(request.message))
       if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
       await queryClient.invalidateQueries({ queryKey: ['conversations'] })
@@ -254,7 +267,6 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
         })
       }
       if (request.message === '') return
-      const choice: WireChoice = { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
       const operation = reserveOperation(started.id, { receipt: null, queued: [] })
       // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
       await submitMessage({ id, generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
@@ -316,16 +328,11 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       return
     }
     if (!online || starting) return
-    // Gemini has no structured chat: it starts as a terminal session shown as its chat.
-    if (!hasAbility(agent, 'structuredChat')) {
-      void startAgentSession(() => Promise.resolve(from.cwd), agent)
-      return
-    }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
       .catch((error: unknown) => { toast.failed(`Could not start a ${agentLabel(agent)} chat`, error) })
       .finally(() => { endStart('alone') })
-  }, [online, starting, beginStart, endStart, startChat, startAgentSession])
+  }, [online, starting, beginStart, endStart, startChat])
 
   // "Hand off to …": a new session of another agent in the same folder, starting with a text brief of this one's work.
   const handoffSession = useCallback(async (from: SessionView, to: ChatAgent) => {
@@ -399,8 +406,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
     // In the Chat view a session is a chat with no terminal behind it (ADR 0018). A saved conversation still resumes as
     // the agent's own session until the daemon can open one as a chat.
-    const agent = request.agent
-    if (chatView && hasAbility(agent, 'structuredChat') && request.resume === null) return startDirectChat({ ...request, agent, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    if (chatView && request.resume === null) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
