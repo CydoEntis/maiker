@@ -260,13 +260,19 @@ owned. The `apps/tui` `maiker` package preserves the installed command and re-ex
 the terminal client library for compatibility. Codex compatibility preflight,
 session metadata, usage extraction, effective-config policy, native hook
 configuration projection and completion-event mapping live in
-`maitty-provider-codex`;
+`maitty-provider-codex`, with the app-server wire format: the strict JSON-RPC envelope
+(`envelope.rs`), request parameters and reply checks (`requests.rs`), approval-request reading
+(`approvals.rs`) and item and turn decoding (`history.rs`);
 Claude stream parsing, version checks, session IDs, launch arguments, frame
 limit, hook event definitions, command-group projection and replacement,
 ownership, stale-hook projection, native event mapping and status-line config
 policy live in `maitty-provider-claude`. `maitty-provider` holds the contract an adapter
 implements: the `ProviderDialect` trait, a state machine with no I/O, and the commands, steps
-and events it exchanges with the daemon. No adapter implements it yet (MAITTY-483, MAITTY-484).
+and events it exchanges with the daemon. It also holds what every adapter needs to make
+provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
+(`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
+contract from the open connection on. The daemon does not run dialects yet: it calls the Codex
+crate's functions directly (MAITTY-485).
 JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.
 Completing the package split is tracked by
@@ -478,7 +484,7 @@ they never fabricate a native identity or automatically create another thread.
 Native/structured transfer commands remain later work.
 
 The display-history foundation adds `history.rs` (typed projection and bounded
-reads), `history_provider.rs` (Codex event normalization) and `history_storage.rs`
+reads), `history_provider.rs` (maps the Codex crate's decoded events to history updates) and `history_storage.rs`
 (private immutable pages and atomic manifests) beside the transport. Wire DTOs
 live inward in `maitty-shared::conversation`. No transcript enters the ordinary
 snapshot; attachment content is released on disconnect. See API_PATTERNS and

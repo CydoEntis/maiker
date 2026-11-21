@@ -33,7 +33,7 @@ const SUMMARY_FIELDS: [&str; 9] = [
 
 /// `text` without escape sequences or control characters (a line break and a tab stay) and with
 /// each invisible character spelled out, so what is shown is what is there.
-pub(super) fn clean_text(text: &str) -> String {
+pub fn clean_text(text: &str) -> String {
     let mut clean = String::with_capacity(text.len());
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
@@ -41,7 +41,7 @@ pub(super) fn clean_text(text: &str) -> String {
             '\u{1b}' => skip_escape_sequence(&mut chars),
             '\n' | '\t' => clean.push(c),
             c if c.is_control() => {}
-            c if crate::hidden::is_invisible(c) => {
+            c if maitty_shared::hidden::is_invisible(c) => {
                 clean.push_str(&format!("\\u{{{:x}}}", c as u32));
             }
             c => clean.push(c),
@@ -119,7 +119,7 @@ fn bound_value(value: &Value, budget: usize, depth: usize) -> Option<Value> {
 /// be kept whole in shape (nested too deep, a list or object over `MAX_ITEMS`, or still over
 /// `MAX_INPUT_BYTES` with every string cut to the smallest budget); an input cut off partway
 /// would read as complete, so it is left out and the card says the detail is unavailable.
-pub(super) fn bound_input(input: &Value) -> Option<Value> {
+pub fn bound_input(input: &Value) -> Option<Value> {
     if input.is_null() || input.as_object().is_some_and(Map::is_empty) {
         return None;
     }
@@ -130,7 +130,7 @@ pub(super) fn bound_input(input: &Value) -> Option<Value> {
 }
 
 /// One line saying what an approval is about: the field that names the target, cleaned and cut.
-pub(super) fn input_summary(input: &Value) -> String {
+pub fn input_summary(input: &Value) -> String {
     let named = SUMMARY_FIELDS
         .iter()
         .find_map(|field| input.get(field).and_then(Value::as_str));
@@ -145,7 +145,7 @@ pub(super) fn input_summary(input: &Value) -> String {
 
 /// The label shown for an approval: a Bash command as written, any other tool as
 /// "Name: what it acts on".
-pub(super) fn approval_command(tool_name: &str, input: &Value) -> String {
+pub fn approval_command(tool_name: &str, input: &Value) -> String {
     match input.get("command").and_then(Value::as_str) {
         Some(command) => command.to_owned(),
         None => format!("{}: {}", clean_text(tool_name), input_summary(input)),
@@ -169,7 +169,7 @@ fn replacement(old: &str, new: &str) -> String {
 
 /// The file changes a Claude edit tool is asking to make, in the shape of an approval's
 /// `changes` (path, kind, diff). `None` for any other tool, or an input of an unexpected shape.
-pub(super) fn file_change_previews(tool_name: &str, input: &Value) -> Option<Vec<Value>> {
+pub fn file_change_previews(tool_name: &str, input: &Value) -> Option<Vec<Value>> {
     let path = clean_text(input.get("file_path")?.as_str()?);
     let text =
         |value: &Value, field: &str| value.get(field).and_then(Value::as_str).map(str::to_owned);

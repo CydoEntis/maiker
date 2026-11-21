@@ -18,13 +18,13 @@ impl Daemon {
         else {
             return Ok(());
         };
-        let mut params = params(settings);
-        let rpc = if let Some(thread) = expected {
-            params["threadId"] = json!(thread);
-            params["excludeTurns"] = json!(true);
-            Rpc::Resume { params }
-        } else {
-            Rpc::Start { params }
+        let rpc = match expected {
+            Some(thread) => Rpc::Resume {
+                params: maitty_provider_codex::requests::thread_resume_params(settings, thread),
+            },
+            None => Rpc::Start {
+                params: maitty_provider_codex::requests::thread_start_params(settings),
+            },
         };
         self.conversation_runtimes
             .request(id, *generation, token, rpc)
@@ -201,15 +201,7 @@ impl Daemon {
                 client,
                 mut receipt,
             } => {
-                let turn = value
-                    .get("turn")
-                    .ok_or_else(|| anyhow::anyhow!("Codex turn response lacks turn"))?;
-                let turn_id = identifier(turn, "id")?;
-                if !turn.get("items").is_some_and(Value::is_array)
-                    || !turn.get("status").is_some_and(Value::is_string)
-                {
-                    bail!("Codex turn response is incomplete; delivery uncertain");
-                }
+                let turn_id = maitty_provider_codex::requests::started_turn(&value)?;
                 if let Some(conversation) = self
                     .conversations
                     .iter_mut()
@@ -344,7 +336,11 @@ impl Daemon {
                     Some(Value::String(cursor))
                         if !cursor.is_empty() && cursors.insert(cursor.clone()) =>
                     {
-                        let params = json!({"threadId":thread,"cursor":cursor,"limit":history::MAX_READ_ENTRIES,"sortDirection":"asc","itemsView":"full"});
+                        let params = maitty_provider_codex::requests::turns_list_params(
+                            &thread,
+                            Some(cursor),
+                            history::MAX_READ_ENTRIES,
+                        );
                         self.conversation_requests.insert(
                             token,
                             Pending::Hydration {

@@ -28,125 +28,6 @@ fn reset_state_after_provider_ready(state: &mut super::State) {
     state.cancelling = None;
 }
 
-fn visible_approval_text(text: &str) -> String {
-    let mut visible = String::with_capacity(text.len());
-    for character in text.chars() {
-        if crate::hidden::is_invisible(character) {
-            visible.push_str(&format!("\\u{{{:x}}}", character as u32));
-        } else {
-            visible.push(character);
-        }
-    }
-    visible
-}
-
-/// Approval text that may be stored and served: invisible characters spelled out, and
-/// token- and key-shaped strings masked (see `redact.rs`).
-fn approval_text(text: &str) -> String {
-    super::redact::redact_text(&visible_approval_text(text)).into_owned()
-}
-
-fn supported_approval_choices(
-    params: &serde_json::Value,
-) -> Vec<crate::conversation::ApprovalDecision> {
-    const ACCEPT: &str = "accept";
-    const ACCEPT_FOR_SESSION: &str = "acceptForSession";
-    const DECLINE: &str = "decline";
-    const CANCEL: &str = "cancel";
-    use crate::conversation::ApprovalDecision as Decision;
-    let Some(choices) = params
-        .get("availableDecisions")
-        .and_then(serde_json::Value::as_array)
-    else {
-        return vec![Decision::Accept, Decision::Decline];
-    };
-    choices
-        .iter()
-        .filter_map(|choice| {
-            let name = choice.as_str().or_else(|| {
-                choice
-                    .as_object()
-                    .and_then(|choice| choice.keys().next().map(String::as_str))
-            })?;
-            match name {
-                ACCEPT => Some(Decision::Accept),
-                ACCEPT_FOR_SESSION => Some(Decision::AcceptForSession),
-                DECLINE => Some(Decision::Decline),
-                CANCEL => Some(Decision::Cancel),
-                _ => None,
-            }
-        })
-        .collect()
-}
-
-fn user_input_questions(
-    params: &serde_json::Value,
-) -> Option<Vec<crate::conversation::UserInputQuestion>> {
-    let questions = params.get("questions")?.as_array()?;
-    if questions.is_empty() {
-        return None;
-    }
-    let mut ids = std::collections::BTreeSet::new();
-    questions
-        .iter()
-        .map(|question| {
-            let id = question.get("id")?.as_str()?.to_owned();
-            if id.is_empty() || !ids.insert(id.clone()) {
-                return None;
-            }
-            let options = match question.get("options") {
-                None | Some(serde_json::Value::Null) => Vec::new(),
-                Some(serde_json::Value::Array(options)) => options
-                    .iter()
-                    .map(|option| {
-                        Some(crate::conversation::UserInputOption {
-                            label: approval_text(option.get("label")?.as_str()?),
-                            description: approval_text(
-                                option.get("description")?.as_str()?,
-                            ),
-                        })
-                    })
-                    .collect::<Option<Vec<_>>>()?,
-                Some(_) => return None,
-            };
-            Some(crate::conversation::UserInputQuestion {
-                id,
-                header: approval_text(question.get("header")?.as_str()?),
-                question: approval_text(question.get("question")?.as_str()?),
-                is_other: question
-                    .get("isOther")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(false),
-                is_secret: question
-                    .get("isSecret")
-                    .and_then(serde_json::Value::as_bool)
-                    .unwrap_or(false),
-                options,
-            })
-        })
-        .collect()
-}
-
-fn file_change_previews(
-    changes: &[serde_json::Value],
-) -> Option<Vec<crate::conversation::FileChangePreview>> {
-    changes
-        .iter()
-        .map(|change| {
-            let raw_path = change.get("path")?.as_str()?;
-            Some(crate::conversation::FileChangePreview {
-                path: visible_approval_text(raw_path),
-                kind: change.get("kind")?.as_str()?.to_owned(),
-                // The diff of a secret file is left out, the path and kind stay.
-                diff: super::redact::redact_diff(
-                    raw_path,
-                    &visible_approval_text(change.get("diff")?.as_str()?),
-                ),
-            })
-        })
-        .collect()
-}
-
 impl Daemon {
     pub(in crate::daemon) async fn initialize_conversation_cache(&mut self) -> Result<()> {
         let path = self.session_path.clone();
@@ -360,13 +241,8 @@ impl Daemon {
                 method,
                 params,
             } => {
-                if matches!(
-                    method.as_str(),
-                    "item/commandExecution/requestApproval"
-                        | "item/fileChange/requestApproval"
-                        | "item/permissions/requestApproval"
-                        | "item/tool/requestUserInput"
-                ) {
+                use maitty_provider_codex::approvals;
+                if approvals::is_turn_request(&method) {
                     let thread = self
                         .conversations
                         .iter()
@@ -383,118 +259,26 @@ impl Daemon {
                             crate::conversation::Delivery::SubmissionUncertain => None,
                         });
                     anyhow::ensure!(
-                        params.get("threadId").and_then(serde_json::Value::as_str) == thread
-                            && params.get("turnId").and_then(serde_json::Value::as_str)
-                                == active_turn,
+                        approvals::names(&params, thread, active_turn),
                         "Codex approval request does not belong to the acknowledged active turn"
                     );
                 }
                 let state = self.conversation_states.entry(id).or_default();
                 state.blocked = true;
                 state.status = Status::Blocked;
-                let command = params.get("command").and_then(serde_json::Value::as_str);
-                let kind = match method.as_str() {
-                    "item/commandExecution/requestApproval" if command.is_some() => {
-                        Some(crate::conversation::ApprovalRequestKind::Command)
-                    }
-                    "item/fileChange/requestApproval" => {
-                        Some(crate::conversation::ApprovalRequestKind::FileChange)
-                    }
-                    "item/permissions/requestApproval"
-                        if params
-                            .get("itemId")
-                            .and_then(serde_json::Value::as_str)
-                            .is_some()
-                            && params
-                                .get("cwd")
-                                .and_then(serde_json::Value::as_str)
-                                .is_some()
-                            && params
-                                .get("permissions")
-                                .is_some_and(serde_json::Value::is_object) =>
-                    {
-                        Some(crate::conversation::ApprovalRequestKind::Permission)
-                    }
-                    "item/tool/requestUserInput" if user_input_questions(&params).is_some() => {
-                        Some(crate::conversation::ApprovalRequestKind::UserInput)
-                    }
-                    _ => None,
-                };
+                let request_id: crate::conversation::ProviderRequestId = request.into();
+                let known_changes = approvals::subject(&params)
+                    .and_then(|subject| state.file_change_previews.get(&subject))
+                    .cloned();
                 let mut arrived = None;
-                if let Some(kind) = kind {
-                    let request_id: crate::conversation::ProviderRequestId = request.into();
+                if let Some(asked) =
+                    approvals::approval_request(request_id.clone(), &method, &params, known_changes)
+                {
                     arrived = Some(request_id.clone());
-                    let item_id = params
-                        .get("itemId")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_owned);
-                    let turn_id = params
-                        .get("turnId")
-                        .and_then(serde_json::Value::as_str)
-                        .map(str::to_owned);
-                    let changes = item_id
-                        .as_ref()
-                        .zip(turn_id.as_ref())
-                        .and_then(|(item_id, turn_id)| {
-                            state
-                                .file_change_previews
-                                .get(&(turn_id.clone(), item_id.clone()))
-                        })
-                        .cloned()
-                        // Claude states an edit's diff in the request itself; Codex sends it
-                        // earlier, as a patch update.
-                        .or_else(|| {
-                            params
-                                .get("changes")
-                                .and_then(serde_json::Value::as_array)
-                                .and_then(|changes| file_change_previews(changes))
-                        })
-                        .unwrap_or_default();
-                    let choices = match kind {
-                        crate::conversation::ApprovalRequestKind::FileChange
-                            if changes.is_empty() =>
-                        {
-                            Vec::new()
-                        }
-                        crate::conversation::ApprovalRequestKind::Permission => vec![
-                            crate::conversation::ApprovalDecision::Decline,
-                            crate::conversation::ApprovalDecision::Accept,
-                        ],
-                        _ => supported_approval_choices(&params),
-                    };
-                    // Only a command request can be remembered, by the command exactly as sent.
-                    let remembered_hash = (kind == crate::conversation::ApprovalRequestKind::Command)
-                        .then(|| command.map(crate::protocol::command_hash))
-                        .flatten();
-                    let approval = crate::conversation::ApprovalRequest {
-                        request_id: request_id.clone(),
-                        kind,
-                        item_id,
-                        turn_id,
-                        questions: if kind == crate::conversation::ApprovalRequestKind::UserInput {
-                            user_input_questions(&params).unwrap_or_default()
-                        } else {
-                            Vec::new()
-                        },
-                        permissions: params.get("permissions").cloned(),
-                        command: command.map(approval_text),
-                        reason: params
-                            .get("reason")
-                            .and_then(serde_json::Value::as_str)
-                            .map(approval_text),
-                        cwd: params
-                            .get("cwd")
-                            .or_else(|| params.get("grantRoot"))
-                            .and_then(serde_json::Value::as_str)
-                            .map(std::path::PathBuf::from),
-                        changes,
-                        choices,
-                        can_remember: remembered_hash.is_some(),
-                    };
-                    if let Some(hash) = remembered_hash {
+                    if let Some(hash) = asked.command_hash {
                         state.command_hashes.insert(request_id.clone(), hash);
                     }
-                    if state.approvals.insert(request_id, approval).is_some() {
+                    if state.approvals.insert(request_id, asked.request).is_some() {
                         bail!("Codex reused a pending approval request ID");
                     }
                     if state.unsupported_requests.is_empty()
@@ -503,7 +287,6 @@ impl Daemon {
                         state.error = None;
                     }
                 } else {
-                    let request_id = request.into();
                     let message = format!(
                         "Provider request {method} is unsupported; {} left it unanswered",
                         crate::brand::APP_NAME
@@ -552,7 +335,7 @@ impl Daemon {
                     }
                     let key = (turn_id.to_owned(), item_id.to_owned());
                     let state = self.conversation_states.entry(id).or_default();
-                    let changes = if let Some(changes) = file_change_previews(changes) {
+                    let changes = if let Some(changes) = maitty_provider_codex::approvals::file_change_previews(changes) {
                         state.file_change_previews.insert(key, changes.clone());
                         changes
                     } else {

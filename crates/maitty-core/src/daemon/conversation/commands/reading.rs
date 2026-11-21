@@ -18,7 +18,11 @@ impl Daemon {
         if c.binding.provider == Provider::Claude {
             return self.begin_claude_history_hydration(id, generation, read, started);
         }
-        let params = json!({"threadId":c.binding.session_id,"limit":history::MAX_READ_ENTRIES,"sortDirection":"asc","itemsView":"full"});
+        let params = maitty_provider_codex::requests::turns_list_params(
+            &c.binding.session_id,
+            None,
+            history::MAX_READ_ENTRIES,
+        );
         let mut history = History::new(id);
         history.revision = self
             .conversation_states

@@ -85,7 +85,7 @@ impl Daemon {
             generation,
             token,
             Rpc::Interrupt {
-                params: json!({"threadId":thread_id,"turnId":turn_id}),
+                params: maitty_provider_codex::requests::turn_interrupt_params(&thread_id, &turn_id),
             },
         );
         if let Err(error) = request {

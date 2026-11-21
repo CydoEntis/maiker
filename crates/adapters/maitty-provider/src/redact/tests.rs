@@ -332,10 +332,10 @@ fn a_diff_of_a_secret_file_is_omitted_and_any_other_diff_is_masked() {
 }
 
 fn tool(command: &str, output: &str) -> Entry {
-    use super::super::history::{ItemState, SourceId};
+    use maitty_shared::conversation::history::{ItemState, SourceId};
     Entry {
         source: SourceId {
-            conversation: crate::conversation::ConversationId(1),
+            conversation: maitty_shared::conversation::ConversationId(1),
             turn: "t".into(),
             item: "i".into(),
         },
@@ -401,10 +401,10 @@ fn reading_a_secret_file_with_a_shell_command_omits_the_output_only() {
 
 #[test]
 fn a_message_is_masked() {
-    use super::super::history::{ItemState, Role, SourceId};
+    use maitty_shared::conversation::history::{ItemState, Role, SourceId};
     let mut entry = Entry {
         source: SourceId {
-            conversation: crate::conversation::ConversationId(1),
+            conversation: maitty_shared::conversation::ConversationId(1),
             turn: "t".into(),
             item: "i".into(),
         },
