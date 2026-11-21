@@ -684,7 +684,17 @@ impl Server {
             .and_then(Value::as_bool)
             .unwrap_or(true)
             && crate::gitfs::head(&self.root).is_some();
+        // A second helper for the same task gets its own branch, and the reply names that one.
         let branch = slug(prompt);
+        let branch = if before
+            .terms
+            .values()
+            .any(|t| t.branch.as_deref() == Some(branch.as_str()))
+        {
+            format!("{branch}-{}", had.len())
+        } else {
+            branch
+        };
         let c = if worktree {
             // With only chats open there is no workspace. The service reads `from`, not `ws`,
             // when the repo is named, so the helper's worktree needs none.
@@ -692,18 +702,9 @@ impl Server {
                 .active_ws
                 .or_else(|| before.workspaces.first().map(|w| w.id))
                 .unwrap_or(NO_WORKSPACE);
-            let branch = if before
-                .terms
-                .values()
-                .any(|t| t.branch.as_deref() == Some(branch.as_str()))
-            {
-                format!("{branch}-{}", had.len())
-            } else {
-                branch.clone()
-            };
             Command::NewWorktree {
                 ws,
-                branch,
+                branch: branch.clone(),
                 base: None,
                 cmd: Some(cmd),
                 split: None,
@@ -730,7 +731,10 @@ impl Server {
                     })));
                 }
                 let place = if worktree {
-                    format!("its own worktree ({branch})")
+                    // Two helpers started at once ask for the same name; the service settles
+                    // it, so the session's own branch is the one to report.
+                    let made = now.terms.get(&new).and_then(|t| t.branch.clone());
+                    format!("its own worktree ({})", made.unwrap_or(branch))
                 } else {
                     self.root.display().to_string()
                 };
