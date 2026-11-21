@@ -2,6 +2,7 @@
 
 use crate::brand::{APP_COMMAND, APP_VERSION};
 use crate::ipc;
+pub(crate) mod agents;
 pub(crate) mod conversation;
 pub(crate) mod doctor_machines;
 pub(crate) mod handoff;

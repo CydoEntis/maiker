@@ -56,7 +56,7 @@ reaches them only from a shell's "Start a chat here".
   model, an effort, a permission mode, a name, a branch or worktree, and another machine.
 - Showing a terminal agent as a chat from its hooks stays only for sessions started in the
   Terminal view or outside the app; whether that stays at all is a later decision.
-- Gemini gets a chat only over ACP, so it starts from the Chat view only where the config has
-  an ACP entry for it. Installing ACP agents for the person is a later change.
+- Gemini gets a chat only over ACP, so it starts from the Chat view only where it is installed
+  from the registry (0019) or the config has an ACP entry for it.
 - `docs/UI.md` changes with each ticket that lands: it still describes a session with a chat and
   a terminal log.

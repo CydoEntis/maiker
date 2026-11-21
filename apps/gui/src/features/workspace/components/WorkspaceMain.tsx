@@ -58,6 +58,7 @@ export function WorkspaceMain() {
                     pickFolder={folderPick.pick}
                     onOpenProject={openProject.open}
                     onStart={startNewChat}
+                    otherAgents={chatView}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
                     onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}

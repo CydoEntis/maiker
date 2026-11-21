@@ -97,9 +97,29 @@ still holds its record; otherwise it is blocked with the reason, and nothing is 
 
 ## Project-specific: configuration
 
-An ACP agent is an `[[agents]]` entry with `acp = true`. The entry names the program and its
-arguments; Maiker does not guess an agent's ACP flag. The keys and their checks are in
+An ACP agent is an `[[agents]]` entry with `acp = true`, or an agent installed from the ACP
+registry. A config entry names the program and its arguments; Maiker does not guess an agent's
+ACP flag. The keys and their checks are in
 [ENVIRONMENT](../ENVIRONMENT.md#project-specific-agents-run-over-acp).
+
+## Project-specific: the registry
+
+`maiker agents list`, `install <id>` and `remove <id>` (`maitty-core/src/acp_registry.rs`,
+[ADR 0019](../adr/0019-acp-agents-are-installed-from-the-registry.md)) install agents from
+`https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`.
+
+- An agent lands in `<data folder>/acp-agents/<id>/<version>/`, and
+  `<data folder>/acp-agents/installed.json` records its program, arguments and variables as the
+  registry gave them. The last index fetched is kept beside it for a time with no network.
+- A config entry wins over an installed agent of the same name.
+- A binary download needs the registry's SHA-256. An npm agent needs Node.js and npm on this
+  computer and runs as `node <the package's program>`. A Python (`uvx`) agent is not installed.
+- The registry's `claude-acp` and `codex-acp` are not listed (ADR 0018).
+- The checks on an entry and a download are in
+  [SECURITY](../SECURITY.md#project-specific-installing-an-agent-from-the-acp-registry).
+- Run by hand on Linux x86_64 (2026-11-21): `agents install opencode` (binary, 2.3.2) followed by
+  a chat through the daemon that answered, and `agents install pi-acp` (npm, 0.0.35). Not yet
+  run on Windows or macOS.
 
 ## Project-specific: how the daemon runs it
 

@@ -19,6 +19,11 @@ vi.mock('@/api/folderGit', async (importOriginal) => ({
   loadFolderBranches: () => Promise.resolve(host.branches === null ? null : { ...host.branches, branches: host.branches.branches.map((entry) => ({ ...entry, remote: false })) }),
 }))
 
+vi.mock('@/api/acpAgents', () => ({
+  loadAcpAgents: () => Promise.resolve([{ id: 'opencode', name: 'OpenCode', version: '2.3.2', description: '', source: 'registry', installed: '2.3.2', unavailable: null }]),
+  installAcpAgent: () => Promise.resolve(),
+  removeAcpAgent: () => Promise.resolve(),
+}))
 vi.mock('@/api/daemon', () => ({
   loadAgentModels: () => Promise.resolve([]),
   agentsInstalled: () => Promise.resolve(host.installed),
@@ -58,6 +63,7 @@ type Extra = {
   projects?: typeof PROJECTS
   onAddMachine?: () => void
   onOtherMachine?: (machine: number) => void
+  otherAgents?: boolean
 }
 
 /** Bypass Permissions switched off for every agent, so a mode is picked as before it was on by default. */
@@ -350,6 +356,25 @@ describe('the New session draft', () => {
     await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith(null) })
     unmount()
     expect(onWarm).toHaveBeenLastCalledWith(null)
+  })
+
+  it('starts another agent picked from Other agents over ACP, and offers that only where it can run', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    const { unmount } = dialog(onStart)
+    await ready()
+    expect(screen.queryByRole('button', { name: 'Other agents…' })).not.toBeInTheDocument()
+    unmount()
+
+    dialog(onStart, { otherAgents: true })
+    await ready()
+    await userEvent.click(screen.getByRole('button', { name: 'Other agents…' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Use OpenCode' }))
+    expect(screen.getByRole('status')).toHaveTextContent('This session starts OpenCode over ACP')
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+
+    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
+    expect(onStart.mock.calls[0]?.[0]).toMatchObject({ acp: 'opencode', message: 'hello' })
   })
 
   it('starts in the folder on its branch, with no new branch, when no other chat is on it', async () => {

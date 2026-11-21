@@ -307,6 +307,21 @@ describe('starting a chat from the draft in the Chat view', () => {
     expect(daemon.submitMessage).toHaveBeenLastCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'hello', undefined)
   })
 
+  it('starts another agent picked for the session over ACP by its id, in place of the draft\'s own', async () => {
+    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'claude', acp: 'opencode', message: 'hello' }))
+
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'opencode')
+    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.submitMessage).toHaveBeenLastCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'hello', undefined)
+  })
+
+  it('refuses another agent in the Terminal view, where it has no chat to run in', async () => {
+    await expect(starts({ openSessionsIn: 'terminal' }).startNewChat(request({ acp: 'opencode' }))).rejects.toThrow('only in the Chat view')
+
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+
   it('sends nothing when the draft has no message, and picks nothing the person left alone', async () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(request({ reasoning: 'default' }))
     expect(daemon.submitMessage).not.toHaveBeenCalled()

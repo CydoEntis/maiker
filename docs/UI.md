@@ -1410,6 +1410,14 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     config. Such a chat (`chat.acp`) uses the agent's own model and permission settings, so its box names the agent and
     shows no model, effort or permission picker (`ownSettings` in `Composer`), and it has no slash-command menu or side
     question. The draft's model, effort and mode picks are not sent to it.
+  - **Other agents…** under the draft's box (Chat view, this computer; `AcpAgentsDialog`) lists the agents that run
+    over ACP: the config's, and the ACP registry's ([ADR 0019](adr/0019-acp-agents-are-installed-from-the-registry.md)).
+    A registry agent has **Install** (it says it downloads a program that runs as you), then **Use**, **Update** when
+    a newer version is out, and **Remove**; one that cannot be installed here says why and has no button. The work is
+    the host's `acp_agents`, `install_acp_agent` and `remove_acp_agent`, which run the `maiker agents` command off the
+    UI thread; a failure is said on the agent's own row. **Use** picks the agent for this draft only: a line under the
+    box names it, with **Change** and **Use <the draft's agent> instead**, and the session starts it over ACP by its id
+    (`NewChatRequest.acp`).
   - In any chat, an approval's buttons carry the agent's own words for each choice where it gave them (`choiceLabels`),
     and a command an ACP agent runs is a command step.
   - **A saved Claude Code or Codex conversation** (the saved list, a closed session reopened, Resume on an ended chat)
