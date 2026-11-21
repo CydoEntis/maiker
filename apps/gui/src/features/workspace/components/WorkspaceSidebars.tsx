@@ -13,7 +13,7 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newTerminal, chatView, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
   // A session's own New worktree can move its chat into the new worktree, which only this computer's can; another
@@ -59,7 +59,9 @@ export function WorkspaceSidebars() {
       onOpenProject={(machine) => { afterPick(); setOpenProject(projectRequestFor(machine)) }}
       projectActions={projectActionsFor(afterPick)}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
-      onFixMachine={(head) => { afterPick(); if (head.name !== null) fixMachine(head.name) }}
+      onRetryMachine={retryNamed}
+      onSignInMachine={(machine, name) => { afterPick(); openLoginNamed(machine, name) }}
+      onCopyCommand={copyCommand}
       onRenameMachine={setRenamingMachine}
       onUpdateMachine={(name, action) => { afterPick(); setUpdateAsk({ name, action }) }}
       onShowSession={(id) => { afterPick(); showSessionById(id) }}

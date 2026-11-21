@@ -112,25 +112,13 @@ describe('the address step', () => {
       expect(machines.add.onAdd).not.toHaveBeenCalled()
     })
 
-    it('says it is offline, and opens the Fix step for it', async () => {
+    it('opens where machines are managed when it is not connected either, where its row has the fix', async () => {
+      const onOpenSettings = vi.fn()
       const machines = info({ list: [{ ...kingdom('unreachable', 'bad'), why: 'connection refused' }] })
-      render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
-      const user = userEvent.setup()
-      await user.click(await screen.findByRole('button', { name: 'kingdom: Already added · unreachable' }))
-      expect(await screen.findByRole('dialog', { name: 'Fix kingdom' })).toBeInTheDocument()
-      await user.click(screen.getByRole('button', { name: 'Try again' }))
-      expect(machines.onRetry).toHaveBeenCalledWith('kingdom')
-    })
-
-    it('offers one button to update an older Maiker there, not a command to type', async () => {
-      const machines = info({ list: [{ ...kingdom('older Maiker', 'bad'), updateAction: 'update', said: 'run `maiker machine update kingdom`, then retry' }] })
-      render(<AddMachineDialog machines={machines} onClose={vi.fn()} />)
-      const user = userEvent.setup()
-      await user.click(await screen.findByRole('button', { name: /^kingdom: Already added/ }))
-      expect(await screen.findByText('kingdom needs a Maiker update')).toBeInTheDocument()
-      expect(screen.queryByText(/maiker machine update/)).toBeNull()
-      await user.click(screen.getByRole('button', { name: 'Update Maiker on kingdom' }))
-      expect(machines.onUpdate).toHaveBeenCalledWith('kingdom', 'update', false)
+      render(<AddMachineDialog machines={machines} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
+      await userEvent.setup().click(await screen.findByRole('button', { name: 'kingdom: Already added · unreachable' }))
+      expect(onOpenSettings).toHaveBeenCalled()
+      expect(machines.add.onAdd).not.toHaveBeenCalled()
     })
   })
 
@@ -479,59 +467,5 @@ describe('Machine added', () => {
   it('suggests the name the machine reports for a bare address', async () => {
     await addedDialog({ facts: { reportedName: 'gpu-box' } })
     expect(screen.getByRole('textbox', { name: 'Name' })).toHaveValue('gpu-box')
-  })
-})
-
-describe('mending a machine that is not connected', () => {
-  const down = (word: string, extra: Partial<MachineHead> = {}): MachineHead => ({ ...LOCAL_HEAD, key: 'machine-1', machine: 1, name: 'build', label: 'build', chip: { glyph: '✕', word, tone: 'bad' }, target: 'me@build.example', down: true, ...extra })
-
-  it('opens a machine that needs a login on the plain sign-in step, in the host\'s words, with Try again dialling it again', async () => {
-    const why = 'build refused your key: run `ssh-copy-id me@build.example` in a terminal, then try again.'
-    const head = down('needs login', { loginCommand: 'ssh me@build.example', said: 'Permission denied (publickey).', why, failure: 'key-refused', fixCommand: 'ssh-copy-id me@build.example' })
-    const machines = info({ list: [head] })
-    render(<AddMachineDialog machines={machines} fixing={head} onClose={vi.fn()} />)
-    expect(screen.getByRole('dialog', { name: 'Fix build' })).toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'Address' })).toBeNull()
-    expect(screen.getByText("Couldn't sign in to me@build.example")).toBeInTheDocument()
-    expect(screen.getByText(why)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Run' })).toBeNull()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
-    expect(machines.onRetry).toHaveBeenCalledWith('build')
-  })
-
-  it('stops a machine whose host key changed at Reach, with the host\'s sentence and Try again, never Trust', async () => {
-    const onRetry = vi.fn()
-    const why = "build's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R 'build.example'` in a terminal and try again."
-    const head = down('needs login', { said: 'Host key verification failed.', failure: 'host-key-changed', why })
-    render(<AddMachineDialog machines={info({ list: [head], onRetry })} fixing={head} onClose={vi.fn()} />)
-    expect(screen.getByText("build's host key has changed")).toBeInTheDocument()
-    expect(screen.getByText(why)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
-    expect(onRetry).toHaveBeenCalledWith('build')
-  })
-
-  it('shows the reason for any other state, with Try again and a way to Settings', async () => {
-    const onRetry = vi.fn()
-    const onOpenSettings = vi.fn()
-    const head = down('unreachable', { why: 'connection refused' })
-    render(<AddMachineDialog machines={info({ list: [head], onRetry })} fixing={head} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
-    expect(screen.getByText('build is not connected')).toBeInTheDocument()
-    expect(screen.getByText('connection refused')).toBeInTheDocument()
-    const user = userEvent.setup()
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(onRetry).toHaveBeenCalledWith('build')
-    await user.click(screen.getByRole('button', { name: 'Open in Settings' }))
-    expect(onOpenSettings).toHaveBeenCalled()
-  })
-
-  it('ticks Connected and closes with the toast once the machine is back', async () => {
-    toast.success.mockClear()
-    const onClose = vi.fn()
-    const before = down('reconnecting', { why: 'dialling' })
-    const { rerender } = render(<AddMachineDialog machines={info({ list: [before] })} fixing={before} onClose={onClose} />)
-    rerender(<AddMachineDialog machines={info({ list: [{ ...before, chip: { glyph: '●', word: 'connected', tone: 'ok' }, down: false }] })} fixing={before} onClose={onClose} />)
-    await waitFor(() => { expect(onClose).toHaveBeenCalled() }, { timeout: 3000 })
-    expect(toast.success).toHaveBeenCalledWith('Connected to build')
   })
 })
