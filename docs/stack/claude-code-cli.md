@@ -47,12 +47,14 @@ The Maiker adapter follows that wire contract. See
 [ADR 0005](../adr/0005-provider-adapters-and-permissions.md) and
 the [transport research](../research/claude-code-gui-transport.md).
 
-The rule above against emulating Codex JSON-RPC holds for what Claude reports: `TurnProjector`
-and the approval reading (`maitty-provider-claude/src/approvals.rs`) hand the daemon typed
-provider events, and no Claude frame reaches a client. It is not yet met for what the daemon
-asks: `claude.rs` still takes its commands (send, answer, interrupt) in Codex's parameter
-shapes and answers a send in Codex's reply shape, until the daemon runs dialects (MAITTY-485).
-`ClaudeDialect` (`dialect.rs`) is that dialect, tested by itself and not yet run by the daemon.
+The rule above against emulating Codex JSON-RPC holds for what Claude reports and for what it
+is asked: `TurnProjector` and the approval reading (`maitty-provider-claude/src/approvals.rs`)
+hand the daemon typed provider events, no Claude frame reaches a client, and `claude.rs` takes
+the daemon's typed commands (`runtime::Rpc`). One Codex shape is left: `claude.rs` answers a
+send, and the opening of a conversation, in the JSON the daemon reads every provider's answers
+in ([ADR 0016](../adr/0016-one-provider-contract-with-no-io.md)). `ClaudeDialect` (`dialect.rs`)
+implements the provider contract and is tested by itself; the daemon still runs Claude through
+`claude.rs`, which starts the next message's process ahead.
 
 Windows Claude Code 2.1.314 was verified directly and through Maiker's daemon on
 2026-10-30. The daemon smoke covered conversation creation, streamed
