@@ -1989,6 +1989,8 @@ fn only_the_pane_itself_can_be_named_as_the_starter() {
 fn a_worktree_start_keeps_its_starter_after_the_caller_has_gone() {
     let (mut d, _rx) = daemon();
     let starter = pane(&mut d);
+    // The starter is a session of the desktop app; the tool server that asks is a terminal client.
+    d.terms.get_mut(&starter).unwrap().owner = Surface::Desktop;
     let dir = std::env::temp_dir().join(format!(
         concat!(env!("APP_COMMAND"), "-started-by-{}"),
         std::process::id()
@@ -2007,6 +2009,10 @@ fn a_worktree_start_keeps_its_starter_after_the_caller_has_gone() {
     });
     let helper = newest(&d);
     assert_eq!(d.terms[&helper].started_by, Some(starter));
+    assert_eq!(d.terms[&helper].owner, Surface::Desktop, "a helper is listed where its starter is");
+    let listed = d.snapshot_for(Surface::Desktop);
+    assert!(listed.terms.contains_key(&helper));
+    assert!(listed.workspaces.iter().any(|w| w.tabs.iter().any(|t| t.layout.contains(helper))));
     // The next session you start yourself isn't the starter's.
     d.command(
         0,
