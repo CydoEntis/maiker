@@ -167,6 +167,16 @@ pattern_rows = 12
 # [[agents]]
 # name = "goose"
 # enabled = false
+#
+# An agent that speaks the Agent Client Protocol can be named as a chat agent. `command` is the
+# program alone and `args` puts it in ACP mode; nothing goes through a shell. Not for claude or
+# codex, which have their own chat support.
+# [[agents]]
+# name = "gemini"
+# acp = true
+# command = "gemini"
+# args = ["--experimental-acp"]
+# env = { SOME_SETTING = "value" }
 
 
 # Bypass Permissions: agents start without permission prompts (Claude
