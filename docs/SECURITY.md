@@ -800,7 +800,7 @@ The path comes from a hook report, so it is input, not trust:
   file, the same session) while it still runs that agent, even if the hook goes unverified or its session or file is
   briefly unknown; a new session, or following again after the agent leaves, needs the verified hook again.
 - Reads are incremental and bounded (4 MiB per poll, a 16 MiB tail first, lines over 1 MiB dropped), run off the
-  event loop, never write, and are cleaned and bounded like structured history (`tool_input.rs`). The text is
+  event loop, never write, and are cleaned and bounded like structured history (`maitty-provider/src/tool_input.rs`). The text is
   held in daemon memory for the conversation's life, never cached, logged or put in a fixture.
 - A followed conversation is read-only, and reading never changes a status.
 
@@ -1007,7 +1007,7 @@ environment), so it is held to the same boundary as the rest of the history: it
 leaves only in an explicit authorized read and in the private cache. It is cleaned
 of escape and control characters, invisible characters are spelled out as Unicode
 escapes, every string is cut and the whole value is capped at 64 KiB, and an input
-that cannot be bounded in shape is dropped (`tool_input.rs`). Secrets are
+that cannot be bounded in shape is dropped (`maitty-provider/src/tool_input.rs`). Secrets are
 masked on the way in; see *Conversation history and secrets* below. Answered approvals
 keep the request's command and diff in daemon memory only, never in the cache, and
 the answers to user-input requests are not kept at all.
@@ -1053,7 +1053,7 @@ uncertain in every read response until its persistence barrier succeeds.
 ### Conversation history and secrets
 
 Everything the daemon stores and serves as conversation history passes one function,
-`redact_entry` (`daemon/conversation/redact.rs`), when it enters the store (`History::apply`,
+`redact_entry` (`maitty-provider/src/redact.rs`), when it enters the store (`History::apply`,
 `hydrate`) and again when a cache is loaded. That covers the Claude and Codex adapters, both
 followed-transcript parsers, message text, tool input, command output and approvals. It changes only
 Maiker's copy: the agent still sees exactly what it sent and received, and nothing is blocked.

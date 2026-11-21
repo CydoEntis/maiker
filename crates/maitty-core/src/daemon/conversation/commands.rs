@@ -43,23 +43,8 @@ pub(in crate::daemon) struct QueuedSend {
     choice: TurnChoice,
 }
 
-/// The provider's `turn/start` parameters. Only what the user picked is added; the providers
-/// keep a model and effort for the turns after, so a choice made once holds until changed.
-fn send_params(
-    thread: &str,
-    text: &str,
-    client_message_id: &str,
-    choice: &TurnChoice,
-) -> Value {
-    let mut params = json!({"threadId":thread,"input":[{"type":"text","text":text,"text_elements":[]}],"clientUserMessageId":client_message_id});
-    if let Some(model) = &choice.model {
-        params["model"] = json!(model);
-    }
-    if let Some(effort) = &choice.effort {
-        params["effort"] = json!(effort);
-    }
-    params
-}
+use maitty_provider_codex::requests::{identifier, turn_start_params as send_params};
+
 const MAX_HYDRATION_ENTRIES: usize = 100_000;
 const MAX_HYDRATION_BYTES: usize = 32 * 1024 * 1024;
 const MAX_USER_INPUT_ANSWER_CHARS: usize = 10_000;
@@ -192,98 +177,17 @@ impl Pending {
     }
 }
 
-fn approval(settings: &LaunchSettings) -> &'static str {
-    match settings.approval_policy {
-        ApprovalPolicy::Untrusted => "untrusted",
-        ApprovalPolicy::OnRequest => "on-request",
-        ApprovalPolicy::Never => "never",
-    }
-}
-fn sandbox(settings: &LaunchSettings) -> &'static str {
-    match settings.sandbox {
-        Sandbox::ReadOnly => "read-only",
-        Sandbox::WorkspaceWrite => "workspace-write",
-        Sandbox::FullAccess => "danger-full-access",
-    }
-}
-
-fn params(settings: &LaunchSettings) -> Value {
-    json!({"cwd": settings.cwd, "model": settings.model, "modelProvider": settings.model_provider,
-        "approvalPolicy": approval(settings), "approvalsReviewer":"user", "sandbox":sandbox(settings),
-        "config": {"sandbox_workspace_write": {"network_access":false,"writable_roots":[],"exclude_tmpdir_env_var":true,"exclude_slash_tmp":true}}})
-}
-fn identifier(value: &Value, key: &str) -> Result<String> {
-    value
-        .get(key)
-        .and_then(Value::as_str)
-        .filter(|s| !s.trim().is_empty() && !s.chars().any(char::is_control))
-        .map(str::to_owned)
-        .ok_or_else(|| anyhow::anyhow!("Codex response lacks a valid {key}"))
-}
+/// Checks the reply to opening a thread and returns the provider's own name for it.
 fn validate_response(
     value: &Value,
     settings: &mut LaunchSettings,
     expected: Option<&str>,
 ) -> Result<String> {
-    let thread = value
-        .get("thread")
-        .ok_or_else(|| anyhow::anyhow!("Codex response lacks thread"))?;
-    let id = identifier(thread, "id")?;
-    if expected.is_some_and(|expected| expected != id) {
-        bail!("Provider resumed a different exact session");
-    }
+    // Claude's adapter answers with the session alone: it has no sandbox or model to echo.
     if settings.provider == Provider::Claude {
-        return Ok(id);
+        return maitty_provider_codex::requests::thread_id(value, expected);
     }
-    let cwd = identifier(value, "cwd")?;
-    if std::path::Path::new(&cwd) != settings.cwd
-        || value.get("approvalPolicy") != Some(&json!(approval(settings)))
-        || value.get("approvalsReviewer") != Some(&json!("user"))
-    {
-        bail!("Codex effective working directory or approval posture differs");
-    }
-    let effective = value
-        .get("sandbox")
-        .ok_or_else(|| anyhow::anyhow!("Codex response lacks sandbox"))?;
-    let kind = match settings.sandbox {
-        Sandbox::ReadOnly => "readOnly",
-        Sandbox::WorkspaceWrite => "workspaceWrite",
-        Sandbox::FullAccess => "dangerFullAccess",
-    };
-    // Full access has no sandbox, so there is no network restriction to verify.
-    if effective.get("type") != Some(&json!(kind))
-        || (settings.sandbox != Sandbox::FullAccess
-            && effective
-                .get("networkAccess")
-                .is_some_and(|v| v != &json!(false)))
-    {
-        bail!("Codex effective sandbox differs");
-    }
-    if settings.sandbox == Sandbox::WorkspaceWrite {
-        let roots = effective.get("writableRoots").and_then(Value::as_array);
-        if roots.is_some_and(|roots| {
-            roots
-                .iter()
-                .any(|root| root.as_str().map(std::path::Path::new) != Some(settings.cwd.as_path()))
-        }) || effective.get("excludeTmpdirEnvVar") != Some(&json!(true))
-            || effective.get("excludeSlashTmp") != Some(&json!(true))
-        {
-            bail!("Codex effective writable roots differ");
-        }
-    }
-    let model = identifier(value, "model")?;
-    let provider = identifier(value, "modelProvider")?;
-    if settings.model.as_ref().is_some_and(|m| m != &model)
-        || settings
-            .model_provider
-            .as_ref()
-            .is_some_and(|p| p != &provider)
-    {
-        bail!("Codex effective model selection differs");
-    }
-    settings.model = Some(model);
-    settings.model_provider = Some(provider);
-    Ok(id)
+    maitty_provider_codex::requests::validate_thread(value, settings, expected)
 }
 
 mod approvals;

@@ -5,6 +5,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
+pub mod approvals;
+pub mod dialect;
+pub mod envelope;
+pub mod history;
+pub mod requests;
 mod runtime_policy;
 mod status_hooks;
 

@@ -12,10 +12,8 @@ pub(super) mod helper_record;
 pub(super) mod history;
 mod history_provider;
 pub(super) mod news;
-mod tool_input;
 pub(super) mod history_storage;
 mod process;
-mod redact;
 pub(super) mod saved;
 pub(super) mod side;
 mod runtime;
@@ -27,6 +25,7 @@ pub(in crate::daemon) fn mask_secrets(text: &str) -> String {
     redact::redact_text(text).into_owned()
 }
 
+use maitty_provider::{redact, tool_input};
 pub(in crate::daemon) use runtime::Owner;
 use runtime::Payload;
 pub(super) use runtime::{Event, Registry};

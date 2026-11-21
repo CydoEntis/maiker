@@ -1,7 +1,39 @@
-use super::history::{Content, Entry, IncompleteReason, ItemState, Role, SourceId, Update};
-use super::tool_input::{bound_input, clean_text};
-use crate::conversation::ConversationId;
+//! Reads what Codex reports about a turn (`item/*`, `turn/*`, `error`) into what a history
+//! keeps: cleaned, bounded, and with secret file content left out.
+
+use maitty_provider::redact;
+use maitty_provider::tool_input::{bound_input, clean_text};
+use maitty_shared::conversation::history::{Content, IncompleteReason, ItemState, Role};
 use serde_json::Value;
+
+/// One thing Codex said about a turn, by the turn and item it names.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum HistoryEvent {
+    ProviderError {
+        message: String,
+        will_retry: bool,
+    },
+    Item {
+        turn: String,
+        item: String,
+        content: Content,
+        state: ItemState,
+        started_at_ms: Option<u64>,
+        completed_at_ms: Option<u64>,
+    },
+    /// More text for an answer that is still being written.
+    Delta {
+        turn: String,
+        item: String,
+        delta: String,
+    },
+    TurnStatus {
+        turn: String,
+        state: ItemState,
+        started_at_ms: Option<u64>,
+        completed_at_ms: Option<u64>,
+    },
+}
 
 type Result<T> = std::result::Result<T, IncompleteReason>;
 const ERROR_MESSAGE_CHARS: usize = 1024;
@@ -15,7 +47,7 @@ const MAX_PLAN_BYTES: usize = 64 * 1024;
 const MAX_REASONING_BYTES: usize = 64 * 1024;
 /// The item a provider's own summary of the earlier conversation arrives as. It is kept as a tool
 /// step of this kind, with the summary as its output.
-pub(super) const CONTEXT_SUMMARY_ITEM: &str = "contextSummary";
+pub const CONTEXT_SUMMARY_ITEM: &str = "contextSummary";
 
 fn tool_label(item: &Value) -> String {
     item.get("command")
@@ -25,7 +57,7 @@ fn tool_label(item: &Value) -> String {
         .unwrap_or_else(|| "Run command".into())
 }
 
-pub(super) fn error_message(value: &Value) -> Result<String> {
+pub fn error_message(value: &Value) -> Result<String> {
     let message = text(value, "message")?;
     Ok(message.chars().take(ERROR_MESSAGE_CHARS).collect())
 }
@@ -45,12 +77,9 @@ fn status(value: &str) -> Result<ItemState> {
         _ => Err(IncompleteReason::InvalidEvent),
     }
 }
-pub(super) fn notification(
-    conversation: ConversationId,
-    thread: &str,
-    method: &str,
-    params: &Value,
-) -> Result<Option<Update>> {
+/// What `method` with `params` says about `thread`. `None` for a method that says nothing a
+/// history keeps; an error when the event cannot be trusted.
+pub fn event(thread: &str, method: &str, params: &Value) -> Result<Option<HistoryEvent>> {
     if !matches!(
         method,
         "item/started"
@@ -72,14 +101,14 @@ pub(super) fn notification(
             .get("willRetry")
             .and_then(Value::as_bool)
             .ok_or(IncompleteReason::InvalidEvent)?;
-        return Ok(Some(Update::ProviderError {
+        return Ok(Some(HistoryEvent::ProviderError {
             message,
             will_retry,
         }));
     }
     if method.starts_with("turn/") {
         let turn = params.get("turn").ok_or(IncompleteReason::InvalidEvent)?;
-        return Ok(Some(Update::SetTurnStatus {
+        return Ok(Some(HistoryEvent::TurnStatus {
             turn: text(turn, "id")?.into(),
             state: status(text(turn, "status")?)?,
             started_at_ms: seconds_as_ms(turn, "startedAt"),
@@ -88,24 +117,16 @@ pub(super) fn notification(
     }
     let turn = text(params, "turnId")?.to_owned();
     if method == "item/agentMessage/delta" {
-        let source = SourceId {
-            conversation,
-            turn,
-            item: text(params, "itemId")?.into(),
-        };
+        let item = text(params, "itemId")?.into();
         let delta = params
             .get("delta")
             .and_then(Value::as_str)
             .ok_or(IncompleteReason::InvalidEvent)?
             .into();
-        return Ok(Some(Update::AppendDelta { source, delta }));
+        return Ok(Some(HistoryEvent::Delta { turn, item, delta }));
     }
     let item = params.get("item").ok_or(IncompleteReason::InvalidEvent)?;
-    let source = SourceId {
-        conversation,
-        turn,
-        item: text(item, "id")?.into(),
-    };
+    let item_id = text(item, "id")?.to_owned();
     let kind = text(item, "type")?;
     let content = match kind {
         "reasoning" => match reasoning_summary(item) {
@@ -214,13 +235,14 @@ pub(super) fn notification(
     } else {
         ItemState::Completed
     };
-    Ok(Some(Update::UpsertItem(Entry {
-        source,
+    Ok(Some(HistoryEvent::Item {
+        turn,
+        item: item_id,
         content,
         state,
         started_at_ms: params.get("startedAtMs").and_then(Value::as_u64),
         completed_at_ms: params.get("completedAtMs").and_then(Value::as_u64),
-    })))
+    }))
 }
 
 /// A turn's `startedAt` / `completedAt`, which Codex reports in whole seconds.
@@ -263,7 +285,7 @@ fn reasoning_summary(item: &Value) -> Option<String> {
     }
     // Masked before the cut: a secret split by the cut would no longer match a pattern.
     let joined = parts.join("\n\n");
-    let masked = super::redact::redact_text(&joined);
+    let masked = redact::redact_text(&joined);
     Some(bounded(&masked, MAX_REASONING_BYTES, "reasoning"))
 }
 
@@ -361,7 +383,7 @@ fn file_change_output(item: &Value) -> String {
         }
         output.push_str(&format!("{} ({})\n", change_path(change), change_kind(change)));
         // The content of a secret file never enters the history; its path and kind do.
-        output.push_str(&super::redact::redact_diff(
+        output.push_str(&redact::redact_diff(
             change_path(change),
             change.get("diff").and_then(Value::as_str).unwrap_or_default(),
         ));
@@ -376,6 +398,3 @@ fn file_change_output(item: &Value) -> String {
     }
     output
 }
-
-#[cfg(test)]
-mod tests;

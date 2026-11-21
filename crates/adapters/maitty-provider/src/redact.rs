@@ -15,16 +15,16 @@
 //! entry passes the choke point again whenever it is updated, hydrated or read back from the cache.
 //! Nothing here logs or returns what a pattern matched.
 
-use super::history::{Content, Entry};
+use maitty_shared::conversation::history::{Content, Entry};
 use serde_json::Value;
 use std::borrow::Cow;
 use std::sync::LazyLock;
 use regex::{Captures, Regex};
 
 /// What replaces a masked secret.
-pub(super) const MASK: &str = "[redacted]";
+pub const MASK: &str = "[redacted]";
 /// What replaces the text of a secret file's content, diff or edit.
-pub(super) const OMITTED: &str = "[content of a secret file omitted]";
+pub const OMITTED: &str = "[content of a secret file omitted]";
 const MASKED_KEY: &str = "[redacted private key]";
 /// Added to a tool input whose text was omitted: how many bytes of text that was.
 const OMITTED_BYTES_FIELD: &str = "omitted_bytes";
@@ -112,7 +112,7 @@ const NON_SECRET_VALUES: [&str; 10] = [
 ];
 
 /// `text` with token- and key-shaped strings masked. Everything else is returned as written.
-pub(super) fn redact_text(text: &str) -> Cow<'_, str> {
+pub fn redact_text(text: &str) -> Cow<'_, str> {
     let mut out = replace(&PRIVATE_KEY_BLOCK, Cow::Borrowed(text), MASKED_KEY);
     out = replace(&AUTHORIZATION, out, |caps: &Captures<'_>| mask_group(caps, 1));
     out = replace(&BEARER, out, |caps: &Captures<'_>| mask_group(caps, 1));
@@ -246,7 +246,7 @@ fn is_secret_value(name: &str, inner: &str, quoted: bool, separator: &str) -> bo
 
 /// `value` with every string in it masked and every value under a secret-named key masked, for a
 /// tool input. Returns whether anything changed.
-pub(super) fn redact_input(value: &mut Value) -> bool {
+pub fn redact_input(value: &mut Value) -> bool {
     match value {
         Value::String(text) => redact_in_place(text),
         Value::Array(items) => items.iter_mut().fold(false, |any, item| redact_input(item) | any),
@@ -275,7 +275,7 @@ fn is_secret_json_value(value: &Value) -> bool {
 }
 
 /// Masks `text` where it stands. Returns whether anything changed.
-pub(super) fn redact_in_place(text: &mut String) -> bool {
+pub fn redact_in_place(text: &mut String) -> bool {
     match redact_text(text) {
         Cow::Owned(masked) => {
             *text = masked;
@@ -288,7 +288,7 @@ pub(super) fn redact_in_place(text: &mut String) -> bool {
 /// Whether a file path names a file that holds credentials: `.env` (not the `.example`, `.sample`
 /// or `.template` copies), keys and certificates, credential stores, and anything under `.aws`,
 /// `.ssh` or `.gnupg`. Judged on the path alone; case-insensitive; `\` and `/` both separate.
-pub(super) fn is_secret_path(path: &str) -> bool {
+pub fn is_secret_path(path: &str) -> bool {
     let lower = path.to_ascii_lowercase();
     let mut components = lower.split(['/', '\\']).filter(|part| !part.is_empty());
     let Some(name) = components.next_back() else {
@@ -339,7 +339,7 @@ const KEPT_FIELDS: [&str; 8] = [
 ];
 
 /// Whether a tool input acts on a secret file.
-pub(super) fn input_targets_secret_file(input: &Value) -> bool {
+pub fn input_targets_secret_file(input: &Value) -> bool {
     PATH_FIELDS
         .iter()
         .filter_map(|field| input.get(field).and_then(Value::as_str))
@@ -349,7 +349,7 @@ pub(super) fn input_targets_secret_file(input: &Value) -> bool {
 /// Replaces the text of a tool input that acts on a secret file with [`OMITTED`], keeping the
 /// path, flags, numbers and the shape of lists, and recording how many bytes were left out.
 /// Returns whether anything was omitted.
-pub(super) fn omit_secret_file_content(input: &mut Value) -> bool {
+pub fn omit_secret_file_content(input: &mut Value) -> bool {
     if !input_targets_secret_file(input) {
         return false;
     }
@@ -393,7 +393,7 @@ fn omit_strings(value: &mut Value, omitted_bytes: &mut usize, top: bool) -> bool
 
 /// A file change's diff as it may be stored: omitted when the file is a secret file, otherwise
 /// masked by pattern.
-pub(super) fn redact_diff(path: &str, diff: &str) -> String {
+pub fn redact_diff(path: &str, diff: &str) -> String {
     if is_secret_path(path) {
         OMITTED.to_owned()
     } else {
@@ -424,7 +424,7 @@ fn command_prints_secret_file(command: &str) -> bool {
 
 /// Makes `entry` safe to store and serve: text masked, secret-file content omitted. The single
 /// function every path into the history goes through.
-pub(super) fn redact_entry(entry: &mut Entry) {
+pub fn redact_entry(entry: &mut Entry) {
     match &mut entry.content {
         Content::Message { text, .. } | Content::Reasoning { text } => {
             redact_in_place(text);

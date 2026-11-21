@@ -73,24 +73,9 @@ impl Daemon {
             bail!("That decision is not available for this provider request");
         }
         let response = if approval.kind == crate::conversation::ApprovalRequestKind::Permission {
-            let permissions = match decision {
-                ApprovalDecision::Accept => approval.permissions.clone().ok_or_else(|| {
-                    anyhow::anyhow!("Permission request has no requested profile")
-                })?,
-                ApprovalDecision::Decline => json!({}),
-                ApprovalDecision::AcceptForSession | ApprovalDecision::Cancel => {
-                    bail!("This permission request supports only a turn-scoped approval")
-                }
-            };
-            json!({ "permissions": permissions, "scope": "turn" })
+            maitty_provider_codex::requests::permission_response(decision, approval.permissions.as_ref())?
         } else {
-            let result = match decision {
-                ApprovalDecision::Accept => "accept",
-                ApprovalDecision::AcceptForSession => "acceptForSession",
-                ApprovalDecision::Decline => "decline",
-                ApprovalDecision::Cancel => "cancel",
-            };
-            json!({ "decision": result })
+            maitty_provider_codex::requests::decision_response(decision)
         };
         self.conversation_runtimes.request(
             id,
@@ -303,17 +288,13 @@ impl Daemon {
                 }
             }
         }
-        let answers = answers
-            .into_iter()
-            .map(|(question, answers)| (question, json!({ "answers": answers })))
-            .collect::<serde_json::Map<_, _>>();
         self.conversation_runtimes.request(
             id,
             generation,
             0,
             Rpc::Answer {
                 request_id: request_id.clone().into(),
-                response: json!({ "answers": answers }),
+                response: maitty_provider_codex::requests::user_input_response(answers),
             },
         )?;
         if let Some(state) = self.conversation_states.get_mut(&id) {

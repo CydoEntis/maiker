@@ -16,6 +16,7 @@ maitty-agent-detection = { path = "../maitty-agent-detection" }
 maitty-ipc-transport = { path = "../maitty-ipc-transport" }
 maitty-machines = { path = "../maitty-machines" }
 maitty-settings = { path = "../maitty-settings" }
+maitty-provider = { path = "../adapters/maitty-provider" }
 maitty-provider-codex = { path = "../adapters/maitty-provider-codex" }
 maitty-provider-claude = { path = "../adapters/maitty-provider-claude" }
 anyhow = "1"
