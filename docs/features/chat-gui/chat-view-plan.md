@@ -155,13 +155,15 @@ check for the view). Acceptance criteria are the bullets.
   Claude or Codex started from the desktop as a structured conversation the daemon owns, chosen with **Session: Chat**
   in New agent on a branch or **Start a Claude chat** on a shell's empty chat card (Terminal is the default). Done:
   start (in a folder or a new branch worktree), list, composer, Stop, daemon queue, approvals by id, user-input form,
-  attachments, close (ends the agent). Left: resuming a chat session's agent after a daemon restart from the window,
-  a chat session on another machine, and a try against a live Claude and Codex (the daemon is tested against the
-  fake providers only; Codex's rollout shape is fixtures only).
+  attachments, close (ends the agent), taking a chat up again after a daemon restart
+  ([chat-auto-resume](../chat-auto-resume/intent.md)), a chat session on another machine
+  ([remote chat](../remote-chat/spec.md)), and a live run on Linux of Claude Code 2.1.327 and Codex 0.170.0 through a
+  nested daemon (the results are in the two stack docs). Left: the same live run on Windows for the current versions,
+  and in the packaged app.
 - History is still polled (1 s while working), but a poll is now one small read: every page carries a `resume`
   cursor that returns only the entries changed since (G24 part 2). A push of events is not built.
 - Left: token counts (no usage events in the history), a helper agent's phase line and step count (not in the
-  history), the sidebar working shimmer, an external-link route (agent links copy their address, see UI.md), a
+  history), an external-link route (agent links copy their address, see UI.md), a
   Claude exit code (the provider reports none), and the session panel (CV-8, removed by v18 D.6).
 
 ## Out of scope
