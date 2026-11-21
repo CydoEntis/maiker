@@ -1745,14 +1745,14 @@ pub async fn cancel_conversation(
 pub async fn rename_conversation(
     id: u64,
     title: String,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationRename {
             id: maitty_shared::conversation::ConversationId(id),
             title,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1764,14 +1764,14 @@ pub async fn rename_conversation(
 pub async fn archive_conversation(
     id: u64,
     archived: bool,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationArchive {
             id: maitty_shared::conversation::ConversationId(id),
             archived,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1827,13 +1827,13 @@ pub async fn allow_conversation_always(
 }
 
 /// Close a chat with an undo window: the daemon hides it at once and ends it when the window passes.
-pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon_executable: PathBuf) -> Result<Value> {
+pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon: impl Into<Daemon>) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationClose {
             id: maitty_shared::conversation::ConversationId(id),
             generation,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1843,12 +1843,12 @@ pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon_execu
 }
 
 /// Bring back a chat closed with `close_conversation_with_undo` while its window is open.
-pub async fn undo_close_conversation(id: u64, daemon_executable: PathBuf) -> Result<Value> {
+pub async fn undo_close_conversation(id: u64, daemon: impl Into<Daemon>) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationUndoClose {
             id: maitty_shared::conversation::ConversationId(id),
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1998,14 +1998,14 @@ pub async fn forget_allowed_command(
 pub async fn end_conversation(
     id: u64,
     generation: u64,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationEnd {
             id: maitty_shared::conversation::ConversationId(id),
             generation,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -2050,10 +2050,40 @@ pub async fn start_chat_session(
     provider: Provider,
     branch: Option<String>,
     permissions: Permissions,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
-    create_conversation(cwd, provider, permissions, branch, daemon_executable).await
+    match daemon.into() {
+        Daemon::Local(daemon_executable) => create_conversation(cwd, provider, permissions, branch, daemon_executable).await,
+        // Another machine's worktree is made before the start (`Command::BranchWorktree`), so a start there names its folder alone.
+        remote @ Daemon::Remote(_) if branch.is_none() => start_conversation(remote_agent_target(cwd, provider, permissions)?, None, remote).await,
+        Daemon::Remote(_) => bail!("A chat on another machine starts in a folder that is already there; make its worktree first"),
+    }
 }
+
+/// The start of a Claude Code or Codex chat on another machine. This computer cannot know where
+/// that machine keeps the agent or its settings, so the start names neither: its daemon finds both.
+fn remote_agent_target(cwd: PathBuf, provider: Provider, permissions: Permissions) -> Result<StartTarget> {
+    if !matches!(provider, Provider::Claude | Provider::Codex) {
+        bail!("Only Claude Code and Codex start a chat by their provider");
+    }
+    let (sandbox, approval_policy) = permissions.launch_policy();
+    Ok(StartTarget::Agent { provider, cwd: remote_folder(cwd)?, sandbox, approval_policy })
+}
+
+/// A folder on another machine, which this computer cannot look at: one plain absolute POSIX path
+/// (a Windows remote is out, ADR 0007). That machine's daemon checks that it is there.
+fn remote_folder(cwd: PathBuf) -> Result<PathBuf> {
+    let plain = cwd.to_str().is_some_and(|text| {
+        text.starts_with('/') && text.len() <= REMOTE_FOLDER_MAX && !text.chars().any(char::is_control)
+    });
+    if !plain {
+        bail!("The folder on the other machine must be a plain absolute path");
+    }
+    Ok(cwd)
+}
+
+/// Longest folder sent to another machine, in bytes.
+const REMOTE_FOLDER_MAX: usize = 4096;
 
 pub async fn create_conversation(
     cwd: PathBuf,
@@ -2124,8 +2154,8 @@ fn chat_launch_settings(cwd: PathBuf, provider: Provider, permissions: Permissio
     })
 }
 
-async fn start_conversation(target: StartTarget, branch: Option<String>, daemon_executable: PathBuf) -> Result<Value> {
-    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch }), daemon_executable).await?;
+async fn start_conversation(target: StartTarget, branch: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
+    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch }), daemon).await?;
     match reply {
         Reply::ConversationStarted { id, generation } => {
             Ok(json!({"id": id, "generation": generation}))
@@ -2136,8 +2166,21 @@ async fn start_conversation(target: StartTarget, branch: Option<String>, daemon_
 
 /// Start a chat with `agent` over ACP in `cwd`. Only the agent's name is sent: the daemon picks
 /// its program from its own config, so this app never names a program to run.
-pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon_executable: PathBuf) -> Result<Value> {
-    start_conversation(acp_start_target(cwd, agent)?, None, daemon_executable).await
+pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon: impl Into<Daemon>) -> Result<Value> {
+    let daemon = daemon.into();
+    let target = match &daemon {
+        Daemon::Local(_) => acp_start_target(cwd, agent)?,
+        Daemon::Remote(_) => remote_acp_target(cwd, agent)?,
+    };
+    start_conversation(target, None, daemon).await
+}
+
+/// `acp_start_target` for another machine, whose folders this computer cannot look at.
+fn remote_acp_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
+    if !maitty_shared::conversation::acp_agent_name(&agent) {
+        bail!("{agent:?} is not an agent's name");
+    }
+    Ok(StartTarget::Acp { agent, cwd: remote_folder(cwd)? })
 }
 
 fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
@@ -2151,6 +2194,41 @@ fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
         bail!("The project path is a file, not a folder.");
     }
     Ok(StartTarget::Acp { agent, cwd })
+}
+
+#[cfg(test)]
+mod remote_start_tests {
+    use super::{ApprovalPolicy, Permissions, Provider, Sandbox, StartTarget, remote_acp_target, remote_agent_target};
+
+    #[test]
+    fn a_chat_on_another_machine_names_the_provider_folder_and_posture_and_no_program() {
+        let target = remote_agent_target("/home/dev/app".into(), Provider::Claude, Permissions::parse("full-access").unwrap()).unwrap();
+
+        assert_eq!(target, StartTarget::Agent {
+            provider: Provider::Claude,
+            cwd: "/home/dev/app".into(),
+            sandbox: Sandbox::FullAccess,
+            approval_policy: ApprovalPolicy::Never,
+        });
+    }
+
+    #[test]
+    fn a_folder_that_is_not_a_plain_absolute_path_and_an_agent_with_no_provider_start_are_refused() {
+        let asks = || Permissions::parse("workspace-write").unwrap();
+
+        assert!(remote_agent_target("app".into(), Provider::Codex, asks()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_agent_target("/home/dev/a\nb".into(), Provider::Codex, asks()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_agent_target("/home/dev/app".into(), Provider::Gemini, asks()).unwrap_err().to_string().contains("Only Claude Code and Codex"));
+        assert!(remote_acp_target("C:\\app".into(), "opencode".into()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_acp_target("/home/dev/app".into(), "Not A Name".into()).unwrap_err().to_string().contains("not an agent's name"));
+    }
+
+    #[test]
+    fn an_acp_chat_on_another_machine_names_the_agent_and_the_folder_as_given() {
+        let target = remote_acp_target("/no/such/folder/here".into(), "opencode".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Acp { agent: "opencode".into(), cwd: "/no/such/folder/here".into() });
+    }
 }
 
 #[cfg(test)]

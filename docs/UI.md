@@ -138,7 +138,7 @@ session is its own action (its look is in [DESIGN](DESIGN.md#desktop-app)).
 The desktop app also shows other machines' terminal sessions (ADR 0007).
 Its host holds one supervised connection per machine and the web view only renders: it knows a machine by
 name, never by where it points. A session of another machine has the id `build/t12` (the machine's name, so a
-saved layout survives a restart; this computer's stay `t12`). **Settings › GitHub** (`GitHubSection`, key
+saved layout survives a restart; this computer's stay `t12`); a chat that machine's daemon runs is `build/c12`. **Settings › GitHub** (`GitHubSection`, key
 `H`) has one row for this computer and one for each connected machine, saying what that machine's own `gh`
 says (`github_accounts`): "Signed in as <login>" (with "(also …)" for its other accounts), "Not signed in",
 "The GitHub command line (gh) is not installed. Get it from cli.github.com", "Checking…" until it answers,
@@ -1374,6 +1374,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     config. Such a chat (`chat.acp`) uses the agent's own model and permission settings, so its box names the agent and
     shows no model, effort or permission picker (`ownSettings` in `Composer`), and it has no slash-command menu or side
     question. The draft's model, effort and mode picks are not sent to it.
+  - **On another machine** the same two starts go to that machine's daemon (`machine` on `start_chat_session` and
+    `start_acp_chat`; [the spec](features/remote-chat/spec.md)): no shell is started there. The chat is a session of
+    that machine with the id `build/c12` (`remoteChatId`), opened once the machine lists it, and its rename, end and
+    put away go to that machine. A new worktree is made there first; switching that checkout's branch, and resuming a
+    conversation saved on this computer, are refused in a line. Changes and Files stay local-only for it.
   - **Other agents…** under the draft's box (Chat view, this computer; `AcpAgentsDialog`) lists the agents that run
     over ACP: the config's, and the ACP registry's ([ADR 0019](adr/0019-acp-agents-are-installed-from-the-registry.md)).
     A registry agent has **Install** (it says it downloads a program that runs as you), then **Use**, **Update** when

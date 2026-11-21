@@ -1472,15 +1472,26 @@ async fn allow_conversation_always(
 }
 
 #[tauri::command]
-async fn close_conversation_with_undo(app: tauri::AppHandle, id: u64, generation: u64) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::close_conversation_with_undo(id, generation, daemon_executable(&app)?)
+async fn close_conversation_with_undo(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+    generation: u64,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::close_conversation_with_undo(id, generation, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
 
 #[tauri::command]
-async fn undo_close_conversation(app: tauri::AppHandle, id: u64) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::undo_close_conversation(id, daemon_executable(&app)?)
+async fn undo_close_conversation(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::undo_close_conversation(id, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1550,10 +1561,12 @@ async fn send_conversation_now(
 #[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
     id: u64,
     title: String,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::rename_conversation(id, title, daemon_executable(&app)?)
+    maitty_desktop_client::rename_conversation(id, title, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1561,10 +1574,12 @@ async fn rename_conversation(
 #[tauri::command]
 async fn archive_conversation(
     app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
     id: u64,
     archived: bool,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::archive_conversation(id, archived, daemon_executable(&app)?)
+    maitty_desktop_client::archive_conversation(id, archived, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1583,10 +1598,12 @@ async fn resume_codex_conversation(
 #[tauri::command]
 async fn end_conversation(
     app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
     id: u64,
     generation: u64,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::end_conversation(id, generation, daemon_executable(&app)?)
+    maitty_desktop_client::end_conversation(id, generation, wire.daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1605,7 +1622,6 @@ async fn start_chat_session(
     branch: Option<String>,
     permissions: String,
 ) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "A chat session")?;
     let permissions = maitty_desktop_client::Permissions::parse(&permissions)
         .map_err(|error| format!("{error:#}"))?;
     maitty_desktop_client::start_chat_session(
@@ -1613,7 +1629,7 @@ async fn start_chat_session(
         provider,
         branch,
         permissions,
-        daemon_executable(&app)?,
+        wire.start_daemon(machine, || daemon_executable(&app))?,
     )
         .await
         .map_err(|error| format!("{error:#}"))
@@ -1639,7 +1655,7 @@ async fn resume_chat_session(
         .map_err(|error| format!("{error:#}"))
 }
 
-/// A chat with `agent` over ACP in `cwd`, on this computer. The daemon picks the agent's program.
+/// A chat with `agent` over ACP in `cwd`, on this computer or on `machine`. That machine's daemon picks the agent's program.
 #[tauri::command]
 async fn start_acp_chat(
     app: tauri::AppHandle,
@@ -1648,8 +1664,7 @@ async fn start_acp_chat(
     cwd: PathBuf,
     agent: String,
 ) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "A chat session")?;
-    maitty_desktop_client::start_acp_chat(cwd, agent, daemon_executable(&app)?)
+    maitty_desktop_client::start_acp_chat(cwd, agent, wire.start_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

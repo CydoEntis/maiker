@@ -29,6 +29,16 @@ pub fn vet_chat_reply(reply: Reply) -> Result<Reply, String> {
     }
 }
 
+/// The answer to a chat started on another machine, or why it is refused. Only the start itself
+/// passes: the new conversation's number and generation, which are used for requests to that
+/// machine alone and never drawn.
+pub fn vet_chat_start(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::ConversationStarted { id, generation } => Ok(Reply::ConversationStarted { id, generation }),
+        _ => Err("it is not the start of a chat".into()),
+    }
+}
+
 /// A side answer (`/btw`) from another machine's daemon, made safe, or why it is refused. Only a
 /// side answer passes, its text cut to what a side answer may hold and every string cleaned like a
 /// chat's.
@@ -123,6 +133,15 @@ fn clean_text(text: &str) -> String {
 mod tests {
     use super::*;
     use maitty_shared::conversation::{ConversationId, QueuedReceipt};
+
+    #[test]
+    fn only_the_start_of_a_chat_is_taken_as_the_answer_to_starting_one() {
+        let started = Reply::ConversationStarted { id: maitty_shared::conversation::ConversationId(7), generation: 1 };
+
+        assert!(matches!(vet_chat_start(started), Ok(Reply::ConversationStarted { id, generation: 1 }) if id.0 == 7));
+        assert!(vet_chat_start(Reply::Ok).is_err());
+        assert!(vet_chat_start(Reply::Text("/etc/passwd".into())).is_err());
+    }
 
     #[test]
     fn a_side_answer_from_another_machine_is_cleaned_and_cut() {

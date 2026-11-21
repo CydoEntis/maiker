@@ -40,15 +40,42 @@ export function terminalSessionId(term: number, machineName: string | null = nul
   return machineName === null ? `t${String(term)}` : `${machineName}/t${String(term)}`
 }
 
+/**
+ * A chat session of another machine: `build/c12` is conversation 12 on build. This computer's chat is its bare
+ * number, as it always was. The name, not the machine's number, is in it, so a saved layout survives a restart.
+ */
+const REMOTE_CHAT_ID = /^([A-Za-z0-9][A-Za-z0-9._-]*)\/c(\d+)$/
+
+/** The id of the chat session that is conversation `conversation` on the machine named `machineName`. */
+export function remoteChatId(conversation: number, machineName: string): string {
+  return `${machineName}/c${String(conversation)}`
+}
+
+/** Where a chat session lives: its machine, and its conversation's number on that machine. */
+export type ChatAddress = { machine: number; conversation: number }
+
+/**
+ * Where a chat session id points: this computer for a bare number, another machine for `build/c12`. Null for
+ * anything else (a terminal session). Throws for a machine the host has not told the window about this run.
+ */
+export function chatAddressOf(sessionId: string): ChatAddress | null {
+  if (/^\d+$/.test(sessionId)) return { machine: LOCAL_MACHINE, conversation: Number(sessionId) }
+  const match = REMOTE_CHAT_ID.exec(sessionId)
+  if (match?.[1] === undefined || match[2] === undefined) return null
+  const machine = idsByName.get(match[1].toLowerCase())
+  if (machine === undefined) throw new Error(`${match[1]} is not one of this computer's machines`)
+  return { machine, conversation: Number(match[2]) }
+}
+
 /** The pane number of a terminal session id of any machine; null for anything else (a chat's number). */
 export function terminalOf(sessionId: string): number | null {
   const match = SESSION_ID.exec(sessionId)
   return match?.[2] === undefined ? null : Number(match[2])
 }
 
-/** The name of the machine a session id belongs to; null for this computer or a chat. */
+/** The name of the machine a session id belongs to, a terminal's or a chat's; null for this computer. */
 export function machineNameOf(sessionId: string): string | null {
-  return SESSION_ID.exec(sessionId)?.[1] ?? null
+  return SESSION_ID.exec(sessionId)?.[1] ?? REMOTE_CHAT_ID.exec(sessionId)?.[1] ?? null
 }
 
 /**
@@ -77,6 +104,8 @@ export function machineArgs(address: SessionAddress): { machine?: number } {
 export function addressOf(sessionId: string): SessionAddress | null {
   const address = parseSessionId(sessionId)
   if (address !== null) return address
+  // Another machine's chat is no terminal session, whatever machine it names.
+  if (REMOTE_CHAT_ID.test(sessionId)) return null
   const name = machineNameOf(sessionId)
   if (name !== null) throw new Error(`${name} is not one of this computer's machines`)
   return null

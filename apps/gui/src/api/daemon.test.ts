@@ -2,7 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
-import { startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation, allowAlways, sideAnswer } from './daemon'
+import type { Conversation } from '@/data/preview'
+import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation, allowAlways, sideAnswer } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -513,6 +514,23 @@ describe('names and closed sessions shared through the daemon', () => {
     expect(invoke).toHaveBeenNthCalledWith(1, 'rename_conversation', { id: 42, title: 'Fix the login bug' })
     expect(invoke).toHaveBeenNthCalledWith(2, 'archive_conversation', { id: 42, archived: true })
   })
+
+  it('names, ends and puts away a chat of another machine on that machine, and asks this computer nothing about its files', async () => {
+    vi.mocked(isTauri).mockReturnValue(true)
+    vi.mocked(invoke).mockResolvedValue(null)
+    registerMachine('build', 3)
+    const chat = { id: 'build/c12', generation: 2 } as Conversation
+
+    await renameConversationOnDaemon(chat, 'Fix the login bug')
+    await closeChatSession(chat)
+    await expect(loadConversationDiff(chat)).rejects.toThrow('local-only')
+
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['rename_conversation', { id: 12, machine: 3, title: 'Fix the login bug' }],
+      ['end_conversation', { id: 12, machine: 3, generation: 2 }],
+      ['archive_conversation', { id: 12, machine: 3, archived: true }],
+    ])
+  })
 })
 
 describe('terminal sessions shown beside chats', () => {
@@ -883,15 +901,21 @@ describe('commands for a pane, on whichever machine it is', () => {
     ])
   })
 
-  it('lists only the terminals of another machine, with ids that name it', () => {
+  it('lists the terminals of another machine and the chats its daemon started, with ids that name it', () => {
     const snapshot = {
       terms: { '7': { id: 7, agent: null, process: 'bash', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null } },
       workspaces: [],
-      conversations: [{ id: 5, generation: 1, execution: 'Structured', provider: 'Claude', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: null, checks: [] }],
+      conversations: [
+        { id: 5, generation: 1, execution: 'Structured', provider: 'Claude', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: null, checks: [] },
+        // A conversation that follows an agent in a pane this list does not show is no session of its own there.
+        { id: 6, generation: 1, execution: 'Native', provider: 'Claude', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: 99, checks: [] },
+      ],
     }
     const listed = conversationsFromSnapshot(snapshot, { id: 3, name: 'build' })
-    expect(listed.map((item) => item.id)).toEqual(['build/t7'])
-    expect(conversationsFromSnapshot(snapshot).map((item) => item.id)).toEqual(['5', 't7'])
+    expect(listed.map((item) => item.id)).toEqual(['build/c5', 'build/t7'])
+    // The chat's feed and sends are kept under a key that holds the machine: 3 above 32 bits, conversation 5 below.
+    expect(listed[0]).toMatchObject({ machine: 3, machineName: 'build', chat: { conversation: 3 * 4_294_967_296 + 5, generation: 1, machine: 'build' } })
+    expect(conversationsFromSnapshot(snapshot).map((item) => item.id)).toEqual(['5', '6', 't7'])
   })
 
   it('lists a session on another machine once, beside a session of this computer that has ssh open to it', () => {

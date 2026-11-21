@@ -787,6 +787,15 @@ exception: the desktop app asks another machine's daemon to make a new chat's wo
 checkout, and takes back only the folder, one plain absolute path (`remote_chat::vet_worktree_reply`),
 which becomes the folder a session starts in there. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
 
+Starting a chat on another machine (ADR 0007, protocol 122) is the other thing asked of it. The window names a
+provider (Claude Code or Codex) or an ACP agent's name, a folder and a posture, never a program, a settings folder,
+an argument or a variable: that machine's daemon finds the program itself (`StartTarget::Agent`, `StartTarget::Acp`).
+The folder is sent only as one plain absolute POSIX path with no control characters, at most 4096 bytes
+(`remote_folder`), and the name must be an agent's name (`acp_agent_name`). The answer is taken only when it is the
+start itself, a conversation's number and generation (`remote_chat::vet_chat_start`); they address that machine's
+request lines alone and are never drawn. This gives the window nothing it did not have: it can already start a shell
+on that machine and type into it.
+
 ## Project-specific: followed transcripts
 
 The daemon reads an agent's own transcript for a pane it follows ([ADR 0003](adr/0003-status-and-conversation-trust.md)).
