@@ -27,7 +27,7 @@ const daemon = vi.hoisted(() => ({
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
   startAgentSession: vi.fn<(folder: string, agent: string, flags: readonly string[]) => Promise<void>>(),
-  startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, fullAccess: boolean) => Promise<{ id: number; generation: number }>>(),
+  startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string) => Promise<{ id: number; generation: number }>>(),
   archiveConversationOnDaemon: vi.fn<(conversation: { id: string }, archived: boolean) => Promise<void>>(),
   closeSessionWithUndo: vi.fn<(conversation: { id: string }) => Promise<void>>(),
   undoCloseSession: vi.fn<(conversation: { id: string }) => Promise<void>>(),
@@ -1442,9 +1442,12 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
 
     daemon.loadConversations.mockResolvedValue([claude(5, HOME)])
+    daemon.startChatSession.mockResolvedValue({ id: 5, generation: 1 })
     await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
-    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalledWith(HOME, 'claude', expect.any(Array)) })
+    // ADR 0018: the Chat view starts a chat the daemon owns, never the agent's terminal program.
+    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(HOME, 'claude', null, expect.stringMatching(/^(workspace-write|full-access)$/)) })
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
   })
 

@@ -2042,34 +2042,17 @@ impl Permissions {
     }
 }
 
-/// The posture of a chat session: it asks before a tool use the provider does not allow by itself,
-/// unless the caller asks for the provider's own skip-permissions mode (ADR 0005, ADR 0003).
-fn chat_session_permissions(full_access: bool) -> Permissions {
-    if full_access {
-        Permissions::FullAccess
-    } else {
-        Permissions::WorkspaceWrite
-    }
-}
-
-/// Start a chat session: a structured conversation the daemon owns (ADR 0003). With `full_access` the
-/// provider runs unsandboxed and without approvals; there is no other posture to choose. With a
+/// Start a chat session: a structured conversation the daemon owns (ADR 0003), with the posture the
+/// person picked for it (ADR 0018: the New session draft starts chats, and carries its mode). With a
 /// `branch` the daemon makes a worktree for it from the project at `cwd` and starts there.
 pub async fn start_chat_session(
     cwd: PathBuf,
     provider: Provider,
     branch: Option<String>,
-    full_access: bool,
+    permissions: Permissions,
     daemon_executable: PathBuf,
 ) -> Result<Value> {
-    create_conversation(
-        cwd,
-        provider,
-        chat_session_permissions(full_access),
-        branch,
-        daemon_executable,
-    )
-    .await
+    create_conversation(cwd, provider, permissions, branch, daemon_executable).await
 }
 
 pub async fn create_conversation(
@@ -3390,23 +3373,21 @@ mod pane_command_tests {
 
 #[cfg(test)]
 mod chat_posture_tests {
-    use super::{chat_session_permissions, Permissions};
+    use super::Permissions;
     use maitty_shared::conversation::{ApprovalPolicy, Sandbox};
 
     #[test]
-    fn a_chat_session_asks_unless_full_access_is_requested() {
-        assert_eq!(
-            chat_session_permissions(false).launch_policy(),
-            (Sandbox::WorkspaceWrite, ApprovalPolicy::OnRequest)
-        );
-        assert!(matches!(
-            chat_session_permissions(true),
-            Permissions::FullAccess
-        ));
-        assert_eq!(
-            chat_session_permissions(true).launch_policy(),
-            (Sandbox::FullAccess, ApprovalPolicy::Never)
-        );
+    fn a_chat_session_asks_unless_full_access_is_picked() {
+        let policy = |picked: &str| Permissions::parse(picked).unwrap().launch_policy();
+
+        assert_eq!(policy("read-only"), (Sandbox::ReadOnly, ApprovalPolicy::OnRequest));
+        assert_eq!(policy("workspace-write"), (Sandbox::WorkspaceWrite, ApprovalPolicy::OnRequest));
+        assert_eq!(policy("full-access"), (Sandbox::FullAccess, ApprovalPolicy::Never));
+    }
+
+    #[test]
+    fn a_posture_this_app_does_not_know_is_refused() {
+        assert!(Permissions::parse("anything").is_err());
     }
 }
 
