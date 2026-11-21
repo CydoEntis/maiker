@@ -47,12 +47,12 @@ The Maiker adapter follows that wire contract. See
 [ADR 0005](../adr/0005-provider-adapters-and-permissions.md) and
 the [transport research](../research/claude-code-gui-transport.md).
 
-The rule above against emulating Codex JSON-RPC is not yet met inside the daemon: `TurnProjector`
-and `claude.rs` hand the daemon Claude's events under Codex's notification names (`turn/started`,
-`item/completed`, `item/commandExecution/requestApproval`), because the daemon's conversation
-code reads that one vocabulary. No Claude frame and no Codex name reaches a client. The provider
-trait (MAITTY-482, MAITTY-484) replaces those names with provider events;
-[the fit check](../research/provider-trait-claude-fit.md) lists what moves.
+The rule above against emulating Codex JSON-RPC holds for what Claude reports: `TurnProjector`
+and the approval reading (`maitty-provider-claude/src/approvals.rs`) hand the daemon typed
+provider events, and no Claude frame reaches a client. It is not yet met for what the daemon
+asks: `claude.rs` still takes its commands (send, answer, interrupt) in Codex's parameter
+shapes and answers a send in Codex's reply shape, until the daemon runs dialects (MAITTY-485).
+`ClaudeDialect` (`dialect.rs`) is that dialect, tested by itself and not yet run by the daemon.
 
 Windows Claude Code 2.1.314 was verified directly and through Maiker's daemon on
 2026-10-30. The daemon smoke covered conversation creation, streamed

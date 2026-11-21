@@ -1,6 +1,25 @@
 //! The Claude adapter driven directly: handshake, a streamed turn, approvals and interrupts.
 
 use super::*;
+use crate::conversation::{ApprovalDecision, ApprovalRequestKind, FileChangePreview, ProviderRequestId};
+use maitty_provider::ProviderEvent;
+
+/// What an event says in a word or two, for a test that checks the order of a turn's events.
+fn named(event: &ProviderEvent) -> &'static str {
+    use super::super::history::ItemState;
+    match event {
+        ProviderEvent::TurnStarted { .. } => "turn started",
+        ProviderEvent::Item(item) if item.state == ItemState::Running => "item started",
+        ProviderEvent::Item(_) => "item completed",
+        ProviderEvent::TextDelta { .. } => "text",
+        ProviderEvent::TurnCompleted { .. } => "turn completed",
+        other => panic!("unexpected Claude event {other:?}"),
+    }
+}
+
+fn turn_ended(event: &ProviderEvent, expected: super::super::history::ItemState) -> bool {
+    matches!(event, ProviderEvent::TurnCompleted { state, .. } if *state == expected)
+}
 
 #[tokio::test]
 async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
@@ -73,11 +92,11 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
         };
         assert_eq!(event.owner, owner);
         match event.payload {
-            Payload::Notification { method, params } => {
-                if method == "item/agentMessage/delta" {
-                    assert_eq!(params["delta"], "fake reply");
+            Payload::Event(event) => {
+                if let ProviderEvent::TextDelta { text, .. } = &event {
+                    assert_eq!(text, "fake reply");
                 }
-                notifications.push(method);
+                notifications.push(named(&event));
             }
             Payload::Response {
                 token: 3,
@@ -96,13 +115,13 @@ async fn claude_adapter_initializes_streams_a_turn_and_reads_empty_turns() {
     assert_eq!(
         notifications,
         [
-            "turn/started",
-            "item/started",
-            "item/completed",
-            "item/started",
-            "item/agentMessage/delta",
-            "item/completed",
-            "turn/completed",
+            "turn started",
+            "item started",
+            "item completed",
+            "item started",
+            "text",
+            "item completed",
+            "turn completed",
         ]
     );
 
@@ -141,12 +160,8 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
     let mut turn_id = None;
     for _ in 0..6 {
         match receive_claude_payload(&mut received, owner).await {
-            Payload::Notification { method, params } if method == "turn/started" => {
-                turn_id = params["turn"]["id"].as_str().map(str::to_owned);
-            }
-            Payload::Notification { method, .. } => {
-                assert!(method == "item/started" || method == "item/completed");
-            }
+            Payload::Event(ProviderEvent::TurnStarted { turn, .. }) => turn_id = Some(turn),
+            Payload::Event(ProviderEvent::Item(_)) => {}
             Payload::Response {
                 token: 3,
                 result: Ok(value),
@@ -154,8 +169,8 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
                 assert_eq!(value["turn"]["status"], "inProgress");
                 acknowledged = true;
             }
-            Payload::Request { id, method, params } => {
-                approval = Some((id, method, params));
+            Payload::Event(ProviderEvent::ApprovalRequested { request, command_hash }) => {
+                approval = Some((request, command_hash));
                 break;
             }
             _ => panic!("unexpected Claude approval payload"),
@@ -166,14 +181,15 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
         "the user prompt should be acknowledged before approval"
     );
     let turn_id = turn_id.expect("the turn start should include its exact ID");
-    let (id, method, params) = approval.expect("Claude should request tool approval");
-    assert_eq!(id, RequestId::Text("tool-request".into()));
-    assert_eq!(method, "item/commandExecution/requestApproval");
-    assert_eq!(params["threadId"], "fixture-session");
-    assert_eq!(params["turnId"], turn_id);
-    assert_eq!(params["itemId"], "tool-request");
-    assert_eq!(params["command"], "echo hello");
-    assert_eq!(params["availableDecisions"], json!(["accept", "decline"]));
+    let (request, command_hash) = approval.expect("Claude should request tool approval");
+    assert_eq!(request.request_id, ProviderRequestId::Text("tool-request".into()));
+    assert_eq!(request.kind, ApprovalRequestKind::Command);
+    assert_eq!(request.turn_id, Some(turn_id));
+    assert_eq!(request.item_id.as_deref(), Some("tool-request"));
+    assert_eq!(request.command.as_deref(), Some("echo hello"));
+    assert_eq!(request.choices, [ApprovalDecision::Accept, ApprovalDecision::Decline]);
+    assert!(command_hash.is_some() && request.can_remember);
+    let id = RequestId::from(request.request_id);
 
     requests
         .send(super::runtime::Command {
@@ -187,8 +203,7 @@ async fn exercise_claude_approval(scenario: &str, decision: &str) {
         .unwrap();
     assert!(matches!(
         receive_claude_payload(&mut received, owner).await,
-        Payload::Notification { method, params }
-            if method == "turn/completed" && params["turn"]["status"] == "completed"
+        Payload::Event(event) if turn_ended(&event, super::super::history::ItemState::Completed)
     ));
     stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);
@@ -262,16 +277,9 @@ async fn claude_edit_call_and_approval_carry_input_diff_and_a_link_to_the_tool_s
     let mut approval = None;
     loop {
         match receive_claude_payload(&mut received, owner).await {
-            Payload::Notification { method, params } => {
-                histories
-                    .notification(ConversationId(1), "fixture-session", &method, &params)
-                    .unwrap();
-                if method == "turn/completed" {
-                    break;
-                }
-            }
-            Payload::Request { id, method, params } => {
-                approval = Some((method, params));
+            Payload::Event(ProviderEvent::ApprovalRequested { request, .. }) => {
+                let id = RequestId::from(request.request_id.clone());
+                approval = Some(request);
                 requests
                     .send(super::runtime::Command {
                         token: 4,
@@ -283,18 +291,26 @@ async fn claude_edit_call_and_approval_carry_input_diff_and_a_link_to_the_tool_s
                     .await
                     .unwrap();
             }
+            Payload::Event(event) => {
+                let ended = matches!(event, ProviderEvent::TurnCompleted { .. });
+                let update = super::super::history_provider::provider_event(ConversationId(1), event);
+                histories.apply(ConversationId(1), &update).unwrap();
+                if ended {
+                    break;
+                }
+            }
             Payload::Response { .. } => {}
             _ => panic!("unexpected Claude edit payload"),
         }
     }
 
-    let (method, params) = approval.expect("the edit asks for approval");
-    assert_eq!(method, "item/fileChange/requestApproval");
-    assert_eq!(params["itemId"], "toolu_edit");
-    assert_eq!(params["command"], "Edit: src/a.rs");
+    let request = approval.expect("the edit asks for approval");
+    assert_eq!(request.kind, ApprovalRequestKind::FileChange);
+    assert_eq!(request.item_id.as_deref(), Some("toolu_edit"));
+    assert_eq!(request.command.as_deref(), Some("Edit: src/a.rs"));
     assert_eq!(
-        params["changes"],
-        json!([{"path":"src/a.rs","kind":"update","diff":"-old\n+new"}])
+        request.changes,
+        [FileChangePreview { path: "src/a.rs".into(), kind: "update".into(), diff: "-old\n+new".into() }]
     );
 
     let history = histories.get(1).unwrap();
@@ -353,16 +369,9 @@ async fn claude_write_of_a_secret_file_and_an_echoed_token_are_masked_in_history
     let mut approval = None;
     loop {
         match receive_claude_payload(&mut received, owner).await {
-            Payload::Notification { method, params } => {
-                histories
-                    .notification(ConversationId(1), "fixture-session", &method, &params)
-                    .unwrap();
-                if method == "turn/completed" {
-                    break;
-                }
-            }
-            Payload::Request { id, method, params } => {
-                approval = Some((method, params));
+            Payload::Event(ProviderEvent::ApprovalRequested { request, .. }) => {
+                let id = RequestId::from(request.request_id.clone());
+                approval = Some(request);
                 requests
                     .send(super::runtime::Command {
                         token: 4,
@@ -374,15 +383,22 @@ async fn claude_write_of_a_secret_file_and_an_echoed_token_are_masked_in_history
                     .await
                     .unwrap();
             }
+            Payload::Event(event) => {
+                let ended = matches!(event, ProviderEvent::TurnCompleted { .. });
+                let update = super::super::history_provider::provider_event(ConversationId(1), event);
+                histories.apply(ConversationId(1), &update).unwrap();
+                if ended {
+                    break;
+                }
+            }
             Payload::Response { .. } => {}
             _ => panic!("unexpected Claude payload"),
         }
     }
 
-    // The fixture asserts the agent was answered with its own, unmasked input. The approval the
-    // adapter raises is masked where the daemon stores it (see the daemon-level test).
-    let (method, _) = approval.expect("the write asks for approval");
-    assert_eq!(method, "item/fileChange/requestApproval");
+    // The fixture asserts the agent was answered with its own, unmasked input.
+    let request = approval.expect("the write asks for approval");
+    assert_eq!(request.kind, ApprovalRequestKind::FileChange);
 
     let history = histories.get(1).unwrap();
     let find = |item: &str| {
@@ -465,12 +481,8 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     let mut acknowledged = false;
     for _ in 0..4 {
         match receive_claude_payload(&mut received, owner).await {
-            Payload::Notification { method, params } if method == "turn/started" => {
-                turn_id = params["turn"]["id"].as_str().map(str::to_owned);
-            }
-            Payload::Notification { method, .. } => {
-                assert!(method == "item/started" || method == "item/completed");
-            }
+            Payload::Event(ProviderEvent::TurnStarted { turn, .. }) => turn_id = Some(turn),
+            Payload::Event(ProviderEvent::Item(_)) => {}
             Payload::Response {
                 token: 3,
                 result: Ok(value),
@@ -503,8 +515,7 @@ async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
     // Claude ends a stopped turn with an error result; the person asked for it, so it is interrupted.
     assert!(matches!(
         receive_claude_payload(&mut received, owner).await,
-        Payload::Notification { method, params }
-            if method == "turn/completed" && params["turn"]["status"] == "interrupted"
+        Payload::Event(event) if turn_ended(&event, super::super::history::ItemState::Interrupted)
     ));
     stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);

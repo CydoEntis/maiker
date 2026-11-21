@@ -28,6 +28,14 @@ fn reset_state_after_provider_ready(state: &mut super::State) {
     state.cancelling = None;
 }
 
+/// What the daemon needs to know about a reported event beside its history update.
+struct Reported {
+    /// The event ends the turn a person asked to stop.
+    cancellation_finished: bool,
+    /// The event is a turn's end, whatever state it ended in.
+    completed: bool,
+}
+
 impl Daemon {
     pub(in crate::daemon) async fn initialize_conversation_cache(&mut self) -> Result<()> {
         let path = self.session_path.clone();
@@ -248,59 +256,25 @@ impl Daemon {
                         .iter()
                         .find(|conversation| conversation.id == id)
                         .map(|conversation| conversation.binding.session_id.as_str());
-                    let active_turn = self
-                        .conversation_operations
-                        .iter()
-                        .find(|operation| operation.receipt.conversation == id)
-                        .and_then(|operation| match &operation.receipt.delivery {
-                            crate::conversation::Delivery::Acknowledged { turn_id } => {
-                                Some(turn_id.as_str())
-                            }
-                            crate::conversation::Delivery::SubmissionUncertain => None,
-                        });
+                    let active_turn = self.conversation_active_turn(id);
                     anyhow::ensure!(
                         approvals::names(&params, thread, active_turn),
                         "Codex approval request does not belong to the acknowledged active turn"
                     );
                 }
-                let state = self.conversation_states.entry(id).or_default();
-                state.blocked = true;
-                state.status = Status::Blocked;
                 let request_id: crate::conversation::ProviderRequestId = request.into();
-                let known_changes = approvals::subject(&params)
-                    .and_then(|subject| state.file_change_previews.get(&subject))
-                    .cloned();
-                let mut arrived = None;
-                if let Some(asked) =
-                    approvals::approval_request(request_id.clone(), &method, &params, known_changes)
-                {
-                    arrived = Some(request_id.clone());
-                    if let Some(hash) = asked.command_hash {
-                        state.command_hashes.insert(request_id.clone(), hash);
-                    }
-                    if state.approvals.insert(request_id, asked.request).is_some() {
-                        bail!("Codex reused a pending approval request ID");
-                    }
-                    if state.unsupported_requests.is_empty()
-                        && state.error.as_deref() != Some(FILE_CHANGE_DIFF_ERROR)
-                    {
-                        state.error = None;
-                    }
-                } else {
-                    let message = format!(
-                        "Provider request {method} is unsupported; {} left it unanswered",
-                        crate::brand::APP_NAME
-                    );
-                    state
-                        .unsupported_requests
-                        .insert(request_id, message.clone());
-                    state.error = Some(message);
-                }
-                if let Some(arrived) = arrived {
-                    self.auto_approve_remembered(id, &arrived);
-                }
-                Ok(())
+                let known_changes = approvals::subject(&params).and_then(|subject| {
+                    self.conversation_states
+                        .get(&id)
+                        .and_then(|state| state.file_change_previews.get(&subject))
+                        .cloned()
+                });
+                let asked = approvals::approval_request(request_id.clone(), &method, &params, known_changes)
+                    .map(|asked| (asked.request, asked.command_hash))
+                    .ok_or((request_id, method));
+                self.conversation_asked(id, asked)
             }
+            Payload::Event(event) => self.conversation_provider_event(id, generation, event),
             Payload::Notification { method, params } => {
                 let thread = self
                     .conversations
@@ -320,22 +294,13 @@ impl Daemon {
                         params.get("changes").and_then(serde_json::Value::as_array),
                     )
                 {
-                    let active_turn = self
-                        .conversation_operations
-                        .iter()
-                        .find(|operation| operation.receipt.conversation == id)
-                        .and_then(|operation| match &operation.receipt.delivery {
-                            crate::conversation::Delivery::Acknowledged { turn_id } => {
-                                Some(turn_id.as_str())
-                            }
-                            crate::conversation::Delivery::SubmissionUncertain => None,
-                        });
+                    let active_turn = self.conversation_active_turn(id);
                     if active_turn != Some(turn_id) {
                         return Ok(());
                     }
                     let key = (turn_id.to_owned(), item_id.to_owned());
                     let state = self.conversation_states.entry(id).or_default();
-                    let changes = if let Some(changes) = maitty_provider_codex::approvals::file_change_previews(changes) {
+                    let changes = if let Some(changes) = maitty_provider::approval::file_change_previews(changes) {
                         state.file_change_previews.insert(key, changes.clone());
                         changes
                     } else {
@@ -372,127 +337,263 @@ impl Daemon {
                                 .is_some_and(|state| state.cancelling.as_deref() == Some(turn_id))
                         });
                 if cancellation_finished {
-                    let state = self
-                        .conversation_states
-                        .get_mut(&id)
-                        .expect("validated active cancellation");
-                    state.cancelling = None;
-                    state.approvals.clear();
-                    state.file_change_previews.clear();
-                    state.unsupported_requests.clear();
-                    state.blocked = false;
-                    state.error = None;
+                    self.conversation_cancellation_finished(id);
                 }
                 let update = super::history_provider::notification(id, &thread, &method, &params);
-                if !matches!(&update, Ok(None)) {
-                    for pending in self.conversation_requests.values_mut() {
-                        if let Pending::Hydration {
-                            id: owner, changed, ..
-                        } = pending
-                            && *owner == id
-                        {
-                            *changed = true;
-                        }
-                    }
-                }
-                let state = self.conversation_states.entry(id).or_default();
-                if let Ok(Some(super::history::Update::ProviderError {
-                    message,
-                    will_retry,
-                })) = &update
-                {
-                    state.error = Some(message.clone());
-                    state.status = if *will_retry {
-                        Status::Working
-                    } else {
-                        Status::Blocked
-                    };
-                }
-                if matches!(
-                    &update,
-                    Err(_)
-                        | Ok(Some(super::history::Update::UpsertItem(
-                            super::history::Entry {
-                                content: super::history::Content::Unsupported { .. },
-                                ..
-                            }
-                        )))
-                ) {
-                    state.history_ready = false;
-                    state.error =
-                        Some("Native history is incomplete or contains unsupported content".into());
-                }
-                if let Ok(Some(super::history::Update::SetTurnStatus {
-                    turn,
-                    state: turn_state,
-                    ..
-                })) = &update
-                {
-                    let cancelled_turn = cancellation_finished
-                        && *turn_state == super::history::ItemState::Interrupted;
-                    let failure = match turn_state {
-                        super::history::ItemState::Failed => Some("Codex turn failed"),
-                        super::history::ItemState::Interrupted => {
-                            Some("Codex turn was interrupted")
-                        }
-                        _ => None,
-                    };
-                    if cancelled_turn {
-                        state.error = None;
-                        state.status = Status::Idle;
-                    } else {
-                        if let Some(failure) = failure {
-                            state.error = Some(
-                                params
-                                    .get("turn")
-                                    .and_then(|turn| turn.get("error"))
-                                    .filter(|error| !error.is_null())
-                                    .map(super::history_provider::error_message)
-                                    .transpose()?
-                                    .unwrap_or_else(|| failure.into()),
-                            );
-                        } else if let Some(error) = params
-                            .get("turn")
-                            .and_then(|turn| turn.get("error"))
-                            .filter(|error| !error.is_null())
-                        {
-                            state.error = Some(super::history_provider::error_message(error)?);
-                        }
-                        state.status =
-                            if state.blocked || failure.is_some() || state.error.is_some() {
-                                Status::Blocked
-                            } else if *turn_state == super::history::ItemState::Running {
-                                Status::Working
-                            } else {
-                                Status::Done
-                            };
-                    }
-                    if method == "turn/completed" {
-                        self.conversation_turn_ended(id, generation, turn.clone());
-                    }
-                }
-                self.conversation_history
-                    .notification(id, &thread, &method, &params)?;
-                if self.cfg.restore.enabled && self.cfg.restore.output {
-                    let history = self
-                        .conversation_histories
-                        .entry(id)
-                        .or_insert_with(|| History::new(id));
-                    let revision = history.revision;
-                    match update {
-                        Ok(Some(update)) => history.apply(update)?,
-                        Ok(None) => (),
-                        Err(reason) => {
-                            history.set_completeness(Completeness::Incomplete(reason))?
-                        }
-                    }
-                    if history.revision != revision {
-                        self.cache_conversation(id);
-                    }
-                }
-                Ok(())
+                let turn_error = || {
+                    params
+                        .get("turn")
+                        .and_then(|turn| turn.get("error"))
+                        .filter(|error| !error.is_null())
+                        .map(super::history_provider::error_message)
+                        .transpose()
+                };
+                self.conversation_reported(
+                    id,
+                    generation,
+                    update,
+                    Reported { cancellation_finished, completed: method == "turn/completed" },
+                    turn_error,
+                )
             }
         }
+    }
+
+    /// Takes in what a provider reported about a turn: the conversation's status and error
+    /// follow it, and its history keeps it. `turn_error` reads the reason a turn gave for ending,
+    /// and is asked only when a turn's status changed.
+    fn conversation_reported(
+        &mut self,
+        id: ConversationId,
+        generation: u64,
+        update: Result<Option<super::history::Update>, super::history::IncompleteReason>,
+        reported: Reported,
+        turn_error: impl Fn() -> Result<Option<String>, super::history::IncompleteReason>,
+    ) -> Result<()> {
+        if !matches!(&update, Ok(None)) {
+            for pending in self.conversation_requests.values_mut() {
+                if let Pending::Hydration {
+                    id: owner, changed, ..
+                } = pending
+                    && *owner == id
+                {
+                    *changed = true;
+                }
+            }
+        }
+        let state = self.conversation_states.entry(id).or_default();
+        if let Ok(Some(super::history::Update::ProviderError {
+            message,
+            will_retry,
+        })) = &update
+        {
+            state.error = Some(message.clone());
+            state.status = if *will_retry {
+                Status::Working
+            } else {
+                Status::Blocked
+            };
+        }
+        if matches!(
+            &update,
+            Err(_)
+                | Ok(Some(super::history::Update::UpsertItem(
+                    super::history::Entry {
+                        content: super::history::Content::Unsupported { .. },
+                        ..
+                    }
+                )))
+        ) {
+            state.history_ready = false;
+            state.error =
+                Some("Native history is incomplete or contains unsupported content".into());
+        }
+        if let Ok(Some(super::history::Update::SetTurnStatus {
+            turn,
+            state: turn_state,
+            ..
+        })) = &update
+        {
+            let cancelled_turn = reported.cancellation_finished
+                && *turn_state == super::history::ItemState::Interrupted;
+            let failure = match turn_state {
+                super::history::ItemState::Failed => Some("Codex turn failed"),
+                super::history::ItemState::Interrupted => {
+                    Some("Codex turn was interrupted")
+                }
+                _ => None,
+            };
+            if cancelled_turn {
+                state.error = None;
+                state.status = Status::Idle;
+            } else {
+                if let Some(failure) = failure {
+                    state.error = Some(turn_error()?.unwrap_or_else(|| failure.into()));
+                } else if let Some(error) = turn_error()? {
+                    state.error = Some(error);
+                }
+                state.status =
+                    if state.blocked || failure.is_some() || state.error.is_some() {
+                        Status::Blocked
+                    } else if *turn_state == super::history::ItemState::Running {
+                        Status::Working
+                    } else {
+                        Status::Done
+                    };
+            }
+            if reported.completed {
+                self.conversation_turn_ended(id, generation, turn.clone());
+            }
+        }
+        self.conversation_history.apply(id, &update)?;
+        if self.cfg.restore.enabled && self.cfg.restore.output {
+            let history = self
+                .conversation_histories
+                .entry(id)
+                .or_insert_with(|| History::new(id));
+            let revision = history.revision;
+            match update {
+                Ok(Some(update)) => history.apply(update)?,
+                Ok(None) => (),
+                Err(reason) => {
+                    history.set_completeness(Completeness::Incomplete(reason))?
+                }
+            }
+            if history.revision != revision {
+                self.cache_conversation(id);
+            }
+        }
+        Ok(())
+    }
+
+    /// Takes in a request a provider made of a person, or one this project cannot answer, named
+    /// by its request and method. The conversation waits either way.
+    fn conversation_asked(
+        &mut self,
+        id: ConversationId,
+        asked: Result<
+            (crate::conversation::ApprovalRequest, Option<String>),
+            (crate::conversation::ProviderRequestId, String),
+        >,
+    ) -> Result<()> {
+        let state = self.conversation_states.entry(id).or_default();
+        state.blocked = true;
+        state.status = Status::Blocked;
+        let arrived = match asked {
+            Ok((request, command_hash)) => {
+                let request_id = request.request_id.clone();
+                if let Some(hash) = command_hash {
+                    state.command_hashes.insert(request_id.clone(), hash);
+                }
+                if state.approvals.insert(request_id.clone(), request).is_some() {
+                    bail!("Codex reused a pending approval request ID");
+                }
+                if state.unsupported_requests.is_empty()
+                    && state.error.as_deref() != Some(FILE_CHANGE_DIFF_ERROR)
+                {
+                    state.error = None;
+                }
+                Some(request_id)
+            }
+            Err((request_id, method)) => {
+                let message = format!(
+                    "Provider request {method} is unsupported; {} left it unanswered",
+                    crate::brand::APP_NAME
+                );
+                state
+                    .unsupported_requests
+                    .insert(request_id, message.clone());
+                state.error = Some(message);
+                None
+            }
+        };
+        if let Some(arrived) = arrived {
+            self.auto_approve_remembered(id, &arrived);
+        }
+        Ok(())
+    }
+
+    /// The turn a conversation's provider has acknowledged and not yet ended.
+    fn conversation_active_turn(&self, id: ConversationId) -> Option<&str> {
+        self.conversation_operations
+            .iter()
+            .find(|operation| operation.receipt.conversation == id)
+            .and_then(|operation| match &operation.receipt.delivery {
+                crate::conversation::Delivery::Acknowledged { turn_id } => Some(turn_id.as_str()),
+                crate::conversation::Delivery::SubmissionUncertain => None,
+            })
+    }
+
+    /// Takes in what an adapter that speaks the provider contract reported.
+    fn conversation_provider_event(
+        &mut self,
+        id: ConversationId,
+        generation: u64,
+        event: maitty_provider::ProviderEvent,
+    ) -> Result<()> {
+        use maitty_provider::ProviderEvent;
+        // The helpers listed belong to one run of the provider.
+        let state = self.conversation_states.entry(id).or_default();
+        if state.helpers_generation != generation {
+            state.helpers.clear();
+            state.helpers_generation = generation;
+        }
+        match event {
+            ProviderEvent::ApprovalRequested { request, command_hash } => {
+                anyhow::ensure!(
+                    request.turn_id.is_some()
+                        && request.turn_id.as_deref() == self.conversation_active_turn(id),
+                    "Codex approval request does not belong to the acknowledged active turn"
+                );
+                self.conversation_asked(id, Ok((request, command_hash)))
+            }
+            ProviderEvent::UnsupportedRequest { request, method } => {
+                self.conversation_asked(id, Err((request, method)))
+            }
+            event @ (ProviderEvent::Problem { .. }
+            | ProviderEvent::Item(_)
+            | ProviderEvent::TextDelta { .. }
+            | ProviderEvent::TurnStarted { .. }
+            | ProviderEvent::TurnCompleted { .. }
+            | ProviderEvent::Unreadable { .. }) => {
+                let (ended, error) = match &event {
+                    ProviderEvent::TurnCompleted { turn, error, .. } => {
+                        (Some(turn.clone()), error.clone())
+                    }
+                    _ => (None, None),
+                };
+                let cancellation_finished = ended.as_deref().is_some_and(|turn| {
+                    self.conversation_states
+                        .get(&id)
+                        .is_some_and(|state| state.cancelling.as_deref() == Some(turn))
+                });
+                if cancellation_finished {
+                    self.conversation_cancellation_finished(id);
+                }
+                let update = super::history_provider::provider_event(id, event);
+                self.conversation_reported(
+                    id,
+                    generation,
+                    update,
+                    Reported { cancellation_finished, completed: ended.is_some() },
+                    || Ok(error.clone()),
+                )
+            }
+            other => bail!("Provider event reached the daemon outside its command: {other:?}"),
+        }
+    }
+
+    /// A person's stop of a turn went through: nothing it asked is open any more.
+    fn conversation_cancellation_finished(&mut self, id: ConversationId) {
+        let Some(state) = self.conversation_states.get_mut(&id) else {
+            return;
+        };
+        state.cancelling = None;
+        state.approvals.clear();
+        state.file_change_previews.clear();
+        state.unsupported_requests.clear();
+        state.blocked = false;
+        state.error = None;
     }
 
     /// Keeps the conversation's helpers (ADR 0010) from what its provider reports, and takes a

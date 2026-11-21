@@ -5,6 +5,7 @@
 //! line the provider printed, and carries out the [`Step`]s it gets back. A dialect never decides
 //! a conversation's status; it reports [`ProviderEvent`]s and the daemon decides.
 
+pub mod approval;
 pub mod redact;
 pub mod tool_input;
 
@@ -14,6 +15,7 @@ use maitty_shared::conversation::{
     ApprovalDecision, ApprovalRequest, FileChangePreview, ProviderRequestId, TurnChoice,
 };
 use std::collections::BTreeMap;
+use std::ffi::OsString;
 
 /// A provider process to start: what to run it with and what to tell it first.
 ///
@@ -22,7 +24,7 @@ use std::collections::BTreeMap;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct LaunchPlan {
     /// The arguments after the program itself. The daemon chooses the program.
-    pub arguments: Vec<String>,
+    pub arguments: Vec<OsString>,
     /// Variables to set for the process, by name.
     pub environment: BTreeMap<String, String>,
     /// Variables the process must not inherit from the daemon.

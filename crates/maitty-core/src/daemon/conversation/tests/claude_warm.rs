@@ -4,6 +4,7 @@
 //! so it cannot change status (ADR 0003); and an interrupt still reaches the turn it runs.
 
 use super::*;
+use maitty_provider::ProviderEvent;
 
 /// Long enough for a stray event to arrive, short enough to keep the tests quick.
 const QUIET: Duration = Duration::from_millis(300);
@@ -70,14 +71,12 @@ async fn finish_turn(received: &mut mpsc::Receiver<Ev>, owner: super::runtime::O
     let mut turn = None;
     loop {
         match receive_claude_payload(received, owner).await {
-            Payload::Notification { method, params } if method == "turn/started" => {
-                turn = params["turn"]["id"].as_str().map(str::to_owned);
-            }
-            Payload::Notification { method, params } if method == "turn/completed" => {
-                assert_eq!(params["turn"]["status"], "completed");
+            Payload::Event(ProviderEvent::TurnStarted { turn: started, .. }) => turn = Some(started),
+            Payload::Event(ProviderEvent::TurnCompleted { state, .. }) => {
+                assert_eq!(state, super::history::ItemState::Completed);
                 return turn.expect("the turn started before it completed");
             }
-            Payload::Notification { .. } | Payload::Response { result: Ok(_), .. } => {}
+            Payload::Event(_) | Payload::Response { result: Ok(_), .. } => {}
             _ => panic!("unexpected Claude turn payload"),
         }
     }
@@ -148,10 +147,8 @@ async fn interrupt(
     let mut turn = None;
     while turn.is_none() {
         match receive_claude_payload(received, owner).await {
-            Payload::Notification { method, params } if method == "turn/started" => {
-                turn = params["turn"]["id"].as_str().map(str::to_owned);
-            }
-            Payload::Notification { .. } | Payload::Response { result: Ok(_), .. } => {}
+            Payload::Event(ProviderEvent::TurnStarted { turn: started, .. }) => turn = Some(started),
+            Payload::Event(_) | Payload::Response { result: Ok(_), .. } => {}
             _ => panic!("unexpected Claude turn payload"),
         }
     }
@@ -172,8 +169,8 @@ async fn interrupt(
                 assert_eq!(value, json!({}));
                 answered = true;
             }
-            Payload::Notification { method, .. } if method == "turn/completed" => break,
-            Payload::Notification { .. } | Payload::Response { result: Ok(_), .. } => {}
+            Payload::Event(ProviderEvent::TurnCompleted { .. }) => break,
+            Payload::Event(_) | Payload::Response { result: Ok(_), .. } => {}
             _ => panic!("unexpected Claude interrupt payload"),
         }
     }

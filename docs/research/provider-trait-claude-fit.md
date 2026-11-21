@@ -1,9 +1,8 @@
 # Does one provider trait fit Claude's process-per-message model?
 
 Checked 2026-11-20 against `crates/maitty-core/src/daemon/conversation/claude.rs` and
-`maitty-provider-claude`. The prototype is
-`crates/adapters/maitty-provider-claude/src/dialect_spike.rs`: test-only, about 290 lines, with
-ten tests. Nothing in the daemon uses it.
+`maitty-provider-claude`. The prototype was `dialect_spike.rs` in that crate: test-only, about
+290 lines, with ten tests. It has since become `ClaudeDialect` (`dialect.rs`, MAITTY-484).
 
 ## Result: go
 

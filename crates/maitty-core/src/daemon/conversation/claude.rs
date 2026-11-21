@@ -10,8 +10,10 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
 
 use crate::conversation::TurnChoice;
+use maitty_provider::ProviderEvent;
+use maitty_provider_claude::approvals::approval_request;
 use maitty_provider_claude::{
-    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, ProjectedEvent, TurnProjector,
+    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, TurnProjector,
     command_arguments_for_turn, parse_output_frame, session_id, verified_version,
     version_number,
 };
@@ -755,12 +757,9 @@ async fn run_turn(
                     if approvals.len() >= MAX_PENDING_TOOLS || approvals.insert(request_id.clone(), input.clone()).is_some() {
                         return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval request queue overflow or ID reuse") });
                     }
-                    let (method, params) = approval_request(session, &turn_id, request_id, request, tool_name, &input);
-                    super::runtime::emit(events, owner, super::runtime::Payload::Request {
-                        id: super::transport::RequestId::Text(request_id.clone()),
-                        method: method.into(),
-                        params,
-                    }).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                    let (request, command_hash) = approval_request(&turn_id, request_id, request, tool_name, &input);
+                    let asked = ProviderEvent::ApprovalRequested { request, command_hash };
+                    super::runtime::emit(events, owner, super::runtime::Payload::Event(asked)).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     continue;
                 }
                 if let OutputFrame::ControlResponse { response } = &frame
@@ -782,20 +781,21 @@ async fn run_turn(
                 let projected = projector.project(frame).map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                 for event in projected {
                     match event {
-                        ProjectedEvent::Notification { method, params } => {
-                            super::runtime::emit(events, owner, super::runtime::Payload::Notification { method, params })
-                                .await
-                                .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
-                        }
-                        ProjectedEvent::Acknowledged { result } => {
+                        // The delivery receipt answers the send itself, in the shape the
+                        // daemon reads every provider's send answer in.
+                        ProviderEvent::Delivered { turn } => {
                             let acknowledged = pending_token.take().context("Claude acknowledgement token was already consumed")
                                 .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                             super::runtime::emit(events, owner, super::runtime::Payload::Response {
                                 token: acknowledged,
-                                result: Ok(result),
+                                result: Ok(serde_json::json!({"turn":{"id":turn,"status":"inProgress","items":[]}})),
                             }).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                         }
-                        ProjectedEvent::ControlRequest { .. } => unreachable!("control requests are mapped before turn projection"),
+                        event => {
+                            super::runtime::emit(events, owner, super::runtime::Payload::Event(event))
+                                .await
+                                .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                        }
                     }
                 }
                 if finished { return Ok((client, choice)); }
@@ -804,51 +804,9 @@ async fn run_turn(
     }
 }
 
-/// Longest tool-use id accepted as a link to a tool step.
-const MAX_TOOL_USE_ID_CHARS: usize = 256;
-
-/// The provider request that asks the person to decide on one Claude `can_use_tool` call.
-///
-/// The request is linked to the tool's own history step by `itemId` when Claude names the tool
-/// use (`tool_use_id`, the same id the step has); otherwise `itemId` falls back to the request id.
-/// An edit tool is raised as a file change that carries its diff, any other tool as a command
-/// whose text names its target.
-fn approval_request(
-    session: &str,
-    turn_id: &str,
-    request_id: &str,
-    request: &Value,
-    tool_name: &str,
-    input: &Value,
-) -> (&'static str, Value) {
-    let item_id = request
-        .get("tool_use_id")
-        .and_then(Value::as_str)
-        .filter(|id| {
-            !id.is_empty()
-                && id.chars().count() <= MAX_TOOL_USE_ID_CHARS
-                && !id.chars().any(char::is_control)
-        })
-        .unwrap_or(request_id);
-    let mut params = serde_json::json!({
-        "threadId": session,
-        "turnId": turn_id,
-        "itemId": item_id,
-        "command": super::tool_input::approval_command(tool_name, input),
-        "availableDecisions": ["accept", "decline"],
-    });
-    match super::tool_input::file_change_previews(tool_name, input) {
-        Some(changes) => {
-            params["changes"] = changes.into();
-            ("item/fileChange/requestApproval", params)
-        }
-        None => ("item/commandExecution/requestApproval", params),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{approval_request, parse_output_frame, turn_choice, verified_version};
+    use super::{parse_output_frame, turn_choice, verified_version};
     use crate::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox};
     use crate::conversation::TurnChoice;
     use maitty_provider_claude::{
@@ -1112,66 +1070,6 @@ mod tests {
                 request
             }
         );
-    }
-
-    #[test]
-    fn approvals_name_their_target_and_link_to_the_tool_step() {
-        let cases = [
-            (
-                "Bash",
-                json!({"command":"cargo test"}),
-                json!({"tool_use_id":"toolu_1"}),
-                "item/commandExecution/requestApproval",
-                "toolu_1",
-                "cargo test",
-                false,
-            ),
-            (
-                "Edit",
-                json!({"file_path":"src/a.rs","old_string":"x","new_string":"y"}),
-                json!({"tool_use_id":"toolu_2"}),
-                "item/fileChange/requestApproval",
-                "toolu_2",
-                "Edit: src/a.rs",
-                true,
-            ),
-            (
-                "Write",
-                json!({"file_path":"b.txt","content":"hi"}),
-                json!({}),
-                "item/fileChange/requestApproval",
-                "request-1",
-                "Write: b.txt",
-                true,
-            ),
-            (
-                "WebFetch",
-                json!({"url":"https://example.com"}),
-                json!({"tool_use_id":""}),
-                "item/commandExecution/requestApproval",
-                "request-1",
-                "WebFetch: https://example.com",
-                false,
-            ),
-            (
-                "Bash",
-                json!({"command":"ls"}),
-                json!({"tool_use_id":"bad\nid"}),
-                "item/commandExecution/requestApproval",
-                "request-1",
-                "ls",
-                false,
-            ),
-        ];
-        for (tool, input, request, method, item_id, command, has_changes) in cases {
-            let (got_method, params) =
-                approval_request("session", "turn", "request-1", &request, tool, &input);
-            assert_eq!(got_method, method, "{tool}");
-            assert_eq!(params["itemId"], item_id, "{tool}");
-            assert_eq!(params["command"], command, "{tool}");
-            assert_eq!(params.get("changes").is_some(), has_changes, "{tool}");
-            assert_eq!(params["turnId"], "turn");
-        }
     }
 
     #[test]
