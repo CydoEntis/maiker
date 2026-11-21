@@ -52,6 +52,7 @@ fn result(out: &mut impl Write, id: &str, result: &str) {
 
 fn main() {
     let version = if std::env::args().any(|argument| argument == "--version-2") { 2 } else { 1 };
+    let loads = std::env::args().any(|argument| argument == "--loads");
     let stdin = io::stdin();
     let mut out = io::stdout();
     // The prompt whose turn is still running, by its request id.
@@ -61,11 +62,12 @@ fn main() {
         let method = text(&line, "method");
         match (method, id(&line)) {
             (Some("initialize"), Some(id)) => {
-                result(&mut out, id, &format!(r#"{{"protocolVersion":{version},"agentCapabilities":{{"loadSession":false}}}}"#));
+                result(&mut out, id, &format!(r#"{{"protocolVersion":{version},"agentCapabilities":{{"loadSession":{loads}}}}}"#));
             }
             (Some("session/new"), Some(id)) => {
                 result(&mut out, id, &format!(r#"{{"sessionId":"{SESSION}"}}"#));
             }
+            (Some("session/load"), Some(id)) => result(&mut out, id, "{}"),
             (Some("session/prompt"), Some(id)) => {
                 let said = text(&line, "text").unwrap_or_default().to_owned();
                 prompt = Some(id.to_owned());

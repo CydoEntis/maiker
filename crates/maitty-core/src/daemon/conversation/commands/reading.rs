@@ -2,13 +2,16 @@
 
 use super::*;
 
-/// Whether the provider's saved history is the transcript file it writes, and not asked for.
-fn reads_transcript(provider: Provider) -> bool {
-    use crate::daemon::providers::{HistorySource, adapter};
-    adapter(provider)
+fn history_source(provider: Provider) -> Option<crate::daemon::providers::HistorySource> {
+    crate::daemon::providers::adapter(provider)
         .structured
         .as_ref()
-        .is_some_and(|structured| structured.history == HistorySource::Transcript)
+        .map(|structured| structured.history)
+}
+
+/// Whether the provider is never asked for its saved history: what the daemon holds is used.
+fn reads_transcript(provider: Provider) -> bool {
+    history_source(provider).is_some_and(|source| source != crate::daemon::providers::HistorySource::Provider)
 }
 
 impl Daemon {
@@ -67,6 +70,8 @@ impl Daemon {
         }) else {
             bail!("Claude conversation identity changed during history hydration");
         };
+        let recorded = history_source(conversation.binding.provider)
+            == Some(crate::daemon::providers::HistorySource::Recorded);
         if conversation.awaiting_first_user_message {
             self.complete_empty_thread(id)?;
             if let Some(client) = started {
@@ -99,11 +104,11 @@ impl Daemon {
             .get(&id)
             .is_some_and(|state| state.history_ready)
             && self.conversation_runtimes.owns(id);
-        let (history, is_complete) = cached_claude_history(
-            id,
-            self.conversation_histories.get(&id),
-            is_currently_reconciled,
-        )?;
+        let (history, is_complete) = if recorded {
+            recorded_history(id, self.conversation_histories.get(&id))?
+        } else {
+            cached_claude_history(id, self.conversation_histories.get(&id), is_currently_reconciled)?
+        };
         let attachment = read.as_ref().map(|read| read.client).or(started);
         if let Some(client) = attachment {
             if self.conversation_history.get(client).is_none() {
@@ -119,9 +124,11 @@ impl Daemon {
         state.history_ready = is_complete && history.completeness == Completeness::Complete;
         if !state.history_ready {
             state.status = Status::Blocked;
-            state.error = Some(
-                "Claude history could not be reconciled with the provider transcript; chat resume is disabled".into(),
-            );
+            state.error = Some(if recorded {
+                "No history was kept for this conversation, so it cannot be continued; chat resume is disabled".into()
+            } else {
+                "Claude history could not be reconciled with the provider transcript; chat resume is disabled".into()
+            });
         }
         if let Some(read) = read {
             self.reply_history(id, read)?;

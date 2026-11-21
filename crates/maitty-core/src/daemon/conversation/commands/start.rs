@@ -1,6 +1,7 @@
 //! Starting a conversation: admission, identity, validation and the first save.
 
 use super::*;
+use std::path::{Path, PathBuf};
 
 impl Daemon {
     pub(in crate::daemon) fn conversation_start(
@@ -18,9 +19,10 @@ impl Daemon {
         let by = self
             .starting(client, "a structured Codex conversation")?
             .and_then(crate::daemon::helpers::Starter::pane);
+        let (target, program) = self.acp_target(target)?;
         let identity = match target {
-            // The wire names the agent; running one is the daemon's next step (MAITTY-491).
-            StartTarget::Acp { .. } => bail!("This version cannot start an agent over ACP yet"),
+            // `acp_target` turned it into a start with the config's own program.
+            StartTarget::Acp { .. } => bail!("An ACP start was not resolved"),
             StartTarget::Create(settings)
             | StartTarget::Session {
                 settings,
@@ -107,8 +109,21 @@ impl Daemon {
                 LaunchIdentity::Existing(Box::new(c.clone()))
             }
         };
+        let (executable, arguments, agent_environment) = match program {
+            Some(program) => (Some(program.executable), program.arguments, program.environment),
+            None => (None, Vec::new(), Vec::new()),
+        };
+        let mut identity = identity;
+        // A saved ACP conversation runs the program the config names today.
+        if let (Some(executable), LaunchIdentity::Existing(conversation)) = (executable, &mut identity) {
+            conversation.binding.executable.clone_from(&executable);
+            if let Some(settings) = &mut conversation.settings {
+                settings.executable = executable;
+            }
+        }
         let launch = Launch {
             identity,
+            arguments,
             environment: std::env::vars_os()
                 .filter(|(key, value)| {
                     let valid_entry = valid_provider_environment_entry(key, value);
@@ -126,6 +141,9 @@ impl Daemon {
                     Some(path) if key.eq_ignore_ascii_case("PATH") => (key, path.to_os_string()),
                     _ => (key, value),
                 })
+                // What the config sets for the agent wins over what the daemon inherited.
+                .filter(|(key, _)| !agent_environment.iter().any(|(set, _)| same_variable(set, key)))
+                .chain(agent_environment.iter().cloned())
                 .collect(),
             #[cfg(test)]
             failure_point: None,
@@ -146,6 +164,60 @@ impl Daemon {
         });
         self.dirty = true;
         Ok(())
+    }
+
+    /// Resolves a start that runs an agent over ACP: the program, its arguments and its
+    /// variables come from the daemon's config, never from the client that asked.
+    fn acp_target(&self, target: StartTarget) -> Result<(StartTarget, Option<AcpProgram>)> {
+        match target {
+            StartTarget::Acp { agent, cwd } => {
+                let program = self.acp_program(&agent)?;
+                let settings = LaunchSettings {
+                    provider: Provider::Acp,
+                    executable: program.executable.clone(),
+                    // An ACP agent is not pointed at a configuration; the folder stands in.
+                    config_root: cwd.clone(),
+                    cwd,
+                    model: None,
+                    model_provider: None,
+                    // The agent asks before it acts and keeps its own limits; the daemon sets neither.
+                    approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+                    sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+                    agent: Some(agent),
+                };
+                Ok((StartTarget::Create(settings), Some(program)))
+            }
+            StartTarget::Create(settings) | StartTarget::Session { settings, .. }
+                if settings.provider == Provider::Acp =>
+            {
+                bail!("An agent run over ACP is started by its name, not by a program")
+            }
+            StartTarget::Conversation { id, .. } => {
+                let agent = self
+                    .conversations
+                    .iter()
+                    .find(|conversation| conversation.id == id && conversation.binding.provider == Provider::Acp)
+                    .map(|conversation| conversation.binding.agent.clone().unwrap_or_default());
+                let program = agent.map(|agent| self.acp_program(&agent)).transpose()?;
+                Ok((target, program))
+            }
+            other => Ok((other, None)),
+        }
+    }
+
+    fn acp_program(&self, name: &str) -> Result<AcpProgram> {
+        let agent = self.cfg.acp_agent(name).ok_or_else(|| {
+            anyhow::anyhow!("The config has no agent named `{name}` that runs over ACP (`acp = true`)")
+        })?;
+        let executable = crate::proc::resolve_executable_path(Path::new(&agent.command))
+            .ok()
+            .filter(|path| path.is_file())
+            .ok_or_else(|| anyhow::anyhow!("The program `{}` of agent `{name}` was not found", agent.command))?;
+        Ok(AcpProgram {
+            executable,
+            arguments: agent.args.iter().map(Into::into).collect(),
+            environment: agent.env.iter().map(|(key, value)| (key.into(), value.into())).collect(),
+        })
     }
 
     pub(super) fn next_conversation_id(&self) -> Result<ConversationId> {
@@ -246,5 +318,22 @@ impl Daemon {
             return Err(error);
         }
         Ok(())
+    }
+}
+
+/// What the daemon's config says to run for an agent over ACP. `environment` can hold
+/// credentials, so it is never logged.
+struct AcpProgram {
+    executable: PathBuf,
+    arguments: Vec<std::ffi::OsString>,
+    environment: Vec<(std::ffi::OsString, std::ffi::OsString)>,
+}
+
+/// Whether two names are the same environment variable: Windows ignores their case.
+fn same_variable(one: &std::ffi::OsStr, other: &std::ffi::OsStr) -> bool {
+    if cfg!(windows) {
+        one.to_string_lossy().eq_ignore_ascii_case(&other.to_string_lossy())
+    } else {
+        one == other
     }
 }

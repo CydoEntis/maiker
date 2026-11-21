@@ -403,13 +403,28 @@ async fn run(
     };
     use crate::daemon::providers::{ProcessModel, adapter};
     // `validate` refused a provider with no chat runtime, so the server model is what is left.
-    let per_message = adapter(launch.provider())
+    let process = adapter(launch.provider())
         .structured
         .as_ref()
-        .is_some_and(|structured| structured.process == ProcessModel::PerMessage);
-    if per_message {
-        super::claude::run(launch, owner, identity, events, stop, requests).await;
-        return;
+        .map_or(ProcessModel::Server, |structured| structured.process);
+    match process {
+        ProcessModel::PerMessage => {
+            super::claude::run(launch, owner, identity, events, stop, requests).await;
+            return;
+        }
+        ProcessModel::Dialect => {
+            let (_, executable, cwd) = launch.paths();
+            let (executable, cwd) = (executable.to_path_buf(), cwd.to_path_buf());
+            // ACP is the only dialect run this way so far.
+            let dialect = maitty_provider_acp::AcpDialect::new(maitty_provider_acp::Settings {
+                arguments: launch.arguments,
+                cwd: cwd.clone(),
+            });
+            let host = super::dialect_runtime::Host { executable, cwd, environment: launch.environment };
+            super::dialect_runtime::run(Box::new(dialect), host, owner, events, stop, requests).await;
+            return;
+        }
+        ProcessModel::Server => {}
     }
     let connected = launch.connect(&identity).await;
     let mut connection = match connected {

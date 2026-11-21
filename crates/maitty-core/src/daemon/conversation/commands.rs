@@ -69,6 +69,27 @@ fn cached_claude_history(
     Ok((history, is_complete))
 }
 
+/// The history of a conversation whose provider is never asked for it and writes no file the
+/// daemon reads: what the daemon kept is the whole of it, less whatever was still being written
+/// when the agent went away. Not complete only when nothing was kept.
+fn recorded_history(id: ConversationId, cached: Option<&History>) -> Result<(History, bool)> {
+    let Some(cached) = cached else {
+        let mut history = History::new(id);
+        history
+            .reconnect()
+            .map_err(|reason| anyhow::anyhow!("Cannot mark the history incomplete: {reason:?}"))?;
+        return Ok((history, false));
+    };
+    let mut history = cached.clone();
+    if history.completeness != Completeness::Complete {
+        history
+            .reconnect()
+            .and_then(|()| history.set_completeness(Completeness::Complete))
+            .map_err(|reason| anyhow::anyhow!("Cannot take up the kept history: {reason:?}"))?;
+    }
+    Ok((history, true))
+}
+
 /// The requester of a start the daemon makes itself. No client has this id, so a reply to it is
 /// dropped and a failure is only recorded on the conversation and logged.
 pub(in crate::daemon) const DAEMON_REQUESTER: ClientId = ClientId::MAX;
