@@ -11,13 +11,16 @@
   ([ADR 0017](../adr/0017-acp-for-agents-without-an-adapter.md)).
 - Codex and Claude Code keep their own adapters. ACP is only for an agent that has none.
 - Speak protocol version 1 only. An agent that answers `initialize` with another version is
-  refused, with its version in the message. The crate's `unstable_*` and v2 features stay off.
-- Depend on the types crate only, pinned exactly and without default features:
-  `agent-client-protocol-schema = { version = "=1.20.0", default-features = false }`. Do not add
-  the SDK crate `agent-client-protocol`
-  ([why](../research/acp-rust-package.md)). Update the pin in a commit of its own.
-- Route by method name (`from_method_and_params`). Never deserialize the crate's routing enums
-  straight from a payload: they pick a variant by shape and can pick the wrong one.
+  refused, with its version in the message.
+- The wire types are the adapter's own (`wire.rs`): only the messages it reads and writes. Do not
+  add `agent-client-protocol-schema` or the SDK crate `agent-client-protocol` to the workspace.
+  The schema crate turns on `serde_json`'s `preserve_order`, and cargo applies a feature to every
+  crate in the build: with it, JSON objects stop sorting their keys everywhere, which changed the
+  daemon's golden records and the CLI's call fingerprints when it was tried
+  ([research](../research/acp-rust-package.md)).
+- Route by method name, then read the payload as that method's type. A kind the adapter does not
+  name (an update, a content block, a tool kind, a stop reason) reads as `Other`: it is skipped or
+  shown as unsupported, never guessed at.
 - One agent process per conversation, started and stopped by the daemon like any provider's.
   The dialect does no I/O.
 
@@ -34,14 +37,17 @@
 
 ## Permissions
 
-- `session/request_permission` is shown with the agent's **own options**, in its order and under
-  its names. Maiker adds none and hides none.
-- A person's choice is sent back as that option's id. Maiker never picks an option the person did
-  not, and never answers from a remembered rule: the "always in this project" rule of
+- `session/request_permission` offers a person only what the agent offered: allow once, allow
+  for the session (the agent's `allow_always`) and decline (`reject_once`), each only when the
+  agent listed an option of that kind. `reject_always` has no choice of ours and is not offered.
+  The options are not yet shown under the agent's own names (MAITTY-494).
+- A person's choice is sent back as the id of the agent's first option of that kind. Maiker never
+  picks an option the person did not, and never answers from a remembered rule: the "always in this project" rule of
   [ADR 0005](../adr/0005-provider-adapters-and-permissions.md) is for command requests of the
   native adapters, whose commands Maiker can hash exactly.
 - Interrupting a turn sends `session/cancel` and answers every permission request still open with
-  the `cancelled` outcome, never with an option.
+  the `cancelled` outcome, never with an option. A request that arrives outside a turn is
+  answered `cancelled` and shown to nobody.
 - Maiker never sends `session/set_mode` or `session/set_config_option` to move a running session
   to a wider mode. A mode is chosen by the person, and only among the modes the agent listed.
 
@@ -68,7 +74,12 @@
 | `ProviderEvent::ApprovalRequested` | `session/request_permission` |
 
 Stop reasons: `end_turn` completes the turn; `cancelled` interrupts it; `refusal`,
-`max_tokens` and `max_turn_requests` fail it with the reason as the error.
+`max_tokens`, `max_turn_requests` and any other fail it with the reason as the error. A prompt
+the agent answers with an error fails the turn with the agent's message, cleaned and cut, and
+the conversation goes on.
+
+A saved session's replayed updates (`session/load`) are dropped: the daemon does not rebuild
+history from them yet, so `history_replay` is never claimed.
 
 ## Limits
 
@@ -86,11 +97,7 @@ runs through ACP.
 
 ## Project-specific: what is verified
 
-Nothing against a real agent. The dialect is tested against the protocol's types and a fake
-agent whose lines were written by hand from the schema, not recorded. Gemini CLI and OpenCode
+Nothing against a real agent. The dialect is tested against lines written by hand from the
+protocol's version 1 schema (`maitty-provider-acp/src/fixtures/`), not recorded. Gemini CLI and OpenCode
 have not been run here; recording their real output and pinning their versions is MAITTY-469,
 MAITTY-496 and MAITTY-497.
-
-`agent-client-protocol-schema` turns on `serde_json`'s `preserve_order` for the whole build, so
-JSON objects keep the order they were built in instead of sorting their keys. The golden records
-must stay unchanged when the dependency is added.
