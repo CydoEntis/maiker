@@ -28,7 +28,7 @@ import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
 import { BUNDLED_FONT_NAME, fontStackFor, installedMonospaceFamilies, WEIGHT_BOLD, WEIGHT_EXTRA_BOLD, WEIGHT_LIGHT, WEIGHT_MEDIUM, WEIGHT_REGULAR, WEIGHT_SEMIBOLD, type TerminalFontWeight } from '@/lib/terminalFont'
-import type { AddMachineOptions, Added, Grant, HostChoice, HostKeyReport, MachineActivity, UpdateProgress } from '@/api/machines'
+import type { AddMachineOptions, Added, Grant, HostChoice, MachineActivity, UpdateProgress } from '@/api/machines'
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
@@ -62,8 +62,6 @@ export type MachinesInfo = {
   onOpenLogin: (machine: number) => void
   /** Names a machine in the window (a local label; blank takes the name away). Nothing changes on the machine. */
   onRename: (name: string, nickname: string) => void
-  /** Looks at a machine's host key, and trusts the one that was shown. */
-  hostKey: { inspect: (name: string) => Promise<HostKeyReport>; trust: (name: string, fingerprint: string) => Promise<void> }
   /** How many sessions the sidebar shows for a machine (by its number); without it a tile says it does not know. */
   sessionsOn?: (machine: number) => number
   add: {
@@ -73,10 +71,6 @@ export type MachinesInfo = {
     onAdd: (target: string, name?: string, port?: number, options?: AddMachineOptions) => Promise<Added>
     /** Ends the look that is running. */
     onCancel: () => void
-    /** The host key a not-yet-added host offers, before anything is saved. Rejects when it cannot be fetched. */
-    inspect: (target: string, port?: number) => Promise<HostKeyReport>
-    /** Trusts the host key whose fingerprint was shown, for a host that is not a machine yet. */
-    trust: (target: string, fingerprint: string, port?: number) => Promise<void>
     /** Calls back as the host reports how far a machine's helper install has got; resolves with the call that stops it. */
     onProgress: (listener: (progress: UpdateProgress) => void) => Promise<() => void>
     /** Opens the Add a remote machine dialog (the same one the sidebar opens). */

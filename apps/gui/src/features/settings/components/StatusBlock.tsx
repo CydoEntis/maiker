@@ -37,14 +37,14 @@ type Props = {
   copy?: { text: string; label: string; onCopy: (text: string) => void } | undefined
   /** Raw output, behind Details. */
   raw?: string | null
-  /** On a machine's page: no background, only the mark and the words. */
+  /** In a machine's More fold: no background, only the mark and the words. */
   plain?: boolean
   /** Buttons: the neutral primary first, then text buttons. */
   children?: ReactNode
 }
 
 /**
- * The one block that reports progress and problems, for Add a machine and a machine's page: a mark or
+ * The one block that reports progress and problems, for Add a machine and the machine list: a mark or
  * spinner, one sentence, an optional command, and the actions. Each change is announced.
  */
 export function StatusBlock({ tone, lead, more, copy, raw = null, plain = false, children }: Props) {

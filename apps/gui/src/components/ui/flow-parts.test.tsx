@@ -5,48 +5,6 @@ import { describe, expect, it, vi } from 'vitest'
 import { ChoiceCards } from './choice-cards'
 import { Progress } from './progress'
 import { StepBar } from './step-bar'
-import { Steps, type StepItem } from './steps'
-
-const STEPS: StepItem[] = [
-  { id: 'reach', label: 'Reach the computer', state: 'done', result: 'Reached 100.78.214.15 · 38 ms' },
-  { id: 'key', label: 'Sign in with your key', state: 'needs', result: 'server-15 did not accept your key', body: <button type="button">Copy my key</button> },
-  { id: 'helper', label: 'Set up the Maiker helper', state: 'pending' },
-]
-
-describe('Steps', () => {
-  it('is a named list with the current step marked and each result under its step', () => {
-    render(<Steps label="Adding a machine" steps={STEPS} />)
-    const list = screen.getByRole('list', { name: 'Adding a machine' })
-    const items = within(list).getAllByRole('listitem')
-    expect(items).toHaveLength(3)
-    expect(items[0]).toHaveTextContent('Reached 100.78.214.15 · 38 ms')
-    expect(items[0]).not.toHaveAttribute('aria-current')
-    expect(items[1]).toHaveAttribute('aria-current', 'step')
-    expect(items[2]).not.toHaveAttribute('aria-current')
-  })
-
-  it('names each step state with the shared mark, so colour is never the only signal', () => {
-    render(<Steps label="Adding" steps={STEPS} />)
-    expect(screen.getAllByText(/^(done|needs you|waiting)$/).map((word) => word.textContent)).toEqual(['done', 'needs you', 'waiting'])
-  })
-
-  it('puts the fix of a step that needs you straight under the step, in amber, and keeps it usable', async () => {
-    const user = userEvent.setup()
-    render(<Steps label="Adding" steps={STEPS} />)
-    const fix = screen.getByRole('button', { name: 'Copy my key' })
-    expect(screen.getByText('Sign in with your key')).toHaveClass('text-(--needs)')
-    await user.tab()
-    expect(fix).toHaveFocus()
-  })
-
-  it('announces a result politely when it arrives', () => {
-    const { rerender } = render(<Steps label="Adding" steps={[{ id: 'a', label: 'Reach', state: 'running' }]} />)
-    const live = screen.getByRole('listitem').querySelector('[aria-live="polite"]')
-    expect(live).not.toBeNull()
-    rerender(<Steps label="Adding" steps={[{ id: 'a', label: 'Reach', state: 'done', result: 'Reached it' }]} />)
-    expect(screen.getByRole('listitem').querySelector('[aria-live="polite"]')).toHaveTextContent('Reached it')
-  })
-})
 
 describe('StepBar', () => {
   const NAMES = ['Welcome', 'Agents', 'Your view']

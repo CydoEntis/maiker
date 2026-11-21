@@ -2,7 +2,6 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { HostKeyReport } from '@/api/machines'
 import { machineHeads, type MachineHead, type RemoteMachine } from '@/features/workspace/model/machines'
 import type { MachinesInfo } from './DesktopSettings'
 import { MachinesPage } from './MachinesPage'
@@ -10,12 +9,16 @@ import { MachinesPage } from './MachinesPage'
 vi.mock('@/TerminalView', () => ({ TerminalView: ({ conversation }: { conversation: { id: string } }) => <div data-testid="key-terminal">{conversation.id}</div> }))
 
 type State = RemoteMachine['state']
-const OLDER = 'run `maiker machine update NAME`, then retry'
-const MISSING = 'run `maiker machine update NAME --install`, then retry'
+/** The host's sentences and failure kinds (crates/maitty-machines link_failure), NAME standing for the machine. */
+const OLDER: Partial<State> = { why: 'NAME runs an older Maiker: run `maiker machine update NAME`, then try again.', failure: 'update', fix_command: 'maiker machine update NAME' }
+const MISSING: Partial<State> = { why: "Maiker isn't installed on NAME: run `maiker machine update NAME --install` (Linux and macOS machines only), then try again.", failure: 'install', fix_command: 'maiker machine update NAME --install' }
+const REFUSED_KEY: Partial<State> = { why: 'NAME refused your key: run `ssh-copy-id me@NAME.lan` in a terminal, then try again.', failure: 'key-refused', fix_command: 'ssh-copy-id me@NAME.lan' }
 
 function machine(id: number, name: string, state: State['state'], extra: Partial<State> = {}): RemoteMachine {
-  const why = (extra.why ?? null)?.replace('NAME', name) ?? null
-  return { state: { machine: id, name, state, why, attempt: null, since: Date.now() - 14 * 60_000, target: `me@${name}.lan`, ...extra, ...(why === null ? {} : { why }) }, conversations: [], heard: true, listedAt: 0 }
+  const named = (text: string | null | undefined) => text?.replaceAll('NAME', name) ?? null
+  const why = named(extra.why)
+  const fixCommand = named(extra.fix_command)
+  return { state: { machine: id, name, state, why, attempt: null, since: Date.now() - 14 * 60_000, target: `me@${name}.lan`, ...extra, ...(why === null ? {} : { why }), ...(fixCommand === null ? {} : { fix_command: fixCommand }) }, conversations: [], heard: true, listedAt: 0 }
 }
 
 function heads(...machines: RemoteMachine[]): MachineHead[] {
@@ -34,8 +37,7 @@ function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
     onCopyCommand: vi.fn(),
     onOpenLogin: vi.fn(),
     onRename: vi.fn(),
-    hostKey: { inspect: vi.fn(), trust: vi.fn(() => Promise.resolve()) },
-    add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), inspect: vi.fn(), trust: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() },
+    add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() },
     ...overrides,
   }
 }
@@ -45,8 +47,9 @@ function renderPage(machines: MachinesInfo, appVersion = '0.46.0') {
   return userEvent.setup()
 }
 
-const rowOf = (name: string) => screen.getByRole('button', { name }).closest('[role="listitem"]') as HTMLElement
-const names = () => within(screen.getByRole('list')).getAllByRole('listitem').map((item) => within(item).getAllByRole('button')[0]?.textContent)
+const rowOf = (name: string) => screen.getByRole('listitem', { name })
+const names = () => within(screen.getByRole('list')).getAllByRole('listitem').map((item) => item.getAttribute('aria-label'))
+const buttonsOf = (name: string) => within(rowOf(name)).getAllByRole('button').map((button) => button.textContent)
 
 describe('the machine list', () => {
   it('shows a placeholder until the host has answered, and cannot add yet', () => {
@@ -68,7 +71,7 @@ describe('the machine list', () => {
     const list = heads(
       machine(1, 'quiet', 'connected'),
       machine(2, 'busy', 'connected'),
-      machine(3, 'older', 'needs-update', { why: OLDER }),
+      machine(3, 'older', 'needs-update', OLDER),
       machine(4, 'gone', 'unreachable', { why: 'no answer' }),
       machine(5, 'locked', 'needs-login', { said: 'me@locked.lan: Permission denied (publickey).' }),
     )
@@ -84,13 +87,13 @@ describe('the machine list', () => {
   })
 
   it('offers each machine at most the one fix its state needs', () => {
-    const list = heads(machine(1, 'gone', 'unreachable'), machine(2, 'locked', 'needs-login'), machine(3, 'older', 'needs-update', { why: OLDER }), machine(4, 'bare', 'needs-update', { why: MISSING }), machine(5, 'fine', 'connected'))
+    const list = heads(machine(1, 'gone', 'unreachable'), machine(2, 'locked', 'needs-login'), machine(3, 'older', 'needs-update', OLDER), machine(4, 'bare', 'needs-update', MISSING), machine(5, 'fine', 'connected'))
     renderPage(info({ list }))
-    expect(within(rowOf('gone')).getAllByRole('button').map((button) => button.textContent)).toEqual(['gone', 'Retry'])
-    expect(within(rowOf('locked')).getAllByRole('button').map((button) => button.textContent)).toEqual(['locked', 'Fix'])
-    expect(within(rowOf('older')).getAllByRole('button').map((button) => button.textContent)).toEqual(['older', 'Update'])
-    expect(within(rowOf('bare')).getAllByRole('button').map((button) => button.textContent)).toEqual(['bare', 'Install'])
-    expect(within(rowOf('fine')).getAllByRole('button')).toHaveLength(1)
+    expect(buttonsOf('gone')).toEqual(['Retry', 'More', 'Remove'])
+    expect(buttonsOf('locked')).toEqual(['Fix', 'More', 'Remove'])
+    expect(buttonsOf('older')).toEqual(['Update', 'More', 'Remove'])
+    expect(buttonsOf('bare')).toEqual(['Install', 'More', 'Remove'])
+    expect(buttonsOf('fine')).toEqual(['More', 'Remove'])
   })
 
   it('retries in place without leaving the list', async () => {
@@ -103,21 +106,20 @@ describe('the machine list', () => {
     expect(screen.getByText('1 machine')).toBeInTheDocument()
   })
 
-  it('opens the page of a machine from its row, and Fix opens it too', async () => {
+  it('has no page per machine: More folds its settings open under its row, and Fix opens that fold', async () => {
     const list = heads(machine(1, 'locked', 'needs-login', { said: 'x: Permission denied (publickey).' }), machine(2, 'fine', 'connected'))
     const user = renderPage(info({ list }))
+    const more = screen.getByRole('button', { name: 'More about fine' })
+    expect(more).toHaveAttribute('aria-expanded', 'false')
+    await user.click(more)
+    expect(more).toHaveAttribute('aria-expanded', 'true')
+    expect(within(rowOf('fine')).getByRole('group', { name: 'More about fine' })).toBeInTheDocument()
+    expect(screen.queryByRole('heading')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Fix locked' }))
-    expect(screen.getByRole('heading', { name: 'locked' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'All machines' }))
-    await user.click(screen.getByRole('button', { name: 'fine' }))
-    expect(screen.getByRole('heading', { name: 'fine' })).toBeInTheDocument()
-  })
-
-  it('marks the machine you came back from', async () => {
-    const user = renderPage(info({ list: heads(machine(1, 'fine', 'connected')) }))
-    await user.click(screen.getByRole('button', { name: 'fine' }))
-    await user.click(screen.getByRole('button', { name: 'All machines' }))
-    expect(rowOf('fine')).toHaveAttribute('aria-current', 'true')
+    expect(within(rowOf('locked')).getByRole('group', { name: 'More about locked' })).toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'More about fine' })).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'More about locked' }))
+    expect(screen.queryByRole('group')).toBeNull()
   })
 
   it('shows a search field only past twelve machines', () => {
@@ -143,7 +145,7 @@ describe('the machine list', () => {
 })
 
 describe('updating from the list', () => {
-  const older = (name: string, id: number) => machine(id, name, 'needs-update', { why: OLDER })
+  const older = (name: string, id: number) => machine(id, name, 'needs-update', OLDER)
 
   it('asks what an update will interrupt before it runs, then updates in place', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
@@ -187,7 +189,7 @@ describe('updating from the list', () => {
   it('installs on a machine with none after one question, without counting what is open', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
     const onCheckActivity = vi.fn(() => Promise.resolve(null))
-    const user = renderPage(info({ list: heads(machine(1, 'bare', 'needs-update', { why: MISSING })), onUpdate, onCheckActivity }))
+    const user = renderPage(info({ list: heads(machine(1, 'bare', 'needs-update', MISSING)), onUpdate, onCheckActivity }))
     await user.click(screen.getByRole('button', { name: 'Install bare' }))
     await user.click(screen.getByRole('button', { name: 'Install on bare now' }))
     expect(onUpdate).toHaveBeenCalledWith('bare', 'install', false)
@@ -211,61 +213,74 @@ describe('updating from the list', () => {
   })
 })
 
-describe("a machine's page", () => {
-  it('says it is connected, with the sessions, and offers no fix', async () => {
+describe("a machine's More fold", () => {
+  const unfold = async (user: ReturnType<typeof userEvent.setup>, name: string) => {
+    await user.click(screen.getByRole('button', { name: `More about ${name}` }))
+    return screen.getByRole('group', { name: `More about ${name}` })
+  }
+
+  it('says where it is and that its Maiker is up to date, and offers no fix when it is connected', async () => {
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), sessionsOn: () => 2 }))
-    await user.click(screen.getByRole('button', { name: 'devbox' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Connected · 2 sessions')
-    expect(screen.getByText('Up to date')).toBeInTheDocument()
-    expect(screen.getByText('me@devbox.lan')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Retry|Try again|Update/ })).toBeNull()
+    const fold = await unfold(user, 'devbox')
+    expect(within(fold).getByText('Up to date')).toBeInTheDocument()
+    expect(within(fold).getByText('me@devbox.lan')).toBeInTheDocument()
+    expect(within(fold).queryByRole('status')).toBeNull()
+    expect(within(fold).queryByRole('button')).toBeNull()
   })
 
   it('renames the machine as you type, as a local label', async () => {
     const onRename = vi.fn()
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), onRename }))
-    await user.click(screen.getByRole('button', { name: 'devbox' }))
-    await user.type(screen.getByRole('textbox', { name: 'Name' }), '!')
+    const fold = await unfold(user, 'devbox')
+    await user.type(within(fold).getByRole('textbox', { name: 'Name' }), '!')
     expect(onRename).toHaveBeenLastCalledWith('devbox', 'devbox!')
   })
 
-  it('shows what is wrong with its one fix: how long it has been unreachable, and Retry now', async () => {
+  it('says how long a machine that is down has been unreachable, and why; Retry stays on the row', async () => {
     const onRetry = vi.fn()
-    const user = renderPage(info({ list: heads(machine(1, 'gpu', 'unreachable', { why: 'Maiker keeps trying.' })), onRetry }))
-    await user.click(screen.getByRole('button', { name: 'gpu' }))
-    expect(screen.getByRole('status')).toHaveTextContent("Can't reach it for 14 min. Maiker keeps trying.")
-    await user.click(screen.getByRole('button', { name: 'Retry now' }))
+    const said = 'ssh: connect to host gpu.lan port 22: No route to host'
+    const user = renderPage(info({ list: heads(machine(1, 'gpu', 'unreachable', { why: 'Maiker keeps trying.', said })), onRetry }))
+    const fold = await unfold(user, 'gpu')
+    expect(within(fold).getByRole('status')).toHaveTextContent("Can't reach it for 14 min. Maiker keeps trying.")
+    expect(within(fold).queryByRole('button', { name: /Retry|Try again/ })).toBeNull()
+    await user.click(within(fold).getByRole('button', { name: 'Details' }))
+    expect(within(fold).getByText(said)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Retry gpu' }))
     expect(onRetry).toHaveBeenCalledWith('gpu')
   })
 
-  it('gives the command for a rejected key, with Copy, and tries again', async () => {
+  it('gives a rejected key the host\'s sentence and its command with Copy and Try again, but no terminal', async () => {
     const onRetry = vi.fn()
     const onCopyCommand = vi.fn()
-    const user = renderPage(info({ list: heads(machine(1, 'studio', 'needs-login', { said: 'me@studio.lan: Permission denied (publickey).' })), onRetry, onCopyCommand }))
+    const user = renderPage(info({ list: heads(machine(7, 'studio', 'needs-login', { ...REFUSED_KEY, said: 'me@studio.lan: Permission denied (publickey).' })), onRetry, onCopyCommand }))
     await user.click(screen.getByRole('button', { name: 'Fix studio' }))
-    expect(screen.getByRole('status')).toHaveTextContent('Key rejected. Run this once on this computer, then try again.')
-    await user.click(screen.getByRole('button', { name: 'Copy the ssh-copy-id command' }))
+    const fold = screen.getByRole('group', { name: 'More about studio' })
+    expect(within(fold).getByRole('status')).toHaveTextContent('Key rejected. studio refused your key: run `ssh-copy-id me@studio.lan` in a terminal, then try again.')
+    expect(within(fold).queryByRole('button', { name: 'Open a terminal' })).toBeNull()
+    await user.click(within(fold).getByRole('button', { name: 'Copy the command' }))
     expect(onCopyCommand).toHaveBeenCalledWith('ssh-copy-id me@studio.lan')
-    expect(screen.getByText('Copied')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(within(fold).getByText('Copied')).toBeInTheDocument()
+    await user.click(within(fold).getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledWith('studio')
   })
 
-  it('shows the raw words under Details', async () => {
-    const said = 'me@studio.lan: Permission denied (publickey).'
-    const user = renderPage(info({ list: heads(machine(1, 'studio', 'needs-login', { said })) }))
+  it('offers the terminal sign-in only for a password or a second code, with the host\'s sentence', async () => {
+    const onOpenLogin = vi.fn()
+    const why = "studio asks for a password or a second code, which Maiker can't answer: set up a key, or sign in in a terminal."
+    const user = renderPage(info({ list: heads(machine(7, 'studio', 'needs-login', { why, failure: 'needs-person' })), onOpenLogin }))
     await user.click(screen.getByRole('button', { name: 'Fix studio' }))
-    expect(screen.queryByText(said)).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Details' }))
-    expect(screen.getByText(said)).toBeInTheDocument()
+    const fold = screen.getByRole('group', { name: 'More about studio' })
+    expect(within(fold).getByRole('status')).toHaveTextContent(`Needs a sign-in. ${why}`)
+    await user.click(within(fold).getByRole('button', { name: 'Open a terminal' }))
+    expect(onOpenLogin).toHaveBeenCalledWith(7)
   })
 
-  it('updates after asking, with the Update button on its Maiker row', async () => {
+  it('says its Maiker is older, while Update stays on the row', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'needs-update', { why: OLDER })), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'devbox' }))
-    expect(screen.getByText('Older · this computer has 0.46.0')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update Maiker on devbox' }))
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'needs-update', OLDER)), onUpdate }))
+    const fold = await unfold(user, 'devbox')
+    expect(within(fold).getByText('Older · this computer has 0.46.0')).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Update devbox' }))
     await user.click(await screen.findByRole('button', { name: 'Update devbox now' }))
     expect(onUpdate).toHaveBeenCalledWith('devbox', 'update', false)
   })
@@ -273,53 +288,66 @@ describe("a machine's page", () => {
   it('is off for the clipboard and notifications until allowed, and each switch asks for just its own power', async () => {
     const onGrant = vi.fn()
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), onGrant }))
-    await user.click(screen.getByRole('button', { name: 'devbox' }))
-    const clipboard = screen.getByRole('switch', { name: 'Allow devbox to copy to your clipboard' })
-    const notices = screen.getByRole('switch', { name: 'Allow devbox to notify you' })
+    const fold = await unfold(user, 'devbox')
+    const clipboard = within(fold).getByRole('switch', { name: 'Allow devbox to copy to your clipboard' })
+    const notices = within(fold).getByRole('switch', { name: 'Allow devbox to notify you' })
     expect(clipboard).toHaveAttribute('aria-checked', 'false')
+    expect(notices).toHaveAttribute('aria-checked', 'false')
     await user.click(notices)
     expect(onGrant).toHaveBeenCalledWith('devbox', 'notices', true)
     await user.click(clipboard)
     expect(onGrant).toHaveBeenLastCalledWith('devbox', 'clipboard', true)
+    expect(onGrant).toHaveBeenCalledTimes(2)
   })
 
-  it('asks before removing, says what stays, and goes back to the list', async () => {
-    const onRemove = vi.fn()
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), onRemove }))
-    await user.click(screen.getByRole('button', { name: 'devbox' }))
-    await user.click(screen.getByRole('button', { name: 'Remove devbox…' }))
-    expect(onRemove).not.toHaveBeenCalled()
-    expect(screen.getByText('Its sessions stop showing here. Nothing on devbox is deleted.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    expect(onRemove).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Remove devbox…' }))
-    await user.click(screen.getByRole('button', { name: 'Remove devbox' }))
-    expect(onRemove).toHaveBeenCalledWith('devbox')
+  it('turns a switch that is on back off', async () => {
+    const onGrant = vi.fn()
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected', { clipboard: true, notices: true })), onGrant }))
+    const fold = await unfold(user, 'devbox')
+    await user.click(within(fold).getByRole('switch', { name: 'Allow devbox to copy to your clipboard' }))
+    expect(onGrant).toHaveBeenCalledWith('devbox', 'clipboard', false)
+    await user.click(within(fold).getByRole('switch', { name: 'Allow devbox to notify you' }))
+    expect(onGrant).toHaveBeenLastCalledWith('devbox', 'notices', false)
   })
 })
 
-describe('a host key on a machine that stopped on it', () => {
-  const stopped = (rest: Partial<State> = {}) => heads(machine(1, 'new', 'needs-login', { said: 'Host key verification failed.', ...rest }))
-  const report = (status: 'unknown' | 'changed'): HostKeyReport => (status === 'unknown'
-    ? { status, host: 'new.lan', port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:abc' }
-    : { status, host: 'new.lan', port: 22, key_type: 'ssh-ed25519', fingerprint: 'SHA256:new', known_fingerprint: 'SHA256:old' })
-
-  it('shows its fingerprint and trusts it only when you say so', async () => {
-    const trust = vi.fn(() => Promise.resolve())
-    const user = renderPage(info({ list: stopped(), hostKey: { inspect: vi.fn(() => Promise.resolve(report('unknown'))), trust } }))
-    await user.click(screen.getByRole('button', { name: 'Fix new' }))
-    expect(await screen.findByText('First time connecting to new.')).toBeInTheDocument()
-    expect(screen.getByText('SHA256:abc')).toBeInTheDocument()
-    expect(trust).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Trust and connect' }))
-    expect(trust).toHaveBeenCalledWith('new', 'SHA256:abc')
+describe('removing a machine from its row', () => {
+  it('asks first, says what stays, and can be cancelled', async () => {
+    const onRemove = vi.fn(() => Promise.resolve(true))
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), onRemove }))
+    await user.click(screen.getByRole('button', { name: 'Remove devbox…' }))
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(within(rowOf('devbox')).getByRole('status')).toHaveTextContent('Remove devbox? Its sessions stop showing here. Nothing on devbox is deleted.')
+    await user.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: 'Remove devbox' })).toBeNull()
   })
 
-  it('never offers to trust a key that changed', async () => {
-    const user = renderPage(info({ list: stopped(), hostKey: { inspect: vi.fn(() => Promise.resolve(report('changed'))), trust: vi.fn() } }))
+  it('removes the machine once you say so', async () => {
+    const onRemove = vi.fn(() => Promise.resolve(true))
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected'), machine(2, 'gpu', 'unreachable')), onRemove }))
+    await user.click(screen.getByRole('button', { name: 'Remove gpu…' }))
+    await user.click(screen.getByRole('button', { name: 'Remove gpu' }))
+    expect(onRemove).toHaveBeenCalledWith('gpu')
+    expect(onRemove).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Remove gpu' })).toBeNull()
+  })
+})
+
+describe('a machine whose host key changed', () => {
+  const why = "new's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R 'new.lan'` in a terminal and try again."
+  const stopped = () => heads(machine(1, 'new', 'needs-login', { why, failure: 'host-key-changed', fix_command: "ssh-keygen -R 'new.lan'", said: 'Host key verification failed.' }))
+
+  it('says so with the host\'s sentence and Try again, never offering to trust the key', async () => {
+    const onRetry = vi.fn()
+    const user = renderPage(info({ list: stopped(), onRetry }))
     await user.click(screen.getByRole('button', { name: 'Fix new' }))
-    expect(await screen.findByText("new's identity changed since you last connected.")).toBeInTheDocument()
+    const fold = screen.getByRole('group', { name: 'More about new' })
+    expect(within(fold).getByRole('status')).toHaveTextContent(`Host key changed. ${why}`)
     expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
+    expect(screen.queryByText(/ssh-copy-id/)).toBeNull()
+    await user.click(within(fold).getByRole('button', { name: 'Try again' }))
+    expect(onRetry).toHaveBeenCalledWith('new')
   })
 })
 

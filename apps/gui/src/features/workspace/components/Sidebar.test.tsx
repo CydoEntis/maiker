@@ -32,7 +32,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}) {
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: groupByProject(sessions, []).machines, selectedProject: null, statusHeadings: true, focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none,
-    onOpenProject: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onFixMachine: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
+    onOpenProject: none, onNewShell: none, onAddMachine: none, onMachineSettings: none, onRetryMachine: none, onSignInMachine: none, onCopyCommand: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onSplitSession: none, onCopyPath: none, onCopyText: none, onShowChanges: none, onMarkDone: none, onBringBack: none, onUnsnooze: none, onGetFile: none,
     onEndSession: none, onOpenSettings: none, onRecentSessions: none,
     ...more,
@@ -150,15 +150,15 @@ describe('a machine that needs maiker installed or updated', () => {
     return within(screen.getByRole('menu', { name: 'devbox' })).getAllByRole('menuitem').map((item) => item.textContent)
   }
 
-  it('offers one Install button when it is down, which opens its fix, and its dot says it is not installed', async () => {
+  it('offers one Install button when it is down, which asks to install, and its dot says it is not installed', async () => {
     const user = userEvent.setup()
-    const onFixMachine = vi.fn()
-    show([], { machines: [LOCAL_HEAD, needing('install')], onFixMachine })
+    const onUpdateMachine = vi.fn()
+    show([], { machines: [LOCAL_HEAD, needing('install')], onUpdateMachine })
     expect(screen.getByRole('img', { name: /^devbox is / })).toHaveClass('is-warn')
-    expect(screen.queryByRole('button', { name: 'Fix devbox' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Retry devbox' })).toBeNull()
     expect(screen.getAllByRole('button', { name: 'Install Maiker on devbox' })).toHaveLength(1)
     await user.click(screen.getByRole('button', { name: 'Install Maiker on devbox' }))
-    expect(onFixMachine).toHaveBeenCalledWith(expect.objectContaining({ name: 'devbox' }))
+    expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'install')
   })
 
   it('has no + on a machine, and a machine that is down still says why from its dot and its menu', () => {
@@ -493,15 +493,56 @@ describe('a machine heading', () => {
     expect(screen.getByText('Connecting…')).toBeTruthy()
   })
 
-  it('marks a machine that is not up with a red dot, Offline and a Fix button, the reason as its tooltip, and offers no new session on it', async () => {
+  it('shows a machine that is not up with its sentence under the heading and Retry, which dials it again, and offers no new session on it', async () => {
     const user = userEvent.setup()
-    const onFixMachine = vi.fn()
-    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why: 'connection refused', chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }], onFixMachine })
-    expect(screen.getByText('Offline')).toBeTruthy()
-    expect(screen.getByText('Offline').closest('.mx-machine-why')).toHaveAttribute('title', 'connection refused')
+    const onRetryMachine = vi.fn()
+    const why = "Can't reach devbox: check the name or address, and that the machine is on (Connection refused)."
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why, failure: 'unreachable', chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }], onRetryMachine })
+    const line = screen.getByRole('group', { name: 'Why devbox is not connected' })
+    expect(within(line).getByText(why)).toBeTruthy()
+    expect(within(line).queryByRole('button', { name: 'Copy the command' })).toBeNull()
+    expect(within(line).queryByRole('button', { name: 'Sign in in a terminal' })).toBeNull()
     expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Open a project on devbox' }).disabled).toBe(true)
-    await user.click(screen.getByRole('button', { name: 'Fix devbox' }))
-    expect(onFixMachine).toHaveBeenCalledWith(expect.objectContaining({ name: 'devbox' }))
+    await user.click(within(line).getByRole('button', { name: 'Retry devbox' }))
+    expect(onRetryMachine).toHaveBeenCalledWith('devbox')
+  })
+
+  it('offers Copy for the command its sentence names, the whole command', async () => {
+    const user = userEvent.setup()
+    const onCopyCommand = vi.fn()
+    const command = 'ssh-copy-id cydo@devbox.example.internal'
+    const why = `devbox refused your key: run \`${command}\` in a terminal, then try again.`
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why, failure: 'key-refused', fixCommand: command, chip: { glyph: '✕', word: 'needs login', tone: 'bad' } }], onCopyCommand })
+    const line = screen.getByRole('group', { name: 'Why devbox is not connected' })
+    expect(within(line).getByText(why)).toBeTruthy()
+    expect(within(line).getByRole('button', { name: 'Retry devbox' })).toBeTruthy()
+    expect(within(line).queryByRole('button', { name: 'Sign in in a terminal' })).toBeNull()
+    await user.click(within(line).getByRole('button', { name: 'Copy the command' }))
+    expect(onCopyCommand).toHaveBeenCalledWith(command)
+  })
+
+  it('says a changed host key in the host\'s sentence, with Copy for the command that clears it and Retry, never Trust', async () => {
+    const user = userEvent.setup()
+    const onCopyCommand = vi.fn()
+    const command = "ssh-keygen -R 'devbox.example'"
+    const why = `devbox's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run \`${command}\` in a terminal and try again.`
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why, failure: 'host-key-changed', fixCommand: command, said: 'Host key verification failed.', chip: { glyph: '✕', word: 'needs login', tone: 'bad' } }], onCopyCommand })
+    const line = screen.getByRole('group', { name: 'Why devbox is not connected' })
+    expect(within(line).getByText(why)).toBeTruthy()
+    expect(within(line).getByRole('button', { name: 'Retry devbox' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /Trust/ })).toBeNull()
+    await user.click(within(line).getByRole('button', { name: 'Copy the command' }))
+    expect(onCopyCommand).toHaveBeenCalledWith(command)
+  })
+
+  it('offers a terminal sign-in only for a login that needs a person', async () => {
+    const user = userEvent.setup()
+    const onSignInMachine = vi.fn()
+    show([], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, why: "devbox asks for a password or a second code, which Maiker can't answer: set up a key, or sign in in a terminal.", failure: 'needs-person', chip: { glyph: '✕', word: 'needs login', tone: 'bad' } }], onSignInMachine })
+    const line = screen.getByRole('group', { name: 'Why devbox is not connected' })
+    expect(within(line).getByRole('button', { name: 'Retry devbox' })).toBeTruthy()
+    await user.click(within(line).getByRole('button', { name: 'Sign in in a terminal' }))
+    expect(onSignInMachine).toHaveBeenCalledWith(4, 'devbox')
   })
 
   it('collapses its sessions when the name is clicked', async () => {
@@ -795,15 +836,15 @@ describe('the tree of machine, project and status', () => {
     }
   })
 
-  it('keeps a saved machine with no sessions as a card of its own: Offline with Fix, and "No sessions yet"', () => {
-    const onFixMachine = vi.fn()
+  it('keeps a saved machine with no sessions as a card of its own: Offline with Retry, and "No sessions yet"', () => {
+    const onRetryMachine = vi.fn()
     const down: MachineHead = { ...DEVBOX, down: true, chip: { glyph: '●', word: 'unreachable', tone: 'bad' } }
-    show(mixed(), { machines: [LOCAL_HEAD, down], onFixMachine })
+    show(mixed(), { machines: [LOCAL_HEAD, down], onRetryMachine })
     const card = screen.getByRole('group', { name: 'Projects on devbox' }).closest<HTMLElement>('.mx-machine') as HTMLElement
     expect(within(card).getByText('Offline')).toBeTruthy()
     expect(within(card).getByText('No sessions yet')).toBeTruthy()
-    fireEvent.click(within(card).getByRole('button', { name: 'Fix devbox' }))
-    expect(onFixMachine).toHaveBeenCalledWith(down)
+    fireEvent.click(within(card).getByRole('button', { name: 'Retry devbox' }))
+    expect(onRetryMachine).toHaveBeenCalledWith('devbox')
   })
 
   it('shows a session that has done nothing as an italic "New session"', () => {

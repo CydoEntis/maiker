@@ -359,7 +359,7 @@ the window, and any other miss waits for a `list_sessions` read to confirm it (U
 that machine's sessions, and a miss of one waits for a later list of that machine, which `ask_machine_list(machine)`
 asks for (`Query::List` on its line, refused for this computer and for a machine with no line, and dropped
 within `WINDOW_LIST_ASK_EVERY`, 5 s, of the last ask of that machine it sent); its connection
-state as `machine-state` (`connecting`, `connected`, `reconnecting`, `needs-login`, `needs-update`, `unreachable`, or `refused` when a different daemon answers at its name), with `since` (epoch ms) once it is not connected and the machine's `clipboard`, `notices` and `sounds` opt-ins from its entry (all off unless it says); a notice from a machine that opted in goes to the window as `machine-notice` (`{machine, text}`, cleaned, cut and led by `[name]`) and the window shows it as a toast or, away from it, a system notification; `retry_machine(name)` dials a machine now and clears a refusal; `remove_machine(name)` deletes its entry from `config.local.toml` first and only then stops it, forgets its daemon id and tells the window with `machine-removed` (its sessions and saved layout are left alone); the commands that read a pane's files or repository (`repo_query`, `restore_snapshot`, `snapshot_restore_count`, `pane_terminal_screen`) take the pane's `machine` and refuse another machine's with the terminal app's words (`<Feature> is local-only in v1: the files are on <machine>, not on this computer.`), as the window does before it asks (`apps/gui/src/lib/localOnly.ts`); `set_machine_grant(name, grant, on)` allows or stops a machine's `clipboard` or `notices` (written to its entry in `config.local.toml` first, then applied at once; the new state follows as `machine-state`); text an allowed machine asks to copy arrives as `machine-clipboard` (`{machine, text}`); `start_session_on_machine(machine, folder)` starts a terminal session in a typed folder of another machine (one that is not there opens in its home folder); `list_ssh_hosts` lists the `~/.ssh/config` hosts that are not machines yet; `add_machine(target, name?)` checks the target, looks at the machine over ssh without asking anyone anything (12 s at most; `cancel_add_machine` ends it), writes the entry only when that held up, and starts dialling it (a login that needs a person opens ssh in a session on this computer, and the window dials again when it closes); `list_machines_overview` gives a window that starts late each machine's last state and
+state as `machine-state` (`connecting`, `connected`, `reconnecting`, `needs-login`, `needs-update`, `unreachable`, or `refused` when a different daemon answers at its name), with `since` (epoch ms) once it is not connected and the machine's `clipboard`, `notices` and `sounds` opt-ins from its entry (all off unless it says); a notice from a machine that opted in goes to the window as `machine-notice` (`{machine, text}`, cleaned, cut and led by `[name]`) and the window shows it as a toast or, away from it, a system notification; `retry_machine(name)` dials a machine now and clears a refusal; `remove_machine(name)` deletes its entry from `config.local.toml` first and only then stops it, forgets its daemon id and tells the window with `machine-removed` (its sessions and saved layout are left alone); the commands that read a pane's files or repository (`repo_query`, `restore_snapshot`, `snapshot_restore_count`, `pane_terminal_screen`) take the pane's `machine` and refuse another machine's with the terminal app's words (`<Feature> is local-only in v1: the files are on <machine>, not on this computer.`), as the window does before it asks (`apps/gui/src/lib/localOnly.ts`); `set_machine_grant(name, grant, on)` allows or stops a machine's `clipboard` or `notices` (written to its entry in `config.local.toml` first, then applied at once; the new state follows as `machine-state`); text an allowed machine asks to copy arrives as `machine-clipboard` (`{machine, text}`); `start_session_on_machine(machine, folder)` starts a terminal session in a typed folder of another machine (one that is not there opens in its home folder); `list_ssh_hosts` lists the `~/.ssh/config` hosts that are not machines yet; `add_machine(target, name?)` checks the target, looks at the machine over ssh without asking anyone anything (12 s at most; `cancel_add_machine` ends it), writes the entry only when that held up, and starts dialling it; it answers `added`, `login` (written, but ssh could not log in alone) or `failed` (nothing written: unreachable, or a changed host key), the last two with the shared sentence (`message`), the failure's kind and its `fix_command`, or `needs-name` or `cancelled`, and rejects with words only for a request it refuses before looking (a login that needs a person opens ssh in a session on this computer through `open_machine_login`, and the machine connects once it is done); `list_machines_overview` gives a window that starts late each machine's last state and
 snapshot. The window names a machine's terminal sessions `build/t12` (the machine's name, so a saved
 layout survives a restart; this computer's stay `t12`) and passes the number the host gave the
 machine (`machine`) with each command, only for a pane of another machine. Files, Changes, Find,
@@ -1455,15 +1455,28 @@ that ends sooner counts as a failure, so a line turned away as soon as it is mad
 as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
-type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent
-its stream marker or a frame. Exit 127 is `NeedsUpdate` with the install text. Exit
-`NO_DAEMON_EXIT` (74) is `Unreachable` with the start-it text. Exit 255 with nothing received
-and one of three fixed tokens in stderr (`Permission denied`, `Host key verification failed`,
-`Too many authentication failures`) is `NeedsLogin`: the only place ssh's words are read.
-Everything else is `Unreachable` with ssh's last stderr line, control characters removed and
-cut to 200 characters. The fix text of each class is one constant in `maitty-machines` (`link_failure.rs`)
-(`FIX_LOGIN`, `FIX_UPDATE`, `FIX_INSTALL`, `FIX_NO_DAEMON`); `FIX_UPDATE` and `FIX_INSTALL` name
-`maiker machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
+type (`OtherVersion` is `Update`, or `UpdateHere` when the far side is newer), ssh's exit status, and
+whether the far side ever sent its stream marker or a frame. Exit 127 is `Install`. Exit
+`NO_DAEMON_EXIT` (74) is `NoDaemon`. Exit 255 with nothing received is read for a few fixed tokens,
+the only place ssh's words are read: `REMOTE HOST IDENTIFICATION HAS CHANGED` or `Host key
+verification failed` is `HostKeyChanged` (with the host as `known_hosts` names it, from ssh's own
+`ssh-keygen -R` line when it is a plain host); `Permission denied` or `Too many authentication
+failures` is `NeedsPerson` when the key already worked (`partial success`) or the methods ssh lists
+hold no `publickey`, else `KeyRefused`. Everything else is `Unreachable` with ssh's last stderr
+line, control characters removed and cut to 200 characters. The connection state carries the class
+itself (`ConnectionState::NeedsLogin`, `NeedsUpdate` and `Unreachable` hold a `FailureClass`;
+`ConnectionState::failure`), and a refusal by daemon id is `Refused`.
+
+**Failure sentences.** `link_failure::sentence(failure, subject, os)` is the only place a failure is
+worded: one sentence that names the machine and gives the exact fix, never an internal part of the
+app (no helper, probe or daemon), and never an offer to accept a changed host key. `Subject` is the
+machine's name, target and port (`Subject::of` a `Machine`, `Subject::of_def` a `MachineDef`);
+`ClientOs` picks the fix for the system the person types on (`ssh-copy-id` on Linux and macOS, the
+PowerShell line that does the same on Windows). `fix_command` is the one command a sentence names,
+for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
+`doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
+`message`) show these sentences and write none of their own. `is_failure_sentence` tells such a
+sentence from a machine's other words, for MCP's `unreachable` error code.
 
 **Custom transport.** A machine with `via` is reached by running the user's program
 (`Route::Command`, `ssh_command::command_argv`, both in `maitty-machines`) in place of ssh: the same pipes, stream marker skipping,
@@ -1480,7 +1493,7 @@ on every retry of a failed first dial, and after an explicit `Command::Retry` (t
 dialog's retry, also after a refusal). The redials after an established line ended (stalled or
 closed) run `<remote_cmd> proxy --attach-only` (built in `maitty-machines`' `ssh_command.rs`): if no daemon runs
 there, the proxy exits `NO_DAEMON_EXIT` before writing anything, and the machine is `Unreachable`
-with `FIX_NO_DAEMON` ("retry to start it there") until a person retries, so a dropped link never
+with `NoDaemon` ("try again to start it there") until a person retries, so a dropped link never
 brings back a daemon the user stopped. `Machine::from_def` is attach-only by default, which is
 what the CLI's `--on`, MCP and `doctor` use: none of them starts a remote daemon.
 

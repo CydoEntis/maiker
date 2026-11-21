@@ -8,7 +8,7 @@
 use crate::client::remote_snapshot::sanitize_snapshot;
 use crate::config::Config;
 use crate::ipc::Machine;
-use crate::link_failure::{self, FailureClass};
+use crate::link_failure::{self, Subject};
 use crate::protocol::{Reply, TermId};
 use maitty_settings::config::LOCAL_MACHINE;
 use std::str::FromStr;
@@ -281,9 +281,10 @@ impl Target {
     /// error with where it happened.
     pub(crate) fn connect_error(&self, error: anyhow::Error) -> anyhow::Error {
         match self.name().filter(|_| self.is_remote()) {
-            Some(name) => {
-                anyhow::anyhow!("{name}: {}", failure_line(&link_failure::classify(&error)))
-            }
+            Some(_) => anyhow::anyhow!(
+                "{}",
+                link_failure::sentence_here(&link_failure::classify(&error), &Subject::of(&self.machine))
+            ),
             None if self.is_remote() => error.context("over ssh"),
             None => error.context(concat!(
                 "couldn't reach the ",
@@ -307,18 +308,6 @@ impl Target {
             }
             other => Ok(other),
         }
-    }
-}
-
-/// What went wrong and what to do about it, on one line.
-pub(crate) fn failure_line(class: &FailureClass) -> String {
-    match class {
-        FailureClass::Login(_) => format!("needs a login; {}", link_failure::FIX_LOGIN),
-        FailureClass::Update => format!("is another version; {}", link_failure::FIX_UPDATE),
-        FailureClass::UpdateHere => format!("is newer; {}", link_failure::FIX_UPDATE_HERE),
-        FailureClass::Install => format!("has no app; {}", link_failure::FIX_INSTALL),
-        FailureClass::NoDaemon => format!("is not running; {}", link_failure::FIX_NO_DAEMON),
-        FailureClass::Unreachable(why) => format!("unreachable ({why})"),
     }
 }
 

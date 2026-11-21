@@ -398,7 +398,10 @@ mod tests {
         let remote = app.remotes.entry(machine).or_default();
         remote.name = "kingdom".into();
         remote.snap.terms.insert(term.term, info);
-        remote.state = ConnectionState::Unreachable { since: Instant::now(), why: "no route".into() };
+        remote.state = ConnectionState::Unreachable {
+            since: Instant::now(),
+            failure: crate::link_failure::FailureClass::Unreachable("no route".into()),
+        };
         remote.down_since = Some(Instant::now());
         let stopped = app.stopped(ClientTerm::on(machine, term.term)).expect("stopped");
         assert_eq!(stopped.title(), "kingdom stopped answering");

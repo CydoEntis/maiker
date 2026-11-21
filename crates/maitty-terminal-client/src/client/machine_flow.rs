@@ -1,6 +1,7 @@
 //! What the Machines dialog does with a choice. Adding looks at the machine first, with no
-//! prompt (a host that works with keys is added in that one step); a login that needs a person
-//! opens ssh in a popup on this computer, and the machine connects when it closes. Removing
+//! prompt (a host that works with keys is added in that one step); a failure is said with the
+//! shared sentence, and only a login that needs a person (a password, a second code) opens ssh in
+//! a popup on this computer, where the machine connects when it closes (ADR 0017). Removing
 //! takes the machine out of the config, the sidebar and the window's records, and leaves the
 //! machine itself, its sessions and its saved layout alone.
 
@@ -12,7 +13,7 @@ use super::*;
 use crate::client::link::ConnectionState;
 use crate::client::machine_config::{self, Grant};
 use crate::client::machine_ids;
-use crate::link_failure::FailureClass;
+use crate::link_failure::{FailureClass, Subject, sentence_here};
 use crate::machine_probe::{self, Probe};
 use maitty_settings::config::MachineDef;
 use std::collections::HashSet;
@@ -227,17 +228,26 @@ impl App {
         let notice = match result {
             Probe::Cancelled => return,
             Probe::Ready { version } => {
-                self.machine_added(&def, Added::Connect, &version, Outcome::Ready(version.clone()))
+                self.machine_added(&def, Added::Connect(None), &version, Outcome::Ready(version.clone()))
             }
-            Probe::Failed(FailureClass::Login(_)) => {
-                self.machine_added(&def, Added::Login, "", Outcome::Login)
+            // A changed host key is refused by ssh, so nothing is added (ADR 0017).
+            Probe::Failed(
+                failure @ (FailureClass::Unreachable(_) | FailureClass::HostKeyChanged { .. }),
+            ) => say(sentence_here(&failure, &Subject::of_def(&def)), true),
+            // The one login ssh cannot finish alone: a person answers it in the popup.
+            Probe::Failed(failure @ FailureClass::NeedsPerson(_)) => {
+                self.machine_added(&def, Added::Login(failure), "", Outcome::Login)
             }
-            Probe::Failed(FailureClass::Unreachable(why)) => {
-                say(format!("{}: {why}", def.target), true)
+            // Nothing typed in a popup makes the machine take the key: the sentence gives the
+            // command that does, and the machine is kept so `r` tries again once it has run.
+            Probe::Failed(failure @ FailureClass::KeyRefused(_)) => {
+                self.machine_added(&def, Added::Connect(Some(failure)), "", Outcome::SignInFailed)
             }
-            // Reached, but the app is missing, old, or not running: the connection's own state
-            // says which, with the fix, once it dials.
-            Probe::Failed(_) => self.machine_added(&def, Added::Connect, "", Outcome::Fix),
+            // Reached, but the app is missing, old, or not running: said now, and the
+            // connection's own state carries it on once it dials.
+            Probe::Failed(failure) => {
+                self.machine_added(&def, Added::Connect(Some(failure)), "", Outcome::Fix)
+            }
         };
         self.machines_say(notice);
     }
@@ -256,15 +266,9 @@ impl App {
             return say(format!("Could not add {}: {e:#}", def.name), true);
         }
         self.cfg.machines.push(def.clone());
-        self.with_machines_view(|v| {
-            v.step = MachineStep::Added {
-                name: def.name.clone(),
-                target: def.target.clone(),
-                how: outcome,
-            }
-        });
-        if how == Added::Login {
-            match self.machine_first_login(def) {
+        self.machine_added_shows(def, outcome);
+        let still = match how {
+            Added::Login(failure) => match self.machine_first_login(def) {
                 Ok(()) => {
                     return say(
                         format!(
@@ -275,24 +279,36 @@ impl App {
                     );
                 }
                 Err(e) => {
+                    // No popup to sign in with, so the checklist must not point at one.
+                    self.machine_added_shows(def, Outcome::SignInFailed);
                     self.machine_start(def);
-                    return say(
-                        format!(
-                            "Added {}. Run `ssh {}` once in a terminal to log in, then retry ({e:#}).",
-                            def.name, def.target
-                        ),
-                        true,
-                    );
+                    let said = sentence_here(&failure, &Subject::of_def(def));
+                    return say(format!("Added {}. {said} ({e:#})", def.name), true);
                 }
-            }
-        }
+            },
+            Added::Connect(still) => still,
+        };
         self.machine_start(def);
+        if let Some(failure) = still {
+            let said = sentence_here(&failure, &Subject::of_def(def));
+            return say(format!("Added {}. {said}", def.name), true);
+        }
         let there = if version.is_empty() {
             String::new()
         } else {
             format!(" {version} answered there.")
         };
         say(format!("Added {}.{there} Connecting.", def.name), false)
+    }
+
+    fn machine_added_shows(&mut self, def: &MachineDef, outcome: Outcome) {
+        self.with_machines_view(|v| {
+            v.step = MachineStep::Added {
+                name: def.name.clone(),
+                target: def.target.clone(),
+                how: outcome,
+            }
+        });
     }
 
     /// Start dialling a configured machine. It shows as connecting at once.
@@ -685,10 +701,12 @@ impl App {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Added {
-    Connect,
-    Login,
+    /// Dial it now. Carries what the look found still wrong there, said with the shared sentence.
+    Connect(Option<FailureClass>),
+    /// ssh needs a person to log in, for this reason: a popup first.
+    Login(FailureClass),
 }
 
 #[cfg(test)]

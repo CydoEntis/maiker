@@ -8,7 +8,7 @@ use super::*;
 use crate::brand::APP_NAME;
 use crate::client::link::ConnectionState;
 use crate::hidden::sanitize;
-use crate::link_failure::{FIX_INSTALL, FIX_UPDATE_HERE};
+use crate::link_failure::FailureClass;
 
 /// This computer's mark on the pane badge, and another machine's (here and on the sidebar).
 pub(super) const LOCAL_ICON: &str = "⌂";
@@ -26,7 +26,7 @@ pub(super) struct StateMark {
 }
 
 /// What `machine update` does for a machine that needs it: put the app there, or replace the
-/// version it has. Told apart by the fix text the connection carries.
+/// version it has. Told apart by the failure the connection carries.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(in crate::client) enum AppFix {
     Install,
@@ -38,10 +38,9 @@ pub(in crate::client) enum AppFix {
 impl AppFix {
     pub fn of(state: &ConnectionState) -> Option<AppFix> {
         match state {
-            ConnectionState::NeedsUpdate { why } if why == FIX_INSTALL => Some(AppFix::Install),
+            ConnectionState::NeedsUpdate { failure: FailureClass::Install } => Some(AppFix::Install),
+            ConnectionState::NeedsUpdate { failure: FailureClass::Update } => Some(AppFix::Update),
             // Newer there than here: nothing to do to that machine, so no button for it.
-            ConnectionState::NeedsUpdate { why } if why == FIX_UPDATE_HERE => None,
-            ConnectionState::NeedsUpdate { .. } => Some(AppFix::Update),
             _ => None,
         }
     }
@@ -86,7 +85,7 @@ pub(super) fn state_mark(state: &ConnectionState, ascii: bool, t: &Theme) -> Sta
             (pick("↻", "~"), format!("reconnecting #{attempt}"), t.muted)
         }
         ConnectionState::NeedsLogin { .. } => (pick("✕", "x"), "needs login".to_string(), t.err),
-        ConnectionState::NeedsUpdate { why } if why == FIX_UPDATE_HERE => {
+        ConnectionState::NeedsUpdate { failure: FailureClass::UpdateHere } => {
             (pick("✕", "x"), "newer than this app".to_string(), t.err)
         }
         ConnectionState::NeedsUpdate { .. } => (pick("✕", "x"), "needs update".to_string(), t.err),
@@ -161,21 +160,19 @@ impl App {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::link_failure::FIX_UPDATE;
 
     #[test]
-    fn the_fix_text_tells_an_install_from_an_update_and_nothing_else_needs_one() {
-        let needs = |why: &str| ConnectionState::NeedsUpdate { why: why.into() };
-        assert_eq!(AppFix::of(&needs(FIX_INSTALL)), Some(AppFix::Install));
-        assert_eq!(AppFix::of(&needs(FIX_UPDATE)), Some(AppFix::Update));
-        assert_eq!(AppFix::of(&needs(FIX_UPDATE_HERE)), None);
+    fn the_failure_tells_an_install_from_an_update_and_nothing_else_needs_one() {
+        let needs = |failure| ConnectionState::NeedsUpdate { failure };
+        assert_eq!(AppFix::of(&needs(FailureClass::Install)), Some(AppFix::Install));
+        assert_eq!(AppFix::of(&needs(FailureClass::Update)), Some(AppFix::Update));
+        assert_eq!(AppFix::of(&needs(FailureClass::UpdateHere)), None);
         assert_eq!(AppFix::Restart.verb(), "restart");
         assert_eq!(AppFix::Restart.label(), format!("Restart {APP_NAME}"));
         assert_eq!(AppFix::of(&ConnectionState::Connected), None);
         assert_eq!(
-            AppFix::of(&ConnectionState::NeedsLogin { why: FIX_INSTALL.into(), said: String::new() }),
+            AppFix::of(&ConnectionState::NeedsLogin { failure: FailureClass::KeyRefused(String::new()) }),
             None
         );
     }
 }
-

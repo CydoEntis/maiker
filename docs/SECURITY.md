@@ -165,9 +165,10 @@ in the home folder of this computer or of the machine named, whose first command
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
 password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
-has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
-one-line key-copy command to copy and run in the person's own terminal (`keySetupCommand` refuses a target that is not one plain
-word).
+has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. A refused key's one-line failure only says so and offers a
+one-line key-copy command to copy and run in the person's own terminal. The command comes from the host
+(`link_failure::fix_command`), which gives none for a target that is not one plain word (`check_target`). A changed host key is
+refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
@@ -386,7 +387,9 @@ control-character `ssh_args` entry, and a bad `remote_cmd`; `ssh_args` is a list
 split on spaces. The ssh command itself is built in one place (`ssh_command.rs` in `maitty-machines`, shared by the terminal app and the desktop app): ssh runs with
 `-o BatchMode=yes` (no prompts) and `-o ForwardAgent=no` and `-a` (no agent forwarding), plus
 `ConnectTimeout` and `ServerAlive*` defaults that `ssh_args` may override; `BatchMode` and
-`ForwardAgent` come before `ssh_args` so ssh's first-value-wins rule keeps them. The host follows
+`ForwardAgent` come before `ssh_args` so ssh's first-value-wins rule keeps them. A line that never asks a
+person also carries `StrictHostKeyChecking=accept-new` after `ssh_args`, only in place of ssh's own default
+(see *remote machine logins from the desktop*, Host keys). The host follows
 `--`, and a host that starts with `-` is refused there too, since `--remote host` never passes
 the config load. The remote command is one string for the remote user's login shell, so each
 word is POSIX single-quoted whatever the client runs (a Windows client to a Linux remote
@@ -413,7 +416,7 @@ ssh's login words.
 The Machines dialog adds two more ssh command lines, built beside the first in `ssh_command.rs` with the same
 target check, hardening and `--`: a probe (`BatchMode`, `ConnectTimeout=8`, stdin closed, output read to
 64 KiB and cleaned) and a first login (no `BatchMode`, so ssh can ask) that runs in a popup pane on this
-computer. A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
+computer, only for a login that needs a person (a password or a second code; ADR 0017). A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
 holds whitespace or a control character is refused with the loader's message, and nothing is spawned or
 written. A pane's shell reads the first-login line, so each word is a plain word (letters, digits and
 `_./-~:=,+@`, with a Windows path's backslashes on Windows) or one single-quoted word; a word with a quote or a
@@ -499,8 +502,10 @@ host` already runs, and the person added that machine to use it. The CLI's `--on
 `doctor` stay attach-only. What ssh
 or the far side prints (its last stderr line) is untrusted: it is stripped of control characters,
 so no escape sequence reaches the terminal, and cut to 200 characters before it is shown. The
-failure is classified from ssh's exit status and the stream, not its wording, apart from three
-fixed tokens that mark a login ssh could not do without a person (`link_failure::classify`). Typing
+failure is classified from ssh's exit status and the stream, not its wording, apart from a few
+fixed tokens that mark a login ssh could not do without a person or a changed host key
+(`link_failure::classify`). A host name taken from ssh's words for the `ssh-keygen -R` command is kept
+only when it is a plain host. Typing
 for a machine that is down is dropped, never queued and replayed.
 
 A remote daemon is someone else's computer, so everything it sends is untrusted: it can forge
@@ -683,7 +688,7 @@ The one-shot commands (`--on build ...`, `--pane build/4`) treat the machine the
 What it answers is untrusted: a list (`ls`, `wait`) is cleaned like a window's snapshot
 (`remote_snapshot::sanitize_snapshot`), an error or notice and a line a `wait --regex` matched lose
 control characters and hidden characters (`hidden::sanitize`), and a failure to connect is shown as
-one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
+one cleaned line with its fix (`link_failure::sentence`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
 pane a command runs in belongs to this computer's daemon, so `$AGENT_TERM_ID` is never the default
@@ -1154,44 +1159,36 @@ is what the panes show, so the rules are those of a credential:
 ## Project-specific: remote machine logins from the desktop
 
 The Settings > Remote machines screens (`apps/gui/src-tauri/src/machine_access.rs`, `add_machine.rs`;
-logic in `crates/maitty-machines/src/{host_key,key_login,machine_target}.rs`) let a person fix a
-machine that will not log in without a terminal. They run ssh tools on this computer on input from
-the window, so each is bounded as follows.
+logic in `crates/maitty-machines/src/{machine_target,new_host_keys}.rs`) let a person add a machine
+and change the user it connects as without a terminal. Maiker takes no account password: a login
+that needs one goes through the terminal sign-in
+([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md)). They run ssh tools on this
+computer on input from the window, so each is bounded as follows.
 
 | Command | What it takes | Rule |
 | --- | --- | --- |
 | `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
 | `add_machine` key file | a path | Optional `identity_file` on the entry, passed as `-i <path>` (one argv entry). It must be an absolute path (a leading `~/` is expanded), exist and be a file; a path that starts with `-`, has a control character or ends in `.pub` is refused. The file is never opened by Maiker (only ssh reads it) and a path with `via` is refused. Entries without it still load. |
 | `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
-| `inspect_new_host`, `trust_new_host` | target, port, fingerprint | The same checks as `inspect_host_key` and `trust_host_key`, for a host that is not a machine yet, so a new host is trusted before anything is written. Nothing is saved when the person cancels. |
-| `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
-| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. Replaced by [ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md) (a new host key is trusted on first connection, as `accept-new`); this row describes the code until that lands. |
-| `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |
 
-Key login with a password once (`key_login`):
+Host keys ([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md), `new_host_keys.rs`):
 
-> [ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md) removes this flow (Maiker relies on your
-> own ssh keys and agent); the rules below describe the code until that lands.
-
-- **The password.** It arrives as one argument, is moved into a `Secret` (no `Debug`, `Clone` or
-  `Serialize`; its bytes are overwritten on drop), and lives only for that call. It is not written
-  to disk, config, logs, ssh arguments or events, never sent to the daemon, and never returned to the
-  window. It reaches ssh only through `SSH_ASKPASS` with `SSH_ASKPASS_REQUIRE=force`: a helper script
-  with no secret in it, in a mode-0700 folder that is removed afterwards, prints it from an
-  environment variable set on that one short-lived ssh process. Every text shown from ssh is scrubbed
-  of the password first. Limits that remain: the window's webview and the IPC string cannot be wiped,
-  and the environment of the ssh child (readable by the same user while it runs) holds it briefly.
-- **Where it can be used.** Never before the machine's host key is trusted: the steps run with
-  `StrictHostKeyChecking=yes`, and the command refuses when the key is not on record. Not offered when
-  this computer is Windows (the helper is a shell script); the card says so and offers the terminal.
-- **What is installed.** Only the public key. A key with a passphrase stops the flow. A new key
-  (ed25519, no passphrase) is made only after the person agrees, only where no key file exists.
-- **The far side.** OpenSSH on Linux and macOS: `~/.ssh` 700, `authorized_keys` 600, no duplicate.
-  Windows: an administrator's key goes to `ProgramData\ssh\administrators_authorized_keys` with
-  only Administrators and SYSTEM allowed; anyone else's to their own `.ssh\authorized_keys`. The
-  system is told with fixed commands (`uname -s`, then one fixed `cmd` line); when it cannot be told,
-  or the machine does not confirm, the exact steps are shown and nothing is guessed.
-- **Attempts.** One password prompt per ssh run, a wrong password stops at once, and three wrong
-  passwords for a machine in a row stop further tries until Maiker restarts.
-- **After.** The key is checked by a `BatchMode` login with passwords off; the machine is dialled
-  again only on success.
+- **No question, no key written by Maiker.** Every line Maiker runs to a machine without a person
+  (the add probe, the dial, the file, folder, paste and install lines) carries
+  `-o StrictHostKeyChecking=accept-new` after the person's own `ssh_args`. ssh itself records a key it
+  has not seen in the person's `known_hosts` and refuses one that differs from the key on record.
+  Maiker shows no fingerprint and never writes `known_hosts`. Risk accepted: the first connection to a
+  new host trusts whatever key answers, as plain ssh with `accept-new` does.
+- **Only ssh's default is replaced.** When `ssh -G` for the target shows `StrictHostKeyChecking` set
+  to anything but `ask` (by the person's `~/.ssh/config` or `ssh_args`), nothing is added. Nothing is
+  added either for a client that is not OpenSSH 7.6 or later (`ssh -V`, asked once per program), which
+  would refuse the option. ssh then behaves as it did before.
+- **Never off.** No ssh option that turns host-key checking off (`StrictHostKeyChecking=no`) is used
+  anywhere; tests pin this.
+- **A refused key adds nothing.** A machine whose host key ssh refused while it was being added is not
+  written, from the desktop app or the terminal app (`machine_probe` yields
+  `FailureClass::HostKeyChanged`). A refused key, while adding or on a configured machine, is said in
+  the shared sentence (above: how to check it and the `ssh-keygen -R` that clears the old key) with Try
+  again; nothing offers to trust it.
+- The terminal sign-in line (`first_login_command`) carries no setting: a person is there to answer
+  ssh, and the probe before it has already had ssh record a new key.

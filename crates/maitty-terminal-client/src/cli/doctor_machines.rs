@@ -9,10 +9,9 @@
 //! ssh lines are the fixed ones `ssh_command` builds.
 
 use super::block_on;
-use super::target::failure_line;
 use crate::brand::APP_COMMAND;
 use crate::ipc::{self, Machine, other_version};
-use crate::link_failure::{self, FailureClass, classify};
+use crate::link_failure::{FailureClass, Subject, classify, sentence_here};
 use crate::machine_probe::{self, Located, Probe};
 use crate::protocol::PROTOCOL_VERSION;
 use crate::remote_install::{State, classify_version, state_of};
@@ -135,7 +134,7 @@ enum Next {
 /// asks ssh something. Only the program is named, never its arguments, which can hold tokens.
 fn check_custom(machine: &Machine, program: &str, budget: Duration) -> Vec<Check> {
     vec![
-        protocol(&handshake(machine, budget), machine.name()),
+        protocol(&handshake(machine, budget), &Subject::of(machine)),
         Check::note(VERSION, NEEDS_SSH),
         Check::note(LOGIN_PATH, NEEDS_SSH),
         Check::note(CUSTOM_TRANSPORT, program),
@@ -151,31 +150,32 @@ fn check_machine(def: &MachineDef, ssh: &str, ours: &str, budget: Duration) -> V
     let left = || deadline.saturating_duration_since(Instant::now());
     let cancel = AtomicBool::new(false);
     let name = def.name.as_str();
-    let (reach, next) = after_probe(&machine_probe::probe(&machine, left(), &cancel), name);
+    let subject = Subject::of(&machine);
+    let (reach, next) = after_probe(&machine_probe::probe(&machine, left(), &cancel), &subject);
     let mut checks = vec![reach];
     match next {
         Next::Stop => checks.push(Check::skipped("not reachable")),
         Next::NoApp => {
-            checks.push(not_installed(name));
+            checks.push(not_installed(&subject));
             checks.push(Check::skipped("maiker is not installed there"));
         }
         Next::Go(line) => {
             checks.push(version(&line, ours, name));
-            checks.push(protocol(&handshake(&machine, left()), name));
+            checks.push(protocol(&handshake(&machine, left()), &subject));
             let found = machine_probe::locate(&machine, left(), &cancel);
-            checks.push(login_path(&found, def.remote_cmd.as_deref(), name));
+            checks.push(login_path(&found, def.remote_cmd.as_deref(), &subject));
         }
     }
     checks.push(options(def));
     checks
 }
 
-/// The fix text of a failure with this machine's name in it.
-fn explain(class: &FailureClass, name: &str) -> String {
-    failure_line(class).replace("<name>", name)
+/// A failure as the shared sentence, the same words the window shows.
+fn explain(class: &FailureClass, subject: &Subject<'_>) -> String {
+    sentence_here(class, subject)
 }
 
-fn after_probe(probe: &Probe, name: &str) -> (Check, Next) {
+fn after_probe(probe: &Probe, subject: &Subject<'_>) -> (Check, Next) {
     match probe {
         Probe::Ready { version } => (
             Check::pass(REACHABLE, "ssh logs in without a prompt"),
@@ -185,19 +185,13 @@ fn after_probe(probe: &Probe, name: &str) -> (Check, Next) {
             Check::pass(REACHABLE, "ssh logs in without a prompt"),
             Next::NoApp,
         ),
-        Probe::Failed(class) => (Check::fail(REACHABLE, explain(class, name)), Next::Stop),
+        Probe::Failed(class) => (Check::fail(REACHABLE, explain(class, subject)), Next::Stop),
         Probe::Cancelled => (Check::fail(REACHABLE, "cancelled"), Next::Stop),
     }
 }
 
-fn not_installed(name: &str) -> Check {
-    Check::fail(
-        VERSION,
-        format!(
-            "{APP_COMMAND} is not installed there; {}",
-            link_failure::FIX_INSTALL.replace("<name>", name)
-        ),
-    )
+fn not_installed(subject: &Subject<'_>) -> Check {
+    Check::fail(VERSION, explain(&FailureClass::Install, subject))
 }
 
 fn version(line: &str, ours: &str, name: &str) -> Check {
@@ -236,7 +230,8 @@ fn handshake(machine: &Machine, limit: Duration) -> Result<(), anyhow::Error> {
     })
 }
 
-fn protocol(result: &Result<(), anyhow::Error>, name: &str) -> Check {
+fn protocol(result: &Result<(), anyhow::Error>, subject: &Subject<'_>) -> Check {
+    let name = subject.name;
     match result {
         Ok(()) => Check::pass(
             PROTOCOL,
@@ -256,14 +251,14 @@ fn protocol(result: &Result<(), anyhow::Error>, name: &str) -> Check {
                     "its daemon speaks protocol {theirs}, this computer {PROTOCOL_VERSION}; run `{APP_COMMAND} machine update {name}`"
                 ),
             ),
-            None => Check::fail(PROTOCOL, explain(&classify(e), name)),
+            None => Check::fail(PROTOCOL, explain(&classify(e), subject)),
         },
     }
 }
 
 /// Where the login shell finds the app, against the `remote_cmd` that is run. Only the program's
 /// path is shown, never the PATH, which can name users and private folders.
-fn login_path(found: &Located, remote_cmd: Option<&str>, name: &str) -> Check {
+fn login_path(found: &Located, remote_cmd: Option<&str>, subject: &Subject<'_>) -> Check {
     let custom = remote_cmd.filter(|cmd| *cmd != APP_COMMAND);
     match (found, custom) {
         (Located::At(path), Some(cmd)) if cmd != path => Check::note(
@@ -281,7 +276,7 @@ fn login_path(found: &Located, remote_cmd: Option<&str>, name: &str) -> Check {
                 "{APP_COMMAND} is not on its login PATH; put it on the PATH there, or set remote_cmd to its path"
             ),
         ),
-        (Located::Failed(class), _) => Check::fail(LOGIN_PATH, explain(class, name)),
+        (Located::Failed(class), _) => Check::fail(LOGIN_PATH, explain(class, subject)),
         (Located::Cancelled, _) => Check::fail(LOGIN_PATH, "cancelled"),
     }
 }
@@ -323,7 +318,8 @@ fn shown(args: &[String]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::link_failure::FIX_LOGIN;
+
+    const BOX: Subject<'static> = Subject { name: "box", target: Some("me@box"), port: None };
 
     fn unreachable(why: &str) -> Probe {
         Probe::Failed(FailureClass::Unreachable(why.into()))
@@ -343,23 +339,22 @@ mod tests {
         let (check, next) = after_probe(
             &Probe::Ready {
                 version: "maiker 0.60.0".into(),
-            },
-            "box",
-        );
+            }, &BOX);
         assert_eq!(check.ok, Some(true));
         assert_eq!(next, Next::Go("maiker 0.60.0".into()));
     }
 
     #[test]
     fn a_machine_that_cannot_be_reached_says_why_and_stops_the_rest() {
-        let (check, next) = after_probe(&unreachable("Connection refused"), "box");
+        let (check, next) = after_probe(&unreachable("Connection refused"), &BOX);
         assert_eq!(
             line(&check),
-            "bad reachable unreachable (Connection refused)"
+            "bad reachable Can't reach box: check the name or address, and that the machine is on (Connection refused)."
         );
         assert_eq!(next, Next::Stop);
-        let (check, next) = after_probe(&Probe::Failed(FailureClass::Login("denied".into())), "box");
-        assert_eq!(check.detail, format!("needs a login; {FIX_LOGIN}"));
+        let refused = FailureClass::KeyRefused("denied".into());
+        let (check, next) = after_probe(&Probe::Failed(refused.clone()), &BOX);
+        assert_eq!(check.detail, sentence_here(&refused, &BOX));
         assert_eq!(next, Next::Stop);
         assert_eq!(
             Check::skipped("not reachable").detail,
@@ -369,10 +364,10 @@ mod tests {
 
     #[test]
     fn ssh_getting_in_with_no_app_is_reachable_and_not_installed() {
-        let (check, next) = after_probe(&Probe::Failed(FailureClass::Install), "box");
+        let (check, next) = after_probe(&Probe::Failed(FailureClass::Install), &BOX);
         assert_eq!(check.ok, Some(true));
         assert_eq!(next, Next::NoApp);
-        let missing = not_installed("box");
+        let missing = not_installed(&BOX);
         assert_eq!(missing.ok, Some(false));
         assert!(
             missing.detail.contains("machine update box --install"),
@@ -413,9 +408,7 @@ mod tests {
     fn a_daemon_of_another_protocol_says_which_side_to_update() {
         let speaking = |daemon| {
             protocol(
-                &Err(anyhow::Error::from(ipc::OtherVersion { daemon })),
-                "box",
-            )
+                &Err(anyhow::Error::from(ipc::OtherVersion { daemon })), &BOX)
         };
         let older = speaking(PROTOCOL_VERSION - 1);
         assert_eq!(older.ok, Some(false));
@@ -435,22 +428,22 @@ mod tests {
             "{newer:?}"
         );
         assert!(!newer.detail.contains("machine update"), "{newer:?}");
-        assert_eq!(protocol(&Ok(()), "box").ok, Some(true));
-        let down = protocol(&Err(anyhow::anyhow!("closed")), "box");
+        assert_eq!(protocol(&Ok(()), &BOX).ok, Some(true));
+        let down = protocol(&Err(anyhow::anyhow!("closed")), &BOX);
         assert_eq!(down.ok, Some(false));
     }
 
     #[test]
     fn the_login_path_shows_the_program_and_flags_a_remote_cmd_that_differs() {
         let at = |path: &str| Located::At(path.into());
-        let plain = login_path(&at("/usr/bin/maiker"), None, "box");
+        let plain = login_path(&at("/usr/bin/maiker"), None, &BOX);
         assert_eq!(
             line(&plain),
             "ok login PATH maiker found at /usr/bin/maiker"
         );
-        let same = login_path(&at("/opt/maiker"), Some("/opt/maiker"), "box");
+        let same = login_path(&at("/opt/maiker"), Some("/opt/maiker"), &BOX);
         assert_eq!(same.ok, Some(true));
-        let differs = login_path(&at("/usr/bin/maiker"), Some("~/bin/maiker"), "box");
+        let differs = login_path(&at("/usr/bin/maiker"), Some("~/bin/maiker"), &BOX);
         assert_eq!(differs.ok, None);
         assert!(
             differs
@@ -458,7 +451,7 @@ mod tests {
                 .contains("your remote_cmd ~/bin/maiker is used"),
             "{differs:?}"
         );
-        let by_name = login_path(&at("/usr/bin/maiker"), Some("maiker"), "box");
+        let by_name = login_path(&at("/usr/bin/maiker"), Some("maiker"), &BOX);
         assert_eq!(
             by_name.ok,
             Some(true),
@@ -468,12 +461,12 @@ mod tests {
 
     #[test]
     fn an_app_off_the_login_path_is_a_fault_only_when_the_default_command_runs() {
-        let default = login_path(&Located::NotFound, None, "box");
+        let default = login_path(&Located::NotFound, None, &BOX);
         assert_eq!(default.ok, Some(false));
         assert!(default.detail.contains("not on its login PATH"));
-        let custom = login_path(&Located::NotFound, Some("~/bin/maiker"), "box");
+        let custom = login_path(&Located::NotFound, Some("~/bin/maiker"), &BOX);
         assert_eq!(custom.ok, None);
-        let failed = login_path(&Located::Failed(FailureClass::Login("denied".into())), None, "box");
+        let failed = login_path(&Located::Failed(FailureClass::KeyRefused("denied".into())), None, &BOX);
         assert_eq!(failed.ok, Some(false));
     }
 

@@ -156,6 +156,7 @@ fn the_shim_is_called_the_way_the_client_calls_ssh() {
         "-o ConnectTimeout=",
         "-o ServerAliveInterval=",
         "-o ServerAliveCountMax=",
+        "-o StrictHostKeyChecking=accept-new",
         "-a",
         "-T",
     ] {
@@ -164,6 +165,51 @@ fn the_shim_is_called_the_way_the_client_calls_ssh() {
             "{want} is passed before `--`: {args:?}"
         );
     }
+    assert!(
+        !options.contains("StrictHostKeyChecking=no"),
+        "host-key checking is never turned off: {args:?}"
+    );
+}
+
+/// The ed25519 key the shim's machine offers, and another one for a key that changed.
+const OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+const OLD_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm";
+
+/// `maiker --remote box ls --json` through the shim checking its host key against `known_hosts`
+/// (holding `on_record`, or no file); what came of it and the file afterwards.
+fn remote_with_host_key(on_record: Option<&str>) -> (Output, Option<String>) {
+    let sandbox = Sandbox::new();
+    let known_hosts = sandbox.dir.join("known_hosts");
+    if let Some(line) = on_record {
+        std::fs::write(&known_hosts, line).expect("write known_hosts");
+    }
+    let mut command = sandbox.command(MAITTY, "proxy");
+    command
+        .env(env_name("FAKE_SSH_KNOWN_HOSTS"), &known_hosts)
+        .env(env_name("FAKE_SSH_HOST_KEY"), OFFERED_KEY)
+        .args(["--remote", "box", "ls", "--json"]);
+    let out = output_within(command, WAIT);
+    (out, std::fs::read_to_string(&known_hosts).ok())
+}
+
+#[test]
+fn a_host_key_never_seen_is_recorded_by_ssh_and_the_terminal_app_connects_without_a_question() {
+    let (out, known_hosts) = remote_with_host_key(None);
+    assert!(out.status.success(), "{}", text(&out.stderr));
+    assert_eq!(known_hosts, Some(format!("box ssh-ed25519 {OFFERED_KEY}\n")));
+}
+
+#[test]
+fn a_changed_host_key_is_refused_and_known_hosts_is_left_as_it_was() {
+    let on_record = format!("box ssh-ed25519 {OLD_KEY}\n");
+    let (out, known_hosts) = remote_with_host_key(Some(&on_record));
+    assert!(!out.status.success(), "a changed key must not connect");
+    assert!(
+        text(&out.stderr).contains("Host key verification failed"),
+        "{}",
+        text(&out.stderr)
+    );
+    assert_eq!(known_hosts, Some(on_record));
 }
 
 #[test]
@@ -952,7 +998,7 @@ mod supervised {
     use runtime::connections::{Connections, MachineId, Outgoing};
     use runtime::ipc::Machine;
     use runtime::link::{Backoff, ConnectionState, LinkControl, LinkEvent, Links, Timing};
-    use runtime::link_failure::{FIX_LOGIN, FIX_NO_DAEMON, FIX_UPDATE};
+    use runtime::link_failure::FailureClass;
     use runtime::protocol::{ClientMsg, Command as Cmd, ServerMsg};
 
     const BOX: MachineId = MachineId(1);
@@ -1255,7 +1301,7 @@ mod supervised {
         let mut window = Window::new(vec![(BOX, configured(&sandbox, "auth-fail"))], quick(WAIT));
         runtime.block_on(window.until("needs-login", |w| w.is(BOX, "needs-login")));
         assert!(
-            matches!(window.state_of(BOX), Some(ConnectionState::NeedsLogin { why, .. }) if why == FIX_LOGIN),
+            matches!(window.state_of(BOX), Some(ConnectionState::NeedsLogin { failure: FailureClass::KeyRefused(_) })),
             "{:?}",
             window.state_of(BOX)
         );
@@ -1279,7 +1325,7 @@ mod supervised {
         assert_eq!(
             window.state_of(BOX),
             Some(&ConnectionState::NeedsUpdate {
-                why: FIX_UPDATE.into()
+                failure: FailureClass::Update
             })
         );
         drop(window);
@@ -1299,7 +1345,7 @@ mod supervised {
         assert_eq!(
             window.state_of(BOX),
             Some(&ConnectionState::NeedsUpdate {
-                why: runtime::link_failure::FIX_UPDATE_HERE.into()
+                failure: FailureClass::UpdateHere
             })
         );
         drop(window);
@@ -1316,7 +1362,7 @@ mod supervised {
             quick(Duration::from_millis(300)),
         );
         runtime.block_on(window.until("unreachable", |w| w.is(BOX, "unreachable")));
-        let Some(ConnectionState::Unreachable { why, .. }) = window.state_of(BOX) else {
+        let Some(ConnectionState::Unreachable { failure: FailureClass::Unreachable(why), .. }) = window.state_of(BOX) else {
             panic!("{:?}", window.state_of(BOX))
         };
         assert!(why.starts_with("no answer within"), "{why}");
@@ -1415,10 +1461,10 @@ mod supervised {
         stop_daemon(&sandbox);
         kill_connection(&sandbox.calls());
         runtime.block_on(window.until("unreachable", |w| w.is(BOX, "unreachable")));
-        let Some(ConnectionState::Unreachable { why, .. }) = window.state_of(BOX) else {
+        let Some(ConnectionState::Unreachable { failure, .. }) = window.state_of(BOX) else {
             panic!("{:?}", window.state_of(BOX))
         };
-        assert_eq!(why, FIX_NO_DAEMON);
+        assert_eq!(*failure, FailureClass::NoDaemon);
         let dialled = calls_made(&sandbox);
         runtime.block_on(window.until("two more dials", |_| calls_made(&sandbox) >= dialled + 2));
         assert!(!has_daemon(&sandbox), "a redial never starts the daemon");
@@ -1662,9 +1708,7 @@ mod custom_transport {
         let failed = failure(&via(&sandbox, "unreachable", &[], false));
         assert_eq!(
             failed.class,
-            FailureClass::Unreachable(
-                "It refused the connection, so its ssh server may be off. Start ssh on it, then retry. (ssh: connect to host box port 22: Connection refused)".into()
-            )
+            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
         );
     }
 

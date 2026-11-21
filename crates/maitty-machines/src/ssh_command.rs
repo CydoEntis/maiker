@@ -513,7 +513,7 @@ fn option(setting: &str) -> [String; 2] {
     ["-o".to_string(), setting.to_string()]
 }
 
-fn validate_target(target: &str) -> Result<(), SshCommandError> {
+pub(crate) fn validate_target(target: &str) -> Result<(), SshCommandError> {
     if target.is_empty() {
         return Err(EmptyTarget);
     }

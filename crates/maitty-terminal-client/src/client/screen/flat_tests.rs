@@ -307,8 +307,8 @@ fn with_kingdom_needing_the_app() -> (App, MachineId) {
     });
     app.screen.saved.group_machine = true;
     let id = MachineId(9);
-    let why = crate::link_failure::FIX_INSTALL.into();
-    app.on_link_state(id, "kingdom".into(), ConnectionState::NeedsUpdate { why });
+    let failure = crate::link_failure::FailureClass::Install;
+    app.on_link_state(id, "kingdom".into(), ConnectionState::NeedsUpdate { failure });
     (app, id)
 }
 

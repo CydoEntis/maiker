@@ -1,7 +1,8 @@
 //! A look at a machine over ssh before it is added: log in with what ssh already has (keys,
-//! an agent, a known host), never asking anyone anything, and run the app's `--version`
-//! there. A result tells the dialog whether to add the machine straight away, to open a
-//! terminal for a login that needs a person, or to show why the machine cannot be reached.
+//! an agent), never asking anyone anything, and run the app's `--version` there. A host key ssh
+//! has not seen is recorded by ssh on the way (`new_host_keys`); a changed one is refused. A
+//! result tells the dialog whether to add the machine straight away, to open a terminal for a
+//! login that needs a person, or to show why the machine cannot be added.
 //!
 //! It blocks, so a window runs it on a background thread; setting `cancel` ends it.
 
@@ -289,14 +290,14 @@ mod tests {
     }
 
     #[test]
-    fn a_login_ssh_could_not_do_is_needs_login() {
+    fn a_login_ssh_could_not_do_is_classified() {
         assert_eq!(
             finished(Some(255), "", "box: Permission denied (publickey).\n"),
-            Probe::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
+            Probe::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
         );
         assert_eq!(
             finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::Login("Host key verification failed.".into()))
+            Probe::Failed(FailureClass::HostKeyChanged { known_as: None })
         );
     }
 
@@ -322,7 +323,7 @@ mod tests {
         assert_eq!(path, "/bin/[31mmaitty");
         assert_eq!(
             located_from(Some(255), "", "box: Permission denied (publickey).\n"),
-            Located::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
+            Located::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
         );
     }
 
@@ -339,7 +340,7 @@ mod tests {
                 "ssh: connect to host box port 22: Connection timed out\n"
             ),
             Probe::Failed(FailureClass::Unreachable(
-                "It did not answer in time. Check that it is on and reachable from this network. (ssh: connect to host box port 22: Connection timed out)".into()
+                "ssh: connect to host box port 22: Connection timed out".into()
             ))
         );
     }

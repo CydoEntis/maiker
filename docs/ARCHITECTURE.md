@@ -238,7 +238,7 @@ default bindings, key parsing and built-in themes; terminal-specific mouse
 encoding stays in the terminal client. Config loading and filesystem migrations
 are core-owned. `maitty-machines` owns the machine definition (`[[machines]]`) and its
 validation (`maitty-settings` re-exports them from `config`), the ssh line and its hardening
-(`ssh_command.rs`), the failure classes and their fix texts (`link_failure.rs`), the fixed remote
+(`ssh_command.rs`), the failure classes and the one sentence each is said as (`link_failure.rs`: `classify`, `sentence`, `fix_command`; both apps show these and word no failure of their own), the fixed remote
 scripts and the dial to another machine (`machine.rs`), the connection registry (`connections.rs`: one
 bounded reader and writer task per machine, one fair intake, sends routed by machine, a lost connection
 marked and never ending the window), the connection state machine and its supervisors (`link/`: `Links`,

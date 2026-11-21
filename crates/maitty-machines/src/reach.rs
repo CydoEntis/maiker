@@ -26,7 +26,7 @@ pub fn reach_ms(ssh: &[String], target: &str, limit: Duration) -> Option<u64> {
         command.creation_flags(crate::CREATE_NO_WINDOW);
     }
     let output = command.output().ok().filter(|output| output.status.success())?;
-    let resolved = parse_resolved(&String::from_utf8_lossy(&output.stdout), None).ok()?;
+    let resolved = parse_resolved(&String::from_utf8_lossy(&output.stdout)).ok()?;
     connect_ms(&resolved.host, resolved.port, limit)
 }
 

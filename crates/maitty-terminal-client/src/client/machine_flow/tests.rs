@@ -12,7 +12,7 @@ use crate::client::remote_status_tests::{Runtime, Sandbox};
 use crate::client::screen::machine_group::AppFix;
 use crate::client::screen::machines::{MachinesView, Outcome};
 use crate::client::ssh_hosts::SshHost;
-use crate::link_failure::{FIX_INSTALL, FIX_LOGIN};
+use crate::link_failure::FailureClass;
 use crate::protocol::{ServerMsg, Snapshot, Status};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::Path;
@@ -448,6 +448,25 @@ fn a_bad_host_shows_ssh_s_error_adds_nothing_and_does_not_hang() {
 }
 
 #[test]
+fn a_changed_host_key_adds_nothing_and_says_the_shared_sentence() {
+    let mut h = Harness::new("proxy");
+    let known_hosts = h.sandbox.dir.join("known_hosts");
+    let on_record = "box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm\n";
+    std::fs::write(&known_hosts, on_record).unwrap();
+    h.app.machine_flow.ssh.extend([
+        format!("--known-hosts={}", known_hosts.display()),
+        "--host-key=AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl".to_owned(),
+    ]);
+    h.add_by_enter("box");
+    h.next_bg();
+    assert!(h.notice().starts_with("box's host key has changed"), "{}", h.notice());
+    assert!(h.view().notice.as_ref().unwrap().error);
+    assert!(matches!(h.view().step, MachineStep::Browse));
+    assert!(h.local_config().is_none() && h.app.cfg.machines.is_empty());
+    assert_eq!(std::fs::read_to_string(&known_hosts).unwrap(), on_record);
+}
+
+#[test]
 fn a_probe_that_hangs_is_ended_at_the_limit_and_ssh_is_gone() {
     let mut h = Harness::new("hang");
     h.app.machine_flow.probe_limit = Duration::from_millis(400);
@@ -475,7 +494,7 @@ fn escape_ends_a_probe_that_is_waiting_and_what_it_finds_later_is_ignored() {
 
 #[test]
 fn a_login_that_needs_a_person_opens_ssh_in_a_popup_on_this_computer() {
-    let mut h = Harness::new("auth-fail");
+    let mut h = Harness::new("needs-person");
     h.add_by_enter("box");
     h.next_bg();
     let popups = h.popups();
@@ -514,6 +533,32 @@ fn a_login_that_needs_a_person_opens_ssh_in_a_popup_on_this_computer() {
 }
 
 #[test]
+fn a_refused_key_adds_the_machine_says_the_shared_sentence_and_opens_no_popup() {
+    let mut h = Harness::new("auth-fail");
+    h.add_by_enter("box");
+    h.next_bg();
+    assert!(h.popups().is_empty(), "a popup cannot make the machine take the key");
+    assert!(!h.app.machine_login_waiting("box"));
+    let refused = FailureClass::KeyRefused("host@box: Permission denied (publickey).".into());
+    let said = sentence_here(&refused, &Subject::of_def(&h.app.cfg.machines[0]));
+    assert_eq!(h.notice(), format!("Added box. {said}"));
+    assert!(h.view().notice.as_ref().unwrap().error);
+    if cfg!(not(windows)) {
+        assert!(h.notice().contains("run `ssh-copy-id box` in a terminal"), "{}", h.notice());
+    }
+    assert!(
+        matches!(&h.view().step, MachineStep::Added { how: Outcome::SignInFailed, .. }),
+        "the dialog stays open on the checklist: {:?}",
+        h.view().step
+    );
+    assert_eq!(
+        machine_entries(&h.local_config().unwrap()),
+        [("box".to_string(), "box".to_string())],
+        "kept, so `r` tries again once the key is copied, as the desktop app does"
+    );
+}
+
+#[test]
 fn a_remote_command_that_needs_quoting_cannot_use_the_popup_and_says_how_to_log_in() {
     let mut h = Harness::new("auth-fail");
     h.app.cfg.machines.clear();
@@ -540,7 +585,7 @@ fn a_missing_app_adds_the_machine_so_its_state_can_say_what_to_install() {
         assert_eq!(
             h.state_of("box"),
             Some(ConnectionState::NeedsUpdate {
-                why: FIX_INSTALL.into()
+                failure: FailureClass::Install
             })
         );
         let toast = h.app.notice.as_ref().map(|(text, ..)| text.clone());
@@ -566,7 +611,7 @@ fn after_an_update_that_left_the_daemon_old_the_fix_becomes_a_restart_that_runs_
         .await;
         let id = h.id_of("box").expect("its connection");
         let old_daemon = ConnectionState::NeedsUpdate {
-            why: crate::link_failure::FIX_UPDATE.into(),
+            failure: FailureClass::Update,
         };
         h.app.remotes.get_mut(&id).unwrap().state = old_daemon.clone();
         assert_eq!(h.app.machine_fix(id), Some(AppFix::Update));
@@ -634,7 +679,7 @@ fn popup_snapshot(open: bool) -> Snapshot {
 fn when_the_login_popup_closes_the_machine_connects_with_batch_mode() {
     let runtime = Runtime::new();
     runtime.block_on(async {
-        let mut h = Harness::live("auth-fail").await;
+        let mut h = Harness::live("needs-person").await;
         h.add_by_enter("box");
         h.until("the popup to be asked for", |h| {
             h.app.machine_login_waiting("box")
@@ -677,7 +722,7 @@ fn when_the_login_popup_closes_the_machine_connects_with_batch_mode() {
 fn a_popup_that_closes_on_a_failed_login_leaves_the_machine_with_its_state_and_the_fix() {
     let runtime = Runtime::new();
     runtime.block_on(async {
-        let mut h = Harness::live("auth-fail").await;
+        let mut h = Harness::live("needs-person").await;
         h.add_by_enter("box");
         h.until("the popup to be asked for", |h| {
             h.app.machine_login_waiting("box")
@@ -692,7 +737,7 @@ fn a_popup_that_closes_on_a_failed_login_leaves_the_machine_with_its_state_and_t
         })
         .await;
         assert!(
-            matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { why, said }) if why == FIX_LOGIN && !said.is_empty()),
+            matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { failure: FailureClass::NeedsPerson(said) }) if !said.is_empty()),
             "{:?}",
             h.state_of("box")
         );
@@ -704,7 +749,7 @@ fn a_popup_that_closes_on_a_failed_login_leaves_the_machine_with_its_state_and_t
 fn a_popup_that_is_never_seen_does_not_leave_the_machine_undialled_for_ever() {
     let runtime = Runtime::new();
     runtime.block_on(async {
-        let mut h = Harness::live("auth-fail").await;
+        let mut h = Harness::live("needs-person").await;
         h.add_by_enter("box");
         h.until("the popup to be asked for", |h| {
             h.app.machine_login_waiting("box")
@@ -951,4 +996,180 @@ fn the_dialog_lists_your_machines_and_its_keys_update_and_remove_the_chosen_one(
         assert!(machine_entries(&h.local_config().unwrap()).is_empty());
         assert!(h.app.cfg.machines.is_empty());
     });
+}
+
+// ---- what each way adding ends looks like --------------------------------------------------
+
+/// The sizes each ending is drawn at: the smallest window the dialog keeps to, and a common one.
+const FRAME_SIZES: [(u16, u16); 2] = [(80, 24), (100, 30)];
+
+/// The window drawn at `w`x`rows`: the frame as text (printed with `AGENT_SHOW=1`), and the words
+/// of the dialog in reading order, with its border gone and runs of spaces made one, so a
+/// sentence that wrapped is found whole. Without a dialog the words are the whole frame's.
+fn drawn(h: &mut Harness, what: &str, (w, rows): (u16, u16)) -> (String, String) {
+    h.app.screen.modal_rects.clear();
+    h.app.screen_fresh();
+    let mut term = ratatui::Terminal::new(ratatui::backend::TestBackend::new(w, rows))
+        .expect("a test terminal");
+    term.draw(|f| crate::client::render::draw(&mut h.app, f))
+        .expect("a frame");
+    let buf = term.backend().buffer();
+    let text: String = (0..rows)
+        .map(|y| (0..w).map(|x| buf[(x, y)].symbol()).collect::<String>().trim_end().to_string() + "\n")
+        .collect();
+    if maitty_shared::brand::env_var("SHOW").is_ok() {
+        println!("===== {what} {w}x{rows}\n{text}");
+    }
+    let (left, width) = match (matches!(h.app.mode, Mode::Machines(_)), h.app.screen.modal_rects.last()) {
+        (true, Some(r)) => (r.x as usize + 1, (r.width as usize).saturating_sub(2)),
+        _ => (0, w as usize),
+    };
+    let words = text
+        .lines()
+        .map(|line| line.chars().skip(left).take(width).collect::<String>())
+        .collect::<Vec<_>>()
+        .join(" ")
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    (text, words)
+}
+
+/// Add `box` through the shim in `mode` and take the look's result in.
+fn added_through(mode: &str) -> Harness {
+    let mut h = Harness::new(mode);
+    h.add_by_enter("box");
+    h.next_bg();
+    h
+}
+
+/// The shared sentence for `box`, reached as `box`, the way the flow words it.
+fn sentence_for(failure: &FailureClass) -> String {
+    let def = MachineDef {
+        name: "box".into(),
+        target: "box".into(),
+        ..MachineDef::default()
+    };
+    sentence_here(failure, &Subject::of_def(&def))
+}
+
+#[track_caller]
+fn assert_shows(words: &str, text: &str, wants: &[&str]) {
+    for want in wants {
+        assert!(words.contains(want), "{want:?} missing:\n{text}");
+    }
+    for gone in ["verify host key", "fingerprint", "the connection shows the fix"] {
+        assert!(!words.contains(gone), "{gone:?} is still drawn:\n{text}");
+    }
+}
+
+#[test]
+fn a_machine_that_answers_is_drawn_added_with_every_step_done() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("proxy");
+        let (text, words) = drawn(&mut h, "success", size);
+        assert_shows(&words, &text, &[
+            "MACHINE ADDED",
+            "✓ reach box",
+            "✓ sign in as you",
+            "✓ maitty-daemon",
+            "Added box. maiker 0.0.0-fake answered there. Connecting.",
+        ]);
+    }
+}
+
+#[test]
+fn a_machine_ssh_cannot_reach_is_drawn_with_the_shared_sentence_and_nothing_added() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("unreachable");
+        let said = sentence_for(
+            &FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into()),
+        );
+        let (text, words) = drawn(&mut h, "unreachable", size);
+        assert_shows(&words, &text, &["ADD MACHINE", &said]);
+        assert!(!words.contains("MACHINE ADDED"), "{text}");
+    }
+}
+
+#[test]
+fn a_refused_key_is_drawn_with_the_failed_sign_in_and_the_command_that_fixes_it() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("auth-fail");
+        let said = sentence_for(&FailureClass::KeyRefused(String::new()));
+        let (text, words) = drawn(&mut h, "key refused", size);
+        assert_shows(&words, &text, &[
+            "MACHINE ADDED",
+            "✓ reach box",
+            "✕ sign in as you",
+            "○ maitty-daemon",
+            &format!("Added box. {said}"),
+        ]);
+        assert!(h.popups().is_empty(), "no popup for a refused key");
+    }
+}
+
+#[test]
+fn a_login_that_needs_a_person_is_drawn_as_the_popup_s_toast_with_the_dialog_closed() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("needs-person");
+        let (text, words) = drawn(&mut h, "needs a person", size);
+        assert!(!matches!(h.app.mode, Mode::Machines(_)), "the popup has the keys");
+        // The toast wraps inside its own frame, so its words are looked for line by line.
+        assert_shows(&words, &text, &["Notice", "Added box. ssh needs you to log in:"]);
+        assert_eq!(
+            h.app.notice.as_ref().map(|(said, ..)| said.as_str()),
+            Some("Added box. ssh needs you to log in: use the popup.")
+        );
+        assert_eq!(h.popups().len(), 1, "the popup is asked for once");
+    }
+}
+
+#[test]
+fn a_changed_host_key_is_drawn_with_the_shared_sentence_and_nothing_added() {
+    for size in FRAME_SIZES {
+        let mut h = Harness::new("proxy");
+        let known_hosts = h.sandbox.dir.join("known_hosts");
+        let on_record = "box ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm\n";
+        std::fs::write(&known_hosts, on_record).unwrap();
+        h.app.machine_flow.ssh.extend([
+            format!("--known-hosts={}", known_hosts.display()),
+            "--host-key=AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl".to_owned(),
+        ]);
+        h.add_by_enter("box");
+        h.next_bg();
+        let said = sentence_for(&FailureClass::HostKeyChanged { known_as: None });
+        let (text, words) = drawn(&mut h, "host key changed", size);
+        assert_shows(&words, &text, &["ADD MACHINE", &said]);
+        assert!(h.app.cfg.machines.is_empty(), "nothing is added");
+    }
+}
+
+#[test]
+fn a_machine_without_the_app_is_drawn_added_with_the_shared_sentence() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("not-installed");
+        let said = sentence_for(&FailureClass::Install);
+        let (text, words) = drawn(&mut h, "Maiker missing", size);
+        assert_shows(&words, &text, &[
+            "MACHINE ADDED",
+            "✓ sign in as you",
+            "✕ maitty-daemon",
+            &format!("Added box. {said}"),
+        ]);
+    }
+}
+
+/// The look runs only `--version`, which an older app answers too: that it is older is told by
+/// the connection, so the dialog says it under the machine, as the desktop app's list does.
+#[test]
+fn a_machine_with_an_older_app_is_drawn_with_the_shared_sentence_under_it() {
+    for size in FRAME_SIZES {
+        let mut h = added_through("proxy");
+        let older = FailureClass::Update;
+        h.app.on_link_state(MachineId(40), "box".into(), ConnectionState::NeedsUpdate { failure: older.clone() });
+        h.app.open_machines_on(MachineId(40));
+        let said = sentence_for(&older);
+        let (text, words) = drawn(&mut h, "Maiker older", size);
+        assert_shows(&words, &text, &["MACHINES", "needs update", "u update", &said]);
+    }
 }

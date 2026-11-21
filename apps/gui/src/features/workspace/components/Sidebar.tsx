@@ -66,8 +66,12 @@ export type SidebarProps = {
   /** What a project heading's buttons and right-click menu do; without it a heading only folds. */
   projectActions?: ProjectActions | undefined
   onMachineSettings: () => void
-  /** Fix on a machine that is not up: mends it in the Add a remote machine dialog. */
-  onFixMachine: (head: MachineHead) => void
+  /** Dials a machine that is not up again (by its real name): its Retry under the heading. */
+  onRetryMachine: (name: string) => void
+  /** Opens ssh to a machine in a terminal, for a login that needs a password or a second code. */
+  onSignInMachine: (machine: number, name: string) => void
+  /** Copies the command a down machine's sentence names. */
+  onCopyCommand: (command: string) => void
   /** Asks for a name of the user's own for another machine (by its real name). */
   onRenameMachine: (name: string) => void
   /** Installs or updates the app on a machine that needs it; the window asks first. */
@@ -323,7 +327,7 @@ function Expanded(props: SidebarProps) {
       onContextMenu={(event) => { openMenu(event, machineTitle(node.head), machineMenu(node.head)) }}
       canStart={props.canStart}
       onOpenProject={props.onOpenProject}
-      onFix={props.onFixMachine}
+      fixes={{ onRetry: props.onRetryMachine, onSignIn: props.onSignInMachine, onCopyCommand: props.onCopyCommand }}
     >
       {projectSections(node)}
     </MachineSection>
@@ -448,21 +452,46 @@ function ProjectSection({ node, open, onToggle, headings, selected, head, render
   )
 }
 
+/** What a down machine's own buttons do, passed through to the line under its heading. */
+type MachineFixes = {
+  onRetry: (name: string) => void
+  onSignIn: (machine: number, name: string) => void
+  onCopyCommand: (command: string) => void
+}
+
+/** What a down machine says when the host gave no sentence, which a host that answered always does. */
+function fallbackWords(update: UpdateAction | null): string {
+  if (update === null) return 'Offline'
+  return update === 'install' ? 'Maiker not installed' : 'Needs update'
+}
+
 /**
- * A machine that is not up: a red dot, "Offline", and one **Fix** button. The word never changes with the line's retries
- * (unreachable, needs login, reconnecting #3 all read the same here); the host's reason is the tooltip, and Fix opens the
- * machine's page in Settings, where the reason is read in full and acted on.
+ * A remote machine that is not up: a red dot, the host's one sentence (the same words Settings and the terminal app show),
+ * whole and wrapping, so a command it names is never cut off, and the fix right under it: **Retry**, **Copy** when the
+ * sentence names a command, and **Sign in in a terminal** only for a login that needs a password or a second code. A machine
+ * that is down because its Maiker is old or missing has one thing to press instead, its Install or Update, which asks first.
  */
-function MachineWhy({ head, onFix }: { head: MachineHead; onFix: (head: MachineHead) => void }) {
-  const reason = head.said ?? head.why
-  // One thing to press: a machine that is down because its Maiker is old or missing says so here, and the head carries no second button.
+function MachineWhy({ head, name, onUpdate, fixes }: { head: MachineHead; name: string; onUpdate: (name: string, action: UpdateAction) => void; fixes: MachineFixes }) {
   const update = head.updateAction
+  const command = head.fixCommand
   return (
-    <span className="mx-machine-why" title={reason === null || reason === '' ? undefined : reason}>
+    <div className="mx-machine-why is-down" role="group" aria-label={`Why ${head.label} is not connected`}>
       <span className="mx-machine-why-dot" aria-hidden="true" />
-      <span className="mx-machine-why-word">{update === null ? 'Offline' : update === 'install' ? 'Maiker not installed' : 'Needs update'}</span>
-      <button type="button" className="mx-machine-fix" aria-label={update === null ? `Fix ${head.label}` : `${UPDATE_WORDS[update].verb} Maiker on ${head.label}`} onClick={() => { onFix(head) }}>{update === null ? 'Fix' : UPDATE_WORDS[update].verb}</button>
-    </span>
+      <div className="mx-machine-why-body">
+        <span className="mx-machine-why-words">{head.why ?? fallbackWords(update)}</span>
+        <span className="mx-machine-why-actions">
+          {update === null
+            ? (
+              <>
+                <button type="button" className="mx-machine-fix" aria-label={`Retry ${head.label}`} onClick={() => { fixes.onRetry(name) }}>Retry</button>
+                {command !== null && <button type="button" className="mx-machine-fix" aria-label="Copy the command" title={command} onClick={() => { fixes.onCopyCommand(command) }}>Copy</button>}
+                {head.failure === 'needs-person' && <button type="button" className="mx-machine-fix" onClick={() => { fixes.onSignIn(head.machine, name) }}>Sign in in a terminal</button>}
+              </>
+            )
+            : <button type="button" className="mx-machine-fix" aria-label={`${UPDATE_WORDS[update].verb} Maiker on ${head.label}`} onClick={() => { onUpdate(name, update) }}>{UPDATE_WORDS[update].verb}</button>}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -470,7 +499,7 @@ type SectionProps = {
   canStart: boolean
   /** Wraps a machine's + in its + menu. */
   onOpenProject: (machine: number) => void
-  onFix: (head: MachineHead) => void
+  fixes: MachineFixes
   /** The draft chat, listed last on this machine; null when it is not on this machine. */
   draft: DraftChat | null
   /** How far this machine's update has got, while one runs. */
@@ -485,7 +514,7 @@ type SectionProps = {
 }
 
 /** One machine: its heading (name, count, update, its line's dot) and its opened projects, each with its sessions. */
-function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onContextMenu, children, canStart, onOpenProject, onFix }: SectionProps) {
+function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onContextMenu, children, canStart, onOpenProject, fixes }: SectionProps) {
   const { head } = node
   const title = machineTitle(head)
   return (
@@ -507,7 +536,7 @@ function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onCon
       {progress !== undefined && head.name !== null && (
         <span className="mx-machine-progress" role="progressbar" aria-label={`Updating ${head.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${String(progress)}%` }} /></span>
       )}
-      {head.down && head.name !== null && progress === undefined && <MachineWhy head={head} onFix={onFix} />}
+      {head.down && head.name !== null && progress === undefined && <MachineWhy head={head} name={head.name} onUpdate={onUpdate} fixes={fixes} />}
       {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
       <Collapse open={open}>
         <MachineBody node={node} label={`Projects on ${title}`} draft={draft}>{children}</MachineBody>

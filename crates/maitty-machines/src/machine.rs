@@ -6,6 +6,7 @@
 use crate::MachineDef;
 use crate::brand::{APP_COMMAND, APP_ENV};
 use crate::link_failure::SshEnd;
+use crate::new_host_keys;
 use crate::ssh_command::{self, ProxyMode};
 use anyhow::{Context, Result};
 use maitty_ipc_transport::{
@@ -62,6 +63,14 @@ struct SshRoute {
     /// The app's command on the far side (`~/.cargo/bin/<app>`).
     remote_cmd: String,
     proxy: ProxyMode,
+}
+
+impl SshRoute {
+    /// The program and its leading arguments for a line that never asks a person, with Maiker's
+    /// host-key default when it applies (`new_host_keys`). Blocks briefly: off the UI thread.
+    fn line(&self) -> Vec<String> {
+        new_host_keys::with_setting(&self.ssh, new_host_keys::applies(&self.ssh, &self.target))
+    }
 }
 
 impl Machine {
@@ -197,7 +206,7 @@ impl Machine {
     pub fn probe_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_probe(
-            &route.ssh,
+            &route.line(),
             &route.target,
             &route.remote_cmd,
         )?)
@@ -206,26 +215,26 @@ impl Machine {
     /// `probe_argv` for the app under another command there (a name it had before a rename).
     pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
+        Ok(ssh_command::ssh_argv_probe(&route.line(), &route.target, remote_cmd)?)
     }
 
     /// A login that runs `true` with ssh's own debug lines on stderr, to read which key signed in.
     /// It never asks anyone anything.
     pub fn key_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_key(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_key(&route.line(), &route.target)?)
     }
 
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
     pub fn platform_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_platform(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_platform(&route.line(), &route.target)?)
     }
 
     /// The line that asks this machine where its login shell finds the app.
     pub fn where_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_where(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_where(&route.line(), &route.target)?)
     }
 
     /// The options every connection to a machine carries, in words (see `doctor`).
@@ -237,7 +246,7 @@ impl Machine {
     pub fn install_argv(&self, destination: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_install(
-            &route.ssh,
+            &route.line(),
             &route.target,
             destination,
             bytes,
@@ -249,7 +258,7 @@ impl Machine {
     pub fn paste_argv(&self, name: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_paste(
-            &route.ssh,
+            &route.line(),
             &route.target,
             name,
             bytes,
@@ -261,7 +270,7 @@ impl Machine {
     pub fn list_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_list(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -273,7 +282,7 @@ impl Machine {
     pub fn index_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_index(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -285,7 +294,7 @@ impl Machine {
     pub fn get_folder_argv(&self, path: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_get_folder(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
         )?)
@@ -296,7 +305,7 @@ impl Machine {
     pub fn get_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_get(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -308,7 +317,7 @@ impl Machine {
     pub fn put_folder_argv(&self, name: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_put_folder(
-            &route.ssh,
+            &route.line(),
             &route.target,
             name,
             bytes,
@@ -319,7 +328,7 @@ impl Machine {
     pub fn restart_if_idle_argv(&self, program: &str, when: ssh_command::RestartWhen) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_restart_if_idle(
-            &route.ssh,
+            &route.line(),
             &route.target,
             program,
             when,
@@ -330,7 +339,7 @@ impl Machine {
     pub fn activity_argv(&self, program: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_activity(
-            &route.ssh,
+            &route.line(),
             &route.target,
             program,
         )?)
@@ -345,8 +354,10 @@ impl Machine {
         }
     }
 
-    /// The first login as one line for a pane's shell: ssh may ask for a password, a code or
-    /// a host key, and prints the app's version there.
+    /// The first login as one line for a pane's shell: ssh may ask for a password or a code, and
+    /// prints the app's version there. It carries no host-key setting: it is built on the UI thread,
+    /// where `SshRoute::line` may not run, a person is there to answer ssh, and the probe before it
+    /// has already had ssh record a new key.
     pub fn first_login_command(&self) -> Result<String> {
         let route = self.ssh_route()?;
         let argv = ssh_command::ssh_argv_interactive(&route.ssh, &route.target, &route.remote_cmd)?;
@@ -483,8 +494,9 @@ impl SshSaid {
 type Spawned = (tokio::process::ChildStdout, Writer, SshSaid);
 
 /// `ssh [hardening] host -- <app> proxy`: its stdout still unread, its stdin as the writer.
-fn spawn_ssh(route: &SshRoute) -> Result<Spawned> {
-    let argv = ssh_command::ssh_argv(&route.ssh, &route.target, &route.remote_cmd, route.proxy)?;
+/// `ssh` is the route's program and arguments as `SshRoute::line` gives them.
+fn spawn_ssh(route: &SshRoute, ssh: &[String]) -> Result<Spawned> {
+    let argv = ssh_command::ssh_argv(ssh, &route.target, &route.remote_cmd, route.proxy)?;
     let failed = format!("running {} (is OpenSSH installed?)", argv[0]);
     spawn_piped(&argv, false, &failed)
 }
@@ -763,7 +775,13 @@ pub async fn open_remote(machine: &Machine, dial: Dial) -> Result<(Reader, Write
             anyhow::bail!("this computer is reached over its local socket, not by open_remote")
         }
         Route::Ssh(route) => {
-            let (stdout, mut w, said) = spawn_ssh(route)?;
+            let line = {
+                let route = route.clone();
+                tokio::task::spawn_blocking(move || route.line())
+                    .await
+                    .context("looking at the ssh setup")?
+            };
+            let (stdout, mut w, said) = spawn_ssh(route, &line)?;
             match greet_ssh(stdout, &mut w, &hello).await {
                 Ok(r) => (r, w, said),
                 Err(e) => return Err(ssh_failed(machine, said, e, false).await),
@@ -1111,7 +1129,7 @@ mod tests {
         let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
         assert_eq!(
             crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Login("box: Permission denied".into())
+            crate::link_failure::FailureClass::KeyRefused("box: Permission denied".into())
         );
     }
 
