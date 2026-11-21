@@ -1618,6 +1618,21 @@ async fn start_chat_session(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// A chat with `agent` over ACP in `cwd`, on this computer. The daemon picks the agent's program.
+#[tauri::command]
+async fn start_acp_chat(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    cwd: PathBuf,
+    agent: String,
+) -> Result<serde_json::Value, String> {
+    wire.require_local(machine, "A chat session")?;
+    maitty_desktop_client::start_acp_chat(cwd, agent, daemon_executable(&app)?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn create_conversation(
     app: tauri::AppHandle,
@@ -1891,6 +1906,7 @@ pub fn run() {
             resume_codex_conversation,
             create_conversation,
             start_chat_session,
+            start_acp_chat,
             end_conversation,
             codex_executable_path,
             claude_executable_path,

@@ -15,6 +15,8 @@ const CODEX_PLAN_ITEM = 'plan'
 const CODEX_HELPER_ITEM = 'collabAgentToolCall'
 // The daemon's name for an agent's own summary of the earlier conversation; the text is the output.
 const CONTEXT_SUMMARY_ITEM = 'contextSummary'
+// ACP's name for a tool call that runs a command; its title is the command. Neither native adapter uses the name.
+const ACP_COMMAND_ITEM = 'execute'
 
 const STATUS_BY_STATE: Record<HistoryEntry['state'], ItemStatus> = {
   Running: 'running',
@@ -125,6 +127,7 @@ export function projectItem(provider: ChatProvider, content: ItemContent, base: 
   }
   if ('Tool' in content) {
     if (content.Tool.kind === CONTEXT_SUMMARY_ITEM) return [{ ...base, kind: 'summary', text: content.Tool.output }]
+    if (content.Tool.kind === ACP_COMMAND_ITEM) return [commandEvent(content.Tool, content.Tool.label ?? '', base)]
     return provider === 'claude' ? claudeTool(content.Tool, base) : codexTool(content.Tool, base)
   }
   if ('Reasoning' in content) {

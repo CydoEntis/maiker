@@ -870,6 +870,19 @@ describe('commands for a pane, on whichever machine it is', () => {
     expect(listed.map((item) => item.chat?.steers)).toEqual([true, false, undefined, undefined])
   })
 
+  it('reads a chat run over ACP as its agent\'s, and marks it so the chat offers no picker', () => {
+    const chat = (id: number, more: Record<string, unknown>) => ({ id, generation: 1, execution: 'Structured', provider: 'Acp', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: null, checks: [], ...more })
+    const snapshot = { terms: {}, workspaces: [], conversations: [chat(1, { agent: 'claude' }), chat(2, { agent: 'gemini' }), { ...chat(3, {}), provider: 'Codex' }] }
+
+    const listed = conversationsFromSnapshot(snapshot)
+
+    expect(listed.map((item) => [item.agent, item.chat?.acp, item.title])).toEqual([
+      ['claude', true, 'Claude conversation 1'],
+      ['gemini', true, 'Gemini conversation 2'],
+      ['codex', undefined, 'Codex conversation 3'],
+    ])
+  })
+
   it('lists only the terminals of another machine, with ids that name it', () => {
     const snapshot = {
       terms: { '7': { id: 7, agent: null, process: 'bash', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null } },

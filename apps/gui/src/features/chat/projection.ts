@@ -150,6 +150,7 @@ function approvalEventOf(request: ApprovalRequest): ApprovalEvent {
     })),
     questions: request.questions.map((question) => ({ id: question.id, header: question.header, question: question.question, isOther: question.is_other, isSecret: question.is_secret, options: question.options })),
     choices: request.choices,
+    ...(request.choice_labels.length === request.choices.length && request.choices.length > 0 ? { choiceLabels: request.choice_labels } : {}),
     canRemember: request.can_remember,
     resolution: { status: 'pending' },
   }

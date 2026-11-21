@@ -123,7 +123,7 @@ export function ApprovalCard({ event, actions, step, onGoToStep }: Props) {
               disabled={actions.busy || !pending}
               onClick={() => { actions.answer(event.requestId, choice) }}
             >
-              {CHOICE_LABEL[choice]}
+              {event.choiceLabels?.[index] ?? CHOICE_LABEL[choice]}
             </Button>
           ))}
           {event.canRemember && actions.remember !== undefined && (

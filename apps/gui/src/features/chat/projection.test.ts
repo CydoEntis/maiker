@@ -348,6 +348,14 @@ describe('approvals', () => {
     })
   })
 
+  it('carries the agent\'s own words for the choices only when there is one for each', () => {
+    const named = only(project('claude', [], [{ ...claudeApproval, choice_labels: ['Allow once', 'Reject'] }]))
+    const uneven = only(project('claude', [], [{ ...claudeApproval, choice_labels: ['Allow once'] }]))
+
+    expect(named).toMatchObject({ kind: 'approval', choiceLabels: ['Allow once', 'Reject'] })
+    expect(uneven).not.toHaveProperty('choiceLabels')
+  })
+
   it('carries the Codex file preview as a diff', () => {
     const event = only(project('codex', [], [codexApproval]))
     expect(event).toMatchObject({

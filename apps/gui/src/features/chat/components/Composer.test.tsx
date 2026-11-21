@@ -69,6 +69,24 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
   return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
+describe('a chat that runs over ACP', () => {
+  it('names the agent in the box and offers no model or permission picker, which another chat does', async () => {
+    fake.current = new FakeDaemonHistory()
+    const controls = () => screen.getByRole('group', { name: 'Model and permissions' })
+
+    render(<ChatSession link={LINK} agent="claude" online />)
+    await settle()
+    const picked = within(controls()).queryAllByRole('button').length
+    cleanup()
+    render(<ChatSession link={{ ...LINK, acp: true }} agent="claude" online />)
+    await settle()
+
+    expect(picked).toBeGreaterThan(0)
+    expect(within(controls()).queryAllByRole('button')).toHaveLength(0)
+    expect(controls().textContent).toContain('Claude')
+  })
+})
+
 describe('the usage strip', () => {
   it('shows what the agent reported using at the right of the box: the context, and each plan limit with its window', async () => {
     const soon = Math.floor(Date.now() / 1000) + 3 * 3600 + 30
