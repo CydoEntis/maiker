@@ -3,6 +3,16 @@
 Checked 2026-11-20 on Linux with cargo 1.100.0, in a scratch workspace outside the repo. Nothing
 was added to this repository's `Cargo.toml` or `Cargo.lock`.
 
+## Outcome (2026-11-20, MAITTY-490)
+
+**Neither package is used.** Adding the schema crate to the workspace turned on `serde_json`'s
+`preserve_order` for every crate built with it (the crate asks for that feature, and cargo
+unifies features across a build). JSON objects then keep insertion order instead of sorting
+keys. In this repository that failed 26 daemon tests, the nine golden records among them, and
+two CLI tests, one of them the call fingerprint. `maitty-provider-acp` has its own types for the
+messages it uses (`wire.rs`). The check below missed this because it ran in a scratch workspace
+with none of our code. What follows is the original note.
+
 ## Recommendation
 
 Use the types crate only, pinned exactly and without its default feature:

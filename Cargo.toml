@@ -17,6 +17,7 @@ members = [
     "crates/adapters/maitty-provider",
     "crates/adapters/maitty-provider-codex",
     "crates/adapters/maitty-provider-claude",
+    "crates/adapters/maitty-provider-acp",
 ]
 resolver = "3"
 

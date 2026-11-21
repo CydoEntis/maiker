@@ -33,7 +33,7 @@ starter-owned sections forward. It never touches `Project-specific:` sections.
 | [xterm](xterm.md) | project | 6.0.0 |
 | [claude-code-cli](claude-code-cli.md) | project | Claude Code CLI; verified versions listed in the doc |
 | [codex-app-server](codex-app-server.md) | project | codex-cli 0.164.0, 0.165.0 |
-| [acp](acp.md) | project | protocol v1; `agent-client-protocol-schema` 1.20.0; no agent verified yet |
+| [acp](acp.md) | project | protocol v1, own wire types; no agent verified yet |
 
 ## Not applied
 

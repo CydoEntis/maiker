@@ -272,7 +272,8 @@ and events it exchanges with the daemon. It also holds what every adapter needs 
 provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
 (`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
 contract from the open connection on, and `ClaudeDialect` (`maitty-provider-claude/src/dialect.rs`)
-implements it whole. Both providers' events reach one place in the daemon
+implements it whole. `AcpDialect` (`maitty-provider-acp`) is the dialect for an agent with no
+adapter of its own ([stack/acp.md](stack/acp.md)); the daemon does not run it yet. Both providers' events reach one place in the daemon
 (`conversation_reported`, `conversation_asked`), so a turn's status and history are decided the
 same way for every provider.
 
@@ -344,7 +345,7 @@ crates/
   maitty-machines/                the `[[machines]]` definition and its checks and edits, the ssh line, failure classes, dial, connection registry and link supervisors, the cleaning and policy for what another machine sends, the daemon-id store, the `~/.ssh/config` parser, the reader of this computer's machine list (`local_machines`: `config.local.toml`, as both apps read it), and the atomic state-file helpers (`write_atomic`, `read_state`, which `maitty-core` re-exports), shared by both apps
   maitty-highlight/               syntax highlighting for file previews, shared by both apps (STACK: syntect)
   maitty-test-support/            test-only helpers shared across crates: building and locating the fake-ssh shim, running a command with a time limit
-  adapters/                       the provider contract (`maitty-provider`) and the Codex, Claude and future provider adapters
+  adapters/                       the provider contract (`maitty-provider`) and the Codex, Claude and ACP adapters
 scripts/                          repository checks, e.g. `check-gui-deps.sh` (the desktop app's dependency rule)
 docs/                             architecture, roadmap and design specs
 ```

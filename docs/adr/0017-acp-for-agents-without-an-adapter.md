@@ -24,8 +24,8 @@ for an agent nobody here has pinned, and how the protocol change reaches install
 - **One compatibility cut.** The ACP provider identity is a new enum variant, so it takes one
   `PROTOCOL_VERSION` bump that also raises `COMPATIBLE_SINCE`: an older peer refuses to talk and
   never misreads a conversation whose provider it does not know (0002).
-- ACP is a dialect behind the provider contract: protocol version 1, the types crate only, one
-  process per conversation. The daemon offers the agent no file or terminal methods and no MCP
+- ACP is a dialect behind the provider contract: protocol version 1, its own wire types and no
+  ACP library, one process per conversation. The daemon offers the agent no file or terminal methods and no MCP
   servers. A permission request shows the agent's own options; Maiker never chooses one, never
   remembers one, and never moves a running session to a wider mode. The rules are in
   [stack/acp.md](../stack/acp.md).
@@ -50,8 +50,8 @@ for an agent nobody here has pinned, and how the protocol change reaches install
 - Client and daemon must be updated together once, at the cut.
 - An ACP chat has no steering, no remembered approvals and no saved-history replay unless the
   agent advertises loading a session.
-- The types crate is a new, exactly pinned dependency that releases often; updating it is
-  deliberate work.
+- The adapter's wire types are ours to keep in step with the protocol. No ACP crate is linked:
+  the published types crate changes how `serde_json` orders keys for the whole build.
 - Nothing here is verified against a real agent until Gemini CLI and OpenCode are run and
   recorded. Revisit the "no file or terminal methods" rule only with a way to hold them to the
   agent's own permissions.
