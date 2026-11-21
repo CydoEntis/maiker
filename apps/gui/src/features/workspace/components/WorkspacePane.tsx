@@ -1,13 +1,12 @@
 import { OpenSubagentContext, subagentNamed, type OpenSubagent } from '@/features/chat/openSubagent'
 import { movePanes } from './paneTransition'
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { TerminalView } from '@/TerminalView'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { toast } from '@/lib/toast'
 import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
 import { isChatSession } from '../model/chatSession'
-import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -42,9 +41,6 @@ export function WorkspacePane({ shown, pane, kept }: {
 }) {
   const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setWorktreeFrom, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
-  // The session whose terminal log is shown over its chat. The app's view is one setting for every session; this is only
-  // the way to read the log when the chat cannot carry on (it crashed, the agent stopped, it never reports in).
-  const [logOf, setLogOf] = useState<string | null>(null)
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
   const session = paneSessions.get(pane.sessionId)
@@ -63,13 +59,8 @@ export function WorkspacePane({ shown, pane, kept }: {
     add: (text: string, first: boolean, operation: number) => queueFollowUp(session, text, first, operation),
     drop: (index: number, text: string) => dropQueuedFollowUp(session, index, text),
   }
-  const logShown = !chatOnly && logOf === session.id
-  const view = logShown ? 'terminal' : chat.view
-  const showLog = () => {
-    if (chatOnly) return
-    setLogOf(session.id)
-    void carryDraftToTerminal(session).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
-  }
+  // A session is shown as the app's view says; no control on it moves it between chat and terminal (ADR 0018).
+  const view = chat.view
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })
   const interrupted = session.interrupted !== null && !dismissedRestores.has(session.id) ? session.interrupted : null
@@ -78,7 +69,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   const problem: ChatProblem | null = head?.down === true && head.name !== null
     ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
     : session.status === 'error' && !session.ended && !isShell(session)
-      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: chatOnly ? null : showLog, onRestart: chatOnly ? null : () => { setLogOf(null); restartPane(pane.id) } }
+      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
       : interrupted !== null
         ? { kind: 'interrupted', agent: interrupted.agent, resume: interrupted.resume, onRestart: () => { resumeInterrupted(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
         : fullPercent !== null && typeInto !== undefined
@@ -120,13 +111,11 @@ export function WorkspacePane({ shown, pane, kept }: {
       dragging={dragId === pane.id}
       dropWord={dragId === null ? 'Drop to show it here' : 'Drop to swap'}
       view={view}
-      {...(logShown ? { onHideLog: () => { setLogOf(null) } } : {})}
       chat={view === 'chat' ? (
-        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal log', run: showLog }}>
+        <PaneErrorBoundary key={session.id} what="This chat">
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
-          hasTerminal={!chatOnly}
           root={session.repoRoot ?? session.cwd}
           onOpenDiff={openDiff}
           onOpenFile={(path, line) => { openPath(session, path, line ?? undefined) }}
@@ -154,7 +143,6 @@ export function WorkspacePane({ shown, pane, kept }: {
           subagents={helpers}
           onBackToMain={() => { setOpenSubagent(null) }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
-          onShowLog={showLog}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
         />
         </OpenSubagentContext.Provider>

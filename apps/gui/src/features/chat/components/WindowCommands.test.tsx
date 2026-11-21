@@ -152,14 +152,12 @@ describe('the commands the window answers itself', () => {
 
   it('types /exit into the terminal once confirmed, where Claude Code quits', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
-    const onShowTerminal = vi.fn()
-    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, onShowTerminal, windowActions: windowActions() })
+    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, windowActions: windowActions() })
 
     await user.type(box, '/exit{Escape}{Enter}')
     expect(typeInto).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'End session' }))
 
-    expect(onShowTerminal).toHaveBeenCalledOnce()
     await settle(1000)
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/exit', '\r'])
   })

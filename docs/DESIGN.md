@@ -823,10 +823,8 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   view, picked in Settings › General › **How you work › Open sessions in**, and changing it moves every open session
   (an "All sessions now open in X" note with **Undo** shows under the row). In the chat view the chat covers the pane body while the terminal stays
   mounted underneath, hidden by `visibility`, so it keeps streaming and keeps its size, and nothing is sent to the
-  daemon. A pane can show its terminal log over a chat that cannot carry on (**Show the log** on a stopped agent, **Show
-  the terminal log** on a chat that never starts or failed to draw), with **Back to chat** in its ⋯ menu; that moves the text waiting
-  in the chat box into the agent's prompt (one paste, no Enter; `model/draftCarry.ts`), under the message box's rule: only while
-  the agent is idle or done, and not when files are attached. **An agent opens in the app's view** (Gemini always as its terminal); a shell is a
+  daemon. No control on a session shows its terminal over its chat or back: a chat that cannot carry on says in a line
+  what to do, and for a terminal agent that is the Terminal view in Settings. **An agent opens in the app's view** (Gemini always as its terminal); a shell is a
   terminal, and stays one when an agent is typed into it, and its ⋯ menu starts a chat in its folder.
   Every session on this computer, agent or shell, has terminals of its own in its folder, shown in the **terminal
   dock** (`components/TerminalDock.tsx`, layout 2h): one card beside the chat, for the focused session, opened and

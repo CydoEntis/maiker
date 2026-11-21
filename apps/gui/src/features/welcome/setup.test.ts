@@ -36,7 +36,8 @@ describe('viewNote', () => {
   })
   it('always says where to change it', () => {
     expect(viewNote('chat', 'chat', false)).toContain('Settings')
-    expect(viewNote('chat', 'chat', false)).toContain('···')
+    // No session has a switch of its own (ADR 0018), so the note names none.
+    expect(viewNote('chat', 'chat', false)).not.toContain('menu')
   })
   it('says Gemini opens in Terminal only for Chat with Gemini installed', () => {
     expect(viewNote('chat', 'chat', true)).toContain('Gemini sessions open in Terminal')

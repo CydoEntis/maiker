@@ -18,22 +18,21 @@ describe('what makes a problem', () => {
   })
 
   it('says why a stopped agent was stopped in plain words, and keeps the code for Copy details', () => {
-    const words = problemWords({ kind: 'stopped', agent: 'Claude', code: 137, onRestart: vi.fn(), onViewLog: vi.fn() }, 0)
+    const words = problemWords({ kind: 'stopped', agent: 'Claude', code: 137, onRestart: vi.fn() }, 0)
     expect(words.reason).toMatch(/^Claude stopped in the middle of a step\. The system stopped it, most often because the computer ran out of memory\./)
     expect(words.reason).toMatch(/Restart to carry on from the last message\.$/)
     expect(words.details).toContain('(exit code 137)')
   })
 
   it('names a plain exit code in the reason', () => {
-    const words = problemWords({ kind: 'stopped', agent: 'Codex', code: 1, onRestart: null, onViewLog: vi.fn() }, 0)
+    const words = problemWords({ kind: 'stopped', agent: 'Codex', code: 1, onRestart: null }, 0)
     expect(words.reason).toMatch(/^Codex exited with code 1 in the middle of a step\./)
   })
 
-  it('points to where the reason is: a restart, the terminal log, or for a chat with no terminal the line under its box', () => {
-    const stopped = (onRestart: (() => void) | null, onViewLog: (() => void) | null) => problemWords({ kind: 'stopped', agent: 'Claude', code: null, onRestart, onViewLog }, 0).reason
-    expect(stopped(vi.fn(), vi.fn())).toContain('Restart to carry on from the last message.')
-    expect(stopped(null, vi.fn())).toContain('The terminal log has the reason.')
-    expect(stopped(null, null)).toContain('The reason is under the message box.')
-    expect(stopped(null, null)).not.toContain('terminal')
+  it('points to where the reason is: a restart, or for a chat with no terminal the line under its box', () => {
+    const stopped = (onRestart: (() => void) | null) => problemWords({ kind: 'stopped', agent: 'Claude', code: null, onRestart }, 0).reason
+    expect(stopped(vi.fn())).toContain('Restart to carry on from the last message.')
+    expect(stopped(null)).toContain('The reason is under the message box.')
+    expect(stopped(null)).not.toContain('terminal')
   })
 })
