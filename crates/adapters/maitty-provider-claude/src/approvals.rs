@@ -63,6 +63,7 @@ pub fn approval_request(
         permissions: None,
         choices,
         can_remember: command_hash.is_some(),
+        choice_labels: Vec::new(),
     };
     (request, command_hash)
 }

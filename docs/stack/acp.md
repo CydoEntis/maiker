@@ -40,7 +40,11 @@
 - `session/request_permission` offers a person only what the agent offered: allow once, allow
   for the session (the agent's `allow_always`) and decline (`reject_once`), each only when the
   agent listed an option of that kind. `reject_always` has no choice of ours and is not offered.
-  The options are not yet shown under the agent's own names (MAITTY-494).
+  Each choice carries the agent's own name for it (`ApprovalRequest::choice_labels`, cleaned and
+  cut like every agent text; none when a name cleans to nothing). No client shows them yet
+  (MAITTY-495).
+- Maiker never sets an agent's mode (`session/set_mode` is never sent). A change of mode is the
+  agent's to ask for, as a permission a person answers.
 - A person's choice is sent back as the id of the agent's first option of that kind. Maiker never
   picks an option the person did not, and never answers from a remembered rule: the "always in this project" rule of
   [ADR 0005](../adr/0005-provider-adapters-and-permissions.md) is for command requests of the

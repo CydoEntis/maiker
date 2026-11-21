@@ -751,7 +751,7 @@ async fn run_turn(
                         return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval request queue overflow or ID reuse") });
                     }
                     let (request, command_hash) = approval_request(&turn_id, request_id, request, tool_name, &input);
-                    let asked = ProviderEvent::ApprovalRequested { request, command_hash };
+                    let asked = ProviderEvent::ApprovalRequested { request: Box::new(request), command_hash };
                     super::runtime::emit(events, owner, super::runtime::Payload::Event(asked)).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     continue;
                 }

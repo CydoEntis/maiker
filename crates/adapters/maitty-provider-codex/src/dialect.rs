@@ -253,7 +253,7 @@ impl CodexDialect {
             self.requests.insert(request_id, open).is_none(),
             "Codex reused a pending approval request ID"
         );
-        Ok(ProviderEvent::ApprovalRequested { request: asked.request, command_hash: asked.command_hash })
+        Ok(ProviderEvent::ApprovalRequested { request: Box::new(asked.request), command_hash: asked.command_hash })
     }
 }
 

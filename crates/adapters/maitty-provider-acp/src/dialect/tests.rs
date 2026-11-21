@@ -203,8 +203,71 @@ fn a_permission_request_offers_only_what_the_agent_offered() {
     assert_eq!(request.kind, ApprovalRequestKind::Command);
     assert_eq!(request.command.as_deref(), Some("cargo test"));
     assert_eq!(request.choices, [ApprovalDecision::Accept, ApprovalDecision::Decline]);
+    assert_eq!(request.choice_labels, ["Allow", "Reject"]);
     assert_eq!((request.turn_id.as_deref(), request.item_id.as_deref()), (Some("turn-1"), Some("call-9")));
     assert!(!request.can_remember && command_hash.is_none());
+}
+
+#[test]
+fn the_agents_names_for_its_options_are_cleaned_and_dropped_when_one_is_empty() {
+    let ask = |allow: &str| {
+        json!({"jsonrpc": "2.0", "id": 7, "method": "session/request_permission", "params": {
+            "sessionId": "sess-1",
+            "toolCall": {"toolCallId": "call-9", "title": "cargo test", "kind": "execute"},
+            "options": [
+                {"optionId": "a", "name": allow, "kind": "allow_once"},
+                {"optionId": "b", "name": "Yes, and don't ask again", "kind": "allow_always"},
+                {"optionId": "c", "name": "Second allow", "kind": "allow_once"},
+            ],
+        }})
+        .to_string()
+    };
+    let labels = |allow: &str| {
+        let mut dialect = running();
+        match &events(dialect.on_line(&ask(allow)).unwrap())[..] {
+            [ProviderEvent::ApprovalRequested { request, .. }] => (request.choices.clone(), request.choice_labels.clone()),
+            other => panic!("{other:?}"),
+        }
+    };
+
+    let (choices, named) = labels("Yes\u{1b}[31m\nsecond line");
+    let (still_offered, unnamed) = labels("\u{1b}");
+
+    assert_eq!(choices, [ApprovalDecision::Accept, ApprovalDecision::AcceptForSession]);
+    assert_eq!(named.len(), 2);
+    assert!(named[0].starts_with("Yes") && !named[0].contains(['\u{1b}', '\n']), "{named:?}");
+    assert_eq!(named[1], "Yes, and don't ask again");
+    assert_eq!(still_offered, choices);
+    assert!(unnamed.is_empty());
+}
+
+#[test]
+fn the_dialect_never_changes_the_agents_mode_itself() {
+    let mut dialect = dialect();
+    let mut written_lines = Vec::new();
+    let mut keep = |steps: &[Step]| written_lines.extend(written(steps));
+    keep(&dialect.on_command(Command::Open { session: None }).unwrap());
+    keep(&dialect.on_line(&result(1, json!({"protocolVersion": 1}))).unwrap());
+    let modes = json!({"currentModeId": "ask", "availableModes": [{"id": "ask", "name": "Ask"}, {"id": "yolo", "name": "Bypass"}]});
+    keep(&dialect.on_line(&result(2, json!({"sessionId": "sess-1", "modes": modes}))).unwrap());
+    keep(&send(&mut dialect, "hello"));
+    let switch = json!({"jsonrpc": "2.0", "id": 9, "method": "session/request_permission", "params": {
+        "sessionId": "sess-1",
+        "toolCall": {"toolCallId": "call-1", "title": "Switch to Bypass", "kind": "switch_mode"},
+        "options": [{"optionId": "y", "name": "Switch", "kind": "allow_always"}, {"optionId": "n", "name": "Stay", "kind": "reject_once"}],
+    }});
+
+    let asked = dialect.on_line(&switch.to_string()).unwrap();
+    keep(&asked);
+    let request = ProviderRequestId::Integer(9);
+    keep(&dialect.on_command(Command::Answer { request, decision: ApprovalDecision::AcceptForSession }).unwrap());
+    keep(&dialect.on_command(Command::Interrupt { turn: "turn-1".into() }).unwrap());
+
+    // A change of mode is the agent's to ask for and a person's to allow.
+    assert!(written(&asked).is_empty(), "the request waits for a person");
+    assert!(matches!(&events(asked)[..], [ProviderEvent::ApprovalRequested { request, .. }] if request.choices == [ApprovalDecision::AcceptForSession, ApprovalDecision::Decline]));
+    let methods: Vec<_> = written_lines.iter().filter_map(|line| line["method"].as_str()).collect();
+    assert_eq!(methods, ["initialize", "session/new", "session/prompt", "session/cancel"]);
 }
 
 #[test]

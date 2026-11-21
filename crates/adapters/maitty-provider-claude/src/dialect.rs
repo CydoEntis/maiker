@@ -185,7 +185,7 @@ impl ProviderDialect for ClaudeDialect {
                     "Claude approval request queue overflow or ID reuse"
                 );
                 let (request, command_hash) = approval_request(&turn.id, &request_id, &request, tool, &input);
-                Ok(vec![Step::Emit(ProviderEvent::ApprovalRequested { request, command_hash })])
+                Ok(vec![Step::Emit(ProviderEvent::ApprovalRequested { request: Box::new(request), command_hash })])
             }
             frame => {
                 let finished = matches!(frame, OutputFrame::Result { .. });

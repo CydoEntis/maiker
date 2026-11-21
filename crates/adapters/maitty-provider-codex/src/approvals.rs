@@ -100,6 +100,7 @@ pub fn approval_request(
         changes,
         choices,
         can_remember: command_hash.is_some(),
+        choice_labels: Vec::new(),
     };
     Some(Asked { request, command_hash })
 }

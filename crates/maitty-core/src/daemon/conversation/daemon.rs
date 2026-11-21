@@ -545,7 +545,7 @@ impl Daemon {
                         && request.turn_id.as_deref() == self.conversation_active_turn(id),
                     "Codex approval request does not belong to the acknowledged active turn"
                 );
-                self.conversation_asked(id, Ok((request, command_hash)))
+                self.conversation_asked(id, Ok((*request, command_hash)))
             }
             ProviderEvent::UnsupportedRequest { request, method } => {
                 self.conversation_asked(id, Err((request, method)))

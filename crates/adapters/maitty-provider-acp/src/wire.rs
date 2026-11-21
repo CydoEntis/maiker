@@ -281,6 +281,9 @@ pub(crate) struct RequestPermissionRequest {
 #[serde(rename_all = "camelCase")]
 pub(crate) struct PermissionOption {
     pub option_id: String,
+    /// The agent's words for the option, as a person is shown them.
+    #[serde(default)]
+    pub name: String,
     pub kind: PermissionOptionKind,
 }
 
