@@ -51,6 +51,14 @@ impl Daemon {
                 if thread_id.trim().is_empty() || thread_id.chars().any(char::is_control) {
                     bail!("An exact nonempty thread ID is required");
                 }
+                // Claude Code is not asked whether it knows the session, so a wrong name would only
+                // fail at the first message; its transcript says now.
+                if settings.provider == Provider::Claude
+                    && !super::super::claude::transcript_path(&settings.config_root, &settings.cwd, &thread_id)
+                        .is_some_and(|transcript| transcript.is_file())
+                {
+                    bail!("Claude Code has no saved conversation `{thread_id}` for this folder");
+                }
                 if self.conversations.iter().any(|c| {
                     c.binding.provider == settings.provider
                         && c.binding.session_id == thread_id

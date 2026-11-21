@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
 import { DEFAULT_PICK, everywhereModel, writeChoice } from '@/features/chat/agentChoice'
-import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, resumeChatSession, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
@@ -25,7 +25,7 @@ import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { bypasses } from '@/features/settings/preferences'
 import { chatPermissions, launchFlags, startsBypassed, withBypass } from './model/newChatHost'
-import { CODEX_FULL_MODE } from '@/features/chat/chatMeta'
+import { CODEX_FULL_MODE, START_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
 import { resolveStartFolder } from './model/startFolder'
@@ -228,18 +228,21 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [online, startWords, chatView])
 
   // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0018). Claude Code
-  // and Codex run through their own adapters, with the mode, model and effort picked; any other agent runs over ACP by
-  // its name, where its own settings decide those. The start answers once the agent is up, so the page stays until
+  // and Codex run through their own adapters, with the mode, model and effort picked, on a new session or a saved one;
+  // any other agent runs over ACP by its name, where its own settings decide those. The start answers once the agent is up, so the page stays until
   // then, and the first message is an ordinary send after it.
   const startDirectChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions): Promise<void> => {
     const { agent, model, reasoning } = request
-    const permissions = hasAbility(agent, 'structuredChat') ? chatPermissions(agent, request.mode, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
+    // A saved conversation is resumed with no mode picked for it, so it opens in the agent's usual one.
+    const picked = request.resume === null ? request.mode : START_MODE[agent]
+    const permissions = hasAbility(agent, 'structuredChat') ? chatPermissions(agent, picked, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
     if (permissions === null) throw new Error(`${agentLabel(agent)} cannot start a chat in this permission mode yet. Pick another mode.`)
     const mode: StartMode = background ? 'background' : 'alongside'
     if (!beginStart(mode)) throw new Error(ANOTHER_START_RUNNING)
     try {
+      // A saved conversation opens as a chat on the agent's own session, with what was said before as its history.
       const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
-        ? await startChatSession(request.folder, agent, null, permissions)
+        ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions) : await resumeChatSession(request.folder, agent, request.resume, permissions)
         : await startAcpChat(request.folder, agent)
       const id = String(started.id)
       const choice: WireChoice = permissions === undefined ? {} : { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
@@ -404,9 +407,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     let folder = request.folder
     if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
-    // In the Chat view a session is a chat with no terminal behind it (ADR 0018). A saved conversation still resumes as
-    // the agent's own session until the daemon can open one as a chat.
-    if (chatView && request.resume === null) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    // In the Chat view a session is a chat with no terminal behind it (ADR 0018), a saved conversation included.
+    if (chatView) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.

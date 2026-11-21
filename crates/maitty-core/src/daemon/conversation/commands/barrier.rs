@@ -98,6 +98,7 @@ impl Daemon {
                 id,
                 generation,
                 created_thread,
+                adopted,
             } => {
                 if !self
                     .conversations
@@ -121,6 +122,9 @@ impl Daemon {
                         }
                         Err(error) => Err((token, error.to_string())),
                     }
+                } else if adopted && self.keeps_its_history_in_a_transcript(id) {
+                    self.begin_saved_history(id, generation, client)
+                        .map_err(|error| (token, error.to_string()))
                 } else {
                     self.begin_hydration(id, generation, None, Some(client))
                         .map_err(|error| (token, error.to_string()))

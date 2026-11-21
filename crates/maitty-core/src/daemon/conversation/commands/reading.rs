@@ -156,6 +156,104 @@ impl Daemon {
         Ok(())
     }
 
+    /// Whether the conversation's saved history is the transcript file its agent writes.
+    pub(super) fn keeps_its_history_in_a_transcript(&self, id: ConversationId) -> bool {
+        self.conversations.iter().any(|conversation| {
+            conversation.id == id
+                && history_source(conversation.binding.provider)
+                    == Some(crate::daemon::providers::HistorySource::Transcript)
+        })
+    }
+
+    /// Opens a chat on a session that began outside this app: nothing was recorded here, so its
+    /// transcript is read into the history before the start is answered. The read is off the
+    /// daemon's thread; `saved_history_read` takes what it found.
+    pub(super) fn begin_saved_history(
+        &mut self,
+        id: ConversationId,
+        generation: u64,
+        client: ClientId,
+    ) -> Result<()> {
+        let conversation = self
+            .conversations
+            .iter()
+            .find(|conversation| conversation.id == id && conversation.generation == generation)
+            .ok_or_else(|| anyhow::anyhow!("No current conversation"))?;
+        let binding = &conversation.binding;
+        let (provider, session) = (binding.provider, binding.session_id.clone());
+        let path = super::super::claude::transcript_path(&binding.config_root, &binding.cwd, &session)
+            .ok_or_else(|| anyhow::anyhow!("The saved conversation's name is not one a transcript has"))?;
+        #[cfg(test)]
+        let home = self.followed_home.clone().or_else(super::super::follow::user_home);
+        #[cfg(not(test))]
+        let home = super::super::follow::user_home();
+        let tx = self.tx.clone();
+        tokio::task::spawn_blocking(move || {
+            let result = match home {
+                Some(home) => super::super::follow::saved_history(id, provider, &session, &path, &home)
+                    .map_err(|failure| failure.words().to_owned()),
+                None => Err("The home folder is unknown".to_owned()),
+            };
+            // A closed daemon has no consumer for the read.
+            let saved = super::super::follow::Saved { id, generation, client, result };
+            let _ = tx.blocking_send(crate::daemon::Ev::SavedHistory(Box::new(saved)));
+        });
+        Ok(())
+    }
+
+    /// Takes the history read from a saved session's transcript and answers the start. A history
+    /// that is not whole is refused: a chat is never continued over a past it cannot show.
+    pub(in crate::daemon) fn saved_history_read(&mut self, saved: super::super::follow::Saved) {
+        let super::super::follow::Saved { id, generation, client, result } = saved;
+        if !self.conversations.iter().any(|c| c.id == id && c.generation == generation) {
+            self.send(client, ServerMsg::Error("Conversation identity changed while its saved history was read".into()));
+            return;
+        }
+        let kept = result
+            .map_err(|why| format!("The saved conversation could not be read: {why}"))
+            .and_then(|history| match history.completeness {
+                Completeness::Complete => Ok(history),
+                _ => Err("This saved conversation is too long to open as a chat; resume it in a terminal".to_owned()),
+            })
+            .and_then(|history| self.keep_saved_history(id, history).map_err(|error| error.to_string()));
+        match kept {
+            Ok(()) => {
+                self.send(client, ServerMsg::Reply(Reply::ConversationStarted { id, generation }));
+            }
+            Err(error) => {
+                let state = self.conversation_states.entry(id).or_default();
+                state.status = Status::Blocked;
+                state.error = Some(error.clone());
+                state.history_ready = false;
+                self.dirty = true;
+                self.send(client, ServerMsg::Error(error));
+            }
+        }
+    }
+
+    fn keep_saved_history(&mut self, id: ConversationId, mut history: History) -> Result<()> {
+        if !self.cfg.restore.enabled || !self.cfg.restore.output {
+            bail!("Opening a saved conversation as a chat needs `restore.output` on, so its history is kept");
+        }
+        let state = self.conversation_states.entry(id).or_default();
+        state.history_revision = state
+            .history_revision
+            .max(history.revision)
+            .checked_add(1)
+            .ok_or_else(|| anyhow::anyhow!("History revision exhausted"))?;
+        history.revision = state.history_revision;
+        state.history_ready = true;
+        state.blocked = false;
+        state.error = None;
+        if state.status == Status::Working {
+            state.status = Status::Idle;
+        }
+        self.conversation_histories.insert(id, history);
+        self.cache_conversation(id);
+        self.dirty = true;
+        Ok(())
+    }
+
     pub(super) fn complete_empty_thread(&mut self, id: ConversationId) -> Result<()> {
         let mut history = History::new(id);
         history.set_completeness(Completeness::Complete)?;

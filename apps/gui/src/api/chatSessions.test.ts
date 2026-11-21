@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import type { Conversation } from '@/data/preview'
-import { closeChatSession, conversationsFromSnapshot, startChatSession } from './daemon'
+import { closeChatSession, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -12,7 +12,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('chat sessions', () => {
   beforeEach(() => {
     vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockImplementation((command) => Promise.resolve(command === 'start_chat_session' ? { id: 44, generation: 1 } : null))
+    vi.mocked(invoke).mockReset().mockImplementation((command) => Promise.resolve(command === 'start_chat_session' || command === 'resume_chat_session' ? { id: 44, generation: 1 } : null))
   })
 
   const summary = (extra: Record<string, unknown> = {}) => ({
@@ -31,6 +31,14 @@ describe('chat sessions', () => {
       ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: 'agent/x', permissions: 'workspace-write' }],
       ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, permissions: 'full-access' }],
       ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: null, permissions: 'read-only' }],
+    ])
+  })
+
+  it('opens a saved conversation as a chat by the name its agent gave it', async () => {
+    await expect(resumeChatSession('/work/app', 'codex', 'saved-1', 'read-only')).resolves.toEqual({ id: 44, generation: 1 })
+
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['resume_chat_session', { cwd: '/work/app', provider: 'Codex', session: 'saved-1', permissions: 'read-only' }],
     ])
   })
 

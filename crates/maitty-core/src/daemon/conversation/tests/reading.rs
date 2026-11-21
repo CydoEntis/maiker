@@ -199,6 +199,57 @@ async fn structured_local_ipc_missing_exact_thread_never_creates_fallback() {
 }
 
 #[tokio::test]
+async fn a_saved_codex_thread_opens_as_a_chat_with_the_turns_it_already_had() {
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        // The fake lists a saved turn for the thread once this file is there.
+        let written = s.fixture.directory.path().join("native-history-written");
+        tokio::task::spawn_blocking(move || std::fs::write(written, "true")).await.unwrap().unwrap();
+        let target = crate::conversation::StartTarget::Session {
+            settings: settings(&s),
+            thread_id: "exact-thread".into(),
+        };
+
+        let started = exchange(
+            &mut s,
+            120,
+            crate::protocol::ClientMsg::Command(crate::protocol::Command::ConversationStart { target, branch: None }),
+            None,
+        )
+        .await;
+
+        let ServerMsg::Reply(crate::protocol::Reply::ConversationStarted { id, .. }) = started else {
+            panic!("{started:?}");
+        };
+        assert!(s.daemon.pending_starts.is_empty());
+        let read = exchange(
+            &mut s,
+            121,
+            crate::protocol::ClientMsg::Query(crate::protocol::Query::ConversationRead { id, cursor: None, limit: 128 }),
+            None,
+        )
+        .await;
+        let ServerMsg::Reply(crate::protocol::Reply::ConversationRead(read)) = read else {
+            panic!("{read:?}");
+        };
+        assert!(
+            read.history.entries.iter().any(|entry| matches!(
+                &entry.content,
+                super::history::Content::Message { text, .. } if text == "native reply preserved"
+            )),
+            "{:?}",
+            read.history.entries
+        );
+    })
+    .catch_unwind()
+    .await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
 async fn structured_output_false_reads_native_memory_without_a_detached_cache() {
     let mut s = conversation_fixture("conversation").await;
     let outcome=AssertUnwindSafe(async {

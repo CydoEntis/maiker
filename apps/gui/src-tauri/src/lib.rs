@@ -1618,6 +1618,26 @@ async fn start_chat_session(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// A saved Claude Code or Codex conversation of this computer, opened as a chat session: the agent's
+/// own session `session` in `cwd`, with its earlier messages as the chat's history.
+#[tauri::command]
+async fn resume_chat_session(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    cwd: PathBuf,
+    provider: maitty_shared::conversation::Provider,
+    session: String,
+    permissions: String,
+) -> Result<serde_json::Value, String> {
+    wire.require_local(machine, "A chat session")?;
+    let permissions = maitty_desktop_client::Permissions::parse(&permissions)
+        .map_err(|error| format!("{error:#}"))?;
+    maitty_desktop_client::resume_chat_session(cwd, provider, session, permissions, daemon_executable(&app)?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// A chat with `agent` over ACP in `cwd`, on this computer. The daemon picks the agent's program.
 #[tauri::command]
 async fn start_acp_chat(
@@ -1906,6 +1926,7 @@ pub fn run() {
             resume_codex_conversation,
             create_conversation,
             start_chat_session,
+            resume_chat_session,
             start_acp_chat,
             end_conversation,
             codex_executable_path,
