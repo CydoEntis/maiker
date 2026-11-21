@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { Progress } from '@/components/ui/progress'
-import { unreachableAdvice, unreachableKind } from '../model/unreachable'
 
 /** The amber room under a step that needs the person: the one fix, the main answer first. */
 export function NeedsBox({ children }: { children: ReactNode }) {
@@ -22,24 +21,15 @@ export function StepBody({ text, children }: { text: ReactNode; children?: React
   )
 }
 
-type NoAnswerProps = { message: string; host: string; port: number | null; onRetry: () => void; onEdit: () => void }
+type NoAnswerProps = { message: string; onRetry: () => void; onEdit: () => void }
 
-/** The machine could not be reached: the plain reasons (address, power, SSH port), ssh's own words behind Details, and the two ways on. */
-export function NoAnswerBody({ message, host, port, onRetry, onEdit }: NoAnswerProps) {
-  const kind = unreachableKind(message)
+/** The machine could not be reached: the host's one sentence (what to check, with ssh's own words in it), and the two ways on. */
+export function NoAnswerBody({ message, onRetry, onEdit }: NoAnswerProps) {
   return (
-    <>
-      <StepBody text={kind === 'other' ? message : unreachableAdvice(kind, host, port)}>
-        <Button variant="needs" autoFocus onClick={onRetry}>Try again</Button>
-        <Button variant="outline" onClick={onEdit}>Edit the address</Button>
-      </StepBody>
-      {kind !== 'other' && (
-        <details className="text-xs text-(--muted)">
-          <summary className="cursor-pointer">Details</summary>
-          <pre className="mt-1.5 mb-0 font-(family-name:--mono) whitespace-pre-wrap">{message}</pre>
-        </details>
-      )}
-    </>
+    <StepBody text={message}>
+      <Button variant="needs" autoFocus onClick={onRetry}>Try again</Button>
+      <Button variant="outline" onClick={onEdit}>Edit the address</Button>
+    </StepBody>
   )
 }
 

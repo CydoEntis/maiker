@@ -1,8 +1,7 @@
 import { Button } from '@/components/ui/button'
 import { addressOf, type AddRequest, type HostResult, type MachineFacts, type Stage } from '../model/addStage'
 import { UPDATE_WORDS, type MachineHead } from '@/features/workspace/model/machines'
-import { HOST_KEY_WORDS } from '../model/machineRows'
-import { unreachableKind, unreachableTitle } from '../model/unreachable'
+import { stoppedOnHostKey } from '../model/machineRows'
 import { AddChecklist, type Position, type StepId } from './AddChecklist'
 import { HelperProgressBody, NoAnswerBody, StepBody } from './AddBodies'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
@@ -48,8 +47,8 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
   switch (stage.kind) {
     case 'checking': return { at: 'reach', state: 'running' }
     case 'no-answer': {
-      const body = <NoAnswerBody message={stage.message} host={host} port={request.port} onRetry={run.retry} onEdit={onChangeAddress} />
-      return { at: 'reach', state: 'needs', label: unreachableTitle(unreachableKind(stage.message), host), body }
+      const body = <NoAnswerBody message={stage.message} onRetry={run.retry} onEdit={onChangeAddress} />
+      return { at: 'reach', state: 'needs', label: `Couldn't reach ${host}`, body }
     }
     case 'no-name': return { at: 'reach', state: 'needs', label: "Can't make a name for that", body: <StepBody text={`Type ${request.target} as user@host, so Maiker can name it.`}><Button variant="soft" onClick={onChangeAddress}>Edit the address</Button></StepBody> }
     case 'name-taken': {
@@ -60,13 +59,13 @@ function positionOf(stage: Stage, { request, machines, run, appVersion, onChange
     case 'saved': return savedPosition(stage.name, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
     case 'trust': return { at: 'host', state: 'needs', label: `First time connecting to ${request.fromConfig ? request.name : host}`, body: <HostKeyBody report={stage.report} trusting={stage.trusting} problem={stage.problem} onTrust={run.trust} onCopy={machines.onCopyCommand} onCancel={onClose} /> }
     case 'changed': return { at: 'host', state: 'failed', label: `${host}'s identity changed since you last connected`, body: <HostKeyBody report={stage.report} trusting={false} problem={null} onTrust={run.trust} onCopy={machines.onCopyCommand} /> }
-    case 'unverified': return { at: 'host', state: 'needs', label: `Couldn't check ${host}'s identity`, body: <StepBody text={stage.said}><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Try again</Button></StepBody> }
+    case 'unverified': return { at: 'host', state: 'needs', label: `${host}'s host key has changed`, body: <StepBody text={stage.message}><Button variant="needs" onClick={() => { machines.onRetry(stage.name) }}>Try again</Button></StepBody> }
     case 'adding': {
       if (!stage.helper) return { at: 'key', state: 'running' }
       const text = stage.action === 'install' ? `Not installed yet. Copying Maiker${appVersion === null ? '' : ` ${appVersion}`} to ${request.name}…` : `Updating Maiker on ${request.name}…`
       return { at: 'helper', state: 'running', body: <HelperProgressBody text={text} percent={stage.percent} /> }
     }
-    case 'key': return { at: 'key', state: 'needs', label: `Couldn't sign in to ${stage.login.target}`, body: <KeyStep target={stage.login.target} port={request.port} said={stage.login.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.removeSaved(stage.login.name) }} /> }
+    case 'key': return { at: 'key', state: 'needs', label: `Couldn't sign in to ${stage.login.target}`, body: <KeyStep message={stage.login.message} command={stage.login.fix_command} said={stage.login.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.removeSaved(stage.login.name) }} /> }
     case 'helper': return helperPosition(stage, { request, machines, run, appVersion, onChangeAddress, onKept, onClose })
     case 'connected': return { at: 'connected', state: 'done' }
   }
@@ -83,32 +82,32 @@ function savedPosition(name: string, { request, machines, run, onChangeAddress }
   if (live?.updateAction != null) {
     const action = live.updateAction
     const label = action === 'install' ? `Maiker is not on ${name}` : `${name} has another Maiker`
-    return { at: 'helper', state: 'needs', label, body: <StepBody text={UPDATE_WORDS[action].need(name)}><Button variant="needs" onClick={() => { run.setUpHelper(action) }}>{UPDATE_WORDS[action].verb} it</Button></StepBody> }
+    return { at: 'helper', state: 'needs', label, body: <StepBody text={live.why ?? UPDATE_WORDS[action].need(name)}><Button variant="needs" onClick={() => { run.setUpHelper(action) }}>{UPDATE_WORDS[action].verb} it</Button></StepBody> }
   }
   if (live === undefined || word === 'connecting' || word?.startsWith('reconnecting') === true) return { at: 'key', state: 'running', label: `Signing in to ${name}…`, body: <StepBody text="Waiting for it to answer." /> }
-  const message = live.why ?? live.said ?? 'It did not answer.'
-  const body = <NoAnswerBody message={message} host={request.host} port={request.port} onRetry={() => { run.retrySaved(name) }} onEdit={onChangeAddress} />
+  const message = live.why ?? 'It did not answer.'
+  const body = <NoAnswerBody message={message} onRetry={() => { run.retrySaved(name) }} onEdit={onChangeAddress} />
   return { at: 'reach', state: 'needs', label: `${name} is not connected`, body }
 }
 
 function loginPosition(name: string, live: MachineHead, request: AddRequest, machines: MachinesInfo, run: Run): Position {
-  if (HOST_KEY_WORDS.test(live.said ?? '')) {
-    return { at: 'host', state: 'needs', label: `Couldn't check ${request.host}'s identity`, body: <StepBody text={live.said ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
+  if (stoppedOnHostKey(live)) {
+    return { at: 'host', state: 'needs', label: `${request.host}'s host key has changed`, body: <StepBody text={live.why ?? ''}><Button variant="needs" onClick={() => { run.retrySaved(name) }}>Try again</Button></StepBody> }
   }
-  return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? request.target}`, body: <KeyStep target={live.target ?? request.target} port={request.port} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.retrySaved(name) }} /> }
+  return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? request.target}`, body: <KeyStep message={live.why ?? ''} command={live.fixCommand} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { run.retrySaved(name) }} /> }
 }
 
 function helperPosition(stage: Extract<Stage, { kind: 'helper' }>, { machines, run, onKept }: Parts): Position {
   const { name, version } = stage.added
   if (stage.reason === 'not-running') {
-    return { at: 'helper', state: 'needs', label: `Maiker is on ${name} but couldn't start`, body: <StepBody text="Its service did not answer."><Button variant="needs" onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody> }
+    return { at: 'helper', state: 'needs', label: `Maiker is on ${name} but couldn't start`, body: <StepBody text={stage.message ?? ''}><Button variant="needs" onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody> }
   }
   const keep = <Button variant="soft" onClick={() => { run.keep(); onKept(name) }}>{stage.reason === 'older' && version !== null ? `Keep ${version}` : 'Add without it'}</Button>
   if (stage.reason === 'older') {
     const label = `${name} has an older Maiker${version === null ? '' : ` (${version})`}`
-    return { at: 'helper', state: 'needs', label, body: <StepBody text="Some features need both computers on the same version."><Button variant="needs" onClick={() => { run.setUpHelper('update') }}>Update it</Button>{keep}</StepBody> }
+    return { at: 'helper', state: 'needs', label, body: <StepBody text={stage.message ?? ''}><Button variant="needs" onClick={() => { run.setUpHelper('update') }}>Update it</Button>{keep}</StepBody> }
   }
-  const text = stage.said ?? 'Maiker is not installed there yet. It installs in ~/.maiker (about 40 MB). No admin rights needed.'
+  const text = stage.message ?? ''
   return { at: 'helper', state: 'needs', label: `Couldn't put Maiker on ${name}`, body: <StepBody text={text}><Button variant="needs" onClick={() => { run.setUpHelper('install') }}>Try again</Button>{keep}</StepBody> }
 }
 

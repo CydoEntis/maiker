@@ -4,7 +4,7 @@
 //! Nothing here touches the config file or the hub: it decides, and the command acts.
 
 use maitty_machines::MachineDef;
-use maitty_machines::link_failure::FailureClass;
+use maitty_machines::link_failure::{ClientOs, FailureClass, Subject, clean, fix_command, sentence_here};
 use maitty_machines::host_key::{self, TOOL_LIMIT, Tools};
 use maitty_machines::key_file::check_key_file;
 use maitty_machines::machine_config::{refusal_of, refusal_with, suggest_name};
@@ -65,9 +65,9 @@ pub fn host_choices(hosts: &[SshHost], existing: &[MachineDef]) -> Vec<HostChoic
 pub enum How {
     /// Dial it now. `version` is what the app there said, when it answered; `reach` is how far the look got.
     Connect { version: Option<String>, reach: Reach },
-    /// ssh needs a person: write the entry and open ssh where prompts can be answered.
-    /// `said` is ssh's own last line, why it could not log in.
-    Login { said: String },
+    /// ssh could not log in alone (`FailureClass::is_login`): write the entry and let the window
+    /// say why and what to do.
+    Login { failure: FailureClass },
 }
 
 /// How far the look got on a machine ssh could log in to: the app answered, or why it did not.
@@ -150,11 +150,13 @@ pub fn prepare(
                 reach: Reach::Answered,
             },
         }),
-        Probe::Failed(FailureClass::Login(said)) => Ok(Prepare::Ready {
+        Probe::Failed(failure) if failure.is_login() => Ok(Prepare::Ready {
             def,
-            how: How::Login { said },
+            how: How::Login { failure },
         }),
-        Probe::Failed(FailureClass::Unreachable(why)) => Err(format!("{}: {why}", def.target)),
+        Probe::Failed(failure @ FailureClass::Unreachable(_)) => {
+            Err(sentence_here(&failure, &Subject::of_def(&def)))
+        }
         // Reached, but the app is missing, old or not running: said here so the window can ask
         // about it at once, and the connection's own state carries on once it dials.
         Probe::Failed(class) => Ok(Prepare::Ready {
@@ -170,7 +172,22 @@ fn reach_of(class: &FailureClass) -> Reach {
         FailureClass::Install => Reach::Missing,
         FailureClass::Update => Reach::Older,
         FailureClass::UpdateHere => Reach::NewerHere,
-        FailureClass::NoDaemon | FailureClass::Login(_) | FailureClass::Unreachable(_) => Reach::NotRunning,
+        _ => Reach::NotRunning,
+    }
+}
+
+/// The failure a machine that was reached still has, said as the shared sentence: the app there
+/// is missing, of another version or not running, or putting it there failed. None once it answered.
+fn still_failing(reach: Reach, helper_install: Option<&HelperInstall>) -> Option<FailureClass> {
+    if let Some(HelperInstall { installed: false, said }) = helper_install {
+        return Some(FailureClass::InstallFailed(clean(said)));
+    }
+    match reach {
+        Reach::Answered => None,
+        Reach::Missing => Some(FailureClass::Install),
+        Reach::Older => Some(FailureClass::Update),
+        Reach::NewerHere => Some(FailureClass::UpdateHere),
+        Reach::NotRunning => Some(FailureClass::NoDaemon),
     }
 }
 
@@ -195,7 +212,8 @@ pub enum Outcome {
     /// how far the look got. `reach_ms` is how long the machine took to be reached (a plain
     /// connect), `took_ms` how long it took to log in and ask, `key` the file name of the key that
     /// signed in. `helper_install` is set when the app was missing and the window asked for it to
-    /// be installed as part of adding.
+    /// be installed as part of adding. `message` is the shared sentence for what is still wrong
+    /// there, when something is.
     Added {
         name: String,
         version: Option<String>,
@@ -204,11 +222,21 @@ pub enum Outcome {
         reach_ms: Option<u64>,
         key: Option<String>,
         helper_install: Option<HelperInstall>,
+        message: Option<String>,
     },
-    /// Written and dialling, but ssh could not log in without a person. Nothing is opened: the
-    /// window shows `said` (ssh's own words), and the way forward (the host key card, or the
-    /// user to fix). `command` is the same login to run in any terminal, when the machine has one.
-    Login { name: String, target: String, said: String, command: Option<String> },
+    /// Written and dialling, but ssh could not log in alone. Nothing is opened: the window shows
+    /// `message` (the shared sentence), with `said` (ssh's own words) beside it. `failure` is which
+    /// login failure it is (`FailureClass::kind`), `fix_command` the command the sentence names,
+    /// and `command` the same login to run in any terminal, when the machine has one.
+    Login {
+        name: String,
+        target: String,
+        said: String,
+        message: String,
+        failure: &'static str,
+        fix_command: Option<String>,
+        command: Option<String>,
+    },
     /// No name could be made from the target.
     NeedsName,
     Cancelled,
@@ -326,7 +354,10 @@ pub async fn add_machine(
                 Some(HelperInstall { installed: true, .. }) => Reach::Answered,
                 _ => reach,
             };
+            let message = still_failing(reach, helper_install.as_ref())
+                .map(|failure| sentence_here(&failure, &Subject::of_def(&def)));
             Ok(Outcome::Added {
+                message,
                 name: def.name,
                 version,
                 reach,
@@ -336,12 +367,18 @@ pub async fn add_machine(
                 helper_install,
             })
         }
-        How::Login { said } => Ok(Outcome::Login {
-            command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
-            name: def.name,
-            target: def.target,
-            said,
-        }),
+        How::Login { failure } => {
+            let subject = Subject::of_def(&def);
+            Ok(Outcome::Login {
+                command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
+                message: sentence_here(&failure, &subject),
+                failure: failure.kind(),
+                fix_command: fix_command(&failure, &subject, ClientOs::this()),
+                said: failure.said().unwrap_or_default().to_owned(),
+                name: def.name,
+                target: def.target,
+            })
+        }
     }
 }
 
@@ -488,8 +525,11 @@ mod tests {
 
     #[test]
     fn a_login_ssh_cannot_do_is_added_and_left_to_a_person() {
-        let Ok(Prepare::Ready { how: How::Login { said }, .. }) = look("auth-fail") else {
+        let Ok(Prepare::Ready { how: How::Login { failure }, .. }) = look("auth-fail") else {
             panic!("login");
+        };
+        let FailureClass::KeyRefused(said) = failure else {
+            panic!("a refused key: {failure:?}");
         };
         assert!(said.contains("Permission denied"), "ssh's own words reach the window: {said:?}");
     }
@@ -507,7 +547,7 @@ mod tests {
         let Err(why) = look("unreachable") else {
             panic!("an error");
         };
-        assert!(why.starts_with("build.example: "), "{why}");
+        assert!(why.starts_with("Can't reach build.example: check the name or address"), "{why}");
     }
 
     #[test]
@@ -588,12 +628,27 @@ mod tests {
             reach_ms: Some(38),
             key: Some("id_ed25519".into()),
             helper_install: Some(HelperInstall { installed: true, said: "done".into() }),
+            message: None,
         };
         let json = serde_json::to_value(&added).unwrap();
         assert_eq!(json["outcome"], "added");
         assert_eq!((json["reach_ms"].as_u64(), json["took_ms"].as_u64()), (Some(38), Some(900)));
         assert_eq!(json["key"], "id_ed25519");
         assert_eq!(json["helper_install"]["installed"], true);
+    }
+
+    #[test]
+    fn what_is_still_wrong_with_a_reached_machine_is_one_shared_failure() {
+        assert_eq!(still_failing(Reach::Answered, None), None);
+        assert_eq!(still_failing(Reach::Missing, None), Some(FailureClass::Install));
+        assert_eq!(still_failing(Reach::Older, None), Some(FailureClass::Update));
+        assert_eq!(still_failing(Reach::NewerHere, None), Some(FailureClass::UpdateHere));
+        assert_eq!(still_failing(Reach::NotRunning, None), Some(FailureClass::NoDaemon));
+        let failed = HelperInstall { installed: false, said: "no build for this system\n".into() };
+        assert_eq!(
+            still_failing(Reach::Missing, Some(&failed)),
+            Some(FailureClass::InstallFailed("no build for this system".into()))
+        );
     }
 
     #[test]

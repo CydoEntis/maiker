@@ -16,7 +16,8 @@ const changed: HostKeyReport = { status: 'changed', host: 'build.example', port:
 
 type AddedOutcome = Extract<Added, { outcome: 'added' }>
 const added = (extra: Partial<AddedOutcome> = {}): Added => ({ outcome: 'added', name: 'server-15', version: '0.46.0', reach: 'answered', took_ms: 90, reach_ms: 38, key: 'id_ed25519', ...extra })
-const refused: Added = { outcome: 'login', name: 'server-15', target: 'dev@100.78.214.15', said: 'dev@100.78.214.15: Permission denied (publickey).', command: null }
+const REFUSED_KEY = 'server-15 refused your key: run `ssh-copy-id dev@100.78.214.15` in a terminal, then try again.'
+const refused: Added = { outcome: 'login', name: 'server-15', target: 'dev@100.78.214.15', said: 'dev@100.78.214.15: Permission denied (publickey).', message: REFUSED_KEY, failure: 'key-refused', fix_command: 'ssh-copy-id dev@100.78.214.15', command: null }
 
 const connectedHead = (name = 'server-15', machine = 3): MachineHead => ({ ...LOCAL_HEAD, key: `machine-${String(machine)}`, machine, name, label: name, chip: { glyph: '●', word: 'connected', tone: 'ok' }, target: 'dev@server-15.lan' })
 
@@ -233,10 +234,9 @@ describe('the checklist', () => {
       return { user, view, machines }
     }
 
-    it('says in one plain screen that SSH is set up outside Maiker, with no terminal, command run or password', async () => {
+    it('says the host\'s one sentence, with no terminal, command run or password', async () => {
       await open()
-      expect(screen.getByText(/Maiker couldn't sign in to dev@100\.78\.214\.15\. Maiker uses your normal SSH setup, so set it up first/)).toBeInTheDocument()
-      expect(screen.getByText('ssh dev@100.78.214.15')).toBeInTheDocument()
+      expect(screen.getByText(REFUSED_KEY)).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Run' })).toBeNull()
       expect(screen.queryByTestId('key-terminal')).toBeNull()
       expect(screen.queryByText('Checking your key…')).toBeNull()
@@ -247,14 +247,9 @@ describe('the checklist', () => {
       expect(screen.getByText(/SSH said: dev@100\.78\.214\.15: Permission denied \(publickey\)\./)).toBeInTheDocument()
     })
 
-    it('says a computer that is refusing connections for a few minutes is doing so, in plain words', async () => {
-      await open('Connection closed by 100.78.214.15 port 22')
-      expect(screen.getByText('This computer is refusing connections for a few minutes because of earlier failed sign-ins. Wait and try again.')).toBeInTheDocument()
-    })
-
-    it('copies the one-line key-copy command', async () => {
+    it('copies the command the host named', async () => {
       const { user, machines } = await open()
-      await user.click(screen.getByRole('button', { name: 'Copy the key-copy command' }))
+      await user.click(screen.getByRole('button', { name: 'Copy the command' }))
       expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15')
     })
 
@@ -298,10 +293,11 @@ describe('the checklist', () => {
     })
 
     it('says so when the install did not work, and tries it again from the step', async () => {
-      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null, helper_install: { installed: false, said: 'No space left on the device.' } }))) })
+      const message = 'Maiker could not be installed or started on server-15 (No space left on the device.); only Linux and macOS machines are supported.'
+      const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null, helper_install: { installed: false, said: 'No space left on the device.' }, message }))) })
       const { user } = await connectTo(machines)
       expect(await screen.findByText("Couldn't put Maiker on server-15")).toBeInTheDocument()
-      expect(screen.getByText('No space left on the device.')).toBeInTheDocument()
+      expect(screen.getByText(message)).toBeInTheDocument()
       await user.click(screen.getByRole('button', { name: 'Try again' }))
       expect(machines.onUpdate).toHaveBeenCalledWith('server-15', 'install', false)
     })
@@ -337,12 +333,13 @@ describe('the checklist', () => {
   })
 
   describe('a machine that does not answer', () => {
-    const silent = () => info({}, { inspect: vi.fn(() => Promise.reject(new Error('timed out'))), onAdd: vi.fn(() => Promise.reject(new Error('ssh: connect to host 10.9.9.9 port 22: Connection timed out'))) })
+    const UNREACHED = "Can't reach 10.9.9.9: check the name or address, and that the machine is on (ssh: connect to host 10.9.9.9 port 22: Connection timed out)."
+    const silent = () => info({}, { inspect: vi.fn(() => Promise.reject(new Error('timed out'))), onAdd: vi.fn(() => Promise.reject(new Error(UNREACHED))) })
 
-    it("says the host didn't answer, with the plain reasons", async () => {
+    it("says it couldn't reach the machine, in the host's one sentence", async () => {
       await connectTo(silent(), 'dev@10.9.9.9')
-      expect(await screen.findByText("10.9.9.9 didn't answer")).toBeInTheDocument()
-      expect(screen.getByText(/Maiker tried for 15 seconds.*accepts SSH on port 22/)).toBeInTheDocument()
+      expect(await screen.findByText("Couldn't reach 10.9.9.9")).toBeInTheDocument()
+      expect(screen.getByText(UNREACHED)).toBeInTheDocument()
     })
 
     it('tries the whole sequence again', async () => {
@@ -542,13 +539,15 @@ describe('Machine added', () => {
 describe('mending a machine that is not connected', () => {
   const down = (word: string, extra: Partial<MachineHead> = {}): MachineHead => ({ ...LOCAL_HEAD, key: 'machine-1', machine: 1, name: 'build', label: 'build', chip: { glyph: '✕', word, tone: 'bad' }, target: 'me@build.example', down: true, ...extra })
 
-  it('opens a machine that needs a login on the plain sign-in step, with Try again dialling it again', async () => {
-    const head = down('needs login', { loginCommand: 'ssh me@build.example', said: 'Permission denied (publickey).' })
+  it('opens a machine that needs a login on the plain sign-in step, in the host\'s words, with Try again dialling it again', async () => {
+    const why = 'build refused your key: run `ssh-copy-id me@build.example` in a terminal, then try again.'
+    const head = down('needs login', { loginCommand: 'ssh me@build.example', said: 'Permission denied (publickey).', why, failure: 'key-refused', fixCommand: 'ssh-copy-id me@build.example' })
     const machines = info({ list: [head] })
     render(<AddMachineDialog machines={machines} fixing={head} onClose={vi.fn()} />)
     expect(screen.getByRole('dialog', { name: 'Fix build' })).toBeInTheDocument()
     expect(screen.queryByRole('textbox', { name: 'Address' })).toBeNull()
     expect(screen.getByText("Couldn't sign in to me@build.example")).toBeInTheDocument()
+    expect(screen.getByText(why)).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Run' })).toBeNull()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Try again' }))
     expect(machines.onRetry).toHaveBeenCalledWith('build')
@@ -556,7 +555,7 @@ describe('mending a machine that is not connected', () => {
 
   it('asks to trust a host key it has not seen, by the machine name', async () => {
     const trust = vi.fn(() => Promise.resolve())
-    const head = down('needs login', { said: 'Host key verification failed.' })
+    const head = down('needs login', { said: 'Host key verification failed.', failure: 'host-key-changed' })
     render(<AddMachineDialog machines={info({ list: [head], hostKey: { inspect: vi.fn(() => Promise.resolve(key('unknown'))), trust } })} fixing={head} onClose={vi.fn()} />)
     await userEvent.setup().click(await screen.findByRole('button', { name: 'Trust and continue' }))
     expect(trust).toHaveBeenCalledWith('build', FINGERPRINT)

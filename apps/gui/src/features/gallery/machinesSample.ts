@@ -12,10 +12,10 @@ const COUNT = { few: 2, some: 4, many: 5 }
 type Entry = readonly [name: string, state: State['state'], target: string, sessions: number, extra?: Partial<State>]
 
 const ENTRIES: readonly Entry[] = [
-  ['gpu-box', 'unreachable', 'cydo@10.0.4.12', 0, { why: 'No answer from 10.0.4.12.' }],
-  ['studio-pc', 'needs-login', 'cydo@studio-pc', 0, { said: 'cydo@studio-pc: Permission denied (publickey).' }],
-  ['devbox', 'needs-update', 'cydo@10.0.4.7', COUNT.few, { why: 'run `maiker machine update devbox`, then retry' }],
-  ['ec2-eu-west', 'needs-update', 'ubuntu@3.249.18.40', COUNT.few, { why: 'run `maiker machine update ec2-eu-west`, then retry' }],
+  ['gpu-box', 'unreachable', 'cydo@10.0.4.12', 0, { why: "Can't reach gpu-box: check the name or address, and that the machine is on (ssh: connect to host 10.0.4.12 port 22: Connection timed out).", failure: 'unreachable' }],
+  ['studio-pc', 'needs-login', 'cydo@studio-pc', 0, { said: 'cydo@studio-pc: Permission denied (publickey).', why: 'studio-pc refused your key: run `ssh-copy-id cydo@studio-pc` in a terminal, then try again.', failure: 'key-refused', fix_command: 'ssh-copy-id cydo@studio-pc' }],
+  ['devbox', 'needs-update', 'cydo@10.0.4.7', COUNT.few, { why: 'devbox runs an older Maiker: run `maiker machine update devbox`, then try again.', failure: 'update', fix_command: 'maiker machine update devbox' }],
+  ['ec2-eu-west', 'needs-update', 'ubuntu@3.249.18.40', COUNT.few, { why: 'ec2-eu-west runs an older Maiker: run `maiker machine update ec2-eu-west`, then try again.', failure: 'update', fix_command: 'maiker machine update ec2-eu-west' }],
   ['lab-a100', 'connected', 'cydo@lab-a100.uni.edu', COUNT.many],
   ['build-01', 'connected', 'ci@build-01.lan', COUNT.some],
   ['staging', 'connected', 'deploy@staging.acme.dev', 1],

@@ -1111,7 +1111,7 @@ mod tests {
         let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
         assert_eq!(
             crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Login("box: Permission denied".into())
+            crate::link_failure::FailureClass::KeyRefused("box: Permission denied".into())
         );
     }
 

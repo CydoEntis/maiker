@@ -85,12 +85,19 @@ export function addressOf(sessionId: string): SessionAddress | null {
 export const MACHINE_KINDS = ['connecting', 'connected', 'reconnecting', 'needs-login', 'needs-update', 'unreachable', 'refused'] as const
 export type MachineKind = (typeof MACHINE_KINDS)[number]
 
+/** Which failure a machine has, as the host names it (`FailureClass::kind` in crates/maitty-machines): buttons are picked by it, never by the words. */
+export const FAILURE_KINDS = ['key-refused', 'needs-person', 'host-key-changed', 'update', 'update-here', 'install', 'install-failed', 'not-running', 'unreachable', 'refused'] as const
+export type FailureKind = (typeof FAILURE_KINDS)[number]
+
 const MachineStateSchema = z.object({
   machine: z.number().int().nonnegative(),
   name: z.string(),
   state: z.enum(MACHINE_KINDS),
-  /** What a person has to do, when one has to. */
+  /** The failure as one sentence that names the machine and gives the fix, worded by the host so both apps say the same; null when nothing failed. */
   why: z.string().nullable(),
+  failure: z.enum(FAILURE_KINDS).nullish(),
+  /** The one command `why` asks for, for a Copy button. */
+  fix_command: z.string().nullish(),
   /** On needs-login: ssh's own last line, why it could not log in. */
   said: z.string().nullable().optional(),
   /** On needs-login: the line to run in a terminal to log in by hand. */
@@ -248,8 +255,21 @@ const AddedSchema = z.discriminatedUnion('outcome', [
     key: z.string().nullish(),
     /** Set when the app was missing and `installHelper` asked for it to be installed as part of adding. */
     helper_install: z.object({ installed: z.boolean(), said: z.string() }).nullish(),
+    /** What is still wrong there, as the host's one sentence; null once the app answered. */
+    message: z.string().nullish(),
   }),
-  z.object({ outcome: z.literal('login'), name: z.string(), target: z.string(), said: z.string(), command: z.string().nullable() }),
+  z.object({
+    outcome: z.literal('login'),
+    name: z.string(),
+    target: z.string(),
+    said: z.string(),
+    /** Why ssh could not log in and what to do, as the host's one sentence. */
+    message: z.string(),
+    failure: z.enum(FAILURE_KINDS),
+    /** The command `message` asks for, for a Copy button. */
+    fix_command: z.string().nullable(),
+    command: z.string().nullable(),
+  }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),
 ])

@@ -12,7 +12,7 @@ use crate::client::remote_status_tests::{Runtime, Sandbox};
 use crate::client::screen::machine_group::AppFix;
 use crate::client::screen::machines::{MachinesView, Outcome};
 use crate::client::ssh_hosts::SshHost;
-use crate::link_failure::{FIX_INSTALL, FIX_LOGIN};
+use crate::link_failure::FailureClass;
 use crate::protocol::{ServerMsg, Snapshot, Status};
 use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::path::Path;
@@ -540,7 +540,7 @@ fn a_missing_app_adds_the_machine_so_its_state_can_say_what_to_install() {
         assert_eq!(
             h.state_of("box"),
             Some(ConnectionState::NeedsUpdate {
-                why: FIX_INSTALL.into()
+                failure: FailureClass::Install
             })
         );
         let toast = h.app.notice.as_ref().map(|(text, ..)| text.clone());
@@ -566,7 +566,7 @@ fn after_an_update_that_left_the_daemon_old_the_fix_becomes_a_restart_that_runs_
         .await;
         let id = h.id_of("box").expect("its connection");
         let old_daemon = ConnectionState::NeedsUpdate {
-            why: crate::link_failure::FIX_UPDATE.into(),
+            failure: FailureClass::Update,
         };
         h.app.remotes.get_mut(&id).unwrap().state = old_daemon.clone();
         assert_eq!(h.app.machine_fix(id), Some(AppFix::Update));
@@ -692,7 +692,7 @@ fn a_popup_that_closes_on_a_failed_login_leaves_the_machine_with_its_state_and_t
         })
         .await;
         assert!(
-            matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { why, said }) if why == FIX_LOGIN && !said.is_empty()),
+            matches!(h.state_of("box"), Some(ConnectionState::NeedsLogin { failure: FailureClass::KeyRefused(said) }) if !said.is_empty()),
             "{:?}",
             h.state_of("box")
         );

@@ -1,7 +1,7 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { markConversationsDisconnected } from '@/data/connection'
 import type { Conversation } from '@/data/preview'
-import type { MachineState } from '@/api/machines'
+import type { FailureKind, MachineState } from '@/api/machines'
 import { LOCAL_MACHINE, machineNameOf } from '@/api/machines'
 import type { Layout } from './layout'
 
@@ -81,7 +81,12 @@ export type MachineHead = {
   nickname?: string
   label: string
   chip: MachineChip | null
+  /** The host's one sentence for what failed and what to do; null when nothing failed. */
   why: string | null
+  /** Which failure it is, as the host names it; null when nothing failed. */
+  failure: FailureKind | null
+  /** The one command `why` asks for, to copy; null when there is none. */
+  fixCommand: string | null
   /** On needs-login: ssh's own last line, why it could not log in; null otherwise. */
   said: string | null
   /** On needs-login: the line to run in a terminal to log in by hand; null otherwise. */
@@ -100,35 +105,29 @@ export type MachineHead = {
   updateAction: UpdateAction | null
 }
 
-const UPDATE_COMMAND = /`(maiker machine update [^`]+)`/
-const INSTALL_FLAG = '--install'
-const UPDATE_HERE = 'update maiker on this computer'
-
 /** The machine runs a newer app than this one: the fix is updating this app, and nothing is done to the machine. */
 export function isNewerThanThisApp(state: MachineState): boolean {
-  return state.state === 'needs-update' && (state.why ?? '').includes(UPDATE_HERE)
+  return state.state === 'needs-update' && state.failure === 'update-here'
 }
 
-/** The command a needs-update fix names, as the host wrote it (the machine's name is in it). */
+/** The command a needs-update fix names, as the host gave it (the machine's name is in it). */
 export function updateCommandOf(state: MachineState): string | null {
-  if (state.state !== 'needs-update') return null
-  return UPDATE_COMMAND.exec(state.why ?? '')?.[1] ?? null
+  return updateActionOf(state) === null ? null : state.fix_command ?? null
 }
 
 /** A first install (no app on the machine at all), or replacing the other version it runs. */
 export type UpdateAction = 'install' | 'update'
 
 /**
- * Which fix a machine that needs update gets. The host only names `--install` when the app is not
- * on the machine at all, and the update refuses a first install without it, so the button must
- * pass it exactly then. A machine newer than this app gets no button: updating it from here would
- * be a downgrade, which the update refuses.
+ * Which fix a machine that needs update gets, from the failure the host named. A machine newer than this app gets no button:
+ * updating it from here would be a downgrade, which the update refuses.
  */
 export function updateActionOf(state: MachineState): UpdateAction | null {
   if (state.state !== 'needs-update' || isNewerThanThisApp(state)) return null
-  return updateCommandOf(state)?.includes(INSTALL_FLAG) === true ? 'install' : 'update'
+  return state.failure === 'install' || state.failure === 'install-failed' ? 'install' : 'update'
 }
 
+/** `need` is the update's own question (its dialog and button); a failed connection is said by the host's sentence instead. */
 type UpdateWords = { verb: string; state: string; need: (name: string) => string; running: (name: string) => string; failed: (name: string) => string }
 
 /** What the window says of each fix, so the sidebar, its dialog, Settings and the toasts agree. */
@@ -185,7 +184,7 @@ export function isDown(state: MachineState): boolean {
 export const THIS_COMPUTER = 'this computer'
 
 /** This computer's header, which the sidebar shows even when there is no other machine. */
-export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
+export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, failure: null, fixCommand: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
 
 function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): { nickname: string } | Record<string, never> {
   const nickname = nicknames[name.toLowerCase()]
@@ -242,7 +241,7 @@ export function machineHeads(machines: ReadonlyMap<number, RemoteMachine>, nickn
   if (machines.size === 0) return []
   const others = [...machines.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
+    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, failure: machine.state.failure ?? null, fixCommand: machine.state.fix_command ?? null, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
   return [LOCAL_HEAD, ...others]
 }
 

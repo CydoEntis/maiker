@@ -487,7 +487,7 @@ mod tests {
             "build".into(),
             Unreachable {
                 since: std::time::Instant::now(),
-                why: "no route".into(),
+                failure: crate::link_failure::FailureClass::Unreachable("no route".into()),
             },
         );
         let remote = &app.remotes[&MachineId(1)];
@@ -495,7 +495,7 @@ mod tests {
         assert!(matches!(remote.state, Unreachable { .. }));
         assert_eq!(
             app.notice.as_ref().unwrap().0,
-            "build is unreachable: no route"
+            "Can't reach build: check the name or address, and that the machine is on (no route)."
         );
     }
 

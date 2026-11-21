@@ -462,16 +462,16 @@ fn a_paste_goes_into_the_input_not_the_pane_behind() {
 /// supervisors said.
 fn app_needing_fixes() -> App {
     use crate::client::link::ConnectionState;
-    use crate::link_failure::{FIX_INSTALL, FIX_UPDATE};
+    use crate::link_failure::FailureClass;
     let mut app = app_with(&[
         ("build", "dev@build.lan"),
         ("gpu", "gpu"),
         ("kingdom", "dev@kingdom.lan"),
     ]);
     let states = [
-        ("build", ConnectionState::NeedsUpdate { why: FIX_UPDATE.into() }),
+        ("build", ConnectionState::NeedsUpdate { failure: FailureClass::Update }),
         ("gpu", ConnectionState::Connected),
-        ("kingdom", ConnectionState::NeedsUpdate { why: FIX_INSTALL.into() }),
+        ("kingdom", ConnectionState::NeedsUpdate { failure: FailureClass::Install }),
     ];
     for (n, (name, state)) in states.into_iter().enumerate() {
         app.on_link_state(MachineId(40 + n as u16), name.into(), state);
@@ -504,6 +504,34 @@ fn a_machine_that_needs_the_app_shows_the_key_that_installs_or_updates_it() {
         assert!(
             said.contains("run `maiker machine update kingdom --install`"),
             "the fix under the chosen one names the machine: {w}x{h}\n{text}"
+        );
+    }
+}
+
+#[test]
+fn a_machine_that_failed_says_the_shared_sentence_under_it() {
+    use crate::client::link::ConnectionState;
+    use crate::link_failure::{FailureClass, Subject, sentence_here};
+    for (w, h) in SIZES {
+        let mut app = app_with(&[("build", "dev@build.lan")]);
+        let failure = FailureClass::KeyRefused("dev@build.lan: Permission denied (publickey).".into());
+        app.on_link_state(MachineId(40), "build".into(), ConnectionState::NeedsLogin { failure: failure.clone() });
+        let v = MachinesView {
+            machine_sel: app.machine_listed_at("build"),
+            ..view(Some(hosts()))
+        };
+        let (text, r, buf) = shown(&mut app, v, w, h);
+        assert_box_whole(&text, r, &buf);
+        let said = words(&text, r);
+        assert!(
+            said.contains("build refused your key: run `"),
+            "the list says the sentence both apps share: {w}x{h}\n{text}"
+        );
+        let toast = app.notice.as_ref().map(|(text, ..)| text.clone());
+        assert_eq!(
+            toast,
+            Some(sentence_here(&failure, &Subject::of_def(&app.cfg.machines[0]))),
+            "the toast is the same sentence"
         );
     }
 }

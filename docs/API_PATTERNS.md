@@ -1455,15 +1455,28 @@ that ends sooner counts as a failure, so a line turned away as soon as it is mad
 as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
-type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent
-its stream marker or a frame. Exit 127 is `NeedsUpdate` with the install text. Exit
-`NO_DAEMON_EXIT` (74) is `Unreachable` with the start-it text. Exit 255 with nothing received
-and one of three fixed tokens in stderr (`Permission denied`, `Host key verification failed`,
-`Too many authentication failures`) is `NeedsLogin`: the only place ssh's words are read.
-Everything else is `Unreachable` with ssh's last stderr line, control characters removed and
-cut to 200 characters. The fix text of each class is one constant in `maitty-machines` (`link_failure.rs`)
-(`FIX_LOGIN`, `FIX_UPDATE`, `FIX_INSTALL`, `FIX_NO_DAEMON`); `FIX_UPDATE` and `FIX_INSTALL` name
-`maiker machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
+type (`OtherVersion` is `Update`, or `UpdateHere` when the far side is newer), ssh's exit status, and
+whether the far side ever sent its stream marker or a frame. Exit 127 is `Install`. Exit
+`NO_DAEMON_EXIT` (74) is `NoDaemon`. Exit 255 with nothing received is read for a few fixed tokens,
+the only place ssh's words are read: `REMOTE HOST IDENTIFICATION HAS CHANGED` or `Host key
+verification failed` is `HostKeyChanged` (with the host as `known_hosts` names it, from ssh's own
+`ssh-keygen -R` line when it is a plain host); `Permission denied` or `Too many authentication
+failures` is `NeedsPerson` when the key already worked (`partial success`) or the methods ssh lists
+hold no `publickey`, else `KeyRefused`. Everything else is `Unreachable` with ssh's last stderr
+line, control characters removed and cut to 200 characters. The connection state carries the class
+itself (`ConnectionState::NeedsLogin`, `NeedsUpdate` and `Unreachable` hold a `FailureClass`;
+`ConnectionState::failure`), and a refusal by daemon id is `Refused`.
+
+**Failure sentences.** `link_failure::sentence(failure, subject, os)` is the only place a failure is
+worded: one sentence that names the machine and gives the exact fix, never an internal part of the
+app (no helper, probe or daemon), and never an offer to accept a changed host key. `Subject` is the
+machine's name, target and port (`Subject::of` a `Machine`, `Subject::of_def` a `MachineDef`);
+`ClientOs` picks the fix for the system the person types on (`ssh-copy-id` on Linux and macOS, the
+PowerShell line that does the same on Windows). `fix_command` is the one command a sentence names,
+for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
+`doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
+`message`) show these sentences and write none of their own. `is_failure_sentence` tells such a
+sentence from a machine's other words, for MCP's `unreachable` error code.
 
 **Custom transport.** A machine with `via` is reached by running the user's program
 (`Route::Command`, `ssh_command::command_argv`, both in `maitty-machines`) in place of ssh: the same pipes, stream marker skipping,
@@ -1480,7 +1493,7 @@ on every retry of a failed first dial, and after an explicit `Command::Retry` (t
 dialog's retry, also after a refusal). The redials after an established line ended (stalled or
 closed) run `<remote_cmd> proxy --attach-only` (built in `maitty-machines`' `ssh_command.rs`): if no daemon runs
 there, the proxy exits `NO_DAEMON_EXIT` before writing anything, and the machine is `Unreachable`
-with `FIX_NO_DAEMON` ("retry to start it there") until a person retries, so a dropped link never
+with `NoDaemon` ("try again to start it there") until a person retries, so a dropped link never
 brings back a daemon the user stopped. `Machine::from_def` is attach-only by default, which is
 what the CLI's `--on`, MCP and `doctor` use: none of them starts a remote daemon.
 

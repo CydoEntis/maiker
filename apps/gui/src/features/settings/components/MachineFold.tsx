@@ -29,10 +29,10 @@ export function MachineFold({ head, sessions, machines, appVersion }: Props) {
           plain
           lead={<>{status.lead}{status.showsSince && head.downSince !== null && <> for <Since at={head.downSince} />.</>}</>}
           more={status.more}
-          copy={status.command === null ? undefined : { text: status.command, label: 'the ssh-copy-id command', onCopy: machines.onCopyCommand }}
+          copy={status.command === null ? undefined : { text: status.command, label: 'the command', onCopy: machines.onCopyCommand }}
           raw={head.said}
         >
-          {loginButtons(head.chip?.word === 'needs login', () => { machines.onRetry(name) }, () => { machines.onOpenLogin(head.machine) })}
+          {loginButtons(head, () => { machines.onRetry(name) }, () => { machines.onOpenLogin(head.machine) })}
         </StatusBlock>
       )}
       <SettingsRow label="Name" detail="What the sidebar calls it. Nothing changes on the machine.">
@@ -52,14 +52,15 @@ export function MachineFold({ head, sessions, machines, appVersion }: Props) {
 
 /**
  * A rejected login is the one failure whose fix is not the row's own button: the row says Fix, which opens this fold,
- * so Try again and the terminal sign-in live here. Any other failure has Retry on the row already.
+ * so Try again lives here. Any other failure has Retry on the row already. A password or a second code is the one
+ * failure a person answers in a terminal, so only it gets the terminal sign-in.
  */
-function loginButtons(needsLogin: boolean, onTryAgain: () => void, onOpenTerminal: () => void): ReactNode {
-  if (!needsLogin) return undefined
+function loginButtons(head: MachineHead, onTryAgain: () => void, onOpenTerminal: () => void): ReactNode {
+  if (head.chip?.word !== 'needs login') return undefined
   return (
     <>
       <button type="button" className="mx-rm-primary" onClick={onTryAgain}>Try again</button>
-      <button type="button" className="mx-rm-text" onClick={onOpenTerminal}>Open a terminal</button>
+      {head.failure === 'needs-person' && <button type="button" className="mx-rm-text" onClick={onOpenTerminal}>Open a terminal</button>}
     </>
   )
 }

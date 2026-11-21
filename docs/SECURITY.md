@@ -166,8 +166,9 @@ webview supplies the machine and nothing else, so it is not a way to run a progr
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
 password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
 has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
-one-line key-copy command to copy and run in the person's own terminal (`keySetupCommand` refuses a target that is not one plain
-word).
+one-line key-copy command to copy and run in the person's own terminal. The command comes from the host
+(`link_failure::fix_command`), which gives none for a target that is not one plain word (`check_target`). A changed host key is
+refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
@@ -499,8 +500,10 @@ host` already runs, and the person added that machine to use it. The CLI's `--on
 `doctor` stay attach-only. What ssh
 or the far side prints (its last stderr line) is untrusted: it is stripped of control characters,
 so no escape sequence reaches the terminal, and cut to 200 characters before it is shown. The
-failure is classified from ssh's exit status and the stream, not its wording, apart from three
-fixed tokens that mark a login ssh could not do without a person (`link_failure::classify`). Typing
+failure is classified from ssh's exit status and the stream, not its wording, apart from a few
+fixed tokens that mark a login ssh could not do without a person or a changed host key
+(`link_failure::classify`). A host name taken from ssh's words for the `ssh-keygen -R` command is kept
+only when it is a plain host. Typing
 for a machine that is down is dropped, never queued and replayed.
 
 A remote daemon is someone else's computer, so everything it sends is untrusted: it can forge
@@ -683,7 +686,7 @@ The one-shot commands (`--on build ...`, `--pane build/4`) treat the machine the
 What it answers is untrusted: a list (`ls`, `wait`) is cleaned like a window's snapshot
 (`remote_snapshot::sanitize_snapshot`), an error or notice and a line a `wait --regex` matched lose
 control characters and hidden characters (`hidden::sanitize`), and a failure to connect is shown as
-one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
+one cleaned line with its fix (`link_failure::sentence`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
 pane a command runs in belongs to this computer's daemon, so `$AGENT_TERM_ID` is never the default

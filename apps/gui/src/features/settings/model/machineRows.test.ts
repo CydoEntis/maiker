@@ -13,8 +13,11 @@ function head(name: string, state: State['state'], extra: Partial<State> = {}): 
   return found
 }
 
-const OLDER = 'run `maiker machine update box`, then retry'
-const MISSING = 'run `maiker machine update box --install`, then retry'
+/** The host's sentences and failure kinds, as crates/maitty-machines link_failure gives them. */
+const OLDER: Partial<State> = { why: 'box runs an older Maiker: run `maiker machine update box`, then try again.', failure: 'update', fix_command: 'maiker machine update box' }
+const MISSING: Partial<State> = { why: 'Maiker isn\'t installed on box: run `maiker machine update box --install` (Linux and macOS machines only), then try again.', failure: 'install', fix_command: 'maiker machine update box --install' }
+const NEWER: Partial<State> = { why: 'box runs a newer Maiker than this computer: update Maiker here (`maiker update`, or the desktop app\'s own update), then try again.', failure: 'update-here' }
+const REFUSED_KEY: Partial<State> = { why: 'box refused your key: run `ssh-copy-id me@box.lan` in a terminal, then try again.', failure: 'key-refused', fix_command: 'ssh-copy-id me@box.lan', said: 'me@box: Permission denied (publickey).' }
 
 describe('a machine row', () => {
   it('says how many sessions a healthy machine has, and offers nothing', () => {
@@ -23,12 +26,14 @@ describe('a machine row', () => {
     expect(rowOf(head('box', 'connected'), 0).line).toBe('No sessions')
   })
 
-  it('offers Fix for a rejected key, and says a host key apart from a key', () => {
-    const rejected = head('box', 'needs-login', { said: 'me@box: Permission denied (publickey).' })
+  it('offers Fix for a rejected key, and tells a changed host key and a sign-in apart from a key by the host\'s failure', () => {
+    const rejected = head('box', 'needs-login', REFUSED_KEY)
     expect(rowOf(rejected, 0)).toMatchObject({ glyph: '×', tone: 'bad', line: 'Key rejected', action: 'fix' })
-    const unknownHost = head('box', 'needs-login', { said: 'Host key verification failed.' })
-    expect(stoppedOnHostKey(unknownHost)).toBe(true)
-    expect(rowOf(unknownHost, 0).line).toBe('Host key not trusted')
+    const changedHost = head('box', 'needs-login', { failure: 'host-key-changed', said: 'Host key verification failed.' })
+    expect(stoppedOnHostKey(changedHost)).toBe(true)
+    expect(rowOf(changedHost, 0).line).toBe('Host key changed')
+    expect(stoppedOnHostKey(head('box', 'needs-login', { said: 'Host key verification failed.' }))).toBe(false)
+    expect(rowOf(head('box', 'needs-login', { failure: 'needs-person' }), 0).line).toBe('Needs a sign-in')
   })
 
   it('offers Retry for a machine it cannot reach, and counts how long', () => {
@@ -37,12 +42,12 @@ describe('a machine row', () => {
   })
 
   it('offers Update for an older Maiker and Install when there is none, in amber', () => {
-    expect(rowOf(head('box', 'needs-update', { why: OLDER }), 2)).toMatchObject({ glyph: '●', tone: 'ok', line: '2 sessions · older Maiker', action: 'update' })
-    expect(rowOf(head('box', 'needs-update', { why: MISSING }), 0)).toMatchObject({ line: 'Maiker not installed', action: 'install' })
+    expect(rowOf(head('box', 'needs-update', OLDER), 2)).toMatchObject({ glyph: '●', tone: 'ok', line: '2 sessions · older Maiker', action: 'update' })
+    expect(rowOf(head('box', 'needs-update', MISSING), 0)).toMatchObject({ line: 'Maiker not installed', action: 'install' })
   })
 
   it('offers nothing for a Maiker newer than this app, since updating from here would be a downgrade', () => {
-    const newer = head('box', 'needs-update', { why: 'update maiker on this computer first' })
+    const newer = head('box', 'needs-update', NEWER)
     expect(rowOf(newer, 1)).toMatchObject({ line: '1 session · newer Maiker', action: null })
   })
 
@@ -54,7 +59,7 @@ describe('a machine row', () => {
 
 describe('the order of the list', () => {
   it('puts failed machines first, then those to update, then connected ones busiest first', () => {
-    const heads = [head('a-quiet', 'connected'), head('b-busy', 'connected'), head('c-old', 'needs-update', { why: OLDER }), head('d-down', 'unreachable')]
+    const heads = [head('a-quiet', 'connected'), head('b-busy', 'connected'), head('c-old', 'needs-update', OLDER), head('d-down', 'unreachable')]
     const sessions: Record<string, number> = { 'a-quiet': 1, 'b-busy': 9, 'c-old': 4, 'd-down': 0 }
     const names = ordered(heads, (each) => sessions[each.label] ?? null).map((each) => each.label)
     expect(names).toEqual(['d-down', 'c-old', 'b-busy', 'a-quiet'])
@@ -71,7 +76,7 @@ describe('finding machines', () => {
   })
 
   it('updates only machines with an older Maiker, never a first install', () => {
-    const heads = [head('a', 'needs-update', { why: OLDER }), head('b', 'needs-update', { why: MISSING }), head('c', 'connected')]
+    const heads = [head('a', 'needs-update', OLDER), head('b', 'needs-update', MISSING), head('c', 'connected')]
     expect(updatable(heads).map((each) => each.label)).toEqual(['a'])
   })
 })
@@ -81,8 +86,8 @@ describe("a machine's fold status", () => {
     expect(foldStatusOf(head('box', 'connected'), 2)).toMatchObject({ glyph: '●', lead: 'Connected · 2 sessions', action: null })
   })
 
-  it('gives the ssh-copy-id command for a rejected key', () => {
-    expect(foldStatusOf(head('box', 'needs-login'), 0)).toMatchObject({ lead: 'Key rejected.', command: 'ssh-copy-id me@box.lan', action: 'retry' })
+  it('gives the host\'s sentence and its command for a rejected key', () => {
+    expect(foldStatusOf(head('box', 'needs-login', REFUSED_KEY), 0)).toMatchObject({ lead: 'Key rejected.', more: REFUSED_KEY.why, command: 'ssh-copy-id me@box.lan', action: 'retry' })
   })
 
   it('leaves the time to the fold, so it keeps counting', () => {
@@ -93,9 +98,9 @@ describe("a machine's fold status", () => {
 describe("a machine's Maiker line", () => {
   it('says up to date, older, not installed, newer, or unknown', () => {
     expect(maikerLine(head('box', 'connected'), '0.46.0')).toBe('Up to date')
-    expect(maikerLine(head('box', 'needs-update', { why: OLDER }), '0.46.0')).toBe('Older · this computer has 0.46.0')
-    expect(maikerLine(head('box', 'needs-update', { why: MISSING }), '0.46.0')).toBe('Not installed')
-    expect(maikerLine(head('box', 'needs-update', { why: 'update maiker on this computer first' }), '0.46.0')).toBe('Newer than this app')
+    expect(maikerLine(head('box', 'needs-update', OLDER), '0.46.0')).toBe('Older · this computer has 0.46.0')
+    expect(maikerLine(head('box', 'needs-update', MISSING), '0.46.0')).toBe('Not installed')
+    expect(maikerLine(head('box', 'needs-update', NEWER), '0.46.0')).toBe('Newer than this app')
     expect(maikerLine(head('box', 'unreachable'), '0.46.0')).toBe('Unknown until it connects')
   })
 })

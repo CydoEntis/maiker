@@ -283,7 +283,7 @@ fn listing_every_machine_reports_the_one_that_is_down_inline() {
         down["message"]
             .as_str()
             .unwrap()
-            .starts_with("gpu: unreachable ("),
+            .starts_with("Can't reach gpu: check the name or address"),
         "{down}"
     );
 }

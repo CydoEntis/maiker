@@ -289,14 +289,14 @@ mod tests {
     }
 
     #[test]
-    fn a_login_ssh_could_not_do_is_needs_login() {
+    fn a_login_ssh_could_not_do_is_classified() {
         assert_eq!(
             finished(Some(255), "", "box: Permission denied (publickey).\n"),
-            Probe::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
+            Probe::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
         );
         assert_eq!(
             finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::Login("Host key verification failed.".into()))
+            Probe::Failed(FailureClass::HostKeyChanged { known_as: None })
         );
     }
 
@@ -322,7 +322,7 @@ mod tests {
         assert_eq!(path, "/bin/[31mmaitty");
         assert_eq!(
             located_from(Some(255), "", "box: Permission denied (publickey).\n"),
-            Located::Failed(FailureClass::Login("box: Permission denied (publickey).".into()))
+            Located::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
         );
     }
 
@@ -339,7 +339,7 @@ mod tests {
                 "ssh: connect to host box port 22: Connection timed out\n"
             ),
             Probe::Failed(FailureClass::Unreachable(
-                "It did not answer in time. Check that it is on and reachable from this network. (ssh: connect to host box port 22: Connection timed out)".into()
+                "ssh: connect to host box port 22: Connection timed out".into()
             ))
         );
     }

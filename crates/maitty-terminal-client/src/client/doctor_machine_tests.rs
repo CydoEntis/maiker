@@ -4,7 +4,6 @@
 
 use super::cli_machine_tests::Build;
 use crate::cli::doctor_machines::{Check, MachineReport, check_all};
-use crate::link_failure::FIX_LOGIN;
 use crate::protocol::PROTOCOL_VERSION;
 use std::process::Command;
 use std::time::{Duration, Instant};
@@ -113,7 +112,10 @@ fn a_machine_that_needs_a_login_stops_after_one_failed_line_and_a_skip() {
     let checks = find(&reports, "locked");
     assert_eq!(checks[0].ok, Some(false));
     assert_eq!(checks[0].what, "reachable");
-    assert_eq!(checks[0].detail, format!("needs a login; {FIX_LOGIN}"));
+    assert!(
+        checks[0].detail.starts_with("locked refused your key: run `"),
+        "the shared sentence: {checks:?}"
+    );
     assert_eq!(checks[1].detail, "skipped: not reachable");
     assert_eq!(
         checks[2].what, "ssh options",

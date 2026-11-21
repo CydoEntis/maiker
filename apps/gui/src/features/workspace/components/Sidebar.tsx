@@ -450,11 +450,11 @@ function ProjectSection({ node, open, onToggle, headings, selected, head, render
 
 /**
  * A machine that is not up: a red dot, "Offline", and one **Fix** button. The word never changes with the line's retries
- * (unreachable, needs login, reconnecting #3 all read the same here); the host's reason is the tooltip, and Fix opens the
+ * (unreachable, needs login, reconnecting #3 all read the same here); the host's one sentence is the tooltip, and Fix opens the
  * machine's page in Settings, where the reason is read in full and acted on.
  */
 function MachineWhy({ head, onFix }: { head: MachineHead; onFix: (head: MachineHead) => void }) {
-  const reason = head.said ?? head.why
+  const reason = head.why
   // One thing to press: a machine that is down because its Maiker is old or missing says so here, and the head carries no second button.
   const update = head.updateAction
   return (

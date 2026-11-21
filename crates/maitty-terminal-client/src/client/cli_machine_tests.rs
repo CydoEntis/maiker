@@ -9,7 +9,7 @@ use crate::cli::target::{Target, resolve_machine};
 use crate::cli::{self, Waited};
 use crate::config::Config;
 use crate::ipc;
-use crate::link_failure::{FIX_INSTALL, FIX_LOGIN, FIX_NO_DAEMON};
+use crate::link_failure::{FailureClass, Subject, sentence_here};
 use crate::protocol::{ClientMsg, Query, Reply, Snapshot, TermId};
 use maitty_settings::config::MachineDef;
 use std::path::PathBuf;
@@ -206,7 +206,7 @@ fn ls_all_lists_the_machine_that_answers_and_reports_the_one_that_does_not() {
     assert!(out.starts_with("machine build\n"), "{out}");
     assert_eq!(warnings.len(), 1, "{warnings:?}");
     assert!(
-        warnings[0].starts_with("gpu: unreachable ("),
+        warnings[0].starts_with("Can't reach gpu: check the name or address"),
         "{warnings:?}"
     );
 
@@ -230,24 +230,24 @@ fn ls_all_fails_when_no_machine_answers() {
         .err()
         .expect("nothing answered");
     let said = format!("{error:#}");
-    assert!(said.contains("gpu: unreachable ("), "{said}");
-    assert!(said.contains("locked: needs a login"), "{said}");
+    assert!(said.contains("Can't reach gpu: "), "{said}");
+    assert!(said.contains("locked refused your key"), "{said}");
     assert!(said.contains("no machine answered"), "{said}");
 }
 
 #[test]
 fn a_machine_that_cannot_be_reached_gets_one_line_with_its_fix() {
     let build = Build::start(&[("locked", "auth-fail"), ("bare", "not-installed")]);
-    let locked = cli::ls(&build.target("locked"), false).unwrap_err();
-    assert_eq!(
-        format!("{locked:#}"),
-        format!("locked: needs a login; {FIX_LOGIN}")
-    );
-    let bare = cli::ls(&build.target("bare"), false).unwrap_err();
-    assert_eq!(
-        format!("{bare:#}"),
-        format!("bare: has no app; {FIX_INSTALL}")
-    );
+    let said = |name: &str, failure: FailureClass| {
+        let target = build.target(name);
+        let error = cli::ls(&target, false).unwrap_err();
+        (format!("{error:#}"), sentence_here(&failure, &Subject::of(target.machine())))
+    };
+    let (locked, fix) = said("locked", FailureClass::KeyRefused(String::new()));
+    assert_eq!(locked, fix);
+    let (bare, fix) = said("bare", FailureClass::Install);
+    assert_eq!(bare, fix);
+    assert!(bare.contains("`maiker machine update bare --install`"), "{bare}");
 }
 
 #[test]
@@ -263,7 +263,7 @@ fn a_machine_with_no_daemon_running_says_how_to_start_it() {
     let error = cli::ls(&target, false).unwrap_err();
     assert_eq!(
         format!("{error:#}"),
-        format!("build: is not running; {FIX_NO_DAEMON}")
+        sentence_here(&FailureClass::NoDaemon, &Subject::of(target.machine()))
     );
 }
 

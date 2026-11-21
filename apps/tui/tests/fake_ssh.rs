@@ -952,7 +952,7 @@ mod supervised {
     use runtime::connections::{Connections, MachineId, Outgoing};
     use runtime::ipc::Machine;
     use runtime::link::{Backoff, ConnectionState, LinkControl, LinkEvent, Links, Timing};
-    use runtime::link_failure::{FIX_LOGIN, FIX_NO_DAEMON, FIX_UPDATE};
+    use runtime::link_failure::FailureClass;
     use runtime::protocol::{ClientMsg, Command as Cmd, ServerMsg};
 
     const BOX: MachineId = MachineId(1);
@@ -1255,7 +1255,7 @@ mod supervised {
         let mut window = Window::new(vec![(BOX, configured(&sandbox, "auth-fail"))], quick(WAIT));
         runtime.block_on(window.until("needs-login", |w| w.is(BOX, "needs-login")));
         assert!(
-            matches!(window.state_of(BOX), Some(ConnectionState::NeedsLogin { why, .. }) if why == FIX_LOGIN),
+            matches!(window.state_of(BOX), Some(ConnectionState::NeedsLogin { failure: FailureClass::KeyRefused(_) })),
             "{:?}",
             window.state_of(BOX)
         );
@@ -1279,7 +1279,7 @@ mod supervised {
         assert_eq!(
             window.state_of(BOX),
             Some(&ConnectionState::NeedsUpdate {
-                why: FIX_UPDATE.into()
+                failure: FailureClass::Update
             })
         );
         drop(window);
@@ -1299,7 +1299,7 @@ mod supervised {
         assert_eq!(
             window.state_of(BOX),
             Some(&ConnectionState::NeedsUpdate {
-                why: runtime::link_failure::FIX_UPDATE_HERE.into()
+                failure: FailureClass::UpdateHere
             })
         );
         drop(window);
@@ -1316,7 +1316,7 @@ mod supervised {
             quick(Duration::from_millis(300)),
         );
         runtime.block_on(window.until("unreachable", |w| w.is(BOX, "unreachable")));
-        let Some(ConnectionState::Unreachable { why, .. }) = window.state_of(BOX) else {
+        let Some(ConnectionState::Unreachable { failure: FailureClass::Unreachable(why), .. }) = window.state_of(BOX) else {
             panic!("{:?}", window.state_of(BOX))
         };
         assert!(why.starts_with("no answer within"), "{why}");
@@ -1415,10 +1415,10 @@ mod supervised {
         stop_daemon(&sandbox);
         kill_connection(&sandbox.calls());
         runtime.block_on(window.until("unreachable", |w| w.is(BOX, "unreachable")));
-        let Some(ConnectionState::Unreachable { why, .. }) = window.state_of(BOX) else {
+        let Some(ConnectionState::Unreachable { failure, .. }) = window.state_of(BOX) else {
             panic!("{:?}", window.state_of(BOX))
         };
-        assert_eq!(why, FIX_NO_DAEMON);
+        assert_eq!(*failure, FailureClass::NoDaemon);
         let dialled = calls_made(&sandbox);
         runtime.block_on(window.until("two more dials", |_| calls_made(&sandbox) >= dialled + 2));
         assert!(!has_daemon(&sandbox), "a redial never starts the daemon");
@@ -1662,9 +1662,7 @@ mod custom_transport {
         let failed = failure(&via(&sandbox, "unreachable", &[], false));
         assert_eq!(
             failed.class,
-            FailureClass::Unreachable(
-                "It refused the connection, so its ssh server may be off. Start ssh on it, then retry. (ssh: connect to host box port 22: Connection refused)".into()
-            )
+            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
         );
     }
 

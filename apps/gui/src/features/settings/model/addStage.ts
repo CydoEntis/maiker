@@ -1,5 +1,4 @@
 import type { Added, HostKeyReport } from '@/api/machines'
-import { HOST_KEY_WORDS } from './machineRows'
 
 /** What the person typed, as Add a remote machine sends it. `entry` is the raw text, kept so Change address comes back to it. */
 export type AddRequest = {
@@ -62,10 +61,11 @@ export type Stage =
   | { kind: 'removing'; name: string }
   /** A machine saved by an earlier try, dialled again: the checklist follows what the host says of it. */
   | { kind: 'saved'; name: string }
-  /** ssh would not confirm the host key and the window could not fetch it: the machine is saved but not checked. */
-  | { kind: 'unverified'; name: string; said: string }
+  /** ssh refused the host key: the machine is saved, and `message` is the host's sentence for it. */
+  | { kind: 'unverified'; name: string; message: string }
   | { kind: 'key'; login: Login }
-  | { kind: 'helper'; reason: 'missing' | 'older' | 'not-running'; added: Added1; said: string | null }
+  /** `message` is the host's sentence for what is still wrong there. */
+  | { kind: 'helper'; reason: 'missing' | 'older' | 'not-running'; added: Added1; message: string | null }
   | { kind: 'connected'; reached: ReachedMachine }
 
 /** The host's refusal when the name is already in the saved machines. */
@@ -94,14 +94,15 @@ export function stageAfterAdd(result: Added, request: AddRequest): Stage | null 
   switch (result.outcome) {
     case 'cancelled': return null
     case 'needs-name': return { kind: 'no-name' }
-    case 'login': return HOST_KEY_WORDS.test(result.said) ? { kind: 'unverified', name: result.name, said: result.said } : { kind: 'key', login: result }
+    case 'login': return result.failure === 'host-key-changed' ? { kind: 'unverified', name: result.name, message: result.message } : { kind: 'key', login: result }
     case 'added': {
       // The helper was missing and add_machine put it on: the machine is as good as one that had it.
       const putOn = result.reach === 'missing' && result.helper_install?.installed === true
       if (result.reach === 'answered' || result.reach === 'newer-here' || putOn) return { kind: 'connected', reached: reachedOf(request, result.name, result) }
-      if (result.reach === 'not-running') return { kind: 'helper', reason: 'not-running', added: result, said: null }
-      if (result.reach === 'older') return { kind: 'helper', reason: 'older', added: result, said: null }
-      return { kind: 'helper', reason: 'missing', added: result, said: result.helper_install?.said ?? null }
+      const message = result.message ?? null
+      if (result.reach === 'not-running') return { kind: 'helper', reason: 'not-running', added: result, message }
+      if (result.reach === 'older') return { kind: 'helper', reason: 'older', added: result, message }
+      return { kind: 'helper', reason: 'missing', added: result, message }
     }
   }
 }

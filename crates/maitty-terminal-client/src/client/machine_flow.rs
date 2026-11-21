@@ -12,7 +12,7 @@ use super::*;
 use crate::client::link::ConnectionState;
 use crate::client::machine_config::{self, Grant};
 use crate::client::machine_ids;
-use crate::link_failure::FailureClass;
+use crate::link_failure::{FailureClass, Subject, sentence_here};
 use crate::machine_probe::{self, Probe};
 use maitty_settings::config::MachineDef;
 use std::collections::HashSet;
@@ -229,11 +229,11 @@ impl App {
             Probe::Ready { version } => {
                 self.machine_added(&def, Added::Connect, &version, Outcome::Ready(version.clone()))
             }
-            Probe::Failed(FailureClass::Login(_)) => {
-                self.machine_added(&def, Added::Login, "", Outcome::Login)
+            Probe::Failed(failure) if failure.is_login() => {
+                self.machine_added(&def, Added::Login(failure), "", Outcome::Login)
             }
-            Probe::Failed(FailureClass::Unreachable(why)) => {
-                say(format!("{}: {why}", def.target), true)
+            Probe::Failed(failure @ FailureClass::Unreachable(_)) => {
+                say(sentence_here(&failure, &Subject::of_def(&def)), true)
             }
             // Reached, but the app is missing, old, or not running: the connection's own state
             // says which, with the fix, once it dials.
@@ -263,7 +263,7 @@ impl App {
                 how: outcome,
             }
         });
-        if how == Added::Login {
+        if let Added::Login(failure) = &how {
             match self.machine_first_login(def) {
                 Ok(()) => {
                     return say(
@@ -276,13 +276,8 @@ impl App {
                 }
                 Err(e) => {
                     self.machine_start(def);
-                    return say(
-                        format!(
-                            "Added {}. Run `ssh {}` once in a terminal to log in, then retry ({e:#}).",
-                            def.name, def.target
-                        ),
-                        true,
-                    );
+                    let said = sentence_here(failure, &Subject::of_def(def));
+                    return say(format!("Added {}. {said} ({e:#})", def.name), true);
                 }
             }
         }
@@ -685,10 +680,11 @@ impl App {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, PartialEq, Eq)]
 enum Added {
     Connect,
-    Login,
+    /// ssh could not log in alone, for this reason.
+    Login(FailureClass),
 }
 
 #[cfg(test)]

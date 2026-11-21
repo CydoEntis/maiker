@@ -402,11 +402,10 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   your key**, **Set up the Maiker helper**, **Connected**, each ticking with its result ("Reached 100.78.214.15 · 38 ms", "Known
   computer", "Signed in with id_ed25519"); the foot is **← Change address** (back to what was typed) and **Cancel**. A step that
   needs the person is an amber step with one main fix: a new host ("First time connecting to <host>", `ED25519 · SHA256:…`,
-  **Trust and continue**; a changed key has no Trust), a machine that would not sign in ("Couldn't sign in to <user@host>": one plain paragraph saying SSH is set up
-  outside Maiker for now (run `ssh <user@host>` in a terminal until it logs in without a password), the host's own reason
-  when it gave one, a Copy line for the one-line key-copy command and **Try again**; no terminal, no command preview, no
-  password anywhere in Maiker), a host that does not answer ("<host> didn't answer", the address, the
-  power and the SSH port, **Try again** and **Edit the address**). A missing helper is not a question: it installs as a step with a
+  **Trust and continue**; a changed key has no Trust), a machine that would not sign in ("Couldn't sign in to <user@host>": the host's one sentence with the fix, ssh's own reason
+  when it gave one, a Copy line for the command the sentence names and **Try again**; no terminal, no command preview, no
+  password anywhere in Maiker), a host that does not answer ("Couldn't reach <host>", the host's one sentence, **Try again** and
+  **Edit the address**). Every failure's words are the host's shared sentence, the same as the terminal app's. A missing helper is not a question: it installs as a step with a
   progress bar ("Not installed yet. Copying Maiker <version> to <name>…"). When the machine is in, the card is **Machine added**: a
   green "Connected. Its sessions show up in your sidebar under this name." line, a Name field (selected, so typing replaces it;
   an SSH config host keeps its config name), the details that are known (Address, Reach time, Key used, Maiker helper; System and
@@ -418,13 +417,14 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   body sits straight under its label (no card inside the dialog's card); the one box in the key step is the command or terminal well. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
   Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
-  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Can't reach it · 14 min", "N sessions ·
+  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Can't reach it · 14 min", "N sessions ·
   older Maiker", "Maiker not installed"), at most one outlined button (Fix opens the row's fold; Retry, Update and Install
   run in place and say Retrying… or Updating… meanwhile), then **More** and **Remove** as text buttons. Order: failed, then to update, then connecting, then just
   added, then connected by sessions. A search field shows past 12 machines. A "This computer" line with **Details**
   sits under the list. **More** (or a click on the row) folds the machine's settings open under its row, one fold at a
-  time (`MachineFold.tsx`, indented past the mark): for a failed machine first its status block (the reason, how long,
-  raw output behind Details; a rejected login adds the key command with Copy, **Try again** and **Open a terminal**),
+  time (`MachineFold.tsx`, indented past the mark): for a failed machine first its status block (the host's shared sentence, how long,
+  raw output behind Details; a rejected login adds the command the sentence names with Copy and **Try again**, and
+  **Open a terminal** only when the machine asks for a password or a second code),
   then settings rows (Name, saved as you type as the sidebar nickname; Address; Maiker; Copy to your clipboard and
   Notifications, two switches). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
   Nothing on <name> is deleted.", **Remove** and Cancel). The status block (`StatusBlock.tsx`) is the one place progress and problems show:

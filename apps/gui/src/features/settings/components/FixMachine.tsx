@@ -3,7 +3,7 @@ import type { HostKeyReport } from '@/api/machines'
 import { Button } from '@/components/ui/button'
 import { errorMessage } from '@/lib/error-message'
 import { UPDATE_WORDS, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
-import { HOST_KEY_WORDS } from '../model/machineRows'
+import { stoppedOnHostKey } from '../model/machineRows'
 import { AddChecklist, type Position } from './AddChecklist'
 import { HelperProgressBody, StepBody } from './AddBodies'
 import { AddMachineFrame, FrameBody, FrameFoot } from './AddMachineFrame'
@@ -29,7 +29,7 @@ type Props = {
 type Look = { state: 'loading' } | { state: 'ready'; report: HostKeyReport } | { state: 'failed'; message: string }
 
 /** A host key to trust on a machine that already exists: looked at by the machine's name, trusted by it. */
-function FixHostKey({ name, target, machines }: { name: string; target: string; machines: MachinesInfo }) {
+function FixHostKey({ name, live, machines }: { name: string; live: MachineHead; machines: MachinesInfo }) {
   const { inspect, trust } = machines.hostKey
   const [look, setLook] = useState<Look>({ state: 'loading' })
   const [trusting, setTrusting] = useState(false)
@@ -44,7 +44,7 @@ function FixHostKey({ name, target, machines }: { name: string; target: string; 
   }, [inspect, name])
   if (look.state === 'loading') return <StepBody text={`Reaching ${name}…`} />
   if (look.state === 'failed') return <StepBody text={look.message}><Button variant="needs" onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
-  if (look.report.status === 'trusted') return <KeyStep target={target} port={null} said={null} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} />
+  if (look.report.status === 'trusted') return <KeyStep message={live.why ?? ''} command={live.fixCommand} said={null} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} />
   const { report } = look
   const doTrust = () => {
     setTrusting(true)
@@ -57,7 +57,7 @@ function FixHostKey({ name, target, machines }: { name: string; target: string; 
 type Setup = { state: 'idle' } | { state: 'running'; percent: number | null } | { state: 'failed'; message: string }
 
 /** Maiker on the machine is missing or older: one button puts this computer's version there, with how far it has got. */
-function FixHelper({ name, action, machines }: { name: string; action: UpdateAction; machines: MachinesInfo }) {
+function FixHelper({ name, action, why, machines }: { name: string; action: UpdateAction; why: string | null; machines: MachinesInfo }) {
   const { onUpdate, add } = machines
   const [setup, setSetup] = useState<Setup>({ state: 'idle' })
   const running = setup.state === 'running'
@@ -79,7 +79,7 @@ function FixHelper({ name, action, machines }: { name: string; action: UpdateAct
   }
   if (setup.state === 'running') return <HelperProgressBody text={action === 'install' ? `Putting Maiker on ${name}…` : `Updating Maiker on ${name}…`} percent={setup.percent} />
   return (
-    <StepBody text={setup.state === 'failed' ? setup.message : UPDATE_WORDS[action].need(name)}>
+    <StepBody text={setup.state === 'failed' ? setup.message : why ?? UPDATE_WORDS[action].need(name)}>
       <Button variant="primary" autoFocus onClick={start}>{setup.state === 'failed' ? 'Try again' : `${UPDATE_WORDS[action].verb} Maiker on ${name}`}</Button>
     </StepBody>
   )
@@ -89,16 +89,16 @@ function FixHelper({ name, action, machines }: { name: string; action: UpdateAct
 function positionOf(live: MachineHead, name: string, machines: MachinesInfo): Position {
   if (live.chip?.word === 'connected') return { at: 'connected', state: 'done' }
   const needsLogin = live.target !== null && (live.loginCommand !== null || live.chip?.word === 'needs login')
-  if (needsLogin && HOST_KEY_WORDS.test(live.said ?? '')) {
-    return { at: 'host', state: 'needs', label: `Check ${name} is the right computer`, body: <FixHostKey name={name} target={live.target ?? ''} machines={machines} /> }
+  if (needsLogin && stoppedOnHostKey(live)) {
+    return { at: 'host', state: 'needs', label: `Check ${name} is the right computer`, body: <FixHostKey name={name} live={live} machines={machines} /> }
   }
-  if (needsLogin) return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? name}`, body: <KeyStep target={live.target ?? name} port={null} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} /> }
+  if (needsLogin) return { at: 'key', state: 'needs', label: `Couldn't sign in to ${live.target ?? name}`, body: <KeyStep message={live.why ?? NO_REASON} command={live.fixCommand} said={live.said} onCopy={machines.onCopyCommand} onTryAgain={() => { machines.onRetry(name) }} /> }
   if (live.updateAction !== null) {
     const action = live.updateAction
     const label = action === 'install' ? `Maiker is not on ${name}` : `${name} needs a Maiker update`
-    return { at: 'helper', state: 'needs', label, body: <FixHelper name={name} action={action} machines={machines} /> }
+    return { at: 'helper', state: 'needs', label, body: <FixHelper name={name} action={action} why={live.why} machines={machines} /> }
   }
-  const body = <StepBody text={live.said ?? live.why ?? NO_REASON}><Button variant="needs" autoFocus onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
+  const body = <StepBody text={live.why ?? NO_REASON}><Button variant="needs" autoFocus onClick={() => { machines.onRetry(name) }}>Try again</Button></StepBody>
   return { at: 'reach', state: 'needs', label: `${name} is not connected`, body }
 }
 

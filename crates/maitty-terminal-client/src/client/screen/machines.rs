@@ -175,7 +175,7 @@ impl App {
                     mark.glyph,
                     mark.word,
                     mark.color,
-                    state_detail(&remote.state),
+                    state_detail(&remote.state, def),
                 )
             }
             None => (
@@ -191,8 +191,7 @@ impl App {
             glyph,
             word,
             color,
-            // The fix texts name the machine as `<name>`: say which one.
-            detail: detail.map(|why| why.replace("<name>", &def.name)),
+            detail,
             fix,
             notices: def.notices,
             sounds: def.sounds,
@@ -201,15 +200,15 @@ impl App {
     }
 }
 
-fn state_detail(state: &crate::client::link::ConnectionState) -> Option<String> {
-    use crate::client::link::ConnectionState::*;
-    match state {
-        NeedsLogin { why, .. } | NeedsUpdate { why } | Unreachable { why, .. } => {
-            Some(sanitize(why, false))
-        }
-        Reconnecting { .. } => Some("The connection was lost; trying again.".to_string()),
-        Connecting | Connected => None,
+/// A failure is said as the shared sentence, so this list and the desktop app agree.
+fn state_detail(state: &crate::client::link::ConnectionState, def: &MachineDef) -> Option<String> {
+    use crate::client::link::ConnectionState::Reconnecting;
+    if let Reconnecting { .. } = state {
+        return Some("The connection was lost; trying again.".to_string());
     }
+    let failure = state.failure()?;
+    let said = crate::link_failure::sentence_here(failure, &crate::link_failure::Subject::of_def(def));
+    Some(sanitize(&said, false))
 }
 
 /// What the input says, read as `[user@]host[:path]`.

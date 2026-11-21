@@ -9,12 +9,16 @@ import { MachinesPage } from './MachinesPage'
 vi.mock('@/TerminalView', () => ({ TerminalView: ({ conversation }: { conversation: { id: string } }) => <div data-testid="key-terminal">{conversation.id}</div> }))
 
 type State = RemoteMachine['state']
-const OLDER = 'run `maiker machine update NAME`, then retry'
-const MISSING = 'run `maiker machine update NAME --install`, then retry'
+/** The host's sentences and failure kinds (crates/maitty-machines link_failure), NAME standing for the machine. */
+const OLDER: Partial<State> = { why: 'NAME runs an older Maiker: run `maiker machine update NAME`, then try again.', failure: 'update', fix_command: 'maiker machine update NAME' }
+const MISSING: Partial<State> = { why: "Maiker isn't installed on NAME: run `maiker machine update NAME --install` (Linux and macOS machines only), then try again.", failure: 'install', fix_command: 'maiker machine update NAME --install' }
+const REFUSED_KEY: Partial<State> = { why: 'NAME refused your key: run `ssh-copy-id me@NAME.lan` in a terminal, then try again.', failure: 'key-refused', fix_command: 'ssh-copy-id me@NAME.lan' }
 
 function machine(id: number, name: string, state: State['state'], extra: Partial<State> = {}): RemoteMachine {
-  const why = (extra.why ?? null)?.replace('NAME', name) ?? null
-  return { state: { machine: id, name, state, why, attempt: null, since: Date.now() - 14 * 60_000, target: `me@${name}.lan`, ...extra, ...(why === null ? {} : { why }) }, conversations: [], heard: true, listedAt: 0 }
+  const named = (text: string | null | undefined) => text?.replaceAll('NAME', name) ?? null
+  const why = named(extra.why)
+  const fixCommand = named(extra.fix_command)
+  return { state: { machine: id, name, state, why, attempt: null, since: Date.now() - 14 * 60_000, target: `me@${name}.lan`, ...extra, ...(why === null ? {} : { why }), ...(fixCommand === null ? {} : { fix_command: fixCommand }) }, conversations: [], heard: true, listedAt: 0 }
 }
 
 function heads(...machines: RemoteMachine[]): MachineHead[] {
@@ -68,7 +72,7 @@ describe('the machine list', () => {
     const list = heads(
       machine(1, 'quiet', 'connected'),
       machine(2, 'busy', 'connected'),
-      machine(3, 'older', 'needs-update', { why: OLDER }),
+      machine(3, 'older', 'needs-update', OLDER),
       machine(4, 'gone', 'unreachable', { why: 'no answer' }),
       machine(5, 'locked', 'needs-login', { said: 'me@locked.lan: Permission denied (publickey).' }),
     )
@@ -84,7 +88,7 @@ describe('the machine list', () => {
   })
 
   it('offers each machine at most the one fix its state needs', () => {
-    const list = heads(machine(1, 'gone', 'unreachable'), machine(2, 'locked', 'needs-login'), machine(3, 'older', 'needs-update', { why: OLDER }), machine(4, 'bare', 'needs-update', { why: MISSING }), machine(5, 'fine', 'connected'))
+    const list = heads(machine(1, 'gone', 'unreachable'), machine(2, 'locked', 'needs-login'), machine(3, 'older', 'needs-update', OLDER), machine(4, 'bare', 'needs-update', MISSING), machine(5, 'fine', 'connected'))
     renderPage(info({ list }))
     expect(buttonsOf('gone')).toEqual(['Retry', 'More', 'Remove'])
     expect(buttonsOf('locked')).toEqual(['Fix', 'More', 'Remove'])
@@ -142,7 +146,7 @@ describe('the machine list', () => {
 })
 
 describe('updating from the list', () => {
-  const older = (name: string, id: number) => machine(id, name, 'needs-update', { why: OLDER })
+  const older = (name: string, id: number) => machine(id, name, 'needs-update', OLDER)
 
   it('asks what an update will interrupt before it runs, then updates in place', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
@@ -186,7 +190,7 @@ describe('updating from the list', () => {
   it('installs on a machine with none after one question, without counting what is open', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
     const onCheckActivity = vi.fn(() => Promise.resolve(null))
-    const user = renderPage(info({ list: heads(machine(1, 'bare', 'needs-update', { why: MISSING })), onUpdate, onCheckActivity }))
+    const user = renderPage(info({ list: heads(machine(1, 'bare', 'needs-update', MISSING)), onUpdate, onCheckActivity }))
     await user.click(screen.getByRole('button', { name: 'Install bare' }))
     await user.click(screen.getByRole('button', { name: 'Install on bare now' }))
     expect(onUpdate).toHaveBeenCalledWith('bare', 'install', false)
@@ -246,26 +250,35 @@ describe("a machine's More fold", () => {
     expect(onRetry).toHaveBeenCalledWith('gpu')
   })
 
-  it('gives a rejected login its command with Copy, Try again and a terminal to sign in', async () => {
+  it('gives a rejected key the host\'s sentence and its command with Copy and Try again, but no terminal', async () => {
     const onRetry = vi.fn()
     const onCopyCommand = vi.fn()
-    const onOpenLogin = vi.fn()
-    const user = renderPage(info({ list: heads(machine(7, 'studio', 'needs-login', { said: 'me@studio.lan: Permission denied (publickey).' })), onRetry, onCopyCommand, onOpenLogin }))
+    const user = renderPage(info({ list: heads(machine(7, 'studio', 'needs-login', { ...REFUSED_KEY, said: 'me@studio.lan: Permission denied (publickey).' })), onRetry, onCopyCommand }))
     await user.click(screen.getByRole('button', { name: 'Fix studio' }))
     const fold = screen.getByRole('group', { name: 'More about studio' })
-    expect(within(fold).getByRole('status')).toHaveTextContent('Key rejected. Run this once on this computer, then try again.')
-    await user.click(within(fold).getByRole('button', { name: 'Copy the ssh-copy-id command' }))
+    expect(within(fold).getByRole('status')).toHaveTextContent('Key rejected. studio refused your key: run `ssh-copy-id me@studio.lan` in a terminal, then try again.')
+    expect(within(fold).queryByRole('button', { name: 'Open a terminal' })).toBeNull()
+    await user.click(within(fold).getByRole('button', { name: 'Copy the command' }))
     expect(onCopyCommand).toHaveBeenCalledWith('ssh-copy-id me@studio.lan')
     expect(within(fold).getByText('Copied')).toBeInTheDocument()
     await user.click(within(fold).getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledWith('studio')
+  })
+
+  it('offers the terminal sign-in only for a password or a second code, with the host\'s sentence', async () => {
+    const onOpenLogin = vi.fn()
+    const why = "studio asks for a password or a second code, which Maiker can't answer: set up a key, or sign in in a terminal."
+    const user = renderPage(info({ list: heads(machine(7, 'studio', 'needs-login', { why, failure: 'needs-person' })), onOpenLogin }))
+    await user.click(screen.getByRole('button', { name: 'Fix studio' }))
+    const fold = screen.getByRole('group', { name: 'More about studio' })
+    expect(within(fold).getByRole('status')).toHaveTextContent(`Needs a sign-in. ${why}`)
     await user.click(within(fold).getByRole('button', { name: 'Open a terminal' }))
     expect(onOpenLogin).toHaveBeenCalledWith(7)
   })
 
   it('says its Maiker is older, while Update stays on the row', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'needs-update', { why: OLDER })), onUpdate }))
+    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'needs-update', OLDER)), onUpdate }))
     const fold = await unfold(user, 'devbox')
     expect(within(fold).getByText('Older · this computer has 0.46.0')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Update devbox' }))

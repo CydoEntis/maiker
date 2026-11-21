@@ -1099,7 +1099,8 @@ pub fn react(
             name,
             state,
         } => {
-            let mut told = describe(machine, &name, &state);
+            let route = handle.route(machine);
+            let mut told = describe(machine, &name, &state, route.as_ref());
             // The state machine has no word for it: a refusal reads as unreachable there.
             if handle.is_refused(machine) {
                 told.state = "refused";
@@ -1107,9 +1108,9 @@ pub fn react(
             if told.state == "needs-login" {
                 // A login the person can do: the same line the add flow opens in a session. A route
                 // that cannot make one (a custom transport) leaves the window with the fix text only.
-                told.login_command = handle.route(machine).and_then(|route| route.first_login_command().ok());
+                told.login_command = route.as_ref().and_then(|route| route.first_login_command().ok());
             }
-            told.target = handle.route(machine).and_then(|route| route.target().map(str::to_owned));
+            told.target = route.as_ref().and_then(|route| route.target().map(str::to_owned));
             let opts = handle.opts_of(machine);
             (told.clipboard, told.notices, told.sounds) = (opts.clipboard, opts.notices, opts.sounds);
             told.since = handle.down_since(machine, state.is_connected(), now_ms());
@@ -1591,6 +1592,8 @@ mod tests {
             name: name.into(),
             state: kind,
             why: None,
+            failure: None,
+            fix_command: None,
             said: None,
             login_command: None,
             target: None,
