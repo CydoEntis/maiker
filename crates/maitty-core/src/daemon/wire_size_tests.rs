@@ -432,6 +432,7 @@ fn conversation(i: u32) -> ConversationSummary {
         root: Some(root_of(i)),
         branch: Some(branch_of(i)),
         helpers: Vec::new(),
+        capabilities: None,
     }
 }
 

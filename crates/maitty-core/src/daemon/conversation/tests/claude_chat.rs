@@ -43,6 +43,8 @@ async fn a_claude_chat_is_created_sent_a_message_and_read_back_through_the_daemo
         assert_eq!(summary.provider, crate::conversation::Provider::Claude);
         assert_eq!(summary.execution, crate::conversation::ExecutionKind::Structured);
         assert_eq!(summary.native_term, None);
+        let capabilities = summary.capabilities.as_ref().expect("a chat reports what its provider can do");
+        assert!(capabilities.resume && !capabilities.steer);
 
         let sent = exchange(
             &mut session,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { CODEX_START_MODES, PICKABLE_MODES } from '@/features/chat/chatMeta'
 import { ANSWER_KEYS, CODEX_ANSWER_KEYS } from '@/features/chat/permissionAsk'
-import { abilitiesOf, hasAbility, runsMidTurn, type StructuredAbility } from './agentAbilities'
+import { abilitiesOf, hasAbility, runsMidTurn, steersIntoTurn, type StructuredAbility } from './agentAbilities'
 import { moveRefusal } from './moveToWorktree'
 import { CHAT_AGENTS } from './chatView'
 import type { SessionView } from './session'
@@ -123,5 +123,11 @@ describe('runsMidTurn', () => {
     expect(runsMidTurn('codex', '/side hi')).toBe(false)
     expect(runsMidTurn('gemini', '/btw hi')).toBe(false)
     expect(runsMidTurn(undefined, '/btw hi')).toBe(false)
+  })
+})
+
+describe('steersIntoTurn', () => {
+  it('is what the daemon reported, and false where it reported nothing', () => {
+    expect([steersIntoTurn(true), steersIntoTurn(false), steersIntoTurn(undefined)]).toEqual([true, false, false])
   })
 })

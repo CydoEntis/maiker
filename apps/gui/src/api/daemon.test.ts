@@ -857,6 +857,19 @@ describe('commands for a pane, on whichever machine it is', () => {
     expect(invoke).not.toHaveBeenCalled()
   })
 
+  it('takes whether a chat steers from the daemon, and says nothing where the daemon did not', () => {
+    const chat = (id: number, more: Record<string, unknown>) => ({ id, generation: 1, execution: 'Structured', provider: 'Codex', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: null, checks: [], ...more })
+    const snapshot = {
+      terms: {},
+      workspaces: [],
+      conversations: [chat(1, { capabilities: { steer: true, resume: true, verified: 'Pinned' } }), chat(2, { capabilities: { steer: false } }), chat(3, {}), chat(4, { capabilities: 'something newer' })],
+    }
+
+    const listed = conversationsFromSnapshot(snapshot)
+
+    expect(listed.map((item) => item.chat?.steers)).toEqual([true, false, undefined, undefined])
+  })
+
   it('lists only the terminals of another machine, with ids that name it', () => {
     const snapshot = {
       terms: { '7': { id: 7, agent: null, process: 'bash', status: 'Idle', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null } },

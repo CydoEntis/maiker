@@ -1264,6 +1264,15 @@ current generation (ADR 0010; Codex's `subAgentActivity` items). It is display o
 status. It is a defaulted field, empty from an older daemon, so it needs no `PROTOCOL_VERSION` bump;
 a test decodes the old shape.
 
+`ConversationSummary.capabilities` is what the conversation's provider can do, for a chat the
+daemon runs. Each adapter states its own once (`maitty_provider_codex::capabilities`,
+`maitty_provider_claude::capabilities`) and the daemon's registry reports it; `steer` is true only
+while the running Codex says it takes a message into a turn. It is absent for a conversation
+the daemon only follows and from an older daemon, and a client then falls back to what it knows
+about the agent (the window: `agentAbilities.ts`). It is a defaulted field that is left out when
+absent, so it needs no `PROTOCOL_VERSION` bump; a test decodes the old shape. The window reads
+`steer` to say what Send now does, and treats a shape it cannot read as no report.
+
 Protocol 65 removes the handoff between chat and terminal
 (`ConversationHandoffToNative`, `ConversationHandoffToChat`): a session is a chat
 or a terminal session from the moment it starts. It adds the human-only

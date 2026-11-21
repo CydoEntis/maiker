@@ -361,6 +361,17 @@ pub fn command_arguments_for_turn(
     arguments
 }
 
+/// What Claude Code can do in a chat, checked against the pinned version. It takes no message
+/// into a running turn and has no history to ask for: its saved conversation is a file.
+pub fn capabilities() -> maitty_shared::conversation::capabilities::Capabilities {
+    use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+    Capabilities {
+        resume: true,
+        verified: Verified::Pinned,
+        ..Capabilities::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{

@@ -24,6 +24,8 @@ type Props = {
   onEdit: (id: number) => void
   /** Sends a message into the turn that is running; absent while the agent asks something, or where the chat cannot send. */
   onSendNow?: ((id: number) => void) | undefined
+  /** Send now goes into the running turn; otherwise the turn is stopped for it. */
+  steers?: boolean | undefined
   /** Puts a message one place nearer the front. */
   onMoveUp?: ((id: number) => void) | undefined
   /** Removes every queued message. */
@@ -54,17 +56,18 @@ type ActionsProps = {
   onRemove: (id: number) => void
   onEdit: (id: number) => void
   onSendNow: ((id: number) => void) | undefined
+  steers: boolean
   onMoveUp: ((id: number) => void) | undefined
   sending: boolean
 }
 
 /** What can be done to a message that is open: Edit, Send now, Move up and Remove, as outlined buttons. */
-function Actions({ id, canMoveUp, agent, onRemove, onEdit, onSendNow, onMoveUp, sending }: ActionsProps) {
+function Actions({ id, canMoveUp, agent, onRemove, onEdit, onSendNow, steers, onMoveUp, sending }: ActionsProps) {
   return (
     <div className="mx-qd-actions">
       <button type="button" className="mx-dock-action" title="Take it back into the message box to change it" onClick={() => { onEdit(id) }}><EditGlyph />Edit</button>
       {onSendNow !== undefined && (
-        <button type="button" className="mx-dock-action" disabled={sending} title={`Send it to ${AGENT_LABEL[agent]} now, interrupting the step it is on`} onClick={() => { onSendNow(id) }}><SendNowGlyph />Send now</button>
+        <button type="button" className="mx-dock-action" disabled={sending} title={steers ? `Send it to ${AGENT_LABEL[agent]} now, into the turn it is running` : `Send it to ${AGENT_LABEL[agent]} now, interrupting the step it is on`} onClick={() => { onSendNow(id) }}><SendNowGlyph />Send now</button>
       )}
       {canMoveUp && onMoveUp !== undefined && <button type="button" className="mx-dock-action" onClick={() => { onMoveUp(id) }}><MoveUpGlyph />Move up</button>}
       <span className="mx-spacer" />
@@ -79,7 +82,7 @@ function Actions({ id, canMoveUp, agent, onRemove, onEdit, onSendNow, onMoveUp, 
  * a numbered list with a hint and Clear all. A click on a message reads it whole, and only then do its actions show.
  * Only one message is read at a time; opening the list or the helpers folds the others (`open`, `onRead`).
  */
-export function QueuedMessages({ agent, queue, open, onOpenChange, onRead, helpersOpen, onRemove, onEdit, onSendNow, onMoveUp, onClear, sendingNow, note }: Props) {
+export function QueuedMessages({ agent, queue, open, onOpenChange, onRead, helpersOpen, onRemove, onEdit, onSendNow, steers = false, onMoveUp, onClear, sendingNow, note }: Props) {
   const [reading, setReading] = useState<number | null>(null)
   const messages = queue.map(messageOf)
   const first = messages[0]
@@ -99,7 +102,7 @@ export function QueuedMessages({ agent, queue, open, onOpenChange, onRead, helpe
     onRead()
   }
   const actions = (message: Message, index: number) => (
-    <Actions id={message.id} canMoveUp={index > 0} agent={agent} onRemove={onRemove} onEdit={onEdit} onSendNow={onSendNow} onMoveUp={onMoveUp} sending={sendingNow?.has(message.id) === true} />
+    <Actions id={message.id} canMoveUp={index > 0} agent={agent} onRemove={onRemove} onEdit={onEdit} onSendNow={onSendNow} steers={steers} onMoveUp={onMoveUp} sending={sendingNow?.has(message.id) === true} />
   )
   return (
     <div className="mx-dock-queue" role="region" aria-label="Queued messages">

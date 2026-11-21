@@ -30,6 +30,9 @@ function toSubagentDetail(child: SubagentActivity) {
   return { id: child.id, name: child.name, state: child.state, task: child.task, startedAt: child.started_at, updatedAt: child.updated_at, latest: child.latest_activity, result: child.result }
 }
 
+// What the daemon says the chat's provider can do. Only what a control here reads is kept; an unknown shape is no
+// report, never a lost chat.
+const CapabilitiesSchema = z.object({ steer: z.boolean().default(false) })
 const ConversationSummarySchema = z.object({
   id: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
@@ -47,6 +50,8 @@ const ConversationSummarySchema = z.object({
   branch: z.string().nullable().default(null),
   // The helpers a chat session's provider reported starting (ADR 0010); empty from an older daemon.
   helpers: z.array(SubagentActivitySchema).default([]),
+  // Absent from an older daemon and for a conversation it only follows; the window then falls back to what it knows.
+  capabilities: CapabilitiesSchema.nullable().default(null).catch(null),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -1535,7 +1540,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent: summary.provider.toLowerCase(),
           process: summary.provider.toLowerCase(),
-          chat: { conversation: summary.id, generation: summary.generation },
+          chat: { conversation: summary.id, generation: summary.generation, ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
           details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: summary.helpers.map(toSubagentDetail) },
         }
       : {}),
