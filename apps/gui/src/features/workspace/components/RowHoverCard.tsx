@@ -4,10 +4,11 @@ import { StatusIcon } from '@/components/ui/status-icon'
 import type { SessionView } from '../model/session'
 import { hoverCardText, type CardPlace } from '../model/hoverCard'
 import { rowTitle } from '../model/sidebar'
+import { type HelperCount } from '../model/helpers'
 import { AppIcon, Icon, type IconName } from './glyphs'
 import { Ago } from './times'
 
-type Props = { session: SessionView; place: CardPlace; open: boolean; cold: boolean; portalContainer: HTMLElement | null }
+type Props = { session: SessionView; starter: string | null; helpers: HelperCount | null; place: CardPlace; open: boolean; cold: boolean; portalContainer: HTMLElement | null }
 
 /** One line of the card: its icon hangs in the margin left of the text, and a screen reader hears what it is. */
 function CardRow({ icon, what, children }: { icon: IconName; what: string; children: ReactNode }) {
@@ -25,9 +26,9 @@ function CardRow({ icon, what, children }: { icon: IconName; what: string; child
  * pull request, and who runs it and when it last moved. It only tells; it takes no pointer input, so it can never be
  * in the way of the next row.
  */
-function RowHoverCardView({ session, place, open, cold, portalContainer }: Props) {
+function RowHoverCardView({ session, starter, helpers, place, open, cold, portalContainer }: Props) {
   // The place is known before the first draw (worked out from the row), so the card is never drawn hidden, measured and moved.
-  const text = hoverCardText(session, rowTitle(session))
+  const text = hoverCardText(session, rowTitle(session), starter, helpers)
   return (
     <WindowPortal container={portalContainer}>
     <div role="tooltip" className={`mx-hover-card${cold ? ' is-cold' : ''}`} data-float data-open={open} style={place satisfies CSSProperties}>
@@ -52,6 +53,8 @@ function RowHoverCardView({ session, place, open, cold, portalContainer }: Props
             <span className="is-del is-mono">−{text.changes.removed}</span>
           </CardRow>
         )}
+        {text.startedBy !== null && <CardRow icon="arrowUpRight" what="Started by"><span>Started by {text.startedBy}</span></CardRow>}
+        {text.helpers !== null && <CardRow icon="list" what="Helpers"><span className={text.helpers.needs ? 'is-needs' : ''}>{text.helpers.text}</span></CardRow>}
         {text.pr !== null && (
           <CardRow icon="pullRequest" what="Pull request">
             <span className="is-mono">{text.pr.number}</span>

@@ -146,6 +146,8 @@ const TerminalSessionSchema = z.object({
   }).default({ context: null, cost: null, tokens: null }),
   // The helpers the session asked to start and waits on the person for, one task each (`TermInfo.helper_ask`).
   helper_ask: z.array(z.string()).default([]),
+  // The pane whose agent started this one (`TermInfo.started_by`); null when a person did, and from an older daemon.
+  started_by: z.number().int().nullable().default(null),
   // The agent's subagents as its runtime reports them (`TermInfo.subagent_activity`); times are unix seconds.
   subagent_activity: z.array(SubagentActivitySchema).default([]),
 })
@@ -1485,6 +1487,7 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),
       limits: limits.map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })),
       helperAsk: term.helper_ask,
+      startedBy: term.started_by === null ? null : terminalSessionId(term.started_by, machine?.name ?? null),
       subagents: term.subagent_activity.map(toSubagentDetail),
     },
     ...(chat ? { chat } : {}),

@@ -59,6 +59,15 @@ describe('chat sessions', () => {
     expect(listed[0]?.chat).toEqual({ conversation: 9, generation: 1, readOnly: true })
   })
 
+  it('keeps the pane that started a session as that session\'s id, on this computer and on another machine, and none from an older daemon', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const terms = { '7': term(7), '8': term(8, { started_by: 7 }) }
+    const here = conversationsFromSnapshot({ terms, workspaces: [], conversations: [] })
+    expect(here.map((item) => [item.id, item.details?.startedBy])).toEqual([['t7', null], ['t8', 't7']])
+    const there = conversationsFromSnapshot({ terms, workspaces: [], conversations: [] }, { id: 4, name: 'build' })
+    expect(there.map((item) => [item.id, item.details?.startedBy])).toEqual([['build/t7', null], ['build/t8', 'build/t7']])
+  })
+
   it('reads a summary from before the repository and branch were named', () => {
     const old = Object.fromEntries(Object.entries(summary()).filter(([key]) => key !== 'root' && key !== 'branch'))
     const [chat] = conversationsFromSnapshot(snapshot([old]))

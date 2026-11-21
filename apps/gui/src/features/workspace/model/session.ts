@@ -83,6 +83,8 @@ export type SessionView = {
   queued: readonly string[]
   /** The tasks of the helpers the session asked to start and waits on the person for; empty when it asked for none. */
   helperAsk: readonly string[]
+  /** The session whose agent started this one (`TermInfo.started_by`); null when a person did. It may no longer be listed. */
+  startedBy: string | null
   /** The agent's subagents, in the order its runtime reported them. */
   subagents: SubagentView[]
   /**
@@ -349,6 +351,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     secretAsk: conversation.details?.secretAsk ?? [],
     queued: conversation.details?.queued ?? [],
     helperAsk: conversation.details?.helperAsk ?? [],
+    startedBy: conversation.details?.startedBy ?? null,
     // Which helpers a row lists (`listedSubagents`): not one that finished, nor one that stopped once the turn is over.
     subagents: listedSubagents((conversation.details?.subagents ?? []).map(toSubagentView), status === 'working'),
     helpersOnly: helpersOnly(conversation, status),

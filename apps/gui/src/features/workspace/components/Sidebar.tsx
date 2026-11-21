@@ -14,6 +14,7 @@ import { useReducedMotion } from './motion'
 import { useFlip } from './useFlip'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { SessionRow } from './SessionRow'
+import { helperLinks } from '../model/helpers'
 import { StartMenu } from './StartMenu'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { NeedsYouStrip } from './NeedsYouStrip'
@@ -308,6 +309,7 @@ function Expanded(props: SidebarProps) {
     }
   }
 
+  const links = helperLinks(props.sessions)
   const renderRow = (session: SessionView, showProject: boolean, showMachine = true) => {
     const selected = session.id === props.focusedId
     return (
@@ -317,6 +319,8 @@ function Expanded(props: SidebarProps) {
           selected={selected}
           showProject={showProject}
           machine={showMachine ? session.machineName : null}
+          starter={links.starterOf.get(session.id) ?? null}
+          helpers={links.helpersOf.get(session.id) ?? null}
           onShow={() => { props.onShowSession(session.id) }}
           onRename={() => { props.onRenameSession(session.id) }}
           onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}

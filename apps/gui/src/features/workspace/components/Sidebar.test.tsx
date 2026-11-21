@@ -399,6 +399,58 @@ describe('a session row', () => {
     expect(names.filter((name) => /^(Put away|Snooze)/.test(name))).toEqual([])
   })
 
+  describe('whose agent started helpers', () => {
+    const startedBy = (id: string) => ({ details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, startedBy: id } })
+    const lead = () => session(1, { agent: 'claude', named: true, title: 'Growth', status: 'working' })
+    const helper = (pane: number, title: string, extra: Partial<Conversation> = {}) => session(pane, { agent: 'codex', named: true, title, status: 'working', cwd: '/home/me/app1', ...startedBy('t1'), ...extra })
+
+    it('counts its helpers on its first line, and each helper names it on its second', () => {
+      show([lead(), helper(2, 'Review the diff'), helper(3, 'Write the tests')])
+      const growth = screen.getByRole('button', { name: 'Growth, claude, 2 helpers, working' })
+      expect(growth.querySelector('.mx-row-title .mx-row-helpers')?.textContent).toBe('2 helpers')
+      expect(growth.querySelector('.mx-row-helpers')?.classList.contains('is-needs')).toBe(false)
+      const review = screen.getByRole('button', { name: 'Review the diff, codex, helper of Growth, working' })
+      expect(review.querySelector('.mx-row-sub')?.firstElementChild?.textContent).toBe('↳Growth')
+    })
+
+    it('says how many helpers wait on you, in the needs-you colour', () => {
+      show([lead(), helper(2, 'Review the diff', { status: 'needs-you' }), helper(3, 'Write the tests')])
+      const growth = screen.getByRole('button', { name: 'Growth, claude, 2 helpers, 1 needs you, working' })
+      expect(growth.querySelector('.mx-row-helpers')?.classList.contains('is-needs')).toBe(true)
+    })
+
+    it('draws a helper whose starter is no longer listed as an ordinary row', () => {
+      show([helper(2, 'Review the diff')])
+      expect(screen.getByRole('button', { name: 'Review the diff, codex, working' }).querySelector('.mx-row-starter')).toBeNull()
+    })
+
+    it('keeps the rows in their order, with no level under the starter', () => {
+      show([helper(2, 'Review the diff'), lead(), session(3, { agent: 'claude', named: true, title: 'Billing', status: 'working', cwd: '/home/me/app1' })], { statusHeadings: false })
+      const withHelpers = names()
+      cleanup()
+      localStorage.clear()
+      show([session(2, { agent: 'codex', named: true, title: 'Review the diff', status: 'working', cwd: '/home/me/app1' }), lead(), session(3, { agent: 'claude', named: true, title: 'Billing', status: 'working', cwd: '/home/me/app1' })], { statusHeadings: false })
+      expect(withHelpers).toEqual(names())
+      expect(document.querySelector('.mx-row-wrap .mx-row-wrap')).toBeNull()
+    })
+
+    it('says on the hover card who started a helper, and names a starter\'s helpers', () => {
+      vi.useFakeTimers()
+      try {
+        show([lead(), helper(2, 'Review the diff', { status: 'needs-you' }), helper(3, 'Write the tests')])
+        const rest = (name: RegExp) => { fireEvent.mouseEnter(screen.getByRole('button', { name }).closest('.mx-row-wrap') as HTMLElement) }
+        rest(/^Review the diff,/)
+        act(() => { vi.advanceTimersByTime(450) })
+        expect(screen.getByRole('tooltip')).toHaveTextContent('Started by Growth')
+        fireEvent.mouseLeave(screen.getByRole('button', { name: /^Review the diff,/ }).closest('.mx-row-wrap') as HTMLElement)
+        rest(/^Growth,/)
+        expect(screen.getByRole('tooltip')).toHaveTextContent('2 helpers: Review the diff, Write the tests')
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+  })
+
   it('offers Close shell, not Stop, for a shell', () => {
     show([session(1)])
     fireEvent.contextMenu(screen.getByRole('button', { name: /^app1,/ }))

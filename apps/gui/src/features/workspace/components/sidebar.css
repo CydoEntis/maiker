@@ -145,6 +145,13 @@
 /* A worktree is told from a branch by its tree and its blue, on the row, the pane's header and under the message box. */
 .mx-row-branch.is-worktree svg { flex: none; }
 .mx-row-word { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--danger); }
+/* How many helpers the session's agent started; amber, like any needs-you, while one of them waits on you. */
+.mx-row-helpers { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.mx-row-helpers.is-needs { color: var(--needs); }
+/* Whose helper a row is: it gives way before the place does, so the branch stays readable. */
+.mx-row-starter { display: inline-flex; align-items: center; gap: 4px; flex: 0 2 auto; min-width: 4ch; }
+.mx-row-starter-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-hover-row .is-needs { color: var(--needs); }
 .mx-row-when { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); transition: opacity var(--t-fast) var(--ease); }
 
 

@@ -1124,6 +1124,11 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   Only a session on another machine, outside that machine's heading, has `· machine` after the folder, and only then is
   the branch held to 58% of the line; otherwise it takes all the folder leaves, cut with `…` and its full name in the
   tooltip.
+  A session another session's agent started (a helper) begins its place line with `↳` and that session's name, which
+  gives way with `…` before the place does. The session that started helpers says `2 helpers` in `--muted` before its
+  time, in `--needs` while one of them waits on you. Rows keep their place and their level: a helper is never indented
+  under its starter. The hover card adds `Started by <name>` or `2 helpers: <names>` (three names, then `+n more`). A
+  helper whose starter is no longer listed is an ordinary row (`model/helpers.ts`).
   The close button shows on hover over the time.
 - **Rows slide, folds fold, never both.** A row that changes place slides there (`useFlip`). A section folding
   moves what is under it by itself, so while a fold runs nothing slides, and where things

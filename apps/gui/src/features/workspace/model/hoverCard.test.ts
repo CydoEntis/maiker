@@ -35,6 +35,13 @@ describe('what the hover card says', () => {
     expect(text).toMatchObject({ title: 'Upgrade to React 19', activity: 'Upgrade React', folder: { text: 'app', mono: false, ownWorktree: false }, branch: 'feat/x', changes: { added: 12, removed: 3 }, pr: null, who: 'Claude · This computer' })
   })
 
+  it('says who started a helper, and names a starter\'s first three helpers with a count of the rest', () => {
+    expect(hoverCardText(view(), 'x')).toMatchObject({ startedBy: null, helpers: null })
+    expect(hoverCardText(view(), 'x', 'Growth').startedBy).toBe('Growth')
+    expect(hoverCardText(view(), 'x', null, { total: 2, needs: 0, names: ['Review', 'Tests'] }).helpers).toEqual({ text: '2 helpers: Review, Tests', needs: false })
+    expect(hoverCardText(view(), 'x', null, { total: 5, needs: 1, names: ['a', 'b', 'c', 'd', 'e'] }).helpers).toEqual({ text: '5 helpers: a, b, c, +2 more', needs: true })
+  })
+
   it('tags a branch that has a worktree of its own', () => {
     expect(hoverCardText({ ...view(), worktree: true }, 'x').folder.ownWorktree).toBe(true)
   })

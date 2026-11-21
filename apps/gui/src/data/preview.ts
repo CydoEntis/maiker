@@ -55,6 +55,8 @@ export type TerminalDetails = {
   ownTurnOver?: boolean
   /** The helpers the session asked to start and waits on the person for, one task each; absent from an older daemon. */
   helperAsk?: string[]
+  /** The session whose agent started this one, by its id in this window; null or absent when a person did. */
+  startedBy?: string | null
   /** The agent's subagents as its runtime reports them; absent from an older daemon. */
   subagents?: SubagentActivity[]
 }

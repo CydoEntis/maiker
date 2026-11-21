@@ -2,6 +2,7 @@ import { machineLabel } from '@/data/machineNicknames'
 import { messagePreview } from '@/features/chat/messagePreview'
 import { agentLabel, askWords, SHELL_PROCESS, STATUS_WORD, type SessionView } from './session'
 import { projectOf } from './sidebar'
+import { helpersWord, type HelperCount } from './helpers'
 import { pullRequestHeadline, pullRequestTone, type PullRequestTone } from './pullRequest'
 
 export const HOVER_CARD_DELAY_MS = 450
@@ -12,6 +13,8 @@ const EDGE_PX = 8
 const ABOVE_ROW_PX = 4
 const SAID_CHARS = 140
 const HALF = 2
+/** The most helpers the card names; the rest are a count. */
+const HELPERS_NAMED = 3
 
 /** The words that stand in for an activity line when the session reported none. */
 /** A status word as the card's line: "needs you" is "Needs you". */
@@ -34,8 +37,18 @@ export type HoverCardText = {
   /** Lines added and removed; null when nothing changed. */
   changes: { added: number; removed: number } | null
   pr: { number: string; state: string; tone: PullRequestTone } | null
+  /** The session whose agent started this one, while it is listed; null for a session a person started. */
+  startedBy: string | null
+  /** The helpers its agent started: `2 helpers: Review the diff, Write the tests`, and whether one waits on the person. */
+  helpers: { text: string; needs: boolean } | null
   /** The agent and where it runs: `Claude · This computer`. */
   who: string
+}
+
+function helpersLine(helpers: HelperCount): string {
+  const named = helpers.names.slice(0, HELPERS_NAMED).join(', ')
+  const more = helpers.names.length - HELPERS_NAMED
+  return `${helpersWord(helpers.total)}: ${named}${more > 0 ? `, +${String(more)} more` : ''}`
 }
 
 /**
@@ -43,7 +56,7 @@ export type HoverCardText = {
  * asks when it needs you, the prompt it was last given while it works. The status word is only a stand-in
  * for an activity the session did not report.
  */
-export function hoverCardText(session: SessionView, title: string): HoverCardText {
+export function hoverCardText(session: SessionView, title: string, starter: string | null = null, helpers: HelperCount | null = null): HoverCardText {
   const asked = session.ask === null ? session.asking : askWords(session.ask)
   const said = session.status === 'needs' ? asked : session.status === 'working' ? session.lastPrompt : ''
   const shell = session.process === SHELL_PROCESS
@@ -57,6 +70,8 @@ export function hoverCardText(session: SessionView, title: string): HoverCardTex
     branch: shell ? null : session.branch,
     changes: session.diffAdded + session.diffRemoved > 0 ? { added: session.diffAdded, removed: session.diffRemoved } : null,
     pr: pr === null ? null : { number, state: pullRequestHeadline(pr).slice(number.length).trim() || pr.state.toLowerCase(), tone: pullRequestTone(pr) },
+    startedBy: starter,
+    helpers: helpers === null ? null : { text: helpersLine(helpers), needs: helpers.needs > 0 },
     who: `${agentLabel(session.process)} · ${session.machineName === null ? 'This computer' : machineLabel(session.machineName)}`,
   }
 }
