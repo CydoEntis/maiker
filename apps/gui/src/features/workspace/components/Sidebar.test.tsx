@@ -412,13 +412,16 @@ describe('a session row', () => {
     const lead = () => session(1, { agent: 'claude', named: true, title: 'Growth', status: 'working' })
     const helper = (pane: number, title: string, extra: Partial<Conversation> = {}) => session(pane, { agent: 'codex', named: true, title, status: 'working', cwd: '/home/me/app1', ...startedBy('t1'), ...extra })
 
-    it('counts its helpers on its first line, and each helper names it on its second', () => {
+    it('counts its helpers on its first line, and lists each one set in under it', () => {
       show([lead(), helper(2, 'Review the diff'), helper(3, 'Write the tests')])
       const growth = screen.getByRole('button', { name: 'Growth, claude, 2 helpers, working' })
       expect(growth.querySelector('.mx-row-title .mx-row-helpers')?.textContent).toBe('2 helpers')
       expect(growth.querySelector('.mx-row-helpers')?.classList.contains('is-needs')).toBe(false)
       const review = screen.getByRole('button', { name: 'Review the diff, codex, helper of Growth, working' })
-      expect(review.querySelector('.mx-row-sub')?.firstElementChild?.textContent).toBe('↳Growth')
+      // Under its starter the row does not name it again; what a screen reader hears still does.
+      expect(review.closest('.mx-row-wrap')?.classList.contains('is-nested')).toBe(true)
+      expect(review.querySelector('.mx-row-starter')).toBeNull()
+      expect(growth.closest('.mx-row-wrap')?.classList.contains('is-nested')).toBe(false)
     })
 
     it('says how many helpers wait on you, in the needs-you colour', () => {
@@ -432,14 +435,12 @@ describe('a session row', () => {
       expect(screen.getByRole('button', { name: 'Review the diff, codex, working' }).querySelector('.mx-row-starter')).toBeNull()
     })
 
-    it('keeps the rows in their order, with no level under the starter', () => {
-      show([helper(2, 'Review the diff'), lead(), session(3, { agent: 'claude', named: true, title: 'Billing', status: 'working', cwd: '/home/me/app1' })], { statusHeadings: false })
-      const withHelpers = names()
-      cleanup()
-      localStorage.clear()
-      show([session(2, { agent: 'codex', named: true, title: 'Review the diff', status: 'working', cwd: '/home/me/app1' }), lead(), session(3, { agent: 'claude', named: true, title: 'Billing', status: 'working', cwd: '/home/me/app1' })], { statusHeadings: false })
-      expect(withHelpers).toEqual(names())
-      expect(document.querySelector('.mx-row-wrap .mx-row-wrap')).toBeNull()
+    it('puts each helper right after its starter, whatever order they were made in', () => {
+      show([helper(2, 'Review the diff'), session(3, { agent: 'claude', named: true, title: 'Billing', status: 'working', cwd: '/home/me/app1' }), lead(), helper(4, 'Write the tests')], { statusHeadings: false })
+      const listed = names()
+      const growth = listed.indexOf('Growth')
+      expect(listed.slice(growth, growth + 3)).toEqual(['Growth', 'Review the diff', 'Write the tests'])
+      expect(listed).toContain('Billing')
     })
 
     it('says on the hover card who started a helper, and names a starter\'s helpers', () => {

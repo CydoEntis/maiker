@@ -112,6 +112,8 @@
 @media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
 :root[data-reduced-motion="true"] .mx-hover-card { animation: none; }
 .mx-row-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
+/* A helper under the session that started it: set in by one step, with a rule down its left edge tying it to that row. */
+.mx-row-wrap.is-nested { margin-left: 14px; padding-left: 6px; box-shadow: inset 1px 0 0 var(--line2); }
 .mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: calc(40px * var(--pad, 1)); padding: 4px 6px 4px 10px; border-radius: var(--r-control); text-align: left; transition: background-color var(--t-fast) var(--ease); }
 .mx-row:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
 .mx-row.is-selected, .mx-row.is-selected:hover { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }

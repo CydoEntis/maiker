@@ -19,6 +19,8 @@ type Props = {
   starter?: string | null
   /** The helpers this session's agent started, when it has any listed. */
   helpers?: HelperCount | null
+  /** The row sits right under the session that started it, so its line does not name that session again. */
+  nested?: boolean
   onShow: () => void
   onRename: () => void
   onContextMenu: (event: MouseEvent) => void
@@ -50,7 +52,7 @@ function PlaceLine({ session, project, machine, starter }: { session: SessionVie
  * whose helper it is and where it is (`PlaceLine`). What the agent is doing is the
  * hover card's, not the row's. An idle row is dimmed.
  */
-export function SessionRow({ session, selected, showProject, machine = null, starter = null, helpers = null, onShow, onRename, onContextMenu }: Props) {
+export function SessionRow({ session, selected, showProject, machine = null, starter = null, helpers = null, nested = false, onShow, onRename, onContextMenu }: Props) {
   const title = rowTitle(session)
   const active = !isShell(session) && session.status !== 'idle'
   const word = rowWord(session)
@@ -76,7 +78,7 @@ export function SessionRow({ session, selected, showProject, machine = null, sta
           {/* A shell has no state worth timing. */}
           {!isShell(session) && session.statusSince !== null && <span className="mx-row-when"><Ago at={session.statusSince} /></span>}
         </span>
-        <PlaceLine session={session} project={project} machine={machine} starter={starter} />
+        <PlaceLine session={session} project={project} machine={machine} starter={nested ? null : starter} />
       </span>
     </button>
   )

@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { finishedUnseen, machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, projectName, showsMachineHeadings, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
+import { finishedUnseen, machineFoldCounts, machineFoldKey, nestHelpers, projectFoldCounts, projectFoldKey, projectName, showsMachineHeadings, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 
@@ -127,5 +127,38 @@ describe('what a folded heading counts', () => {
     const [here] = sidebarTree([LOCAL_HEAD], groupByProject(sessions, []).machines, (row) => row.id === 't1', null)
     expect(here === undefined ? null : machineFoldCounts(here)).toEqual({ needs: 0, finished: 1 })
     expect([session(1, '/home/me/shop', { status: 'done' }), session(1, '/home/me/shop')].map(finishedUnseen)).toEqual([true, false])
+  })
+})
+
+describe('helpers in the tree', () => {
+  const details = { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } }
+  const helper = (pane: number, by: number, extra: Partial<Conversation> = {}) => session(pane, '/home/me/app', { details: { ...details, startedBy: `t${String(by)}` }, ...extra })
+  const order = (sessions: readonly SessionView[]) => nestHelpers(sessions, null).sections.map((section) => [section.key, section.sessions.map((item) => item.id)])
+
+  it('lists each helper right under the session that started it, in the order they were made', () => {
+    const all = [session(1, '/home/me/app', { status: 'working' }), helper(2, 1), session(3, '/home/me/app'), helper(4, 1)]
+    expect(order(all)).toEqual([['working', ['t1', 't2', 't4']], ['idle', ['t3']]])
+    expect([...nestHelpers(all, null).nested]).toEqual(['t2', 't4'])
+  })
+
+  it('keeps a helper under its starter whatever its own status becomes', () => {
+    const lead = session(1, '/home/me/app', { status: 'working' })
+    const before = order([lead, helper(2, 1, { status: 'working' }), helper(3, 1, { status: 'working' })])
+    const after = order([lead, helper(2, 1, { status: 'done' }), helper(3, 1, { status: 'needs-you' })])
+    expect(after).toEqual(before)
+  })
+
+  it('leaves a helper whose starter is not listed as an ordinary row', () => {
+    const all = [helper(2, 9), session(3, '/home/me/app')]
+    expect(nestHelpers(all, null).nested.size).toBe(0)
+    expect(order(all).flatMap(([, ids]) => ids)).toHaveLength(2)
+  })
+
+  it('puts a helper of a helper under the first starter, and counts only the rest for status headings', () => {
+    const all = [session(1, '/home/me/app'), helper(2, 1), helper(3, 2)]
+    expect(order(all)).toEqual([['idle', ['t1', 't2', 't3']]])
+    const [machine] = sidebarTree([LOCAL_HEAD], groupByProject(all, []).machines, () => true, null)
+    expect(machine?.projects[0]).toMatchObject({ count: 3, top: 1 })
+    expect(showsStatusHeadings(machine?.projects[0]?.top ?? 0, true)).toBe(false)
   })
 })

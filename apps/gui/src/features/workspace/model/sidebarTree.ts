@@ -1,7 +1,7 @@
 import { baseName } from './folderPick'
 import type { MachineHead } from './machines'
 import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
-import type { SessionView } from './session'
+import { inCreationOrder, type SessionView } from './session'
 import { byLatestChange, sectionOf, statusSections, type HeldRow, type StatusSection } from './sidebar'
 
 /**
@@ -18,6 +18,10 @@ export type ProjectNode = {
   readonly project: OpenedProject
   readonly sections: readonly StatusSection[]
   readonly count: number
+  /** The helpers listed right under the session that started them (`nestHelpers`), by id. */
+  readonly nested: ReadonlySet<string>
+  /** The sessions that are not nested: what decides whether the project needs status headings. */
+  readonly top: number
 }
 
 export type MachineNode = {
@@ -26,6 +30,41 @@ export type MachineNode = {
   readonly key: string
   readonly projects: readonly ProjectNode[]
   readonly count: number
+}
+
+/** How far a helper's starter is followed up to the session at the top: a helper of a helper sits under the first starter. */
+const MAX_STARTER_DEPTH = 8
+
+/**
+ * A project's sessions with every helper right under the session that started it, in the order the helpers were made.
+ * Only the starting session is placed by status, so a helper keeps its place under it whatever its own status does:
+ * helpers start, finish and ask within seconds, and a list that reorders each time cannot be read or clicked. A helper
+ * whose starter is not listed here is an ordinary row.
+ */
+export function nestHelpers(sessions: readonly SessionView[], held: HeldRow | null): { sections: StatusSection[]; nested: Set<string> } {
+  const byId = new Map(sessions.map((session) => [session.id, session]))
+  const leadOf = (session: SessionView): SessionView | null => {
+    let lead: SessionView | null = null
+    let at = session
+    for (let depth = 0; depth < MAX_STARTER_DEPTH; depth += 1) {
+      const starter = at.startedBy === null ? undefined : byId.get(at.startedBy)
+      if (starter === undefined || starter.id === session.id) break
+      lead = starter
+      at = starter
+    }
+    return lead
+  }
+  const helpersOf = new Map<string, SessionView[]>()
+  const nested = new Set<string>()
+  for (const session of inCreationOrder(sessions)) {
+    const lead = leadOf(session)
+    if (lead === null) continue
+    nested.add(session.id)
+    helpersOf.set(lead.id, [...(helpersOf.get(lead.id) ?? []), session])
+  }
+  const sections = statusSections(sessions.filter((session) => !nested.has(session.id)), held)
+    .map((section) => ({ ...section, sessions: section.sessions.flatMap((lead) => [lead, ...(helpersOf.get(lead.id) ?? [])]) }))
+  return { sections, nested }
 }
 
 /** What this computer is called in a fold key: a machine's name never holds a space (`data/openedProjects.ts`). */
@@ -74,7 +113,8 @@ export function sidebarTree(heads: readonly MachineHead[], machines: readonly Ma
     const projects = machines.find((machine) => sameMachineName(machine.machineName, head.name))?.projects ?? []
     const nodes = projects.map((entry): ProjectNode => {
       const sessions = entry.sessions.filter(shown)
-      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections: statusSections(sessions, held), count: sessions.length }
+      const { sections, nested } = nestHelpers(sessions, held)
+      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections, count: sessions.length, nested, top: sessions.length - nested.size }
     })
     return { head, key: machineFoldKey(head.name), projects: nodes, count: nodes.reduce((total, node) => total + node.count, 0) }
   })
@@ -88,7 +128,7 @@ export function sidebarTree(heads: readonly MachineHead[], machines: readonly Ma
  */
 export function treePlacement(tree: readonly MachineNode[], headings: boolean): string {
   return tree.map((machine) => `${machine.key}[${machine.projects.map((project) => {
-    const titled = showsStatusHeadings(project.count, headings)
+    const titled = showsStatusHeadings(project.top, headings)
     return `${project.key}${titled ? '#' : ''}{${project.sections.map((section) => `${section.key}:${section.sessions.map((session) => session.id).join(',')}`).join('|')}}`
   }).join(';')}]`).join('/')
 }

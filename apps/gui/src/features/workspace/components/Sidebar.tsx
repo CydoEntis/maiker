@@ -282,16 +282,17 @@ function Expanded(props: SidebarProps) {
   }
 
   const links = helperLinks(props.sessions)
-  const renderRow = (session: SessionView, showProject: boolean, showMachine = true) => {
+  const renderRow = (session: SessionView, showProject: boolean, showMachine = true, nested = false) => {
     const selected = session.id === props.focusedId
     return (
-      <div key={session.id} className="mx-row-wrap" role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
+      <div key={session.id} className={`mx-row-wrap${nested ? ' is-nested' : ''}`} role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
         <SessionRow
           session={session}
           selected={selected}
           showProject={showProject}
           machine={showMachine ? session.machineName : null}
           starter={links.starterOf.get(session.id) ?? null}
+          nested={nested}
           helpers={links.helpersOf.get(session.id) ?? null}
           onShow={() => { props.onShowSession(session.id) }}
           onRename={() => { props.onRenameSession(session.id) }}
@@ -308,10 +309,10 @@ function Expanded(props: SidebarProps) {
       node={project}
       open={views.isOpen(project.key)}
       onToggle={() => { views.toggle(project.key) }}
-      headings={showsStatusHeadings(project.count, props.statusHeadings)}
+      headings={showsStatusHeadings(project.top, props.statusHeadings)}
       selected={props.selectedProject !== null && sameProject(project.project, props.selectedProject)}
       head={projectHead(node.head, project)}
-      renderRow={(session) => renderRow(session, true, false)}
+      renderRow={(session) => renderRow(session, true, false, project.nested.has(session.id))}
     />
   ))
   const machineDraft = (node: MachineNode) => (draft?.machine === node.head.machine ? draft : null)
@@ -441,7 +442,7 @@ function ProjectSection({ node, open, onToggle, headings, selected, head, render
             <div key={section.key} className="mx-status">
               <div className={`mx-status-head is-${section.key}`} data-tone={section.key} data-flip={`head:${node.key}:${section.key}`} aria-hidden="true">
                 <span className="mx-section-name">{section.name}</span>
-                <span className="mx-section-count mono" data-tone={section.key}>{section.sessions.length}</span>
+                <span className="mx-section-count mono" data-tone={section.key}>{section.sessions.filter((session) => !node.nested.has(session.id)).length}</span>
               </div>
               <div className="mx-rows" role="list" aria-label={`${section.name} in ${node.name}`}>{section.sessions.map(renderRow)}</div>
             </div>
