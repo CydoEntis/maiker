@@ -1247,6 +1247,11 @@ impl App {
             "Installing update… the daemon will restart when no sessions are open.".into(),
             false,
         );
+        // The install downloads a release, replaces the running program and rewrites the agents'
+        // settings. A test's running program is the test itself, so a test stops at the state.
+        if cfg!(test) {
+            return;
+        }
         self.spawn_bg(|| {
             let r = crate::cli::update::install_latest().map(|(v, exe)| {
                 (v, crate::cli::update::integrate_agents(&exe))
