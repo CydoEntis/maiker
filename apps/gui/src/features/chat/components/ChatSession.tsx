@@ -834,8 +834,9 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         agent={agent}
         composer={composer}
         conversation={link.conversation}
-        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet,
+        // and a chat over ACP offers none: the lists and the window's own answers are read from the agent's terminal program.
+        {...(link.acp !== true && abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         problem={dockProblem}
         question={question}
         helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
@@ -843,7 +844,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
         place={place}
         ended={ended}

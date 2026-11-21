@@ -21,7 +21,7 @@ const daemon = vi.hoisted(() => ({
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
   archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
-  startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
+  startAcpChat: vi.fn<(folder: string, agent: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string, choice?: { model?: string; effort?: string }) => Promise<null>>(() => Promise.resolve(null)),
   prewarmAgentSession: vi.fn(() => Promise.resolve()),
 }))
@@ -270,61 +270,53 @@ describe('starting a chat on another machine', () => {
   })
 })
 
-// ADR 0018: what the Chat view starts is a chat the daemon owns, with no terminal behind it.
+// ADR 0018: what the Chat view starts is a chat with the agent over ACP, with no terminal behind it.
 describe('starting a chat from the draft in the Chat view', () => {
   beforeEach(() => { localStorage.clear() })
 
-  it('starts a chat with no terminal, in the folder, and sends the first message with the model and effort picked', async () => {
+  it('starts the agent over ACP in the folder, and sends the first message as it was written', async () => {
     const setNewChatOpen = vi.fn()
 
     await starts({ openSessionsIn: 'chat', setNewChatOpen }).startNewChat(request({ model: 'opus', reasoning: 'high', message: 'Fix the login redirect' }))
 
-    expect(daemon.startChatSession).toHaveBeenCalledWith('/dev/app', 'claude', null, 'workspace-write')
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'claude')
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
-    expect(daemon.submitMessage).toHaveBeenCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'Fix the login redirect', { model: 'opus', effort: 'high' })
+    // The agent's own settings decide its model, so the draft's picks are not sent.
+    expect(daemon.submitMessage).toHaveBeenCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'Fix the login redirect')
     expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: '44' }, expect.stringContaining('Fix'))
     expect(setNewChatOpen).toHaveBeenCalledWith(false)
   })
 
-  it('starts in the mode picked, and without questions while the agent\'s Bypass Permissions switch is on', async () => {
-    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ mode: 'plan' }))
-    expect(daemon.startChatSession).toHaveBeenLastCalledWith('/dev/app', 'claude', null, 'read-only')
-    await starts({ openSessionsIn: 'chat', bypassOff: [] }).startNewChat(request({ agent: 'codex', mode: 'codexAuto' }))
-    expect(daemon.startChatSession).toHaveBeenLastCalledWith('/dev/app', 'codex', null, 'full-access')
-    await starts({ openSessionsIn: 'chat', bypassOff: [] }).startNewChat(request({ bypass: false }))
-    expect(daemon.startChatSession).toHaveBeenLastCalledWith('/dev/app', 'claude', null, 'workspace-write')
+  it('starts every agent that way, Gemini too', async () => {
+    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'codex', mode: 'codexAuto' }))
+    expect(daemon.startAcpChat).toHaveBeenLastCalledWith('/dev/app', 'codex')
+    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'gemini' }))
+    expect(daemon.startAcpChat).toHaveBeenLastCalledWith('/dev/app', 'gemini')
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
   })
 
-  it('sends nothing when the draft has no message, and picks nothing the person left alone', async () => {
-    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ reasoning: 'default' }))
+  it('sends nothing when the draft has no message', async () => {
+    await starts({ openSessionsIn: 'chat' }).startNewChat(request({}))
+
     expect(daemon.submitMessage).not.toHaveBeenCalled()
-
-    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ reasoning: 'default', message: 'hello' }))
-    expect(daemon.submitMessage).toHaveBeenLastCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'hello', undefined)
-  })
-
-  it('refuses a mode the daemon has no chat for, and starts nothing', async () => {
-    await expect(starts({ openSessionsIn: 'chat' }).startNewChat(request({ mode: 'acceptEdits' }))).rejects.toThrow('cannot start a chat in this permission mode')
-    expect(daemon.startChatSession).not.toHaveBeenCalled()
   })
 
   it('leaves the page open with its message when the chat cannot start', async () => {
     const setNewChatOpen = vi.fn()
-    daemon.startChatSession.mockRejectedValueOnce(new Error('Claude Code is not installed'))
+    daemon.startAcpChat.mockRejectedValueOnce(new Error('The program `claude-agent-acp` of agent `claude` was not found'))
 
-    await expect(starts({ openSessionsIn: 'chat', setNewChatOpen }).startNewChat(request({ message: 'hello' }))).rejects.toThrow('not installed')
+    await expect(starts({ openSessionsIn: 'chat', setNewChatOpen }).startNewChat(request({ message: 'hello' }))).rejects.toThrow('was not found')
 
     expect(setNewChatOpen).not.toHaveBeenCalled()
     expect(daemon.submitMessage).not.toHaveBeenCalled()
   })
 
-  it('still starts Gemini, a saved conversation and anything in the Terminal view as the agent\'s own session', async () => {
-    await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'gemini' }))
+  it('still starts a saved conversation and anything in the Terminal view as the agent\'s own session', async () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(request({ resume: ID }))
     await starts({ openSessionsIn: 'terminal' }).startNewChat(request({}))
 
-    expect(daemon.startAgentSession).toHaveBeenCalledTimes(3)
-    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.startAgentSession).toHaveBeenCalledTimes(2)
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
   })
 
   it('starts no agent ahead of the first message for a chat that has no terminal', () => {

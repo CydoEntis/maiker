@@ -27,7 +27,7 @@ const daemon = vi.hoisted(() => ({
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
   startAgentSession: vi.fn<(folder: string, agent: string, flags: readonly string[]) => Promise<void>>(),
-  startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string) => Promise<{ id: number; generation: number }>>(),
+  startAcpChat: vi.fn<(folder: string, agent: string) => Promise<{ id: number; generation: number }>>(),
   archiveConversationOnDaemon: vi.fn<(conversation: { id: string }, archived: boolean) => Promise<void>>(),
   closeSessionWithUndo: vi.fn<(conversation: { id: string }) => Promise<void>>(),
   undoCloseSession: vi.fn<(conversation: { id: string }) => Promise<void>>(),
@@ -157,7 +157,7 @@ describe('desktop terminal multiplexer', () => {
     await user.keyboard('{Control>}{Alt>}{Shift>}t{/Shift}{/Alt}{/Control}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
-    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
     expect(await screen.findByRole('region', { name: 'Shell in ~' })).toHaveTextContent('Pane 5')
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
@@ -172,7 +172,7 @@ describe('desktop terminal multiplexer', () => {
     expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
     expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
-    expect(daemon.startChatSession).not.toHaveBeenCalled()
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
   })
 
@@ -1426,13 +1426,13 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     // What the daemon lists once it has started the chat: a conversation of its own, with no pane.
     const chat: Conversation = { id: '5', generation: 1, execution: 'Structured', title: 'fix the cart', named: true, project: 'a', folder: `${HOME}/a`, cwd: `${HOME}/a`, repo: null, branch: 'working tree', provider: 'Claude', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude', process: 'claude', chat: { conversation: 5, generation: 1 }, details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } } }
     daemon.loadConversations.mockResolvedValue([chat])
-    daemon.startChatSession.mockResolvedValue({ id: 5, generation: 1 })
+    daemon.startAcpChat.mockResolvedValue({ id: 5, generation: 1 })
     daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
     daemon.submitMessage.mockResolvedValue(null)
     await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
     // ADR 0018: the Chat view starts a chat the daemon owns, never the agent's terminal program.
-    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(`${HOME}/a`, 'claude', null, expect.stringMatching(/^(workspace-write|full-access)$/)) })
+    await waitFor(() => { expect(daemon.startAcpChat).toHaveBeenCalledWith(`${HOME}/a`, 'claude') })
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
     // The chat it started is listed and is what the window shows: it must never run where nobody sees it.

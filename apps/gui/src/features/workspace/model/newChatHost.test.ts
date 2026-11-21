@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageOf, chatPermissions, launchFlags, startsBypassed, withBypass } from './newChatHost'
+import { ageOf, launchFlags, startsBypassed, withBypass } from './newChatHost'
 
 
 describe('launchFlags', () => {
@@ -87,29 +87,3 @@ describe('the starting permission mode', () => {
   })
 })
 
-describe('what a chat started from the draft may do', () => {
-  it('asks first in each agent\'s usual mode, and skips the questions while its Bypass Permissions switch is on', () => {
-    expect(chatPermissions('claude', 'default', false)).toBe('workspace-write')
-    expect(chatPermissions('codex', 'codexAuto', false)).toBe('workspace-write')
-    expect(chatPermissions('claude', 'default', true)).toBe('full-access')
-    expect(chatPermissions('codex', 'codexAuto', true)).toBe('full-access')
-  })
-
-  it('keeps a narrower mode picked for Claude while the switch is on, and Codex\'s switch wins as it does on its launch line', () => {
-    expect(chatPermissions('claude', 'plan', true)).toBe('read-only')
-    expect(chatPermissions('codex', 'codexReadOnly', true)).toBe('full-access')
-    expect(chatPermissions('codex', 'codexReadOnly', false)).toBe('read-only')
-  })
-
-  it('starts Claude in its usual mode when Bypass permissions is picked with the switch off', () => {
-    expect(chatPermissions('claude', 'bypassPermissions', false)).toBe('workspace-write')
-    expect(chatPermissions('claude', 'bypassPermissions', true)).toBe('full-access')
-    expect(chatPermissions('codex', 'codexFullAccess', false)).toBe('full-access')
-  })
-
-  it('has no posture for a mode the daemon cannot start a chat in', () => {
-    expect(chatPermissions('claude', 'acceptEdits', false)).toBeNull()
-    expect(chatPermissions('claude', 'auto', true)).toBeNull()
-    expect(chatPermissions('codex', 'nonsense', false)).toBeNull()
-  })
-})

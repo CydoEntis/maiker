@@ -46,6 +46,8 @@ export const ApprovalRequestSchema = z.object({
   reason: z.string().nullable().optional(),
   changes: z.array(z.object({ path: z.string(), kind: z.string(), diff: z.string() })).default([]),
   choices: z.array(ApprovalChoiceSchema).default([]),
+  // The agent's own words for each choice, in the same order (ACP); empty where it gave none.
+  choice_labels: z.array(z.string()).default([]),
   // A command the daemon will remember an approval of for the project.
   can_remember: z.boolean().default(false),
   // What a user-input request asks (Codex); empty for every other kind.

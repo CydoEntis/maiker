@@ -48,6 +48,8 @@ export type ComposerFacts = {
   modeDanger: boolean
   /** The model the agent's own file says it uses; null when it has not said. */
   model: string | null
+  /** The agent runs over ACP: its model and permissions are its own settings, so the box names the agent and offers neither. */
+  ownSettings?: boolean | undefined
   /** The effort the agent's own files say it runs at, when they do. */
   effort?: string | null | undefined
   /** For a chat that follows the agent's terminal and can type into it: send the agent one of its own commands (`/model x`). */
@@ -489,6 +491,14 @@ function EndedLine({ ended }: { ended: EndedActions }) {
 function AgentControls({ agent, conversation, facts, readOnly, lockedWhileWorking }: { agent: ChatAgent; conversation: number | undefined; facts: ComposerFacts; readOnly: boolean; lockedWhileWorking: string | null }) {
   const { agentChips } = facts
   const live = readOnly ? facts.onCommand : undefined
+  if (facts.ownSettings === true) {
+    return (
+      <span className="mx-model-button is-static" title={`${agentLabel(agent)} uses the model and permissions from its own settings.`}>
+        <span className="mx-model-icon"><AppIcon process={agent} size={14} /></span>
+        <span className="mx-model-name">{agentLabel(agent)}</span>
+      </span>
+    )
+  }
   return (
     <>
       {agentChips !== undefined ? (

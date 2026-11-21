@@ -37,7 +37,9 @@ const ConversationSummarySchema = z.object({
   id: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
   execution: z.enum(['Native', 'Structured']),
-  provider: z.enum(['Codex', 'Claude']),
+  provider: z.enum(['Codex', 'Claude', 'Acp']),
+  // The `[[agents]]` name of an agent run over ACP; absent for the others and from an older daemon.
+  agent: z.string().nullable().default(null),
   cwd: z.string(),
   worktree: z.string().nullable(),
   state: z.enum(['Stopped', 'Running', 'Transferring', 'RecoveryRequired']),
@@ -1230,6 +1232,14 @@ export async function startChatSession(folder: string, agent: 'claude' | 'codex'
   })
 }
 
+/**
+ * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0018). Only the agent's name is sent: the
+ * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
+ */
+export async function startAcpChat(folder: string, agent: string): Promise<{ id: number; generation: number }> {
+  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent })
+}
+
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
 export async function connectAgent(agent: 'claude' | 'codex' | 'gemini', configDir?: string): Promise<void> {
   // `configDir` is the folder of one pane's agent: without it the app's own environment decides which folder is repaired.
@@ -1533,18 +1543,23 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
   // (ADR 0003). A followed pane's conversation is read-only and belongs to that pane, so it is not one.
   const chatSession = summary.execution === 'Structured' && summary.native_term === null
   const root = summary.root
+  // A chat over ACP is named by its agent (ADR 0018); the others by their provider.
+  const acp = summary.provider === 'Acp'
+  const agent = acp ? (summary.agent ?? 'agent') : summary.provider.toLowerCase()
+  const provider: Conversation['provider'] = summary.provider === 'Acp' ? (agent === 'claude' ? 'Claude' : 'Codex') : summary.provider
+  const label = acp ? agent.charAt(0).toUpperCase() + agent.slice(1) : summary.provider
 
   return {
     id: String(summary.id),
     generation: summary.generation,
     execution: summary.execution,
-    title: summary.title ?? `${summary.provider} conversation ${String(summary.id)}`,
+    title: summary.title ?? `${label} conversation ${String(summary.id)}`,
     archived: summary.archived,
     named: summary.title !== null,
     project,
     folder: chatSession && root !== null ? root : cwd,
     branch: summary.branch ?? workspace?.git?.branch ?? 'working tree',
-    provider: summary.provider,
+    provider,
     status,
     updated: null,
     model: 'Provider default',
@@ -1558,9 +1573,9 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           cwd,
           checkout: summary.worktree,
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
-          agent: summary.provider.toLowerCase(),
-          process: summary.provider.toLowerCase(),
-          chat: { conversation: summary.id, generation: summary.generation, ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
+          agent,
+          process: agent,
+          chat: { conversation: summary.id, generation: summary.generation, ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
           details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail) },
         }
       : {}),

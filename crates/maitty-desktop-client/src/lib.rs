@@ -2122,6 +2122,53 @@ pub async fn create_conversation(
     }
 }
 
+/// Start a chat with `agent` over ACP in `cwd`. Only the agent's name is sent: the daemon picks
+/// its program from its own config, so this app never names a program to run.
+pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon_executable: PathBuf) -> Result<Value> {
+    let target = acp_start_target(cwd, agent)?;
+    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch: None }), daemon_executable).await?;
+    match reply {
+        Reply::ConversationStarted { id, generation } => Ok(json!({"id": id, "generation": generation})),
+        _ => bail!("The Maiker service gave an answer this app does not understand (conversation start). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
+    if !maitty_shared::conversation::acp_agent_name(&agent) {
+        bail!("{agent:?} is not an agent's name");
+    }
+    let cwd = cwd
+        .canonicalize()
+        .context("The project folder is not there. It may have been moved or deleted")?;
+    if !cwd.is_dir() {
+        bail!("The project path is a file, not a folder.");
+    }
+    Ok(StartTarget::Acp { agent, cwd })
+}
+
+#[cfg(test)]
+mod acp_start_tests {
+    use super::{StartTarget, acp_start_target};
+
+    #[test]
+    fn an_acp_start_names_the_agent_and_a_folder_that_is_there() {
+        let folder = std::env::temp_dir().canonicalize().unwrap();
+
+        let target = acp_start_target(folder.clone(), "claude".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Acp { agent: "claude".into(), cwd: folder });
+    }
+
+    #[test]
+    fn an_acp_start_refuses_a_name_that_is_no_agents_a_missing_folder_and_a_file() {
+        let file = std::env::current_exe().unwrap();
+
+        assert!(acp_start_target(std::env::temp_dir(), "Not A Name".into()).unwrap_err().to_string().contains("not an agent's name"));
+        assert!(acp_start_target("/no/such/folder/anywhere".into(), "claude".into()).unwrap_err().to_string().contains("not there"));
+        assert!(acp_start_target(file, "claude".into()).unwrap_err().to_string().contains("a file"));
+    }
+}
+
 pub fn claude_executable() -> Result<PathBuf> {
     #[cfg(windows)]
     {
