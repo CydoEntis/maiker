@@ -5,7 +5,8 @@ import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/
 import { toast } from '@/lib/toast'
 import { DEFAULT_PICK, everywhereModel, writeChoice } from '@/features/chat/agentChoice'
 import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, resumeChatSession, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
-import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
+import { LOCAL_MACHINE, askMachineList, remoteChatId, startSessionOnMachine } from '@/api/machines'
+import { conversationKey } from '@/api/conversationKey'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -242,20 +243,36 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (!beginStart(mode)) throw new Error(ANOTHER_START_RUNNING)
     try {
       // A saved conversation opens as a chat on the agent's own session, with what was said before as its history.
+      const there = request.machine === LOCAL_MACHINE ? null : machinesRef.current.get(request.machine)
+      if (there === undefined) throw new Error(`${request.machineName} is not one of this computer's machines`)
+      if (there !== null && request.resume !== null) throw new Error('A saved conversation is resumed on the computer that saved it')
       const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
-        ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions) : await resumeChatSession(request.folder, agent, request.resume, permissions)
-        : await startAcpChat(request.folder, request.acp ?? agent)
-      const id = String(started.id)
+        ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions, request.machine) : await resumeChatSession(request.folder, agent, request.resume, permissions)
+        : await startAcpChat(request.folder, request.acp ?? agent, request.machine)
+      // Another machine's chat is `build/c12`, and its feed, box and sends are kept under a key that holds the machine too.
+      const id = there === null ? String(started.id) : remoteChatId(started.id, there.state.name)
+      const key = there === null ? started.id : conversationKey(request.machine, started.id)
+      if (key === null) throw new Error(`${request.machineName} gave the chat a number this window cannot keep apart from other machines'`)
       const choice: WireChoice = permissions === undefined ? {} : { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
       if (permissions !== undefined) {
         rememberConversationPermissions(id, permissions)
         // The chat's own model and effort chips read this, and the first message carries it to the daemon.
-        writeChoice(started.id, { model, reasoning })
+        writeChoice(key, { model, reasoning })
       }
       const named = request.name ?? (request.message === '' ? '' : nameFromMessage(request.message))
       if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
-      await queryClient.invalidateQueries({ queryKey: ['conversations'] })
-      await queryClient.query({ queryKey: ['conversations'], queryFn: loadConversations, staleTime: 0 })
+      if (there === null) {
+        await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+        await queryClient.query({ queryKey: ['conversations'], queryFn: loadConversations, staleTime: 0 })
+      } else {
+        // The machine tells its new chat in its next list, and the pane opens when it does (see `startOnMachine`).
+        void askMachineList(request.machine).catch((error: unknown) => { console.warn(`Could not ask ${request.machineName} for its session list`, error) })
+        const deadline = Date.now() + REMOTE_START_WAIT_MS
+        while (!machinesRef.current.get(request.machine)?.conversations.some((item) => item.id === id)) {
+          if (Date.now() >= deadline) throw new Error(`${request.machineName} started the chat but did not list it. It shows once the machine reports its sessions`)
+          await new Promise((resolve) => { setTimeout(resolve, REMOTE_START_POLL_MS) })
+        }
+      }
       // The page closes in the same update as the pane opens, so nothing shows in between (see `startAgentSession`).
       const settle = () => {
         if (!background) setNewChatOpen(false)
@@ -271,16 +288,16 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
         })
       }
       if (request.message === '') return
-      const operation = reserveOperation(started.id, { receipt: null, queued: [] })
+      const operation = reserveOperation(key, { receipt: null, queued: [] })
       // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
-      await submitMessage({ id, generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
-        updateComposer(started.id, (state) => ({ ...state, draft: request.message }))
+      await submitMessage({ id: String(key), generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
+        updateComposer(key, (state) => ({ ...state, draft: request.message }))
         toast.failed(`The chat started, but ${request.acp ?? agentLabel(agent)} did not take the first message`, error)
       })
     } finally {
       endStart(mode)
     }
-  }, [bypassOff, beginStart, endStart, queryClient, setNewChatOpen, setStartedFrom, setLayout])
+  }, [bypassOff, beginStart, endStart, queryClient, setNewChatOpen, setStartedFrom, setLayout, machinesRef])
 
   // `background` leaves the new session unopened, listed in the sidebar, and the window as it was.
   const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** This session's Bypass Permissions choice, over Settings. */ bypass?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
@@ -401,7 +418,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // other; one in the `background` is not opened and leaves the page open for the next.
   const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The Maiker service is not reachable')
-    if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    if (request.machine !== LOCAL_MACHINE) {
+      if (!chatView) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+      // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0018).
+      // Its worktree is made by that daemon first; its checkout's branch is never switched from here (ADR 0007).
+      if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
+      const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+      return startDirectChat({ ...request, folder: there, branch: null }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    }
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.

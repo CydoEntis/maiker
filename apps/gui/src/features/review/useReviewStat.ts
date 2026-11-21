@@ -22,6 +22,8 @@ export function useReviewStat(conversation: Conversation): ReviewStat | null {
     enabled:
       desktop &&
       conversation.kind !== 'terminal' &&
+      // Another machine's files are not here to count.
+      conversation.machine === undefined &&
       conversation.isGitRepository !== false &&
       conversation.generation !== undefined,
     retry: false,

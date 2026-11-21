@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 121;
+pub const PROTOCOL_VERSION: u32 = 122;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -431,8 +431,9 @@ pub struct AllowedCommand {
 /// in the change that removes, renames or retypes anything an older peer reads or writes, or
 /// that adds a value inside a message it is still sent (a new `Status`, say): such a peer would
 /// misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0017): a peer before
-/// it cannot read a list of conversations that holds one.
-pub const COMPATIBLE_SINCE: u32 = 121;
+/// it cannot read a list of conversations that holds one. 122 added a start a daemon before it
+/// cannot read (`StartTarget::Agent`), so a client would wait on a chat that never starts.
+pub const COMPATIBLE_SINCE: u32 = 122;
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
 /// a build that says nothing, which then talks only to its own version).
@@ -2660,7 +2661,7 @@ impl WorkspaceInfo {
 impl ServerMsg {
     /// The first version whose client reads this message. The daemon does not send a message to
     /// a client older than that. A message added while `COMPATIBLE_SINCE` stays behind gets its
-    /// own arm here; everything else is as old as the window. 121 moved the window, so every
+    /// own arm here; everything else is as old as the window. 122 moved the window, so every
     /// message there is today is as old as it.
     pub fn introduced_in(&self) -> u32 {
         COMPATIBLE_SINCE
@@ -3142,7 +3143,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 121);
+        assert_eq!(PROTOCOL_VERSION, 122);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3629,7 +3630,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 121);
+        assert_eq!(PROTOCOL_VERSION, 122);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -4912,10 +4913,36 @@ mod tests {
 
         assert!(decode::<OldProvider>(&acp).is_err());
         assert!(decode::<OldStartTarget>(&start).is_err());
-        assert_eq!((PROTOCOL_VERSION, COMPATIBLE_SINCE), (121, 121));
         assert!(!speaks_with(120, 115), "a peer from before the provider");
         assert!(!speaks_with(119, 0));
-        assert!(speaks_with(121, 121));
+    }
+
+    /// Version 122 added a start that names no program (`StartTarget::Agent`). A daemon from
+    /// before it cannot decode the request, so the window moved and such a peer is refused.
+    #[test]
+    fn a_peer_from_before_the_daemon_found_start_is_refused_because_it_cannot_read_one() {
+        use crate::conversation::{ApprovalPolicy, Provider, Sandbox, StartTarget};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldStartTarget {
+            Create(serde_json::Value),
+            Session { settings: serde_json::Value, thread_id: String },
+            Conversation { id: u64, generation: u64 },
+            Acp { agent: String, cwd: std::path::PathBuf },
+        }
+        let target = StartTarget::Agent {
+            provider: Provider::Claude,
+            cwd: "/code".into(),
+            sandbox: Sandbox::WorkspaceWrite,
+            approval_policy: ApprovalPolicy::OnRequest,
+        };
+        let start = rmp_serde::to_vec_named(&target).unwrap();
+
+        assert!(decode::<OldStartTarget>(&start).is_err());
+        assert_eq!(decode::<StartTarget>(&start).unwrap(), target);
+        assert_eq!((PROTOCOL_VERSION, COMPATIBLE_SINCE), (122, 122));
+        assert!(!speaks_with(121, 121), "a peer from before the daemon-found start");
+        assert!(speaks_with(122, 122));
     }
 
     #[test]
@@ -4939,7 +4966,7 @@ mod tests {
         assert_eq!((codex.agent_label(), acp.agent_label()), ("Codex".to_owned(), "gemini".to_owned()));
     }
 
-    /// Since 121 moved the window, no message is newer than it.
+    /// Since 122 moved the window, no message is newer than it.
     #[test]
     fn every_message_is_as_old_as_the_window() {
         let ask = ClientMsg::Query(Query::MachineFacts { tag: 1 });

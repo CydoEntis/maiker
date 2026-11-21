@@ -1433,7 +1433,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
 
     // ADR 0018: the Chat view starts a chat the daemon owns, never the agent's terminal program.
-    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(`${HOME}/a`, 'claude', null, expect.stringMatching(/^(workspace-write|full-access)$/)) })
+    await waitFor(() => { expect(daemon.startChatSession).toHaveBeenCalledWith(`${HOME}/a`, 'claude', null, expect.stringMatching(/^(workspace-write|full-access)$/), 0) })
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.startShellSession).not.toHaveBeenCalled()
     // The chat it started is listed and is what the window shows: it must never run where nobody sees it.

@@ -22,7 +22,7 @@ impl Daemon {
         let (target, program) = self.acp_target(target)?;
         let identity = match target {
             // `acp_target` turned it into a start with the config's own program.
-            StartTarget::Acp { .. } => bail!("An ACP start was not resolved"),
+            StartTarget::Acp { .. } | StartTarget::Agent { .. } => bail!("A start by name was not resolved"),
             StartTarget::Create(settings)
             | StartTarget::Session {
                 settings,
@@ -195,6 +195,21 @@ impl Daemon {
                 };
                 Ok((StartTarget::Create(settings), Some(program)))
             }
+            StartTarget::Agent { provider, cwd, sandbox, approval_policy } => {
+                let (executable, config_root) = own_agent(provider)?;
+                let settings = LaunchSettings {
+                    agent: None,
+                    provider,
+                    executable,
+                    config_root,
+                    cwd,
+                    model: None,
+                    model_provider: None,
+                    approval_policy,
+                    sandbox,
+                };
+                Ok((StartTarget::Create(settings), None))
+            }
             StartTarget::Create(settings) | StartTarget::Session { settings, .. }
                 if settings.provider == Provider::Acp =>
             {
@@ -213,6 +228,41 @@ impl Daemon {
         }
     }
 
+}
+
+const CODEX_PROGRAM: &str = if cfg!(windows) { "codex.exe" } else { "codex" };
+
+/// The program and the settings folder of `provider`'s agent on this machine, for a start that
+/// names neither (`StartTarget::Agent`): what a terminal pane here would run and read.
+fn own_agent(provider: Provider) -> Result<(PathBuf, PathBuf)> {
+    let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+    match provider {
+        Provider::Claude => {
+            let program = crate::daemon::conversation::side::claude_on_path()
+                .ok_or_else(|| anyhow::anyhow!("Claude Code is not installed on this machine: no `claude` on its PATH"))?;
+            let folder = std::env::var_os("CLAUDE_CONFIG_DIR")
+                .map(PathBuf::from)
+                .or_else(|| home.map(|home| home.join(".claude")))
+                .ok_or_else(|| anyhow::anyhow!("This machine has no home folder to keep Claude Code's settings in"))?;
+            Ok((program, folder))
+        }
+        Provider::Codex => {
+            let search = crate::login_path::effective_path().or_else(|| std::env::var_os("PATH")).unwrap_or_default();
+            let program = codex_from(&search)
+                .ok_or_else(|| anyhow::anyhow!("Codex is not installed on this machine: no `codex` on its PATH"))?;
+            Ok((program, crate::config::codex_config_dir()))
+        }
+        Provider::Gemini => bail!("Gemini has no structured chat; start it in a terminal"),
+        Provider::Acp => bail!("An agent run over ACP is started by its name, not by a provider"),
+    }
+}
+
+/// `codex` on `search`, the PATH a terminal pane's shell starts with.
+fn codex_from(search: &std::ffi::OsStr) -> Option<PathBuf> {
+    crate::shim::find_on_path(CODEX_PROGRAM, search, Path::new(""), &[])
+}
+
+impl Daemon {
     /// The program of the agent `name`: the config's entry, else the one installed from the ACP
     /// registry (ADR 0019). The installed list is one small file, read when a chat starts.
     fn acp_program(&self, name: &str) -> Result<AcpProgram> {
@@ -364,6 +414,43 @@ fn installed_agent(
         args: kept.args,
         env: kept.env,
     })
+}
+
+#[cfg(test)]
+mod own_agent_tests {
+    use super::{CODEX_PROGRAM, codex_from, own_agent};
+    use crate::conversation::Provider;
+
+    #[test]
+    fn codex_is_the_one_on_the_path_a_pane_would_run_and_none_when_it_is_not_there() {
+        let root = std::env::temp_dir().join(format!("maiker-own-agent-{}", std::process::id()));
+        let (folder, elsewhere) = (root.join("has"), root.join("has-not"));
+        std::fs::create_dir_all(&folder).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        let program = folder.join(CODEX_PROGRAM);
+        std::fs::write(&program, "").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let found = codex_from(folder.as_os_str());
+        let missing = codex_from(elsewhere.as_os_str());
+        std::fs::remove_dir_all(&root).unwrap();
+
+        assert_eq!(found, Some(program));
+        assert_eq!(missing, None);
+    }
+
+    #[test]
+    fn an_agent_with_no_structured_chat_of_its_own_is_refused_in_words() {
+        let gemini = own_agent(Provider::Gemini).unwrap_err().to_string();
+        let acp = own_agent(Provider::Acp).unwrap_err().to_string();
+
+        assert!(gemini.contains("start it in a terminal"), "{gemini}");
+        assert!(acp.contains("started by its name"), "{acp}");
+    }
 }
 
 #[cfg(test)]

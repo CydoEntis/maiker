@@ -4,11 +4,12 @@ import type { Conversation } from '@/data/preview'
 import type { FailureKind, MachineState } from '@/api/machines'
 import { LOCAL_MACHINE, machineNameOf } from '@/api/machines'
 import type { Layout } from './layout'
+import { isListedChatSession } from './chatSession'
 
 /** What the window holds of one other machine: how its line is, and the sessions it last listed. */
 export type RemoteMachine = {
   state: MachineState
-  /** The terminal sessions of its last snapshot, with ids that carry the machine's name. */
+  /** The sessions of its last snapshot, terminals and chats, with ids that carry the machine's name. */
   conversations: readonly Conversation[]
   /** Its first snapshot has come: before that, a layout's panes for it are not known to be gone. */
   heard: boolean
@@ -25,7 +26,8 @@ export function remoteTerminals(machines: ReadonlyMap<number, RemoteMachine>): C
   return [...machines.values()]
     .sort((a, b) => a.state.name.localeCompare(b.state.name, undefined, { sensitivity: 'base' }))
     .flatMap((machine) => {
-      const terminals = machine.conversations.filter((item) => item.kind === 'terminal')
+      // Its terminal sessions, and the chat sessions its daemon started that are not put away.
+      const terminals = machine.conversations.filter((item) => item.kind === 'terminal' || isListedChatSession(item))
       return machine.state.state === 'connected' ? terminals : markConversationsDisconnected([...terminals])
     })
 }

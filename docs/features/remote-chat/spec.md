@@ -25,8 +25,8 @@ on the remote side has to change.
 
 ## Decision
 
-**Route the existing conversation messages by machine. No new message, no `PROTOCOL_VERSION`
-change.**
+**Route the existing conversation messages by machine.** Reading, sending and answering a chat needed no new
+message. Starting one in the Chat view did (protocol 122, below).
 
 - **Request lines.** The host keeps, per machine, a small pool of request connections beside the
   hub's long one, opened through the same hardened ssh line, **attach only** (never starts a
@@ -47,13 +47,34 @@ change.**
   that tails a file would be a second, unverified reader.
 - **Snapshots.** `conversationsFromSnapshot` keeps a remote machine's conversations and gives a
   pane a chat link carrying `machine` (the field already exists for attachments). A conversation
-  that belongs to a pane stays that pane's chat, as on this computer; a remote conversation with
-  no pane is not listed as its own session in v1.
+  that belongs to a pane stays that pane's chat, as on this computer. A chat that machine's daemon
+  started itself (structured, with no pane) is listed as a session of its own; a conversation that
+  follows a pane the list does not show is not.
 - **Status.** Unchanged. The remote daemon decides it and the window displays it (ADR 0003).
   Chat state reads the same snapshot status; a remote conversation cannot set a status that its
   own daemon did not.
 
 ## Starting a chat on a remote machine
+
+**In the Chat view** (ADR 0018) the start is a chat that machine's daemon runs itself, with no terminal session:
+
+- The window sends `Command::ConversationStart` over a request line with a target that names no program:
+  `StartTarget::Agent { provider, cwd, sandbox, approval_policy }` for Claude Code and Codex,
+  `StartTarget::Acp { agent, cwd }` for every other agent. The remote daemon finds the program on the PATH its
+  panes start with and the agent's settings folder in its own home (`own_agent` in
+  `daemon/conversation/commands/start.rs`), or says in words that the agent is not installed there. This needs
+  protocol 122 on both sides.
+- The folder is on the remote, so this computer does not look at it: it is sent only when it is one plain absolute
+  POSIX path (`remote_folder` in `maitty-desktop-client`), and the remote daemon checks that it is there.
+- The reply is vetted by `remote_chat::vet_chat_start`: only `Reply::ConversationStarted` passes.
+- The chat is listed as a session of that machine with the id `<machine>/c<number>` (`remoteChatId`); its feed,
+  box and sends are kept under the machine-and-number key the followed chats already use (`conversationKey`).
+  Rename, end, put away and undo go to that machine (`rename_conversation` and the others take a `machine`).
+- A new worktree is still made first by that machine's daemon (`Command::BranchWorktree`); the start then names
+  its folder. A saved conversation is resumed only on the computer that saved it.
+- An agent from the ACP registry is installed per machine: run `maiker agents install <id>` on that machine.
+
+**In the Terminal view** it is unchanged:
 
 The new chat page starts what a terminal start already does on this computer: a terminal session
 with the agent in it, followed by the first message held until the agent is ready

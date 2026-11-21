@@ -280,6 +280,16 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
     }
 
+    /// Where the start of a chat goes: `daemon`, taking only the new conversation's number and
+    /// generation from another machine.
+    pub fn start_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_start)
+    }
+
     /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
     /// plain absolute path, from another machine.
     pub fn worktree_daemon(

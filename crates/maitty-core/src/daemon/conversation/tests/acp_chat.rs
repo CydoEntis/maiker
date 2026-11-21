@@ -125,6 +125,28 @@ async fn a_client_names_an_acp_agent_and_never_its_program() {
 }
 
 #[tokio::test]
+async fn a_start_that_names_only_a_provider_is_refused_for_one_with_no_chat_of_its_own() {
+    let session = acp_session(&[]).await;
+    checked(session, |session| {
+        Box::pin(async move {
+            let cwd = session.fixture.record.binding.cwd.clone();
+            let target = StartTarget::Agent {
+                provider: Provider::Gemini,
+                cwd,
+                sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+                approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+            };
+
+            let refused = exchange(session, 620, start(target), None).await;
+
+            assert!(matches!(&refused, ServerMsg::Error(why) if why.contains("start it in a terminal")), "{refused:?}");
+            assert!(session.daemon.conversations.is_empty() && session.daemon.pending_starts.is_empty());
+        })
+    })
+    .await;
+}
+
+#[tokio::test]
 async fn a_permission_an_acp_agent_asks_for_waits_for_a_person_and_takes_their_answer() {
     let session = acp_session(&[]).await;
     checked(session, |session| {
