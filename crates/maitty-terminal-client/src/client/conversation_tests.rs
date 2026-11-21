@@ -21,6 +21,7 @@ fn conversation() -> ConversationSummary {
         root: None,
         branch: None,
         helpers: Vec::new(),
+        helper_ask: Vec::new(),
     }
 }
 

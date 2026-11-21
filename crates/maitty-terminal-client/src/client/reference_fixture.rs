@@ -128,6 +128,7 @@ pub(super) fn term(
         started_by: None,
         tab_of: None,
         helper_ask: Vec::new(),
+        started_by_chat: None,
         pr: None,
         queued: Vec::new(),
         own_turn_over: false,

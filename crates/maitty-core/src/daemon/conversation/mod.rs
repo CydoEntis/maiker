@@ -64,6 +64,9 @@ pub(super) struct State {
     /// only: they never set `status`.
     pub(super) helpers: Vec<crate::protocol::SubagentActivity>,
     pub(super) helpers_generation: u64,
+    /// Whether this chat's agent may start helper sessions, and what it waits on the person for
+    /// (ADR 0016). Not the provider's own `helpers` above.
+    pub(in crate::daemon) helper_consent: crate::daemon::helpers::HelperState,
 }
 
 /// How many answered approvals a conversation keeps; the oldest are dropped first.
@@ -93,6 +96,7 @@ impl State {
     pub(super) fn effective_status(&self) -> crate::protocol::Status {
         use crate::protocol::Status;
         if self.error.is_some()
+            || !self.helper_consent.asked.is_empty()
             || (matches!(self.status, Status::Done | Status::Idle) && self.checks.holds_done())
         {
             Status::Blocked

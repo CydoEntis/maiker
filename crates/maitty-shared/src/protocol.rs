@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 119;
+pub const PROTOCOL_VERSION: u32 = 120;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -455,6 +455,10 @@ pub const MACHINE_FACTS_SINCE: u32 = 119;
 /// The first version whose daemon signs in to GitHub itself (`SignInAgent::Github`, `SignInRequest::SignOut`).
 pub const GITHUB_SIGN_IN_SINCE: u32 = 119;
 
+/// The first version whose daemon reads `Command::AnswerChatHelpers` and lets a chat ask to start helpers
+/// (ADR 0016). An older one never fills `ConversationSummary::helper_ask`, so a client has nothing to answer there.
+pub const CHAT_HELPERS_SINCE: u32 = 120;
+
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
 /// a build that says nothing, which then talks only to its own version).
@@ -542,6 +546,11 @@ pub struct ConversationSummary {
     /// (ADR 0010). Display only. Empty from an older daemon.
     #[serde(default)]
     pub helpers: Vec<SubagentActivity>,
+    /// The helpers this chat asked to start and is waiting on you for, one task each (ADR 0016). Not
+    /// empty means it needs you, and `status` reads Blocked; `AnswerChatHelpers` answers it. Empty
+    /// from an older daemon.
+    #[serde(default)]
+    pub helper_ask: Vec<String>,
 }
 
 /// Which app a client is. A terminal session belongs to the app that started it, and only
@@ -1171,6 +1180,12 @@ pub enum Command {
     /// can (not from inside a pane), and only while the request is pending.
     AnswerHelpers {
         term: TermId,
+        choice: HelperChoice,
+    },
+    /// Your answer to a chat that asked to start helpers (`ConversationSummary::helper_ask`, ADR
+    /// 0016). Only you can (not a pane, not a chat's own runtime), and only while it asks.
+    AnswerChatHelpers {
+        conversation: crate::conversation::ConversationId,
         choice: HelperChoice,
     },
     RequestSecret {
@@ -2264,6 +2279,10 @@ pub struct TermInfo {
     /// The pane whose agent started this one, if one did.
     #[serde(default)]
     pub started_by: Option<TermId>,
+    /// The chat whose agent started this one, if one did (ADR 0016); never set with `started_by`.
+    /// None from an older daemon.
+    #[serde(default)]
+    pub started_by_chat: Option<crate::conversation::ConversationId>,
     /// The session whose tab this pane is in, when not its own (`Command::SetTabOf`).
     #[serde(default)]
     pub tab_of: Option<TermId>,
@@ -2663,6 +2682,7 @@ impl ClientMsg {
             | ClientMsg::Query(Query::AgentSignIn { request: SignInRequest::SignOut, .. }) => GITHUB_SIGN_IN_SINCE,
             ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::BypassOff, .. }) => BYPASS_SETTING_SINCE,
             ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::UpdateMachines, .. }) => UPDATE_MACHINES_SINCE,
+            ClientMsg::Command(Command::AnswerChatHelpers { .. }) => CHAT_HELPERS_SINCE,
             ClientMsg::Command(Command::SaveFile { .. })
             | ClientMsg::Query(Query::Repo {
                 request: crate::repo::RepoRequest::FileStamped { .. },
@@ -2715,6 +2735,31 @@ mod tests {
             KillServer { forget: bool },
         }
         let bytes = encode(&Command::DropPrewarm).unwrap();
+        assert!(decode::<OldCommand>(&bytes).is_err());
+        assert!(decode::<Command>(&bytes).is_ok());
+    }
+
+    /// Answering a chat's helper request is a new command: a daemon built before it cannot read it,
+    /// so it is asked only of one that can.
+    #[test]
+    fn a_chats_helper_answer_is_sent_only_to_a_daemon_that_reads_it() {
+        let answer = Command::AnswerChatHelpers {
+            conversation: crate::conversation::ConversationId(7),
+            choice: HelperChoice::Allow,
+        };
+        assert_eq!(ClientMsg::Command(answer.clone()).introduced_in(), CHAT_HELPERS_SINCE);
+        assert_eq!(
+            ClientMsg::Command(Command::AnswerHelpers { term: 1, choice: HelperChoice::Allow }).introduced_in(),
+            COMPATIBLE_SINCE,
+            "a pane's answer is as old as the window"
+        );
+
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldCommand {
+            AnswerHelpers { term: TermId, choice: HelperChoice },
+        }
+        let bytes = encode(&answer).unwrap();
         assert!(decode::<OldCommand>(&bytes).is_err());
         assert!(decode::<Command>(&bytes).is_ok());
     }
@@ -3052,6 +3097,7 @@ mod tests {
         // `root` and `branch` (a chat session's project, ADR 0003) are defaulted too.
         assert_eq!((summary.root, summary.branch), (None, None));
         assert!(summary.helpers.is_empty(), "an older daemon reports no helpers");
+        assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
     }
 
     /// A message held for a starting agent is a new command, and the news that a conversation
@@ -3089,7 +3135,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 119);
+        assert_eq!(PROTOCOL_VERSION, 120);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3580,7 +3626,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 119);
+        assert_eq!(PROTOCOL_VERSION, 120);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()

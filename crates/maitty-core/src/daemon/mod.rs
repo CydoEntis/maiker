@@ -189,8 +189,8 @@ pub enum Ev {
         branch: String,
         cmd: Option<String>,
         split: Option<TermId>,
-        /// The pane that asked, noted when it asked: its connection is usually gone by now.
-        by: Option<TermId>,
+        /// Whose agent asked, noted when it asked: its connection is usually gone by now.
+        by: Option<helpers::Starter>,
         /// The repo's setup (its on_create hook) has run: open what was asked for.
         set_up: bool,
         result: Result<(PathBuf, String), String>,
@@ -586,7 +586,7 @@ struct Daemon {
     next_once: bool,
     /// The pane the next session is started for, when its connection can't say (the
     /// worktree it asked for took a while).
-    next_starter: Option<TermId>,
+    next_starter: Option<helpers::Starter>,
     /// The prewarmed agent: (repo, its worktree, its pane), and whether one is being made.
     spare: Option<(PathBuf, PathBuf, TermId)>,
     spare_making: bool,
@@ -969,18 +969,20 @@ impl Daemon {
             && matches!(
                 cmd,
                 Command::ConversationStart { .. }
-                    | Command::NewWorkspace { .. }
                     | Command::NewTab { .. }
                     | Command::NewFleet { .. }
                     | Command::NewShip { .. }
                     | Command::Split { .. }
-                    | Command::NewWorktree { .. }
                     | Command::BranchWorktree { .. }
                     | Command::Popup { .. }
+                    // A helper is an agent on a task. A bare shell is not one, and nothing a chat
+                    // could do with it goes through the helper consent (ADR 0016).
+                    | Command::NewWorkspace { cmd: None, .. }
+                    | Command::NewWorktree { cmd: None, agent: None, .. }
             )
         {
             anyhow::bail!(
-                "Structured runtimes cannot start descendants until conversation-owned helper consent is supported"
+                "A chat may start only helpers: an agent on a task, in a new session or worktree"
             );
         }
         match cmd {
@@ -1257,7 +1259,9 @@ impl Daemon {
                 anyhow::bail!("snoozing a session is yours to do, not a pane's")
             }
             // A session may not let itself (or another) start helpers.
-            Command::AnswerHelpers { .. } if self.client_is_agent(client) => {
+            Command::AnswerHelpers { .. } | Command::AnswerChatHelpers { .. }
+                if self.client_is_agent(client) =>
+            {
                 anyhow::bail!("starting helpers is yours to allow, not a pane's")
             }
             _ if structured => {
@@ -3794,6 +3798,7 @@ impl Daemon {
                         timeline: t.timeline.iter().cloned().collect(),
                         subagents: t.subagents.iter().map(|(_, k)| k.clone()).collect(),
                         started_by: t.started_by,
+                        started_by_chat: t.started_by_chat,
                         tab_of: t.tab_of.filter(|o| self.terms.contains_key(o)),
                         helper_ask: t.helpers.asked.clone(),
                         pr: self.pr_of(t),
@@ -3889,33 +3894,48 @@ impl Daemon {
         .to_string()
     }
 
-    /// The pane a start comes from, if it comes from one. Only a connection that proved it
-    /// is that pane (its secret) counts: a session can't be hung on a pane by naming it.
-    fn starter(&mut self, client: ClientId) -> Option<TermId> {
-        self.next_starter
-            .take()
-            .or_else(|| self.clients.get(&client).and_then(|c| c.from))
-            .filter(|t| self.terms.contains_key(t))
+    /// Whose agent a start comes from, if it comes from one. Only a connection that proved it
+    /// is that pane (its secret), or that chat's current runtime (its identity), counts: a
+    /// session can't be hung on another by naming it.
+    fn starter(&mut self, client: ClientId) -> Option<helpers::Starter> {
+        use helpers::Starter;
+        let noted = self.next_starter.take();
+        let by = noted.or_else(|| {
+            let client = self.clients.get(&client)?;
+            client.from.map(Starter::Pane).or_else(|| {
+                client
+                    .structured
+                    .filter(|owner| self.structured_current(*owner))
+                    .map(|owner| Starter::Chat(owner.conversation))
+            })
+        })?;
+        match by {
+            Starter::Pane(term) => self.terms.contains_key(&term),
+            Starter::Chat(id) => self.conversations.iter().any(|record| record.id == id),
+        }
+        .then_some(by)
     }
 
-    /// The pane a start comes from, once it may start `task` and there's room for it. A
+    /// Whose agent a start comes from, once it may start `task` and there's room for it. A
     /// session another agent starts is a helper (see `helpers.rs` for who may), and each helper
     /// runs builds and tests of its own: an agent that starts ten takes the whole machine. Past
     /// `sessions.helpers_at_once` of its own working at once the start is refused, with what to
     /// do instead.
-    fn starting(&mut self, client: ClientId, task: &str) -> Result<Option<TermId>> {
-        if self
-            .clients
-            .get(&client)
-            .is_some_and(|client| client.structured.is_some())
-        {
-            anyhow::bail!(
-                "Structured runtimes cannot start descendants until conversation-owned helper consent is supported"
-            );
-        }
+    fn starting(&mut self, client: ClientId, task: &str) -> Result<Option<helpers::Starter>> {
         // A worktree asked for earlier was let through then: don't strand it now.
         let let_through = self.next_starter.is_some();
         let by = self.starter(client);
+        // A chat's runtime that is no longer the current one starts nothing, and is never read as
+        // a person, who is not asked and not counted.
+        if by.is_none()
+            && !let_through
+            && self
+                .clients
+                .get(&client)
+                .is_some_and(|client| client.structured.is_some())
+        {
+            anyhow::bail!("This chat's runtime is no longer current, so it starts nothing");
+        }
         if let Some(by) = by
             && !let_through
         {
@@ -3933,17 +3953,22 @@ impl Daemon {
 
     fn busy_helpers(
         &self,
-        by: TermId,
+        by: helpers::Starter,
         except: Option<crate::conversation::ConversationId>,
     ) -> usize {
         let native = self
             .terms
             .values()
             .filter(|t| {
-                t.started_by == Some(by)
+                (by.pane().is_some_and(|pane| t.started_by == Some(pane))
+                    || by.chat().is_some_and(|chat| t.started_by_chat == Some(chat)))
                     && (t.status == Status::Working || t.born.elapsed() < HELPER_SETTLES)
             })
             .count();
+        // Only a pane starts a chat as its helper; a chat's own starts are sessions.
+        let Some(by) = by.pane() else {
+            return native;
+        };
         native
             + self
                 .conversation_states
@@ -3964,10 +3989,11 @@ impl Daemon {
                 .count()
     }
 
-    /// Note which pane's agent started `term`.
-    fn started(&mut self, term: TermId, by: Option<TermId>) {
+    /// Note whose agent started `term`.
+    fn started(&mut self, term: TermId, by: Option<helpers::Starter>) {
         if let Some(t) = self.terms.get_mut(&term) {
-            t.started_by = by.filter(|b| *b != term);
+            t.started_by = by.and_then(helpers::Starter::pane).filter(|b| *b != term);
+            t.started_by_chat = by.and_then(helpers::Starter::chat);
         }
     }
 
@@ -4282,10 +4308,10 @@ mod tests {
 
         // A client of the version before clone progress existed waits for the clone's own answer alone.
         let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: crate::protocol::ClonePhase::Receiving, percent: 1 });
-        assert!(!client_reads(&progress, PROTOCOL_VERSION - 1));
-        assert!(client_reads(&progress, PROTOCOL_VERSION));
+        assert!(!client_reads(&progress, crate::protocol::CLONE_PROGRESS_SINCE - 1));
+        assert!(client_reads(&progress, crate::protocol::CLONE_PROGRESS_SINCE));
         let cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
-        assert!(client_reads(&cloned, PROTOCOL_VERSION - 1));
+        assert!(client_reads(&cloned, crate::protocol::CLONE_PROGRESS_SINCE - 1));
 
         let unreadable = crate::protocol::decode::<ClientMsg>(&[0xc1]).unwrap_err();
         assert!(skips_unreadable(PROTOCOL_VERSION + 1, &unreadable));

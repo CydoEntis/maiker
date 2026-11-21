@@ -282,6 +282,12 @@ refuses from any pane and accepts only for a request it holds. The desktop app s
 `helper-projects.json` in Maiker's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
 
+A chat asks the same way (ADR 0016, proposed): who is asking is the chat's runtime identity on the
+connection, checked again for every request, and the answer is `AnswerChatHelpers`, refused from any
+pane and from any chat's runtime. The consent is cooperative, as a pane's is: a process of the same
+user that connects with no identity is read as that user, so this stops an agent that follows the
+rules from spending the machine unasked and is not a sandbox.
+
 A chat's **Always in this project** (`ConversationAllowAlways`, ADR 0005) is kept the same way, in
 `chat-allowed-commands.json` in Maiker's data folder: the project and the hash of the exact command as the
 provider sent it (not the text shown, which has secrets hidden). Only a human client can send it; the daemon
@@ -1038,8 +1044,11 @@ to conversation, generation and connection. Strip inherited pane/structured
 credentials before launch. Do not persist this secret, copy a pane token, accept
 a partial environment claim, or treat rejected/revoked claims as human callers.
 Every request uses configured MCP grants, with no logical-conversation self
-exemption; human-only grant/check/helper answers remain human-only. Structured
-descendant starts are refused pending conversation-owned helper consent.
+exemption; human-only grant/check/helper answers remain human-only. A structured
+runtime starts helpers only (an agent on a task, in a new session or worktree),
+and only after the person's answer held on its conversation; a bare shell and
+every other descendant start are refused, and a runtime that is no longer current
+starts nothing and is never counted as a person (ADR 0016, proposed).
 
 Codex filters MCP child environments, so validated runtime overrides append the
 four reserved identity variable names to existing stdio MCP allowlists. They

@@ -1148,7 +1148,12 @@ impl Daemon {
             Command::ForgetCheckApproval { project, name } => {
                 self.forget_check_approval(&project, &name)?
             }
-            Command::AnswerHelpers { term, choice } => self.answer_helpers(term, choice)?,
+            Command::AnswerHelpers { term, choice } => {
+                self.answer_helpers(helpers::Starter::Pane(term), choice)?
+            }
+            Command::AnswerChatHelpers { conversation, choice } => {
+                self.answer_helpers(helpers::Starter::Chat(conversation), choice)?
+            }
             Command::RequestSecret {
                 term,
                 label,

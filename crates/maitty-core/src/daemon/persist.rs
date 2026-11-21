@@ -98,6 +98,9 @@ pub struct SavedPane {
     /// The pane that started it, by its id when this was saved (a key of some tab's `panes`).
     #[serde(default)]
     pub started_by: Option<TermId>,
+    /// The chat that started it (ADR 0016). A conversation keeps its id across a restart.
+    #[serde(default)]
+    pub started_by_chat: Option<crate::conversation::ConversationId>,
     /// It was started as an agent (`Term::began_as_agent`); panes saved before this was recorded
     /// read as not, and their command says when it was one.
     #[serde(default)]

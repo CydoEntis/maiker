@@ -433,7 +433,11 @@ impl Daemon {
         }
         self.may(client, Grant::Start, None)?;
         self.durable_conversation()?;
-        let by = self.starting(client, "a structured Codex conversation")?;
+        // Only a pane's agent starts a chat as its helper: a chat's own runtime is refused this
+        // command before it gets here.
+        let by = self
+            .starting(client, "a structured Codex conversation")?
+            .and_then(crate::daemon::helpers::Starter::pane);
         let identity = match target {
             StartTarget::Create(settings)
             | StartTarget::Session {
@@ -1843,6 +1847,7 @@ impl Daemon {
                     helpers: state
                         .filter(|s| s.helpers_generation == c.generation)
                         .map_or_else(Vec::new, |s| s.helpers.clone()),
+                    helper_ask: state.map_or_else(Vec::new, |s| s.helper_consent.asked.clone()),
                 }
             })
             .collect();
@@ -1865,6 +1870,7 @@ impl Daemon {
                 root: None,
                 branch: None,
                 helpers: Vec::new(),
+                helper_ask: Vec::new(),
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -1887,6 +1893,7 @@ impl Daemon {
                 root: None,
                 branch: None,
                 helpers: Vec::new(),
+                helper_ask: Vec::new(),
             }
         }));
         summaries
@@ -1924,6 +1931,7 @@ impl Daemon {
                     .get(&id)
                     .and_then(|state| state.started_by)
                 {
+                    let by = crate::daemon::helpers::Starter::Pane(by);
                     let allowed = self
                         .may_start_helper(by, "a structured Codex conversation")
                         .and_then(|()| {

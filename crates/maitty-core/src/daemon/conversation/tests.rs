@@ -1592,7 +1592,7 @@ async fn structured_start_honors_authenticated_pane_ask_and_no_helper_answer() {
         assert!(matches!(reply,ServerMsg::Error(ref e) if e.contains("user's OK")));
         assert!(!s.daemon.terms[&from.0].helpers.asked.is_empty());
         s.daemon
-            .answer_helpers(from.0, crate::protocol::HelperChoice::No)
+            .answer_helpers(crate::daemon::helpers::Starter::Pane(from.0), crate::protocol::HelperChoice::No)
             .unwrap();
         let reply = exchange(
             &mut s,
@@ -3002,6 +3002,164 @@ async fn structured_runtime_claims_apply_grants_without_human_or_pane_exemptions
             .await;
             assert!(matches!(denied, ServerMsg::Error(_)));
         }
+    })
+    .catch_unwind()
+    .await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// A chat's runtime asks to start a helper on `task`. `true` runs and ends, so nothing is left behind.
+fn chat_helper(task: &str) -> crate::protocol::ClientMsg {
+    crate::protocol::ClientMsg::Command(crate::protocol::Command::NewWorkspace {
+        cwd: Some(std::env::temp_dir()),
+        name: None,
+        cmd: Some(format!("true '{task}'")),
+    })
+}
+
+fn answer_chat(
+    conversation: crate::conversation::ConversationId,
+    choice: crate::protocol::HelperChoice,
+) -> crate::protocol::ClientMsg {
+    crate::protocol::ClientMsg::Command(crate::protocol::Command::AnswerChatHelpers { conversation, choice })
+}
+
+fn summary_of(s: &TestSession, id: crate::conversation::ConversationId) -> crate::protocol::ConversationSummary {
+    s.daemon
+        .conversation_summaries()
+        .into_iter()
+        .find(|summary| summary.id == id)
+        .expect("the chat is listed")
+}
+
+#[tokio::test]
+async fn a_chat_asks_before_it_starts_helpers_and_only_a_person_answers() {
+    use crate::protocol::HelperChoice;
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (id, _) = create(&mut s).await;
+        let claim = s.daemon.conversation_runtimes.test_identity(id);
+        let pane = authenticated_pane(&mut s);
+        s.daemon.cfg.mcp.grants = vec!["start".into()];
+        s.daemon.cfg.sessions.helpers = "ask".into();
+        let panes = s.daemon.terms.len();
+        // Nothing starts; the agent is told the person was asked, and each task is listed once.
+        let asked = exchange_claim(&mut s, 300, chat_helper("review the diff"), None, Some(claim.clone()), None).await;
+        assert!(
+            matches!(asked, ServerMsg::Error(ref e) if e.contains("needs the user's OK") && e.contains("1 helper")),
+            "{asked:?}"
+        );
+        for client in [301, 302] {
+            exchange_claim(&mut s, client, chat_helper("write the tests"), None, Some(claim.clone()), None).await;
+        }
+        assert_eq!(s.daemon.terms.len(), panes, "no session started");
+        let summary = summary_of(&s, id);
+        assert_eq!(summary.helper_ask, ["review the diff", "write the tests"]);
+        assert_eq!(summary.status, crate::protocol::Status::Blocked, "needs you, whatever the provider reports");
+        // Neither the chat's own runtime nor a pane answers for the person, and the request stays.
+        let own = exchange_claim(&mut s, 303, answer_chat(id, HelperChoice::Allow), None, Some(claim.clone()), None).await;
+        let from_pane = exchange(&mut s, 304, answer_chat(id, HelperChoice::Allow), Some(pane)).await;
+        for refused in [own, from_pane] {
+            assert!(matches!(refused, ServerMsg::Error(ref e) if e.contains("yours to allow")), "{refused:?}");
+        }
+        assert_eq!(summary_of(&s, id).helper_ask.len(), 2);
+        // The person allows: it may start them for as long as it runs.
+        let allowed = exchange(&mut s, 305, answer_chat(id, HelperChoice::Allow), None).await;
+        assert!(matches!(allowed, ServerMsg::Reply(crate::protocol::Reply::Ok)), "{allowed:?}");
+        assert!(summary_of(&s, id).helper_ask.is_empty());
+        let started = exchange_claim(&mut s, 306, chat_helper("review the diff"), None, Some(claim.clone()), None).await;
+        assert!(!matches!(started, ServerMsg::Error(_)), "{started:?}");
+        assert_eq!(s.daemon.terms.len(), panes + 1);
+        let helper = s.daemon.terms.values().max_by_key(|term| term.born).expect("the helper");
+        assert_eq!((helper.started_by_chat, helper.started_by), (Some(id), None));
+        // An answer to nothing is an error, not a grant.
+        for (client, chat) in [(307, id), (308, crate::conversation::ConversationId(9_999))] {
+            let nothing = exchange(&mut s, client, answer_chat(chat, HelperChoice::No), None).await;
+            assert!(matches!(nothing, ServerMsg::Error(_)), "{nothing:?}");
+        }
+        assert!(!s.daemon.conversation_states[&id].helper_consent.refused);
+    })
+    .catch_unwind()
+    .await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
+async fn a_chats_helpers_follow_the_setting_the_limit_and_a_no() {
+    use crate::protocol::HelperChoice;
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (id, _) = create(&mut s).await;
+        let claim = s.daemon.conversation_runtimes.test_identity(id);
+        s.daemon.cfg.mcp.grants = vec!["start".into()];
+        let panes = s.daemon.terms.len();
+        s.daemon.cfg.sessions.helpers = "never".into();
+        let never = exchange_claim(&mut s, 310, chat_helper("a"), None, Some(claim.clone()), None).await;
+        assert!(matches!(never, ServerMsg::Error(ref e) if e.contains("turned helpers off")), "{never:?}");
+        assert!(summary_of(&s, id).helper_ask.is_empty(), "nothing is asked");
+        // Always: nothing is asked, and the limit still holds.
+        s.daemon.cfg.sessions.helpers = "always".into();
+        s.daemon.cfg.sessions.helpers_at_once = "2".into();
+        for client in [311, 312] {
+            let started = exchange_claim(&mut s, client, chat_helper("b"), None, Some(claim.clone()), None).await;
+            assert!(!matches!(started, ServerMsg::Error(_)), "{started:?}");
+        }
+        let third = exchange_claim(&mut s, 313, chat_helper("c"), None, Some(claim.clone()), None).await;
+        assert!(matches!(third, ServerMsg::Error(ref e) if e.contains("at once is the limit")), "{third:?}");
+        assert_eq!(s.daemon.terms.len(), panes + 2);
+        // No: it does the work alone for the rest of its run.
+        s.daemon.cfg.sessions.helpers = "ask".into();
+        s.daemon.cfg.sessions.helpers_at_once = "4".into();
+        exchange_claim(&mut s, 314, chat_helper("d"), None, Some(claim.clone()), None).await;
+        let no = exchange(&mut s, 315, answer_chat(id, HelperChoice::No), None).await;
+        assert!(matches!(no, ServerMsg::Reply(crate::protocol::Reply::Ok)), "{no:?}");
+        let alone = exchange_claim(&mut s, 316, chat_helper("d"), None, Some(claim.clone()), None).await;
+        assert!(matches!(alone, ServerMsg::Error(ref e) if e.contains("Do the work yourself")), "{alone:?}");
+        assert!(summary_of(&s, id).helper_ask.is_empty());
+        assert_eq!(s.daemon.terms.len(), panes + 2);
+    })
+    .catch_unwind()
+    .await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
+async fn a_chat_starts_only_helpers_and_needs_the_start_grant() {
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (id, _) = create(&mut s).await;
+        let claim = s.daemon.conversation_runtimes.test_identity(id);
+        let pane = authenticated_pane(&mut s).0;
+        s.daemon.cfg.sessions.helpers = "always".into();
+        let panes = s.daemon.terms.len();
+        // Without the start grant, even a helper is refused.
+        s.daemon.cfg.mcp.grants = vec!["read".into()];
+        let ungranted = exchange_claim(&mut s, 320, chat_helper("a"), None, Some(claim.clone()), None).await;
+        assert!(matches!(ungranted, ServerMsg::Error(ref e) if e.contains("may not")), "{ungranted:?}");
+        // With it, everything that is not a helper stays refused: a bare shell, a split, another chat.
+        s.daemon.cfg.mcp.grants = vec!["start".into()];
+        let target = crate::conversation::StartTarget::Create(settings(&s));
+        for (client, command) in [
+            (321, crate::protocol::Command::NewWorkspace { cwd: None, name: None, cmd: None }),
+            (
+                322,
+                crate::protocol::Command::Split { term: pane, dir: crate::layout::Dir::Right, cmd: Some("true 'x'".into()), cwd: None },
+            ),
+            (323, crate::protocol::Command::ConversationStart { target, branch: None }),
+        ] {
+            let refused = exchange_claim(&mut s, client, crate::protocol::ClientMsg::Command(command), None, Some(claim.clone()), None).await;
+            assert!(matches!(refused, ServerMsg::Error(ref e) if e.contains("only helpers")), "{refused:?}");
+        }
+        assert_eq!((s.daemon.terms.len(), s.daemon.conversations.len()), (panes, 1));
     })
     .catch_unwind()
     .await;

@@ -2001,7 +2001,7 @@ fn a_worktree_start_keeps_its_starter_after_the_caller_has_gone() {
         branch: "helper".into(),
         cmd: None,
         split: None,
-        by: Some(starter),
+        by: Some(helpers::Starter::Pane(starter)),
         set_up: false,
         result: Ok((dir.clone(), String::new())),
     });
@@ -2021,6 +2021,73 @@ fn a_worktree_start_keeps_its_starter_after_the_caller_has_gone() {
     assert_eq!(d.terms[&yours].started_by, None);
     close(&mut d, &[starter, helper, yours]);
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+#[test]
+fn a_chats_helper_finds_its_chat_again_after_a_restart_and_one_whose_chat_is_gone_is_on_its_own() {
+    use crate::conversation::{Conversation, ConversationId, ExecutionKind, NativeBinding, Provider, RecoveryState};
+    let (rt, (mut d, _rx)) = (runtime(), daemon());
+    let _in_rt = rt.enter();
+    let dir = std::env::temp_dir();
+    let ws = |id: TermId, chat: u64| persist::SavedWs {
+        name: String::new(),
+        cwd: dir.clone(),
+        worktree: false,
+        color: None,
+        group: None,
+        tabs: vec![persist::SavedTab {
+            name: String::new(),
+            layout: Node::Leaf(id),
+            focus: id,
+            panes: [(
+                id,
+                persist::SavedPane {
+                    cwd: Some(dir.clone()),
+                    started_by_chat: Some(ConversationId(chat)),
+                    ..Default::default()
+                },
+            )]
+            .into(),
+        }],
+        active_tab: 0,
+    };
+    let restored = d.restore(persist::Saved {
+        workspaces: vec![ws(70, 9), ws(71, 404)],
+        active: 0,
+        made_worktrees: Vec::new(),
+        conversations: vec![Conversation {
+            id: ConversationId(9),
+            binding: NativeBinding {
+                provider: Provider::Codex,
+                session_id: "native-1".into(),
+                account: None,
+                profile: None,
+                config_root: dir.clone(),
+                executable: dir.join("codex"),
+                cwd: dir.clone(),
+                worktree: None,
+            },
+            execution: ExecutionKind::Native,
+            generation: 1,
+            state: RecoveryState::Stopped,
+            settings: None,
+            awaiting_first_user_message: false,
+            title: None,
+            archived: false,
+            worktree_origin: None,
+        }],
+        pending_starts: Vec::new(),
+        conversation_operations: Vec::new(),
+        turn_continues: Default::default(),
+        turns_in_flight: Vec::new(),
+    });
+    assert!(restored, "the saved conversation is valid");
+    let [helper, orphan] = [0, 1].map(|i| d.workspaces[i].tabs[0].focus);
+    assert_eq!(d.terms[&helper].started_by_chat, Some(ConversationId(9)));
+    assert_eq!(d.snapshot().terms[&helper].started_by_chat, Some(ConversationId(9)));
+    assert_eq!(d.saved().workspaces[0].tabs[0].panes[&helper].started_by_chat, Some(ConversationId(9)), "and it is saved again");
+    assert_eq!(d.terms[&orphan].started_by_chat, None, "its chat did not come back");
+    close(&mut d, &[helper, orphan]);
 }
 
 #[test]

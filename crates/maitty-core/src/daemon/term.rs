@@ -265,6 +265,8 @@ pub struct Term {
     pub grants: Option<Vec<String>>,
     /// The pane whose agent started this one, if one did.
     pub started_by: Option<TermId>,
+    /// The chat whose agent started this one, if one did (ADR 0016); never set with `started_by`.
+    pub started_by_chat: Option<crate::conversation::ConversationId>,
     /// The session whose tab this pane is in, when not its own.
     pub tab_of: Option<TermId>,
     /// Whether this pane's agent may start helpers, and what it is waiting on you for.
@@ -1052,6 +1054,7 @@ impl Term {
             subagent_seen: None,
             grants: None,
             started_by: None,
+            started_by_chat: None,
             tab_of: None,
             helpers: Default::default(),
             progress_off: None,

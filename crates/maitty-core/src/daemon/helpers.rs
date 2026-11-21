@@ -7,10 +7,15 @@
 //! accepted only for a request the daemon holds. "Always in this project" is kept in
 //! `helper-projects.json` in the app's data folder, never in the repo, so an agent that can
 //! write the repo cannot grant itself helpers.
+//!
+//! A chat asks the same way (ADR 0016): the request is made only by a start from a connection
+//! that authenticated as the chat's current runtime, it is held on the conversation, and
+//! `AnswerChatHelpers` answers it, from you alone.
 
 use super::{Daemon, approvals::write_atomic};
 use crate::brand::APP_COMMAND;
 use crate::config::same_path;
+use crate::conversation::ConversationId;
 use crate::protocol::{HelperChoice, TermId};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -75,7 +80,31 @@ fn remember(file: &Path, project: &Path) -> Result<()> {
     Ok(())
 }
 
-/// What one session has been asked and told about helpers. Lives and dies with the pane.
+/// Whose agent starts a helper: a pane's, or a chat's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Starter {
+    Pane(TermId),
+    Chat(ConversationId),
+}
+
+impl Starter {
+    pub fn pane(self) -> Option<TermId> {
+        match self {
+            Starter::Pane(term) => Some(term),
+            Starter::Chat(_) => None,
+        }
+    }
+
+    pub fn chat(self) -> Option<ConversationId> {
+        match self {
+            Starter::Chat(id) => Some(id),
+            Starter::Pane(_) => None,
+        }
+    }
+}
+
+/// What one session has been asked and told about helpers. Lives and dies with the pane, or
+/// with the daemon's state for the chat.
 #[derive(Debug, Clone, Default)]
 pub struct HelperState {
     /// The tasks it wants helpers for and is waiting on you for; empty: not asking.
@@ -143,11 +172,37 @@ impl Daemon {
         })
     }
 
+    /// The project a chat works in: its repo's main checkout, else its folder.
+    fn chat_helper_project(&self, id: ConversationId) -> Option<PathBuf> {
+        let record = self.conversations.iter().find(|c| c.id == id)?;
+        let folder = record.binding.worktree.as_deref().unwrap_or(&record.binding.cwd);
+        Some(crate::gitfs::head(folder).map_or_else(|| folder.to_path_buf(), |h| h.main_root))
+    }
+
+    fn starter_project(&self, by: Starter) -> Option<PathBuf> {
+        match by {
+            Starter::Pane(term) => self.helper_project(term),
+            Starter::Chat(id) => self.chat_helper_project(id),
+        }
+    }
+
+    fn helper_state_mut(&mut self, by: Starter) -> Option<&mut HelperState> {
+        match by {
+            Starter::Pane(term) => self.terms.get_mut(&term).map(|t| &mut t.helpers),
+            Starter::Chat(id) => self
+                .conversation_states
+                .get_mut(&id)
+                .map(|state| &mut state.helper_consent),
+        }
+    }
+
     /// Whether session `by` may start a helper for `task` now. An error says why not, and is
     /// what the agent reads: a refusal to do it alone, or that you have been asked.
-    pub(super) fn may_start_helper(&mut self, by: TermId, task: &str) -> Result<()> {
+    pub(super) fn may_start_helper(&mut self, by: Starter, task: &str) -> Result<()> {
         // A person's shell is not an agent asking for help.
-        if self.terms.get(&by).is_none_or(|t| t.agent.is_none()) {
+        if let Starter::Pane(term) = by
+            && self.terms.get(&term).is_none_or(|t| t.agent.is_none())
+        {
             return Ok(());
         }
         match self.cfg.sessions.helpers.as_str() {
@@ -157,26 +212,40 @@ impl Daemon {
             ),
             _ => {}
         }
-        let project = self.helper_project(by).unwrap_or_default();
+        let project = self.starter_project(by).unwrap_or_default();
         let remembered = self.helper_projects.allows(&project);
-        let Some(t) = self.terms.get_mut(&by) else {
-            return Ok(());
+        let Some(helpers) = self.helper_state_mut(by) else {
+            // A chat the daemon holds no state for has nothing to hold the request on: nobody
+            // could be asked, so nothing starts.
+            return match by {
+                Starter::Pane(_) => Ok(()),
+                Starter::Chat(_) => {
+                    anyhow::bail!("This chat cannot start helpers now. Do the work yourself.")
+                }
+            };
         };
-        if t.helpers.refused {
+        if helpers.refused {
             anyhow::bail!("The user said no helpers for this session. Do the work yourself.");
         }
-        if t.helpers.allowed || remembered {
+        if helpers.allowed || remembered {
             return Ok(());
         }
-        let first = t.helpers.asked.is_empty();
-        if !t.helpers.asked.iter().any(|a| a == task) && t.helpers.asked.len() < MOST_TASKS {
-            t.helpers.asked.push(task.to_string());
+        let first = helpers.asked.is_empty();
+        if !helpers.asked.iter().any(|a| a == task) && helpers.asked.len() < MOST_TASKS {
+            helpers.asked.push(task.to_string());
         }
-        let n = t.helpers.asked.len();
+        let n = helpers.asked.len();
         self.dirty = true;
-        self.needs_you(by);
-        if first {
-            self.announce(by, crate::protocol::Status::Blocked);
+        match by {
+            Starter::Pane(term) => {
+                self.needs_you(term);
+                if first {
+                    self.announce(term, crate::protocol::Status::Blocked);
+                }
+            }
+            // A chat is announced by its window, from the status its summary now reads (ADR
+            // 0003, *Alerts*); the list going out says it.
+            Starter::Chat(_) => {}
         }
         anyhow::bail!(
             "Starting helpers needs the user's OK. Their {APP_COMMAND} row now says it wants to start {n} helper{}. Call {APP_COMMAND}_start for every helper you want so they all show, then try again later; don't start them another way.",
@@ -184,22 +253,22 @@ impl Daemon {
         )
     }
 
-    /// Your answer to session `term`'s request to start helpers. Only while it asks.
-    pub(super) fn answer_helpers(&mut self, term: TermId, choice: HelperChoice) -> Result<()> {
-        let project = self.helper_project(term);
-        let t = self
-            .terms
-            .get_mut(&term)
-            .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
-        if t.helpers.asked.is_empty() {
+    /// Your answer to a session's request to start helpers. Only while it asks.
+    pub(super) fn answer_helpers(&mut self, by: Starter, choice: HelperChoice) -> Result<()> {
+        let project = self.starter_project(by);
+        let helpers = self.helper_state_mut(by).ok_or_else(|| match by {
+            Starter::Pane(term) => anyhow::anyhow!("no pane {term}"),
+            Starter::Chat(id) => anyhow::anyhow!("no chat {}", id.0),
+        })?;
+        if helpers.asked.is_empty() {
             anyhow::bail!("that session isn't asking to start helpers");
         }
-        t.helpers.asked.clear();
+        helpers.asked.clear();
         match choice {
-            HelperChoice::Allow => t.helpers.allowed = true,
-            HelperChoice::No => t.helpers.refused = true,
+            HelperChoice::Allow => helpers.allowed = true,
+            HelperChoice::No => helpers.refused = true,
             HelperChoice::Always => {
-                t.helpers.allowed = true;
+                helpers.allowed = true;
                 if let Some(project) = project {
                     self.helper_projects.add(&project);
                     let file = self.helper_projects_file.clone();

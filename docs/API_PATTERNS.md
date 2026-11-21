@@ -422,6 +422,22 @@ helpers one session has working at once; a start past it is refused with what to
 person's shell (no agent in the pane) is never asked. Sessions saved before a restart keep
 `started_by`; any fleet or commander field in a saved file is ignored on load.
 
+**A chat's helpers** ([ADR 0016](adr/0016-a-chat-asks-before-it-starts-helpers.md), proposed). A
+start from a connection that authenticated as a chat's current runtime (`Hello.structured`) is that
+chat's helper start, under the same setting, limit and `helper-projects.json`. Only `NewWorkspace`
+and `NewWorktree` with a command are let through; a bare shell and every other descendant command
+are refused ("A chat may start only helpers"), and all of them need the `start` grant in `[mcp]
+grants`. The request is held on the conversation: `ConversationSummary.helper_ask` (`Vec<String>`,
+`#[serde(default)]`) lists the tasks and its `status` reads Blocked while it is not empty. Only you
+answer it, with `Command::AnswerChatHelpers { conversation, choice }` (protocol 120,
+`CHAT_HELPERS_SINCE`; refused from a pane and from a chat's runtime, and an error unless that chat
+asks). The helper's `TermInfo.started_by_chat` (`#[serde(default)]`) names the chat, never together
+with `started_by`, and is saved with the session; a helper whose chat is gone from the saved
+conversations comes back with neither. A chat's runtime that is no longer current starts nothing.
+`COMPATIBLE_SINCE` stays 115: an older daemon is never sent the command and an older client reads
+neither field (tests: `a_chats_helper_answer_is_sent_only_to_a_daemon_that_reads_it`, the summary's
+old-shape decode).
+
 **Pull requests.** The daemon polls `gh` off the event loop for each pane's branch, or the URL
 set by `Command::LinkPr { term, url }`; `None` returns to branch discovery. A pane may only link
 its own PR. `TermInfo.pr` holds the latest checks, review, conflict, title and URL. When a new
@@ -1311,8 +1327,9 @@ environment claims and rejected/stale handshakes cannot become human callers.
 Every incoming request rechecks the live owner and configured MCP grants;
 structured callers have no pane self exemption or human-only approval authority.
 Granted list/read/send workflows remain available under their respective grants.
-Structured descendants are refused until conversation-owned helper consent is
-supported; ordinary native helper behavior is unchanged.
+A structured runtime may start helpers only, under the conversation's own helper
+consent (*A chat's helpers*, above); every other descendant is refused. Ordinary
+native helper behavior is unchanged.
 
 Before creating/resuming a thread, the actor reads effective provider config for
 the selected cwd on its own initialized connection. Supported shell policy retains
