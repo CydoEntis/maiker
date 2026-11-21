@@ -1,5 +1,8 @@
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ComponentProps } from 'react'
+import type { OpenWorktreeDialog } from './components/OpenWorktreeDialog'
 import type { ProjectActions } from './components/projectMenu'
+import { sameProject, type OpenedProject } from './model/openedProjects'
+import { worktreeSourceOf } from './model/projectActions'
 import type { SessionView } from './model/session'
 import { useWorkspace } from './workspaceContext'
 
@@ -12,22 +15,60 @@ export function useProjectWorktreeState() {
   return useState<SessionView | null>(null)
 }
 
+/** The project whose Open worktree dialog is open, with its machine and the name its heading gives it; null while closed. */
+export type OpenWorktreeFor = { machine: number; project: OpenedProject; name: string }
+
+export function useOpenWorktreeState() {
+  return useState<OpenWorktreeFor | null>(null)
+}
+
+/** Opens the new-chat draft on `machine` with `folder` filled in, as every start from a project heading does. */
+function useDraftIn() {
+  const { setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen } = useWorkspace()
+  return useCallback((machine: number, folder: string) => {
+    setSettingsSection(null)
+    setNewChatMachine(machine)
+    setNewChatSeed({ folder, message: '' })
+    setNewChatOpen(true)
+  }, [setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen])
+}
+
 /**
  * What a project heading's buttons and menu do in this window, for `Sidebar`'s `projectActions`. `afterPick` runs first,
  * so the overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen, setProjectWorktreeFrom, openedProjects } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects } = useWorkspace()
+  const draftIn = useDraftIn()
   const { close } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
-    onNewSession: (machine, project) => {
-      afterPick()
-      setSettingsSection(null)
-      setNewChatMachine(machine)
-      setNewChatSeed({ folder: project.folder, message: '' })
-      setNewChatOpen(true)
-    },
+    onNewSession: (machine, project) => { afterPick(); draftIn(machine, project.folder) },
     onNewWorktree: (from) => { afterPick(); setProjectWorktreeFrom(from) },
+    onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
     onClose: close,
-  }), [setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen, setProjectWorktreeFrom, close])
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close])
+}
+
+/**
+ * The open Open worktree dialog's props, null while it is closed. A pick closes it: a worktree starts the draft there, one
+ * in use shows its session, and New worktree hands over to that dialog, made from the project's session as its heading's is.
+ */
+export function useOpenWorktreeDialog(): ComponentProps<typeof OpenWorktreeDialog> | null {
+  const { openWorktreeFor, setOpenWorktreeFor, setProjectWorktreeFrom, sessions, showSessionById, openedProjects } = useWorkspace()
+  const draftIn = useDraftIn()
+  if (openWorktreeFor === null) return null
+  const { machine, project, name } = openWorktreeFor
+  const placed = openedProjects.machines.flatMap((entry) => entry.projects).find((entry) => sameProject(entry.project, project))
+  const from = worktreeSourceOf(placed?.sessions ?? [])
+  const done = () => { setOpenWorktreeFor(null) }
+  return {
+    machine,
+    project,
+    name,
+    sessions,
+    onNewWorktree: from === null ? null : () => { done(); setProjectWorktreeFrom(from) },
+    onStart: (folder) => { done(); draftIn(machine, folder) },
+    onShow: (sessionId) => { done(); showSessionById(sessionId) },
+    onCancel: done,
+  }
 }

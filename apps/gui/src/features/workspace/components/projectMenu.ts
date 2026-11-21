@@ -1,6 +1,7 @@
 import { toast } from '@/lib/toast'
 import type { CloseResult, OpenedProject } from '../model/openedProjects'
 import { closeRefusalWords, worktreeSourceOf } from '../model/projectActions'
+import { offersOpenWorktree } from '../model/projectWorktrees'
 import type { SessionView } from '../model/session'
 import type { MenuEntry } from './MenuPopup'
 
@@ -13,6 +14,8 @@ export type ProjectActions = {
   onNewSession: (machine: number, project: OpenedProject) => void
   /** Opens the New worktree dialog off `from`, a session of this computer in the project's repository (`worktreeSourceOf`). */
   onNewWorktree: (from: SessionView) => void
+  /** Opens the Open worktree dialog: the project's linked worktrees, to start a session in one. `name` is the heading's. */
+  onOpenWorktree: (machine: number, project: OpenedProject, name: string) => void
   /** Takes the project off the list, or refuses while a session runs in it (`useOpenedProjects().close`). */
   onClose: (project: OpenedProject) => CloseResult
 }
@@ -32,10 +35,11 @@ export type ProjectTarget = {
 
 type ProjectCommand = { label: string; disabled: boolean; run: () => void }
 
-/** A heading's actions, each once, for its buttons and its menu to share. New worktree is null where it is not offered. */
+/** A heading's actions, each once, for its buttons and its menu to share. New and Open worktree are null where not offered. */
 export type ProjectCommands = {
   newSession: ProjectCommand
   newWorktree: ProjectCommand | null
+  openWorktree: ProjectCommand | null
   close: ProjectCommand
 }
 
@@ -44,6 +48,9 @@ export function projectCommands(actions: ProjectActions, target: ProjectTarget):
   return {
     newSession: { label: 'New session', disabled: !target.canStart, run: () => { actions.onNewSession(target.machine, target.project) } },
     newWorktree: from === null ? null : { label: 'New worktree…', disabled: !target.online, run: () => { actions.onNewWorktree(from) } },
+    openWorktree: offersOpenWorktree(target.project, target.sessions)
+      ? { label: 'Open worktree…', disabled: !target.online, run: () => { actions.onOpenWorktree(target.machine, target.project, target.name) } }
+      : null,
     close: { label: 'Close project', disabled: false, run: () => { closeOrSayWhy(actions, target) } },
   }
 }
@@ -53,6 +60,7 @@ export function projectMenuEntries(commands: ProjectCommands): MenuEntry[] {
   return [
     commands.newSession,
     ...(commands.newWorktree === null ? [] : [commands.newWorktree]),
+    ...(commands.openWorktree === null ? [] : [commands.openWorktree]),
     'separator',
     commands.close,
   ]

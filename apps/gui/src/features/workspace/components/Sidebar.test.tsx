@@ -902,7 +902,7 @@ describe('a project heading', () => {
   ]
   /** The window's actions, with Close project deciding as the window does, over `sessions`. */
   function actionsOver(sessions: readonly SessionView[], opened: readonly OpenedProject[]) {
-    return { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onClose: vi.fn((project: OpenedProject) => closeProject(opened, project, sessions)) } satisfies ProjectActions
+    return { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onClose: vi.fn((project: OpenedProject) => closeProject(opened, project, sessions)) } satisfies ProjectActions
   }
   function showProjects(sessions: SessionView[], opened: readonly OpenedProject[], more: Partial<SidebarProps> = {}) {
     const grouping = groupByProject(sessions, opened)
@@ -934,7 +934,22 @@ describe('a project heading', () => {
     expect(actions.onNewWorktree).toHaveBeenCalledTimes(2)
   })
 
-  it('offers no New worktree on another machine\'s git project, where worktrees are not managed yet', async () => {
+  it('offers Open worktree on a git project of this computer, and asks the window to open its list', async () => {
+    const user = userEvent.setup()
+    const actions = showProjects(inShop(), [])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Open worktree…' }))
+    expect(actions.onOpenWorktree).toHaveBeenCalledWith(0, SHOP, 'shop')
+  })
+
+  it('offers Open worktree on a project of this computer with no session yet, since the list needs none', async () => {
+    showProjects([], [SHOP])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await screen.findByRole('menu', { name: 'shop' })
+    expect(menuItems()).toEqual(['New session', 'Open worktree…', 'Close project'])
+  })
+
+  it('offers no New or Open worktree on another machine\'s git project, where worktrees are not managed yet', async () => {
     showProjects([session(3, { machine: 4, machineName: 'devbox', agent: 'claude', named: true, title: 'There', repo: 'api', branch: 'main', folder: '/srv/api', cwd: '/srv/api' })], [], { machines: [LOCAL_HEAD, DEVBOX] })
     expect(screen.queryByRole('button', { name: 'New worktree in api' })).toBeNull()
     fireEvent.contextMenu(screen.getByRole('button', { name: 'api', expanded: true }))
@@ -979,7 +994,7 @@ describe('a project heading', () => {
     screen.getByRole('button', { name: 'More for shop' }).focus()
     await user.keyboard('{Enter}')
     await screen.findByRole('menu', { name: 'shop' })
-    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Close project'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Open worktree…', 'Close project'])
     await waitForFocus('New session')
     await user.keyboard('{ArrowDown}{Enter}')
     expect(actions.onNewWorktree).toHaveBeenCalledWith(sessions[1])
@@ -1152,7 +1167,7 @@ describe('the counts on a folded heading', () => {
   })
   it('keeps the counts in the folding button, apart from the heading\'s actions beside it, which still act on the project', async () => {
     const user = userEvent.setup()
-    const projectActions = { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onClose: vi.fn() } satisfies ProjectActions
+    const projectActions = { onNewSession: vi.fn(), onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onClose: vi.fn() } satisfies ProjectActions
     show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' })], { projectActions })
     await fold('shop')
     const toggle = screen.getByRole('button', { name: 'shop 1 session needs you 1 finished session not opened yet', expanded: false })
