@@ -3,9 +3,11 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { writeMachineNicknames } from '@/data/machineNicknames'
+import { writeSidebarFolds } from '@/data/sidebarFolds'
 import { currentToasts, resetToasts } from '@/lib/toast'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 import { closeProject, groupByProject, type OpenedProject } from '../model/openedProjects'
+import { machineFoldKey } from '../model/sidebarTree'
 import { toSessionView, type SessionView } from '../model/session'
 import { Sidebar, type SidebarProps } from './Sidebar'
 import { flipKey } from './flipKey'
@@ -126,7 +128,7 @@ describe('the sidebar', () => {
   })
 
   it('has no group-by-project toggle on a machine: its projects are always listed, and no such entry is in its menu', () => {
-    show([session(1, { agent: 'claude', cwd: '/home/me/a', folder: '/home/me/a' }), session(2, { agent: 'claude', cwd: '/home/me/b', folder: '/home/me/b' })])
+    show([session(1, { agent: 'claude', cwd: '/home/me/a', folder: '/home/me/a' }), session(2, { agent: 'claude', cwd: '/home/me/b', folder: '/home/me/b' })], { machines: [LOCAL_HEAD, DEVBOX] })
     expect(screen.queryByRole('button', { name: /Group by project|Show one list/ })).toBeNull()
     expect(within(screen.getByRole('group', { name: 'Projects on This computer' })).getAllByRole('button', { expanded: true }).map((head) => head.textContent)).toEqual(['a', 'b'])
     fireEvent.contextMenu(screen.getByRole('button', { name: /^This computer/ }))
@@ -135,7 +137,7 @@ describe('the sidebar', () => {
 
   it('folds a machine away from its heading', async () => {
     const user = userEvent.setup()
-    show([session(1, { agent: 'claude' })])
+    show([session(1, { agent: 'claude' })], { machines: [LOCAL_HEAD, DEVBOX] })
     await user.click(screen.getByRole('button', { name: /^This computer/ }))
     expect(screen.getByRole('button', { name: /^This computer/ })).toHaveAttribute('aria-expanded', 'false')
   })
@@ -504,7 +506,7 @@ describe('a machine heading', () => {
 
   it('collapses its sessions when the name is clicked', async () => {
     const user = userEvent.setup()
-    show([session(1, { agent: 'claude', named: true, title: 'Here' })])
+    show([session(1, { agent: 'claude', named: true, title: 'Here' })], { machines: [LOCAL_HEAD, DEVBOX] })
     await user.click(screen.getByRole('button', { name: /^This computer/ }))
     expect(screen.getByRole('button', { name: /^This computer/, expanded: false })).toBeTruthy()
   })
@@ -526,11 +528,20 @@ describe('closing a session', () => {
 
 describe('a draft chat', () => {
   it('is listed last on its machine while it waits for a first message, as a twin of a session row, and the empty note steps aside', () => {
-    show([], { draft: { machine: 0, process: 'claude' } })
+    show([], { machines: [LOCAL_HEAD, DEVBOX], draft: { machine: 0, process: 'claude' } })
     const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
     expect((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).contains(draft)).toBe(true)
     expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
     expect(draft.querySelector('.mx-row')).not.toBeNull()
+  })
+
+  it('is listed at the top under no heading while this computer is the only machine, with no empty note', () => {
+    show([], { draft: { machine: 0, process: 'claude' } })
+    const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
+    expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Projects' }).parentElement?.contains(draft)).toBe(true)
+    expect(screen.queryByText('No sessions yet')).toBeNull()
+    expect(screen.queryByText(/^Open a project, then start a session/)).toBeNull()
   })
 
   it('shows the agent picked for it, drawn as a session row draws its agent', () => {
@@ -544,7 +555,7 @@ describe('a draft chat', () => {
   it('stays after every session of its machine, wherever they sort', () => {
     show([session(1, { agent: 'claude', named: true, title: 'First' }), session(2, { agent: 'claude', named: true, title: 'Second', status: 'needs-you' })], { draft: { machine: 0, process: 'claude' } })
     const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
-    const rows = Array.from((screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement).querySelectorAll('.mx-row-wrap'))
+    const rows = Array.from((screen.getByRole('group', { name: 'Projects' }).parentElement as HTMLElement).querySelectorAll('.mx-row-wrap'))
     expect(rows.at(-1)).toBe(draft)
   })
 
@@ -557,7 +568,7 @@ describe('a draft chat', () => {
       session(4, { agent: 'claude', named: true, title: 'Docs', cwd: '/home/me/docs', folder: '/home/me/docs' }),
     ], { draft: { machine: 0, process: 'claude' } })
     const draft = screen.getByRole('status', { name: 'New session, waiting for the first message' })
-    const card = screen.getByRole('button', { name: /^This computer/ }).closest('.mx-machine') as HTMLElement
+    const card = screen.getByRole('group', { name: 'Projects' }).parentElement as HTMLElement
     expect(Array.from(card.querySelectorAll('.mx-row-wrap')).at(-1)).toBe(draft)
     expect(card.querySelector('.mx-status-head')).not.toBeNull()
   })
@@ -588,6 +599,55 @@ describe('with nothing running', () => {
     show([], { listed: false })
     expect(screen.queryByText('No agents running. New chat starts one.')).toBeNull()
     expect(screen.getByText('Looking for your sessions…')).toBeTruthy()
+  })
+})
+
+describe('with this computer alone', () => {
+  const SHOP = { cwd: '/home/me/shop', folder: '/home/me/shop' }
+  const DOCS = { cwd: '/home/me/docs', folder: '/home/me/docs' }
+
+  it('lists its projects at the top, under no machine heading and with no machine count', () => {
+    show([session(1, { ...SHOP, agent: 'claude', named: true, title: 'Here' }), session(2, { ...DOCS, agent: 'claude', named: true, title: 'There' })])
+    expect(screen.queryByRole('button', { name: /^This computer/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Open a project on/ })).toBeNull()
+    expect(document.querySelector('.mx-machine-head')).toBeNull()
+    const top = screen.getByRole('group', { name: 'Projects' })
+    expect(within(top).getAllByRole('button', { expanded: true }).map((head) => head.textContent)).toEqual(['shop', 'docs'])
+    expect(within(top).getByRole('button', { name: /^Here,/ })).toBeTruthy()
+  })
+
+  it('still opens a project on this computer from the header\'s +', async () => {
+    const onOpenProject = vi.fn()
+    show([session(1, { ...SHOP, agent: 'claude' })], { onOpenProject })
+    await userEvent.click(screen.getByRole('button', { name: 'Open a project' }))
+    expect(onOpenProject).toHaveBeenCalledWith(0)
+  })
+
+  it('folds a project, with its counts on the folded heading, and shows the projects whatever its machine\'s fold was', async () => {
+    writeSidebarFolds([machineFoldKey(null)])
+    show([session(1, { ...SHOP, agent: 'claude', status: 'needs-you' }), session(2, { ...SHOP, agent: 'claude', status: 'done' })])
+    expect(screen.getByRole('group', { name: 'Projects' }).closest('[inert]')).toBeNull()
+    await userEvent.click(screen.getByRole('button', { name: 'shop', expanded: true }))
+    const head = screen.getByRole('button', { name: /^shop/, expanded: false })
+    expect(within(head).getByRole('img', { name: '1 session needs you' })).toBeInTheDocument()
+    expect(within(head).getByRole('img', { name: '1 finished session not opened yet' })).toBeInTheDocument()
+  })
+
+  it('opens a session from the Needs you strip and unfolds its project', async () => {
+    const user = userEvent.setup()
+    const onShowSession = vi.fn()
+    show([session(1, { ...SHOP, agent: 'claude', named: true, title: 'Asking', status: 'needs-you' })], { onShowSession })
+    await user.click(screen.getByRole('button', { name: 'shop', expanded: true }))
+    await user.click(within(screen.getByRole('region', { name: 'Needs you' })).getByRole('button', { name: 'Asking on This computer in shop' }))
+    expect(onShowSession).toHaveBeenCalledWith('t1')
+    expect(screen.getByRole('button', { name: 'shop' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('heads each machine again once a remote machine is configured, even one that is down', () => {
+    show([session(1, { ...SHOP, agent: 'claude' })], { machines: [LOCAL_HEAD, { ...DEVBOX, down: true, chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }] })
+    expect(screen.getByRole('button', { name: /^This computer/, expanded: true })).toBeTruthy()
+    expect(screen.getByRole('group', { name: 'Projects on This computer' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^devbox/ })).toBeTruthy()
   })
 })
 
@@ -695,7 +755,7 @@ describe('the tree of machine, project and status', () => {
   it('unfolds the selected project and its machine, and marks the project, compared by folder and not by identity', async () => {
     const user = userEvent.setup()
     const sessions = [session(1, { ...SHOP, agent: 'claude', named: true, title: 'Here' }), session(2, { agent: 'claude', named: true, title: 'Elsewhere', cwd: '/home/me/docs', folder: '/home/me/docs' })]
-    const view = show(sessions)
+    const view = show(sessions, { machines: [LOCAL_HEAD, DEVBOX] })
     await user.click(screen.getByRole('button', { name: 'shop', expanded: true }))
     await user.click(screen.getByRole('button', { name: /^This computer/, expanded: true }))
     const picked: OpenedProject = { machineName: null, folder: '/home/me/shop/' }
@@ -1198,7 +1258,7 @@ describe('the counts on a folded heading', () => {
   })
 
   it('shows a folded machine the sum of its projects\' counts, folded or not', async () => {
-    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' }), agent(3, DOCS, { status: 'needs-you' }), agent(4, DOCS, { status: 'done' }), agent(5, DOCS, { status: 'done' })])
+    show([agent(1, SHOP, { status: 'needs-you' }), agent(2, SHOP, { status: 'done' }), agent(3, DOCS, { status: 'needs-you' }), agent(4, DOCS, { status: 'done' }), agent(5, DOCS, { status: 'done' })], { machines: [LOCAL_HEAD, DEVBOX] })
     await fold('shop')
     await fold(/^This computer/)
     const head = screen.getByRole('button', { name: /^This computer/, expanded: false })

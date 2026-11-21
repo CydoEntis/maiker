@@ -52,6 +52,14 @@ export function showsStatusHeadings(count: number, setting: boolean): boolean {
   return setting && count >= STATUS_HEADINGS_FROM
 }
 
+/**
+ * Whether the tree heads its projects with their machine: only once another machine is configured, whether its line is up
+ * or not. With this computer alone a "This computer" heading is one more level for nothing, so its projects are the top.
+ */
+export function showsMachineHeadings(heads: readonly MachineHead[]): boolean {
+  return heads.some((head) => head.name !== null)
+}
+
 function sameMachineName(a: string | null, b: string | null): boolean {
   return a === null || b === null ? a === b : a.toLowerCase() === b.toLowerCase()
 }

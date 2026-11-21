@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { finishedUnseen, machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, projectName, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
+import { finishedUnseen, machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, projectName, showsMachineHeadings, showsStatusHeadings, sidebarTree, STATUS_HEADINGS_FROM, treePlacement, waitingSessions, waitsOnYou, withSessionsOnly } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 
@@ -40,6 +40,13 @@ describe('the sidebar tree', () => {
     expect(sidebarTree([LOCAL_HEAD], [], all, null)).toEqual([])
     expect(sidebarTree([LOCAL_HEAD], [], all, null, true)).toHaveLength(1)
     expect(sidebarTree([LOCAL_HEAD, DEVBOX], [], all, null)).toHaveLength(2)
+  })
+
+  it('heads machines only once another machine is configured, whether its line is up or down', () => {
+    expect(showsMachineHeadings([])).toBe(false)
+    expect(showsMachineHeadings([LOCAL_HEAD])).toBe(false)
+    expect(showsMachineHeadings([LOCAL_HEAD, DEVBOX])).toBe(true)
+    expect(showsMachineHeadings([LOCAL_HEAD, { ...DEVBOX, down: true, chip: { glyph: '✕', word: 'unreachable', tone: 'bad' } }])).toBe(true)
   })
 
   it('names a git project by its repository, else by its folder, on Windows too', () => {
