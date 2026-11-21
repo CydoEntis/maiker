@@ -12,7 +12,6 @@ pub mod link_failure;
 pub mod local_machines;
 mod machine;
 pub mod reach;
-pub mod host_key;
 pub mod key_file;
 pub mod machine_config;
 pub mod machine_target;
