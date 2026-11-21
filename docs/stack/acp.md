@@ -1,6 +1,6 @@
 # Agent Client Protocol (ACP)
 
-> **Use for:** Running an agent as a daemon-owned chat with no terminal: every chat the Chat view starts.
+> **Use for:** Running an agent that has no adapter of its own as a daemon-owned chat.
 > **Requires:** the provider contract ([ADR 0016](../adr/0016-one-provider-contract-with-no-io.md))
 > **Fills:** ARCHITECTURE § provider adapters; SECURITY § provider permissions
 
@@ -9,9 +9,7 @@
 - ACP is one dialect behind the provider contract, in `crates/adapters/maitty-provider-acp`.
   Nothing outside that crate names an ACP type, and no ACP frame reaches a client
   ([ADR 0017](../adr/0017-acp-for-agents-without-an-adapter.md)).
-- Every chat the Chat view starts runs over ACP, Claude Code and Codex included
-  ([ADR 0018](../adr/0018-the-chat-view-talks-to-the-agent-directly.md)). Their own adapters
-  stay for chats already started with them and for the CLI.
+- Codex and Claude Code keep their own adapters. ACP is only for an agent that has none.
 - Speak protocol version 1 only. An agent that answers `initialize` with another version is
   refused, with its version in the message.
 - The wire types are the adapter's own (`wire.rs`): only the messages it reads and writes. Do not
@@ -103,21 +101,6 @@ An ACP agent is an `[[agents]]` entry with `acp = true`. The entry names the pro
 arguments; Maiker does not guess an agent's ACP flag. The keys and their checks are in
 [ENVIRONMENT](../ENVIRONMENT.md#project-specific-agents-run-over-acp).
 
-Claude Code and Codex have no ACP mode of their own, so each is run through a helper program
-the daemon knows by name (`BUILTIN_ACP_HELPERS` in `maitty-core/src/config.rs`), with no
-arguments. Each is an npm package that needs Node 22 or newer and is installed by the person,
-never by Maiker:
-
-| Agent | Program | Package |
-| --- | --- | --- |
-| `claude` | `claude-agent-acp` | `@agentclientprotocol/claude-agent-acp` |
-| `codex` | `codex-acp` | `@agentclientprotocol/codex-acp` (not `@zed-industries/codex-acp`, which installs the same name around an older Codex) |
-
-An `[[agents]]` entry named `claude` or `codex` with `acp = true` replaces the helper, and one
-with `enabled = false` switches it off. A helper that is not installed is not found when a chat
-asks for it, and the refusal names the program. The helper reads the agent's own sign-in and
-settings: its model and permission mode are the agent's, not Maiker's.
-
 ## Project-specific: how the daemon runs it
 
 `StartTarget::Acp { agent, cwd }` names an `[[agents]]` entry; the daemon resolves the program,
@@ -131,15 +114,10 @@ capabilities claim nothing yet: what one agent advertised stays inside its runni
 ## Project-specific: what is verified
 
 The dialect is tested against lines written by hand from the protocol's version 1 schema
-(`maitty-provider-acp/src/fixtures/`), not recorded. Run by hand on Linux, through the daemon:
-
-- **Claude Code** through `@agentclientprotocol/claude-agent-acp` 0.109.1: a chat started, two
-  messages were answered and a file edit showed as a tool step. No approval was asked for,
-  because that account's own Claude setting is the auto mode.
-- **Codex** through `@agentclientprotocol/codex-acp` 2.9.0: a chat started, a message was
-  answered and a file was written through commands shown as tool steps. Through
-  `@zed-industries/codex-acp` 0.16.0 the chat opened and every message was refused by the
-  service ("model is not supported"): its bundled Codex is older than the account's models.
-
-Nothing has been run on Windows or macOS. Gemini CLI and OpenCode have not been run here;
-recording real output and pinning versions is MAITTY-469, MAITTY-496 and MAITTY-497.
+(`maitty-provider-acp/src/fixtures/`), not recorded. Two real ACP programs were run by hand on
+Linux through the daemon, each from an `[[agents]]` entry, and each answered a message and
+showed its tool calls: `@agentclientprotocol/claude-agent-acp` 0.109.1 and
+`@agentclientprotocol/codex-acp` 2.9.0. That shows the dialect speaks to real agents; it is not
+how Claude Code and Codex are run. Gemini CLI and OpenCode
+have not been run here; recording their real output and pinning their versions is MAITTY-469,
+MAITTY-496 and MAITTY-497.

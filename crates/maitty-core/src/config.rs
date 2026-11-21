@@ -1391,12 +1391,10 @@ impl Config {
         }
     }
 
-    /// The agents that can be run as a chat over ACP: the config's own (`acp = true`), then the
-    /// built-in helpers for the agents that have no ACP mode themselves. A disabled entry is not
-    /// one, and an entry of a built-in's name stands in for it or, disabled, switches it off.
+    /// The agents that can be run as a chat over ACP, as the config names them. A disabled entry
+    /// is not one.
     pub fn acp_agents(&self) -> Vec<AcpAgent> {
-        let mut agents: Vec<AcpAgent> = self
-            .agents
+        self.agents
             .iter()
             .filter(|agent| agent.acp && agent.enabled != Some(false))
             .filter_map(|agent| {
@@ -1407,14 +1405,7 @@ impl Config {
                     env: agent.env.clone(),
                 })
             })
-            .collect();
-        for (name, command) in BUILTIN_ACP_HELPERS {
-            let written = self.agents.iter().any(|agent| agent.name == name && (agent.acp || agent.enabled == Some(false)));
-            if !written {
-                agents.push(AcpAgent { name: name.into(), command: command.into(), args: Vec::new(), env: BTreeMap::new() });
-            }
-        }
-        agents
+            .collect()
     }
 
     pub fn acp_agent(&self, name: &str) -> Option<AcpAgent> {
@@ -1502,11 +1493,6 @@ fn refuse_identity_env(agents: &[AgentDef]) -> Result<()> {
     }
     Ok(())
 }
-
-/// The helper programs that speak ACP for an agent with no ACP mode of its own, by the agent's
-/// name: each is the program its npm package installs (`docs/stack/acp.md`). One that is not
-/// installed is simply not found when a chat asks for it.
-const BUILTIN_ACP_HELPERS: [(&str, &str); 2] = [("claude", "claude-agent-acp"), ("codex", "codex-acp")];
 
 /// An agent run as a chat over ACP: the program, its arguments and the variables set for it.
 /// `env` can hold credentials, so it is never logged.
@@ -2942,27 +2928,12 @@ alt_arrows = true").unwrap();
 
         let agents = c.acp_agents();
 
+        assert_eq!(agents.len(), 1);
         assert_eq!((agents[0].name.as_str(), agents[0].command.as_str()), ("gemini", "gemini"));
         assert_eq!(agents[0].args, ["--experimental-acp"]);
         assert_eq!(agents[0].env.get("GEMINI_SANDBOX").map(String::as_str), Some("false"));
-        assert!(c.acp_agent("opencode").is_none());
+        assert!(c.acp_agent("opencode").is_none() && c.acp_agent("claude").is_none());
         assert!(c.agent_defs().iter().any(|agent| agent.name == "gemini"), "it is still detected in a terminal");
-    }
-
-    #[test]
-    fn claude_and_codex_run_over_acp_through_their_helpers_unless_the_config_says_otherwise() {
-        let plain = Config::default();
-        let written: Config = toml::from_str(
-            "[[agents]]\nname = \"claude\"\nacp = true\ncommand = \"my-claude-acp\"\n\n[[agents]]\nname = \"codex\"\nenabled = false\n",
-        )
-        .unwrap();
-
-        let command = |config: &Config, name: &str| config.acp_agent(name).map(|agent| agent.command);
-
-        assert_eq!(command(&plain, "claude").as_deref(), Some("claude-agent-acp"));
-        assert_eq!(command(&plain, "codex").as_deref(), Some("codex-acp"));
-        assert_eq!(command(&written, "claude").as_deref(), Some("my-claude-acp"));
-        assert_eq!(command(&written, "codex"), None, "a disabled agent has no helper either");
     }
 
     #[test]
