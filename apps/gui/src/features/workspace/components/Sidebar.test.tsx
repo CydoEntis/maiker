@@ -752,7 +752,7 @@ describe('the Needs you strip', () => {
   it('drops the project filter when it picks a session of another project, so its project is there to unfold', async () => {
     const user = userEvent.setup()
     show(asking(), { machines: [LOCAL_HEAD, DEVBOX] })
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^shop/ }))
     expect(screen.queryByRole('button', { name: 'api', expanded: true })).toBeNull()
     expect(stripRows()).toHaveLength(2)
@@ -842,8 +842,8 @@ describe('the top of the sidebar', () => {
   it('keeps the filter button for the project filter alone: no Group or Sort row', async () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'A' })])
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
-    expect(screen.getByRole('dialog', { name: 'Group, sort and filter' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
+    expect(screen.getByRole('dialog', { name: 'Filter by project' })).toBeTruthy()
     expect(screen.queryByRole('radiogroup', { name: 'Group' })).toBeNull()
     expect(screen.queryByRole('radiogroup', { name: 'Sort' })).toBeNull()
   })
@@ -852,11 +852,11 @@ describe('the top of the sidebar', () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'Alpha', cwd: '/home/me/shop', folder: '/home/me/shop' }), session(2, { agent: 'claude', named: true, title: 'Beta', cwd: '/home/me/docs', folder: '/home/me/docs' })])
     const names = () => screen.getAllByRole('button', { name: /^(Alpha|Beta),/ }).map((row) => row.querySelector('.mx-row-name')?.textContent)
-    await user.click(screen.getByRole('button', { name: 'Filter and group: All projects' }))
+    await user.click(screen.getByRole('button', { name: 'Filter by project: All projects' }))
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^docs/ }))
     expect(names()).toEqual(['Beta'])
     expect(screen.queryByRole('button', { name: 'shop', expanded: true })).toBeNull()
-    expect(screen.getByRole('dialog', { name: 'Group, sort and filter' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: 'Filter by project' })).toBeTruthy()
     await user.click(screen.getByRole('button', { name: /^All projects/ }))
     expect(names()).toEqual(['Alpha', 'Beta'])
   })
@@ -868,7 +868,7 @@ describe('the top of the sidebar', () => {
       session(2, { named: true, title: 'B1', cwd: '/home/me/busy' }),
       session(3, { named: true, title: 'B2', cwd: '/home/me/busy' }),
     ])
-    await user.click(screen.getByRole('button', { name: /^Filter and group/ }))
+    await user.click(screen.getByRole('button', { name: /^Filter by project/ }))
     const group = screen.getByRole('group', { name: 'Show projects' })
     expect(within(group).getAllByRole('button').map((button) => button.querySelector('.mx-grp-name')?.textContent)).toEqual(['All projects', 'busy', 'solo'])
     await user.type(screen.getByRole('textbox', { name: 'Filter projects' }), 'so')
@@ -1079,7 +1079,7 @@ describe('the filter button', () => {
   it('stays plain on the default filter, and turns to the accent once a project is picked', async () => {
     const user = userEvent.setup()
     show([session(1, { agent: 'claude', named: true, title: 'A', repo: 'alpha' }), session(2, { agent: 'claude', named: true, title: 'B', repo: 'beta' })])
-    const button = () => screen.getByRole('button', { name: /^Filter and group/ })
+    const button = () => screen.getByRole('button', { name: /^Filter by project/ })
     expect(button()).toHaveAttribute('data-on', 'false')
     await user.click(button())
     await user.click(within(screen.getByRole('group', { name: 'Show projects' })).getByRole('button', { name: /^alpha/ }))

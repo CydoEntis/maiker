@@ -24,10 +24,6 @@ const CHAT_TEXT_LARGEST = 140
 export const CHAT_TEXT_SIZES: readonly number[] = [CHAT_TEXT_SMALL, CHAT_TEXT_SIZE_DEFAULT, CHAT_TEXT_LARGE, CHAT_TEXT_LARGER, CHAT_TEXT_LARGEST]
 /** Which side of the window the sidebar sits on. */
 export type SidebarSide = 'left' | 'right'
-/** How the sidebar orders sessions: as they were created (rows never move), or with what needs you first. */
-export type SidebarOrder = 'creation' | 'priority'
-/** What the sidebar's headings are: what each session is doing, its project, or its machine. */
-export type SidebarGroup = 'status' | 'project' | 'machine'
 /** Which corner the toasts stack in. */
 export type ToastPosition = 'bottom' | 'top'
 /** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
@@ -88,7 +84,6 @@ export type SettingsPreferences = {
   startFolder: string
   /** Where a block saved from a chat goes; empty is the Downloads folder. */
   exportFolder: string
-  /** How the sidebar groups sessions: by git repository, or by the folder they are in. */
   /** Which theme is in use: your dark one, your light one, or whichever the system asks for. */
   themeMode: ThemeMode
   /** The theme names used in dark and in light (Settings › Appearance). */
@@ -109,8 +104,6 @@ export type SettingsPreferences = {
   /** The docked sidebar's width in px; dragged with the mouse. */
   sidebarWidth: number
   sidebarSide: SidebarSide
-  sidebarOrder: SidebarOrder
-  sidebarGroup: SidebarGroup
   /** Inside a project of three sessions or more, a heading over each status that has sessions. The order is the same either way. */
   sidebarStatusHeadings: boolean
   terminalDock: TerminalDock
@@ -215,8 +208,6 @@ function defaults(): SettingsPreferences {
     tabTextSize: UI_TEXT_SIZE_DEFAULT,
     sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     sidebarSide: 'left',
-    sidebarOrder: 'creation',
-    sidebarGroup: 'status',
     sidebarStatusHeadings: true,
     terminalDock: 'bottom',
     iconSize: 'medium',
@@ -319,8 +310,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       tabTextSize: clampNumber(preferences.tabTextSize, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, fallback.tabTextSize),
       sidebarWidth: clampNumber(preferences.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, fallback.sidebarWidth),
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
-      sidebarOrder: preferences.sidebarOrder === 'creation' || preferences.sidebarOrder === 'priority' ? preferences.sidebarOrder : fallback.sidebarOrder,
-      sidebarGroup: preferences.sidebarGroup === 'status' || preferences.sidebarGroup === 'project' || preferences.sidebarGroup === 'machine' ? preferences.sidebarGroup : fallback.sidebarGroup,
       sidebarStatusHeadings: bool(preferences.sidebarStatusHeadings, fallback.sidebarStatusHeadings),
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,

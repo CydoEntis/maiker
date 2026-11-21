@@ -464,7 +464,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   text size is Ctrl+= and Ctrl+− (and Settings › Terminal), and the shortcuts open with their own key.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
   or tabs. A 264px card on `--card` with a `--line` hairline, 8px from the window's edges. Its header reads **Chats**
-  (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then three 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu** (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner: a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows before it scrolls, **All projects** first while the search is empty; picking one narrows the tree to that project's sessions, and the menu stays open; **Reset** appears while a project is picked, and the ≡ button turns `--accent-text` (`data-on`) then. Its Group and Sort rows are not shown: the list is always one tree, `model/sidebarTree.ts`), and the **New session** `+` (opens the + menu, below).
+  (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then three 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu** (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner: a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows before it scrolls, **All projects** first while the search is empty; picking one narrows the tree to that project's sessions, and the menu stays open; **Reset** appears while a project is picked, and the ≡ button turns `--accent-text` (`data-on`) then. It has no grouping or order choice: the list is always one tree, `model/sidebarTree.ts`), and the **New session** `+` (opens the + menu, below).
   **Needs you strip** (`NeedsYouStrip`, `waitingSessions`), between the header and the tree: while a session waits on
   you (it asks, or an agent stopped; one held by its plan limit waits on the limit, not on you, so it is not here) a card
   of the group look (`--m-card`, hairline, `--r-panel`, 8px from the sidebar's sides) headed **Needs you** with its count
@@ -577,7 +577,7 @@ and timings; the feature stylesheets beside their components carry them (`sideba
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). TERMINAL: **Terminal** (text,
   scrollback, and Panes: where an agent's terminals open), **Appearance** (look, surfaces, density and pane
-  title text, motion) and **Sidebar** (grouping, order, position, icon and text size, width). WORKSPACE and ADVANCED
+  title text, motion) and **Sidebar** (status headings, position, icon and text size, width). WORKSPACE and ADVANCED
   are as they were. Each page has a letter that jumps to it (G, C, E, T, A, S, U, N, M, ?, D, P).
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
   text size** (`chatTextSize`: 90 to 140%). Auto is the 760px column on a small pane and grows with a large one, to 62%

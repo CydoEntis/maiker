@@ -2,7 +2,7 @@ import { baseName } from './folderPick'
 import type { MachineHead } from './machines'
 import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
 import type { SessionView } from './session'
-import { sectionOf, sortedBy, statusSections, type HeldRow, type StatusSection } from './sidebar'
+import { byLatestChange, sectionOf, statusSections, type HeldRow, type StatusSection } from './sidebar'
 
 /**
  * A project with fewer sessions than this lists them under no status heading: with one or two rows the dot on each row
@@ -66,7 +66,7 @@ export function sidebarTree(heads: readonly MachineHead[], machines: readonly Ma
     const projects = machines.find((machine) => sameMachineName(machine.machineName, head.name))?.projects ?? []
     const nodes = projects.map((entry): ProjectNode => {
       const sessions = entry.sessions.filter(shown)
-      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections: statusSections(sessions, held, 'recent'), count: sessions.length }
+      return { key: projectFoldKey(entry.project), name: projectName(entry), project: entry.project, sections: statusSections(sessions, held), count: sessions.length }
     })
     return { head, key: machineFoldKey(head.name), projects: nodes, count: nodes.reduce((total, node) => total + node.count, 0) }
   })
@@ -113,7 +113,7 @@ export function waitsOnYou(session: SessionView): boolean {
 export function waitingSessions(heads: readonly MachineHead[], machines: readonly MachineProjects[]): WaitingSession[] {
   const placed = new Map(sidebarTree(heads, machines, waitsOnYou, null).flatMap((machine) => machine.projects.flatMap((project) =>
     project.sections.flatMap((section) => section.sessions.map((session) => [session.id, { session, machine: machine.head, project }] as const)))))
-  return sortedBy([...placed.values()].map((entry) => entry.session), 'recent').flatMap((session) => {
+  return byLatestChange([...placed.values()].map((entry) => entry.session)).flatMap((session) => {
     const entry = placed.get(session.id)
     return entry === undefined ? [] : [entry]
   })

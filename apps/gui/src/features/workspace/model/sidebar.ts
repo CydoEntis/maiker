@@ -1,5 +1,4 @@
 import { isChatSession } from './chatSession'
-import type { MachineHead } from './machines'
 import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
 
 /**
@@ -12,14 +11,6 @@ const EXITED_SHELL = 7
 
 function urgencyOf(session: SessionView): number {
   return session.status === 'error' && isShell(session) ? EXITED_SHELL : URGENCY[session.status]
-}
-
-/** The order the sidebar lists a machine's sessions in: as created, or with what needs you first and the rest as created. */
-export type SidebarOrder = 'creation' | 'priority'
-
-export function bySidebarOrder(sessions: readonly SessionView[], order: SidebarOrder): SessionView[] {
-  const created = inCreationOrder(sessions)
-  return order === 'priority' ? created.sort((a, b) => Number(b.status === 'needs') - Number(a.status === 'needs')) : created
 }
 
 export function byUrgency(sessions: readonly SessionView[]): SessionView[] {
@@ -107,41 +98,13 @@ export function rowWord(session: SessionView, now: number = Date.now()): string 
   return isShell(session) ? 'exited' : STATUS_WORD.error
 }
 
-/** How the rows within a heading are ordered: the latest change of state first, the oldest session first, or by name. */
-export type SidebarSort = 'recent' | 'oldest' | 'name'
-
-export const SIDEBAR_SORTS: ReadonlyArray<readonly [SidebarSort, string]> = [['recent', 'Recent'], ['oldest', 'Oldest'], ['name', 'A–Z']]
-
-export const DEFAULT_SIDEBAR_SORT: SidebarSort = 'recent'
-
 /**
- * The sessions in the order a heading lists them. `oldest` is creation order, the daemon's pane number; `recent` puts the
- * session whose state changed last first (one that never reported a change after the others, newest first); `name` is the
- * names a row shows, A to Z. A row moves only when its state changes or it is renamed, never with the clock.
+ * The sessions with the one whose state changed last first; one that never reported a change comes after the others,
+ * newest first. A row moves only when its state changes, never with the clock.
  */
-export function sortedBy(sessions: readonly SessionView[], sort: SidebarSort): SessionView[] {
-  const created = inCreationOrder(sessions)
-  if (sort === 'oldest') return created
-  if (sort === 'name') return created.sort((a, b) => rowTitle(a).localeCompare(rowTitle(b)))
-  return created.reverse().sort((a, b) => (b.statusSince ?? 0) - (a.statusSince ?? 0))
+export function byLatestChange(sessions: readonly SessionView[]): SessionView[] {
+  return inCreationOrder(sessions).reverse().sort((a, b) => (b.statusSince ?? 0) - (a.statusSince ?? 0))
 }
-
-export type ProjectGroup = { name: string; color: string; sessions: SessionView[]; needs: number }
-
-/** A machine's rows grouped by project, in the order each project first appears in the urgency list. */
-export function projectGroups(sessions: readonly SessionView[]): ProjectGroup[] {
-  const groups = new Map<string, SessionView[]>()
-  for (const session of sessions) {
-    const name = projectOf(session)
-    groups.set(name, [...(groups.get(name) ?? []), session])
-  }
-  return [...groups.entries()].map(([name, members]) => ({ name, color: projectColor(name), sessions: members, needs: members.filter((member) => member.status === 'needs').length }))
-}
-
-/** What the sidebar's headings are: what each session is doing, its project, or the machine it runs on. */
-export type SidebarGrouping = 'status' | 'project' | 'machine'
-
-export const SIDEBAR_GROUPINGS: ReadonlyArray<readonly [SidebarGrouping, string]> = [['status', 'Status'], ['project', 'Project'], ['machine', 'Machine']]
 
 /**
  * A terminal: a session with no agent in it (a shell, or a program running in one, such as `pnpm dev`). One that needs
@@ -149,10 +112,6 @@ export const SIDEBAR_GROUPINGS: ReadonlyArray<readonly [SidebarGrouping, string]
  */
 export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
   return !session.conversation.agent && session.status !== 'needs'
-}
-
-export function isSidebarGrouping(value: unknown): value is SidebarGrouping {
-  return SIDEBAR_GROUPINGS.some(([grouping]) => grouping === value)
 }
 
 export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle'
@@ -188,13 +147,13 @@ export type HeldRow = { readonly id: string; readonly section: StatusSectionKey 
 const stays = (section: StatusSectionKey): boolean => section === 'done' || section === 'idle'
 
 /**
- * The sessions under the status each has, in `sort` order within a section; a section with nothing in it is left out. The `held` row stays where it was picked: looking at a finished agent makes it
+ * The sessions under the status each has, the latest change first within a section (`byLatestChange`); a section with nothing in it is left out. The `held` row stays where it was picked: looking at a finished agent makes it
  * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
  * mark still shows its status. Only that shift between finished and idle is held: a row that starts working, or asks, goes
  * to its own section at once, or an agent at work would be listed as idle until the person looked away.
  */
-export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null, sort: SidebarSort = 'oldest'): StatusSection[] {
-  const ordered = sortedBy(sessions, sort)
+export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null): StatusSection[] {
+  const ordered = byLatestChange(sessions)
   const placed = (session: SessionView): StatusSectionKey => {
     const actual = sectionOf(session)
     return session.id === held?.id && stays(held.section) && stays(actual) ? held.section : actual
@@ -236,31 +195,4 @@ export function projectChoices(sessions: readonly SessionView[]): ProjectChoice[
 /** The sessions of one project, or all of them when none is picked. */
 export function inProject(sessions: readonly SessionView[], project: string | null): SessionView[] {
   return project === null ? [...sessions] : sessions.filter((session) => projectOf(session) === project)
-}
-
-export type ProjectSection = ProjectGroup & { key: string; head: MachineHead }
-
-/**
- * Every project as one heading, by name. A project that is on two machines gets a heading for each,
- * this computer's first, because the same folder name on another machine is another checkout.
- */
-export function projectSections(sessions: readonly SessionView[], heads: readonly MachineHead[], sort: SidebarSort = 'oldest'): ProjectSection[] {
-  return heads
-    .flatMap((head) => projectGroups(sortedBy(sessions.filter((session) => session.machine === head.machine), sort))
-      .map((group) => ({ ...group, key: `${head.key}:${group.name}`, head })))
-    .sort((a, b) => a.name.localeCompare(b.name))
-}
-
-export type MachineGroup = { head: MachineHead; sessions: SessionView[] }
-
-/**
- * The sidebar's groups by machine: one per machine (this computer first), each with its sessions in
- * `order`. With no sessions anywhere and no other machine there are no groups, only the note that
- * says how to start one. Another machine keeps its header with no sessions, as a machine with no app
- * yet has none and its header is where it says so.
- */
-export function machineGroups(sessions: readonly SessionView[], heads: readonly MachineHead[], keepEmpty = false, order: SidebarOrder = 'creation'): MachineGroup[] {
-  // A lone machine with nothing on it has no heading, unless something (a draft chat) is waiting there.
-  if (!keepEmpty && sessions.length === 0 && heads.length <= 1) return []
-  return heads.map((head) => ({ head, sessions: bySidebarOrder(sessions.filter((session) => session.machine === head.machine), order) }))
 }

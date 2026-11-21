@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactElement, type ReactNode } from 'react'
 import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
 import { folderNameOf, STATUS_WORD, type SessionView } from '../model/session'
-import { DEFAULT_SIDEBAR_SORT, inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
+import { inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
 import { machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
 import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
@@ -584,7 +584,7 @@ function Rail(props: SidebarProps) {
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const sections = statusSections(splitPutAway(props.sessions).listed, null, DEFAULT_SIDEBAR_SORT)
+  const sections = statusSections(splitPutAway(props.sessions).listed)
   return (
     <div className="mx-rail">
       <div className="mx-rail-top">

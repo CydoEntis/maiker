@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -190,6 +190,18 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().sidebarStatusHeadings).toBe(false)
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarStatusHeadings: 'no' }))
     expect(readSettingsPreferences().sidebarStatusHeadings).toBe(true)
+  })
+
+  it('loads settings saved with the removed sidebar grouping and order, keeps the rest, and drops them on the next save', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarGroup: 'machine', sidebarOrder: 'priority', sidebarSide: 'right' }))
+    const read = readSettingsPreferences()
+    expect(read.sidebarSide).toBe('right')
+    expect(read).not.toHaveProperty('sidebarGroup')
+    expect(read).not.toHaveProperty('sidebarOrder')
+    writeSettingsPreferences(read)
+    const saved: unknown = JSON.parse(localStorage.getItem('maiker.gui.settings.v1') ?? '{}')
+    expect(saved).not.toHaveProperty('sidebarGroup')
+    expect(saved).not.toHaveProperty('sidebarOrder')
   })
 
   it('opens sessions in the chat unless a view was chosen, and ignores nonsense', () => {
