@@ -3,6 +3,8 @@ use serde_json::Value;
 use maitty_shared::conversation::TurnChoice;
 use std::ffi::OsString;
 
+#[cfg(test)]
+mod dialect_spike;
 mod hooks;
 mod projection;
 pub use hooks::{
