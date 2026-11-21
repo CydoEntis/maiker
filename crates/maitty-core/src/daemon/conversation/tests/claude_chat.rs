@@ -15,6 +15,7 @@ async fn a_claude_chat_is_created_sent_a_message_and_read_back_through_the_daemo
         .await
         .unwrap();
         let claude = crate::conversation::LaunchSettings {
+            agent: None,
             provider: crate::conversation::Provider::Claude,
             executable,
             config_root,
@@ -125,6 +126,7 @@ async fn a_picked_model_and_effort_start_the_next_claude_message_and_a_bad_pick_
         .unwrap();
         let arguments_file = executable.with_extension("args");
         let claude = crate::conversation::LaunchSettings {
+            agent: None,
             provider: crate::conversation::Provider::Claude,
             executable,
             config_root,

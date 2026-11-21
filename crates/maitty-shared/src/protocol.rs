@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 120;
+pub const PROTOCOL_VERSION: u32 = 121;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -430,35 +430,9 @@ pub struct AllowedCommand {
 /// sent (`ServerMsg::introduced_in`), or a field it does not need. Set it to the current version
 /// in the change that removes, renames or retypes anything an older peer reads or writes, or
 /// that adds a value inside a message it is still sent (a new `Status`, say): such a peer would
-/// misread, and that is refused. 115 removed the in-app tickets (ADR 0013): a peer before it sent
-/// or waited for messages that no longer exist.
-pub const COMPATIBLE_SINCE: u32 = 115;
-/// The first version that reads `Command::SaveFile` and `RepoRequest::FileStamped`: a window offers
-/// editing only to a daemon at least this new.
-pub const FILE_EDIT_SINCE: u32 = 116;
-/// The first version that reads `Query::CreateFolder`. A window learns whether a machine's daemon
-/// does from `FolderListing::can_create`, so it never sends the question to one that would not answer.
-pub const FOLDER_CREATE_SINCE: u32 = 117;
-/// The first version whose daemon keeps the bypass-permissions switches (`SettingKey::BypassOff`). An older
-/// daemon ignores `SharedSettings::bypass_off` and cannot read the key, so it is not sent there.
-pub const BYPASS_SETTING_SINCE: u32 = 118;
-/// The first version whose daemon keeps `[updates] machines` (`SettingKey::UpdateMachines`); an older one
-/// cannot read the key, so it is not sent there.
-pub const UPDATE_MACHINES_SINCE: u32 = 118;
-/// The first version whose daemon sends `Reply::CloneProgress` while it clones. Only a client at least this new is
-/// sent it (`ServerMsg::introduced_in`); an older one waits for `Reply::Cloned` alone, as it always did.
-pub const CLONE_PROGRESS_SINCE: u32 = 119;
-/// The first version that reads `Query::FolderGit`: branches of a folder, switched or made on a machine's own daemon.
-pub const FOLDER_GIT_SINCE: u32 = 119;
-/// The first version that reads `Query::MachineFacts`.
-pub const MACHINE_FACTS_SINCE: u32 = 119;
-/// The first version whose daemon signs in to GitHub itself (`SignInAgent::Github`, `SignInRequest::SignOut`).
-pub const GITHUB_SIGN_IN_SINCE: u32 = 119;
-
-/// The first version whose daemon reads `Command::AnswerChatHelpers` and lets a chat ask to start helpers
-/// (ADR 0016). An older one never fills `ConversationSummary::helper_ask`, so a client has nothing to answer there.
-pub const CHAT_HELPERS_SINCE: u32 = 120;
-
+/// misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0017): a peer before
+/// it cannot read a list of conversations that holds one.
+pub const COMPATIBLE_SINCE: u32 = 121;
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
 /// a build that says nothing, which then talks only to its own version).
@@ -556,6 +530,24 @@ pub struct ConversationSummary {
     /// back to what it knows about the agent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub capabilities: Option<crate::conversation::capabilities::Capabilities>,
+    /// The agent an ACP conversation runs, by its name in the daemon's config. Absent for every
+    /// other provider, whose name is the agent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+}
+
+impl ConversationSummary {
+    /// The agent's name as a person reads it: the provider's, or an ACP agent's own.
+    pub fn agent_label(&self) -> String {
+        use crate::conversation::Provider;
+        match (self.provider, &self.agent) {
+            (Provider::Codex, _) => "Codex".into(),
+            (Provider::Claude, _) => "Claude".into(),
+            (Provider::Gemini, _) => "Gemini".into(),
+            (Provider::Acp, Some(agent)) => agent.clone(),
+            (Provider::Acp, None) => "Agent".into(),
+        }
+    }
 }
 
 /// How the service's refusal starts while a session's request to start helpers waits on the
@@ -1663,7 +1655,7 @@ pub enum Reply {
         outcome: Result<String, String>,
     },
     /// Where a `Query::CloneRepo` has got to, sent any number of times before its `Cloned`. Only a
-    /// client at least `CLONE_PROGRESS_SINCE` is sent it. `percent` is of `phase`, 0 to 100.
+    /// client that reads it is sent it. `percent` is of `phase`, 0 to 100.
     CloneProgress {
         tag: u64,
         phase: ClonePhase,
@@ -2668,38 +2660,19 @@ impl WorkspaceInfo {
 impl ServerMsg {
     /// The first version whose client reads this message. The daemon does not send a message to
     /// a client older than that. A message added while `COMPATIBLE_SINCE` stays behind gets its
-    /// own arm here; everything else is as old as the window.
+    /// own arm here; everything else is as old as the window. 121 moved the window, so every
+    /// message there is today is as old as it.
     pub fn introduced_in(&self) -> u32 {
-        match self {
-            ServerMsg::Reply(Reply::CloneProgress { .. }) => CLONE_PROGRESS_SINCE,
-            ServerMsg::Reply(Reply::FolderGit { .. }) => FOLDER_GIT_SINCE,
-            ServerMsg::Reply(Reply::MachineFacts { .. }) => MACHINE_FACTS_SINCE,
-            ServerMsg::Reply(Reply::AgentSignIn { agent: SignInAgent::Github, .. }) => GITHUB_SIGN_IN_SINCE,
-            _ => COMPATIBLE_SINCE,
-        }
+        COMPATIBLE_SINCE
     }
 }
 
 impl ClientMsg {
     /// The first version whose daemon reads this message: what a client checks before it sends
-    /// a request to an older daemon, which would otherwise never answer it.
+    /// a request to an older daemon, which would otherwise never answer it. A message added
+    /// while `COMPATIBLE_SINCE` stays behind gets its own arm here.
     pub fn introduced_in(&self) -> u32 {
-        match self {
-            ClientMsg::Query(Query::CreateFolder { .. }) => FOLDER_CREATE_SINCE,
-            ClientMsg::Query(Query::FolderGit { .. }) => FOLDER_GIT_SINCE,
-            ClientMsg::Query(Query::MachineFacts { .. }) => MACHINE_FACTS_SINCE,
-            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Github, .. })
-            | ClientMsg::Query(Query::AgentSignIn { request: SignInRequest::SignOut, .. }) => GITHUB_SIGN_IN_SINCE,
-            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::BypassOff, .. }) => BYPASS_SETTING_SINCE,
-            ClientMsg::Command(Command::SetSetting { key: crate::settings_view::SettingKey::UpdateMachines, .. }) => UPDATE_MACHINES_SINCE,
-            ClientMsg::Command(Command::AnswerChatHelpers { .. }) => CHAT_HELPERS_SINCE,
-            ClientMsg::Command(Command::SaveFile { .. })
-            | ClientMsg::Query(Query::Repo {
-                request: crate::repo::RepoRequest::FileStamped { .. },
-                ..
-            }) => FILE_EDIT_SINCE,
-            _ => COMPATIBLE_SINCE,
-        }
+        COMPATIBLE_SINCE
     }
 }
 
@@ -2749,15 +2722,15 @@ mod tests {
         assert!(decode::<Command>(&bytes).is_ok());
     }
 
-    /// Answering a chat's helper request is a new command: a daemon built before it cannot read it,
-    /// so it is asked only of one that can.
+    /// Answering a chat's helper request is a command a daemon built before it cannot read. The
+    /// window has moved past that daemon, so the command is as old as the window.
     #[test]
     fn a_chats_helper_answer_is_sent_only_to_a_daemon_that_reads_it() {
         let answer = Command::AnswerChatHelpers {
             conversation: crate::conversation::ConversationId(7),
             choice: HelperChoice::Allow,
         };
-        assert_eq!(ClientMsg::Command(answer.clone()).introduced_in(), CHAT_HELPERS_SINCE);
+        assert_eq!(ClientMsg::Command(answer.clone()).introduced_in(), COMPATIBLE_SINCE);
         assert_eq!(
             ClientMsg::Command(Command::AnswerHelpers { term: 1, choice: HelperChoice::Allow }).introduced_in(),
             COMPATIBLE_SINCE,
@@ -3169,7 +3142,7 @@ mod tests {
             decode::<ServerMsg>(&news),
             Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
         ));
-        assert_eq!(PROTOCOL_VERSION, 120);
+        assert_eq!(PROTOCOL_VERSION, 121);
     }
 
     /// A new command is a new enum variant: a peer built before it can't read it, which is
@@ -3397,12 +3370,8 @@ mod tests {
             version: Some("5-abc".into()),
         };
         assert!(decode::<Old115Command>(&encode(&save).unwrap()).is_err());
-        assert_eq!(ClientMsg::Command(save).introduced_in(), FILE_EDIT_SINCE);
-        let stamped = crate::repo::RepoRequest::FileStamped { path: "README.md".into() };
-        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: stamped }).introduced_in(), FILE_EDIT_SINCE);
-        // Every older message keeps the window's version, so an older daemon is still talked to.
-        assert_eq!(ClientMsg::Query(Query::Repo { term: 3, tag: 1, request: crate::repo::RepoRequest::Snapshots }).introduced_in(), COMPATIBLE_SINCE);
-        const { assert!(FILE_EDIT_SINCE > COMPATIBLE_SINCE && FILE_EDIT_SINCE <= PROTOCOL_VERSION) };
+        // Every peer inside the window reads it, so it is as old as the window.
+        assert_eq!(ClientMsg::Command(save).introduced_in(), COMPATIBLE_SINCE);
         // The wire shapes are pinned: a peer on the same version reads these bytes.
         let reply = crate::repo::RepoReply::Saved { version: "7-ab".into() };
         assert_eq!(
@@ -3660,7 +3629,7 @@ mod tests {
 
     #[test]
     fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 120);
+        assert_eq!(PROTOCOL_VERSION, 121);
         let snapshot = Snapshot {
             daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
             ..Snapshot::default()
@@ -3945,12 +3914,12 @@ mod tests {
             key: SettingKey::UpdateMachines,
             value: SettingValue::Bool(false),
         });
-        assert_eq!(machines.introduced_in(), UPDATE_MACHINES_SINCE);
+        assert_eq!(machines.introduced_in(), COMPATIBLE_SINCE);
         let set = ClientMsg::Command(Command::SetSetting {
             key: SettingKey::BypassOff,
             value: SettingValue::List(vec!["codex".into()]),
         });
-        assert_eq!(set.introduced_in(), BYPASS_SETTING_SINCE);
+        assert_eq!(set.introduced_in(), COMPATIBLE_SINCE);
         let other = ClientMsg::Command(Command::SetSetting {
             key: SettingKey::ReduceMotion,
             value: SettingValue::Bool(true),
@@ -4750,8 +4719,7 @@ mod tests {
         }
         let ask = Query::CreateFolder { parent: "~/code".into(), name: "new".into(), tag: 4 };
         assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
-        assert_eq!(ClientMsg::Query(ask.clone()).introduced_in(), FOLDER_CREATE_SINCE);
-        const { assert!(FOLDER_CREATE_SINCE > COMPATIBLE_SINCE && FOLDER_CREATE_SINCE <= PROTOCOL_VERSION) };
+        assert_eq!(ClientMsg::Query(ask.clone()).introduced_in(), COMPATIBLE_SINCE);
         assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::CreateFolder { tag: 4, .. })));
 
         // The answers keep their shape: a pinned encoding of each, so a reorder or a rename is seen.
@@ -4919,38 +4887,65 @@ mod tests {
         assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));
     }
 
-    /// Version 119 added messages and two values inside one that already existed; none of them
-    /// is sent to a peer that cannot read it, so `COMPATIBLE_SINCE` did not have to move.
+    /// Version 121 added a provider. A list of conversations is sent to every client, so a peer
+    /// from before it would fail on the first ACP conversation: the window moved, and such a
+    /// peer is refused instead.
     #[test]
-    fn what_119_added_is_asked_and_sent_only_where_it_is_read() {
-        use super::{ClonePhase, FolderGitAnswer, FolderGitRequest, MachineFacts, SignInAgent, SignInRequest, SignInState};
-        const { assert!(COMPATIBLE_SINCE < 119, "119 added messages an older peer is never sent, so the window stays open") };
-        let facts = MachineFacts { host_name: None, os: "linux".into(), os_version: None, arch: "x86_64".into(), cpu_cores: 4, agents: Vec::new() };
-        let new_replies = [
-            ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: ClonePhase::Receiving, percent: 5 }),
-            ServerMsg::Reply(Reply::FolderGit { tag: 1, outcome: Ok(FolderGitAnswer::NotARepo) }),
-            ServerMsg::Reply(Reply::MachineFacts { tag: 1, facts }),
-            ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Github, state: SignInState::Idle }),
-        ];
-        for reply in &new_replies {
-            assert_eq!(reply.introduced_in(), 119, "{reply:?}");
+    fn a_peer_from_before_acp_is_refused_because_it_cannot_read_an_acp_conversation() {
+        use crate::conversation::{Provider, StartTarget};
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldProvider {
+            Codex,
+            Claude,
+            Gemini,
         }
-        let new_asks = [
-            ClientMsg::Query(Query::FolderGit { folder: "~/x".into(), request: FolderGitRequest::Branches, tag: 1 }),
-            ClientMsg::Query(Query::MachineFacts { tag: 1 }),
-            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Github, request: SignInRequest::Start, tag: 1 }),
-            ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Claude, request: SignInRequest::SignOut, tag: 1 }),
-        ];
-        for ask in &new_asks {
-            assert_eq!(ask.introduced_in(), 119, "{ask:?}");
-            let back: ClientMsg = decode(&encode(ask).unwrap()).unwrap();
-            assert_eq!(back.introduced_in(), 119);
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum OldStartTarget {
+            Create(serde_json::Value),
+            Session { settings: serde_json::Value, thread_id: String },
+            Conversation { id: u64, generation: u64 },
         }
-        // What an older peer sends and is sent about the same subjects is as old as the window.
-        let old_claude = ClientMsg::Query(Query::AgentSignIn { agent: SignInAgent::Claude, request: SignInRequest::Start, tag: 1 });
-        assert_eq!(old_claude.introduced_in(), COMPATIBLE_SINCE);
-        let old_cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
-        assert_eq!(old_cloned.introduced_in(), COMPATIBLE_SINCE);
+        let acp = rmp_serde::to_vec_named(&Provider::Acp).unwrap();
+        let start = rmp_serde::to_vec_named(&StartTarget::Acp { agent: "gemini".into(), cwd: "/code".into() }).unwrap();
+
+        assert!(decode::<OldProvider>(&acp).is_err());
+        assert!(decode::<OldStartTarget>(&start).is_err());
+        assert_eq!((PROTOCOL_VERSION, COMPATIBLE_SINCE), (121, 121));
+        assert!(!speaks_with(120, 115), "a peer from before the provider");
+        assert!(!speaks_with(119, 0));
+        assert!(speaks_with(121, 121));
+    }
+
+    #[test]
+    fn an_acp_conversation_names_its_agent_and_every_other_summary_is_as_it_was() {
+        use crate::conversation::Provider;
+        let old = serde_json::json!({
+            "id": 7, "generation": 3, "provider": "Codex", "cwd": "/code", "worktree": null,
+            "state": "Running", "status": "Idle", "native_term": null, "checks": []
+        });
+        let codex: ConversationSummary = serde_json::from_value(old.clone()).unwrap();
+        let mut acp = codex.clone();
+        acp.provider = Provider::Acp;
+        acp.agent = Some("gemini".into());
+
+        let written = serde_json::to_value(&acp).unwrap();
+        let read: ConversationSummary = decode(&encode(&acp).unwrap()).unwrap();
+
+        assert!(serde_json::to_value(&codex).unwrap().get("agent").is_none());
+        assert_eq!((&written["provider"], &written["agent"]), (&serde_json::json!("Acp"), &serde_json::json!("gemini")));
+        assert_eq!((read.provider, read.agent.as_deref()), (Provider::Acp, Some("gemini")));
+        assert_eq!((codex.agent_label(), acp.agent_label()), ("Codex".to_owned(), "gemini".to_owned()));
+    }
+
+    /// Since 121 moved the window, no message is newer than it.
+    #[test]
+    fn every_message_is_as_old_as_the_window() {
+        let ask = ClientMsg::Query(Query::MachineFacts { tag: 1 });
+        let answer = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
+
+        assert_eq!((ask.introduced_in(), answer.introduced_in()), (COMPATIBLE_SINCE, COMPATIBLE_SINCE));
     }
 
     /// The shapes version 118 wrote for what 119 still reads, as a peer of that version encodes them.

@@ -429,6 +429,7 @@ mod tests {
     #[test]
     fn read_only_launch_arguments_select_plan_mode_and_the_model() {
         let settings = LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: PathBuf::from("claude"),
             config_root: PathBuf::from("config"),

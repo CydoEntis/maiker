@@ -131,6 +131,14 @@ message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `S
 `ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
 "came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
 
+Protocol 121 added a provider (ADR 0017): `Provider::Acp`, with the agent's name in `agent` on `LaunchSettings`,
+`NativeBinding` and `ConversationSummary` (absent for every other provider), and `StartTarget::Acp { agent, cwd }`,
+which names an `[[agents]]` entry of the daemon's config and never a program. The list of conversations goes to every
+client, and a peer from before 121 cannot decode one that holds an ACP conversation, so `COMPATIBLE_SINCE` moved to
+121 and every older peer is refused (test: `a_peer_from_before_acp_is_refused_because_it_cannot_read_an_acp_conversation`).
+As with 115, the `*_SINCE` gates and `introduced_in` arms of 116 to 119 became dead and were removed; the lines below
+that name them record when each message appeared. 120 belongs to a change that landed beside this one.
+
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
 batch of events the daemon compares a stamp of what a `ConversationRead` would answer (history
@@ -803,8 +811,8 @@ later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also add
 (defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
 `UPDATE_MACHINES_SINCE`.
 
-Protocol 119 adds four things, none of which an older peer is ever sent, so `COMPATIBLE_SINCE` stays 115 (tests:
-`what_119_added_is_asked_and_sent_only_where_it_is_read`, `what_118_sent_about_clones_and_sign_in_still_decodes`):
+Protocol 119 adds four things, none of which an older peer was ever sent, so `COMPATIBLE_SINCE` stayed 115 then (test:
+`what_118_sent_about_clones_and_sign_in_still_decodes`):
 
 - `Reply::CloneProgress { tag, phase, percent }` (`CLONE_PROGRESS_SINCE`), sent any number of times before
   `Reply::Cloned`. The daemon now runs `git clone --progress` and reads git's stderr, which rewrites its progress

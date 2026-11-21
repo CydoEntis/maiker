@@ -1558,8 +1558,8 @@ pub async fn answer_helpers(
     }
 }
 
-/// The person's answer to a chat that asked to start helpers (ADR 0016). A service older than
-/// `CHAT_HELPERS_SINCE` is refused in words here: it could not read the command.
+/// The person's answer to a chat that asked to start helpers (ADR 0016). A service too old to
+/// read the command is refused in words here.
 pub async fn answer_chat_helpers(
     conversation: u64,
     choice: maitty_shared::protocol::HelperChoice,
@@ -2108,9 +2108,12 @@ pub async fn create_conversation(
         Provider::Claude => (claude_executable()?, claude_config_dir()?),
         // Gemini runs in a terminal and its chat is read from the transcript; it has no structured runtime.
         Provider::Gemini => bail!("Gemini has no structured chat; start it in a terminal"),
+        // The daemon picks an ACP agent's program from its own config; this start names a program itself.
+        Provider::Acp => bail!("An agent run over ACP cannot be started from here yet"),
     };
     let (sandbox, approval_policy) = permissions.launch_policy();
     let settings = LaunchSettings {
+        agent: None,
         provider,
         executable,
         config_root,

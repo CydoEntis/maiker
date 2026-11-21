@@ -23,6 +23,7 @@ fn conversation() -> ConversationSummary {
         helpers: Vec::new(),
         helper_ask: Vec::new(),
         capabilities: None,
+        agent: None,
     }
 }
 
@@ -415,7 +416,7 @@ fn esc_decides_later_and_a_chat_that_asks_nothing_opens_nothing() {
 #[test]
 fn an_older_service_on_this_computer_is_not_sent_a_chats_answer() {
     let (mut app, mut rx, _) = asking_app();
-    app.local_protocol = crate::protocol::CHAT_HELPERS_SINCE - 1;
+    app.local_protocol = crate::protocol::COMPATIBLE_SINCE - 1;
     app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
     app.on_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
     assert!(sent_commands(&mut rx).is_empty());

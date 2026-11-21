@@ -98,6 +98,7 @@ pub(crate) fn run(cmd: Cmd) -> Result<()> {
                 }
             } else {
                 let settings = LaunchSettings {
+                    agent: None,
                     provider: crate::conversation::Provider::Codex,
                     executable: executable.ok_or_else(|| {
                         anyhow::anyhow!("--executable is required for a new binding")

@@ -82,6 +82,7 @@ fn claude_launch(root: &Path, scenario: Option<&str>) -> (Launch, super::runtime
     let executable = fake_claude_executable(root);
     let root = std::fs::canonicalize(root).unwrap();
     let settings = crate::conversation::LaunchSettings {
+        agent: None,
         provider: crate::conversation::Provider::Claude,
         executable: executable.clone(),
         config_root: root.clone(),
@@ -94,6 +95,7 @@ fn claude_launch(root: &Path, scenario: Option<&str>) -> (Launch, super::runtime
     let conversation = Conversation {
         id: crate::conversation::ConversationId(90),
         binding: crate::conversation::NativeBinding {
+            agent: None,
             provider: crate::conversation::Provider::Claude,
             session_id: "fixture-session".into(),
             account: None,
@@ -454,6 +456,7 @@ async fn conversation_fixture(mode: &str) -> TestSession {
 fn settings(session: &TestSession) -> crate::conversation::LaunchSettings {
     let b = &session.fixture.record.binding;
     crate::conversation::LaunchSettings {
+        agent: None,
         provider: crate::conversation::Provider::Codex,
         executable: b.executable.clone(),
         config_root: b.config_root.clone(),
@@ -742,6 +745,7 @@ async fn start_claude_chat(session: &mut TestSession, client: u64, scenario: &'s
     .await
     .unwrap();
     let claude = crate::conversation::LaunchSettings {
+        agent: None,
         provider: crate::conversation::Provider::Claude,
         executable: executable.clone(),
         config_root,
@@ -799,6 +803,7 @@ fn claude_open() -> super::runtime::Rpc {
 
 pub(super) fn claude_settings() -> crate::conversation::LaunchSettings {
     crate::conversation::LaunchSettings {
+        agent: None,
         provider: crate::conversation::Provider::Claude,
         executable: PathBuf::from("claude"),
         config_root: PathBuf::from("config"),

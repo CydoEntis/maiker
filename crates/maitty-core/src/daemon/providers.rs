@@ -120,11 +120,25 @@ static GEMINI: Adapter = Adapter {
     side_questions: false,
 };
 
+/// Any agent run over ACP. It has no transcript of its own that the daemon follows: a pane
+/// running the same agent is known by that agent's own name, never as this.
+static ACP: Adapter = Adapter {
+    // Not run by the daemon yet (MAITTY-491).
+    structured: None,
+    // Never read: no pane's agent is named as this provider, so nothing follows a file for it.
+    transcript: Format::Gemini,
+    transcript_is_sessions: |_, _| false,
+    find_transcript: None,
+    commands: None,
+    side_questions: false,
+};
+
 pub(in crate::daemon) fn adapter(provider: Provider) -> &'static Adapter {
     match provider {
         Provider::Codex => &CODEX,
         Provider::Claude => &CLAUDE,
         Provider::Gemini => &GEMINI,
+        Provider::Acp => &ACP,
     }
 }
 

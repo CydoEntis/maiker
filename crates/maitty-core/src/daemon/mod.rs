@@ -4322,12 +4322,10 @@ mod tests {
         assert!(client_reads(&msg, msg.introduced_in()));
         assert!(!client_reads(&msg, msg.introduced_in() - 1));
 
-        // A client of the version before clone progress existed waits for the clone's own answer alone.
+        // The window opens at this version, so no message is newer than a client inside it.
         let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: crate::protocol::ClonePhase::Receiving, percent: 1 });
-        assert!(!client_reads(&progress, crate::protocol::CLONE_PROGRESS_SINCE - 1));
-        assert!(client_reads(&progress, crate::protocol::CLONE_PROGRESS_SINCE));
-        let cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
-        assert!(client_reads(&cloned, crate::protocol::CLONE_PROGRESS_SINCE - 1));
+        assert!(client_reads(&progress, crate::protocol::COMPATIBLE_SINCE));
+        assert!(client_reads(&progress, PROTOCOL_VERSION));
 
         let unreadable = crate::protocol::decode::<ClientMsg>(&[0xc1]).unwrap_err();
         assert!(skips_unreadable(PROTOCOL_VERSION + 1, &unreadable));

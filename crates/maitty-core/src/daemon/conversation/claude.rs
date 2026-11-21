@@ -810,6 +810,7 @@ mod tests {
 
     fn settings(approval_policy: ApprovalPolicy, sandbox: Sandbox) -> LaunchSettings {
         LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: PathBuf::from("claude"),
             config_root: PathBuf::from("config"),

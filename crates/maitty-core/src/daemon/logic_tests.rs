@@ -2070,6 +2070,7 @@ fn a_chats_helper_finds_its_chat_again_after_a_restart_and_one_whose_chat_is_gon
                 profile: None,
                 config_root: dir.clone(),
                 executable: dir.join("codex"),
+                agent: None,
                 cwd: dir.clone(),
                 worktree: None,
             },
@@ -11093,6 +11094,7 @@ fn a_conversation_terminal_its_hooks_never_named_is_remembered_by_its_conversati
     d.conversations.push(Conversation {
         id: ConversationId(9),
         binding: NativeBinding {
+            agent: None,
             provider: Provider::Codex,
             session_id: "native-1".into(),
             account: None,

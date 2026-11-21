@@ -1014,11 +1014,7 @@ impl App {
                 c.worktree.as_deref().unwrap_or(&c.cwd)
             };
             let wi = add_wt(&mut projs[pi], wt, String::new(), true);
-            let provider = match c.provider {
-                crate::conversation::Provider::Codex => "Codex",
-                crate::conversation::Provider::Claude => "Claude",
-                crate::conversation::Provider::Gemini => "Gemini",
-            };
+            let provider = c.agent_label();
             let checks = c.checks.clone();
             let check = crate::protocol::headline(&checks).cloned();
             projs[pi].wts[wi].sessions.push(Session {

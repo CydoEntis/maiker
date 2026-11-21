@@ -119,6 +119,7 @@ async fn structured_newer_full_commit_releases_two_matching_conversation_barrier
         let b = &second.record.binding;
         let target =
             crate::conversation::StartTarget::Create(crate::conversation::LaunchSettings {
+                agent: None,
                 provider: crate::conversation::Provider::Codex,
                 executable: b.executable.clone(),
                 config_root: b.config_root.clone(),

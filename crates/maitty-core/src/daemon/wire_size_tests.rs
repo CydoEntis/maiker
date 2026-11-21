@@ -435,6 +435,7 @@ fn conversation(i: u32) -> ConversationSummary {
         helpers: Vec::new(),
         helper_ask: Vec::new(),
         capabilities: None,
+        agent: None,
     }
 }
 

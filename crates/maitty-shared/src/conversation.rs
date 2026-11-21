@@ -18,6 +18,20 @@ pub struct LaunchSettings {
     pub model_provider: Option<String>,
     pub approval_policy: ApprovalPolicy,
     pub sandbox: Sandbox,
+    /// The `[[agents]]` entry an ACP conversation runs, by name. Set for [`Provider::Acp`] and
+    /// for no other provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+}
+
+/// The longest name an agent run over ACP may have.
+pub const ACP_AGENT_NAME_MAX: usize = 32;
+
+/// Whether `name` can name an agent run over ACP: lowercase letters, digits, `-` and `_`.
+pub fn acp_agent_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= ACP_AGENT_NAME_MAX
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -93,6 +107,9 @@ pub enum StartTarget {
         id: ConversationId,
         generation: u64,
     },
+    /// A new conversation with the agent the daemon's own config names `agent` and runs over
+    /// ACP. The daemon chooses the program; a client names only the agent and the folder.
+    Acp { agent: String, cwd: PathBuf },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -283,17 +300,23 @@ pub enum Provider {
     Codex,
     Claude,
     Gemini,
+    /// An agent with no adapter of its own, run over the Agent Client Protocol. Which agent is
+    /// in the conversation's `agent`.
+    Acp,
 }
 
 impl Provider {
+    /// The providers that are one agent each, and so can be told from a pane's agent name.
     pub const ALL: [Provider; 3] = [Provider::Codex, Provider::Claude, Provider::Gemini];
 
-    /// The agent's command, which is also its name in a terminal pane.
+    /// The agent's command, which is also its name in a terminal pane. For [`Provider::Acp`]
+    /// it is the protocol's name: the agent's own is in the conversation's `agent`.
     pub fn agent_name(self) -> &'static str {
         match self {
             Provider::Codex => "codex",
             Provider::Claude => "claude",
             Provider::Gemini => "gemini",
+            Provider::Acp => "acp",
         }
     }
 }
@@ -309,6 +332,9 @@ pub struct NativeBinding {
     pub executable: PathBuf,
     pub cwd: PathBuf,
     pub worktree: Option<PathBuf>,
+    /// The `[[agents]]` entry an ACP conversation runs. Set for [`Provider::Acp`] only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -421,10 +447,20 @@ pub fn validate_settings(settings: &LaunchSettings) -> Result<(), IdentityError>
             .model_provider
             .as_deref()
             .is_some_and(|s| !identity_text(s))
+        || !agent_fits(settings.provider, settings.agent.as_deref())
     {
         return Err(IdentityError::IncompleteBinding);
     }
     Ok(())
+}
+
+/// An ACP conversation names its agent, and no other conversation names one.
+fn agent_fits(provider: Provider, agent: Option<&str>) -> bool {
+    match (provider, agent) {
+        (Provider::Acp, Some(agent)) => acp_agent_name(agent),
+        (Provider::Acp, None) => false,
+        (_, agent) => agent.is_none(),
+    }
 }
 
 pub fn validate_metadata(
@@ -479,6 +515,7 @@ pub fn validate_registry(records: &[Conversation]) -> Result<(), IdentityError> 
                 || settings.executable != binding.executable
                 || settings.cwd != binding.cwd
                 || settings.provider != binding.provider
+                || settings.agent != binding.agent
             {
                 return Err(IdentityError::IncompleteBinding);
             }
@@ -498,6 +535,7 @@ pub fn validate_registry(records: &[Conversation]) -> Result<(), IdentityError> 
                 .into_iter()
                 .all(|p| exact_path(p))
             || binding.worktree.as_deref().is_some_and(|p| !exact_path(p))
+            || !agent_fits(binding.provider, binding.agent.as_deref())
             || record
                 .worktree_origin
                 .as_ref()
@@ -559,6 +597,7 @@ pub mod tests {
         Conversation {
             id: ConversationId(1),
             binding: NativeBinding {
+                agent: None,
                 provider: Provider::Codex,
                 session_id: "exact-session".into(),
                 account: Some("work".into()),
@@ -659,6 +698,7 @@ pub mod tests {
     #[test]
     fn legacy_launch_settings_default_to_codex() {
         let settings = LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: std::env::temp_dir().join("synthetic-claude.exe"),
             config_root: std::env::temp_dir().join("synthetic-claude-config"),
@@ -674,10 +714,63 @@ pub mod tests {
         assert_eq!(decoded.provider, Provider::Codex);
     }
 
+    fn acp_settings(agent: Option<&str>) -> LaunchSettings {
+        let base = conversation().binding;
+        LaunchSettings {
+            provider: Provider::Acp,
+            executable: base.executable,
+            config_root: base.config_root,
+            cwd: base.cwd,
+            model: None,
+            model_provider: None,
+            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox: Sandbox::ReadOnly,
+            agent: agent.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn an_acp_conversation_must_name_its_agent_and_no_other_may() {
+        let named_codex = LaunchSettings { provider: Provider::Codex, ..acp_settings(Some("gemini")) };
+
+        assert_eq!(validate_settings(&acp_settings(Some("gemini"))), Ok(()));
+        assert_eq!(validate_settings(&acp_settings(None)), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_settings(&acp_settings(Some("Gemini CLI"))), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_settings(&named_codex), Err(IdentityError::IncompleteBinding));
+    }
+
+    #[test]
+    fn a_saved_acp_conversation_keeps_its_agent_and_one_without_it_is_refused() {
+        let mut saved = conversation();
+        saved.binding.provider = Provider::Acp;
+        saved.binding.agent = Some("gemini".into());
+        saved.settings = Some(LaunchSettings { cwd: saved.binding.cwd.clone(), ..acp_settings(Some("gemini")) });
+        let mut unnamed = saved.clone();
+        unnamed.binding.agent = None;
+        unnamed.settings = None;
+        let mut other_agent = saved.clone();
+        other_agent.binding.agent = Some("opencode".into());
+
+        let read: Conversation = serde_json::from_value(serde_json::to_value(&saved).unwrap()).unwrap();
+
+        assert_eq!(read.binding.agent.as_deref(), Some("gemini"));
+        assert_eq!(validate_registry(&[saved]), Ok(()));
+        assert_eq!(validate_registry(&[unnamed]), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_registry(&[other_agent]), Err(IdentityError::IncompleteBinding));
+    }
+
+    #[test]
+    fn an_agent_name_is_short_lowercase_and_free_of_spaces() {
+        assert!(acp_agent_name("gemini") && acp_agent_name("open-code_2"));
+        assert!(!acp_agent_name("") && !acp_agent_name("Gemini") && !acp_agent_name("a b"));
+        assert!(!acp_agent_name(&"a".repeat(ACP_AGENT_NAME_MAX + 1)));
+    }
+
     #[test]
     fn launch_settings_must_match_the_recorded_provider() {
         let mut conversation = conversation();
         conversation.settings = Some(LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: conversation.binding.executable.clone(),
             config_root: conversation.binding.config_root.clone(),
