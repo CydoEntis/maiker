@@ -1360,7 +1360,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Sending the New session draft for Claude Code or Codex on this computer starts a chat session the daemon owns, with no
   terminal behind it (`startDirectChat` in `useSessionStarts`, the host's `start_chat_session`): no agent is started ahead
   of the first message, and nothing the agent draws on a terminal (an update menu, the trust-folder question) can stand in
-  the chat's way. The page stays until the daemon has answered, then closes in the update that opens the chat; the first
+  the chat's way. The chat is listed in the sidebar like any session (`isInSidebar` in `useSessionList`) and its pane is
+  the chat, with no terminal log. The page stays until the daemon has answered, then closes in the update that opens the chat; the first
   message is an ordinary send with the model and effort picked, and a send that fails puts the words in the chat's box. The
   mode picked becomes the daemon's posture (`chatPermissions` in `model/newChatHost.ts`): Claude's Default and Codex's Auto
   ask first, Plan and Read only change nothing, Bypass permissions and Full access ask about nothing, and the agent's Bypass
