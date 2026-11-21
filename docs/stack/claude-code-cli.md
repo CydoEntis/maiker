@@ -43,9 +43,16 @@ through the installed CLI. Anthropic's Help Center currently says third-party
 app usage continues to draw from Claude subscription limits; Maiker does not
 provide a separate Claude login or implement its own agent harness. The official
 Agent SDK uses `--permission-prompt-tool=stdio` for its `canUseTool` callback.
-The Maiker adapter follows that wire contract. See ADR
-0039 and
+The Maiker adapter follows that wire contract. See
+[ADR 0005](../adr/0005-provider-adapters-and-permissions.md) and
 the [transport research](../research/claude-code-gui-transport.md).
+
+The rule above against emulating Codex JSON-RPC is not yet met inside the daemon: `TurnProjector`
+and `claude.rs` hand the daemon Claude's events under Codex's notification names (`turn/started`,
+`item/completed`, `item/commandExecution/requestApproval`), because the daemon's conversation
+code reads that one vocabulary. No Claude frame and no Codex name reaches a client. The provider
+trait (MAITTY-482, MAITTY-484) replaces those names with provider events;
+[the fit check](../research/provider-trait-claude-fit.md) lists what moves.
 
 Windows Claude Code 2.1.314 was verified directly and through Maiker's daemon on
 2026-10-30. The daemon smoke covered conversation creation, streamed

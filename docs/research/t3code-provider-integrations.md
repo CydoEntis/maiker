@@ -56,7 +56,7 @@ lower-level Claude control protocol; its session-history and durable submission
 semantics still need to meet Maiker's stronger recovery contract. The official
 Agent SDK exposes session-message retrieval and a supported callback API, but
 requires a Node worker that the daemon must discover even when it was started by
-the TUI. The current [Claude transport decision](../adr/0039-claude-code-cli-streaming.md)
+the TUI. The current [Claude transport decision](../adr/0005-provider-adapters-and-permissions.md)
 follows PandaCode's installed-CLI control protocol, subject to a capability
 spike against Maiker's stricter history and recovery requirements.
 
