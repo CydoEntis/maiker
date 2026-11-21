@@ -209,6 +209,11 @@ enum Mode {
         term: ClientTerm,
         side: bool,
     },
+    /// A chat with no terminal asks to start helpers (beside its row, ADR 0016).
+    ChatHelpers {
+        chat: crate::client::ids::ClientSession,
+        side: bool,
+    },
     Secret {
         term: ClientTerm,
         id: u64,

@@ -423,6 +423,7 @@ impl App {
             Mode::GoTo { query, sel } => self.on_goto_key(query, sel, &k),
             Mode::Compose(c) => self.on_compose_key(*c, &k),
             Mode::Helpers { term, side } => self.on_helpers_key(term, side, &k),
+            Mode::ChatHelpers { chat, side } => self.on_chat_helpers_key(chat, side, &k),
             Mode::Secret { term, .. } => self.on_secret_key(term, &k),
             Mode::Confirm(c) if matches!(c.act, crate::client::menu::Act::OverrideCheck(..)) => {
                 self.on_override_key(*c, &k)

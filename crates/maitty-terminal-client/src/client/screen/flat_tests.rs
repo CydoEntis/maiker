@@ -1285,3 +1285,37 @@ fn a_narrow_sidebar_shortens_the_count_and_keeps_the_name() {
     let helper: String = rows[row_of(&app, 2) + 1].chars().take(24).collect();
     assert!(helper.contains("↳ fix-footer"), "{helper}");
 }
+
+#[test]
+fn a_helper_a_chat_started_names_the_chat_and_the_chat_counts_it() {
+    use crate::conversation::{ConversationId, ExecutionKind, Provider, RecoveryState};
+    let mut app = reference_fixture::world(Stage::None);
+    let cwd = app.snap.terms[&2].cwd.clone();
+    app.snap.conversations.push(crate::protocol::ConversationSummary {
+        id: ConversationId(41),
+        generation: 1,
+        provider: Provider::Claude,
+        execution: ExecutionKind::Structured,
+        cwd,
+        worktree: None,
+        state: RecoveryState::Running,
+        status: Status::Working,
+        native_term: None,
+        checks: Vec::new(),
+        title: Some("lead-chat".into()),
+        archived: false,
+        root: None,
+        branch: None,
+        helpers: Vec::new(),
+        helper_ask: Vec::new(),
+    });
+    app.snap.terms.get_mut(&2).expect("a session").started_by_chat = Some(ConversationId(41));
+    // A chat the list does not hold started nothing that shows as its helper.
+    app.snap.terms.get_mut(&3).expect("a session").started_by_chat = Some(ConversationId(404));
+    let rows = text(&mut app, 140, 40);
+    show(&rows, "a chat's helper 140x40");
+    assert!(side(&rows, row_of(&app, 2) + 1).contains("↳ lead-chat  "), "{}", side(&rows, row_of(&app, 2) + 1));
+    assert!(!side(&rows, row_of(&app, 3) + 1).contains('↳'), "{}", side(&rows, row_of(&app, 3) + 1));
+    let chat = rows.iter().find(|r| side_of(r).contains("lead-chat") && !side_of(r).contains('↳')).expect("the chat's row");
+    assert!(side_of(chat).contains("1 helper"), "{chat}");
+}

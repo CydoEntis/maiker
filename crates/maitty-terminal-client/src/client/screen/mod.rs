@@ -607,7 +607,7 @@ pub(super) fn rank(s: Status) -> u8 {
 pub(super) fn side_focused(app: &App) -> bool {
     matches!(
         app.mode,
-        Mode::Side | Mode::Helpers { side: true, .. }
+        Mode::Side | Mode::Helpers { side: true, .. } | Mode::ChatHelpers { side: true, .. }
     )
 }
 
@@ -1042,7 +1042,7 @@ impl App {
                 quiet_seen: false,
                 exit: None,
                 exit_seen: false,
-                question: None,
+                question: (!c.helper_ask.is_empty()).then(|| helpers_line(c.helper_ask.len())),
                 is_agent: true,
                 check,
                 checks,
@@ -1608,6 +1608,8 @@ pub(super) enum ScreenHit {
     Approve(check_approve::ApproveHit),
     /// A choice in that question.
     HelperAnswer(ClientTerm, crate::protocol::HelperChoice),
+    /// The same choice, for a chat with no terminal.
+    ChatHelperAnswer(ClientSession, crate::protocol::HelperChoice),
     SecretGive(ClientTerm),
     SecretDecline(ClientTerm),
     /// A button or row of Settings › Check.

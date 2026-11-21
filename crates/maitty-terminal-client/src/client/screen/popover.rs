@@ -375,7 +375,7 @@ pub(in crate::client) fn draw_compose_pop(
     };
     let h = 2 + quote_rows + 1 + input_rows + u16::from(working) + 1;
 
-    let (r, _) = frame_beside_row(app, buf, screen, side, c.term, (x0, w, h), t);
+    let (r, _) = frame_beside_row(app, buf, screen, side, app.session_key(c.term), (x0, w, h), t);
 
     let name = app.session_name(c.term);
     let title = vec![
@@ -562,14 +562,14 @@ pub(in crate::client) fn frame_beside_row(
     buf: &mut Buffer,
     screen: Rect,
     side: Rect,
-    term: ClientTerm,
+    row: ClientSession,
     (x0, w, h): (u16, u16, u16),
     t: &Theme,
 ) -> (Rect, Rect) {
     let ascii = app.cfg.ui.glyphs == "ascii";
     let hit_row = app.hits.iter().find_map(|(r, hit)| match hit {
         crate::client::Hit::Screen(ScreenHit::Session(t))
-            if *t == app.session_key(term) && r.right() <= x0 =>
+            if *t == row && r.right() <= x0 =>
         {
             Some(*r)
         }

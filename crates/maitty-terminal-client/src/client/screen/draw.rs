@@ -369,7 +369,12 @@ pub(in crate::client) fn draw(app: &mut App, f: &mut Frame, area: Rect, t: &Them
         Mode::Compose(c) if c.inbox.is_none() => {
             draw_compose_pop(app, f.buffer_mut(), above, g.side, &c, t)
         }
-        Mode::Helpers { term, .. } => draw_helpers_pop(app, f.buffer_mut(), above, g.side, term, t),
+        Mode::Helpers { term, .. } => {
+            draw_helpers_pop(app, f.buffer_mut(), above, g.side, helpers_ask::Asker::Pane(term), t)
+        }
+        Mode::ChatHelpers { chat, .. } => {
+            draw_helpers_pop(app, f.buffer_mut(), above, g.side, helpers_ask::Asker::Chat(chat), t)
+        }
         Mode::Secret { term, .. } => draw_secret_pop(app, f.buffer_mut(), above, g.side, term, t),
         _ => {}
     }

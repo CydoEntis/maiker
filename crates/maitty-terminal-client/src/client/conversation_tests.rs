@@ -348,3 +348,75 @@ fn opening_a_chat_in_the_terminal_says_it_lives_in_the_desktop_app_and_sends_not
         assert!(matches!(app.mode, Mode::Side));
     }
 }
+
+// ---- a chat asks to start helpers (ADR 0016) ----------------------------------------------
+
+fn sent_commands(rx: &mut mpsc::UnboundedReceiver<Outgoing>) -> Vec<Command> {
+    std::iter::from_fn(|| rx.try_recv().ok())
+        .filter_map(|o| match o.msg {
+            ClientMsg::Command(c) => Some(c),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The app with its chat asking to start two helpers, the sidebar's cursor on the chat's row.
+fn asking_app() -> (App, mpsc::UnboundedReceiver<Outgoing>, crate::client::ids::ClientSession) {
+    let (mut app, rx) = app();
+    app.local_protocol = crate::protocol::PROTOCOL_VERSION;
+    let chat = &mut app.snap.conversations[0];
+    chat.status = Status::Blocked;
+    chat.helper_ask = vec!["review the diff".into(), "write the tests".into()];
+    let key = crate::client::ids::ClientSession::local(crate::protocol::SessionKey::Conversation(ConversationId(41)));
+    app.screen.cursor = Some(key);
+    app.mode = Mode::Side;
+    (app, rx, key)
+}
+
+#[test]
+fn a_chat_asking_for_helpers_opens_the_question_and_sends_the_chats_answer() {
+    let (mut app, mut rx, chat) = asking_app();
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert_eq!(app.mode, Mode::ChatHelpers { chat, side: true }, "Enter on the row opens the question");
+    let o = draw(&mut app, 140, 36);
+    for words in ["START HELPERS?", "codex wants to split this into 2 helpers", "review the diff", "write the tests"] {
+        assert!(o.contains(words), "{words}:\n{o}");
+    }
+    // A reflex key answers nothing.
+    for key in [KeyCode::Enter, KeyCode::Char('y'), KeyCode::Char(' ')] {
+        app.on_key(KeyEvent::new(key, KeyModifiers::NONE));
+    }
+    assert!(sent_commands(&mut rx).is_empty() && matches!(app.mode, Mode::ChatHelpers { .. }));
+    app.on_key(KeyEvent::new(KeyCode::Char('2'), KeyModifiers::NONE));
+    let sent = sent_commands(&mut rx);
+    assert!(
+        matches!(
+            sent.as_slice(),
+            [Command::AnswerChatHelpers { conversation: ConversationId(41), choice: crate::protocol::HelperChoice::Always }]
+        ),
+        "{sent:?}"
+    );
+    assert_eq!(app.mode, Mode::Side, "back in the sidebar");
+}
+
+#[test]
+fn esc_decides_later_and_a_chat_that_asks_nothing_opens_nothing() {
+    let (mut app, mut rx, _) = asking_app();
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.on_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE));
+    assert_eq!(app.mode, Mode::Side);
+    assert!(sent_commands(&mut rx).is_empty(), "nothing was answered");
+    app.snap.conversations[0].helper_ask.clear();
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    assert!(!matches!(app.mode, Mode::ChatHelpers { .. }));
+}
+
+#[test]
+fn an_older_service_on_this_computer_is_not_sent_a_chats_answer() {
+    let (mut app, mut rx, _) = asking_app();
+    app.local_protocol = crate::protocol::CHAT_HELPERS_SINCE - 1;
+    app.on_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::NONE));
+    app.on_key(KeyEvent::new(KeyCode::Char('1'), KeyModifiers::NONE));
+    assert!(sent_commands(&mut rx).is_empty());
+    assert_eq!(app.mode, Mode::Side);
+}

@@ -893,6 +893,13 @@ impl App {
             return;
         }
         if k.code == KeyCode::Enter
+            && let Some(chat) = self.screen.cursor.filter(|key| self.bare_conversation(*key).is_some())
+            && self.chat_helpers_asked(chat)
+        {
+            self.open_chat_helpers(chat, true);
+            return;
+        }
+        if k.code == KeyCode::Enter
             && let Some(c) = self.screen.cursor.and_then(|key| self.session_term(key))
             && self.approval_waits(c)
         {
@@ -2010,6 +2017,7 @@ impl App {
             }
             ScreenHit::Approve(h) => self.on_approve_hit(h),
             ScreenHit::HelperAnswer(term, choice) => self.answer_helpers(term, choice),
+            ScreenHit::ChatHelperAnswer(chat, choice) => self.answer_chat_helpers(chat, choice),
             ScreenHit::SecretGive(term) => self.answer_secret(term, true),
             ScreenHit::SecretDecline(term) => self.answer_secret(term, false),
             ScreenHit::CheckDraft(h) => self.on_check_draft_hit(h),

@@ -328,26 +328,41 @@ fn side_rows(app: &App, model: &[Proj]) -> Vec<SideRow> {
 /// Who started whom: each helper's starter by name, and each starter's count of helpers. A session is a helper only
 /// while the pane that started it is still in its machine's list, the rule `App::is_helper` alerts by.
 fn mark_helpers(app: &App, rows: &mut [SideRow]) {
-    let starters: Vec<Option<ClientTerm>> = rows
+    /// A pane that started a helper, or the row of the chat that did (ADR 0016).
+    enum By {
+        Pane(ClientTerm),
+        Chat(ClientSession),
+    }
+    let starters: Vec<Option<By>> = rows
         .iter()
         .map(|row| {
             let term = row.term?;
-            let by = ClientTerm { machine: term.machine, term: app.term_info(term)?.started_by? };
-            app.term_info(by).map(|_| by)
+            let info = app.term_info(term)?;
+            if let Some(chat) = info.started_by_chat {
+                // A chat that is no longer listed started nothing that is still its.
+                let key = ClientSession::on(term.machine, SessionKey::Conversation(chat));
+                return rows.iter().any(|row| row.key == key).then_some(By::Chat(key));
+            }
+            let by = ClientTerm { machine: term.machine, term: info.started_by? };
+            app.term_info(by).map(|_| By::Pane(by))
         })
         .collect();
     for (helper, by) in starters.into_iter().enumerate() {
         let Some(by) = by else { continue };
         let needs = rows[helper].state == State::Needs;
-        let starter = rows.iter_mut().find(|row| row.term == Some(by));
-        // A starter that is put away has no row, and is still named.
-        let name = match starter {
-            Some(starter) => {
+        let starter = rows.iter_mut().find(|row| match &by {
+            By::Pane(term) => row.term == Some(*term),
+            By::Chat(key) => row.key == *key,
+        });
+        let name = match (starter, &by) {
+            (Some(starter), _) => {
                 starter.helpers.total += 1;
                 starter.helpers.needs += usize::from(needs);
                 starter.name.clone()
             }
-            None => display_name(app.term_info(by), &format!("session {}", by.term)),
+            // A starter that is put away has no row, and is still named.
+            (None, By::Pane(term)) => display_name(app.term_info(*term), &format!("session {}", term.term)),
+            (None, By::Chat(_)) => continue,
         };
         rows[helper].starter = Some(name);
     }

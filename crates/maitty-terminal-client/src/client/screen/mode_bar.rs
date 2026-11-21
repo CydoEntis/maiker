@@ -326,7 +326,7 @@ fn keys_holder(app: &App) -> Option<Holder> {
             &[("", "type"), ("Enter", "save")],
             ("Esc", "cancel"),
         ),
-        Mode::Helpers { .. } => holder(
+        Mode::Helpers { .. } | Mode::ChatHelpers { .. } => holder(
             "HELPERS",
             &[("1", "allow"), ("2", "always"), ("3", "no")],
             ("Esc", "back"),

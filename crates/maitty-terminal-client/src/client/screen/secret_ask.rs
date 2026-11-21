@@ -217,7 +217,7 @@ pub(in crate::client) fn draw_secret_pop(
     let note = wrap("Goes to this session only, once; never into the chat.", iw);
     let h = (1 + 1 + intro.len() + why.len() + 1 + note.len() + 1 + 1 + 1 + 1 + 1) as u16;
 
-    let (r, _) = frame_beside_row(app, buf, screen, side, term, (x0, w, h), t);
+    let (r, _) = frame_beside_row(app, buf, screen, side, app.session_key(term), (x0, w, h), t);
     let card = Style::default().bg(t.card);
     let name = app.session_name(term);
     put(
