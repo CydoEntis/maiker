@@ -661,7 +661,7 @@ What was changed, and how sure we are that it matters:
 | Loops: the working spinner turns by `transform` alone (`mxStatusSpin`), so no step repaints the mark; the skeleton shimmer is a transform-moved highlight over a still base; the M loader's fill colour is computed once; the working spinner, badge pulse, dock breath, M loader, shimmer, update bar and machine spinner pause while the window is hidden (`data-window="inactive"`). | `status-icon.css`, `workspace.css`, `chat.css`, `session-dialogs.css`, `frame.css`, `dock.css` | 2026-11-03: all infinite animations cost 33 of 58 points. |
 | The reduced-motion rules no longer use `:root:has(.mx-app[data-motion="reduced"])`; they read `:root[data-reduced-motion="true"]`. | `sidebar.css`, `workspace.css` | Read in code: `:has` over the whole app is re-evaluated on every DOM change. |
 | The terminal fits its grid at most every 90ms while its pane keeps changing size (a sliding sidebar or drawer) and once at the end (`throttleTrailing`, `FIT_WHILE_ANIMATING_MS`). A fold's grid rows are `contain: layout style`. | `TerminalView.tsx`, `lib/throttle.ts`, `sidebar.css` | Read in code: a resize observer fired the fit at every frame. |
-| The offline banners and `Elapsed` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `Elapsed.tsx`, `states.tsx`, `ServiceStatus.tsx` | Read in code. |
+| The offline banners and `ElapsedSince` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `times.tsx`, `ServiceStatus.tsx` | Read in code. |
 
 ### What was measured, and what could not be
 

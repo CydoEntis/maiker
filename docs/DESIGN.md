@@ -1325,7 +1325,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   only its name: a branch belongs to a session, and a worktree's branch is not the folder's.
 - **Branch or worktree.** A session in the project's own folder shows its branch in `--branch` (violet: #A78BFA on a dark ground, #6B46C1 on a light one, set by `themeStyle`; every branch name and icon uses it) with the branch mark;
   one in a linked worktree (the daemon's `TermInfo.linked`, never worked out from the folder) shows it in `--branch`
-  with a tree, on its sidebar row, and its pane header's branch crumb. The tooltip says which.
+  with a tree, on its sidebar row. The tooltip says which.
 - **A session whose agent asks for a secret** (`maiker_request_secret`) is answered outside the terminal. A session
   shown as a terminal raises a needs-you toast naming the session, its project and the label (`useOutsideAsks.ts`); it
   has no ✕ and stays until the daemon says the request is answered. **Provide…** opens a dialog on the float
@@ -1527,7 +1527,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 
 A session that needs you or finished while you look elsewhere is a toast (`features/notifications/notify.ts`, `noticeForSession.ts`): its title names the session and what happened, the reason says what it asks (a command in mono), and its actions are **Allow** (only when the session is stopped on a choice the GUI can answer) and **Open session**. It is keyed by its session, so the daemon's alert for the same event replaces it.
 
-- **Working badge.** The spinner in `--working` on a 9px square at the tile's corner, ringed in `--card`; it is the same badge on the sidebar row and the pane header. The chat's scroll area fades to transparent over its top 36px.
+- **Chat fade.** The chat's scroll area fades to transparent over its top 12px (a subagent's chat over 36px).
 
 ## Documents
 
