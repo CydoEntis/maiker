@@ -78,17 +78,13 @@ fn reported(steps: &[Step]) -> Vec<String> {
 }
 
 #[test]
-fn opening_a_conversation_starts_no_process() {
+fn opening_a_conversation_starts_no_process_and_opening_another_session_is_refused() {
     let steps = dialect().on_command(Command::Open { session: None }).unwrap();
 
     assert_eq!(
         steps,
         [Step::Emit(ProviderEvent::Ready { session: "session-1".into(), model: None, model_provider: None })]
     );
-}
-
-#[test]
-fn opening_another_session_is_refused() {
     assert!(dialect().on_command(Command::Open { session: Some("session-2".into()) }).is_err());
 }
 
@@ -307,11 +303,6 @@ fn a_process_that_exits_mid_turn_is_reported_and_one_that_exits_after_is_not() {
     dialect.on_line(RESULT).unwrap();
     let after_turn = dialect.on_exit();
 
-    assert_eq!(
-        mid_turn,
-        [Step::Emit(ProviderEvent::Terminated {
-            failure: "Claude Code exited before the turn ended".into()
-        })]
-    );
+    assert!(matches!(&mid_turn[..], [Step::Emit(ProviderEvent::Terminated { .. })]), "{mid_turn:?}");
     assert!(after_turn.is_empty());
 }

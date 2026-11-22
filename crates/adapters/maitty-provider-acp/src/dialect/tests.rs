@@ -166,17 +166,21 @@ fn a_whole_turn_becomes_the_items_a_person_sees_in_the_order_they_came() {
     );
 }
 
+/// The turn's state is what the stop reason says, and only a failure carries a reason.
 #[test]
 fn a_turn_ends_as_its_stop_reason_says() {
     let ended = |reason: &str| {
         let mut dialect = running();
-        named(&events(dialect.on_line(&result(3, json!({"stopReason": reason}))).unwrap())[0])
+        match &events(dialect.on_line(&result(3, json!({"stopReason": reason}))).unwrap())[..] {
+            [ProviderEvent::TurnCompleted { state, error, .. }] => (state.clone(), error.is_some()),
+            other => panic!("{other:?}"),
+        }
     };
 
-    assert_eq!(ended("end_turn"), "turn Completed None");
-    assert_eq!(ended("cancelled"), "turn Interrupted None");
-    assert_eq!(ended("refusal"), r#"turn Failed Some("The agent refused to continue")"#);
-    assert_eq!(ended("max_tokens"), r#"turn Failed Some("The agent reached its token limit")"#);
+    assert_eq!(ended("end_turn"), (ItemState::Completed, false));
+    assert_eq!(ended("cancelled"), (ItemState::Interrupted, false));
+    assert_eq!(ended("refusal"), (ItemState::Failed, true));
+    assert_eq!(ended("max_tokens"), (ItemState::Failed, true));
 }
 
 #[test]

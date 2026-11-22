@@ -148,14 +148,17 @@ fn a_whole_turn_is_reported_in_order() {
     ), "{completed:?}");
 }
 
+/// A turn reply without its items is fatal, so delivery is never guessed; so is an answer
+/// nothing asked for.
 #[test]
-fn a_turn_reply_without_its_items_is_fatal_so_delivery_is_never_guessed() {
+fn a_turn_reply_without_its_items_or_an_answer_nothing_asked_for_is_fatal() {
     let mut dialect = opened();
     send(&mut dialect);
 
     let answered = dialect.on_line(&json!({"id": 4, "result": {"turn": {"id": "turn-1"}}}).to_string());
 
     assert!(answered.is_err());
+    assert!(opened().on_line(&json!({"id": 99, "result": null}).to_string()).is_err());
 }
 
 #[test]
@@ -265,13 +268,6 @@ fn what_another_thread_reports_is_not_this_conversations() {
     let reported = line(&mut dialect, notification("turn/completed", json!({"threadId": "helper-thread", "turn": {"id": "turn-9", "status": "completed"}})));
 
     assert!(reported.is_empty());
-}
-
-#[test]
-fn an_answer_nothing_asked_for_is_fatal() {
-    let mut dialect = opened();
-
-    assert!(dialect.on_line(&json!({"id": 99, "result": null}).to_string()).is_err());
 }
 
 #[test]

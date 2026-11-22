@@ -79,14 +79,12 @@ fn well_known_token_shapes_are_masked_and_their_surroundings_kept() {
     }
 }
 
+/// A whole block is masked through its end line; one that is cut or still streaming, to the end.
 #[test]
-fn a_private_key_block_is_masked_through_its_end_line() {
+fn a_private_key_block_is_masked_through_its_end_line_or_to_the_end_when_cut() {
     let text = format!("key:\n{}\nthen more text", pem_block());
     assert_eq!(masked(&text), "key:\n[redacted private key]\nthen more text");
-}
 
-#[test]
-fn a_private_key_block_that_is_cut_or_still_streaming_is_masked_to_the_end() {
     let begin = format!("-----BEGIN {} KEY-----", "OPENSSH PRIVATE");
     let text = format!("echo '{begin}\nb3BlbnNzaC1rZXktdjEAAAAA\nAAAABG5vbmU");
     let out = masked(&text);
@@ -94,51 +92,37 @@ fn a_private_key_block_that_is_cut_or_still_streaming_is_masked_to_the_end() {
     assert!(!out.contains("b3Blbn"));
 }
 
+/// Authorization headers keep their scheme, a URL keeps its user and host, and a secret-named
+/// assignment keeps its name: only the credential goes.
 #[test]
-fn authorization_headers_keep_the_scheme_and_lose_the_credential() {
+fn a_credential_loses_only_its_value() {
     let token = "Zm9vOmJhcjEyMzQ1Njc4OQ";
-    for (input, expected) in [
+    let aws = aws_secret();
+    let cases: Vec<(String, String)> = vec![
         (
             format!("Authorization: Bearer {token}"),
-            "Authorization: Bearer [redacted]",
+            "Authorization: Bearer [redacted]".into(),
         ),
         (
             format!("-H \"authorization: Basic {token}\""),
-            "-H \"authorization: Basic [redacted]\"",
+            "-H \"authorization: Basic [redacted]\"".into(),
         ),
         (
             format!("curl -H 'Authorization: token {}'", github_token()),
-            "curl -H 'Authorization: token [redacted]'",
+            "curl -H 'Authorization: token [redacted]'".into(),
         ),
         (
             format!("sent bearer {}", rep("abcd1234", 4)),
-            "sent bearer [redacted]",
-        ),
-    ] {
-        assert_eq!(masked(&input), expected);
-    }
-}
-
-#[test]
-fn a_password_inside_a_url_is_masked_and_the_user_and_host_are_kept() {
-    for (input, expected) in [
-        (
-            "postgres://app:hunter2pw@db.internal:5432/app",
-            "postgres://app:[redacted]@db.internal:5432/app",
+            "sent bearer [redacted]".into(),
         ),
         (
-            "git clone https://me:tok3n_value@example.test/r.git",
-            "git clone https://me:[redacted]@example.test/r.git",
+            "postgres://app:hunter2pw@db.internal:5432/app".into(),
+            "postgres://app:[redacted]@db.internal:5432/app".into(),
         ),
-    ] {
-        assert_eq!(masked(input), expected);
-    }
-}
-
-#[test]
-fn secret_named_assignments_lose_only_the_value() {
-    let aws = aws_secret();
-    let cases: Vec<(String, String)> = vec![
+        (
+            "git clone https://me:tok3n_value@example.test/r.git".into(),
+            "git clone https://me:[redacted]@example.test/r.git".into(),
+        ),
         ("API_KEY=abc123def456".into(), "API_KEY=[redacted]".into()),
         ("export GITHUB_TOKEN=plainvalue".into(), "export GITHUB_TOKEN=[redacted]".into()),
         ("DB_PASSWORD=correcthorse".into(), "DB_PASSWORD=[redacted]".into()),
@@ -293,6 +277,12 @@ fn a_write_to_a_secret_file_keeps_its_path_and_loses_its_text() {
     );
     assert!(!omit_secret_file_content(&mut input), "idempotent");
     assert_eq!(input["omitted_bytes"], 25);
+
+    // An edit of an ordinary file keeps its text.
+    let mut input = json!({ "file_path": "src/main.rs", "content": "fn main() {}" });
+    assert!(!omit_secret_file_content(&mut input));
+    assert_eq!(input["content"], "fn main() {}");
+    assert!(input.get("omitted_bytes").is_none());
 }
 
 #[test]
@@ -314,14 +304,6 @@ fn edits_to_a_secret_file_lose_every_text_field_and_keep_their_count() {
     assert_eq!(input["replace_all"], true);
     assert_eq!(input["edits"].as_array().unwrap().len(), 2);
     assert_eq!(input["edits"][1]["new"], OMITTED);
-}
-
-#[test]
-fn an_edit_of_an_ordinary_file_keeps_its_text() {
-    let mut input = json!({ "file_path": "src/main.rs", "content": "fn main() {}" });
-    assert!(!omit_secret_file_content(&mut input));
-    assert_eq!(input["content"], "fn main() {}");
-    assert!(input.get("omitted_bytes").is_none());
 }
 
 #[test]
@@ -353,29 +335,32 @@ fn tool(command: &str, output: &str) -> Entry {
     }
 }
 
+/// Command output, a reasoning summary and a message each lose a token they carry.
 #[test]
-fn command_output_that_echoes_a_token_is_masked_in_an_entry() {
+fn every_text_in_an_entry_is_masked() {
+    use maitty_shared::conversation::history::Role;
     let mut entry = tool("echo $T", &format!("token is {}", github_token()));
     redact_entry(&mut entry);
     let Content::Tool { output, .. } = &entry.content else {
         unreachable!()
     };
     assert_eq!(output, "token is [redacted]");
-}
 
-#[test]
-fn a_token_in_a_reasoning_summary_is_masked_in_an_entry() {
-    let mut entry = tool("", "");
-    entry.content = Content::Reasoning {
-        text: format!("The key is {}", github_token()),
-    };
-    redact_entry(&mut entry);
-    assert_eq!(
-        entry.content,
-        Content::Reasoning {
-            text: "The key is [redacted]".into()
-        }
-    );
+    for (content, expected) in [
+        (
+            Content::Reasoning { text: format!("The key is {}", github_token()) },
+            Content::Reasoning { text: "The key is [redacted]".into() },
+        ),
+        (
+            Content::Message { role: Role::Assistant, text: format!("use {} here", stripe_key()) },
+            Content::Message { role: Role::Assistant, text: "use [redacted] here".into() },
+        ),
+    ] {
+        let mut entry = tool("", "");
+        entry.content = content;
+        redact_entry(&mut entry);
+        assert_eq!(entry.content, expected);
+    }
 }
 
 #[test]
@@ -397,31 +382,4 @@ fn reading_a_secret_file_with_a_shell_command_omits_the_output_only() {
         };
         assert_eq!(output, "plain output", "{command}");
     }
-}
-
-#[test]
-fn a_message_is_masked() {
-    use maitty_shared::conversation::history::{ItemState, Role, SourceId};
-    let mut entry = Entry {
-        source: SourceId {
-            conversation: maitty_shared::conversation::ConversationId(1),
-            turn: "t".into(),
-            item: "i".into(),
-        },
-        content: Content::Message {
-            role: Role::Assistant,
-            text: format!("use {} here", stripe_key()),
-        },
-        state: ItemState::Completed,
-        started_at_ms: None,
-        completed_at_ms: None,
-    };
-    redact_entry(&mut entry);
-    assert_eq!(
-        entry.content,
-        Content::Message {
-            role: Role::Assistant,
-            text: "use [redacted] here".into()
-        }
-    );
 }

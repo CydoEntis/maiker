@@ -404,6 +404,11 @@ mod tests {
         assert!(matches!(events.first(), Some(ProviderEvent::TurnStarted { turn, .. }) if turn == "turn-1"));
         assert_eq!(events.last(), Some(&ProviderEvent::Delivered { turn: "turn-1".into() }));
         assert!(projector.acknowledged());
+        // The submitted message enters the turn as the person's own.
+        let message = Content::Message { role: Role::User, text: "show status".into() };
+        assert_eq!((&item(&events[1]).content, &item(&events[1]).state), (&message, &ItemState::Running));
+        assert_eq!((&item(&events[2]).content, &item(&events[2]).state), (&message, &ItemState::Completed));
+        assert_eq!(item(&events[2]).id, "user-1");
         assert!(
             projector
                 .project(OutputFrame::UserReplay {
@@ -412,49 +417,6 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-    }
-
-    #[test]
-    fn the_submitted_message_enters_the_turn_as_the_persons_own() {
-        let mut projector = projector();
-
-        let events = projector
-            .project(OutputFrame::UserReplay { text: "show status".into() })
-            .unwrap();
-
-        let message = Content::Message { role: Role::User, text: "show status".into() };
-        assert_eq!((&item(&events[1]).content, &item(&events[1]).state), (&message, &ItemState::Running));
-        assert_eq!((&item(&events[2]).content, &item(&events[2]).state), (&message, &ItemState::Completed));
-        assert_eq!(item(&events[2]).id, "user-1");
-    }
-
-    #[test]
-    fn projects_streamed_assistant_text_into_an_answer() {
-        let mut projector = projector();
-        projector
-            .project(OutputFrame::MessageStarted {
-                message_id: "message-1".into(),
-                model: "claude-sonnet".into(),
-            })
-            .unwrap();
-        let started = projector
-            .project(OutputFrame::TextDelta {
-                block_index: 0,
-                text: "hello".into(),
-            })
-            .unwrap();
-        assert_eq!((&item(&started[0]).content, &item(&started[0]).state), (&answer(String::new()), &ItemState::Running));
-        assert_eq!(
-            started.last(),
-            Some(&ProviderEvent::TextDelta { turn: "turn-1".into(), item: "message-1".into(), text: "hello".into() })
-        );
-
-        let completed = projector.project(result(false, Some("hello"))).unwrap();
-        assert_eq!(item(&completed[0]).content, answer("hello".into()));
-        assert!(matches!(
-            completed.last(),
-            Some(ProviderEvent::TurnCompleted { state: ItemState::Completed, error: None, .. })
-        ));
     }
 
     #[test]

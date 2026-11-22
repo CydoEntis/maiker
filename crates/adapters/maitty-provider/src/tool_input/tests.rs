@@ -50,15 +50,10 @@ fn input_that_cannot_keep_its_shape_is_left_out() {
     }
     // 128 lists of 128 short strings stay within every per-level limit but not the byte cap.
     let wide = json!({ "rows": vec![vec![json!("z".repeat(300)); MAX_ITEMS]; MAX_ITEMS] });
-    for input in [too_many, deep, wide] {
+    // Empty input is not kept either.
+    for input in [too_many, deep, wide, json!({}), Value::Null] {
         assert_eq!(bound_input(&input), None, "{input}");
     }
-}
-
-#[test]
-fn empty_input_is_not_kept() {
-    assert_eq!(bound_input(&json!({})), None);
-    assert_eq!(bound_input(&Value::Null), None);
 }
 
 #[test]
@@ -120,8 +115,9 @@ fn an_approval_summary_is_one_cleaned_cut_line() {
     assert_eq!(input_summary(&long).chars().count(), MAX_SUMMARY_CHARS);
 }
 
+/// Edit tools become file-change previews; other tools and malformed edits have none.
 #[test]
-fn edit_tools_become_file_change_previews() {
+fn edit_tools_become_file_change_previews_and_nothing_else_does() {
     let cases = [
         (
             "Edit",
@@ -141,6 +137,9 @@ fn edit_tools_become_file_change_previews() {
             json!({ "file_path": "b.txt", "content": "one\ntwo" }),
             json!([{ "path": "b.txt", "kind": "write", "diff": "+one\n+two" }]),
         ),
+        ("Bash", json!({ "command": "ls" }), Value::Null),
+        ("Edit", json!({ "file_path": "a.rs" }), Value::Null),
+        ("Write", json!({ "content": "c" }), Value::Null),
     ];
     for (tool, input, expected) in cases {
         assert_eq!(
@@ -149,22 +148,6 @@ fn edit_tools_become_file_change_previews() {
             "{tool}"
         );
     }
-}
-
-#[test]
-fn other_tools_and_malformed_edits_have_no_preview() {
-    assert_eq!(
-        file_change_previews("Bash", &json!({ "command": "ls" })),
-        None
-    );
-    assert_eq!(
-        file_change_previews("Edit", &json!({ "file_path": "a.rs" })),
-        None
-    );
-    assert_eq!(
-        file_change_previews("Write", &json!({ "content": "c" })),
-        None
-    );
 }
 
 #[test]

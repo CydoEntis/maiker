@@ -382,7 +382,7 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn only_the_locally_verified_cli_version_is_supported() {
+    fn only_the_locally_verified_cli_version_read_from_its_output_is_supported() {
         assert!(verified_version("2.1.312"));
         assert!(verified_version("2.1.314"));
         assert!(verified_version("2.1.316"));
@@ -390,10 +390,7 @@ mod tests {
         assert!(verified_version("2.1.330"));
         assert!(!verified_version("2.1.313"));
         assert!(!verified_version("2.1.326"), "only the versions run through the adapter are listed");
-    }
-
-    #[test]
-    fn reads_supported_versions_from_claude_version_output() {
+        // The version is read from what `claude --version` prints.
         assert_eq!(version_number("2.1.314 (Claude Code)"), Some("2.1.314"));
         assert_eq!(version_number("Claude Code 2.1.312"), Some("2.1.312"));
         assert_eq!(version_number(" 2.1.313 "), Some("2.1.313"));
