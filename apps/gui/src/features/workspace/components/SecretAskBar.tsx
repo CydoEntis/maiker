@@ -1,7 +1,6 @@
-import { useRef, useState } from 'react'
-import { answerSecret } from '@/api/daemon'
-import { messageOf } from '@/features/inspect/useRepoQuery'
+import { useState } from 'react'
 import type { SecretAsk } from '../model/session'
+import { useSecretAnswer } from '../useSecretAnswer'
 
 type Props = {
   ask: SecretAsk
@@ -11,28 +10,13 @@ type Props = {
 }
 
 /**
- * An agent asked for a secret (`maiker_request_secret`). Only the person answers, here and never in the chat
- * (ADR 0006): the value goes from this box to the daemon and nowhere else, is not kept in the window's state
- * once sent, and the agent gets a single-use reference, never the value.
+ * An agent asked for a secret (`maiker_request_secret`), said over the chat of a session shown as one. Only the person
+ * answers, here and never in the chat (ADR 0006); how the value is sent is `useSecretAnswer`'s.
  */
 export function SecretAskBar({ ask, machine, online }: Props) {
   const [open, setOpen] = useState(false)
-  const [failure, setFailure] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
-  const field = useRef<HTMLInputElement>(null)
+  const { field, failure, busy, give, decline } = useSecretAnswer(ask.id, machine, () => { setOpen(false) })
   const stop = (event: { stopPropagation: () => void }) => { event.stopPropagation() }
-  const send = (value: string | null) => {
-    setBusy(true)
-    setFailure(null)
-    answerSecret(ask.id, machine, value)
-      .then(() => { setOpen(false) })
-      .catch((error: unknown) => { setFailure(messageOf(error)) })
-      .finally(() => {
-        // The value never outlives the answer: the field is emptied whether it was taken or not.
-        if (field.current) field.current.value = ''
-        setBusy(false)
-      })
-  }
   return (
     <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants a secret">
       <span className="mx-pane-ended-text">
@@ -44,7 +28,7 @@ export function SecretAskBar({ ask, machine, online }: Props) {
         ? (
           <form
             className="mx-secret-form"
-            onSubmit={(event) => { event.preventDefault(); const value = field.current?.value ?? ''; if (value !== '') send(value) }}
+            onSubmit={(event) => { event.preventDefault(); give() }}
             onMouseDown={stop}
           >
             <input ref={field} type="password" autoComplete="off" spellCheck={false} aria-label={`Value for ${ask.label}`} autoFocus disabled={busy} />
@@ -55,7 +39,7 @@ export function SecretAskBar({ ask, machine, online }: Props) {
         : (
           <>
             <button type="button" className="mx-pane-ended-button is-primary" disabled={!online || machine !== 0} title={machine === 0 ? 'Type the value; it goes to the Maiker service only' : 'Secrets are only taken for this computer’s sessions'} onMouseDown={stop} onClick={() => { setOpen(true) }}>Provide…</button>
-            <button type="button" className="mx-pane-ended-button" disabled={!online || machine !== 0} title="The agent is told no" onMouseDown={stop} onClick={() => { send(null) }}>Decline</button>
+            <button type="button" className="mx-pane-ended-button" disabled={!online || machine !== 0} title="The agent is told no" onMouseDown={stop} onClick={decline}>Decline</button>
           </>
         )}
     </div>

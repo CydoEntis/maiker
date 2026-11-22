@@ -548,12 +548,19 @@ The desktop window, unlike the terminal interface above, has one full-width foot
   between and around them is `--frame-gap`, `--frame-edge` and `--frame-top` (`tokens.css`), never a number of its
   own, so every gap is the same and a drag handle fits any of them. A card casts no shadow.
 
-- **Pane header** (`PaneHeadId`, shared by the terminal and the chat view): the status mark (`StatusIcon`), a machine tag for a
-  session on another machine only, the whole path cut from its start (`<bdi>` in a right-to-left box keeps the folder it ends in
-  in view), the branch crumb, then the `···` menu. The agent's icon and the `~`-shortened path are not in the header.
-- **No pane foot.** A terminal pane is the agent's own CLI, and Maiker draws no foot, bar or overlay inside it
-  ([DESIGN](DESIGN.md#design-language)). The permission shield and the context bar (`ContextMeter`: a 56px bar and the
-  figure, once the agent has said how full it is) are in the pane header.
+- **Pane header.** A terminal pane (`TerminalHeadId` in `PaneCard.tsx`): a machine tag for a session on another machine
+  only, `project / session name` (a plain shell: its name), the permission shield, the context bar (`ContextMeter`: a
+  32px bar and the figure, once the agent has said how full it is), then Split right, Split down and close as buttons.
+  It has no `···` menu: every pane action is in the right-click menu, which the terminal's own area opens too. A chat
+  pane (`PaneHeadId`): the status mark (`StatusIcon`), a machine tag, the whole path cut from its start (`<bdi>` in a
+  right-to-left box keeps the folder it ends in in view), then the `···` menu.
+- **Nothing of Maiker's in a terminal pane.** A terminal pane is the agent's own CLI, and Maiker draws no foot, bar,
+  status strip or overlay inside it ([DESIGN](DESIGN.md#design-language)), and no button from what the CLI's screen
+  shows. What a session shown as a terminal asks, or has to tell, is said outside the pane (`model/outsideAsks.ts`,
+  `useOutsideAsks.ts`): a helpers request and a secret request are needs-you toasts with no ✕ that open a dialog
+  (`OutsideAskDialogs.tsx`) and stay until the daemon says they are answered; an agent's session that ended is one
+  toast that offers Restart shell. Such a request is not also said by the plain needs-you card. The open dialog counts
+  as a dialog over the panes, so the terminal does not take the keys back until it closes.
 - **Status bar** (`StatusBar`, one row under the cards): the mark, `Maiker <version>` and the update button (`UpdateSlot`, the only place the app draws it) at
   the left; at the right one meter per agent that has reported a limit, then two hints: **Commands** (opens the command palette) and
   **Shortcuts** (opens the shortcut sheet). A hint's keycap is read from the binding table (`useShortcutText('palette')`, `useShortcutText('shortcuts')`), never

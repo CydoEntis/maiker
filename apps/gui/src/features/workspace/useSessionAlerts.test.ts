@@ -22,7 +22,7 @@ describe('a chat session alert', () => {
     const props = (session: SessionView) => ({
       sessions: [session], sessionMap: new Map([[session.id, session]]), machines: new Map(), projectOf: new Map(), online: true, focusedId: null,
       preferences: { notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: true },
-      showSessionById: vi.fn(), answerSession: vi.fn(),
+      showSessionById: vi.fn(), answerSession: vi.fn(), saidByOwnToast: () => false,
     })
     const { rerender } = renderHook((session: SessionView) => { useSessionAlerts(props(session)) }, { initialProps: chat('working') })
     expect(sound.play).not.toHaveBeenCalled()

@@ -469,7 +469,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`aria-expanded`) and `on` fill it with `--icon-button-fill` (the ink at 7%); there is no accent and no second size.
   `label` is required and is its accessible name; `tip` is the tooltip when it says more (the keys that do the same). A
   caller places the button and never sizes or colours it. The title bar's side-panel button, the sidebar's head and its
-  Settings button, Show sidebar, a pane's `⋯` and every dialog's close use it.
+  Settings button, Show sidebar, a terminal pane's split and close, a chat pane's `⋯` and every dialog's close use it.
 - **Selection.** One fill everywhere: the picked row of a menu or list is `--m-sel` (the `--t2` role) and bold
   (`mx-menu-row`, `components/ui/menu-row.css`), never a tick and never an accent outline. The shared menus have no
   checkbox item.
@@ -592,9 +592,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   gives focus back. **Session**: Open, Open in split right, Open in split down (not for the one in front), Open
   terminal here (agents), Rename… (F2), Copy folder path, Get a file… (another machine's sessions), Show changes
   (agents), Stop session or Close shell.
-  **Pane** (⋯ or a right-click in the pane): Split right, Split down, Changes and files, Pin terminals
+  **Pane** (a right-click in the pane; a chat pane also has ⋯): Split right, Split down, Changes and files, Pin terminals
   under chat or Move terminals to side panel (agents); then Rename…, Maximize pane, and New
-  terminal (agents) or Clear and Copy folder path (shells); then **Close**. Closing one pane of several closes only the pane when its
+  terminal (agents) or Clear and Copy folder path (shells); in a terminal pane, **Restart shell** when it ended and an entry for each request it waits on (helpers, a secret); then **Close**. Closing one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session, after the confirm.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
@@ -1161,20 +1161,29 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Branch or worktree.** A session in the project's own folder shows its branch in `--branch` (violet: #A78BFA on a dark ground, #6B46C1 on a light one, set by `themeStyle`; every branch name and icon uses it) with the branch mark;
   one in a linked worktree (the daemon's `TermInfo.linked`, never worked out from the folder) shows it in `--branch`
   with a tree, on its sidebar row, and its pane header's branch crumb. The tooltip says which.
-- **A session whose agent asks for a secret** (`maiker_request_secret`) shows a bar across the top of its pane with the
-  label and the reason the agent gave, and **Provide…** (a masked box; Enter gives it) and **Decline**. The value goes
-  from that box to the daemon and nowhere else: it is not kept in the window's state and not shown in the chat, and the
-  agent gets a single-use reference (ADR 0006, `SecretAskBar.tsx`). This computer's sessions only.
+- **A session whose agent asks for a secret** (`maiker_request_secret`) is answered outside the terminal. A session
+  shown as a terminal raises a needs-you toast naming the session, its project and the label (`useOutsideAsks.ts`); it
+  has no ✕ and stays until the daemon says the request is answered. **Provide…** opens a dialog on the float
+  (`SecretDialog`, `OutsideAskDialogs.tsx`) that says which session asks, for what and why, with a password field,
+  **Give it** (Enter), **Decline** and **Cancel** (which answers nothing). A session shown as a chat says the same in a
+  bar over its chat (`SecretAskBar.tsx`). Both send through `useSecretAnswer`: the value goes from the field to the
+  daemon and nowhere else, is never kept in the window's state, a toast, a log or the clipboard, the field is emptied
+  whether the daemon took it or not, and the agent gets a single-use reference (ADR 0006). This computer's sessions only.
 - **A session that asks to start helpers** asks where every other request is asked: in the tray over the message box
   (`HelpersTray`), in the needs-you colour: "Wants to start N helpers", one task per line, and **Allow** (this session, from now
-  on), **No** and **Always in this project**. A pane showing its terminal has no tray, so it shows the same words and answers in
-  a bar across the top of the pane. It stays until the daemon says the request is answered. The agent's start waits on the
+  on), **No** and **Always in this project**. A session shown as a terminal has no tray and nothing of Maiker's in its pane, so
+  it raises a needs-you toast naming the session and its project, "Wants to start N helpers" (`useOutsideAsks.ts`), with
+  no ✕; **Review** opens a dialog on the float (`HelpersRequestDialog`) listing the tasks, with **Allow**, **No, do it
+  yourself** and **Always for this project**, the same three answers sent by the same command. The session keeps reading
+  needs you, and the toast stays until the daemon says the request is answered. The pane's right-click menu opens the same dialogs. The agent's start waits on the
   answer (`maiker mcp`, up to ten minutes for Claude Code and twenty seconds for the agents that end a tool call sooner), so
   Allow starts the helper with nothing more to type.
 - **Ended panes.** A pane never disappears because a refresh missed its session: it
-  stays in its tab with its output, the tab keeps its name, and a card along the bottom says **Session
-  ended** with **Restart shell** (a new shell in the same folder, in the same place) and **Close pane**
-  (which stops nothing). The first list after launch drops panes of sessions that died while the app
+  stays in its tab with its output and reads idle, and the tab keeps its name. Nothing is drawn in a terminal pane to
+  say so: an agent's session that ended raises one toast outside it, "… ended", with **Restart shell** (a new shell in
+  the same folder, in the same place) and **Close pane** (which stops nothing); a plain shell that ended raises none,
+  and **Restart shell** is in its pane's right-click menu, as it is for an agent's. A pane shown as a chat keeps the
+  card along its bottom (**Session ended**, **Restart shell**, **Close pane**). The first list after launch drops panes of sessions that died while the app
   was closed, and a later list drops the pane of a session the daemon says has left (closed from another client,
   exited, put away), so no pane stays beside a sidebar that no longer lists its session; a session that left with
   no reason keeps its pane as ended. A terminal made by splitting a pane is listed in the sidebar like any other. The sidebar lists the sessions the daemon lists. A row goes at once when the daemon says why it
@@ -1275,8 +1284,17 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   about it (see *Errors*, chat problem): which agent and the command that brings it back
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
-- **Pane header, pane foot and status bar.** The header is one 32px line: the status mark, a machine tag (remote only), the whole
-  path in mono cut from its start, the branch crumb, `···`. A terminal pane has no foot and no bar of Maiker's inside it: the permission shield, the context bar, split right, split down and close are in its header. The window ends in a 26px status bar on the window ground (`--t0`; `StatusBar`, `status-bar.css`): the 12x10 M mark, `Maiker 0.80.0` (mono 11px) and the
+- **Pane header, pane foot and status bar.** A terminal pane's header (`TerminalHeadId` in `PaneCard.tsx`) is one 34px
+  line ruled off by a `--line` hairline, its parts 10px apart: a machine tag (remote only), `project / session name`
+  (13px; the project `--muted`, the slash `--dim`, the name `--fg` at 500, cut with an ellipsis; the agent, its model and
+  the folder in its tooltip), the permission shield (13px, `--dim`), the context bar (32px, with its figure in mono 11px),
+  then **split right**, **split down** and **×** (`IconButton`). A plain shell's header is its name and the same three
+  buttons. The shield says only what Maiker knows: `--needs` when the session was started with its agent's Bypass
+  Permissions flag, else dim, since the mode after that is the agent's own and its screen is never read. × closes the
+  session (a shell: the terminal) through the confirm dialog; on one pane of several that has work in it, it closes only
+  the pane. Under 420px the project goes, under 300px the shield and the bar. There is no `⋯` and no status strip: the
+  status is the sidebar's mark. A terminal pane has no foot and no bar of Maiker's inside it. A chat pane's header is the
+  status mark, a machine tag (remote only), the whole path in mono cut from its start, and `···`. The window ends in a 26px status bar on the window ground (`--t0`; `StatusBar`, `status-bar.css`): the 12x10 M mark, `Maiker 0.80.0` (mono 11px) and the
   update button (the dot and `Update to …`) at the left; at the right one pill per agent (mark, window name in lower case, a 36px bar, figure; mono 11px) at its
   tightest limit, the focused session's agent lit with the ink at 6%, amber (`--needs`) from 70% and red (`--danger`) from 90%,
   then a hairline and two hints, each a keycap and a word: **Commands** opens the command palette and **Shortcuts** the shortcut sheet. The keycaps are the

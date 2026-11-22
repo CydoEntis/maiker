@@ -18,10 +18,8 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-usage-item.is-warn .mx-usage-figure { color: var(--needs); }
 .mx-usage-item.is-hot .mx-usage-figure { color: var(--danger); }
 /* The context bar beside its figure on its own (the pane header). */
-.mx-context-meter { display: inline-flex; align-items: center; gap: 8px; font: 400 11px/12px var(--mono); font-variant-numeric: tabular-nums; color: var(--fg2); }
-.mx-context-meter .mx-usage-bar { width: 56px; }
-.mx-context-meter .mx-usage-name { font: 400 12px var(--ui); }
-.mx-context-meter .mx-usage-figure { min-width: 30px; text-align: right; color: var(--fg2); }
+.mx-context-meter { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 400 11px/12px var(--mono); font-variant-numeric: tabular-nums; color: var(--muted); }
+.mx-context-meter .mx-usage-bar { width: 32px; }
 .mx-context-meter.is-warn .mx-usage-figure { color: var(--needs); }
 .mx-context-meter.is-hot .mx-usage-figure { color: var(--danger); }
 

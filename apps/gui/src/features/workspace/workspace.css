@@ -381,6 +381,10 @@
 .mx-files-editor { width: 100%; min-height: 320px; box-sizing: border-box; resize: vertical; white-space: pre; overflow: auto; color: inherit; background: transparent; border: 0; outline: 0; }
 .mx-secret-form { display: flex; gap: 6px; align-items: center; }
 .mx-secret-form input { min-width: 180px; }
+/* A terminal session's request, answered in a dialog outside its pane (`OutsideAskDialogs.tsx`) on the shared dialog float. */
+.mx-outside-ask-tasks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; font-size: 13px; color: var(--fg); }
+.mx-outside-ask-tasks li { padding: 6px 10px; border-radius: var(--r-control); background: var(--m-well); overflow-wrap: anywhere; }
+.mx-outside-ask .mx-rename-actions { flex-wrap: wrap; }
 .mx-text-button.is-danger { color: var(--danger); }
 /* A small dialog is the float of material.css with the dialog corner; it sets no fill, edge or shadow of its own. */
 .mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }

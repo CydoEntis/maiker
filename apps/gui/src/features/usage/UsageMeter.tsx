@@ -44,12 +44,11 @@ export function UsageMeter({ item, onOpen, openLabel = 'Open Usage & cost', grad
     : <button type="button" className={classes} title={`${tip} · ${openLabel}`} onClick={onOpen}>{body}</button>
 }
 
-/** The pane footer's context meter: the word, a bar and the figure, graded like a limit. */
+/** A terminal pane header's context meter: a short bar and the figure, graded like a limit. */
 export function ContextMeter({ percent }: { percent: number }) {
   const level = levelOf(percent)
   return (
-    <span className={`mx-context-meter${level === null ? '' : ` is-${level}`}`} title={`How much of this chat's memory is used: ${String(percent)}%`}>
-      <span className="mx-usage-name">context</span>
+    <span className={`mx-context-meter${level === null ? '' : ` is-${level}`}`} title={`Context window used: ${String(percent)}%`}>
       <MeterBar percent={percent} label="Context" />
       <span className="mx-usage-figure">{`${String(percent)}%`}</span>
     </span>

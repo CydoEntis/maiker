@@ -27,6 +27,8 @@ type SessionAlerts = {
   preferences: { notifyNeedsYou: boolean; notifyFinished: boolean; notifyError: boolean; notificationSound: boolean }
   showSessionById: (sessionId: string) => void
   answerSession: (sessionId: string, answer: 'y' | 'a' | 'n') => void
+  /** What the session waits for has a toast of its own, which answers it: the plain card would say it twice. */
+  saidByOwnToast: (session: SessionView) => boolean
 }
 
 /**
@@ -34,7 +36,7 @@ type SessionAlerts = {
  * in the window, the system's notice away from it, and a sound: the daemon's say for a terminal session, this window's
  * for a chat session. A session that failed has no card from here: its stop toast is `useStopToasts`'s.
  */
-export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession }: SessionAlerts): void {
+export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession, saidByOwnToast }: SessionAlerts): void {
   const { notifyNeedsYou, notifyFinished, notifyError, notificationSound } = preferences
   const lastStatuses = useRef<ReadonlyMap<string, SessionView['status']> | null>(null)
   const lastNotified = useRef<{ sessionId: string; at: number } | null>(null)
@@ -56,6 +58,7 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
     if (!online) return
     if (document.hasFocus()) {
       const target = sessionMap.get(notice.sessionId)
+      if (target !== undefined && target.status === 'needs' && saidByOwnToast(target)) return
       const card = target && sessionNoticeFor(target, projectOf.get(target.id), {
         open: () => { showSessionById(notice.sessionId) },
         // A chat session's approval is answered in its chat, by the request's id, never by typing a letter.
@@ -66,7 +69,7 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
     }
     lastNotified.current = { sessionId: notice.sessionId, at: Date.now() }
     sendNativeNotice(notice.title, notice.body).catch((error: unknown) => { console.warn('Could not show a system notification', error) })
-  }, [sessionMap, projectOf, showSessionById, online, answerSession])
+  }, [sessionMap, projectOf, showSessionById, online, answerSession, saidByOwnToast])
 
   // A session that just started needing you, finished or failed, and that you are not looking at. A chat session's
   // alert is raised here. A terminal session's sound and system notice come from the daemon (below), which decides

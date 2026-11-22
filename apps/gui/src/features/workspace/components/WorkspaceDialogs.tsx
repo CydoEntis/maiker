@@ -38,10 +38,16 @@ import { ProjectFolderPicker } from './ProjectFolderPicker'
 import { OpenWorktreeDialog } from './OpenWorktreeDialog'
 import { useOpenWorktreeDialog } from '../useProjectActions'
 import { useWorkspace } from '../workspaceContext'
+import { HelpersRequestDialog, SecretDialog } from './OutsideAskDialogs'
+import { sendHelpersAnswer } from '../useOutsideAsks'
+import { projectOf as projectNameOf, rowTitle } from '../model/sidebar'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen, openAsk, setOpenAsk, paneSessions } = useWorkspace()
+  // The session whose request is open, while it still asks: an answer from anywhere closes the dialog with it.
+  const asker = openAsk === null ? undefined : paneSessions.get(openAsk.sessionId)
+  const askedSecret = openAsk?.kind === 'secret' ? asker?.secretAsk.find((ask) => ask.id === openAsk.askId) : undefined
   const serviceFinishing = useServiceFinishing()
   const openWorktree = useOpenWorktreeDialog()
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
@@ -129,6 +135,18 @@ export function WorkspaceDialogs() {
                 onUpdate={(whenIdle) => { setUpdateAsk(null); void updateNamed(updateAsk.name, updateAsk.action, whenIdle) }}
                 onCancel={() => { setUpdateAsk(null) }}
               />
+            )}
+            {asker !== undefined && openAsk?.kind === 'helpers' && asker.helperAsk.length > 0 && (
+              <HelpersRequestDialog
+                asker={{ name: rowTitle(asker), project: projectNameOf(asker) }}
+                tasks={asker.helperAsk}
+                online={online}
+                onAnswer={(choice) => { setOpenAsk(null); sendHelpersAnswer(asker, choice) }}
+                onCancel={() => { setOpenAsk(null) }}
+              />
+            )}
+            {asker !== undefined && askedSecret !== undefined && (
+              <SecretDialog key={askedSecret.id} asker={{ name: rowTitle(asker), project: projectNameOf(asker) }} ask={askedSecret} machine={asker.machine} online={online} onDone={() => { setOpenAsk(null) }} />
             )}
             <DraftGuardHost />
             <ConfirmHost pending={pendingConfirm} />

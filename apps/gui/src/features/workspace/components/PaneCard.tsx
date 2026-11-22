@@ -1,17 +1,22 @@
-import { useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react'
 import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
 import type { SessionView } from '../model/session'
-import { isShell, projectOf, rowTitle } from '../model/sidebar'
-import { BranchMenu, type BranchMenuSpec } from '@/features/chat/components/BranchMenu'
+import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
+import { startedBypassed } from '@/features/chat/bypassSessions'
+import { modelWords } from '@/features/chat/modelName'
+import { ContextMeter } from '@/features/usage/UsageMeter'
+import { machineLabel } from '@/data/machineNicknames'
+import { Tag } from '@/components/ui/tag'
+import { agentName } from '../model/agentMessage'
 import { Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
 import type { PaneView } from '../model/chatView'
 import { SecretAskBar } from './SecretAskBar'
+import { helpersRequestWords } from '../model/outsideAsks'
 import { PaneHeadId } from './PaneHeadId'
-import { PaneFooter } from './PaneFooter'
-import { useShortcutText } from '@/features/shortcuts/platform'
+import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
 import { IconButton } from '@/components/ui/icon-button'
 
 export type PaneCardProps = {
@@ -48,24 +53,26 @@ export type PaneCardProps = {
   onClear: () => void
   onCopyPath: () => void
   onRename: () => void
-  /** Saves a name typed into the title, which a double-click on it opens; without it the title is only shown. */
   /** Before the agent's tile: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
-  /** Where the branch crumb can switch the chat's branch (a session on this computer); without it the branch is only said. */
-  branchMenu?: BranchMenuSpec | undefined
   /** Starts a new shell in an ended pane's folder, in its place. */
   onRestart: (paneId: string) => void
   /** Answers the session's request to start helpers; absent where it cannot be answered. */
   onAnswerHelpers?: (choice: 'allow' | 'always' | 'no') => void
   /** The chat shown in the pane asks the helpers question itself, over its message box, so the bar here stays out. */
   helpersAskedInChat?: boolean
+  /** Opens, outside the pane, the dialog that answers what a session shown as a terminal asks (its toast opens the same one). */
+  outsideAsks?: { onHelpers: () => void; onSecret: (askId: number) => void }
 }
+
+const FULL_PERCENT = 100
 
 const stop = (event: MouseEvent) => { event.stopPropagation() }
 
 export function PaneCard(props: PaneCardProps) {
   const { pane, session, paneCount, focused, maximized } = props
   const shortcutText = useShortcutText()
+  const tip = useTipWithKeys()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const menuWasOpen = useRef(false)
   const multi = paneCount > 1
@@ -84,10 +91,14 @@ export function PaneCard(props: PaneCardProps) {
     { label: maximized ? 'Restore layout' : 'Maximize pane', disabled: !multi && !maximized, run: () => { props.onToggleMaximize(pane.id) } },
     { label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear },
     { label: 'Copy folder path', run: props.onCopyPath },
-    // The header has no close button; with the sidebar hidden this is the one close in reach, on the only pane too.
+    // Maiker draws nothing in a terminal pane, so what a pane shown as one asks or can restart is here, as well as in its toast.
+    ...(shown === 'terminal' && ended ? [{ label: 'Restart shell', disabled: !props.online, run: () => { props.onRestart(pane.id) } }] : []),
+    ...(shown === 'terminal' && !ended && props.outsideAsks !== undefined ? outsideEntries(session, props.outsideAsks) : []),
     'separator',
     { label: 'Close', danger: true, run: () => { props.onClose(pane.id) } },
   ]
+  // One pane of several with work in it only leaves the layout; otherwise the close ends what runs in it, after asking.
+  const closeLabel = multi && keepsRunningUnseen(session) ? 'Close pane' : shell ? 'Close terminal' : 'Close session'
 
   return (
     <>
@@ -113,25 +124,35 @@ export function PaneCard(props: PaneCardProps) {
         }}
       >
         {props.leading}
-        <div className="mx-pane-id">
-          <PaneHeadId session={session} />
-          {/* In the chat the branch is a chip under the box, so the header says only where the session is. */}
-          {!shell && shown !== 'chat' && <PaneCrumbs session={session} branchMenu={props.branchMenu} />}
-        </div>
-        {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
-        <span className="mx-pane-controls">
-          <IconButton
-            label="More pane actions"
-            aria-haspopup="menu"
-            aria-expanded={menuAt !== null}
-            // The open menu closes itself on this press, before the click: the click must not open it again.
-            onPointerDown={() => { menuWasOpen.current = menuAt !== null }}
-            onMouseDown={stop}
-            onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
-          ><Icon name="more" /></IconButton>
-        </span>
-        {/* The header's bottom edge says the status: the plain line while idle, a strip sweeping right to left while working, lit while it needs you. */}
-        <span className="mx-pane-status" data-status={session.status} aria-hidden="true" />
+        {shown === 'terminal' ? (
+          <>
+            <TerminalHeadId session={session} />
+            {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
+            <IconButton label="Split right" tip={tip('Split right', 'split-right')} disabled={full} onClick={() => { props.onSplit(pane.id, 'right') }}><Icon name="splitRight" /></IconButton>
+            <IconButton label="Split down" tip={tip('Split down', 'split-down')} disabled={full} onClick={() => { props.onSplit(pane.id, 'down') }}><Icon name="splitDown" /></IconButton>
+            <IconButton label={closeLabel} onClick={() => { props.onClose(pane.id) }}><Icon name="close" /></IconButton>
+          </>
+        ) : (
+          <>
+            <div className="mx-pane-id">
+              <PaneHeadId session={session} />
+            </div>
+            {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
+            <span className="mx-pane-controls">
+              <IconButton
+                label="More pane actions"
+                aria-haspopup="menu"
+                aria-expanded={menuAt !== null}
+                // The open menu closes itself on this press, before the click: the click must not open it again.
+                onPointerDown={() => { menuWasOpen.current = menuAt !== null }}
+                onMouseDown={stop}
+                onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
+              ><Icon name="more" /></IconButton>
+            </span>
+            {/* The header's bottom edge says the status: the plain line while idle, a strip sweeping right to left while working, lit while it needs you. */}
+            <span className="mx-pane-status" data-status={session.status} aria-hidden="true" />
+          </>
+        )}
       </div>
       <div
         className={`mx-pane-body${shown === 'chat' ? ' is-chat' : ''}`}
@@ -146,11 +167,11 @@ export function PaneCard(props: PaneCardProps) {
         {shown === 'chat' && props.chat}
         {props.overlay}
       </div>
-      {shown === 'terminal' && !shell && <PaneFooter session={session} />}
-      {session.helperAsk.length > 0 && props.onAnswerHelpers && !(shown === 'chat' && props.helpersAskedInChat) && (
+      {/* Over a chat only. A pane shown as a terminal is the agent's own CLI: what it asks is said outside it (`useOutsideAsks`). */}
+      {shown === 'chat' && session.helperAsk.length > 0 && props.onAnswerHelpers && !props.helpersAskedInChat && (
         <div className="mx-pane-ended is-ask" role="alert" aria-label="Wants to start helpers">
           <span className="mx-pane-ended-text">
-            <strong>{`Wants to start ${String(session.helperAsk.length)} helper${session.helperAsk.length === 1 ? '' : 's'}`}</strong>
+            <strong>{helpersRequestWords(session.helperAsk.length)}</strong>
             <small title={session.helperAsk.join('\n')}>{session.helperAsk.join(' · ')}</small>
           </span>
           <button type="button" className="mx-pane-ended-button is-primary" disabled={!props.online} title="This session may start helpers from now on" onMouseDown={stop} onClick={() => { props.onAnswerHelpers?.('allow') }}>Allow</button>
@@ -158,8 +179,8 @@ export function PaneCard(props: PaneCardProps) {
           <button type="button" className="mx-pane-ended-button" disabled={!props.online} title="It does the work alone" onMouseDown={stop} onClick={() => { props.onAnswerHelpers?.('no') }}>No</button>
         </div>
       )}
-      {session.secretAsk.map((ask) => <SecretAskBar key={ask.id} ask={ask} machine={session.machine} online={props.online} />)}
-      {ended && (
+      {shown === 'chat' && session.secretAsk.map((ask) => <SecretAskBar key={ask.id} ask={ask} machine={session.machine} online={props.online} />)}
+      {shown === 'chat' && ended && (
         <div className="mx-pane-ended" role="status" aria-label="Session ended">
           <span className="mx-pane-ended-text"><strong>Session ended</strong><small>Its output is kept above.</small></span>
           <button type="button" className="mx-pane-ended-button is-primary" disabled={!props.online} onMouseDown={stop} onClick={() => { props.onRestart(pane.id) }}>Restart shell</button>
@@ -174,26 +195,36 @@ export function PaneCard(props: PaneCardProps) {
   )
 }
 
+/** The pane menu's entries for what a session asks: each opens the dialog its toast opens. */
+function outsideEntries(session: SessionView, asks: NonNullable<PaneCardProps['outsideAsks']>): MenuEntry[] {
+  return [
+    ...(session.helperAsk.length > 0 ? [{ label: 'Answer the helpers request…', run: asks.onHelpers }] : []),
+    ...session.secretAsk.map((ask) => ({ label: `Provide the secret ${ask.label}…`, run: () => { asks.onSecret(ask.id) } })),
+  ]
+}
+
 /**
- * The header's branch: its name and mark, which a session on this computer can switch from here (locked when the chat has a
- * worktree of its own). The pane's width decides how much shows (`pane.css`).
+ * A terminal pane's header (handoff 6.1), all Maiker draws of the pane: the machine (a remote one only), then
+ * `project / session name` for an agent, with the permission shield and how full its context is, or a plain shell's
+ * name alone. The shield says only what Maiker knows, whether the session was started with its agent's Bypass
+ * Permissions flag: the mode after that is the agent's own, and its screen is never read for it.
  */
-function PaneCrumbs({ session, branchMenu }: { session: SessionView; branchMenu: BranchMenuSpec | undefined }) {
-  const project = projectOf(session)
+function TerminalHeadId({ session }: { session: SessionView }) {
+  const shell = isShell(session)
+  const bypassed = useMemo(() => startedBypassed(session.id), [session.id])
+  const context = session.usage.context
+  const model = modelWords(session.agentModel)
+  const who = shell ? null : model === null ? agentName(session.process) : `${agentName(session.process)} · ${model}`
+  const shield = bypassed ? 'Started with Bypass permissions: it does not ask first' : 'Permissions are the agent’s own: it asks in its terminal'
   return (
-    <nav className="mx-crumbs" aria-label="Chat location">
-      {session.branch !== null && (
-        <>
-          {branchMenu !== undefined ? (
-            <BranchMenu spec={branchMenu} branch={session.branch} worktree={session.worktree} project={project} />
-          ) : (
-            <span className="mx-crumb is-static">
-              <span className={`mx-crumb-branch-icon${session.worktree ? ' is-worktree' : ''}`}><Icon name={session.worktree ? 'worktree' : 'branch'} size={12} /></span>
-              <span className={`mx-crumb-branch${session.worktree ? ' is-worktree' : ''}`}>{session.branch}</span>
-            </span>
-          )}
-        </>
-      )}
-    </nav>
+    <>
+      {session.machineName !== null && <Tag className="mx-pane-machine">{machineLabel(session.machineName)}</Tag>}
+      <span className="mx-pane-title" title={who === null ? session.cwd : `${who} · ${session.cwd}`}>
+        {!shell && <><span className="mx-pane-project">{projectOf(session)}</span><span className="mx-pane-slash" aria-hidden="true">/</span></>}
+        <span className="mx-pane-name">{rowTitle(session)}</span>
+      </span>
+      {!shell && <span className={`mx-pane-shield${bypassed ? ' is-bypass' : ''}`} role="img" aria-label={shield} title={shield}><Icon name="shield" size={13} /></span>}
+      {!shell && context !== null && <ContextMeter percent={Math.min(FULL_PERCENT, Math.max(0, Math.round(context)))} />}
+    </>
   )
 }

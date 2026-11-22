@@ -5,7 +5,8 @@ import { TerminalView } from '@/TerminalView'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { toast } from '@/lib/toast'
-import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
+import { dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
+import { sendHelpersAnswer } from '../useOutsideAsks'
 import { isChatSession } from '../model/chatSession'
 import { PaneCard } from './PaneCard'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
@@ -39,7 +40,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setWorktreeFrom, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -88,11 +89,9 @@ export function WorkspacePane({ shown, pane, kept }: {
   const rewindRefusal = guardLocal(session, 'rewind') ?? (rewindTerm === null ? null : sharedFolderRefusalOf(session))
   const fileSearch = fileSearchOf(session, { term: rewindTerm, machineDown: head?.down === true, desktop: isDesktop() })
   const rewind: RewindPlace | undefined = rewindRefusal !== null ? { refusal: rewindRefusal } : rewindTerm !== null ? { term: rewindTerm } : undefined
-  const answerHelperAsk = (choice: 'allow' | 'always' | 'no') => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }
+  const answerHelperAsk = (choice: 'allow' | 'always' | 'no') => { sendHelpersAnswer(session, choice) }
   // A shell is a terminal already: its menu keeps Clear and Copy folder path in place of New terminal.
   const shell = isShell(session)
-  // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
-  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { setWorktreeFrom(session) } }
   const openHelperChat: OpenSubagent = (title, asked) => {
     const found = subagentNamed(session.subagents, title, asked)
     return found === null ? null : () => { showSubagent(session.id, found.id) }
@@ -182,10 +181,10 @@ export function WorkspacePane({ shown, pane, kept }: {
       onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.failed('Could not clear the screen', error) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
-      branchMenu={branchMenu}
       onRestart={restartPane}
       onAnswerHelpers={answerHelperAsk}
       helpersAskedInChat={chat.availability.kind === 'ready'}
+      outsideAsks={{ onHelpers: () => { setOpenAsk({ kind: 'helpers', sessionId: session.id }) }, onSecret: (askId) => { setOpenAsk({ kind: 'secret', sessionId: session.id, askId }) } }}
     />
   )
 }
