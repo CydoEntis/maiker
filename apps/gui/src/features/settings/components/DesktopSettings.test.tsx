@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { bindingFor, reservedReason } from '@/features/workspace/model/shortcuts'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, reduceMotion: false, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, statusBar: true, reduceMotion: false, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -48,7 +48,7 @@ describe('the agents page', () => {
       ? { installed: true, signedIn: true, account: 'me@example.com', plan: 'max' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
     accounts.signOutAgent.mockReset().mockResolvedValue(undefined)
-    renderSettings('permissions')
+    renderSettings('chat')
 
     expect(await screen.findByText('Signed in as me@example.com · max')).toBeInTheDocument()
     expect(screen.getByText('Installed, not signed in')).toBeInTheDocument()
@@ -66,7 +66,7 @@ describe('the agents page', () => {
       ? { installed: false, signedIn: null, account: '', plan: '' }
       : { installed: true, signedIn: false, account: '', plan: '' }))
     signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'waiting', link: 'https://auth.example/device', code: 'AB12-CD34' })
-    renderSettings('permissions')
+    renderSettings('chat')
 
     expect(await screen.findByText('Not installed on this computer.')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Sign in to Claude' })).not.toBeInTheDocument()
@@ -88,7 +88,7 @@ describe('the agents page', () => {
     const onSignInAgent = vi.fn()
     accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: true, signedIn: false, account: '', plan: '' })
     signIn.agentSignIn.mockReset().mockResolvedValue({ kind: 'failed', failure: 'timed-out' })
-    renderSettings('permissions', { onSignInAgent })
+    renderSettings('chat', { onSignInAgent })
 
     await user.click(await screen.findByRole('button', { name: 'Sign in to Codex' }))
     expect(await screen.findByText('Nobody finished the Codex sign-in in time.')).toBeInTheDocument()
@@ -99,14 +99,15 @@ describe('the agents page', () => {
 
   it('says when an agent could not be asked', async () => {
     accounts.loadAgentAuth.mockReset().mockRejectedValue(new Error('The agent did not answer in time'))
-    renderSettings('permissions')
+    renderSettings('chat')
 
-    expect((await screen.findAllByText('Could not check: The agent did not answer in time')).length).toBe(2)
+    expect((await screen.findAllByText('Could not check. The agent did not answer in time.')).length).toBe(2)
   })
 })
 
 describe('desktop settings', () => {
   it.each<[DesktopSettingsSection, string, boolean, Partial<SettingsPreferences>]>([
+    ['general', 'Status bar', true, { statusBar: false }],
     ['general', 'Update remote machines too', true, { updateMachines: false }],
     ['general', 'Restart the service when idle', false, { restartServiceWhenIdle: true, restartWhenIdle: false }],
     ['permissions', 'Bypass Permissions for Codex', true, { bypassOff: ['codex'] }],
@@ -129,14 +130,27 @@ describe('desktop settings', () => {
     ['terminal', 'Terminal text size', '15', { terminalFontSize: 15 }],
     ['terminal', 'Cursor', 'Underline', { cursorStyle: 'underline' }],
     ['terminal', 'Lines kept per pane', '100k', { scrollback: 100000 }],
-    ['terminal', 'Terminal text weight', 'Medium', { terminalFontWeight: 500 }],
-    ['terminal', 'Terminal bold weight', 'Extra bold', { terminalFontWeightBold: 800 }],
     ['appearance', 'Appearance', 'Light', { themeMode: 'light' }],
   ])('on %s, choosing %s: %s saves it', async (section, group, choice, patch) => {
     const user = userEvent.setup()
     const { onChange } = renderSettings(section)
     await user.click(within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: choice }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, ...patch })
+  })
+
+  it('keeps the rarely changed terminal settings folded under Advanced until Show, and saves them from there', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('terminal')
+    expect(screen.queryByRole('radiogroup', { name: 'Terminal text weight' })).toBeNull()
+    const show = within(screen.getByRole('region', { name: 'Advanced' })).getByRole('button', { name: 'Show' })
+    expect(show).toHaveAttribute('aria-expanded', 'false')
+    await user.click(show)
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Terminal text weight' })).getByRole('radio', { name: 'Medium' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontWeight: 500 })
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Terminal bold weight' })).getByRole('radio', { name: 'Extra bold' }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontWeightBold: 800 })
+    await user.click(screen.getByRole('button', { name: 'Hide' }))
+    expect(screen.queryByRole('radiogroup', { name: 'Terminal text weight' })).toBeNull()
   })
 
   it('asks once before the view changes, changes nothing on Cancel, and saves the view with the answer', async () => {

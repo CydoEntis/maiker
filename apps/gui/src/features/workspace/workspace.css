@@ -77,7 +77,7 @@
   [role="option"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"],
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
   .mx-chip, .mx-chip-row, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
-  .mx-getfile-row, .mx-palette-row, .mx-upd-button,
+  .mx-scard-meta-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
   .mx-rm-row, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
   .mx-crumb, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-dialog-close
 ) {
@@ -218,10 +218,10 @@
 .mx-app.is-narrow .mx-settings-nav { width: 176px; }
 .mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 10px; }
 /* A flat field: the theme's field tone and no edge until it has focus (material.css › field focus). */
-.mx-settings-search { display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--t3); color: var(--dim); }
+.mx-settings-search { flex: none; display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--t3); color: var(--dim); }
 .mx-settings-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; }
 .mx-settings-search input::placeholder { color: var(--dim); }
-.mx-settings-nav-group { display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
+.mx-settings-nav-group { flex: none; display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
 .mx-settings-nav-label { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; color: var(--dim); }
 .mx-settings-nav-item { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-settings-nav-item:hover { color: var(--fg); background: rgba(var(--ink), .035); }
@@ -265,6 +265,8 @@
 .mx-scard.is-filtered:not(:has([data-search-hit])) { display: none; }
 .mx-settings-none { margin: 0; font-size: 13px; color: var(--dim); }
 .mx-scard-meta { font-size: 12px; color: var(--dim); }
+.mx-scard-meta-button { height: 22px; padding: 0 6px; margin-right: -6px; border-radius: var(--r-control); font-size: 12px; color: var(--fg2); }
+.mx-scard-meta-button:hover { background: var(--m-hover); color: var(--fg); }
 /* What a card holds that is not a row of label and control: a folder field, the terminal's text controls. */
 .mx-scard-body { padding: 0 0 14px; }
 .mx-folder-cd { font-size: 12.5px; color: var(--dim); }

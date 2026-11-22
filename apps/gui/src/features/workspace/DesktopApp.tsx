@@ -45,7 +45,7 @@ export function DesktopApp() {
             <WorkspaceDialogs />
             <WindowServiceStatus />
           </div>
-          <WorkspaceStatusBar />
+          {preferences.statusBar && <WorkspaceStatusBar />}
           <Toaster />
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>

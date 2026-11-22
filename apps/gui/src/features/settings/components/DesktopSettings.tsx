@@ -3,7 +3,7 @@ import { HelpersSection } from './HelpersSection'
 import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
-import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
+import { Fragment, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { groupShowsWhole, GroupShowsAll, matchesQuery, rowIsResult, SettingsSearch } from '../settingsSearch'
 import { ThemePicker } from './ThemePicker'
 import { Button } from '@/components/ui/button'
@@ -17,14 +17,14 @@ import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
-import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, matchShortcut, takenBy, withoutAction, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
+import { captureCombo, comboChord, HOTKEY_GROUPS, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, matchShortcut, takenBy, withoutAction, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
 import { asksFirst, confirmAsk, withSkipped } from '@/features/confirm/confirm'
 import { ConfirmHost } from '@/features/confirm/ConfirmDialog'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
-import { errorMessage } from '@/lib/error-message'
+import { explainError } from '@/lib/error-message'
 import { loadAgentAuth, signOutAgent, type AgentAuth } from '@/api/daemon'
 import { SignInCard } from '@/features/signin/SignInCard'
 import { useAgentSignIn } from '@/features/signin/useAgentSignIn'
@@ -35,7 +35,7 @@ import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'helpers' | 'terminal' | 'extensions' | 'machines' | 'usage'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -156,6 +156,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
     items: [
       { id: 'chat', label: 'Chat', path: 'M5 5h14a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-7l-4 3.5V16H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1z' },
       { id: 'permissions', label: 'Permissions', path: 'M12 3 5 6v6c0 4.4 3 7.6 7 9 4-1.4 7-4.6 7-9V6z' },
+      { id: 'helpers', label: 'Helpers', path: 'M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M22 21v-2a4 4 0 0 0-3-3.9M16 3.1a4 4 0 0 1 0 7.8' },
       { id: 'terminal', label: 'Terminal', path: 'M4 7V4h16v3M9 20h6M12 4v16' },
       { id: 'extensions', label: 'Extensions', path: 'M9 3v3M15 3v3M9 18v3M15 18v3M3 9h3M3 15h3M18 9h3M18 15h3M7 6h10v12H7z' },
     ],
@@ -173,8 +174,9 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   appearance: ['Appearance', 'Your theme, motion and the sidebar.'],
   notifications: ['Notifications', 'When the system should tell you a session needs you.'],
   keys: ['Hotkeys', 'Everything the window handles before the shell does.'],
-  chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
-  permissions: ['Permissions', 'Who your agents are signed in as, and what they may run without asking.'],
+  chat: ['Chat', 'Which agent a chat starts, who it is signed in as, and how it is drawn.'],
+  permissions: ['Permissions', 'What your agents may run without asking.'],
+  helpers: ['Helpers', 'Sessions an agent starts for itself, and how many run at once.'],
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
@@ -267,8 +269,9 @@ export function DesktopSettings(props: DesktopSettingsProps) {
   const page = (id: DesktopSettingsSection): ReactNode => {
     switch (id) {
       case 'general': return <GeneralSection preferences={preferences} update={update} onSwitchView={switchView} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
-      case 'chat': return <ChatSection preferences={preferences} update={update} />
-      case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /><HelpersSection /></>
+      case 'chat': return <><ChatSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /></>
+      case 'permissions': return <><BypassSection preferences={preferences} update={update} /><ApprovedCommands /></>
+      case 'helpers': return <HelpersSection />
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
       case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />
@@ -361,6 +364,21 @@ export function Card({ title, meta, children, foot, footRow = false }: { title: 
       {children}
       {foot && <div className={`mx-scard-foot${footRow ? ' is-row' : ''}`}>{foot}</div>}
     </section>
+  )
+}
+
+/**
+ * A card of settings most people never change: only its title until Show opens it. A search looks inside it anyway,
+ * because the results draw each card's rows whatever the fold says.
+ */
+function FoldedCard({ title, children }: { title: string; children: ReactNode }) {
+  const [open, setOpen] = useState(false)
+  const searching = useContext(SettingsSearch) !== null
+  const bodyId = useId()
+  return (
+    <Card title={title} meta={<button type="button" className="mx-scard-meta-button" aria-expanded={open} aria-controls={bodyId} onClick={() => { setOpen((was) => !was) }}>{open ? 'Hide' : 'Show'}</button>}>
+      {(open || searching) && <div id={bodyId}>{children}</div>}
+    </Card>
   )
 }
 
@@ -474,6 +492,11 @@ function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onS
           </div>
         </div>
       </Card>
+      <Card title="Window">
+        <Row label="Status bar" detail="A line at the bottom with the version, updates, usage and the Commands and Shortcuts keys.">
+          <Switch aria-label="Status bar" checked={preferences.statusBar} onCheckedChange={(value) => { update('statusBar', value) }} />
+        </Row>
+      </Card>
       <Card title="Updates">
         <Row label="Download updates automatically" detail="A new release is fetched in the background. Installing waits until you restart.">
           <Switch aria-label="Download updates automatically" checked={preferences.autoDownloadUpdates} onCheckedChange={(value) => { update('autoDownloadUpdates', value) }} />
@@ -491,9 +514,6 @@ function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onS
       <Card title="Sessions">
         <Row label="Reopen layout on launch" detail="Restore the panes and splits you had last time.">
           <Switch aria-label="Reopen layout on launch" checked={preferences.restoreLayout} onCheckedChange={(value) => { update('restoreLayout', value) }} />
-        </Row>
-        <Row label="Closing the window" detail="Sessions are owned by the Maiker service and keep running.">
-          <span style={{ fontSize: 12, color: 'var(--dim)' }}>Keeps running</span>
         </Row>
         <Row label="Welcome" detail="Replay the setup: how you like to work and where to start.">
           <button type="button" className="mx-scard-button" onClick={onShowWelcome}>Show the welcome again</button>
@@ -558,12 +578,6 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         <Row label="Text size">
           <SegmentedChoice label="Terminal text size" value={preferences.terminalFontSize} options={FONT_SIZES} onChange={(value) => { update('terminalFontSize', value) }} />
         </Row>
-        <Row label="Text weight">
-          <SegmentedChoice label="Terminal text weight" value={preferences.terminalFontWeight} options={NORMAL_WEIGHTS} onChange={(value) => { update('terminalFontWeight', value) }} />
-        </Row>
-        <Row label="Bold weight">
-          <SegmentedChoice label="Terminal bold weight" value={preferences.terminalFontWeightBold} options={BOLD_WEIGHTS} onChange={(value) => { update('terminalFontWeightBold', value) }} />
-        </Row>
         <Row label="Cursor">
           <SegmentedChoice label="Cursor" value={preferences.cursorStyle} options={CURSORS} onChange={(value) => { update('cursorStyle', value) }} />
         </Row>
@@ -571,9 +585,20 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
           <Switch aria-label="Blinking cursor" checked={preferences.cursorBlink} onCheckedChange={(value) => { update('cursorBlink', value) }} />
         </Row>
       </Card>
-      <Card title="Scrollback">
+      <Card title="Panes">
+        <Row label="Terminals open in" detail="Where the terminal opens beside the chat: under it, on its right, or in its place. The terminal's own bar changes it too.">
+          <SegmentedChoice label="Terminals open in" value={preferences.terminalDock} options={DOCK_OPTIONS} onChange={(value) => { update('terminalDock', value) }} />
+        </Row>
         <Row label="Lines kept per pane" detail="Older output is dropped from this window. The Maiker service keeps the full history.">
           <SegmentedChoice label="Lines kept per pane" value={preferences.scrollback} options={SCROLLBACKS} onChange={(value) => { update('scrollback', value) }} />
+        </Row>
+      </Card>
+      <FoldedCard title="Advanced">
+        <Row label="Text weight">
+          <SegmentedChoice label="Terminal text weight" value={preferences.terminalFontWeight} options={NORMAL_WEIGHTS} onChange={(value) => { update('terminalFontWeight', value) }} />
+        </Row>
+        <Row label="Bold weight">
+          <SegmentedChoice label="Terminal bold weight" value={preferences.terminalFontWeightBold} options={BOLD_WEIGHTS} onChange={(value) => { update('terminalFontWeightBold', value) }} />
         </Row>
         <Row label="Scroll speed" detail="How many lines one turn of the mouse wheel scrolls. Normal is the terminal's default, which can feel slow.">
           <SegmentedChoice label="Scroll speed" value={preferences.scrollSpeed} options={SCROLL_SPEEDS} onChange={(value) => { update('scrollSpeed', value) }} />
@@ -584,12 +609,7 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
         <Row label="Screen reader support" detail="Mirrors each terminal's text into the page so a screen reader can read it. It makes every pane much heavier to draw, so leave it off unless you use one.">
           <Switch aria-label="Screen reader support" checked={preferences.terminalScreenReader} onCheckedChange={(value) => { update('terminalScreenReader', value) }} />
         </Row>
-      </Card>
-      <Card title="Panes">
-        <Row label="Terminals open in" detail="Where the terminal opens beside the chat: under it, on its right, or in its place. The terminal's own bar changes it too.">
-          <SegmentedChoice label="Terminals open in" value={preferences.terminalDock} options={DOCK_OPTIONS} onChange={(value) => { update('terminalDock', value) }} />
-        </Row>
-      </Card>
+      </FoldedCard>
     </>
   )
 }
@@ -672,7 +692,7 @@ type AccountState = { status: 'loading' } | { status: 'ready'; auth: AgentAuth }
 /** What the account's row says, and whether it is the line of a problem. */
 function accountWords(state: AccountState): string {
   if (state.status === 'loading') return 'Checking…'
-  if (state.status === 'failed') return `Could not check: ${state.message}`
+  if (state.status === 'failed') return `Could not check. ${state.message}`
   const { installed, signedIn, account, plan } = state.auth
   if (!installed) return 'Not installed on this computer.'
   if (signedIn === null) return 'Installed. It did not say whether it is signed in.'
@@ -694,7 +714,7 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
     for (const [agent] of ACCOUNT_AGENTS) {
       loadAgentAuth(agent).then(
         (auth) => { if (current) setStates((now) => ({ ...now, [agent]: { status: 'ready', auth } })) },
-        (error: unknown) => { if (current) setStates((now) => ({ ...now, [agent]: { status: 'failed', message: errorMessage(error, 'the agent did not answer') } })) },
+        (error: unknown) => { if (current) setStates((now) => ({ ...now, [agent]: { status: 'failed', message: explainError(error, 'Could not check').reason } })) },
       )
     }
     return () => { current = false }
@@ -774,56 +794,64 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
     onOverrides(isOwnKey(captured.combo, action, platform) ? withoutAction(overrides, action) : { ...overrides, [action]: captured.combo })
   }
 
+  const meta = <span className="mx-scard-meta">{platform === 'mac' ? 'The same keys in Chat and Terminal view. ⌘ here, Ctrl+Shift on Windows and Linux.' : 'The same keys in Chat and Terminal view. ⌘ on macOS.'}</span>
+  const last = HOTKEY_GROUPS[HOTKEY_GROUPS.length - 1]
+  // One card a group, in the order and the names of the Ctrl+/ sheet, so the two read the same.
   return (
-    <Card
-      title="Hotkeys"
-      meta={<span className="mx-scard-meta">{platform === 'mac' ? 'The same keys in Chat and Terminal view. ⌘ here, Ctrl+Shift on Windows and Linux.' : 'The same keys in Chat and Terminal view. ⌘ on macOS.'}</span>}
-      foot={<>
-        <span>In a focused pane, every other key goes straight to the shell.</span>
-        {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
-      </>}
-      footRow
-    >
-      <div>
-        {rows.map((row) => {
-          const action = row.id
-          const listening = action !== null && capturing === action
-          return (
-            <div key={row.action} className="mx-scard-row mx-hotkey-row">
-              <span>{row.action}</span>
-              {listening ? (
-                // Focused as it opens; every key pressed here, Esc too, is taken down rather than acted on.
-                <button
-                  type="button"
-                  className="mx-key-capture"
-                  {...{ [KEY_CAPTURE_ATTRIBUTE]: '', 'data-owns-escape': '' }}
-                  aria-label={`Press the new keys for ${row.action}, or Esc to cancel`}
-                  autoFocus
-                  onKeyDown={(event) => { onCaptureKey(action, event) }}
-                  onBlur={() => { setCapturing(null) }}
-                >Press the new keys…</button>
-              ) : (
-                <span className="mx-keys">
-                  {row.chords.map((chord, index) => (
-                    <Fragment key={chord.join('+')}>
-                      {index > 0 && <span className="mx-or">or</span>}
-                      <Keycaps chord={chord} className="mx-chord" labelled />
-                    </Fragment>
-                  ))}
-                </span>
-              )}
-              {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">{row.fixed}</span></span> : (
-                <span className="mx-hotkey-actions">
-                  {!listening && <button type="button" className="mx-text-button" aria-label={`Change the keys for ${row.action}`} onClick={() => { startCapture(action) }}>Change</button>}
-                  {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutAction(overrides, action)) }}>Reset</button>}
-                </span>
-              )}
-              {refusal?.action === action && <p className="mx-hotkey-refusal" role="alert">{refusal.reason}</p>}
-            </div>
-          )
-        })}
-      </div>
-    </Card>
+    <>
+      {HOTKEY_GROUPS.map((group, groupIndex) => (
+        <Card
+          key={group}
+          title={group}
+          meta={groupIndex === 0 ? meta : undefined}
+          foot={group === last ? <>
+            <span>In a focused pane, every other key goes straight to the shell.</span>
+            {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
+          </> : undefined}
+          footRow
+        >
+          <div>
+            {rows.filter((row) => row.group === group).map((row) => {
+              const action = row.id
+              const listening = action !== null && capturing === action
+              return (
+                <div key={row.action} className="mx-scard-row mx-hotkey-row">
+                  <span>{row.action}</span>
+                  {listening ? (
+                    // Focused as it opens; every key pressed here, Esc too, is taken down rather than acted on.
+                    <button
+                      type="button"
+                      className="mx-key-capture"
+                      {...{ [KEY_CAPTURE_ATTRIBUTE]: '', 'data-owns-escape': '' }}
+                      aria-label={`Press the new keys for ${row.action}, or Esc to cancel`}
+                      autoFocus
+                      onKeyDown={(event) => { onCaptureKey(action, event) }}
+                      onBlur={() => { setCapturing(null) }}
+                    >Press the new keys…</button>
+                  ) : (
+                    <span className="mx-keys">
+                      {row.chords.map((chord, index) => (
+                        <Fragment key={chord.join('+')}>
+                          {index > 0 && <span className="mx-or">or</span>}
+                          <Keycaps chord={chord} className="mx-chord" labelled />
+                        </Fragment>
+                      ))}
+                    </span>
+                  )}
+                  {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">{row.fixed}</span></span> : (
+                    <span className="mx-hotkey-actions">
+                      {!listening && <button type="button" className="mx-text-button" aria-label={`Change the keys for ${row.action}`} onClick={() => { startCapture(action) }}>Change</button>}
+                      {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutAction(overrides, action)) }}>Reset</button>}
+                    </span>
+                  )}
+                  {refusal?.action === action && <p className="mx-hotkey-refusal" role="alert">{refusal.reason}</p>}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      ))}
+    </>
   )
 }
 

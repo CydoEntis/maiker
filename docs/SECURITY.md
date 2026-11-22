@@ -151,7 +151,7 @@ the webview itself never navigates. What the page then does is the browser's to 
 
 `agent_auth_status` and `agent_sign_out` (`agent_auth.rs`) ask an agent's own command line whether
 its account is signed in (`claude auth status --json`, `codex login status`) and end the sign-in
-(`claude auth logout`, `codex logout`), for Settings › Permissions. The program is the one the host finds
+(`claude auth logout`, `codex logout`), for Settings › Chat › Accounts. The program is the one the host finds
 on PATH, the arguments are constants, the webview supplies only the agent's name (any other name is
 refused), and each run is stopped after 15 seconds. The host reads no credential file and keeps
 none: the window is told who is signed in (the account's email and plan, as the agent prints them),

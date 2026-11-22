@@ -528,7 +528,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   float material there (`--float-bg`, `--float-line`, `--float-sh`) since it now floats over a card.
 - **Settings dialog** (⌘,). Flat and rounded: the float material with the `--r-dialog` corner, and tone does the
   grouping, so there is no rule beside the nav or under the header. A nav on `--t1` at the left, in three groups under
-  dim caps: **APP** (General, Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal, Extensions)
+  dim caps: **APP** (General, Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Helpers, Terminal, Extensions)
   and **MACHINES** (Remote machines). Each item is 32px with a 15px monochrome glyph (the item's own text colour) and
   its name, with no shortcut letter; the current one is the sidebar's selected row (`--t2`), and hover is the ink at
   3.5%. Inside the dialog every field is flat: the search field, the folder fields, inputs, the pickers and the
@@ -768,20 +768,26 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   by conversation number and belongs to its session: when the daemon gives the session's chat a new number, it moves
   to that number (`followComposer`).
 - **Settings pages.** The nav's groups are App (General, Appearance, Notifications, Hotkeys), Agents (Chat,
-  Permissions, Terminal) and Machines (Remote machines). Settings always opens on **General** (the ⚙, the palette and
-  `Ctrl ,`); only Usage and Remote machines open on their own page. **General** (first **Session view**: **Open
-  sessions in**, the only setting for the view, so it is the first thing seen; then start and export folders, each the folder shown with **Browse…**, which
-  opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
-  and says "Saved" for two seconds after a change; updates; sessions, whose last row, **Questions you turned off**,
-  has **Ask again**: it empties `confirmSkipped`, so every confirm asks again, and is disabled while none is skipped) and **Chat** (how a
-  chat starts and is drawn: default agent, width, text size) and **Permissions** (first a
-  **Bypass Permissions** card, one switch per agent, all on, with a foot that says what it allows; then the account each
-  of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
-  sign-in in a terminal, **Sign out**, and **Check again**). **Terminal** (text, scrollback, and Panes: where an
-  agent's terminals open) and **Appearance** (**Theme**: System, Dark or Light and the dark and light theme pickers,
-  each over every theme of its kind; then Motion, with Reduce motion, and the sidebar's position and width). **Notifications** has two switches, Needs you and
-  Done, and the test toast. **Extensions** is the last page under Agents. No page offers corners, density, icon size
-  or colour, an accent, interface text size or status headings.
+  Permissions, Helpers, Terminal, Extensions) and Machines (Remote machines). Settings always opens on **General** (the
+  ⚙, the palette and `Ctrl ,`); only Usage and Remote machines open on their own page. Every row is a setting: a fact
+  with nothing to change is not a row. **General**: first **Session view** (**Open sessions in**, the only setting for
+  the view, so it is the first thing seen); then start and export folders, each the folder shown with **Browse…**,
+  which opens the system's folder picker, and a way back to the default (nothing is typed; the start folder reads as
+  `cd <folder>` and says "Saved" for two seconds after a change); **Window** (**Status bar**, `statusBar`, on by
+  default: off removes the line at the window's foot); updates; sessions, whose last row, **Questions you turned
+  off**, has **Ask again**: it empties `confirmSkipped`, so every confirm asks again, and is disabled while none is
+  skipped. **Chat**: how a chat starts and is drawn (default agent, width, text size, tool calls, file name colours),
+  then **Accounts**, the account each of Claude and Codex is signed in to, as the agent's own command says, with
+  **Sign in**, which opens the agent's own sign-in, **Sign out**, and **Check again**. **Permissions**: a **Bypass
+  Permissions** card, one switch per agent, all on, with a foot that says what it allows, then the commands approved
+  for a project. **Helpers**: when an agent may start helpers and how many work at once. **Terminal**: Text (font,
+  size, cursor) and Panes (where an agent's terminals open, lines kept), then a folded **Advanced** card (text and bold
+  weight, scroll speed, line height, screen reader support) that shows only its title until **Show**; a search looks
+  inside it anyway. **Appearance**: **Theme** (System, Dark or Light and the dark and light theme pickers, each over
+  every theme of its kind), Motion with Reduce motion, and the sidebar's position and width. **Notifications** has two
+  switches, Needs you and Done, and the test toast. A check that fails says why in plain words, never the raw text
+  of a tool or of an answer's shape check (`UNREADABLE_ANSWER`). No page offers corners, density, icon size or
+  colour, an accent, interface text size or status headings.
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
   text size** (`chatTextSize`: 90 to 140%). Auto is the 760px column on a small pane and grows with a large one, to 62%
   of the pane and 1100px at most, so the chat is not a strip on a big screen; the message box is as wide as the
@@ -1022,7 +1028,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   recommend compacting earlier" prompt). The daemon reads them off the screen (`crates/maitty-agent-detection/rules/
   claude.toml`, Maiker's own rules beside the vendored Herdr ones) and says the pane needs you, so the chat shows
   "claude is waiting for you", its box is off until it is answered in the terminal, and nothing queued is typed into it.
-- **Hotkeys are keycaps.** Settings › Hotkeys lists them in the same rows as every other page, and draws each key as
+- **Hotkeys are keycaps.** Settings › Hotkeys lists them in the same rows as every other page, one card a group in
+  the order and names of the `Ctrl /` sheet (`HOTKEY_GROUPS`), and draws each key as
   its own flat cap (`--m-raise`, a hairline and a thicker bottom edge, no gradient or highlight; symbols ⌘⇧⌃⌥ in the interface font, other keys in Geist Mono), with a dim "or"
   between alternatives. Windows and Linux show Ctrl, Shift and Alt as words.
 - **Hotkeys can be changed.** Each window row ends in **Change** (small `mx-text-button`s, one width so the keycaps
@@ -1093,7 +1100,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is whose, and how they are split, is the window's own memory (`data/agentTerminals.ts`, `data/terminalTabs.ts`),
   so the terminal app lists them as sessions, and one whose agent is gone is a row again. Closing the dock only
   hides them.
-  Settings › Appearance › Open sessions in picks the one view for every agent but
+  Settings › General › Open sessions in picks the one view for every agent but
   Gemini (Chat by default). A shell and an unsupported agent are terminals whatever it says; the chat card's empty state,
   "Chat view is for agent sessions", only shows where a pane has no session to hold a chat for.
   Changing the view, or switching between sessions, plays no animation.

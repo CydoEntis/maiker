@@ -4,6 +4,7 @@ import { hasSavedSettings, readSettingsPreferences, writeSettingsPreferences, ty
 const DEFAULTS: SettingsPreferences = {
   spinner: 'braille',
   restoreLayout: true,
+  statusBar: true,
   reduceMotion: false,
   compactSidebar: false,
   notifyNeedsYou: true,

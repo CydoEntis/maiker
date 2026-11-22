@@ -50,6 +50,8 @@ export type SettingsPreferences = {
   spinner: SpinnerStyle
   /** Reopen the panes and splits of last time at launch. Saved as `restoreTabs` before fleets; that name is still read. */
   restoreLayout: boolean
+  /** The line at the foot of the window: version, update, usage and the Commands and Shortcuts keys. */
+  statusBar: boolean
   reduceMotion: boolean
   /** File names in a chat's messages are drawn in the colour of their type. */
   colourFileNames: boolean
@@ -143,6 +145,7 @@ function defaults(): SettingsPreferences {
   return {
     spinner: 'braille',
     restoreLayout: true,
+    statusBar: true,
     reduceMotion: false,
     compactSidebar: false,
     notifyNeedsYou: true,
@@ -235,6 +238,7 @@ export function readSettingsPreferences(): SettingsPreferences {
     return {
       spinner: isSpinnerStyle(preferences.spinner) ? preferences.spinner : fallback.spinner,
       restoreLayout: bool(preferences.restoreLayout ?? saved.restoreTabs, fallback.restoreLayout),
+      statusBar: bool(preferences.statusBar, fallback.statusBar),
       reduceMotion: bool(preferences.reduceMotion, fallback.reduceMotion),
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
