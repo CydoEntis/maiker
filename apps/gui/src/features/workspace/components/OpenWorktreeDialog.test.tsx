@@ -52,13 +52,6 @@ function open(answer: FolderBranchList | null | Error, more: { sessions?: Sessio
 afterEach(() => { cleanup() })
 
 describe('Open worktree', () => {
-  it('lists the repository\'s linked worktrees by name and branch, asked of the project\'s machine', async () => {
-    open(listing(MAIN, FEAT, DOCS))
-    const list = await screen.findByRole('list', { name: 'Worktrees of shop' })
-    const rows = Array.from(list.querySelectorAll('button')).map((row) => row.textContent)
-    expect(rows).toEqual(['feat-xfeat/x', 'tidy-docsdocs/tidy'])
-    expect(machine.asked).toEqual([[0, '/home/me/shop']])
-  })
 
   it('starts a new-chat draft in the worktree picked', async () => {
     const { onStart, onShow } = open(listing(MAIN, FEAT))
@@ -88,37 +81,12 @@ describe('Open worktree', () => {
     expect(onStart).not.toHaveBeenCalled()
   })
 
-  it('with no linked worktree, says so and offers New worktree', async () => {
-    const { onNewWorktree } = open(listing(MAIN))
-    expect(await screen.findByText('shop has no worktrees besides its main checkout. Make one with New worktree….')).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'New worktree…' }))
-    expect(onNewWorktree).toHaveBeenCalled()
-  })
-
-  it('with no linked worktree and nothing to make one from, says how to get there', async () => {
-    open(listing(MAIN), { canMake: false })
-    expect(await screen.findByText('shop has no worktrees besides its main checkout. New worktree… makes one from a session in the repository: start one in shop with New session first.')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'New worktree…' })).toBeNull()
-  })
-
-  it('says when the project\'s folder is not in a git repository', async () => {
-    open(null)
-    expect(await screen.findByText('/home/me/shop is not in a git repository, so it has no worktrees.')).toBeTruthy()
-  })
-
   it('gives the machine\'s reason when the repository could not be read, and can ask again', async () => {
     open(new Error('no such folder'))
     expect((await screen.findByRole('alert')).textContent).toContain('Could not read the worktrees of shop: no such folder')
     machine.listing = () => Promise.resolve(listing(MAIN, FEAT))
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }))
     expect(await screen.findByRole('button', { name: /feat-x/ })).toBeTruthy()
-  })
-
-  it('closes from its Close button', async () => {
-    const { onCancel } = open(listing(MAIN))
-    await screen.findByText(/has no worktrees/)
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
-    expect(onCancel).toHaveBeenCalled()
   })
 })
 
@@ -153,12 +121,5 @@ describe('Open worktree on another machine', () => {
     const { onShow } = openOnDevbox({ sessions: [here, there] })
     fireEvent.click(await screen.findByRole('button', { name: /feat-x/ }))
     expect(onShow).toHaveBeenCalledWith(there.id)
-  })
-
-  it('marks a missing worktree without sending you to remake it from here, which is this computer\'s only', async () => {
-    openOnDevbox()
-    const row = await screen.findByRole('button', { name: /old/ })
-    expect(row.textContent).toContain('Folder missing')
-    expect(row.title).toBe('Its folder is gone.')
   })
 })

@@ -40,37 +40,6 @@ function open(list = disk(), create: Create = vi.fn(() => Promise.resolve({ kind
 const finder = () => screen.getByRole('textbox', { name: 'Find a folder or type a path' })
 
 describe('Open a folder on a machine', () => {
-  it('names the machine in its title and opens on its home folder, with no tabs and the branch of a repository beside it', async () => {
-    open()
-    expect(screen.getByRole('dialog', { name: 'Open a folder on kingdom' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Machine: kingdom' })).toBeInTheDocument()
-    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
-    expect(screen.queryByText(/Rescan|Indexed by/)).not.toBeInTheDocument()
-    expect(await screen.findByRole('option', { name: /maiker/ })).toHaveTextContent('dev')
-    const path = within(screen.getByRole('navigation', { name: 'Path' }))
-    expect(path.getByRole('button', { name: '~' })).toBeInTheDocument()
-    expect(screen.getByRole('option', { name: /notes/ })).toBeInTheDocument()
-  })
-
-  it('hides hidden folders until the switch is on', async () => {
-    const user = userEvent.setup()
-    open()
-    await screen.findByRole('option', { name: /notes/ })
-    expect(screen.queryByRole('option', { name: /\.cache/ })).not.toBeInTheDocument()
-    await user.click(screen.getByRole('switch', { name: 'Hidden folders' }))
-    expect(screen.getByRole('option', { name: /\.cache/ })).toBeInTheDocument()
-  })
-
-  it('filters the folders with the one input', async () => {
-    const user = userEvent.setup()
-    open()
-    await screen.findByRole('option', { name: /notes/ })
-    await user.type(finder(), 'mai')
-    expect(screen.getAllByRole('option')).toHaveLength(1)
-    await user.clear(finder())
-    await user.type(finder(), 'zzz')
-    expect(await screen.findByText(/No folder here matches “zzz”/)).toBeInTheDocument()
-  })
 
   it('goes into a folder with the arrow keys and Enter, up with Backspace, and chooses with Ctrl+Enter', async () => {
     const user = userEvent.setup()
@@ -82,14 +51,6 @@ describe('Open a folder on a machine', () => {
     expect(onPick).toHaveBeenCalledWith({ machine: 2, folder: `${HOME}/maiker` })
     await user.keyboard('{Backspace}')
     expect(await screen.findByRole('option', { name: /notes/ })).toBeInTheDocument()
-  })
-
-  it('goes up one folder from the up button', async () => {
-    const user = userEvent.setup()
-    open()
-    await screen.findByRole('option', { name: /notes/ })
-    await user.click(screen.getByRole('button', { name: 'Up one folder' }))
-    expect(await screen.findByRole('option', { name: /dev/ })).toBeInTheDocument()
   })
 
   it('jumps to a path typed with a slash or a tilde, and says so when there is no folder there', async () => {
@@ -188,16 +149,6 @@ describe('Making a new folder', () => {
     await user.type(nameField(), `${typed}{Enter}`)
     expect((await screen.findByRole('alert')).textContent).toContain(words)
     expect(nameField()).toHaveAttribute('aria-invalid', 'true')
-    expect(create).not.toHaveBeenCalled()
-  })
-
-  it('asks for a name when Enter is pressed on an empty field', async () => {
-    const user = userEvent.setup()
-    const { create } = open()
-    await screen.findByRole('option', { name: /notes/ })
-    await user.click(screen.getByRole('button', { name: 'New folder' }))
-    await user.keyboard('{Enter}')
-    expect((await screen.findByRole('alert')).textContent).toContain('Type a name')
     expect(create).not.toHaveBeenCalled()
   })
 

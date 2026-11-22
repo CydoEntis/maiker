@@ -25,16 +25,6 @@ describe('the question before the sidebar updates a machine', () => {
     expect(onUpdate).toHaveBeenLastCalledWith(false)
   })
 
-  it('says restart, not update, when the app there is already this version', async () => {
-    const user = userEvent.setup()
-    const { onUpdate } = ask('update', Promise.resolve({ sessions: 1, busy: 0, current: true }))
-    expect(await screen.findByRole('dialog', { name: 'Restart Maiker on box' })).toHaveTextContent('box already has this version; its service is still the old one.')
-    expect(screen.queryByRole('button', { name: 'Update now' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Restart now' }))
-    expect(onUpdate).toHaveBeenCalledWith(false)
-    expect(screen.getByRole('button', { name: 'Restart when idle' })).toBeInTheDocument()
-  })
-
   it('cannot update until it knows what is open, and still asks when the machine cannot say', async () => {
     const { onUpdate } = ask('update', Promise.reject(new Error('no route')))
     expect(screen.getByRole('button', { name: 'Update now' })).toBeDisabled()

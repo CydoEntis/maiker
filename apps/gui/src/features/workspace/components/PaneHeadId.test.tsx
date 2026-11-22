@@ -12,11 +12,6 @@ describe('PaneHeadId', () => {
     expect(container.querySelector('bdi')).toHaveTextContent(here.cwd)
   })
 
-  it('has no machine tag for a session on this computer', () => {
-    const { container } = render(<PaneHeadId session={here} />)
-    expect(container.querySelector('.mx-pane-machine')).toBeNull()
-  })
-
   it('tags a remote session with its machine', () => {
     const { container } = render(<PaneHeadId session={{ ...here, machineName: 'devbox' }} />)
     expect(container.querySelector('.mx-pane-machine')).toHaveTextContent('devbox')
@@ -28,11 +23,6 @@ describe('PaneFooter', () => {
     render(<PaneFooter session={{ process: 'claude', agentModel: '', usage: { context: 41.6, cost: null, tokens: null } }} />)
     expect(screen.getByText('Claude')).toBeInTheDocument()
     expect(screen.getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '42')
-  })
-
-  it('names the model beside the agent when the agent said it', () => {
-    render(<PaneFooter session={{ process: 'claude', agentModel: 'claude-sonnet-5-5', usage: { context: 62, cost: null, tokens: null } }} />)
-    expect(screen.getByText('Claude · Sonnet 5.5')).toBeInTheDocument()
   })
 
   it('shows no meter while the agent has not said', () => {

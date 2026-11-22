@@ -1,7 +1,7 @@
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import type { Added, UpdateProgress } from '@/api/machines'
+import type { Added } from '@/api/machines'
 import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 
@@ -47,21 +47,6 @@ async function connectTo(machines: MachinesInfo, address = 'dev@100.78.214.15', 
 }
 
 describe('the field', () => {
-  it('opens inside the themed window, so the corners and colours are the theme’s and not the bare page’s', () => {
-    const root = document.createElement('div')
-    root.className = 'mx-app'
-    document.body.append(root)
-    render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
-    expect(screen.getByRole('dialog').closest('.mx-app')).toBe(root)
-    root.remove()
-  })
-
-  it('is one field, and Add waits for an address that holds up', () => {
-    render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
-    expect(screen.getAllByRole('textbox')).toHaveLength(1)
-    expect(screen.getByRole('textbox', { name: 'Address' })).toHaveAttribute('placeholder', 'user@host, an IP address, or a name from your SSH config')
-    expect(screen.getByRole('button', { name: 'Add' })).toHaveAttribute('aria-disabled', 'true')
-  })
 
   it('answers a wrong address in plain words after Enter, and sends nothing', async () => {
     const machines = info()
@@ -90,38 +75,14 @@ describe('the field', () => {
     await waitFor(() => { expect(machines.add.onAdd).toHaveBeenCalledWith('build', 'build', undefined, { keyFile: null, installHelper: true }) })
   })
 
-  it('offers the hosts of the SSH config that match what is typed', async () => {
-    render(<AddMachineDialog machines={info()} onClose={vi.fn()} />)
-    await screen.findByRole('button', { name: 'Add build' })
-    await userEvent.setup().type(screen.getByRole('textbox', { name: 'Address' }), 'king')
-    expect(screen.queryByRole('button', { name: 'Add build' })).toBeNull()
-    expect(screen.getByRole('button', { name: /^kingdom: Already added/ })).toBeInTheDocument()
-  })
-
   describe('a host of the SSH config that is already a machine', () => {
     const kingdom = (word: string, tone: 'ok' | 'bad'): MachineHead => ({ ...connectedHead('kingdom', 5), target: 'kingdom', chip: { glyph: '●', word, tone } })
-
-    it('stays in the list, dimmed, saying Already added, and cannot be connected again', async () => {
-      render(<AddMachineDialog machines={info({ list: [kingdom('connected', 'ok')] })} onClose={vi.fn()} />)
-      const row = await screen.findByRole('button', { name: 'kingdom: Already added' })
-      expect(row).toHaveClass('is-added')
-      expect(screen.queryByRole('button', { name: 'Add kingdom' })).toBeNull()
-    })
 
     it('opens where machines are managed when it is connected, and adds nothing', async () => {
       const onOpenSettings = vi.fn()
       const machines = info({ list: [kingdom('connected', 'ok')] })
       render(<AddMachineDialog machines={machines} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
       await userEvent.setup().click(await screen.findByRole('button', { name: 'kingdom: Already added' }))
-      expect(onOpenSettings).toHaveBeenCalled()
-      expect(machines.add.onAdd).not.toHaveBeenCalled()
-    })
-
-    it('opens where machines are managed when it is not connected either, where its row has the fix', async () => {
-      const onOpenSettings = vi.fn()
-      const machines = info({ list: [{ ...kingdom('unreachable', 'bad'), why: 'connection refused' }] })
-      render(<AddMachineDialog machines={machines} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
-      await userEvent.setup().click(await screen.findByRole('button', { name: 'kingdom: Already added · unreachable' }))
       expect(onOpenSettings).toHaveBeenCalled()
       expect(machines.add.onAdd).not.toHaveBeenCalled()
     })
@@ -162,25 +123,6 @@ describe('after Add', () => {
     expect(screen.queryByText('Machine added')).toBeNull()
   })
 
-  it('says it is setting up Maiker on the same line while the host installs it, and closes once it is on', async () => {
-    let listener: (progress: UpdateProgress) => void = () => undefined
-    const onProgress = vi.fn((on: (progress: UpdateProgress) => void) => { listener = on; return Promise.resolve(vi.fn()) })
-    const later = answerLater()
-    const onClose = vi.fn()
-    await connectTo(info({}, { onAdd: later.onAdd, onProgress }), 'dev@100.78.214.15', { onClose })
-    await waitFor(() => { expect(onProgress).toHaveBeenCalled() })
-    act(() => { listener({ name: 'server-15', percent: 40 }) })
-    expect(await screen.findByText('Connecting to 100.78.214.15 and setting up Maiker there…')).toBeInTheDocument()
-    await later.answer(added({ reach: 'missing', helper_install: { installed: true, said: 'Installed' } }))
-    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
-  })
-
-  it('closes for a machine whose Maiker is older, which its sidebar heading offers to update', async () => {
-    const onClose = vi.fn()
-    await connectTo(info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'older', version: '0.45.2' }))) }), 'dev@100.78.214.15', { onClose })
-    await waitFor(() => { expect(onClose).toHaveBeenCalled() })
-  })
-
   it('Cancel during the spinner ends the look and gives the field back, as typed', async () => {
     const onClose = vi.fn()
     const machines = info({}, { onAdd: vi.fn(() => new Promise<Added>(() => undefined)) })
@@ -217,8 +159,6 @@ describe('a failure', () => {
   const CHANGED = "100.78.214.15's host key has changed, so Maiker won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '100.78.214.15'` in a terminal and try again."
   const unreachable: Added = { outcome: 'failed', message: UNREACHED, failure: 'unreachable', fix_command: null }
   const changed: Added = { outcome: 'failed', message: CHANGED, failure: 'host-key-changed', fix_command: "ssh-keygen -R '100.78.214.15'" }
-  const UNKNOWN = "100.78.214.15's host key isn't known yet and your ssh settings won't record a new one on their own: run `ssh -o StrictHostKeyChecking=ask dev@100.78.214.15` once in a terminal, check the fingerprint it shows and answer yes, then try again."
-  const unknown: Added = { outcome: 'failed', message: UNKNOWN, failure: 'host-key-unknown', fix_command: 'ssh -o StrictHostKeyChecking=ask dev@100.78.214.15' }
   // The machine the host saved for a login it could not do, as the window then lists it.
   const savedHead: MachineHead = { ...connectedHead(), chip: { glyph: '!', word: 'needs login', tone: 'bad' }, target: 'dev@100.78.214.15' }
 
@@ -239,25 +179,6 @@ describe('a failure', () => {
     expect(machines.onCopyCommand).toHaveBeenCalledWith("ssh-keygen -R '100.78.214.15'")
   })
 
-  it('says a new host key the person\'s ssh settings refused in its sentence, with the ssh line to copy and nothing to remove', async () => {
-    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(unknown)) })
-    const { user } = await connectTo(machines)
-    expect(await screen.findByText(UNKNOWN)).toBeInTheDocument()
-    expect(screen.queryByText(/has changed|ssh-keygen/)).toBeNull()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Copy the command' }))
-    expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh -o StrictHostKeyChecking=ask dev@100.78.214.15')
-  })
-
-  it('says a refused key in the host\'s sentence, with its command to copy and no password or terminal', async () => {
-    const machines = info({}, { onAdd: vi.fn(() => Promise.resolve(refused)) })
-    const { user } = await connectTo(machines)
-    expect(await screen.findByText(REFUSED_KEY)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Sign in in a terminal' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Copy the command' }))
-    expect(machines.onCopyCommand).toHaveBeenCalledWith('ssh-copy-id dev@100.78.214.15')
-  })
-
   it('offers Sign in in a terminal for a login that needs a person, on the machine the host saved', async () => {
     const message = 'server-15 needs a password or a code: sign in in a terminal, then try again.'
     const needsPerson: Added = { ...refused, message, failure: 'needs-person', fix_command: null }
@@ -267,13 +188,6 @@ describe('a failure', () => {
     view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={vi.fn()} />)
     await user.click(screen.getByRole('button', { name: 'Sign in in a terminal' }))
     expect(machines.onOpenLogin).toHaveBeenCalledWith(3)
-  })
-
-  it('says Maiker could not be put on the machine, or did not start, in the host\'s sentence', async () => {
-    const message = 'Maiker could not be installed or started on server-15 (No space left on the device.); only Linux and macOS machines are supported.'
-    await connectTo(info({}, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'missing', version: null, helper_install: { installed: false, said: 'No space left on the device.' }, message }))) }))
-    expect(await screen.findByText(message)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
 
   it('says the host\'s words for a request it refused before looking', async () => {

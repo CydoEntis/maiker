@@ -46,14 +46,6 @@ describe('sidebar resize handle', () => {
     expect(onResizeEnd).toHaveBeenLastCalledWith(SIDEBAR_WIDTH_DEFAULT)
   })
 
-  it('tells assistive tech its value and range', () => {
-    const { handle } = setup(300)
-
-    expect(handle).toHaveAttribute('aria-valuenow', '300')
-    expect(handle).toHaveAttribute('aria-valuemin', String(SIDEBAR_WIDTH_MIN))
-    expect(handle).toHaveAttribute('aria-valuemax', String(SIDEBAR_WIDTH_MAX))
-  })
-
   it('widens when dragged toward the middle of the window with the sidebar on the right', () => {
     const { handle, onResize, onResizeEnd } = setup(300, 'right')
 

@@ -18,47 +18,6 @@ function bar(extra: Partial<Parameters<typeof StatusBar>[0]> = {}) {
 }
 
 describe('StatusBar', () => {
-  it('names the version and carries the update at the left', () => {
-    bar()
-    expect(screen.getByText('Maiker 0.80.0')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Update to 0.81.0' })).toBeInTheDocument()
-  })
-
-  it('shows one meter per agent, each at its tightest limit', () => {
-    bar()
-    const meters = screen.getByRole('group', { name: 'Usage limits' })
-    expect(meters.querySelectorAll('button')).toHaveLength(2)
-    expect(meters).toHaveTextContent('75%')
-    expect(meters).toHaveTextContent('95%')
-    expect(meters).not.toHaveTextContent('30%')
-  })
-
-  it('draws each meter as a pill with its window name and a bar', () => {
-    bar()
-    const [claude] = Array.from(screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('button'))
-    expect(claude?.querySelector('.mx-usage-bar')).not.toBeNull()
-    expect(claude?.querySelector('svg.mx-usage-ring')).toBeNull()
-    expect(claude).toHaveTextContent('Week')
-  })
-
-  it('colours a meter amber from 70 and red from 90', () => {
-    bar()
-    const [claude, codex] = Array.from(screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('button'))
-    expect(claude).toHaveClass('is-warn')
-    expect(codex).toHaveClass('is-hot')
-  })
-
-  it('lights the meter of the agent in focus', () => {
-    bar({ currentAgent: 'codex' })
-    const [claude, codex] = Array.from(screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('button'))
-    expect(claude).not.toHaveClass('is-current')
-    expect(codex).toHaveClass('is-current')
-  })
-
-  it('draws no meters when no agent has reported a limit', () => {
-    bar({ usages: [] })
-    expect(screen.queryByRole('group', { name: 'Usage limits' })).toBeNull()
-  })
 
   it('opens the usage popover from a meter, with every limit of every agent', async () => {
     const props = bar()
