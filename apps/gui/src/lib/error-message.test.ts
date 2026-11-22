@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { z } from 'zod'
 import { APP_NAME } from '@/brand'
-import { errorMessage, explainError, explainStartFailure } from './error-message'
+import { errorMessage, explainError, explainStartFailure, UNREADABLE_ANSWER } from './error-message'
 
 describe('explainStartFailure', () => {
   const tree = { name: 'dev', worktree: true }
@@ -61,5 +62,13 @@ describe('explainError', () => {
 
   it('says no reason was given for a failure with no text', () => {
     expect(explainError({}, 'Could not end the session').reason).toMatch(/^No reason was given/)
+  })
+})
+
+describe('an answer that failed its shape check', () => {
+  it('reads as a sentence, not as the list of fields the check printed', () => {
+    const failure = z.object({ installed: z.boolean() }).safeParse(null).error
+    expect(errorMessage(failure, 'fallback')).toBe(UNREADABLE_ANSWER)
+    expect(explainError(failure, 'Could not check')).toEqual({ title: 'Could not check', reason: UNREADABLE_ANSWER, details: null })
   })
 })
