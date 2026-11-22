@@ -379,7 +379,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   There is one finish, flat: no gradient, highlight or blur anywhere except the first-run veil (no other `backdrop-filter`; hover tints stay). A new
   surface is added to a role's list in `material.css`; it does not set a background of its own. A popover opens
   through `PopupContent` (`components/ui/popup.tsx`) or carries `mx-pop`, so it is portalled into the window root and
-  takes the float role. **Inside a surface**, nothing reads the theme's solid colours directly: a sunken control is
+  takes the float role. A dialog (`Dialog`, `AlertDialog` in `components/ui/`) mounts in the window root (`.mx-app`) by
+  default too: the theme and the float material are scoped to it, and a dialog mounted on the body is see-through. **Inside a surface**, nothing reads the theme's solid colours directly: a sunken control is
   `--m-well`, a raised or current row `--m-raise`, a picked row `--m-sel`, a hovered one `--m-hover`, a dialog's own
   ground `--m-pane`, each mapped to the theme's `--well`/`--raise`/`--sel`/`--hover`/`--pane`. Tints are written
   `rgba(var(--hl), calc(.06 * var(--hk)))`, never a fixed white. `src/material.test.ts` fails when a stylesheet other

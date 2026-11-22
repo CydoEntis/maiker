@@ -62,12 +62,14 @@ function DialogContent({
   unstyled?: boolean
   /** The scrim's class in unstyled mode. */
   overlayClassName?: string
-  /** Where the dialog mounts: the themed window root, so it reads the theme's tokens (default: the body). */
+  /** Where the dialog mounts (default: the themed window root, `.mx-app`). The theme's colours and the dialog material
+   * are scoped to that root, so a dialog mounted on the body has no background and its text sits on whatever is behind. */
   container?: HTMLElement | null
 }) {
+  const root = container ?? document.querySelector<HTMLElement>('.mx-app')
   if (unstyled) {
     return (
-      <DialogPortal container={container}>
+      <DialogPortal container={root}>
         <DialogPrimitive.Overlay data-slot="dialog-overlay" className={overlayClassName}>
           <DialogPrimitive.Content data-slot="dialog-content" className={className} {...props}>{children}</DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
@@ -75,7 +77,7 @@ function DialogContent({
     )
   }
   return (
-    <DialogPortal container={container}>
+    <DialogPortal container={root}>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"

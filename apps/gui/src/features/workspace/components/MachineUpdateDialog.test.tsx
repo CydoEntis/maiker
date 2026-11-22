@@ -14,6 +14,16 @@ function ask(action: UpdateAction, activity: Promise<MachineActivity | null> = P
 }
 
 describe('the question before the sidebar updates a machine', () => {
+  it('opens inside the themed window, so it has the theme\'s background and is not drawn see-through over the chat', () => {
+    const app = document.body.appendChild(Object.assign(document.createElement('div'), { className: 'mx-app' }))
+    try {
+      ask('update')
+      expect(app).toContainElement(screen.getByRole('dialog', { name: 'Update Maiker on box' }))
+    } finally {
+      app.remove()
+    }
+  })
+
   it('says what is open there before an update, and updates now or when idle', async () => {
     const user = userEvent.setup()
     const { onUpdate } = ask('update', Promise.resolve({ sessions: 3, busy: 1, current: false }))
