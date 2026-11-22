@@ -208,7 +208,7 @@ pub(super) fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> 
         || {
             config_root
                 .join("projects")
-                .join(super::saved::claude_folder_name(cwd))
+                .join(super::saved::claude_folder_name(&super::saved::real_folder(cwd)))
                 .join(format!("{session}.jsonl"))
         },
     )

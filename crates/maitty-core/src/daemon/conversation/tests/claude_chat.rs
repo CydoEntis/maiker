@@ -198,11 +198,17 @@ async fn saved_claude_session(session: &mut TestSession) -> (crate::conversation
     let root = session.fixture.directory.path().to_path_buf();
     let cwd = session.fixture.record.binding.cwd.clone();
     let folder = cwd.clone();
-    let (executable, config_root) = tokio::task::spawn_blocking(move || {
+    let (executable, config_root, cwd) = tokio::task::spawn_blocking(move || {
         let config_root = std::fs::canonicalize(&root).unwrap();
-        // The daemon names the folder from the real path it runs the agent in. A temporary folder's
-        // plain path can differ from it: Windows hands out a short name (`RUNNER~1`).
+        // Claude names the folder from the real path it runs in, and the client may send another
+        // name for it: Windows hands out short names (`RUNNER~1`), and a link does the same here.
         let folder = crate::daemon::clean_path(std::fs::canonicalize(&folder).unwrap());
+        #[cfg(unix)]
+        let cwd = {
+            let link = root.join("project-link");
+            std::os::unix::fs::symlink(&folder, &link).unwrap();
+            link
+        };
         let transcripts = config_root.join("projects").join(super::saved::claude_folder_name(&folder));
         std::fs::create_dir_all(&transcripts).unwrap();
         std::fs::write(
@@ -210,7 +216,7 @@ async fn saved_claude_session(session: &mut TestSession) -> (crate::conversation
             include_str!("../fixtures/claude_transcript.jsonl"),
         )
         .unwrap();
-        (fake_claude_executable(&root), config_root)
+        (fake_claude_executable(&root), config_root, cwd)
     })
     .await
     .unwrap();
