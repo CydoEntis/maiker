@@ -5,7 +5,7 @@ import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
-import type { SessionStatus } from '@/features/workspace/model/session'
+import type { SecretAsk, SessionStatus } from '@/features/workspace/model/session'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
 import { buildRows, type ChatRow } from '../chatRows'
@@ -20,7 +20,7 @@ import { startedBypassed } from '../bypassSessions'
 import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
-import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
+import { ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
 import { pickedText, type PickedText } from '../selectionActions'
 import { addQuote } from '../composerStore'
 import { ChatActionsContext, RevealContext, type ChatActions, type Reveal } from '../chatActions'
@@ -48,6 +48,8 @@ import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
 import { ApprovalTray, HelpersTray, PromptTray, type HelperAsk } from './QuestionTray'
+import { SecretTray } from './SecretTray'
+import { answerKeyTarget } from '../answerKeyTarget'
 import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
@@ -107,17 +109,12 @@ const isSentRow = (row: ChatRow) => row.kind === 'user' || row.kind === 'echo'
 /** A pending request is asked in the tray over the message box, so it is not also a row of the list. */
 const isPendingApproval = (row: ChatRow) => row.kind === 'approval' && row.event.resolution.status === 'pending'
 
-/** The keys that answer the question tray, as typing the same letters in the terminal would. */
-const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntries(Object.entries(ANSWER_KEY).map(([decision, key]) => [key, decision as ApprovalDecision]))
-
-/** Whether a key press belongs to a field, where a letter is text and not an answer. */
+/** Whether a key press belongs to a field, where a letter or a number is text and never an answer, even in an empty one. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
-
-/** The message box with nothing in it: y, a and n are not text there yet, so they answer the tray. Numbers stay the box's. */
-const inEmptyBox = (target: EventTarget) => target instanceof HTMLTextAreaElement && target.classList.contains('mx-box-text') && target.value === ''
 
 
 const NO_SUBAGENTS: readonly SubagentView[] = []
+const NO_SECRETS: readonly SecretAsk[] = []
 /** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
 const FLASH_MS = 1200
 const FLASH_FRAMES_MAX = 40
@@ -152,6 +149,10 @@ type Props = {
   helpersOnly?: number
   /** The helpers the session waits on the person to allow, asked in the tray over the message box. */
   helperAsk?: HelperAsk | undefined
+  /** The secrets the session's agent asked for (ADR 0006), each a card over the message box; never their values. */
+  secretAsks?: readonly SecretAsk[]
+  /** The machine the session is on: a secret is only taken for this computer's sessions. */
+  machine?: number
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
@@ -191,7 +192,7 @@ export type WindowActions = {
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', helperAsk, sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
+export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', helperAsk, secretAsks = NO_SECRETS, machine = LOCAL_MACHINE, sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -695,19 +696,18 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const editAction = editFromHere.action
   const renderRow = useCallback(
     (row: ChatRow) => {
-      const item = <ChatItem row={row} agent={agent} workingSince={workingSince} approval={approval} root={root} openDiff={onOpenDiff} goToStep={goToStep} waitingStep={waitingStep} editFromHere={editAction} />
+      const item = <ChatItem row={row} agent={agent} workingSince={workingSince} root={root} openDiff={onOpenDiff} goToStep={goToStep} waitingStep={waitingStep} editFromHere={editAction} />
       return row.key === found ? <div className="mx-chat-found" data-found="true">{item}</div> : item
     },
-    [agent, workingSince, approval, root, onOpenDiff, goToStep, found, waitingStep, editAction],
+    [agent, workingSince, root, onOpenDiff, goToStep, found, waitingStep, editAction],
   )
 
-  // y, a and n answer the tray from anywhere in the chat but a field with text in it, as the same letters do in the terminal.
+  // A card's letters and a question's numbers answer from anywhere in the chat but a field: what is typed in the
+  // message box is always a reply, so one that starts with y, a or n is never taken for an answer.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    const inField = typedInField(event.target)
-    if (inField && !inEmptyBox(event.target)) return
+    if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
     // A question's number picks its choice, as it does in the agent's own menu.
-    const choice = inField ? Number.NaN : Number(event.key) - 1
+    const choice = Number(event.key) - 1
     // A plan is answered from Claude's own menu as the screen shows it, never a guessed key (see PlanTray).
     if (ask?.tool === PLAN_TOOL) {
       const menu = sendKeys === undefined ? [] : planMenuChoices(asking)
@@ -736,15 +736,11 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       void pickChoice(choice)
       return
     }
-    const decision = KEY_DECISION[event.key.toLowerCase()]
-    if (decision === undefined) return
-    if (pending !== null && approval !== null && !approval.busy && pending.approvalKind !== 'UserInput' && pending.choices.includes(decision)) {
-      event.preventDefault()
-      answer(pending.requestId, decision)
-    } else if (stoppedOnPrompt && answerPrompt !== undefined && ask?.answerable === true && decision !== 'AcceptForSession') {
-      event.preventDefault()
-      void answerPrompt(decision === 'Accept' ? 'approve' : 'deny')
-    }
+    // The card nearest the box answers a letter pressed elsewhere in the chat, by the row it shows on that key.
+    const row = answerKeyTarget(chat.current, event.key)
+    if (row === null) return
+    event.preventDefault()
+    row.click()
   }
 
   // The pane hands a new function on every render; the rows are given one that stays the same, so they are not drawn again for it.
@@ -776,6 +772,13 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         />
       )
       : null
+  // The stack over the box: what the agent asked outside its turn (a secret) first, its own question nearest the box.
+  const cards = secretAsks.length === 0 ? question : (
+    <>
+      {secretAsks.map((secret) => <SecretTray key={secret.id} ask={secret} machine={machine} online={online} agent={agentLabel(agent)} />)}
+      {question}
+    </>
+  )
   const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
   // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag is
   // for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
@@ -836,7 +839,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         // and a chat over ACP offers none: the lists and the window's own answers are read from the agent's terminal program.
         {...(link.acp !== true && abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         problem={dockProblem}
-        question={question}
+        question={cards}
         helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
         dock={dock}
         queueNote={queueNote}

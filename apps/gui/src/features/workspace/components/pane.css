@@ -33,14 +33,15 @@
 .mx-pane.is-dragging { opacity: .6; }
 .mx-pane-drop { position: absolute; inset: 6px; z-index: 29; display: flex; align-items: center; justify-content: center; border-radius: var(--r-panel); border: 1px dashed var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); font-size: 13px; font-weight: 600; color: var(--accent-text); pointer-events: none; animation: v7scrim .12s ease-out; }
 
-/* The session header, one thin line: the status mark, the machine tag (remote only), the whole path, the branch. Right:
-   Changes, Files and the ⋯ menu. Its bottom edge is the status (`.mx-pane-status`), not a plain border. */
+/* A pane's header, one thin line, all Maiker draws of a terminal pane: the machine tag (remote only), then
+   `project / session name`, and the close button at the right. */
 .mx-pane-head { position: relative; flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
-/* A terminal pane's header: `project / session name` takes the room, then the shield, the context bar and
-   the three buttons, each 10px apart. Its bottom edge is a plain hairline: the status is the sidebar's mark, not a strip
-   here. A narrow pane gives up the project, then the shield and the meter; the name and the buttons stay. */
-.mx-pane.is-terminal .mx-pane-head { border-bottom: 1px solid var(--line); }
+/* The name takes the room and the buttons sit 10px apart. A terminal pane adds the shield, the context bar and the two
+   split buttons before the close; a chat pane has only the close (its shield and context are in its chat box). The
+   bottom edge is a plain hairline: the status is the sidebar's mark, not a strip here. A narrow pane gives up the
+   project, then the shield and the meter; the name and the buttons stay. */
+.mx-pane > .mx-pane-head { border-bottom: 1px solid var(--line); }
 .mx-pane-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; overflow: hidden; white-space: nowrap; font-size: 13px; }
 .mx-pane-project { flex: none; color: var(--muted); }
 .mx-pane-slash { flex: none; color: var(--dim); }
@@ -53,7 +54,7 @@
 .mx-pane-show-sidebar { margin-left: -4px; }
 .mx-pane-id { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
 
-/* The header's bottom edge. Idle (and anything else without a signal of its own) is the line the header always had.
+/* The bottom edge of the New session draft's header (`NewChatPage`), the one header that says a status. Idle (and anything else without a signal of its own) is the line the header always had.
    Working lights the whole edge in the working colour, with a brighter light that bounces back and forth along it.
    Needs you lights the whole edge in the needs colour. Both layers are always there and only fade (opacity, and the
    colour of the lit edge), so a change of status fades in and out instead of switching; the bounce never stops on a status

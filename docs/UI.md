@@ -555,16 +555,21 @@ The desktop window, unlike the terminal interface above, has one full-width foot
   between and around them is `--frame-gap`, `--frame-edge` and `--frame-top` (`tokens.css`), never a number of its
   own, so every gap is the same and a drag handle fits any of them. A card casts no shadow.
 
-- **Pane header.** A terminal pane (`TerminalHeadId` in `PaneCard.tsx`): a machine tag for a session on another machine
-  only, `project / session name` (a plain shell: its name), the permission shield, the context bar (`ContextMeter`: a
-  32px bar and the figure, once the agent has said how full it is), then Split right, Split down and close as buttons.
-  It has no `···` menu: every pane action is in the right-click menu, which the terminal's own area opens too. A chat
-  pane (`PaneHeadId`): the status mark (`StatusIcon`), a machine tag, the whole path cut from its start (`<bdi>` in a
-  right-to-left box keeps the folder it ends in in view), then the `···` menu.
+- **Pane header.** Every pane (`PaneTitle` in `PaneCard.tsx`): a machine tag for a session on another machine only,
+  then `project / session name` (a plain shell: its name), and close as a button at the right. A terminal pane adds
+  (`TerminalFacts`) the permission shield and the context bar (`ContextMeter`: a 32px bar and the figure, once the agent
+  has said how full it is), and Split right and Split down before the close; a chat pane has neither, since its shield
+  and context are in its chat box and the Chat view has no splits. No pane has a `···` button. A terminal pane's
+  right-click menu holds every pane action and the terminal's own area opens it too. A chat pane's opens from its header
+  only and holds Rename… and Close session (and Maximize pane in a layout of several panes); a right-click in the
+  conversation opens no pane menu, and a text box keeps the system's. What the old chat menu also held is elsewhere or
+  gone on purpose: Copy folder path is on the session's sidebar row, and Split and Clear act on a terminal, which a
+  chat pane does not show.
 - **Nothing of Maiker's in a terminal pane.** A terminal pane is the agent's own CLI, and Maiker draws no foot, bar,
   status strip or overlay inside it ([DESIGN](DESIGN.md#design-language)), and no button from what the CLI's screen
-  shows. What a session shown as a terminal asks, or has to tell, is said outside the pane (`model/outsideAsks.ts`,
-  `useOutsideAsks.ts`): a helpers request and a secret request are needs-you toasts with no ✕ that open a dialog
+  shows. What a session asks, or has to tell, where its pane cannot say it (a terminal, or a chat that is not
+  drawn yet) is said outside the pane (`model/outsideAsks.ts`, `useOutsideAsks.ts`; a drawn chat says the same as
+  needs-you cards over its chat box, and the pane draws no bar over a chat): a helpers request and a secret request are needs-you toasts with no ✕ that open a dialog
   (`OutsideAskDialogs.tsx`) and stay until the daemon says they are answered; an agent's session that ended is one
   toast that offers Restart shell. Such a request is not also said by the plain needs-you card. The open dialog counts
   as a dialog over the panes, so the terminal does not take the keys back until it closes.
@@ -1381,7 +1386,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   numbered 1, which must run 1, 2, 3… to the end, because the daemon's reading also takes in the plan's numbered
   steps), one button each in Claude's words that sends its number, and **Keep planning** (`n`, Esc). The menu
   differs between Claude versions and sessions, so it is never assumed: where it cannot be read the card shows the
-  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. On a Claude permission card, a choice Claude's own menu offers beside Yes and No is a ghost button in Claude's own words that sends its number (`alwaysAllowChoices`, `alwaysAllow.ts`), only on a click: nothing is pre-selected, no key or Enter picks it, and Maiker writes no rule of its own (Claude keeps what it is told, and its words say what and where). Read off the daemon's `asking` text, it is offered only when the menu is "1. Yes", then choices numbered in order, then a "No", and the choice starts "Yes, and don't ask again" (the wording of the checked fixture; "allow all edits during this session" and other wording is unverified and so not offered). Any other menu keeps the two buttons. A question Claude asks (`AskUserQuestion`) with one answer has a button
+  terminal's question and keys (`TerminalPrompt`) and `y`, Enter and the numbers send nothing. On a Claude permission card, a choice Claude's own menu offers beside Yes and No is a plain row under the answers, in Claude's own words, that sends its number (`alwaysAllowChoices`, `alwaysAllow.ts`): it is never the highlighted first row and no letter or number picks it, only a click or moving the highlight onto it and pressing Enter, and Maiker writes no rule of its own (Claude keeps what it is told, and its words say what and where). Read off the daemon's `asking` text, it is offered only when the menu is "1. Yes", then choices numbered in order, then a "No", and the choice starts "Yes, and don't ask again" (the wording of the checked fixture; "allow all edits during this session" and other wording is unverified and so not offered). Any other menu keeps the two buttons. A question Claude asks (`AskUserQuestion`) with one answer has a button
   for each choice, which sends its number. A prompt of several such questions (`PermissionAsk.questions`) shows them
   one at a time: a tab for each (its number, ✓ once answered), the question with its choices, **Back** and **Next**,
   and on the last one **Send answers**, off until every question has an answer;
@@ -1716,7 +1721,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   number (the receipt's plus one; a failed send is retried with the same number so the daemon can tell a retry from a
   new message). Enter sends, Shift+Enter adds a line (not while an input method is composing), Esc or Stop interrupts
   the running turn (`cancel_conversation`). It is off, with the reason as its placeholder, while an approval is
-  pending ("Answer the request above first"); the request's first control that takes a key then has the focus, so `y` / `a` / `n` or
+  pending ("Answer the request above first"); the first control that takes a key in the card nearest the box then has the focus (never taken out of a box that holds a reply being typed), so `y` / `a` / `n` or
   Enter answer it at once (a card answered only by a click, such as trusting a folder, takes no focus), and the box has the focus back once it is answered (only when the focus was in this chat's
   box or nowhere). While the daemon is offline the box still takes typing and says why it cannot send. ↑ in an
   empty box brings back the last message sent in this chat, ↑ again the one before, ↓ forward and back to an empty box;
@@ -1797,10 +1802,14 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   is not this card: it stays the generic menu card (`ScreenMenuTray`). Claude's wording is the screen in the daemon's
   `prompt.rs` test; Codex's is from its source and not yet checked against a capture. No protocol change: the keys go through
   the same pane write as every other answer, which the daemon already gates.
-- **Approvals.** A pending request is the message box's waiting card (`QuestionTray.tsx` on `WaitingCard`), not a row of the list; only the oldest shows, and it
+- **Approvals.** A pending request is a needs-you card over the message box (`QuestionTray.tsx` on `WaitingCard`), not a row of the list; only the oldest shows, and it
   answers through `approve_conversation` by request id, and the request then folds into one line in the list ("Allowed", "Allowed for this session", "Denied"),
-  with the buttons gone. While it is pending, `y` (once), `a` (this session) and `n` (no) answer it from anywhere in the
-  chat but a field, the same letters as typing into the terminal, which stays a working fallback. The daemon's `answered_approvals` are
+  with the answers gone. Its answers are a column of rows (`AnswerList`), and which rows a request offers and which key
+  picks which is one pure model (`answerRows.ts`): only the decisions the provider sent, in its order and, where it
+  named them, its words; never a row it lacks. While it is pending, `y` (once), `a` (this session) and `n` (no) pick
+  their rows from anywhere in the chat but a field, the arrows move the highlight and Enter picks it. The message box is
+  a field even while it is empty: a letter typed there is text. A letter pressed outside a card goes to the card nearest
+  the box, by the row that card shows on that key (`answerKeyTarget.ts`). The daemon's `answered_approvals` are
   read with every page, so a request answered in the terminal or in another window shows as answered with the real
   choice, even when this chat was opened afterwards. The card names the tool step it is about (`item_id`) and its
   "For: ..." link scrolls the list to that step. A request that asks the person a question (`UserInput`) is answered

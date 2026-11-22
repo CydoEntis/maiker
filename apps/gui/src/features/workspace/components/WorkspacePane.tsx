@@ -123,6 +123,8 @@ export function WorkspacePane({ shown, pane, kept }: {
           ask={session.ask}
           asking={session.asking}
           helperAsk={session.helperAsk.length > 0 ? { tasks: session.helperAsk, answer: answerHelperAsk } : undefined}
+          secretAsks={session.secretAsk}
+          machine={session.machine}
           sessionId={session.id}
           problem={problem}
           place={placeOf(session)}
@@ -182,8 +184,6 @@ export function WorkspacePane({ shown, pane, kept }: {
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
       onRestart={restartPane}
-      onAnswerHelpers={answerHelperAsk}
-      helpersAskedInChat={chat.availability.kind === 'ready'}
       outsideAsks={{ onHelpers: () => { setOpenAsk({ kind: 'helpers', sessionId: session.id }) }, onSecret: (askId) => { setOpenAsk({ kind: 'secret', sessionId: session.id, askId }) } }}
     />
   )

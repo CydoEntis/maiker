@@ -466,15 +466,16 @@ export function useWorkspaceState() {
   const service = useServiceStage({ online, mismatch: Boolean(mismatch), onBack: sayBack })
   const moveToWorktree = useMoveToWorktree({ sessionMap, sendTo })
 
-  const shownAsTerminal = useCallback((session: SessionView) => chatOf(session).view === 'terminal', [chatOf])
+  // A chat that is drawn says what its session asks in its own cards; a terminal, and a chat still starting, cannot.
+  const asksOutsidePane = useCallback((session: SessionView) => { const shown = chatOf(session); return shown.view === 'terminal' || shown.availability.kind !== 'ready' }, [chatOf])
   // A request said by its own toast (`useOutsideAsks`) is not said a second time by the plain needs-you card.
-  const saidByOwnToast = useCallback((session: SessionView) => shownAsTerminal(session) && asksOutside(session), [shownAsTerminal])
+  const saidByOwnToast = useCallback((session: SessionView) => asksOutsidePane(session) && asksOutside(session), [asksOutsidePane])
   useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession, saidByOwnToast })
   useStopToasts({ sessions, listed: sessionsQuery.data !== undefined, online, showSessionById })
   const paneOfSession = useLatest((sessionId: string) => layout.arrangements.flatMap((each) => each.panes).find((pane) => pane.sessionId === sessionId && !pane.doc)?.id)
   const restartSession = useCallback((sessionId: string) => { const paneId = paneOfSession(sessionId); if (paneId !== undefined) restartPane(paneId) }, [paneOfSession, restartPane])
   const closeSessionPane = useCallback((sessionId: string) => { const paneId = paneOfSession(sessionId); if (paneId !== undefined) closePaneById(paneId) }, [paneOfSession, closePaneById])
-  useOutsideAsks({ openAsk, setOpenAsk, sessions: paneSessions, shownAsTerminal, listed: sessionsQuery.data !== undefined, online, showSessionById, restartSession, closeSessionPane })
+  useOutsideAsks({ openAsk, setOpenAsk, sessions: paneSessions, asksOutsidePane, listed: sessionsQuery.data !== undefined, online, showSessionById, restartSession, closeSessionPane })
   useMachineToasts({ heads, updating: updateProgress, onRetry: retryNamed, onUpdate: (name, action) => { setUpdateAsk({ name, action }) } })
   // With broadcast on, what is typed in one pane also goes to the layout's other panes, but only the idle ones: never into a busy agent.
   const mirrorInput = useCallback((fromSessionId: string, data: string | Uint8Array) => {

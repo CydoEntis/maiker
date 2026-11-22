@@ -3,7 +3,7 @@ import { noChatReason, type ChatAvailability } from '@/features/workspace/model/
 import type { OpenFile } from '../openFile'
 import type { ChatItemContext } from './ChatItems'
 import type { PermissionAsk } from '@/data/preview'
-import type { SessionStatus } from '@/features/workspace/model/session'
+import type { SecretAsk, SessionStatus } from '@/features/workspace/model/session'
 import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { ChatSession, type WindowActions } from './ChatSession'
@@ -34,6 +34,9 @@ export type ChatPaneProps = {
   ask?: PermissionAsk | null
   /** The helpers the session waits on the person to allow (`ChatSession`). */
   helperAsk?: HelperAsk | undefined
+  /** The secrets the session's agent asked for, and the machine it is on (`ChatSession`). */
+  secretAsks?: readonly SecretAsk[]
+  machine?: number
   /** The session's id, so what is typed before its agent is ready is kept for it. */
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
@@ -99,6 +102,8 @@ export function ChatPane(props: ChatPaneProps) {
             ask={props.ask ?? null}
             asking={props.asking ?? ''}
             helperAsk={props.helperAsk}
+            {...(props.secretAsks === undefined ? {} : { secretAsks: props.secretAsks })}
+            {...(props.machine === undefined ? {} : { machine: props.machine })}
             subagent={props.subagent ?? null}
             {...(props.subagents === undefined ? {} : { subagents: props.subagents })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}

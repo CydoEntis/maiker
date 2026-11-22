@@ -292,26 +292,44 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-signin-code { font: 600 14px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: var(--r-badge); background: color-mix(in oklab, var(--link) 14%, transparent); user-select: all; }
 .mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 
-/* Layer one: what the agent waits on, a floating card above the message box (`WaitingCard`, Needs Card in the design): the
-   box's width, a --line2 border, the shared floating shadow. It rises in, 0.2s. */
+/* The needs-you cards (`WaitingCard`, handoff 5): calm cards on the floating surface, stacked directly above the chat
+   box at its width. The material (ground, hairline, shadow) is the one float's (material.css); the only colour is the
+   amber `!` in the head. Each rises in, 0.2s. */
 @keyframes mxRise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mx-waiting {
-  position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none;
-  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh);
+  position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none; border-radius: var(--r-panel); overflow: hidden;
   animation: mxRise .2s cubic-bezier(.2, .8, .2, 1) both;
 }
-.mx-waiting:not(.is-neutral) { border-color: var(--needs); border-radius: var(--r-panel); overflow: hidden; }
-.mx-waiting:not(.is-neutral) > .mx-waiting-head { background: color-mix(in oklab, var(--needs) 12%, transparent); border-bottom-color: color-mix(in oklab, var(--needs) 30%, transparent); }
-.mx-waiting:focus-visible { box-shadow: var(--float-sh), var(--focus-underline); }
 .mx-waiting-bang { flex: none; width: 14px; text-align: center; font: 800 13px/1 var(--mono); color: var(--needs); }
-.mx-waiting-head { display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
-.mx-waiting-head:last-child { border-bottom: 0; }
+.mx-waiting-head { display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 12px 2px; }
 .mx-waiting-title { min-width: 0; font-size: 13px; font-weight: 600; color: var(--fg); overflow-wrap: anywhere; }
 .mx-waiting-aside { flex: none; font-size: 12px; color: var(--muted); }
-.mx-waiting-body { display: flex; min-width: 0; max-height: min(46vh, 420px); overflow: auto; flex-direction: column; gap: 10px; padding: 10px 12px; }
-.mx-waiting-body.is-flush { gap: 0; padding: 0; }
-.mx-waiting-body.is-flush > :is(.mx-waiting-text, .mx-waiting-note) { padding: 10px 12px 0; }
-.mx-waiting-foot { display: flex; min-height: 40px; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-top: 1px solid var(--line); }
+.mx-waiting-body { display: flex; min-width: 0; max-height: min(46vh, 420px); overflow: auto; flex-direction: column; gap: 8px; padding: 2px 12px 8px; }
+.mx-waiting-body.is-flush { gap: 0; padding: 2px 0 6px; }
+.mx-waiting-body.is-flush > :is(.mx-waiting-text, .mx-waiting-note) { padding: 0 12px 6px; }
+.mx-waiting-foot { display: flex; min-height: 40px; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px 6px 12px; border-top: 1px solid var(--float-line); }
+/* The answers (`AnswerList`): a column, one row an answer, its key in a small cap at the left. The highlighted row (the
+   first, until the arrows move it) has the float's row fill and its cap inverted; a standing choice ("Always in this
+   project") is a plain dim line, indented to the words above it. The weight never changes with the highlight. */
+.mx-answers { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 6px; border-top: 1px solid var(--float-line); }
+.mx-answer { display: flex; width: 100%; min-width: 0; height: 34px; text-align: left; align-items: center; gap: 10px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg2); cursor: pointer; }
+.mx-answer:hover:enabled, .mx-answer[data-highlight="true"] { background: var(--float-hover); color: var(--fg); }
+.mx-answer:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-answer-key { flex: none; display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; padding: 0 6px; border-radius: var(--r-control); background: color-mix(in srgb, var(--fg) 12%, transparent); font: 700 12px var(--mono); color: var(--fg); }
+.mx-answer[data-highlight="true"] > .mx-answer-key { background: var(--fg); color: var(--float-bg); }
+.mx-answer-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-answer.is-quiet { padding-left: 42px; font-weight: 400; color: var(--dim); }
+.mx-answer.is-quiet:hover:enabled, .mx-answer.is-quiet[data-highlight="true"] { color: var(--fg); }
+.mx-answer:disabled { opacity: .55; cursor: default; }
+/* A helpers request's tasks: one numbered line each, then what every helper gets, indented to the tasks' words. */
+.mx-waiting-tasks { display: flex; margin: 0; padding: 4px 12px 0; flex-direction: column; gap: 1px; list-style: none; }
+.mx-waiting-tasks > li { display: flex; min-width: 0; min-height: 24px; align-items: baseline; gap: 10px; font-size: 13px; color: var(--fg); }
+.mx-waiting-task-number { flex: none; width: 14px; text-align: right; font: 500 11px var(--mono); color: var(--dim); }
+.mx-waiting-task-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.mx-waiting-tasks-note { margin: 0; padding: 4px 12px 2px 36px; font-size: 12px; color: var(--dim); }
+/* A secret's value: the ruled field, then its two buttons. */
+.mx-waiting-secret { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.mx-waiting-secret > .mx-waiting-input { flex: 1; min-width: 0; }
 .mx-waiting-text { margin: 0; font-size: 13px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }
 .mx-waiting-text.is-pre { white-space: pre-wrap; }
 .mx-waiting-note { margin: 0; font-size: 12px; color: var(--muted); }
@@ -488,7 +506,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 /* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
 .mx-question-slot { display: contents; }
 
-.mx-waiting-head:has(+ .mx-waiting-body > .mx-waiting-form) { border-bottom: 0; }
 
 /* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
    is never set on a coloured square). It covers the model chip, the agent picker and any mark in the feed. */

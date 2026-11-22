@@ -58,7 +58,7 @@ const READS: readonly (readonly ChatEvent[])[] = [
 ]
 const LAST = READS.length - 1
 
-const CONTEXT: ChatItemContext = { agent: 'claude', workingSince: WORKING_SINCE, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+const CONTEXT: ChatItemContext = { agent: 'claude', workingSince: WORKING_SINCE, root: null, openDiff: null, goToStep: null, waitingStep: null }
 const rowKey = (row: ChatRow) => row.key
 
 /** The turn at one read, in the real list, with buttons to step through the reads or play them at the chat's pace. */

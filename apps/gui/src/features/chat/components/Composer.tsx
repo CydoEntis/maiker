@@ -178,16 +178,18 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
     if (pane?.classList.contains('is-card') === true && !pane.classList.contains('is-focused')) return
     text.current?.focus({ preventScroll: true })
   }, [])
-  // A question the agent asks takes the typing from the box, which goes off while it waits: its first control has the
+  // A question the agent asks takes the typing from the box: the first control of the card nearest the box has the
   // focus, so y / a / n (or Enter) answer it at once instead of going nowhere. Once it is answered the box has it back.
-  // Only when the typing was in this chat's box, or nowhere (the box going off dropped it), never from another pane.
+  // Only when the typing was in this chat's box, or nowhere (the box going off dropped it), never from another pane,
+  // and never out of a box that holds a reply being typed: its next letters would answer the card.
   const tray = useRef<HTMLDivElement>(null)
   const asking = question !== null
   useEffect(() => {
     const active = document.activeElement
     const ours = active === null || active === document.body || active === text.current || (tray.current?.contains(active) ?? false)
     if (!ours) return
-    if (asking) tray.current?.querySelector<HTMLElement>(TRAY_FIRST_CONTROL)?.focus({ preventScroll: true })
+    if (active instanceof HTMLTextAreaElement && active === text.current && !active.disabled && active.value !== '') return
+    if (asking) (tray.current?.lastElementChild ?? tray.current)?.querySelector<HTMLElement>(TRAY_FIRST_CONTROL)?.focus({ preventScroll: true })
     else if (active === null || active === document.body) text.current?.focus({ preventScroll: true })
   }, [asking])
   // The desktop shell takes file drops for itself, so the composer asks to be told of the ones that land on it.

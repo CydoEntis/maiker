@@ -1153,6 +1153,26 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.startShellSession).not.toHaveBeenCalled()
   })
 
+  it('gives a chat pane a header with only its close button, and Rename and Close session on a right-click of it', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(3, `${HOME}/b`)])
+    renderDesktopApp()
+
+    const pane = await screen.findByRole('region', { name: /^Terminal 1: ~\/b/ })
+    const close = within(pane).getByRole('button', { name: 'Close session' })
+    for (const name of ['More pane actions', 'Split right', 'Split down']) expect(within(pane).queryByRole('button', { name })).not.toBeInTheDocument()
+
+    const header = close.parentElement
+    if (header === null) throw new Error('the close button has no header')
+    fireEvent.contextMenu(header)
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getAllByRole('menuitem')).toHaveLength(2)
+    expect(within(menu).getByRole('menuitem', { name: /^Close session/ })).toBeInTheDocument()
+    await user.click(within(menu).getByRole('menuitem', { name: /^Rename/ }))
+    expect(await screen.findByRole('dialog', { name: /Rename/ })).toBeInTheDocument()
+  })
+
   it('docks a terminal in the chat folder from the command palette, for an agent chat in the Chat view', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()

@@ -98,7 +98,7 @@
 .mx-app .mx-hover-card,
 .mx-app .mx-upd-card,
 .mx-app .mx-perf-hud,
-.mx-app .mx-pane-ended,
+.mx-app .mx-waiting,
 .mx-app .mx-focus-pill,
 .mx-pop {
   background: var(--float-bg);

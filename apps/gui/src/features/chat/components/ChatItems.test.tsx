@@ -5,7 +5,7 @@ import type { ChatRow } from '../chatRows'
 import { KnownRowsContext } from '../knownRows'
 import { ChatItem } from './ChatItems'
 
-const context = { agent: 'claude' as const, workingSince: null, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+const context = { agent: 'claude' as const, workingSince: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
 
 /** A reply's lead is a paragraph of its own, so only its words are compared, not the space between them. */
 const noSpace = (text: string) => text.replace(/\s+/g, '')

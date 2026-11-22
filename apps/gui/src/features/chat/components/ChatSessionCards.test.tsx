@@ -127,24 +127,10 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'Accept')
   })
 
-  it('answers with y, a and n typed in the message box while it is empty', async () => {
+  it('leaves a letter typed in the message box to the text, even while the box is empty', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-1')]
     daemon.status = 'Blocked'
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message Claude' }), { key: 'a' })
-    await settle()
-
-    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'AcceptForSession')
-  })
-
-  it('leaves y, a and n to the text once the message box holds some', async () => {
-    const daemon = withStep()
-    daemon.approvals = [request('req-1')]
-    daemon.status = 'Blocked'
-    updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, draft: 'yes please' }))
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
 
@@ -152,6 +138,21 @@ describe('approvals in the chat', () => {
     await settle()
 
     expect(fake.approveRequest).not.toHaveBeenCalled()
+  })
+
+  it('leaves the keys in the message box when a card comes up over a reply being typed', async () => {
+    withStep()
+    updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, draft: 'yes please' }))
+    const view = render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
+    box.focus()
+
+    view.rerender(<ChatSession link={link()} agent="claude" online helperAsk={{ tasks: ['Run the tests'], answer: vi.fn() }} />)
+    await settle()
+
+    expect(screen.getByRole('region', { name: 'Wants to start helpers' })).toBeInTheDocument()
+    expect(box).toHaveFocus()
   })
 
   it('asks one request at a time, the oldest first, and the next once that one is answered', async () => {
@@ -172,7 +173,7 @@ describe('approvals in the chat', () => {
     expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf dist')
   })
 
-  it('gives the main answer with Enter on the card, and names its keys on its buttons', async () => {
+  it('opens with the keys on the first answer, and names each answer\'s key', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-5')]
     daemon.status = 'Blocked'
@@ -183,10 +184,11 @@ describe('approvals in the chat', () => {
     expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveAttribute('aria-keyshortcuts', 'y')
     expect(within(card).getByRole('button', { name: 'This session' })).toHaveAttribute('aria-keyshortcuts', 'a')
     expect(within(card).getByRole('button', { name: 'No' })).toHaveAttribute('aria-keyshortcuts', 'n')
-    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveFocus()
+    fireEvent.keyDown(within(card).getByRole('button', { name: 'Yes once' }), { key: 'a' })
     await settle()
 
-    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'Accept')
+    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'AcceptForSession')
   })
 
   it('moves a request that disappears from the pending list to answered once the daemon records it', async () => {

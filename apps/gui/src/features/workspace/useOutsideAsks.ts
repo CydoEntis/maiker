@@ -16,18 +16,19 @@ export function sendHelpersAnswer(session: Pick<SessionView, 'conversation'>, ch
 }
 
 /**
- * Says outside its pane what a session shown as a terminal asks or has to tell (`model/outsideAsks.ts`): a helpers
+ * Says outside its pane what a session asks or has to tell where its pane cannot (`model/outsideAsks.ts`): a helpers
  * request and a secret request are needs-you toasts that stay until the daemon says they are answered, and open their
- * dialog; an agent's session that ended is one toast that offers a new shell in its place. A session shown as a chat is
- * left out: its chat says these itself.
+ * dialog; an agent's session that ended is one toast that offers a new shell in its place. A session whose chat is
+ * drawn is left out: its chat says these itself, as cards over its message box.
  */
-export function useOutsideAsks({ openAsk, setOpenAsk, sessions, shownAsTerminal, listed, online, showSessionById, restartSession, closeSessionPane }: {
+export function useOutsideAsks({ openAsk, setOpenAsk, sessions, asksOutsidePane, listed, online, showSessionById, restartSession, closeSessionPane }: {
   /** The request whose dialog is open, kept by the window so it counts as a dialog over the panes. */
   openAsk: OpenAsk | null
   setOpenAsk: (ask: OpenAsk | null) => void
   /** Every session a pane can show: the listed ones and the ended ones a pane still holds. */
   sessions: ReadonlyMap<string, SessionView>
-  shownAsTerminal: (session: SessionView) => boolean
+  /** Whether the session's pane cannot say these itself: it is the agent's terminal, or a chat that is not drawn yet. */
+  asksOutsidePane: (session: SessionView) => boolean
   /** The sessions have been listed once: before that an empty list is not "nothing asks". */
   listed: boolean
   online: boolean
@@ -38,7 +39,7 @@ export function useOutsideAsks({ openAsk, setOpenAsk, sessions, shownAsTerminal,
 }): void {
   const said = useRef<AsksSaid>(new Map())
   const acts = useLatest(() => ({ showSessionById, restartSession, closeSessionPane }))
-  const asks = useMemo(() => [...sessions.values()].filter(shownAsTerminal).flatMap(outsideAsksOf), [sessions, shownAsTerminal])
+  const asks = useMemo(() => [...sessions.values()].filter(asksOutsidePane).flatMap(outsideAsksOf), [sessions, asksOutsidePane])
   useEffect(() => {
     // With no line to the service nothing can be answered, and the list says nothing new.
     if (!listed || !online) return

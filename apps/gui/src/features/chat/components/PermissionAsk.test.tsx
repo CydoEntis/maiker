@@ -295,13 +295,15 @@ describe("Claude's own \"don't ask again\" choice", () => {
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
   })
 
-  it('is not picked by its number, and Enter still means only the first choice, Yes once', async () => {
-    const { typeInto } = await openWith(BASH_ASK, MENU)
+  it('is not picked by its number or a letter, and the card opens with the keys on Yes once', async () => {
+    const { typeInto, user } = await openWith(BASH_ASK, MENU)
     const card = screen.getByRole('region', { name: 'Claude needs your permission' })
 
     fireEvent.keyDown(card, { key: '2' })
+    fireEvent.keyDown(card, { key: 'a' })
     expect(typeInto).not.toHaveBeenCalled()
-    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveFocus()
+    await user.keyboard('{Enter}')
     expect(typeInto).toHaveBeenCalledExactlyOnceWith(ANSWER_KEYS.approve)
   })
 

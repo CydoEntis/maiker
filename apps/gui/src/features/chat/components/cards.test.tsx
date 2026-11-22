@@ -105,78 +105,27 @@ describe('helper agents record', () => {
   })
 })
 
-describe('approval card', () => {
-  const actions = (busy = false) => ({ answer: vi.fn(), answerInput: vi.fn(), busy })
+describe('a request as a line of the conversation', () => {
+  it('says what was chosen, with no buttons, once answered', () => {
+    render(<ApprovalCard event={approvalEvent(1, { resolution: { status: 'answered', answer: 'AcceptForSession', answeredAtMs: 1_000 } })} step={null} onGoToStep={null} />)
 
-  it.each([
-    ['y', 'Accept'],
-    ['a', 'AcceptForSession'],
-    ['n', 'Decline'],
-    ['Y', 'Accept'],
-  ])('answers %s with %s by request id while the card is focused', async (key, decision) => {
-    const handlers = actions()
-    render(<ApprovalCard event={approvalEvent('req-1')} actions={handlers} step={null} onGoToStep={null} />)
-
-    screen.getByRole('group', { name: /Approval/ }).focus()
-    await userEvent.keyboard(key)
-
-    expect(handlers.answer).toHaveBeenCalledExactlyOnceWith('req-1', decision)
+    expect(screen.getByRole('group', { name: /Approval/ })).toHaveTextContent('Allowed for this session')
+    expect(screen.queryByRole('button')).toBeNull()
   })
 
-  it.each([
-    ['a choice the request does not offer', approvalEvent(1, { choices: ['Accept'] }), 'n'],
-    ['an answered request', approvalEvent(1, { resolution: { status: 'answered', answer: 'Accept' } }), 'y'],
-    ['another key', approvalEvent(1), 'x'],
-    ['a user-input request', approvalEvent(1, { approvalKind: 'UserInput' }), 'y'],
-  ])('ignores the key for %s', async (_name, event, key) => {
-    const handlers = actions()
-    render(<ApprovalCard event={event} actions={handlers} step={null} onGoToStep={null} />)
+  it('never asks: a pending request shown as a row has no answer to press', () => {
+    render(<ApprovalCard event={approvalEvent(1)} step={null} onGoToStep={null} />)
 
-    screen.getByRole('group', { name: /Approval/ }).focus()
-    await userEvent.keyboard(key)
-
-    expect(handlers.answer).not.toHaveBeenCalled()
-  })
-
-  it('does not take a key with a modifier, or while an answer is on its way', async () => {
-    const handlers = actions(true)
-    render(<ApprovalCard event={approvalEvent(1)} actions={handlers} step={null} onGoToStep={null} />)
-    screen.getByRole('group', { name: /Approval/ }).focus()
-
-    await userEvent.keyboard('y')
-    await userEvent.keyboard('{Control>}n{/Control}')
-
-    expect(handlers.answer).not.toHaveBeenCalled()
-  })
-
-  it('answers by id from a button too', async () => {
-    const handlers = actions()
-    render(<ApprovalCard event={approvalEvent(7)} actions={handlers} step={null} onGoToStep={null} />)
-
-    await userEvent.click(screen.getByRole('button', { name: 'This session (a)' }))
-
-    expect(handlers.answer).toHaveBeenCalledExactlyOnceWith(7, 'AcceptForSession')
-  })
-
-  it('folds into one line saying what was chosen, with no buttons, once answered', () => {
-    render(<ApprovalCard event={approvalEvent(1, { resolution: { status: 'answered', answer: 'AcceptForSession', answeredAtMs: 1_000 } })} actions={actions()} step={null} onGoToStep={null} />)
-
-    expect(screen.getByText('Allowed for this session')).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: /Approval/ })).toBeInTheDocument()
     expect(screen.queryByRole('button')).toBeNull()
   })
 
   it('links to its tool step', async () => {
     const onGoToStep = vi.fn()
-    render(<ApprovalCard event={approvalEvent(1)} actions={actions()} step={{ key: 't1:c', label: 'pnpm test' }} onGoToStep={onGoToStep} />)
+    render(<ApprovalCard event={approvalEvent(1)} step={{ key: 't1:c', label: 'pnpm test' }} onGoToStep={onGoToStep} />)
 
     await userEvent.click(screen.getByRole('button', { name: 'Go to the step this is about: pnpm test' }))
     expect(onGoToStep).toHaveBeenCalledWith('t1:c')
-  })
-
-  it('tells the person to use the terminal when the chat cannot answer', () => {
-    render(<ApprovalCard event={approvalEvent(1)} actions={null} step={null} onGoToStep={null} />)
-
-    expect(screen.getByText(/can take it/)).toBeInTheDocument()
   })
 })
 
