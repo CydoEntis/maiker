@@ -349,6 +349,38 @@ No test drives a real terminal, so look once with a nested server and the shim:
 pane), stops its daemon on drop, and captures output to files, not pipes: a daemon started by
 the command keeps a pipe open on Windows. Copy that pattern for a new remote test.
 
+## Project-specific: what earns a test
+
+A test earns its place when breaking the behaviour it guards would hurt someone and no other test
+would notice. The suite is kept small enough that a design change rewrites a handful of tests, not
+hundreds.
+
+Keep a test that guards:
+
+- an agent's status and the one writer that decides it (ADR 0003);
+- sessions surviving a client closing, crashing or detaching, and the daemon restarting;
+- the protocol: every message's round trip, and which versions talk to each other;
+- security: ssh arguments, host keys, secrets kept out of output, paths from outside;
+- saved data loading, including old shapes, and never being lost;
+- Windows behaviour (paths, short names, pipes, shells);
+- a bug that once shipped, named after the behaviour;
+- anything in *required coverage* below.
+
+Don't keep, and don't write:
+
+- a test that pins wording, a CSS class, a colour or a pixel or cell position, unless the text is a
+  contract another program reads (the wire, a CLI's output, a file format) or the test guards a
+  design token rule (`corners.test.ts`);
+- a second test of a behaviour another test already proves, at another level or through another
+  path; keep the one closest to the user;
+- near-identical cases written out one by one; fold them into one table test;
+- a test of code with no logic of its own: a constructor, a getter, a re-export, a type alias;
+- a test that scripts the order of calls on a mock;
+- a test of a screen, flag or path that no longer exists.
+
+Deleting a test this section rules out is not weakening the suite, as long as the behaviour it
+named is still guarded or is not worth guarding. Say which in the commit.
+
 ## Project-specific: required coverage
 
 - Status detection (`daemon/scan.rs`, hook handling): every agent's
