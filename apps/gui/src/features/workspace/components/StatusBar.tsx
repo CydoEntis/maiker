@@ -39,7 +39,7 @@ function Hint({ keys, label, onOpen }: { keys: string; label: string; onOpen: ()
   )
 }
 
-/** The window's foot: the mark, the version and its update at the left; each agent's tightest limit, then the Commands and Shortcuts hints at the right. */
+/** The window's foot: the mark, the version and its update at the left; every limit of each agent (its 5-hour and weekly ones), then the Commands and Shortcuts hints at the right. */
 export function StatusBar({ version, update, usages, currentAgent, commandsKeys, shortcutsKeys, onOpenCommands, onOpenShortcuts, onOpenUsage }: Props) {
   const [open, setOpen] = useState(false)
   return (
@@ -54,17 +54,18 @@ export function StatusBar({ version, update, usages, currentAgent, commandsKeys,
         <>
           <UsagePopover usages={usages} open={open} onOpenChange={setOpen} onOpenAll={() => { setOpen(false); onOpenUsage() }}>
             <span className="mx-status-meters" role="group" aria-label="Usage limits">
-              {usages.map((usage) => (
+              {usages.flatMap((usage) => usage.items.map((item, at) => (
                 <UsageMeter
-                  key={usage.agent}
-                  item={usage.tightest}
+                  key={`${usage.agent}:${item.window ?? 'context'}`}
+                  item={item}
                   graded
                   className={`mx-status-meter${usage.agent === currentAgent ? ' is-current' : ''}`}
-                  lead={<AppIcon process={usage.agent} size={14} />}
+                  // The agent's mark leads its first meter only, so its limits read as one group.
+                  lead={at === 0 ? <AppIcon process={usage.agent} size={14} /> : undefined}
                   openLabel="Show usage limits"
                   onOpen={() => { setOpen(true) }}
                 />
-              ))}
+              )))}
             </span>
           </UsagePopover>
           <span className="mx-status-sep" aria-hidden="true" />

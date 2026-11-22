@@ -397,14 +397,14 @@ function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): C
     return [
       ...summaries
         .filter((summary) => summary.execution === 'Structured' && summary.native_term === null && conversationKey(machine.id, summary.id) !== null)
-        .map((conversation) => toConversation(conversation, snapshot.workspaces, machine)),
+        .map((conversation) => toConversation(conversation, snapshot.workspaces, machine, limitsOf)),
       ...terminals,
     ]
   }
   return [
     ...summaries
       .filter((summary) => summary.native_term === null || !shownPanes.has(summary.native_term))
-      .map((conversation) => toConversation(conversation, snapshot.workspaces)),
+      .map((conversation) => toConversation(conversation, snapshot.workspaces, undefined, limitsOf)),
     ...terminals,
   ]
 }
@@ -1147,7 +1147,11 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
   }
 }
 
-function toConversation(summary: ConversationSummary, workspaces: WorkspaceSummary[], machine?: SnapshotMachine): Conversation {
+/**
+ * A conversation as a session. `limitsOf` is each agent's plan limits as it last reported them (`Snapshot.limits`): a chat
+ * session carries its agent's, as a terminal session does, so the status bar has them while only chats are open.
+ */
+function toConversation(summary: ConversationSummary, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, limitsOf: ReadonlyMap<string, readonly z.infer<typeof PlanLimitSchema>[]> = new Map()): Conversation {
   // Another machine's chat is named by a key that holds the machine too (`conversationKey`); the caller lists only those that have one.
   const key = machine === undefined ? summary.id : (conversationKey(machine.id, summary.id) ?? summary.id)
   const cwd = summary.worktree ?? summary.cwd
@@ -1200,7 +1204,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           agent,
           process: agent,
           chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
-          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail) },
+          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),
   }

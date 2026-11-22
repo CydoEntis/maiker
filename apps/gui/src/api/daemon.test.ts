@@ -304,6 +304,15 @@ describe('terminal sessions shown beside chats', () => {
     ])
   })
 
+  it('gives a chat session its agent\'s plan limits too, so the status bar has them while only chats are open', async () => {
+    const chat = { id: 40, generation: 1, execution: 'Structured', provider: 'Claude', cwd: '/srv', worktree: null, state: 'Running', status: 'Idle', native_term: null, checks: [] }
+    vi.mocked(invoke).mockResolvedValue({ conversations: [chat], workspaces: [], limits: [['claude', [{ name: 'week', used: 65, resets_at: 5000 }]]], terms: {} })
+
+    const listed = await loadConversations()
+
+    expect(listed.map((item) => [item.process, item.details?.limits])).toEqual([['claude', [{ name: 'week', used: 65, resetsAt: 5000 }]]])
+  })
+
   it('reads what set the status of a session, and nothing from a daemon that does not say', async () => {
     vi.mocked(invoke).mockResolvedValue({ conversations: [], workspaces: [], terms: { '5': term({ id: 5, status_why: 'hook: Stop' }), '6': term({ id: 6 }) } })
 

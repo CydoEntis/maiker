@@ -19,6 +19,13 @@ function bar(extra: Partial<Parameters<typeof StatusBar>[0]> = {}) {
 
 describe('StatusBar', () => {
 
+  it('shows every limit of every agent, the 5-hour and the weekly one both', () => {
+    bar()
+    const meters = screen.getByRole('group', { name: 'Usage limits' }).querySelectorAll('[role="meter"]')
+    expect(Array.from(meters).map((meter) => [meter.getAttribute('aria-label'), meter.getAttribute('aria-valuenow')])).toHaveLength(3)
+    expect(screen.getByRole('group', { name: 'Usage limits' })).toHaveTextContent(/5h.*30%.*Week.*75%.*Week.*95%/)
+  })
+
   it('opens the usage popover from a meter, with every limit of every agent', async () => {
     const props = bar()
     await userEvent.click(screen.getByRole('group', { name: 'Usage limits' }).querySelector('button') as HTMLElement)
