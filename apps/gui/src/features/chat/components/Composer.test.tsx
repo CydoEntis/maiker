@@ -68,16 +68,38 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
   return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
-describe('the usage strip', () => {
+describe('the context bar', () => {
 
-  it('shows the context from the start and a plan limit only once it is half used', async () => {
+  it('shows how full the context is, and leaves the plan limits to the status bar', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: 12, limits: [{ name: 'week', used: 70, resetsAt: 0 }] }} />)
     await settle()
 
     const meters = within(screen.getByRole('group', { name: 'Usage' }))
-    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', 'Weekly limit'])
-    expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('Week70%')
+    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context'])
+    expect(meters.getByRole('meter')).toHaveAttribute('aria-valuenow', '12')
+  })
+})
+
+describe('the chips under the chat box', () => {
+  const PLACE = { machine: null, project: 'maiker', branch: null, worktree: false, folder: '/dev/maiker' }
+
+  it('show on a session that has run nothing, with the context bar beside them', async () => {
+    fake.current = new FakeDaemonHistory()
+    render(<ChatSession link={LINK} agent="claude" online place={PLACE} usage={{ context: 3, limits: [] }} />)
+    await settle()
+    const chips = screen.getByRole('group', { name: 'Session location' })
+    expect(chips.parentElement).toContainElement(screen.getByRole('meter', { name: 'Context' }))
+  })
+
+  it('are gone once the session has run; the context bar stays, in the chat box', async () => {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message('t1', 'u', 'User', 'earlier'))
+    fake.current = daemon
+    render(<ChatSession link={LINK} agent="claude" online place={PLACE} usage={{ context: 40, limits: [] }} />)
+    await settle()
+    expect(screen.queryByRole('group', { name: 'Session location' })).toBeNull()
+    expect(screen.getByRole('meter', { name: 'Context' })).toBeInTheDocument()
   })
 })
 

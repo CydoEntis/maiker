@@ -141,11 +141,11 @@
   border: 1px solid var(--line2);
   box-shadow: none;
 }
-/* The message box (the chat's and the new-session draft's, one component) is the same card as a sidebar group: the card step
-   on the pane inside the card's hairline, so the two read as one material. */
+/* The chat box (the chat's and the new-session draft's, one component) is a field: the theme's field tone (`--t3`, read
+   through its role `--m-raise`) inside a hairline of the ink, so it reads as the place to type on any pane. */
 .mx-app .mx-box {
-  background: var(--m-card);
-  border: 1px solid var(--m-card-line);
+  background: var(--m-raise);
+  border: 1px solid rgba(var(--ink), .11);
   box-shadow: none;
 }
 

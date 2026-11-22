@@ -18,10 +18,10 @@ export function WorkspacePlaceActions({ children }: { children: ReactNode }) {
   const { open } = openProject
   const actions = useMemo<PlaceActions>(() => ({
     projects: machineProjects(sessions, machine, focusedSession, startFolder).map(({ name, folder }) => ({ name, folder })),
-    onNewSessionIn: (folder) => {
+    onNewSessionIn: (folder, agent) => {
       setSettingsSection(null)
       setNewChatMachine(machine)
-      setNewChatSeed({ folder, message: '' })
+      setNewChatSeed({ folder, message: '', ...(agent === undefined ? {} : { agent }) })
       setNewChatOpen(true)
     },
     onOpenFolder: () => { open('folder') },

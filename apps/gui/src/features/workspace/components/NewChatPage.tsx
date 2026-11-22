@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { buildAttachmentMessage } from '@/features/chat/attachmentMessage'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
@@ -25,7 +24,10 @@ import { readLastWho, rememberWho } from '../model/lastWho'
 import { discardDraft, parkDraft, parkedDraft } from '../model/newSessionDraft'
 import { FolderMark, Icon } from './glyphs'
 import { type ChipItem } from './NewChatMenus'
-import { PaneHeadId } from './PaneHeadId'
+import { NEW_SESSION } from '../model/sidebar'
+import { Tag } from '@/components/ui/tag'
+import { machineLabel } from '@/data/machineNicknames'
+import { loadAcpAgents } from '@/api/acpAgents'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import type { PickedFolder } from '../model/folderPick'
 import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
@@ -148,10 +150,10 @@ const refused = (): Promise<boolean> => Promise.resolve(false)
 
 /**
  * The New session draft: a chat that has not been sent yet, in the main area, never a dialog. It is the pane a started chat
- * has, drawn from the same parts: the pane header (status mark and the folder's path), an empty conversation that asks
- * "What are we building today?", the one message box (`Composer`: agent, model and effort, permission mode, attach and send
- * inside it) and under it the one place row (`SessionBar`): machine, folder, branch and sync. Before the first message
- * those chips choose instead of show: the machine's menu picks another computer, the folder's opens a recent project,
+ * has, drawn from the same parts: the chat pane's header (`project / New session` and ×, which discards the draft), an
+ * empty conversation that asks "What are we building today?", the one chat box (`Composer`: agent, model and reasoning
+ * level, permission mode, attach and send inside it) and under it the chips row (`SessionBar`): machine, folder, branch
+ * and sync. Before the first message those chips choose instead of show: the machine's menu picks another computer, the folder's opens a recent project,
  * a folder or a clone (a pasted GitHub link becomes a Clone row), the branch's picks, names or makes a worktree. Nothing
  * starts before Enter; then the session starts with all of it and this same view shows the Starting card until the window
  * swaps in the session's pane in one update. It is always an agent session (ADR 0003); Settings says which view it opens
@@ -242,6 +244,19 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const [other, setOther] = useState<OtherAgent | null>(null)
   const [othersOpen, setOthersOpen] = useState(false)
   const acp = otherAgents && !remote ? other : null
+  // The ACP agents that are ready to run here, for the picker's rail; read again once the Other agents dialog (which installs and removes them) closes.
+  const [readyOthers, setReadyOthers] = useState<readonly OtherAgent[]>([])
+  useEffect(() => {
+    if (!otherAgents || remote || othersOpen) return undefined
+    let live = true
+    loadAcpAgents().then(
+      (agents) => { if (live) setReadyOthers(agents.filter((candidate) => candidate.source === 'config' || candidate.installed !== null).map(({ id, name }) => ({ id, name }))) },
+      (error: unknown) => { console.warn('Could not list the agents that run over ACP', error) },
+    )
+    return () => { live = false }
+  }, [otherAgents, remote, othersOpen])
+  // The one picked is on the rail even before the list has been read again.
+  const railOthers = acp === null || readyOthers.some((candidate) => candidate.id === acp.id) ? readyOthers : [...readyOthers, acp]
   const agentMissing = !remote && acp === null && !isInstalled(agent)
 
   // The message box takes the keys when the draft opens, and again after a start that did not go through.
@@ -491,7 +506,10 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const facts: ComposerFacts = {
     mode: modeLabel(mode), modeDanger: bypass, modeKey: mode, model: null,
     modes: abilities.permissionModes?.modes ?? GEMINI_MODES, modeAgent: agent, onPickMode: setMode, bypassAllowed: true,
-    agentChips: { locked: null, start: choice, remote, onChange: changeChoice, onAgent: pickAgent },
+    agentChips: {
+      locked: null, start: choice, remote, onChange: changeChoice, onAgent: pickAgent, installed: remote ? null : installed,
+      ...(otherAgents && !remote ? { others: { list: railOthers, current: acp?.id ?? null, onPick: (id: string | null) => { setOther(id === null ? null : railOthers.find((candidate) => candidate.id === id) ?? null) } } } : {}),
+    },
   }
   const composer: ChatComposer = {
     draft: message, setDraft: setMessage, attachments, attach, readOnly: false, attachable: !remote,
@@ -522,16 +540,16 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     {othersOpen && <AcpAgentsDialog onPick={(picked) => { setOther(picked); setOthersOpen(false) }} onCancel={() => { setOthersOpen(false) }} />}
     </>
   )
-  const status = starting ? 'working' : 'idle'
   return (
     <section ref={page} className="mx-newchat" aria-label="New session" onKeyDown={onKeyDown}>
       <header className="mx-pane-head">
         {leading}
-        <div className="mx-pane-id">
-          <PaneHeadId session={{ status, process: agent, machineName: remote ? targetLabel : null, cwd: folder === '' ? 'No folder chosen yet' : folder }} />
-        </div>
-        {onCancel !== undefined && <DraftMenu disabled={starting} onDiscard={discard} />}
-        <span className="mx-pane-status" data-status={status} aria-hidden="true" />
+        {remote && <Tag className="mx-pane-machine">{machineLabel(targetLabel)}</Tag>}
+        <span className="mx-pane-title" title={folder === '' ? 'No folder chosen yet' : folder}>
+          <span className="mx-pane-project">{folderName}</span><span className="mx-pane-slash" aria-hidden="true">/</span>
+          <span className="mx-pane-name">{NEW_SESSION}</span>
+        </span>
+        {onCancel !== undefined && <IconButton label="Discard draft" tip="Discard draft (Esc)" disabled={starting} onClick={discard}><Icon name="close" /></IconButton>}
       </header>
       <div className="mx-newchat-body">
         <div className="mx-chat is-starting">
@@ -548,22 +566,6 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         </div>
       </div>
     </section>
-  )
-}
-
-/** The header's ⋯, as a started pane has it: the one way out of the draft besides Esc. */
-function DraftMenu({ disabled, onDiscard }: { disabled: boolean; onDiscard: () => void }) {
-  return (
-    <span className="mx-pane-controls">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <IconButton label="More pane actions" disabled={disabled}><Icon name="more" /></IconButton>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" container={document.querySelector<HTMLElement>('.mx-app')} aria-label="Draft" className="text-fg">
-          <DropdownMenuItem onSelect={onDiscard}>Discard draft<DropdownMenuShortcut>Esc</DropdownMenuShortcut></DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </span>
   )
 }
 

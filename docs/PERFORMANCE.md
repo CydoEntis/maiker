@@ -40,7 +40,7 @@ driven through React 12.5 times a second. Output rendering is the third, separat
 ### 1. Infinite CSS animations on working and waiting sessions (about 32 points per working session; stacks)
 
 - `apps/gui/src/features/workspace/workspace.css:502-505`: `.mx-fx-working::after`, `.mx-fx-needs::after`, `.mx-fx-done::after` move a 250%-wide gradient layer forever (`v14sweep`, `v14breathe`).
-- `workspace.css:244` `.mx-badge.is-needs` and `:754` `.mx-inbox-count.is-needs` animate `box-shadow` forever (`v7pulse`); `:1005` `.mx-upd-dot` too; `:527` `.mx-pane-status.is-idle .mx-status-dot` breathes forever.
+- `workspace.css:244` `.mx-badge.is-needs` and `:754` `.mx-inbox-count.is-needs` animate `box-shadow` forever (`v7pulse`); `:1005` `.mx-upd-dot` too.
 - `workspace.css:483` the Settings preview chip loops the sweep.
 
 The sweep was rewritten earlier to animate `transform`/`opacity`, which is cheap in Chromium (1-2

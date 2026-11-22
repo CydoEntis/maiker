@@ -848,6 +848,8 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
         place={place}
+        // Nothing has run in a chat that is read and empty, with no turn under way: its chips can still change where it works.
+        ran={!(feed.loaded && rows.length === 0 && !working)}
         ended={ended}
       />
       {problemView.alert}

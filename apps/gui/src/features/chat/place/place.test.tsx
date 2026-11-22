@@ -150,10 +150,24 @@ describe('the sync chip', () => {
     expect(titles()).toContain('Pull needs your say')
   })
 
-  it('is not drawn for a folder the daemon cannot read the state of', () => {
+  it('offers the moves without counts on another machine, whose commits are not read from here', async () => {
+    const user = userEvent.setup()
+    git.sync.mockResolvedValue('Fetched')
     render(<SessionBar place={{ ...PLACE, machine: 'devbox', machineId: 2 }} />)
-    expect(screen.queryByRole('button', { name: /^Sync with origin/ })).toBeNull()
+    const chip = screen.getByRole('button', { name: /^Sync with origin/ })
+    expect(chip).not.toHaveAccessibleName(/\d/)
     expect(git.syncState).not.toHaveBeenCalled()
+    await user.click(chip)
+    await user.click(screen.getByRole('radio', { name: /^Fetch/ }))
+    expect(git.sync).toHaveBeenCalledWith(PLACE.folder, 'fetch', 2, 3)
+  })
+
+  it('is not drawn where there is nothing to sync: no branch, or another machine\'s draft with no pane yet', () => {
+    const { unmount } = render(<SessionBar place={{ ...PLACE, branch: null }} />)
+    expect(screen.queryByRole('button', { name: /^Sync with origin/ })).toBeNull()
+    unmount()
+    render(<SessionBar place={{ ...PLACE, machine: 'devbox', machineId: 2, pane: undefined }} />)
+    expect(screen.queryByRole('button', { name: /^Sync with origin/ })).toBeNull()
   })
 })
 

@@ -29,8 +29,7 @@ describe('the chat under its box', () => {
     await user.click(screen.getByRole('button', { name: 'New session here' }))
     expect(onResume).toHaveBeenCalledOnce()
     expect(onNewSession).toHaveBeenCalledOnce()
-    // The location stays; the controls of a session that is gone do not.
-    expect(screen.getByRole('group', { name: 'Session location' })).toBeInTheDocument()
+    // The controls of a session that is gone do not stay.
     expect(screen.queryByRole('group', { name: 'Usage' })).toBeNull()
   })
 })

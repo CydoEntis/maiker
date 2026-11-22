@@ -76,7 +76,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
-    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })
@@ -136,7 +136,8 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     const model = screen.getByRole('button', { name: /^Agent, model and reasoning/ })
     expect(model).toHaveAttribute('aria-disabled', 'true')
-    expect(model).toHaveAttribute('title', 'Claude is working. You can change the model and effort when it finishes, or after Esc.')
+    // The reason is in the button's name, so it is read out and not only shown on hover.
+    expect(model).toHaveAccessibleName(/when Claude finishes/)
     await user.click(model)
     expect(screen.queryByRole('radio', { name: /^Opus 5\.5/ })).not.toBeInTheDocument()
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
@@ -157,7 +158,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     // Picked here: shown at once, and the agent's files then say the same.
     await user.click(button())
-    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(button()).toHaveAccessibleName(/· High/)
     rerender(chat('high'))

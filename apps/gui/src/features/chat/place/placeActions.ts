@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { ChatAgent } from '@/features/workspace/model/chatView'
 
 export type PlaceProject = { name: string; folder: string }
 
@@ -6,7 +7,8 @@ export type PlaceProject = { name: string; folder: string }
 export type PlaceActions = {
   /** The projects the menu offers a new session in. */
   projects: readonly PlaceProject[]
-  onNewSessionIn: (folder: string) => void
+  /** Opens a New session draft in a folder, with `agent` picked when one is given. */
+  onNewSessionIn: (folder: string, agent?: ChatAgent) => void
   /** Opens the Open a project palette in this computer's folders. */
   onOpenFolder: () => void
   /** Opens the Open a project palette on its Git URL field. */

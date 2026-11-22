@@ -688,7 +688,7 @@ Right-click and row menus (`MenuPopup`, `.mx-ctx`) are 190px at least with 4px o
 accessible label. The place chips' menus (branch, sync, folder)
 use `ChipMenu` variant `place` (298-300px, flat search, no counts, plain labels, `ruled` sections). Their picked row is a ground and
 bold, never a tick. `WorkspacePlaceActions` mounts the `PlaceActionsContext` that feeds the folder menu's projects and its
-Open folder and Clone rows. The model menu is 220px wide with rows of 30px.
+Open folder and Clone rows. The model picker is its own float (see *Agent, model and reasoning*).
 
 ## Project-specific: Open a project (desktop)
 
@@ -1345,12 +1345,17 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
 
 ## Project-specific: desktop chat view
 
-The message box's controls (model and effort, permissions, attach, send) are one row inside the box (`Composer.tsx`); the
-session's place (folder, branch, sync chips: `features/chat/place/`) and the usage meters live in one row under it, drawn by
-`features/chat/components/SessionBar.tsx`. It takes `place`, its controls and `onOpenProject(tab: 'clone' | 'folder')` (else the window's `PlaceActionsContext`) as props and
+The chat box's controls (model and reasoning, the shield, the context bar, attach, send) are one row inside the box (`Composer.tsx`). What
+the row shows is decided by pure functions in `features/chat/boxRow.ts`: `permissionWords` (the mode's name only off the agent's
+starting mode), `workingLock` (the model and reasoning lock while the agent works; the reason goes in the button's accessible name, not
+only its tooltip) and `placeChipsShown` (the chips only on a session that has run nothing; `Composer` takes that as `ran`). The
+session's place (folder, branch, sync chips: `features/chat/place/`) is one row under the box, drawn by
+`features/chat/components/SessionBar.tsx`, which holds the context bar at its right while it shows. The sync chip's face and menu
+come from `place/syncMenu.ts`; a folder on another machine is read as `uncounted` (`useSessionSync`), so its chip offers the moves and
+claims no numbers. `SessionBar` takes `place`, its controls and `onOpenProject(tab: 'clone' | 'folder')` (else the window's `PlaceActionsContext`) as props and
 imports nothing from the chat, so the terminal view reuses it; the place is built from the session list
 (`features/chat/sessionPlace.ts`), never by running git in the view. An ended session shows the read-only line with Resume
-and New session here (`EndedActions` on `Composer`) in place of the box; see DESIGN.md, *The message box*.
+and New session here (`EndedActions` on `Composer`) in place of the box; see DESIGN.md, *The chat box*.
 
 The desktop app's chat view is a second view of a Claude Code or Codex session, never a second session
 ([chat view plan](features/chat-gui/chat-view-plan.md), ADR 0006). Rules:
@@ -1424,18 +1429,25 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   no terminal, still starts from a shell's empty chat card (**Start a Claude chat** / **Start a Codex chat**) and
   stops the agent when closed (`closeChatSession`: end, then put away; if the stop fails it stays open).
 - **Choosing the agent for one session.** A project's **New session** opens the New session draft, where the agent is picked in the message box's foot; the palette's "Start <agent>" opens it with that agent picked.
-- **New session draft is the chat a started session has** (`NewChatPage`, `session-dialogs.css`). It reuses the pane's pieces and draws no second copy: the pane header (`mx-pane-head` with `PaneHeadId`, the folder path and status dot; a header menu with Discard draft where a way out exists), an empty feed with the one-line heading "What are we building today?", the one `Composer` (the agent and model picker, the permission control, attach, send inside the box) and the one `SessionBar` place row under it. Before the first message the place row's chips **choose** instead of show: `SessionPlace.picking` (`chat/place/picking.ts`) gives the Machine chip (`MachineChip`), the Folder chip (recent projects, Open folder…, Clone a repository…, clone-link rows), the Branch chip (pick, create, and an Own worktree switch, `WorkInSwitch`) and the Sync chip. Nothing starts until the first message; Esc discards. There is no Run on row, Draft tag, n/a chip, Works in line, key-hint footer, extra + or … buttons or red Bypass button; the permission mode is the Composer's small `mx-mode-button` with a dot while a mode skips prompts. The draft is a plain region in the main area (`aria-label="New session"`), never a `dialog`; a test fails if it becomes one. Check it by measuring `getBoundingClientRect` of each control across the states (each agent, model, effort, worktree on and off, an error, a long branch name, 360px and 1200px): the differences are 0. `#dialogs?show=new`, `new-long`, `new-more` (the permission menu), and `new-fail` draw the states.
-- **The agent dropdown** (`AgentPicker`) in the draft is the started chat's own: Agent, Model and the effort slider, in the box. `compact` remains for other callers.
-- **Agent, model and effort.** A button names the agent's mark and the model (the one picked, else the one the agent's
-  own file says, else just the agent) with a small four-bar meter for the effort, and opens one small menu (`AgentPicker`, layout 2h: 300px, square,
-  opening up from the right of the box): the agent, only before a chat starts (after that its agent is already running), as an **Agent**
-  segmented control with a column per agent, each its mark and name; the models, a 32px row
-  each with its description as the tooltip, the picked one shown by a filled ground and bold (never a tick: `components/ui/menu-row.css`, the one look of a picked row in every single-choice menu, list and select) and a dim "default" on the model the agent's settings
-  name; then a foot of **Effort**: a `StopSlider` (`components/ui/stop-slider.tsx`, `role="slider"`, Left and Right move it, a click on a dot or word or a drag along the track picks it live) drawn as a real track with a filled line to the picked stop, a lit dot at each stop up to it, a larger thumb on the picked one and the stop names below, the picked one bold, with a stop for each level the model takes (Low, Medium, High, Max; Max is absent where the model lacks it). The menu and its rows take `--r-panel` and `--r-control`, and it has small **Model** and **Effort** section labels. Earlier models wait
-  under a **More models** row, so the newest lead; the picked one shows wherever it is. Picking leaves the menu open; Esc
-  or a click outside closes it. The default model (the one the settings name, else the one Claude Code says it
+- **New session draft is the chat a started session has** (`NewChatPage`, `session-dialogs.css`). It reuses the pane's pieces and draws no second copy: the pane header (`mx-pane-head`: `project / New session` and a × that discards the draft where a way out exists), an empty feed with the one-line heading "What are we building today?", the one `Composer` (the model button and its picker, the shield, attach, send inside the box) and the one `SessionBar` place row under it. Before the first message the place row's chips **choose** instead of show: `SessionPlace.picking` (`chat/place/picking.ts`) gives the Machine chip (`MachineChip`), the Folder chip (recent projects, Open folder…, Clone a repository…, clone-link rows), the Branch chip (pick, create, and an Own worktree switch, `WorkInSwitch`) and the Sync chip. Nothing starts until the first message; Esc discards. There is no Run on row, Draft tag, n/a chip, Works in line, key-hint footer, extra + or … buttons or red Bypass button; the permission mode is the Composer's shield, with a dot while a mode skips prompts. The draft is a plain region in the main area (`aria-label="New session"`), never a `dialog`; a test fails if it becomes one. Check it by measuring `getBoundingClientRect` of each control across the states (each agent, model, effort, worktree on and off, an error, a long branch name, 360px and 1200px): the differences are 0. `#dialogs?show=new`, `new-long`, `new-more` (the permission menu), and `new-fail` draw the states.
+- **The model picker** (`AgentPicker`) in the draft is the started chat's own. The draft hands it the installed agents and the agents ready over ACP (`installed`, `others`), and its rail switches the draft's agent (`onAgent`).
+- **Agent, model and reasoning.** The model button names the agent's mark, the model (the one picked, else the one the agent's
+  own file says, else just the agent) and the reasoning level in words, and opens the model picker (`AgentPicker`, on
+  `PopupContent`; what it lists is decided in `features/chat/modelPicker.ts`: `railAgents`, `shownModels`, `reasoningRows`). It has three
+  columns. The **rail** is a `tablist` named Agents with a `tab` per agent: the installed built-in agents (`useInstalledAgents`; every one
+  where that cannot be read, and always the session's own) and, on a draft, the agents ready over ACP (`others`). `aria-selected` is the
+  agent whose models show and `aria-current` the one the session runs. On a draft (`onAgent`) a tab switches the agent. In a started
+  session (`onStartWith`) a tab only browses, and picking another agent's model opens a New session draft in the same folder with that
+  agent (`PlaceActions.onNewSessionIn(folder, agent)`); the running session is not touched. A caller that gives neither gets a rail of
+  the one agent. The **middle** is a `combobox` named Search models over a `ChoiceList` named Model; earlier models wait behind
+  **Show more**, a search looks through all of them, and the picked one shows wherever it is. The **right** is a `ChoiceList` named
+  Reasoning with a row per level the model takes. The picked row has the one selection fill and bold, never a tick
+  (`components/ui/menu-row.css`). Keys: in the search field ↑ and ↓ move the lit model (`aria-activedescendant`), Enter picks it and
+  closes, → at the end of the text goes to the levels and ← at its start to the rail; in a column the arrows move, Enter picks and
+  closes, and ← (→ on the rail) returns to the search. Esc closes. A click picks and leaves the picker open. No row has a shortcut
+  hint: a hint is drawn only for an action in the key table (`features/shortcuts`), and no model has one. The default model (the one the settings name, else the one Claude Code says it
   would pick) stands for "nothing picked": there is no separate Default row then, and picking it sends no model. Where
-  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. The effort in use (`effortInUse`, `agentChoice.ts`) is the level picked here, else the one the agent's own files say (so `/effort medium` typed in the chat lights Medium at once), else the model's default level (Medium): the slider always has a stop lit, and the line at the right of the heading reads "Medium · default" while the level is only assumed. Pressing the picked stop again goes back to the agent's own. A level a model does not take has no stop:
+  no default is known (and for Codex), a Default row stays, because which model it means cannot be read. The effort in use (`effortInUse`, `agentChoice.ts`) is the level picked here, else the one the agent's own files say (so `/effort medium` typed in the chat lights Medium at once), else the model's default level (Medium): a level is always shown picked, and the level the model runs at when none is picked carries a dim "Default" (`reasoningRows`). Pressing the picked level again goes back to the agent's own. A level a model does not take has no row:
   the levels come from the agent's own list for each model (for Codex's Default row, whose model cannot be read, Max
   is left out). Codex's default is the top-level `model` of its `config.toml`, where its list has that model.
   Picking a model that does not take the picked level drops to Medium, or to the agent's own where it takes none.
@@ -1713,9 +1725,8 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   a dropdown that presses Shift+Tab until the agent's screen shows the pick (`modeFromScreen`). It can be picked while the
   agent works: the chip shows the pick at once with a toast ("… from the next turn"), and the keys (or Codex's
   `/permissions`) are typed only when the turn ends, so none lands in it; only a question the agent asks or an offline
-  daemon greys it. The effort slider of the model menu lights the level the agent runs at, or the default stop ("Medium · default") when its files
-  do not say (its tooltip: the agent's own setting); the model and reasoning picker sends `/model` and `/effort`, and a pick made while the agent works is
-  typed in at once, as it would be in the terminal, for the agent to take as soon as it can; only a question the agent is asking holds the picker, since typed text would answer it. The agent
+  daemon greys it. The model picker's Reasoning column shows the level the agent runs at, or the model's default level when its files
+  do not say; the picker sends `/model` and `/effort`. It is locked while the agent works (`workingLock`) and while the agent asks a question, since typed text would land in the turn or answer the question. The agent
   itself is never changed in a chat that has started. A Codex chat on this computer moves its mode with Codex's own `/permissions` command
   and shows the pick until its screen says the command was refused (Codex's files do not name its mode, so the chat claims no more than that);
   its model label is a button that types `/model` and draws Codex's menu in the chat (`CommandMenuTray`: the menu as its terminal shows it

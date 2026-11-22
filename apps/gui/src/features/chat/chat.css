@@ -416,75 +416,55 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-slash-keys { flex: none; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
 .mx-slash-keys kbd { margin-right: 4px; font: 500 11px var(--mono); }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
-.mx-box-text { width: calc(100% - 32px); min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
+.mx-box-text { width: 100%; min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }
-.mx-box-row { display: flex; align-items: center; gap: 4px; }
-/* Attach and send are both 32px and share the box's right inset, so they line up one above the other. */
-.mx-box-attach { position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-box-attach:hover { background: var(--m-hover); color: var(--fg); }
-.mx-box-attach[aria-disabled="true"] { cursor: not-allowed; }
-.mx-model-button { display: inline-flex; align-items: center; gap: 7px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; outline: none; }
-.mx-model-button:hover { background: var(--m-hover); }
-.mx-model-icon { display: flex; }
-.mx-model-icon .mx-app-icon.size-14 { width: 16px; height: 16px; border-radius: var(--r-badge); box-shadow: none; }
-.mx-model-icon .mx-app-icon svg { width: 72%; height: 72%; }
-.mx-model-name { color: var(--fg); font-weight: 500; white-space: nowrap; }
-.mx-model-level { color: var(--muted); white-space: nowrap; }
-.mx-model-effort { color: var(--dim); white-space: nowrap; }
-/* The model menu (layout 2h): 300px, square, opening up from the right of the message box. */
-.mx-mm { width: min(220px, calc(100vw - 32px)); max-height: var(--radix-popover-content-available-height, none); overflow-y: auto; display: flex; flex-direction: column; padding: 0; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: 0 8px 24px rgba(var(--sd), calc(.35 * var(--sk))); }
-.mx-mm-agents { margin: 8px; }
-.mx-mm-models { display: flex; flex-direction: column; max-height: 300px; overflow-y: auto; padding: 0 6px 6px; }
-.mx-mm .mx-mm-models:first-child { padding-top: 6px; }
-.mx-mm-model { border-radius: var(--r-control); flex: none; display: flex; align-items: center; gap: 8px; height: 30px; padding: 0 9px; font-size: 13px; font-weight: 400; color: var(--fg2); text-align: left; outline: none; }
-.mx-mm-model > span:first-child { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-mm-model:hover, .mx-mm-model:focus-visible { background: var(--m-hover); }
-.mx-mm-model small { font-size: 11px; font-weight: 400; color: var(--dim); }
-.mx-mm-more { border-radius: var(--r-control); flex: none; display: flex; align-items: center; gap: 8px; height: 28px; margin: 0 6px 6px; padding: 0 8px; font-size: 12.5px; color: var(--muted); text-align: left; outline: none; }
-.mx-mm-more:hover, .mx-mm-more:focus-visible { background: var(--m-hover); color: var(--fg); }
-.mx-mm-more[aria-expanded="true"] svg { transform: rotate(180deg); }
+/* The one compact row under the text (handoff 5): the agent's mark with model and reasoning level, a hairline, the
+   shield and the context bar at the left; attach and send, both 26px, at the right. Every control is 26px high in
+   12.5px text, and quiet (`--muted`) until the pointer is on it. */
+.mx-box-row { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.mx-box-controls { display: flex; min-width: 0; align-items: center; gap: 2px; }
+.mx-row-button { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 6px; border-radius: var(--r-control); font: 400 12.5px/1 var(--ui); color: var(--muted); white-space: nowrap; outline: none; }
+button.mx-row-button:not(.is-locked):hover, button.mx-row-button[data-state="open"] { background: var(--m-hover); color: var(--fg); }
+/* A control that cannot be used right now keeps its place and size; only its look says so, and its label says why. */
+.mx-row-button.is-locked { cursor: default; opacity: .45; }
+.mx-row-rule { flex: none; width: 1px; height: 12px; background: var(--line); }
+.mx-model-button { flex: 0 1 auto; min-width: 0; }
+.mx-model-icon { flex: none; display: flex; }
+.mx-model-line { min-width: 0; max-width: 36ch; overflow: hidden; text-overflow: ellipsis; }
+/* The permission mode: a shield, and its name only off the agent's usual mode; red in a mode that asks about nothing. */
+.mx-mode-button.is-danger { color: var(--danger); }
+.mx-mode-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
+.mx-box-row .mx-usage { flex: none; padding: 0 6px; }
+/* Send: the text colour when there is something to send, a quiet outlined square when there is not, and the stop
+   square in its place while the agent works, so nothing in the row moves. */
+.mx-send { width: 26px; height: 26px; flex: none; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; background: var(--fg); color: var(--bg); }
+.mx-send.is-off { background: var(--m-hover); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-send.is-stop { background: var(--m-hover); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-send:is(.is-off, .is-stop):focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+.mx-stop-square { width: 9px; height: 9px; border-radius: var(--r-badge); background: currentColor; }
+.mx-send.is-stop.is-off { color: var(--dim); }
+.mx-send.is-busy { cursor: progress; }
+.mx-box-attach[aria-disabled="true"] { cursor: not-allowed; opacity: .42; }
+/* The row under the box of a session that has run nothing: the chips at the left, the context bar at the right. */
+.mx-session-bar { width: 100%; display: flex; align-items: center; gap: 2px; min-height: 28px; padding: 6px 2px 0; font-size: 12.5px; color: var(--muted); }
 /* The foot: the word, the four rising bars, and the level's name at the right. */
-.mx-mm-effort { margin: 4px 0 0; display: grid; grid-template-columns: 1fr auto; align-items: center; row-gap: 6px; padding: 9px 16px 10px; border-top: 1px solid var(--line); }
-.mx-mm-stops { grid-column: 1 / -1; }
-.mx-mm-note { margin: 0; padding: 10px 14px; border-top: 1px solid var(--line); font-size: 12px; color: var(--muted); }
-.mx-mm-effort-word { font-size: 11px; font-weight: 600; color: var(--dim); }
-.mx-mm-level { text-align: right; font-size: 11px; color: var(--muted); white-space: nowrap; }
 /* The permission menu: a row a mode, each with what it does. */
 .mx-pm { width: min(380px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 8px; border-radius: var(--r-panel); }
 .mx-pm-head { display: flex; align-items: center; justify-content: space-between; height: 28px; padding: 0 8px; font-size: 11.5px; color: var(--muted); }
 .mx-pm-head strong { font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); }
 .mx-pm-mode { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 6px 10px 6px 8px; border-radius: var(--r-control); text-align: left; outline: none; }
-.mx-pm-mode:hover:not(:disabled), .mx-pm-mode:focus-visible { background: rgba(var(--hl), calc(.07 * var(--hk))); }
-.mx-pm-mode[aria-checked="true"] { background: rgba(var(--hl), calc(.07 * var(--hk))); box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))); }
-.mx-pm-mode[aria-checked="true"]:focus-visible { box-shadow: inset 0 0 0 1px rgba(var(--hl), calc(.1 * var(--hk))), var(--focus-underline); }
-.mx-pm-mode:disabled { opacity: .5; cursor: not-allowed; }
+/* Hover, the keys' row and the picked row are the shared menu's (`mx-menu-row`, dropdown-menu.tsx); only the two-line
+   layout is this menu's own, and its second line stays quiet and regular whatever the row's state. */
+.mx-pm .mx-pm-mode .mx-pm-what { font-weight: 400; color: var(--muted); }
+.mx-pm .mx-pm-mode .mx-pm-name small { font-weight: 400; color: var(--dim); }
+.mx-pm .mx-pm-mode.is-danger .mx-pm-name { color: var(--danger); }
 .mx-pm-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-pm-name { display: flex; align-items: baseline; gap: 7px; font-size: 13.5px; font-weight: 500; color: var(--fg); }
-.mx-pm-mode.is-danger .mx-pm-name { color: var(--danger); }
 .mx-pm-name small { font-size: 11.5px; font-weight: 400; color: var(--dim); }
 .mx-pm-what { font-size: 12px; color: var(--muted); text-wrap: pretty; }
-.mx-send { width: 32px; height: 32px; flex: none; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; background: var(--accent); color: var(--on-accent); }
-/* With nothing to send it is still plainly a button: the selected-row fill inside the stronger hairline. */
-.mx-send.is-off { background: var(--m-card-sel); color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-send.is-stop { background: var(--m-hover); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-send.is-off:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
-.mx-send.is-stop:focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
-.mx-stop-square { width: 10px; height: 10px; border-radius: var(--r-badge); background: currentColor; }
-/* Working: the stop square sits where the send arrow was, and nothing in the button moves; the line over the box is what
-   says the agent is at work. Just after a send, before there is a turn to stop, the square is there and off. */
-.mx-send.is-stop.is-off { color: var(--dim); }
-.mx-send.is-busy { cursor: progress; }
-/* A chip that cannot be changed right now keeps its place and size; only its look says so. */
-.mx-model-button.is-locked { cursor: not-allowed; opacity: .6; }
-.mx-model-button.is-locked:hover { background: none; }
 
-/* The permission mode: a shield and a chevron, its name in the tooltip; red in a mode that asks about nothing. */
-.mx-mode-button { flex: none; height: 26px; display: inline-flex; align-items: center; gap: 3px; padding: 0 5px 0 7px; border-radius: var(--r-control); color: var(--muted); white-space: nowrap; }
-.mx-mode-button:not(.is-static, .is-locked):hover { background: var(--m-hover); color: var(--fg); }
-.mx-mode-button.is-static { padding: 0 7px; }
-.mx-mode-button.is-locked { cursor: not-allowed; opacity: .6; }
 /* Plan mode, said inside the box while it is on. */
 .mx-plan-strip { margin: 0; display: flex; align-items: baseline; gap: 8px; font-size: 12px; color: var(--muted); }
 .mx-plan-strip-name { font: 600 10.5px var(--mono); letter-spacing: .06em; text-transform: uppercase; color: var(--ansi-blue); }
@@ -497,7 +477,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-sub-back { font-size: 12px; color: var(--accent-text); }
 .mx-sub-back:hover { text-decoration: underline; }
 .mx-sub-note { margin: 0; font-size: 12.5px; color: var(--dim); }
-.mx-model-button.is-static:hover { background: none; }
 
 .mx-composer-note { margin: 6px 4px 0; font-size: 12px; color: var(--dim); }
 .mx-composer-note-action { border: 0; padding: 0; background: none; font: inherit; color: var(--fg2); text-decoration: underline; cursor: pointer; }
@@ -578,25 +557,7 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 /* A file's name in a message, in its type's colour (`--tone` from `typeTone`); the Chat setting "Colour file names" turns it off. */
 :root[data-file-colours="on"] .mx-file-name { color: var(--tone); background: color-mix(in oklab, var(--tone) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tone) 30%, transparent); }
 
-/* The box row keeps only send; the location and the session's controls sit in one row under the box (docs/DESIGN.md, Under the box). */
-.mx-box-row { justify-content: flex-end; }
-/* The chat's box holds its controls in this row (docs/DESIGN.md, The message box); the new-session draft keeps its own. */
-.mx-composer .mx-box-text { width: 100%; min-height: 68px; }
-.mx-composer .mx-box-row { justify-content: space-between; }
-.mx-composer .mx-box-attach { position: static; box-shadow: none; }
-.mx-box-controls { display: flex; min-width: 0; align-items: center; gap: 2px; }
-/* The controls row is one rhythm: every control is 26px high in 12px regular text, and each part has a slot of its own width,
-   so picking another model, effort or mode never moves what sits beside it. Attention is a dot, never louder text. */
-.mx-box-controls :is(.mx-model-button, .mx-mode-button) { flex: none; height: 26px; font: 400 12px/1 var(--ui); gap: 6px; }
-.mx-box-controls :is(.mx-model-name, .mx-model-level, .mx-mode-name) { display: inline-block; overflow: hidden; text-overflow: ellipsis; font-weight: 400; text-align: left; }
-/* The model is one plain line, `Claude · Sonnet 5.5 · Medium`, and the mode a shield and its name; both quiet, neither a bar. */
-.mx-box-controls .mx-model-line { flex: none; max-width: 36ch; }
-.mx-box-controls :is(.mx-model-name, .mx-model-effort, .mx-mode-name) { display: inline; color: var(--muted); }
-.mx-box-controls .mx-model-button:not(.is-locked):hover :is(.mx-model-name, .mx-model-effort), .mx-box-controls .mx-mode-button:not(.is-static, .is-locked):hover .mx-mode-name { color: var(--fg); }
 .mx-box.is-ended { display: none; }
-.mx-session-bar { width: 100%; display: flex; align-items: center; gap: 6px; min-height: 28px; padding: 6px 2px 0 6px; font-size: 12.5px; color: var(--muted); }
-.mx-mode-dot { flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--danger); }
-.mx-mode-name { white-space: nowrap; }
 /* The ended line stands where the box was: the same well the prototype draws, so the chat reads as closed. */
 .mx-ended-line { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--m-well); border: 1px solid var(--line); }
 .mx-ended-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); }
@@ -604,5 +565,3 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-ended-button.is-primary { font-weight: 600; color: var(--bg); background: var(--fg); border-color: var(--fg); }
 .mx-ended-button[aria-disabled="true"] { cursor: not-allowed; opacity: .6; }
 .mx-ended-button:focus-visible { outline: none; box-shadow: var(--focus-underline); }
-/* The picked model: its ground and bold come from the shared menu row; its word takes the full text colour. */
-.mx-mm-model[aria-checked="true"] { color: var(--fg); }

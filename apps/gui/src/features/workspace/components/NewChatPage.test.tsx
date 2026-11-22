@@ -106,10 +106,13 @@ async function lastPopup() {
   return last
 }
 
-/** Opens the agent dropdown, picks the agent in its list and closes it with Esc. */
+const agentTab = (name: string) => within(screen.getByRole('tablist', { name: 'Agents' })).getByRole('tab', { name })
+const level = (name: string) => within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: new RegExp(`^${name}`) })
+
+/** Opens the picker, picks the agent on its rail and closes it with Esc. */
 async function chooseAgent(name: string) {
   await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-  await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name }))
+  await userEvent.click(agentTab(name))
   await userEvent.keyboard('{Escape}')
 }
 const box = () => screen.getByRole('textbox', { name: /^Message / })
@@ -277,6 +280,17 @@ describe('the New session draft', () => {
     expect(onStart.mock.calls[0]?.[0]).toMatchObject({ acp: 'opencode', message: 'hello' })
   })
 
+  it('puts the agents that are ready to run over ACP on the picker\'s rail, and picks one from there', async () => {
+    dialog(undefined, { otherAgents: true })
+    await ready()
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'OpenCode' }))
+    expect(screen.getByRole('status')).toHaveTextContent('This session starts OpenCode over ACP')
+    // A built-in agent's mark takes the session back.
+    await userEvent.click(agentTab('Claude'))
+    expect(screen.queryByRole('status')).toBeNull()
+  })
+
   it('starts in the folder on its branch, with no new branch, when no other chat is on it', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     dialog(onStart)
@@ -346,9 +360,13 @@ describe('the New session draft', () => {
     await ready()
     const mode = screen.getByRole('button', { name: 'Permission mode: Bypass permissions. Pick another.' })
     expect(mode).toHaveClass('is-danger')
+    // Off the agent's usual mode the shield has the mode's name beside it; on it, the shield alone.
+    expect(mode.textContent).not.toBe('')
     await userEvent.click(mode)
     await userEvent.click(await screen.findByRole('menuitemradio', { name: /^Ask before edits/ }))
-    expect(screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })).not.toHaveClass('is-danger')
+    const usual = screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })
+    expect(usual).not.toHaveClass('is-danger')
+    expect(usual.textContent).toBe('')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', mode: 'default', bypass: false })) })
@@ -407,20 +425,22 @@ describe('the New session draft', () => {
   it('gives each agent back the model and effort it was left at', async () => {
     dialog()
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    await userEvent.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('Max'))
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    await userEvent.click(level('Max'))
+    await userEvent.click(agentTab('Codex'))
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Codex · .* · Medium/ })).toBeInTheDocument()
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' }))
+    await userEvent.click(agentTab('Claude'))
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Max/ })).toBeInTheDocument()
   })
 
-  it('switches the agent with the toggle, and sends one that is not installed to its setup page', async () => {
+  it('offers only the installed agents on the rail, and sends a draft that opened on one that is not to its setup page', async () => {
     host.installed = ['claude']
-    dialog()
+    dialog(undefined, { defaultAgent: 'codex' })
     await pickedProject('growth')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    // The draft's own agent stays on the rail; one that is neither installed nor picked is not offered.
+    await waitFor(() => { expect(screen.queryByRole('tab', { name: 'Gemini' })).toBeNull() })
+    expect(agentTab('Codex')).toHaveAttribute('aria-selected', 'true')
+    expect(agentTab('Claude')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     expect(await screen.findByText(/Codex is not installed on this computer/)).toBeInTheDocument()
     await userEvent.type(box(), 'hello')
@@ -574,7 +594,7 @@ describe('the New session draft on another machine', () => {
     await pickedProject('app')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
     await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name: /Opus/ }))
-    await userEvent.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    await userEvent.click(level('High'))
     await userEvent.keyboard('{Escape}')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())

@@ -52,30 +52,6 @@
 @container pane-head (max-width: 300px) { .mx-pane-shield, .mx-pane-head .mx-context-meter { display: none; } }
 /* Where the Show sidebar button sits; the button itself is the shared icon button. */
 .mx-pane-show-sidebar { margin-left: -4px; }
-.mx-pane-id { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 8px; }
-
-/* The bottom edge of the New session draft's header (`NewChatPage`), the one header that says a status. Idle (and anything else without a signal of its own) is the line the header always had.
-   Working lights the whole edge in the working colour, with a brighter light that bounces back and forth along it.
-   Needs you lights the whole edge in the needs colour. Both layers are always there and only fade (opacity, and the
-   colour of the lit edge), so a change of status fades in and out instead of switching; the bounce never stops on a status
-   change, so the light keeps moving while it fades out instead of freezing mid-edge, and it is paused only while the window
-   is in the background ([PERFORMANCE](docs/PERFORMANCE.md)). */
-.mx-pane-status { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; overflow: hidden; background: var(--line); pointer-events: none; }
-.mx-pane-status::before, .mx-pane-status::after { content: ''; position: absolute; top: 0; bottom: 0; left: 0; opacity: 0; transition: opacity var(--t-slow) var(--ease), background-color var(--t-slow) var(--ease); }
-.mx-pane-status::before { right: 0; background-color: var(--working); }
-.mx-pane-status::after { width: 26%; background-color: var(--working); animation: mx-pane-bounce 1.3s ease-in-out infinite alternate; }
-.mx-pane-status[data-status="working"]::before { opacity: .4; }
-.mx-pane-status[data-status="working"]::after { opacity: 1; }
-.mx-pane-status[data-status="needs"]::before, .mx-pane-status[data-status="limited"]::before, .mx-pane-status[data-status="error"]::before { background-color: var(--needs); opacity: 1; }
-/* 26% wide, so 285% of itself is the rest of the edge. */
-@keyframes mx-pane-bounce { from { transform: translateX(0); } to { transform: translateX(285%); } }
-:root[data-window="inactive"] .mx-pane-status::after { animation-play-state: paused; }
-:root[data-reduced-motion="true"] .mx-pane-status::after { animation: none; opacity: 0; }
-/* The path reads right to left so a long one loses its start; its `<bdi>` keeps the path itself left to right. */
-.mx-pane-path { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font: 400 12.5px var(--mono); color: var(--fg2); }
-.mx-pane-mark { flex: none; display: inline-flex; }
-/* A plain shell's mark is the prompt, in the dim mono the terminal draws it in. */
-.mx-pane-prompt { width: 16px; text-align: center; font: 400 12px/1 var(--mono); color: var(--dim); }
 /* The machine a remote session runs on: a small chip on the selected ground, in the mono face. */
 .mx-pane-head .mx-pane-machine { flex: none; height: auto; padding: 1px 6px; border-radius: var(--r-badge); font: 500 11.5px var(--mono); color: var(--fg); background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); }
 

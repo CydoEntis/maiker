@@ -33,16 +33,15 @@ export type SessionPlace = {
 }
 
 type Props = {
-  /** Without it (the place is not known) the row holds the controls alone. */
   place?: SessionPlace | undefined
-  /** The controls at the right (usage meters): the chat and the terminal each bring their own. */
+  /** What sits at the right end of the row: the context bar. */
   children?: ReactNode
 }
 
 /**
- * The one row under a session's input, as plain text: folder, branch and sync at the left, the session's controls at the
- * right. It is never wider than the box, and the folder's text gives way first (its full path is on hover). It knows
- * nothing of chat or terminal internals, so both views draw the same row (docs/DESIGN.md, Under the box).
+ * The row under the chat box of a session that has run nothing (`placeChipsShown`): folder, branch and sync as plain
+ * chips at the left, the context bar at the right. It is never wider than the box, and the folder's text gives way
+ * first (its full path is on hover). Once the session has run, the composer does not draw it.
  */
 export function SessionBar({ place, children }: Props) {
   return (
@@ -60,7 +59,10 @@ function Place({ place }: { place: SessionPlace }) {
   const folder = place.folder ?? ''
   const branch = folder === '' ? null : place.branch
   const { picking } = place
-  const sync = useSessionSync({ folder, machine, term: place.pane ?? 0, project: place.project, readable: machine === LOCAL_MACHINE && branch !== null && picking?.sync !== false, branch })
+  const term = place.pane ?? 0
+  // Another machine's checkout is named by the session's pane, so a draft there (no pane yet) has nothing to sync.
+  const reading = branch === null || picking?.sync === false ? 'none' : machine === LOCAL_MACHINE ? 'counted' : term > 0 ? 'uncounted' : 'none'
+  const sync = useSessionSync({ folder, machine, term, project: place.project, reading, branch })
   const text = place.worktreeName == null ? place.project : `${place.project} / ${place.worktreeName}`
   return (
     <span className="mx-session-place" role="group" aria-label="Session location">
