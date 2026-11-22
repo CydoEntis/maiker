@@ -4,14 +4,14 @@
  * Every surface in the app is one of three roles, and reads its look from the role's tokens, never
  * from its own colours:
  *   panel  the big resting surfaces (the sidebar, the main card, the inspector)
- *   float  what opens over them (menus, popovers, dialogs, the palette, find)
+ *   float  what opens over them (menus, popovers, toasts, dialogs, the palette, find)
  *   field  what you type into or press (the message box and its tray)
  * A component picks its role by being listed below, or by carrying `mx-pop` (a popover or menu
  * from a library) or `mx-field`. A new surface joins a list here; it does not set a background of
  * its own. Terminal panes stay solid: the terminal draws its own ground.
  *
- * The desktop has one look, flat: solid fills, a hairline, no blur or gradient. Floats keep one plain
- * shadow so they stay apart from what is under them. The one shape choice is the corners (`data-corners`,
+ * The desktop has one look, flat: solid fills, a hairline, no blur or gradient. Only a float casts a
+ * shadow, and every float casts the same one. The one shape choice is the corners (`data-corners`,
  * the rule at the end of this file and the `--r-*` tokens in `tokens.css`). A component never asks
  * which is on; it reads the tokens.
  */
@@ -19,13 +19,6 @@
 /* ---- tokens ---- */
 /* Portalled content can sit outside the window root, so the ink, the light and the shade have defaults here. */
 :root { --ink: 255, 255, 255; --shk: 1; --hl: var(--ink); --hs: 255, 255, 255; --hk: 1; --sd: 0, 0, 0; --sk: var(--shk); }
-/* The one shadow for everything that floats, scaled by the theme's shadow strength (`--shk`). Nothing hard-codes its own:
-   a floating card, a dialog and an anchored menu each read one of these three. */
-:root {
-  --pop-sh: 0 4px 14px rgba(0, 0, 0, calc(.2 * var(--shk)));
-  --pop-sh-dialog: 0 12px 32px rgba(0, 0, 0, calc(.45 * var(--shk)));
-  --pop-sh-menu: 0 3px 10px rgba(0, 0, 0, calc(.18 * var(--shk)));
-}
 /* The theme's own solid colours, under the role names. Declared on the window root as well, because
    the theme colours are set inline there. */
 :root, .mx-app, .app-shell {
@@ -42,10 +35,15 @@
   --m-card-line: var(--line);
   /* A dark theme's two steps are computed with the theme (`cardSteps` in themes.ts); the mixes here are a light theme's. */
   --m-card-sel: var(--card-sel-step, color-mix(in srgb, var(--m-sel) 97%, var(--fg)));
-  /* What a menu or popover is drawn on: the same card as a sidebar group and the message box, inside the card's hairline. Its
-     shadow, not a lighter fill, is what lifts it off the window. */
-  --pop-bg: var(--m-card);
-  --pop-ring: var(--m-card-line);
+  /* The floating surface: what a menu, popover, toast or dialog is drawn on is the theme's `--float-bg`; its hairline is the
+     ink, and its shadow is the one shadow in the app, scaled by the theme's shadow strength. Declared beside the theme's
+     roles (not on the page root alone) so a root that carries its own theme mixes them from that theme's ink and strength. */
+  --float-line: rgba(var(--ink), .07);
+  /* The icon button's hover and on fill (components/ui/icon-button.tsx). */
+  --icon-button-fill: rgba(var(--ink), .07);
+  /* A row the pointer or the keys are on, inside a float: the ink again, so it shows on any theme's float ground. */
+  --float-hover: rgba(var(--ink), .06);
+  --float-sh: 0 10px 28px rgba(0, 0, 0, calc(.45 * var(--shk)));
 }
 /* ---- component tokens ----
    The shared pieces every control reads, so one component serves every theme:
@@ -80,7 +78,9 @@
   box-shadow: none;
 }
 
-/* ---- float ---- */
+/* ---- float ----
+   One material for everything that opens over the window: `--float-bg`, the ink hairline and the one shadow. A float sets
+   no fill, edge or shadow of its own; its corner is `--r-panel` (a menu, popover or toast) or `--r-dialog` (a dialog). */
 .mx-app .mx-ctx,
 .mx-app .mx-palette,
 .mx-app .mx-find,
@@ -91,35 +91,31 @@
 .mx-app .mx-menu,
 .mx-app .mx-picker-menu,
 .mx-app .mx-tip,
+.mx-app .mx-hover-card,
 .mx-app .mx-upd-card,
 .mx-app .mx-perf-hud,
 .mx-app .mx-pane-ended,
 .mx-app .mx-focus-pill,
 .mx-pop {
-  background: var(--main);
-  border: 1px solid var(--line);
-  /* One plain shadow keeps a flat float apart from what is under it. */
-  box-shadow: var(--pop-sh);
+  background: var(--float-bg);
+  border: 1px solid var(--float-line);
+  box-shadow: var(--float-sh);
 }
-/* A dialog casts the deeper shadow, an anchored menu the lighter one. */
-.mx-app :is([role="dialog"], [role="alertdialog"], .mx-palette, .mx-settings, .mx-rename) { box-shadow: var(--pop-sh-dialog); }
-.mx-app :is([role="menu"], .mx-ctx, .mx-menu, .mx-picker-menu) { box-shadow: var(--pop-sh-menu); }
-/* A tip and the hover card are drawn over the busiest part of the window and come and go with the pointer: always the flat ring. */
-.mx-app .mx-tip { box-shadow: var(--pop-sh-flat); --float-bleed: 4px; }
+/* What a library draws by role (a Radix menu, list, dialog or tip, wherever it is portalled) is the same float. */
+.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], .open-project-dialog) {
+  background-color: var(--float-bg);
+  border-color: var(--float-line);
+}
+.mx-app :is([role="menu"], [role="dialog"], [role="alertdialog"]) { box-shadow: var(--float-sh); }
+:root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--float-bg); border-color: var(--float-line); }
+/* A tip and the hover card are drawn over the busiest part of the window and come and go with the pointer: a flat ring, no
+   blur to repaint (docs/PERFORMANCE.md). */
+.mx-app :is(.mx-tip, .mx-hover-card) { box-shadow: var(--pop-sh-flat); --float-bleed: 4px; }
 /* The corner readout sits on the window, not over it. */
 .mx-app .mx-perf-hud { box-shadow: none; }
-/* Whatever opens over the window is solid: the theme's own ground, never a tint of what is behind it. This sits after the
-   roles above and is more specific than any component's own fill, so a popup that was painted from a see-through role
-   (a hover or a raise tint) is still opaque. */
-.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], [role="dialog"], [role="alertdialog"], [role="tooltip"], .open-project-dialog, .mx-pop, .mx-menu, .mx-picker-menu, .mx-tip, .mx-ctx, .mx-palette, .mx-find) {
-  background-color: var(--main);
-}
-/* Menus and popovers are the lifted exception: one surface and one ring for every right-click menu, dropdown, picker and popover. */
-.mx-app :is([data-radix-popper-content-wrapper] > *, [role="menu"], [role="listbox"], [role="tooltip"], .mx-pop, .mx-menu, .mx-picker-menu, .mx-ctx, .mx-tip, .mx-hover-card) {
-  background-color: var(--pop-bg);
-  border-color: var(--pop-ring);
-}
-:root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--pop-bg); border-color: var(--pop-ring); }
+/* A field inside a float is sunk into it: the well, not the card a field on a pane is. */
+.mx-app :is(.mx-ctx, .mx-menu, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) { --c-field-bg: var(--m-well); }
+.mx-app :is(.mx-ctx, .mx-menu, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) .mx-field { background: var(--m-well); }
 
 /* Popovers grow from the corner that touches their anchor: 160ms, from scale .9 (design rule 12). Radix publishes the
    anchor corner as `--radix-popper-transform-origin`. A dialog has no anchor, so it has no `data-side` and does not grow. */

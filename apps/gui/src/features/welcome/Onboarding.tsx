@@ -158,7 +158,7 @@ export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, 
         {phase === 'draw' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press Enter to skip.</div>}
         {!reducedMotion && <OnboardingMark gone={phase === 'window'} />}
         {phase === 'window' && (
-          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-dialog) border border-(--line) bg-(--main) shadow-(--pop-sh)">
+          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-dialog) border border-(--line) bg-(--main) shadow-(--float-sh)">
             <div className="mx-onb-sr" aria-live="polite">{`Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`}</div>
             <div className="flex h-[52px] flex-none items-center gap-4 border-b border-(--line) px-5">
               <MaikerMark width={26} height={20} />

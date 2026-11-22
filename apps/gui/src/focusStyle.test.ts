@@ -103,7 +103,7 @@ describe('focus is one underline, and a field turns its edge', () => {
       const shadow = /(?:^|[;\s])box-shadow\s*:\s*([^;]*)/.exec(body)?.[1]
       if (shadow === undefined || /^none\b/.test(shadow.trim())) return false
       const layers = splitLayers(shadow)
-      return layers.some((layer) => !/--focus-underline|--focus-line|--field-focus-edge|--pop-sh|--c-field-sh/.test(layer) && !/^inset 0 0 0 1px /.test(layer) && !NEEDS_UNDERLINE.test(layer))
+      return layers.some((layer) => !/--focus-underline|--focus-line|--field-focus-edge|--float-sh|--c-field-sh/.test(layer) && !/^inset 0 0 0 1px /.test(layer) && !NEEDS_UNDERLINE.test(layer))
     }).map(({ where, selector }) => `${where} ${selector}`)
     expect(offenders).toEqual([])
   })

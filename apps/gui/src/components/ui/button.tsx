@@ -38,6 +38,7 @@ const buttonVariants = cva(
         xl: "h-9 px-[18px] text-[13.5px]",
         /** The action beside a field (Connect). */
         field: "h-10 px-[18px] text-[13.5px]",
+        /** A round or filled button that holds only a glyph (the chat's jump button, the browser preview). A plain icon button is `IconButton`. */
         icon: "size-7 border-transparent px-0 text-(--muted) hover:enabled:text-(--fg) [&_svg:not([class*='size-'])]:size-[15px]",
       },
     },
@@ -87,9 +88,4 @@ function Button({
   )
 }
 
-/** A square button with only an icon: the label is its tooltip and its accessible name. */
-function IconButton({ label, ...props }: Omit<React.ComponentProps<"button">, "aria-label" | "title"> & { label: string }) {
-  return <Button type="button" variant="ghost" size="icon" aria-label={label} title={label} {...props} />
-}
-
-export { Button, IconButton, KeyHint, buttonVariants }
+export { Button, KeyHint, buttonVariants }

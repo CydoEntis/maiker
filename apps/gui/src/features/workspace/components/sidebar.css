@@ -18,10 +18,7 @@
 .mx-head-button.is-small { width: 26px; height: 26px; }
 .mx-head-button:not(:disabled):hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
 .mx-head-button:disabled { opacity: .4; }
-/* The filter button while the list is narrowed or re-sorted. */
-.mx-head-button.is-on, .mx-head-button.is-on:not(:disabled):hover { color: var(--accent-text); }
 .mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
-.mx-settings-button { width: auto; height: 26px; padding: 0 8px; }
 .mx-sidebar .mx-head-button.mx-add-machine { width: auto; flex: none; gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
 
 /* Which project, and what the headings are: two quiet buttons, each opening a short list. */
@@ -81,9 +78,7 @@
    and moves to the next row with no fade. Its icons hang in the left margin, so the text lines up under the name. */
 .mx-hover-card {
   position: fixed; z-index: 85; width: 300px; max-height: calc(100vh - 16px); display: flex; flex-direction: column; border-radius: var(--r-panel); pointer-events: none;
-  background: var(--pop-bg); border: 1px solid var(--pop-ring); box-shadow: var(--pop-sh-menu); color: var(--fg);
-  /* A hairline ring needs no 48px bleed in the folded cut's clip. */
-  --float-bleed: 4px;
+  color: var(--fg);
 }
 .mx-hover-card.is-cold { animation: mx-hover-in .12s ease-out; }
 .mx-hover-card[data-open="false"] { visibility: hidden; opacity: 0; }
@@ -175,6 +170,8 @@
 .mx-rail-session:hover { background: var(--m-hover); }
 .mx-rail-item.is-selected .mx-rail-session, .mx-rail-item.is-selected .mx-rail-session:hover { background: var(--m-sel); }
 .mx-rail-item.is-idle .mx-rail-session { opacity: .7; }
+/* An idle session has no mark, and the rail's button holds nothing else: a dim dot keeps the button findable. */
+.mx-rail-session:empty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
 
 /* A chat that is still a draft: a session row's twin, named "New chat" in italics with a "draft" tag at its right. */
 .mx-draft { pointer-events: none; align-items: center; }
@@ -200,7 +197,7 @@
 
 /* The ≡ menu (`SidebarFilterMenu`): 264px, grows from the button's bottom-left corner. A project search heads it, then
    the projects (six rows, then it scrolls), and Reset while a project is picked. */
-.mx-pop.mx-grp-menu { width: 264px; padding: 0; display: flex; flex-direction: column; box-shadow: var(--pop-sh-menu); }
+.mx-pop.mx-grp-menu { width: 264px; padding: 0; display: flex; flex-direction: column; }
 .mx-grp-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; box-shadow: inset 0 -1px 0 var(--line); color: var(--dim); }
 .mx-grp-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 12.5px; color: var(--fg); }
 .mx-grp-projects { max-height: 188px; overflow-y: auto; padding: 4px; }

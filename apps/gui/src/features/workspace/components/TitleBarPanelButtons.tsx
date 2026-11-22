@@ -2,6 +2,7 @@ import { activeArrangement } from '../model/layout'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
+import { IconButton } from '@/components/ui/icon-button'
 import { Icon } from './glyphs'
 
 /**
@@ -25,15 +26,15 @@ export function TitleBarPanelButtons() {
   return (
     <span className="mx-tbar-panels">
       {dockable && (
-        <button type="button" className={`mx-pane-control${terminalShown ? ' is-on' : ''}`} aria-label="Terminal" title={tip(terminalShown ? 'Hide terminal' : 'Terminal', 'terminal')} aria-pressed={terminalShown} onClick={toggleTerminal}><Icon name="terminalBox" size={15} /></button>
+        <IconButton label="Terminal" tip={tip(terminalShown ? 'Hide terminal' : 'Terminal', 'terminal')} aria-pressed={terminalShown} onClick={toggleTerminal}><Icon name="terminalBox" /></IconButton>
       )}
       {hasPanel && (
         <>
-          <button type="button" className={`mx-pane-control${showing('changes') ? ' is-on' : ''}`} aria-label="Changes" title={tip('Changes', 'inspect')} aria-pressed={showing('changes')} onClick={() => { togglePanel(pane.id, session.id, 'changes') }}>
+          <IconButton label="Changes" tip={tip('Changes', 'inspect')} aria-pressed={showing('changes')} onClick={() => { togglePanel(pane.id, session.id, 'changes') }}>
             <Icon name="gitChanges" />
             {changed > 0 && <span className="mx-pane-count" aria-label={`${String(changed)} changed`}>{changed}</span>}
-          </button>
-          <button type="button" className={`mx-pane-control${showing('files') ? ' is-on' : ''}`} aria-label="Files" title="Files" aria-pressed={showing('files')} onClick={() => { togglePanel(pane.id, session.id, 'files') }}><Icon name="files" size={15} /></button>
+          </IconButton>
+          <IconButton label="Files" aria-pressed={showing('files')} onClick={() => { togglePanel(pane.id, session.id, 'files') }}><Icon name="files" /></IconButton>
         </>
       )}
     </span>

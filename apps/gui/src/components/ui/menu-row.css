@@ -1,4 +1,4 @@
-/* The picked row of a menu or list: a filled ground and bold, never a tick. Written once for every single-choice menu
+/* The picked row of a menu or list: the selected-row fill (`--m-sel`, the theme's `--t2` role) and bold, never a tick or an outline. Written once for every single-choice menu
    (model rows, the agent list, the theme list, dropdown radio items, select items); a caller adds `mx-menu-row`. Bold
    cannot widen anything here: a row fills the width of its menu. */
 .mx-menu-row:is([aria-checked="true"], [data-state="checked"]) { background: var(--m-sel); font-weight: 700; }

@@ -31,6 +31,7 @@ import type { PickedFolder } from '../model/folderPick'
 import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
 import { copyText } from '@/lib/clipboard'
 import { AcpAgentsDialog, type OtherAgent } from './AcpAgentsDialog'
+import { IconButton } from '@/components/ui/icon-button'
 
 /** The branch a session starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
 export type BranchChoice = { name: string; create: boolean; worktree: boolean }
@@ -556,7 +557,7 @@ function DraftMenu({ disabled, onDiscard }: { disabled: boolean; onDiscard: () =
     <span className="mx-pane-controls">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button type="button" className="mx-pane-control mx-pane-more" aria-label="More pane actions" title="More pane actions" disabled={disabled}><Icon name="more" /></button>
+          <IconButton label="More pane actions" disabled={disabled}><Icon name="more" /></IconButton>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end" container={document.querySelector<HTMLElement>('.mx-app')} aria-label="Draft" className="text-fg">
           <DropdownMenuItem onSelect={onDiscard}>Discard draft<DropdownMenuShortcut>Esc</DropdownMenuShortcut></DropdownMenuItem>

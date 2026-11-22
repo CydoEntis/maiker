@@ -8,6 +8,6 @@ const MARK: Record<StatusMarkState, StatusMarkKind> = {
 }
 
 /** The preview's name for the one status mark (`components/ui/status-icon.tsx`); it draws nothing of its own. */
-export function StatusMark({ status, className }: { status: StatusMarkState; className?: string | undefined }) {
-  return <StatusIcon status={MARK[status]} className={className} />
+export function StatusMark({ status, named = false, className }: { status: StatusMarkState; named?: boolean; className?: string | undefined }) {
+  return <StatusIcon status={MARK[status]} named={named} className={className} />
 }

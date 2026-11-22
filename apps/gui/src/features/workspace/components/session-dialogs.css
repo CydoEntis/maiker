@@ -22,7 +22,7 @@
 @keyframes mx-list-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
 .mx-fp-scrim { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: center; padding: 24px; background: rgba(0, 0, 0, .5); animation: v7scrim .15s ease-out; }
 .mx-fp-scrim { align-items: flex-start; padding-top: max(48px, 14vh); }
-.mx-fp { position: relative; display: flex; flex-direction: column; box-sizing: border-box; background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); color: var(--fg); animation: mx-dialog-in .16s ease-out; }
+.mx-fp { position: relative; display: flex; flex-direction: column; box-sizing: border-box; background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); color: var(--fg); animation: mx-dialog-in .16s ease-out; }
 .mx-fp { width: min(580px, calc(100vw - 48px)); max-height: calc(100vh - 96px); }
 .mx-fp:focus-visible { outline: none; }
 .mx-nsd-grow { flex: 1; min-width: 6px; }
@@ -144,7 +144,7 @@
 .mx-fp-use-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* The dialog's own box takes focus (so Esc and Tab have a place to start), and it is no field: it keeps its shadow, with no underline. */
-.mx-app :is(.mx-rename, .mx-fp, .mx-palette):focus-visible { box-shadow: var(--pop-sh-dialog); }
+.mx-app :is(.mx-rename, .mx-fp, .mx-palette):focus-visible { box-shadow: var(--float-sh); }
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
 :is(.mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }

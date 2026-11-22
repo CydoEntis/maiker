@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { XIcon } from 'lucide-react'
-import { IconButton } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { DialogClose, DialogTitle } from '@/components/ui/dialog'
 import { Icon } from '@/features/workspace/components/glyphs'
 

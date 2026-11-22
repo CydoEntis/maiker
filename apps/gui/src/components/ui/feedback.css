@@ -42,8 +42,7 @@
 .mx-toast-slot { position: relative; isolation: isolate; pointer-events: none; }
 .mx-toast-slot[data-ghosts="1"] { margin-top: 9px; }
 .mx-toast-slot[data-ghosts="2"] { margin-top: 18px; }
-.mx-toast[data-float] { position: relative; z-index: 1; pointer-events: auto; display: flex; align-items: flex-start; gap: 9px; padding: 10px 8px 12px 11px; color: var(--fg); background: var(--main); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: var(--pop-sh-dialog); overflow: hidden; animation: mx-toast-in .24s cubic-bezier(.2, .8, .2, 1); }
-.mx-app .mx-toast[data-float] { border-color: var(--line); box-shadow: var(--pop-sh-dialog); }
+.mx-toast[data-float] { position: relative; z-index: 1; pointer-events: auto; display: flex; align-items: flex-start; gap: 9px; padding: 10px 8px 12px 11px; color: var(--fg); border-radius: var(--r-panel); overflow: hidden; animation: mx-toast-in .24s cubic-bezier(.2, .8, .2, 1); }
 .mx-toast.is-note[data-float] { align-items: center; min-height: 40px; padding: 6px 6px 6px 11px; }
 .mx-toast > .mx-status-icon { height: 20px; }
 .mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -82,7 +81,7 @@
 .mx-veil.is-chat { z-index: 45; }
 .mx-veil.is-window { z-index: 92; background: color-mix(in srgb, var(--bg) 78%, transparent); }
 :root[data-gpu="software"] .mx-veil { animation: none; }
-.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; border-color: var(--line2); box-shadow: inset 3px 0 0 var(--edge), var(--pop-sh-dialog); animation: mx-fb-fade .18s var(--ease); }
+.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; box-shadow: inset 3px 0 0 var(--edge), var(--float-sh); animation: mx-fb-fade .18s var(--ease); }
 .mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--fg); }
 .mx-alert-reason { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
 .mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }

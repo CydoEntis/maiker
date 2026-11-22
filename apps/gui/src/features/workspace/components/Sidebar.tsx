@@ -8,6 +8,7 @@ import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
 import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
 import { SidebarResizer } from './SidebarResizer'
 import { AppIcon, FolderMark, Icon, MachineIcon } from './glyphs'
+import { IconButton } from '@/components/ui/icon-button'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Collapse } from './Collapse'
 import { useReducedMotion } from './motion'
@@ -342,12 +343,12 @@ function Expanded(props: SidebarProps) {
   return (
     <div className="mx-sidebar-expanded">
       <div className="mx-sidebar-top">
-        <button type="button" className="mx-head-button" aria-label="Hide sidebar" title={tip('Hide sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="panelLeft" size={14} /></button>
+        <IconButton label="Hide sidebar" tip={tip('Hide sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="panelLeft" /></IconButton>
         <span className="mx-sidebar-title">Chats</span>
         <span className="mx-spacer" />
-        <button type="button" className="mx-head-button" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={14} /></button>
+        <IconButton label="Search" tip={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" /></IconButton>
         <SidebarFilterMenu projects={projects} project={project} onProject={setPickedProject} />
-        <button type="button" className="mx-head-button" aria-label="Open a project" title="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(localMachine) }}><Icon name="plus" size={15} /></button>
+        <IconButton label="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(localMachine) }}><Icon name="plus" /></IconButton>
       </div>
       {/* Outside the scrolling list, so it stays in view while the tree scrolls. */}
       <NeedsYouStrip waiting={waiting} namesMachine={headed} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
@@ -368,7 +369,7 @@ function Expanded(props: SidebarProps) {
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
         <button type="button" className="mx-head-button mx-add-machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={14} />Remote machine</button>
         <span className="mx-spacer" />
-        <button type="button" className="mx-head-button mx-settings-button" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" size={16} /></button>
+        <IconButton label="Settings" tip={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></IconButton>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={headed} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}

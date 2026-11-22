@@ -181,7 +181,7 @@ There are no banners. Every surface but the toast (below: the status mark, no ed
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
-- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (`--main`, `--line`, `--pop-sh-dialog`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a `!` in a `--danger` circle, a warning the same in `--needs`, a note none). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
+- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a `!` in a `--danger` circle, a warning the same in `--needs`, a note none). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
   OS failure of a known kind in plain words), with **Copy details** when the tool's text says more (CODE-STANDARDS ›
   error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
@@ -346,7 +346,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Flat cards on the window ground** (the chat handoff, `design_handoff_maitty_chat`). The window is the theme's
   `--bg`, with two cards on it: the **sidebar** (264px, 12px from the window's edges) and the **workspace**, 12px
   beside it. Each is a solid `--main` with a 1px `--line` hairline, no highlight and no shadow. Only what opens over
-  them casts a shadow (`--sh-pop`); a waiting card rising from the message box casts `--sh-rise`. `--ink` and `--hk` (the
+  them casts a shadow (`--float-sh`); a waiting card rising from the message box casts `--sh-rise`. `--ink` and `--hk` (the
   highlight colour and its strength) and `--sd`/`--shk` (the shadow colour and its strength) are theme tokens; a
   palette theme sets its own strengths (`hk`/`sk` in its palette), and the rest take dark .7/.6 or light 1/.35.
   Nothing tints the window behind the cards. A terminal sits on the card's own ground: xterm's background and ANSI black are `--main`, so a
@@ -357,7 +357,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (sidebar, main card,
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
   tray), and takes its fill, hairline and shadow from that role's rule in `material.css`: a panel is `--main` with a
-  `--line` hairline and no shadow, a float the same with one plain shadow, a field `--raise` with a `--line2` hairline.
+  `--line` hairline and no shadow, a float is the floating surface (below), a field `--raise` with a `--line2` hairline.
   There is one finish, flat: no gradient, highlight or blur anywhere except the first-run veil (no other `backdrop-filter`; hover tints stay). A new
   surface is added to a role's list in `material.css`; it does not set a background of its own. A popover opens
   through `PopupContent` (`components/ui/popup.tsx`) or carries `mx-pop`, so it is portalled into the window root and
@@ -387,9 +387,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `CardBody` 10px 12px, `CardFoot` 40px with the answers; `tone` `needs` for an amber edge, `err` for a red one;
   `interactive` for a card that is itself a button, `--line2` edge on hover and the focus underline inside), **Button**
   (`button.tsx`: kinds `primary` (the theme's accent), `needs` (only the main answer to something waiting on you),
-  `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px; `keyHint` draws the key that also
+  `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button, the browser preview); `keyHint` draws the key that also
   presses it; hover brightens, press darkens toward `--bg`, focus is the one 2px accent underline (`--focus-underline`),
-  disabled is 42% opacity), **IconButton** (an icon with its label as tooltip and name), **Tag** (`tag.tsx`: a
+  disabled is 42% opacity), **IconButton** (`icon-button.tsx`, the one icon button; see *Icon buttons* below), **Tag** (`tag.tsx`: a
   mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
   Loading or Reading, the label is for screen readers only), **FileBadge** (the path with its folder dimmed and no type icon,
   then the path with its folder dimmed; a long path shortens from the front so the name stays), **CodeChip**,
@@ -412,7 +412,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   | `--ink` | `--ink` | an `r,g,b` triple: a hairline or hover fill is `rgba(var(--ink), .08)` |
   | `--needs`, `--working`, `--ok`, `--danger` | the same names (`--ok` is also read as `--done`, `--danger` as `--err`) | a tint is `color-mix(in srgb, var(--needs) 14%, transparent)`; danger is a destructive action and an error toast, never a session's state |
   | `--sy-kw`, `-str`, `-fn`, `-num`, `-ty`, `-com`, `-prop` | the same names | syntax: the `tok-keyword`, `-string`, `-variable`, `-number`, `-comment` and `-flag` (property) kinds of `crates/maitty-highlight` and `lib/highlight.ts` read them |
-  | `--shk` | `--shk` | the shadow strength every floating shadow is scaled by (`--pop-sh-menu`, `--pop-sh`, `--pop-sh-dialog`) |
+  | `--shk` | `--shk` | the shadow strength the one floating shadow is scaled by (`--float-sh`) |
 
   **Older names are aliases of a role, defined in one place** (`COMPATIBILITY` in `themes.ts`), for the screens not
   yet rebuilt: `--bg` is `--t0`, `--main` and `--pane` are `--t1`, `--sel` is `--t2`, `--raise` is `--t3`, `--warn`
@@ -427,17 +427,39 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is white or black by its side, and the syntax colours are its own magenta (keyword), green (string), blue (name),
   working colour (number), meter yellow (type), dim text (comment) and accent text (property).
 
-  A floating surface is `--main` with `1px solid --line` (a menu or popover: `--pop-bg` and `--pop-ring`, below) and one
-  of the three shadows, with the `--r-panel` radius: menus, popovers, toasts and dialogs only.
+  **The floating surface** is one material, written once in `material.css`: the fill is `--float-bg`, the edge is
+  `1px solid --float-line` (the ink at 7%) and the shadow is `--float-sh` (`0 10px 28px` black at 45%, scaled by
+  `--shk`). Menus, popovers, toasts and dialogs take it, by being listed in the float rule, by carrying `mx-pop`, or by
+  their role (`menu`, `listbox`, `dialog`, `alertdialog`, `tooltip`, a Radix popper). **Nothing else names a shadow**,
+  and a float sets no fill, edge or shadow of its own: `material.test.ts` pins the rule and fails on a removed
+  `--pop-*` name. The corner is `--r-panel` for a menu, popover or toast and `--r-dialog` for a dialog. A row the pointer
+  or the keys are on, inside a float, is `--float-hover` (the ink at 6%); a field inside a menu, popover, toast or small
+  dialog is `--well` (`--c-field-bg` is set to it there). Two cheaper values keep the same rule: a tip and the hover card
+  take a 1px ring (`--pop-sh-flat`), and under software painting `--float-sh` is a 1px ring
+  ([PERFORMANCE](PERFORMANCE.md)).
 
   **Fonts.** Two, both bundled: **Inter** for the interface (`--ui`) and **JetBrains Mono** for paths, branches,
   commands and numbers (`--mono`); `theme/look.ts` sets them. The terminal's own font is the user's setting.
 
   Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
 - **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
-  box (a caller beside smaller text may ask for less): the marks of [Design language](#design-language), and nothing
-  for idle. There is no failed mark: the daemon's `error`, `limited` and `unknown` draw as idle. The preview's
-  `StatusMark` (`components/StatusMark.tsx`) only maps its own names onto it.
+  box (a caller beside smaller text may ask for less): needs you is a 14px speech bubble holding `?` in `--needs`, done
+  the same bubble holding a tick in `--ok`, working an 11px ring in `--working` with half of it lit, turning once in
+  `--t-spin`; idle draws **nothing** (no element at all), and the row that holds it does the dimming. With motion
+  reduced the ring stands still and is lit all the way round. `markOf` is the one function that files a status under a
+  mark, and nothing else decides it: it files `error` and `limited` under needs you and `unknown` under idle. A mark is
+  decoration beside words that say the status; `named` makes it an image named for its state (`markName`) where there
+  are no such words. There is no failed mark. The preview's `StatusMark` (`components/StatusMark.tsx`) only maps its own
+  names onto it.
+- **Icon buttons.** One component, `IconButton` (`components/ui/icon-button.tsx`): a 26px square with a 14px glyph in
+  `--muted`, `--fg` on hover, the corner `--r-control`. Hover, a pressed toggle (`aria-pressed`), an open menu
+  (`aria-expanded`) and `on` fill it with `--icon-button-fill` (the ink at 7%); there is no accent and no second size.
+  `label` is required and is its accessible name; `tip` is the tooltip when it says more (the keys that do the same). A
+  caller places the button and never sizes or colours it. The title bar's panel buttons, the sidebar's head and its
+  Settings button, Show sidebar, a pane's `⋯` and every dialog's close use it.
+- **Selection.** One fill everywhere: the picked row of a menu or list is `--m-sel` (the `--t2` role) and bold
+  (`mx-menu-row`, `components/ui/menu-row.css`), never a tick and never an accent outline. The shared menus have no
+  checkbox item.
 - **Corners are rounded, and there is no option for them.** Every radius is a token (`--r-control` 6px, `--r-panel`
   10px, `--r-badge` 3px, `--r-dialog` 14px for the big windows); a component never sets a radius of its own. `withLook`
   in `theme/look.ts` sets the fonts and the shading. **Components are built once and read tokens.** Besides the base tokens, the shared pieces read the component
@@ -540,9 +562,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Menus** (`components/MenuPopup.tsx`, `menu.css`). One look for every right-click and ⋯ menu: 228px or wider,
   5px inside, radius 12, a float like the cards, a dim 11px heading that names what it is for, 30px rows of 13px text with
   their key at the right in mono, separators between groups. Every menu and popover (right-click menus, dropdowns, pickers,
-  popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, on `--pop-bg` (the card,
-  `--m-card`: the same surface as a sidebar group and the message box; its shadow lifts it) inside a 1px `--pop-ring`
-  (`--m-card-line`); no blur, no gradient. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). A danger row is red; one that stops something running
+  popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, as the floating surface
+  (`--float-bg`, `--float-line`, `--float-sh`); no blur, no gradient. The row under the pointer or the keys is `--float-hover`. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). A danger row is red; one that stops something running
   is handled by the app, which asks in a dialog first (see Close ends the session). Arrow keys, Home and End move, Esc or a click outside closes and
   gives focus back. **Session**: Open, Open in split right, Open in split down (not for the one in front), Open
   terminal here (agents), Rename… (F2), Copy folder path, Get a file… (another machine's sessions), Show changes
@@ -1009,7 +1030,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   adds nothing.
 - **No Inbox.** What needs you and what finished are at the top of the sidebar, and
   the notification card and the tray menu say the same; the desktop app has no separate Inbox panel.
-- **Session header** (`PaneCard.tsx`, `pane.css`; 52px, two lines). Left: the 14px status icon (`StatusIcon`: `--needs` `!`, the running light, `✓`, `×`, a dim `–`),
+- **Session header** (`PaneCard.tsx`, `pane.css`; 52px, two lines). Left: the status mark (`StatusIcon`; see *Status marks*),
   the session's name (14px 600; one click turns it into a field, Enter or leaving saves, Esc cancels), and under it the folder (the locked folder for a
   chat with a worktree of its own, a plain one otherwise), the project in `--muted`, `/`, the branch in mono `--branch` as a button
   with a chevron that opens "Branch in <project>", and, for a session on another machine, `· machine`. A plain shell has one line, `zsh · <cwd>`, and nothing else until an agent starts in it.
@@ -1169,7 +1190,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **A run of steps is one quiet line** (`WorkCard`, no box): "✓ Read 6 files, ran 1 command · 6 steps ›" in `--muted`; opened
   it lists the steps under a 1px `--line` rule at their left, and only one step is open at a time. There is no "latest 3" and no "+N more".
 - **Action cards** (`WaitingCard`, Needs Card in the design) are floating cards the width of the message box: `--main`, a
-  `--line2` border, the shared `--pop-sh`, the panel radius (`data-float`), an amber `!` and an amber primary
+  `--line2` border, the shared `--float-sh`, the panel radius (`data-float`), an amber `!` and an amber primary
   button, rising in over 0.2s. A question card shows one question at a time: tabs with an amber underline, numbered answers
   with no boxes (1 to 9 pick, ↑↓ move, ←→ question, Enter next), a ruled free-text line, and "Skip" / "Next ↵" (the last one
   "Send answers (N left)").

@@ -3,6 +3,7 @@ import { Popover } from 'radix-ui'
 import { PopupContent } from '@/components/ui/popup'
 import type { ProjectChoice } from '../model/sidebar'
 import { FolderMark, Icon } from './glyphs'
+import { IconButton } from '@/components/ui/icon-button'
 
 /** The project list shows this many rows before it scrolls; with more projects than this the search box says how many. */
 export const PROJECT_ROWS_SHOWN = 6
@@ -28,7 +29,7 @@ export function SidebarFilterMenu({ projects, project, onProject }: Props) {
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className={`mx-head-button${narrowed ? ' is-on' : ''}`} data-on={narrowed} aria-label={label} title="Filter by project"><Icon name="filter" /></button>
+        <IconButton label={label} tip="Filter by project" on={narrowed}><Icon name="filter" /></IconButton>
       </Popover.Trigger>
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Filter by project" className="mx-grp-menu">
         <label className="mx-grp-search">

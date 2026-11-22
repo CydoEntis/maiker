@@ -191,7 +191,7 @@
 .mx-app-icon.is-deepseek { --mark: var(--agent-deepseek); }
 .mx-app-icon.is-shell { color: var(--dim); }
 
-:root[data-window="inactive"] :is(.mx-status-icon, .mx-status-light *, .mx-mach-spin, .mx-upd-bar span, .mx-upd-bar span::after) { animation-play-state: paused; }
+:root[data-window="inactive"] :is(.mx-status-light, .mx-mach-spin, .mx-upd-bar span, .mx-upd-bar span::after) { animation-play-state: paused; }
 
 /* With a single pane the workspace's own border takes the focus; with several, the focused pane does. Never both. */
 .mx-app[data-side="right"] .mx-sidebar { margin: 12px 12px 12px 0; }
@@ -382,8 +382,8 @@
 .mx-secret-form { display: flex; gap: 6px; align-items: center; }
 .mx-secret-form input { min-width: 180px; }
 .mx-text-button.is-danger { color: var(--danger); }
-/* A small dialog is a float like the New session dialog: the page colour, a hairline, 14px at most, the shared shadow. */
-.mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }
+/* A small dialog is the float of material.css with the dialog corner; it sets no fill, edge or shadow of its own. */
+.mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }
 .mx-folder-row { display: flex; gap: 8px; align-items: center; }
 .mx-folder-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--pane-line); background: var(--well, var(--m-raise)); color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; }
 .mx-folder-row input.is-missing { border-color: var(--danger-line, var(--danger)); box-shadow: 0 0 0 3px var(--danger-soft, transparent); }
@@ -444,7 +444,7 @@
 
 /* Command palette */
 .mx-palette-scrim { position: absolute; inset: 0; z-index: 60; background: rgba(0, 0, 0, .58); animation: v7scrim .2s ease-out; }
-.mx-palette { position: absolute; top: 14vh; left: 50%; width: min(600px, calc(100% - 40px)); max-height: min(520px, 72vh); transform: translateX(-50%); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); overflow: hidden; animation: mx-palette-in .16s ease-out; }
+.mx-palette { position: absolute; top: 14vh; left: 50%; width: min(600px, calc(100% - 40px)); max-height: min(520px, 72vh); transform: translateX(-50%); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); overflow: hidden; animation: mx-palette-in .16s ease-out; }
 @keyframes mx-palette-in { from { opacity: 0; transform: translateX(-50%) scale(.96); } to { opacity: 1; transform: translateX(-50%); } }
 .mx-palette-input { flex: none; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); color: var(--dim); }
 .mx-palette-input input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font: inherit; font-size: 15px; color: var(--fg); }
@@ -540,12 +540,13 @@
 .mx-app { --pop-sh-flat: 0 0 0 1px var(--line2); }
 .mx-app[data-theme-kind="light"] { --pop-sh-flat: 0 0 0 1px rgba(17, 22, 27, .14); }
 :root[data-gpu="software"] { --float-bleed: 4px; }
-:root[data-gpu="software"] { --pop-sh: 0 0 0 1px var(--line2); --pop-sh-dialog: 0 0 0 1px var(--line2); --pop-sh-menu: 0 0 0 1px var(--line2); }
+/* The float's shadow is declared beside the theme's roles (material.css), so the cheaper value is set at each of those roots. */
+:root[data-gpu="software"], :root[data-gpu="software"] :is(.mx-app, .app-shell) { --float-sh: 0 0 0 1px var(--line2); }
 :root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-fp-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-restarting) { animation: none; }
 /* A dialog fades in without its scale (a scale repaints the whole dialog at every size), and the palette keeps its centring transform. */
 :root[data-gpu="software"] :is(.mx-fp, .mx-rename) { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-palette { animation-name: v7scrim; }
-:root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --pop-sh: 0 0 0 1px rgba(17, 22, 27, .14); --pop-sh-dialog: var(--pop-sh); --pop-sh-menu: var(--pop-sh); }
+:root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --float-sh: 0 0 0 1px rgba(17, 22, 27, .14); }
 
 /* Layout variables, set on the app root so they can use the theme's colours. The layout rules above read these.
    --rk multiplies the larger radii. */
@@ -558,7 +559,7 @@
   --tbar: transparent; --tbar-b: 0;
   /* Surfaces: opaque cards with a hairline and, on dark themes, a faint top highlight; a soft shadow only on
      short-lived popovers. */
-  --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--pop-sh);
+  --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--float-sh);
   --sbm: 12px 0 12px 12px; --sbw: 1px; --tba: center; --tl: 4px; --edge: 8px; --tsh: 32px; --tsw: 26px; --ibh: 30px;
 }
 .mx-app[data-theme-kind="light"] { --sh: none; }
@@ -576,7 +577,7 @@
 .mx-upd-keyonly { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; width: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
 .mx-upd-keyonly:focus-visible { clip: auto; clip-path: none; height: 24px; width: auto; padding: 0 8px; font-size: 12px; background: var(--main); color: var(--fg); box-shadow: var(--focus-underline); z-index: 1; }
 .mx-upd-dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; background: var(--accent); }
-.mx-upd-card { width: 300px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh); color: var(--fg); position: relative; }
+.mx-upd-card { width: 300px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); color: var(--fg); position: relative; }
 .mx-upd-head { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 10px; }
 .mx-upd-title { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-upd-versions { font: 400 12px var(--mono); color: var(--dim); white-space: nowrap; }

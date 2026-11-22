@@ -1,5 +1,6 @@
 import { X } from 'lucide-react'
-import { Button, IconButton } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import { copySignInCode, openSignInLink } from './signInActions'
 import { failureWords, linkHost, SIGN_IN_LABELS } from './signInWords'

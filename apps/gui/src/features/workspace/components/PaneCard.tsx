@@ -12,6 +12,7 @@ import { SecretAskBar } from './SecretAskBar'
 import { PaneHeadId } from './PaneHeadId'
 import { PaneFooter } from './PaneFooter'
 import { useShortcutText } from '@/features/shortcuts/platform'
+import { IconButton } from '@/components/ui/icon-button'
 
 export type PaneCardProps = {
   pane: PaneSlot
@@ -119,18 +120,15 @@ export function PaneCard(props: PaneCardProps) {
         </div>
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         <span className="mx-pane-controls">
-          <button
-            type="button"
-            className="mx-pane-control mx-pane-more"
-            aria-label="More pane actions"
-            title="More pane actions"
+          <IconButton
+            label="More pane actions"
             aria-haspopup="menu"
             aria-expanded={menuAt !== null}
             // The open menu closes itself on this press, before the click: the click must not open it again.
             onPointerDown={() => { menuWasOpen.current = menuAt !== null }}
             onMouseDown={stop}
             onClick={(event) => { if (!menuWasOpen.current) setMenuAt(menuPoint(event, true)) }}
-          ><Icon name="more" /></button>
+          ><Icon name="more" /></IconButton>
         </span>
         {/* The header's bottom edge says the status: the plain line while idle, a strip sweeping right to left while working, lit while it needs you. */}
         <span className="mx-pane-status" data-status={session.status} aria-hidden="true" />

@@ -10,7 +10,7 @@
 .mx-stop-dot { width: 14px; height: 22px; display: grid; place-items: center; }
 .mx-stop-dot::before { content: ""; width: 9px; height: 9px; border-radius: 50%; background: var(--line2); }
 .mx-stop.is-reached .mx-stop-dot::before { background: var(--fg2); }
-.mx-stop.is-picked .mx-stop-dot::before { width: 14px; height: 14px; background: var(--fg); box-shadow: 0 0 0 3px var(--pop-bg); }
+.mx-stop.is-picked .mx-stop-dot::before { width: 14px; height: 14px; background: var(--fg); box-shadow: 0 0 0 3px var(--float-bg); }
 .mx-stop.is-picked { color: var(--fg); font-weight: 600; }
 .mx-stops:not(.is-disabled) .mx-stop:hover { color: var(--fg); }
 .mx-stops:focus-visible .mx-stop.is-picked .mx-stop-word { box-shadow: var(--focus-underline); }

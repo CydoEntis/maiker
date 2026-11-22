@@ -1,8 +1,6 @@
 /* Right-click and ⋯ menus (the design's `.cm`): 190px at least, 4px of room, rows of 30px, keys at the right, no heading. */
 .mx-ctx {
   position: fixed; z-index: 91; min-width: 190px; padding: 4px; display: flex; flex-direction: column; border-radius: var(--r-panel);
-  background: var(--main);
-  border: 1px solid rgba(var(--hl), calc(.12 * var(--hk)));
   color: var(--fg); font-family: var(--ui);
   animation: mx-pop .14s ease-out;
 }
@@ -15,7 +13,7 @@
 .mx-ctx-item:focus-visible { outline: none; box-shadow: none; }
 /* One highlighted item at a time: Radix moves `data-highlighted` with the pointer and the arrow keys, so a hovered row and a
    keyboard row can never both be lit, and the global focus underline is switched off above. */
-.mx-ctx-item:not(:disabled)[data-highlighted] { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
+.mx-ctx-item:not(:disabled)[data-highlighted] { background: var(--float-hover); color: var(--fg); }
 /* The shared dropdown item paints every child with its focus colour; a row keeps its mark's colour, its label's and its hint's, and only the ground changes. */
 /* The class is doubled to out-rank the dropdown item's `focus:**:text-accent-foreground`, which also paints the mark's own svg. */
 .mx-ctx-item.mx-ctx-item:focus .mx-app-icon, .mx-ctx-item.mx-ctx-item:focus .mx-app-icon * { color: var(--mark, var(--fg2)); }

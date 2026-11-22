@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, IconButton } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
@@ -91,7 +92,7 @@ function Primitives() {
       <Sample label="IconButton">
         <div className="flex gap-3.5">
           <Captioned caption="default"><IconButton label="Copy"><Copy /></IconButton></Captioned>
-          <Captioned caption="hover"><IconButton label="Copy" className="bg-(--hover) text-(--fg)"><Copy /></IconButton></Captioned>
+          <Captioned caption="hover or on"><IconButton label="Copy" on><Copy /></IconButton></Captioned>
           <Captioned caption="focus"><IconButton label="Copy" className={FOCUS_RING}><Copy /></IconButton></Captioned>
         </div>
       </Sample>
@@ -112,8 +113,8 @@ function Primitives() {
         <Sample label="CodeChip · Link">
           <span className="text-sm text-(--fg2)">Run <CodeChip>pnpm test</CodeChip> or read <TextLink href="#gallery">the guide</TextLink></span>
         </Sample>
-        <Sample label="StatusIcon (the four marks, one box)">
-          {STATES.map((state) => <Captioned key={state} caption={state}><StatusIcon status={state} /></Captioned>)}
+        <Sample label="StatusIcon (three marks; idle has none)">
+          {STATES.map((state) => <Captioned key={state} caption={state}><StatusIcon status={state} named /></Captioned>)}
         </Sample>
         <Sample label="Fold">
           <div className="w-full border border-(--line)">

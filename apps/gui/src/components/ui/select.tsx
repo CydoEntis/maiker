@@ -58,7 +58,7 @@ function SelectItem({ className, children, text, ...props }: React.ComponentProp
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn("mx-menu-row relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 px-1.5 text-[12.5px] outline-hidden select-none focus:bg-hover", className)}
+      className={cn("mx-menu-row relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 px-1.5 text-[12.5px] outline-hidden select-none focus:bg-(--float-hover)", className)}
       {...props}
     >
       <SelectPrimitive.ItemText className="sr-only">{text ?? ""}</SelectPrimitive.ItemText>

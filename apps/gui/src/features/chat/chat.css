@@ -297,12 +297,12 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 @keyframes mxRise { from { transform: translateY(10px); opacity: 0; } to { transform: none; opacity: 1; } }
 .mx-waiting {
   position: relative; z-index: 1; width: 100%; margin: 0 0 8px; outline: none;
-  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh);
+  background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh);
   animation: mxRise .2s cubic-bezier(.2, .8, .2, 1) both;
 }
 .mx-waiting:not(.is-neutral) { border-color: var(--needs); border-radius: var(--r-panel); overflow: hidden; }
 .mx-waiting:not(.is-neutral) > .mx-waiting-head { background: color-mix(in oklab, var(--needs) 12%, transparent); border-bottom-color: color-mix(in oklab, var(--needs) 30%, transparent); }
-.mx-waiting:focus-visible { box-shadow: var(--pop-sh), var(--focus-underline); }
+.mx-waiting:focus-visible { box-shadow: var(--float-sh), var(--focus-underline); }
 .mx-waiting-bang { flex: none; width: 14px; text-align: center; font: 800 13px/1 var(--mono); color: var(--needs); }
 .mx-waiting-head { display: flex; min-width: 0; min-height: 36px; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .mx-waiting-head:last-child { border-bottom: 0; }

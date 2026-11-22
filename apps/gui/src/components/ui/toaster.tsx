@@ -2,7 +2,8 @@ import * as React from "react"
 import { X } from "lucide-react"
 import { copyText } from "@/lib/clipboard"
 import { COLLAPSE_AT, readingToasts, toast, useToasts, type ToastAction, type ToastItem, type ToastKind } from "@/lib/toast"
-import { Button, IconButton } from "./button"
+import { Button } from "./button"
+import { IconButton } from "./icon-button"
 import { CopyDetails } from "./feedback"
 import { StatusIcon, type StatusIconKind } from "./status-icon"
 
@@ -62,7 +63,7 @@ function ToastView({ item }: { item: ToastItem }) {
         )}
       </div>
       {note && action}
-      {item.closeButton && <IconButton label="Dismiss" className="mx-toast-x size-6" onClick={() => { toast.dismiss(item.id) }}><X /></IconButton>}
+      {item.closeButton && <IconButton label="Dismiss" className="mx-toast-x" onClick={() => { toast.dismiss(item.id) }}><X /></IconButton>}
       {item.hideAfter !== null && <span key={item.count} className="mx-toast-bar" aria-hidden="true" style={{ animationDuration: `${String(item.hideAfter)}ms` }} />}
     </div>
   )
