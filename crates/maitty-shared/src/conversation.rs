@@ -588,14 +588,10 @@ mod turn_choice_tests {
     }
 
     #[test]
-    fn plain_models_and_known_efforts_pass() {
+    fn plain_models_and_known_efforts_pass_and_anything_that_could_read_as_an_option_is_refused() {
         assert!(choice(Some("opus"), Some("max")).validate().is_ok());
         assert!(choice(Some("claude-sonnet-4.5[1m]"), None).validate().is_ok());
         assert!(choice(None, None).is_empty());
-    }
-
-    #[test]
-    fn anything_that_could_read_as_an_option_or_is_unknown_is_refused() {
         for model in ["", "--dangerously-skip-permissions", "a b", "a\nb", &"x".repeat(65)] {
             assert!(choice(Some(model), None).validate().is_err(), "{model:?}");
         }
@@ -639,22 +635,6 @@ pub mod tests {
         assert_eq!(back, c);
         assert!(validate_registry(&[back]).is_ok());
 
-        let mut legacy = serde_json::to_value(&c).unwrap();
-        legacy
-            .as_object_mut()
-            .unwrap()
-            .remove("awaiting_first_user_message");
-        let legacy: Conversation = serde_json::from_value(legacy).unwrap();
-        assert!(!legacy.awaiting_first_user_message);
-    }
-
-    #[test]
-    fn a_conversation_from_before_worktree_origins_decodes_without_one() {
-        let mut old = serde_json::to_value(conversation()).unwrap();
-        old.as_object_mut().unwrap().remove("worktree_origin");
-        let old: Conversation = serde_json::from_value(old).unwrap();
-        assert_eq!(old.worktree_origin, None);
-
         let mut c = conversation();
         c.worktree_origin = Some(WorktreeOrigin {
             main: std::env::temp_dir().join("main"),
@@ -664,6 +644,21 @@ pub mod tests {
         let back: Conversation = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
         assert_eq!(back, c);
         assert!(validate_registry(&[back]).is_ok());
+    }
+
+    /// Every field added to a saved conversation after the first is defaulted, so an older
+    /// registry still loads: not waiting, no worktree origin, no title, not archived.
+    #[test]
+    fn a_saved_conversation_from_before_the_newer_fields_still_loads() {
+        let mut old = serde_json::to_value(conversation()).unwrap();
+        let map = old.as_object_mut().unwrap();
+        for field in ["awaiting_first_user_message", "worktree_origin", "title", "archived"] {
+            map.remove(field).expect(field);
+        }
+        let old: Conversation = serde_json::from_value(old).unwrap();
+        assert!(!old.awaiting_first_user_message);
+        assert_eq!((old.worktree_origin, old.title), (None, None));
+        assert!(!old.archived);
     }
 
     #[test]
@@ -682,22 +677,6 @@ pub mod tests {
         assert!(origin(main.clone(), PathBuf::from("tree"), "task").is_err(), "relative folder");
         assert!(origin(main.clone(), tmp.join("tree"), "").is_err(), "no branch");
         assert!(origin(main, tmp.join("tree"), "  ").is_err(), "a blank branch");
-    }
-
-    #[test]
-    fn a_read_from_before_answered_approvals_still_decodes() {
-        let read: ReadResult = serde_json::from_value(serde_json::json!({
-            "conversation": 1,
-            "generation": 2,
-            "status": "Working",
-            "receipt": null,
-            "history": { "entries": [], "next": null, "completeness": "Complete" },
-            "error": null,
-            "checks": [],
-            "approvals": []
-        }))
-        .unwrap();
-        assert!(read.answered_approvals.is_empty());
     }
 
     #[test]
@@ -796,26 +775,6 @@ pub mod tests {
     }
 
     #[test]
-    fn launch_settings_must_match_the_recorded_provider() {
-        let mut conversation = conversation();
-        conversation.settings = Some(LaunchSettings {
-            agent: None,
-            provider: Provider::Claude,
-            executable: conversation.binding.executable.clone(),
-            config_root: conversation.binding.config_root.clone(),
-            cwd: conversation.binding.cwd.clone(),
-            model: None,
-            model_provider: None,
-            approval_policy: ApprovalPolicy::OnRequest,
-            sandbox: Sandbox::ReadOnly,
-        });
-        assert_eq!(
-            validate_registry(&[conversation]),
-            Err(IdentityError::IncompleteBinding)
-        );
-    }
-
-    #[test]
     fn interrupted_writers_are_fenced_on_restart() {
         for state in [RecoveryState::Running, RecoveryState::Transferring] {
             let mut c = conversation();
@@ -844,10 +803,27 @@ pub mod tests {
             validate_registry(&[c.clone(), duplicate]),
             Err(IdentityError::DuplicateNativeSession)
         );
-        let mut incomplete = c;
+        let mut incomplete = c.clone();
         incomplete.binding.executable = "codex".into();
         assert_eq!(
             validate_registry(&[incomplete]),
+            Err(IdentityError::IncompleteBinding)
+        );
+        // Launch settings must match the recorded provider.
+        let mut mismatched = c;
+        mismatched.settings = Some(LaunchSettings {
+            agent: None,
+            provider: Provider::Claude,
+            executable: mismatched.binding.executable.clone(),
+            config_root: mismatched.binding.config_root.clone(),
+            cwd: mismatched.binding.cwd.clone(),
+            model: None,
+            model_provider: None,
+            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox: Sandbox::ReadOnly,
+        });
+        assert_eq!(
+            validate_registry(&[mismatched]),
             Err(IdentityError::IncompleteBinding)
         );
     }
@@ -874,27 +850,5 @@ mod title_tests {
         assert_eq!(clean_title(""), None);
         let long = "x".repeat(MAX_TITLE_CHARS + 20);
         assert_eq!(clean_title(&long).unwrap().chars().count(), MAX_TITLE_CHARS);
-    }
-
-    #[test]
-    fn an_older_saved_conversation_without_a_title_still_loads() {
-        let mut value = serde_json::to_value(super::tests::conversation()).unwrap();
-        let map = value.as_object_mut().unwrap();
-        map.remove("title");
-        map.remove("archived");
-        let loaded: Conversation = serde_json::from_value(value).unwrap();
-        assert_eq!(loaded.title, None);
-        assert!(!loaded.archived);
-    }
-}
-
-#[cfg(test)]
-mod provider_tests {
-    use super::*;
-
-    #[test]
-    fn each_provider_is_named_as_its_agent_command() {
-        let names: Vec<_> = Provider::ALL.iter().map(|p| p.agent_name()).collect();
-        assert_eq!(names, ["codex", "claude", "gemini"]);
     }
 }

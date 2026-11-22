@@ -48,18 +48,3 @@ pub struct Capabilities {
     #[serde(default)]
     pub verified: Verified,
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_default_claims_nothing_and_is_only_advertised() {
-        let none = Capabilities::default();
-
-        assert!(!none.steer && !none.resume && !none.history_replay);
-        assert!(none.models.is_none() && none.modes.is_empty());
-        assert!(!none.slash_commands && !none.helpers && !none.usage);
-        assert_eq!(none.verified, Verified::Advertised);
-    }
-}

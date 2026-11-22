@@ -461,7 +461,7 @@ asks). The helper's `TermInfo.started_by_chat` (`#[serde(default)]`) names the c
 with `started_by`, and is saved with the session; a helper whose chat is gone from the saved
 conversations comes back with neither. A chat's runtime that is no longer current starts nothing.
 `COMPATIBLE_SINCE` stays 115: an older daemon is never sent the command and an older client reads
-neither field (tests: `a_chats_helper_answer_is_sent_only_to_a_daemon_that_reads_it`, the summary's
+neither field (tests: `a_peer_from_before_a_message_cannot_read_it`, `every_message_is_as_old_as_the_window`, the summary's
 old-shape decode).
 
 **Pull requests.** The daemon polls `gh` off the event loop for each pane's branch, or the URL
@@ -944,7 +944,7 @@ checked again just before the rename, and the permissions of the old file are ke
 error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
 older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
 115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
-Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `a_file_write_is_asked_only_of_a_daemon_that_knows_it`.
+Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `answers_keep_their_pinned_wire_shape`.
 For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
 that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
 (`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`

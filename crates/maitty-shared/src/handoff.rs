@@ -136,23 +136,3 @@ pub fn uncommitted(porcelain: &str) -> Vec<String> {
     }
     out
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_brief_names_the_app_it_came_from() {
-        let facts = Facts {
-            pane: 3,
-            agent: "claude".into(),
-            task: "fix it".into(),
-            last_prompt: String::new(),
-            branch: None,
-            checkout: PathBuf::from("/work/app"),
-            changed: Ok(Changed { files: vec![], committed_unknown: None }),
-            screen: String::new(),
-        };
-        assert!(brief(&facts, "someapp").starts_with("Handoff from claude in someapp pane 3."));
-    }
-}

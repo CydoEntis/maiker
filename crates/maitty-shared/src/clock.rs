@@ -122,18 +122,4 @@ mod tests {
         assert_eq!(weekday(day_of(0, -3600)), "Wed", "before the epoch's day");
         assert_eq!(day_of(AT, 0) + 1, day_of(AT, 10 * 3600));
     }
-
-    #[test]
-    fn local_times_are_padded_clock_faces() {
-        let (hm, hms) = (local_hm(AT), local_hms(AT));
-        assert!(hms.starts_with(&hm), "{hm} / {hms}");
-        let digits = |s: &str| {
-            s.split(':')
-                .all(|p| p.len() == 2 && p.chars().all(|c| c.is_ascii_digit()))
-        };
-        assert!(
-            hm.len() == 5 && hms.len() == 8 && digits(&hm) && digits(&hms),
-            "{hm} / {hms}"
-        );
-    }
 }

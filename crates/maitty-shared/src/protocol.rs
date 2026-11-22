@@ -2704,50 +2704,6 @@ mod tests {
         assert!(!speaks_with(PROTOCOL_VERSION + 1, 0));
     }
 
-    /// Keeping an agent warm is two new commands: a daemon built before them cannot read them, so a
-    /// client asks only a daemon that says it is new enough.
-    #[test]
-    fn keeping_an_agent_warm_is_asked_only_of_a_daemon_that_knows_it() {
-        assert_eq!(
-            ClientMsg::Command(Command::KillServer { forget: false }).introduced_in(),
-            COMPATIBLE_SINCE
-        );
-
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            KillServer { forget: bool },
-        }
-        let bytes = encode(&Command::DropPrewarm).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        assert!(decode::<Command>(&bytes).is_ok());
-    }
-
-    /// Answering a chat's helper request is a command a daemon built before it cannot read. The
-    /// window has moved past that daemon, so the command is as old as the window.
-    #[test]
-    fn a_chats_helper_answer_is_sent_only_to_a_daemon_that_reads_it() {
-        let answer = Command::AnswerChatHelpers {
-            conversation: crate::conversation::ConversationId(7),
-            choice: HelperChoice::Allow,
-        };
-        assert_eq!(ClientMsg::Command(answer.clone()).introduced_in(), COMPATIBLE_SINCE);
-        assert_eq!(
-            ClientMsg::Command(Command::AnswerHelpers { term: 1, choice: HelperChoice::Allow }).introduced_in(),
-            COMPATIBLE_SINCE,
-            "a pane's answer is as old as the window"
-        );
-
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            AnswerHelpers { term: TermId, choice: HelperChoice },
-        }
-        let bytes = encode(&answer).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        assert!(decode::<Command>(&bytes).is_ok());
-    }
-
     /// A build from before the window sends a Welcome with the version alone.
     #[test]
     fn a_welcome_without_a_window_still_decodes() {
@@ -2772,9 +2728,20 @@ mod tests {
         assert_eq!(encode(&back).unwrap(), bytes);
     }
 
-    #[test]
-    fn every_message_round_trips() {
-        let clients = vec![
+    /// A peer built before `msg` existed cannot read it, while this build can: a new variant is
+    /// why a version that adds one has to move the window or give it its own `introduced_in` arm.
+    fn unreadable_before<Old: for<'a> Deserialize<'a>, T: Serialize + for<'a> Deserialize<'a>>(msg: &T) {
+        let bytes = encode(msg).unwrap();
+        assert!(decode::<Old>(&bytes).is_err(), "an older peer misread a newer message");
+        assert!(decode::<T>(&bytes).is_ok());
+    }
+
+    fn every_client_message() -> Vec<ClientMsg> {
+        use crate::conversation::ConversationId;
+        use crate::settings_view::{SettingKey, SettingValue, WindowStyle};
+        let id = ConversationId(47);
+        let repo = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 9, request });
+        let mut clients = vec![
             ClientMsg::Hello {
                 version: PROTOCOL_VERSION,
                 attach: true,
@@ -2836,14 +2803,18 @@ mod tests {
             ClientMsg::Query(Query::PaneSearch {
                 query: "error".into(),
             }),
-            ClientMsg::Query(Query::Repo {
-                term: 3,
-                tag: 9,
-                request: crate::repo::RepoRequest::DiffRange {
-                    from: "main".into(),
-                    to: "HEAD".into(),
-                    path: Some("src/lib.rs".into()),
-                },
+            repo(crate::repo::RepoRequest::DiffRange {
+                from: "main".into(),
+                to: "HEAD".into(),
+                path: Some("src/lib.rs".into()),
+            }),
+            repo(crate::repo::RepoRequest::Snapshots),
+            repo(crate::repo::RepoRequest::RestoreCount {
+                commit: "abc123".into(),
+            }),
+            repo(crate::repo::RepoRequest::FindFiles {
+                query: "main".into(),
+                limit: 20,
             }),
             ClientMsg::Query(Query::CheckOutput {
                 term: 3,
@@ -2853,9 +2824,64 @@ mod tests {
                 term: 3,
                 name: Some("build".into()),
             }),
-            ClientMsg::Query(Query::ConversationTerminalReplay {
-                id: crate::conversation::ConversationId(47),
-                generation: 2,
+            ClientMsg::Query(Query::ConversationTerminalReplay { id, generation: 2 }),
+            ClientMsg::Query(Query::Settings),
+            ClientMsg::Query(Query::SideAnswer {
+                id,
+                ask: SideAsk::Command(SideCommand::SkillDoctor),
+                tag: 3,
+            }),
+            ClientMsg::Query(Query::Extensions {
+                request: crate::extensions::ExtRequest::Remove {
+                    target: crate::extensions::ExtTarget {
+                        agent: crate::extensions::ExtAgent::Claude,
+                        kind: crate::extensions::ExtKind::Plugin,
+                        id: "a@b".into(),
+                        scope: crate::extensions::ExtScope::User,
+                        project: None,
+                    },
+                },
+                tag: 7,
+            }),
+            ClientMsg::Query(Query::AgentCommands {
+                agent: crate::conversation::Provider::Claude,
+                folder: "/code".into(),
+                tag: 5,
+            }),
+            ClientMsg::Query(Query::Repositories { rescan: true, tag: 8 }),
+            ClientMsg::Query(Query::ListFolders { path: "~".into(), tag: 1 }),
+            ClientMsg::Query(Query::CreateFolder {
+                parent: "~/code".into(),
+                name: "new".into(),
+                tag: 4,
+            }),
+            ClientMsg::Query(Query::SavedConversations {
+                agent: "claude".into(),
+                folder: "~/code/app".into(),
+                tag: 2,
+            }),
+            ClientMsg::Query(Query::ClosedSessions),
+            ClientMsg::Query(Query::WorktreeStanding {
+                repo: PathBuf::from("/code/app"),
+                folder: PathBuf::from("/code/app-worktrees/task"),
+            }),
+            ClientMsg::Query(Query::MachineFacts { tag: 1 }),
+            ClientMsg::Query(Query::CloneRepo {
+                address: "https://h/o/r.git".into(),
+                parent: "~".into(),
+                tag: 3,
+            }),
+            ClientMsg::Query(Query::AgentSignIn {
+                agent: SignInAgent::Codex,
+                request: SignInRequest::Cancel,
+                tag: 4,
+            }),
+            ClientMsg::Query(Query::FolderGit {
+                folder: "~/shop".into(),
+                request: FolderGitRequest::CheckoutRemote {
+                    remote_branch: "origin/x".into(),
+                },
+                tag: 8,
             }),
             ClientMsg::Command(Command::NewWorkspace {
                 cwd: Some(PathBuf::from("/code")),
@@ -2869,12 +2895,14 @@ mod tests {
                 cwd: None,
             }),
             ClientMsg::Command(Command::ConversationTerminalResize {
-                id: crate::conversation::ConversationId(47),
+                id,
                 generation: 2,
                 cols: 96,
                 rows: 32,
             }),
             ClientMsg::Command(Command::ClosePane { term: 3 }),
+            ClientMsg::Command(Command::CloseSession { term: 3 }),
+            ClientMsg::Command(Command::UndoClose { term: 3 }),
             ClientMsg::Command(Command::Reveal { term: 3 }),
             ClientMsg::Command(Command::TeachAgent { term: 3 }),
             ClientMsg::Command(Command::Popup {
@@ -2903,6 +2931,11 @@ mod tests {
                 text: "fix the parser".into(),
                 operation: Some(7),
             }),
+            ClientMsg::Command(Command::SendWhenReady {
+                term: 3,
+                text: "fix the parser".into(),
+                operation: None,
+            }),
             ClientMsg::Command(Command::RerunCheck {
                 term: 3,
                 name: None,
@@ -2920,39 +2953,13 @@ mod tests {
                 term: 3,
                 name: None,
             }),
-            ClientMsg::Command(Command::ApproveCheck {
-                term: 3,
-                name: "test".into(),
-                choice: ApprovalChoice::Once,
-                command_sha256: command_hash("npm test"),
-            }),
-            ClientMsg::Command(Command::ApproveCheck {
-                term: 3,
-                name: "test".into(),
-                choice: ApprovalChoice::Always,
-                command_sha256: command_hash("npm test"),
-            }),
-            ClientMsg::Command(Command::ApproveCheck {
-                term: 3,
-                name: "test".into(),
-                choice: ApprovalChoice::Never,
-                command_sha256: command_hash("npm test"),
-            }),
             ClientMsg::Command(Command::ForgetCheckApproval {
                 project: PathBuf::from("/code/api"),
                 name: "test".into(),
             }),
-            ClientMsg::Command(Command::AnswerHelpers {
-                term: 3,
+            ClientMsg::Command(Command::AnswerChatHelpers {
+                conversation: ConversationId(7),
                 choice: HelperChoice::Allow,
-            }),
-            ClientMsg::Command(Command::AnswerHelpers {
-                term: 3,
-                choice: HelperChoice::Always,
-            }),
-            ClientMsg::Command(Command::AnswerHelpers {
-                term: 3,
-                choice: HelperChoice::No,
             }),
             ClientMsg::Command(Command::TidyWorktrees {
                 items: vec![(PathBuf::from("/code/.wt/rate"), false)],
@@ -2961,9 +2968,42 @@ mod tests {
                 term: 3,
                 name: "x".into(),
             }),
+            ClientMsg::Command(Command::PinPane {
+                term: 3,
+                pinned: true,
+            }),
+            ClientMsg::Command(Command::ArchivePane {
+                term: 3,
+                archived: true,
+            }),
+            ClientMsg::Command(Command::SnoozePane {
+                term: 3,
+                until: Some(1_000),
+            }),
+            ClientMsg::Command(Command::NewFleet {
+                name: "api".into(),
+                cwd: None,
+                colors: vec![3, 0],
+            }),
+            ClientMsg::Command(Command::NewShip {
+                ws: 2,
+                cwd: Some(PathBuf::from("/srv")),
+                cmd: None,
+            }),
             ClientMsg::Command(Command::MoveToWorktree {
                 term: 3,
                 branch: Some("feat/x".into()),
+            }),
+            ClientMsg::Command(Command::BranchWorktree {
+                project: PathBuf::from("/code"),
+                branch: "feat/x".into(),
+            }),
+            ClientMsg::Command(Command::SaveFile {
+                term: 3,
+                tag: 1,
+                path: "README.md".into(),
+                contents: "# hi\r\n".into(),
+                version: Some("5-abc".into()),
             }),
             ClientMsg::Command(Command::ReloadAgent { term: 3 }),
             ClientMsg::Command(Command::SwapPanes { a: 3, b: 4 }),
@@ -2972,21 +3012,87 @@ mod tests {
                 tag: 4,
                 commit: "abc123".into(),
             }),
+            ClientMsg::Command(Command::KillServer { forget: false }),
+            ClientMsg::Command(Command::DropPrewarm),
+            ClientMsg::Command(Command::ReopenClosedSession {
+                agent: "claude".into(),
+                session: "abc".into(),
+            }),
+            ClientMsg::Command(Command::ConversationStart {
+                target: crate::conversation::StartTarget::Conversation { id, generation: 2 },
+                branch: Some("chat/one".into()),
+            }),
+            ClientMsg::Command(Command::ConversationSend {
+                id,
+                generation: 1,
+                operation: 3,
+                text: "hi".into(),
+                choice: Some(crate::conversation::TurnChoice {
+                    model: Some("opus".into()),
+                    effort: Some("high".into()),
+                }),
+            }),
+            ClientMsg::Command(Command::ConversationDequeue {
+                id,
+                generation: 1,
+                operation: 4,
+            }),
+            ClientMsg::Command(Command::ConversationSendNow {
+                id,
+                generation: 2,
+                operation: 5,
+            }),
         ];
-        for m in &clients {
-            round_trips(m);
+        for choice in [ApprovalChoice::Once, ApprovalChoice::Always, ApprovalChoice::Never] {
+            clients.push(ClientMsg::Command(Command::ApproveCheck {
+                term: 3,
+                name: "test".into(),
+                choice,
+                command_sha256: command_hash("npm test"),
+            }));
         }
-        let servers = vec![
+        for choice in [HelperChoice::Allow, HelperChoice::Always, HelperChoice::No] {
+            clients.push(ClientMsg::Command(Command::AnswerHelpers { term: 3, choice }));
+        }
+        for (key, value) in [
+            (SettingKey::ReduceMotion, SettingValue::Bool(true)),
+            (SettingKey::Spinner, SettingValue::List(vec!["x".into()])),
+            (SettingKey::StartDir, SettingValue::Text("~/code".into())),
+            (SettingKey::BypassOff, SettingValue::List(vec!["gemini".into()])),
+            (SettingKey::UpdateMachines, SettingValue::Bool(false)),
+            (SettingKey::WindowStyle, SettingValue::WindowStyle(WindowStyle::Glass)),
+        ] {
+            clients.push(ClientMsg::Command(Command::SetSetting { key, value }));
+        }
+        clients
+    }
+
+    fn every_server_message() -> Vec<ServerMsg> {
+        let id = crate::conversation::ConversationId(47);
+        let why = BTreeMap::from([(3, RemovalReason::Closed), (4, RemovalReason::Exited)]);
+        let mut servers = vec![
             ServerMsg::Welcome {
                 version: PROTOCOL_VERSION,
                 compatible_since: COMPATIBLE_SINCE,
             },
             ServerMsg::State(Snapshot::default()),
+            ServerMsg::State(Snapshot {
+                daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
+                revision: 9,
+                removed: why.clone(),
+                ..Snapshot::default()
+            }),
             ServerMsg::TermsChanged {
                 changed: Vec::new(),
                 removed: vec![3],
                 reasons: BTreeMap::from([(3, RemovalReason::Exited)]),
                 revision: 4,
+            },
+            ServerMsg::TermsChanged {
+                changed: Vec::new(),
+                removed: vec![3, 4],
+                reasons: why,
+                revision: 9,
             },
             ServerMsg::Replay {
                 term: 3,
@@ -3018,10 +3124,6 @@ mod tests {
                     can_create: true,
                 },
             }),
-            ServerMsg::Reply(Reply::FolderCreated {
-                tag: 9,
-                outcome: FolderCreated::Created { path: "/home/me/code/new".into() },
-            }),
             ServerMsg::Reply(Reply::SavedConversations {
                 tag: 8,
                 found: SavedConversations::Listed(vec![SavedConversation {
@@ -3035,6 +3137,104 @@ mod tests {
                 found: SavedConversations::NotSupported,
             }),
             ServerMsg::Reply(Reply::TerminalReplay(vec![27, b'[', b'H'])),
+            ServerMsg::Reply(Reply::ConversationQueued(crate::conversation::QueuedReceipt {
+                conversation: id,
+                generation: 1,
+                operation: 4,
+            })),
+            ServerMsg::Reply(Reply::Settings(sample_settings())),
+            ServerMsg::SettingsChanged(sample_settings()),
+            ServerMsg::Reply(Reply::SideAnswer {
+                tag: 3,
+                answer: SideAnswer::Answered { text: "ok".into() },
+            }),
+            ServerMsg::Reply(Reply::HelperRead(HelperRecord {
+                term: 1,
+                helper: "a1".into(),
+                entries: Vec::new(),
+                start_missing: true,
+            })),
+            ServerMsg::Reply(Reply::Specialists(crate::specialists::SpecialistList {
+                term: 1,
+                project: "/p".into(),
+                files: vec![crate::specialists::SpecialistFile {
+                    tool: crate::specialists::SpecialistTool::Codex,
+                    scope: crate::specialists::SpecialistScope::Home,
+                    name: "code-reviewer".into(),
+                    description: Some("Reviews a change".into()),
+                    path: "/h/.codex/agents/code-reviewer.toml".into(),
+                    text: "name = \"code-reviewer\"".into(),
+                    text_cut: false,
+                }],
+                truncated: false,
+            })),
+            ServerMsg::Reply(Reply::AgentCommands {
+                tag: 5,
+                answer: Ok(vec![crate::agent_commands::AgentCommand {
+                    name: "compact".into(),
+                    description: "d".into(),
+                    hint: String::new(),
+                    aliases: Vec::new(),
+                }]),
+            }),
+            ServerMsg::Reply(Reply::AgentCommands {
+                tag: 6,
+                answer: Err("Claude Code is not installed".into()),
+            }),
+            ServerMsg::Reply(Reply::Repositories {
+                tag: 8,
+                found: crate::repositories::RepositoryIndex {
+                    repos: vec![crate::repositories::IndexedRepository {
+                        path: "/home/me/app".into(),
+                        branch: Some("main".into()),
+                        last_used: 1_794_000_000,
+                    }],
+                    indexed_at: 1_794_000_100,
+                    more: false,
+                },
+            }),
+            ServerMsg::Reply(Reply::ClosedSessions(vec![ClosedSession {
+                agent: "claude".into(),
+                session: "abc".into(),
+                cwd: PathBuf::from("/code/api"),
+                branch: Some("main".into()),
+                title: Some("fix the parser".into()),
+                at: 7,
+                worktree: None,
+                repo: None,
+            }])),
+            ServerMsg::Reply(Reply::WorktreeStanding(Some(WorktreeStanding {
+                dirty: 0,
+                branch: Some("task".into()),
+                merged: false,
+                last_commit: "5 weeks ago".into(),
+                inactive_days: Some(30),
+            }))),
+            ServerMsg::Reply(Reply::AgentSignIn {
+                tag: 1,
+                agent: SignInAgent::Claude,
+                state: SignInState::Waiting {
+                    link: Some("https://auth.example/device".into()),
+                    code: Some("AB-12".into()),
+                },
+            }),
+            ServerMsg::Reply(Reply::Cloned {
+                tag: 1,
+                outcome: Ok("/x".into()),
+            }),
+            ServerMsg::Reply(Reply::FolderGit {
+                tag: 8,
+                outcome: Ok(FolderGitAnswer::Branches(FolderBranches {
+                    current: Some("main".into()),
+                    branches: vec![FolderBranch {
+                        name: "origin/x".into(),
+                        current: false,
+                        when: Some(5),
+                        remote: true,
+                    }],
+                    worktrees: Vec::new(),
+                })),
+            }),
             ServerMsg::Error("nope".into()),
             ServerMsg::Notice("saved".into()),
             ServerMsg::AskRemoveWorktree {
@@ -3048,20 +3248,237 @@ mod tests {
             },
             ServerMsg::AutoWorkspace("api".into()),
             ServerMsg::Raise,
-            ServerMsg::ConversationChanged {
-                id: crate::conversation::ConversationId(47),
-                generation: 2,
-            },
+            ServerMsg::ConversationChanged { id, generation: 2 },
             ServerMsg::Bye,
         ];
-        for m in &servers {
+        for outcome in [
+            FolderCreated::Created { path: "/home/me/code/new".into() },
+            FolderCreated::Exists,
+            FolderCreated::NotAllowed { reason: "x".into() },
+            FolderCreated::Failed { reason: "y".into() },
+        ] {
+            servers.push(ServerMsg::Reply(Reply::FolderCreated { tag: 9, outcome }));
+        }
+        for answer in [
+            Ok(crate::extensions::ExtReply::Done("x".into())),
+            Err(crate::extensions::ExtError::NeedsTerminal("claude mcp login x".into())),
+        ] {
+            servers.push(ServerMsg::Reply(Reply::Extensions { tag: 7, answer }));
+        }
+        servers
+    }
+
+    #[test]
+    fn every_message_round_trips() {
+        for m in &every_client_message() {
+            round_trips(m);
+        }
+        for m in &every_server_message() {
             round_trips(m);
         }
     }
 
+    /// Since 122 moved the window, no message is newer than it: a client asks any daemon it
+    /// talks to, and a daemon answers any client it talks to.
+    #[test]
+    fn every_message_is_as_old_as_the_window() {
+        for m in every_client_message() {
+            assert_eq!(m.introduced_in(), COMPATIBLE_SINCE, "{m:?}");
+        }
+        for m in every_server_message() {
+            assert_eq!(m.introduced_in(), COMPATIBLE_SINCE, "{m:?}");
+        }
+    }
+
+    /// Every message added since some older peer was built, against that peer's own enum.
+    #[test]
+    fn a_peer_from_before_a_message_cannot_read_it() {
+        use crate::conversation::ConversationId;
+        // Each enum below is a declaration as some older peer had it, so most of their
+        // fields are never read.
+        #[allow(dead_code)]
+        mod old {
+            use super::super::{Dir, HelperChoice, PathBuf, TermId, WsId};
+            use crate::conversation::ConversationId;
+            use serde::Deserialize;
+            #[derive(Deserialize)]
+            pub enum BeforePrewarm { KillServer { forget: bool } }
+            #[derive(Deserialize)]
+            pub enum BeforeChatHelpers { AnswerHelpers { term: TermId, choice: HelperChoice } }
+            #[derive(Deserialize)]
+            pub enum BeforeHeld { ClearQueue { term: TermId } }
+            #[derive(Deserialize)]
+            pub enum BeforeSwap { ResizePane { term: TermId, dir: Dir, delta: f32 } }
+            #[derive(Deserialize)]
+            pub enum BeforeDequeue { ConversationCancel { id: u64, generation: u64 } }
+            #[derive(Deserialize)]
+            pub enum Before116 { WriteFile { term: TermId, tag: u64, path: String, contents: String } }
+            #[derive(Deserialize)]
+            pub enum BeforePin { RenamePane { term: TermId, name: String } }
+            #[derive(Deserialize)]
+            pub enum BeforeFleets {
+                NewWorkspace { cwd: Option<PathBuf>, name: Option<String>, cmd: Option<String> },
+                NewTab { ws: WsId, name: Option<String>, cmd: Option<String> },
+            }
+            #[derive(Deserialize)]
+            pub enum BeforeSoftClose { ClosePane { term: TermId } }
+            #[derive(Deserialize)]
+            pub enum BeforeSnooze { ArchivePane { term: TermId, archived: bool } }
+            #[derive(Deserialize)]
+            pub enum BeforeSendNow { ConversationDequeue { id: ConversationId, generation: u64, operation: u64 } }
+            #[derive(Deserialize)]
+            pub enum BeforeReopen { DropPrewarm }
+            #[derive(Deserialize)]
+            pub enum BeforeRestoreCount { Snapshots }
+            #[derive(Deserialize)]
+            pub enum BeforeFindFiles { Snapshots, RestoreCount { commit: String } }
+            #[derive(Deserialize)]
+            pub enum QueryBeforeSettings { UsageReport }
+            #[derive(Deserialize)]
+            pub enum QueryBeforeExtensions { GitIdentities { tag: u64 } }
+            #[derive(Deserialize)]
+            pub enum QueryBeforeFolders { ListFolders { path: String, tag: u64 } }
+            #[derive(Deserialize)]
+            pub enum QueryBeforeClosed { List }
+            #[derive(Deserialize)]
+            pub enum ReplyBefore { Ok }
+            #[derive(Deserialize)]
+            pub enum ServerBefore { Raise, Bye }
+        }
+        let id = ConversationId(3);
+        unreadable_before::<old::BeforePrewarm, _>(&Command::DropPrewarm);
+        unreadable_before::<old::BeforeChatHelpers, _>(&Command::AnswerChatHelpers {
+            conversation: ConversationId(7),
+            choice: HelperChoice::Allow,
+        });
+        unreadable_before::<old::BeforeHeld, _>(&Command::SendWhenReady {
+            term: 3,
+            text: "fix the parser".into(),
+            operation: None,
+        });
+        unreadable_before::<old::BeforeSwap, _>(&Command::SwapPanes { a: 3, b: 4 });
+        unreadable_before::<old::BeforeDequeue, _>(&Command::ConversationDequeue { id, generation: 1, operation: 4 });
+        unreadable_before::<old::Before116, _>(&Command::SaveFile {
+            term: 3,
+            tag: 1,
+            path: "README.md".into(),
+            contents: "# hi\r\n".into(),
+            version: Some("5-abc".into()),
+        });
+        for command in [
+            Command::PinPane { term: 3, pinned: true },
+            Command::ArchivePane { term: 3, archived: true },
+            Command::SetSetting {
+                key: crate::settings_view::SettingKey::ReduceMotion,
+                value: crate::settings_view::SettingValue::Bool(true),
+            },
+        ] {
+            unreadable_before::<old::BeforePin, _>(&command);
+        }
+        for command in [
+            Command::NewFleet { name: "api".into(), cwd: None, colors: vec![3, 0] },
+            Command::NewShip { ws: 2, cwd: Some(PathBuf::from("/srv")), cmd: None },
+        ] {
+            unreadable_before::<old::BeforeFleets, _>(&command);
+        }
+        for command in [Command::CloseSession { term: 3 }, Command::UndoClose { term: 3 }] {
+            unreadable_before::<old::BeforeSoftClose, _>(&command);
+        }
+        unreadable_before::<old::BeforeSnooze, _>(&Command::SnoozePane { term: 3, until: Some(1_000) });
+        unreadable_before::<old::BeforeSendNow, _>(&Command::ConversationSendNow { id, generation: 2, operation: 5 });
+        unreadable_before::<old::BeforeReopen, _>(&Command::ReopenClosedSession {
+            agent: "claude".into(),
+            session: "abc".into(),
+        });
+        unreadable_before::<old::BeforeRestoreCount, _>(&crate::repo::RepoRequest::RestoreCount {
+            commit: "abc123".into(),
+        });
+        unreadable_before::<old::BeforeFindFiles, _>(&crate::repo::RepoRequest::FindFiles {
+            query: "main".into(),
+            limit: 20,
+        });
+
+        unreadable_before::<old::QueryBeforeSettings, _>(&Query::Settings);
+        unreadable_before::<old::QueryBeforeExtensions, _>(&Query::Extensions {
+            request: crate::extensions::ExtRequest::Remove {
+                target: crate::extensions::ExtTarget {
+                    agent: crate::extensions::ExtAgent::Claude,
+                    kind: crate::extensions::ExtKind::Plugin,
+                    id: "a@b".into(),
+                    scope: crate::extensions::ExtScope::User,
+                    project: None,
+                },
+            },
+            tag: 7,
+        });
+        for query in [
+            Query::SideAnswer { id: ConversationId(4), ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3 },
+            Query::Repositories { rescan: true, tag: 8 },
+            Query::CreateFolder { parent: "~/code".into(), name: "new".into(), tag: 4 },
+            Query::SavedConversations { agent: "claude".into(), folder: "~/code/app".into(), tag: 2 },
+        ] {
+            unreadable_before::<old::QueryBeforeFolders, _>(&query);
+        }
+        for query in [
+            Query::ClosedSessions,
+            Query::WorktreeStanding {
+                repo: PathBuf::from("/code/app"),
+                folder: PathBuf::from("/code/app-worktrees/task"),
+            },
+        ] {
+            unreadable_before::<old::QueryBeforeClosed, _>(&query);
+        }
+
+        let standing = WorktreeStanding {
+            dirty: 0,
+            branch: Some("task".into()),
+            merged: false,
+            last_commit: "5 weeks ago".into(),
+            inactive_days: Some(30),
+        };
+        for reply in [
+            Reply::ConversationQueued(crate::conversation::QueuedReceipt { conversation: id, generation: 1, operation: 4 }),
+            Reply::SideAnswer { tag: 3, answer: SideAnswer::Answered { text: "ok".into() } },
+            Reply::Repositories {
+                tag: 8,
+                found: crate::repositories::RepositoryIndex { repos: Vec::new(), indexed_at: 1_794_000_100, more: false },
+            },
+            Reply::SavedConversations { tag: 2, found: SavedConversations::NotSupported },
+            Reply::ClosedSessions(Vec::new()),
+            Reply::WorktreeStanding(Some(standing)),
+        ] {
+            unreadable_before::<old::ReplyBefore, _>(&reply);
+        }
+        for news in [
+            ServerMsg::ConversationChanged { id, generation: 2 },
+            ServerMsg::SettingsChanged(sample_settings()),
+        ] {
+            unreadable_before::<old::ServerBefore, _>(&news);
+        }
+    }
+
+    /// Pinned encodings of answers a peer on the same version reads: a reorder or a rename of
+    /// these is seen, which a round trip would not catch.
+    #[test]
+    fn answers_keep_their_pinned_wire_shape() {
+        let reply = crate::repo::RepoReply::Saved { version: "7-ab".into() };
+        assert_eq!(
+            encode(&reply).unwrap().as_ref(),
+            [0x81, 0xa5, b'S', b'a', b'v', b'e', b'd', 0x81, 0xa7, b'v', b'e', b'r', b's', b'i', b'o', b'n', 0xa4, b'7', b'-', b'a', b'b']
+        );
+        assert_eq!(encode(&crate::repo::RepoReply::ChangedOnDisk).unwrap().as_ref(), [0xad, b'C', b'h', b'a', b'n', b'g', b'e', b'd', b'O', b'n', b'D', b'i', b's', b'k']);
+        let created = FolderCreated::Created { path: "/a/b".into() };
+        assert_eq!(
+            encode(&created).unwrap().as_ref(),
+            [0x81, 0xa7, b'C', b'r', b'e', b'a', b't', b'e', b'd', 0x81, 0xa4, b'p', b'a', b't', b'h', 0xa4, b'/', b'a', b'/', b'b']
+        );
+        assert_eq!(encode(&FolderCreated::Exists).unwrap().as_ref(), [0xa6, b'E', b'x', b'i', b's', b't', b's']);
+    }
+
     #[test]
     fn conversation_summary_from_an_older_daemon_defaults_to_structured_execution() {
-        let summary: ConversationSummary = serde_json::from_value(serde_json::json!({
+        use crate::conversation::capabilities::{Capabilities, Verified};
+        let mut summary: ConversationSummary = serde_json::from_value(serde_json::json!({
             "id": 7,
             "generation": 3,
             "provider": "Codex",
@@ -3079,117 +3496,23 @@ mod tests {
             crate::conversation::ExecutionKind::Structured
         );
         // `root` and `branch` (a chat session's project, ADR 0003) are defaulted too.
-        assert_eq!((summary.root, summary.branch), (None, None));
+        assert_eq!((summary.root.clone(), summary.branch.clone()), (None, None));
         assert!(summary.helpers.is_empty(), "an older daemon reports no helpers");
         assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
-    }
 
-    #[test]
-    fn a_summary_carries_capabilities_only_when_the_daemon_knows_them() {
-        use crate::conversation::capabilities::{Capabilities, Verified};
-        let mut summary: ConversationSummary = serde_json::from_value(serde_json::json!({
-            "id": 7, "generation": 3, "provider": "Codex", "cwd": "/code", "worktree": null,
-            "state": "Running", "status": "Idle", "native_term": null, "checks": []
-        }))
-        .unwrap();
+        // Capabilities are written only when the daemon knows them.
         let unknown = serde_json::to_value(&summary).unwrap();
         summary.capabilities = Some(Capabilities {
             steer: true,
             verified: Verified::Pinned,
             ..Capabilities::default()
         });
-
         let known = serde_json::to_value(&summary).unwrap();
         let read: ConversationSummary = serde_json::from_value(known.clone()).unwrap();
-
         assert!(unknown.get("capabilities").is_none());
         assert_eq!(known["capabilities"]["steer"], true);
         assert_eq!(read.capabilities, summary.capabilities);
-    }
-
-    /// A message held for a starting agent is a new command, and the news that a conversation
-    /// changed a new server message: a peer built before them reads neither, which is why
-    /// protocol 78 refuses protocol 77.
-    #[test]
-    fn a_peer_from_before_held_messages_and_chat_news_cannot_read_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ClearQueue { term: TermId },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldServerMsg {
-            Raise,
-            Bye,
-        }
-        let held = encode(&Command::SendWhenReady {
-            term: 3,
-            text: "fix the parser".into(),
-            operation: None,
-        })
-        .unwrap();
-        assert!(decode::<OldCommand>(&held).is_err());
-        assert!(matches!(
-            decode::<Command>(&held),
-            Ok(Command::SendWhenReady { term: 3, text, operation: None }) if text == "fix the parser"
-        ));
-
-        let id = crate::conversation::ConversationId(3);
-        let news = encode(&ServerMsg::ConversationChanged { id, generation: 2 }).unwrap();
-        assert!(decode::<OldServerMsg>(&news).is_err());
-        assert!(matches!(
-            decode::<ServerMsg>(&news),
-            Ok(ServerMsg::ConversationChanged { id: read, generation: 2 }) if read == id
-        ));
-        assert_eq!(PROTOCOL_VERSION, 122);
-    }
-
-    /// A new command is a new enum variant: a peer built before it can't read it, which is
-    /// why adding one bumps `PROTOCOL_VERSION` (and the two refuse to talk).
-    #[test]
-    fn a_peer_from_before_swap_panes_cannot_read_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ResizePane { term: TermId, dir: Dir, delta: f32 },
-        }
-        let bytes = encode(&Command::SwapPanes { a: 3, b: 4 }).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        let Command::SwapPanes { a, b } = decode(&bytes).unwrap() else {
-            panic!("expected a swap")
-        };
-        assert_eq!((a, b), (3, 4));
-    }
-
-    /// Removing a queued message and the reply to a queued send are a new command and a new reply:
-    /// a peer built before them cannot read either, which is why protocol 71 refuses protocol 70.
-    #[test]
-    fn a_peer_from_before_the_send_queue_cannot_read_its_messages() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ConversationCancel { id: u64, generation: u64 },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        let id = crate::conversation::ConversationId(3);
-        let dequeue = encode(&Command::ConversationDequeue { id, generation: 1, operation: 4 }).unwrap();
-        assert!(decode::<OldCommand>(&dequeue).is_err());
-        assert!(matches!(
-            decode::<Command>(&dequeue).unwrap(),
-            Command::ConversationDequeue { operation: 4, .. }
-        ));
-        let queued = Reply::ConversationQueued(crate::conversation::QueuedReceipt {
-            conversation: id,
-            generation: 1,
-            operation: 4,
-        });
-        assert!(decode::<OldReply>(&encode(&queued).unwrap()).is_err());
     }
 
     /// `queued` was added to the read as a defaulted field: a reply from before it still decodes,
@@ -3203,6 +3526,7 @@ mod tests {
         }))
         .expect("a read from before the queue");
         assert!(read.queued.is_empty() && read.history.resume.is_none() && !read.history.reset);
+        assert!(read.answered_approvals.is_empty(), "a read from before answered approvals");
     }
 
     /// `questions` was added to a permission ask as a defaulted field: one from a hook or a daemon
@@ -3249,31 +3573,29 @@ mod tests {
         assert!(old.choices.is_empty() && old.questions.is_empty());
         let back: PermissionAsk = decode(&encode(&form).unwrap()).unwrap();
         assert_eq!(back, form);
+
+        // One from before choices existed reads with none.
+        let ask: PermissionAsk =
+            serde_json::from_value(serde_json::json!({"tool": "Bash", "detail": "ls", "answerable": true})).unwrap();
+        assert!(ask.choices.is_empty(), "an older peer sends no choices");
     }
 
-    /// `first` was added to `QueueFollowUp` as a defaulted field: a peer that does not send it
-    /// still decodes, as "at the back". Dropping one queued follow-up is a new command, read only
-    /// by a daemon that says it is new enough.
+    /// `first` and then `operation` were added to `QueueFollowUp` (and `operation` to
+    /// `SendWhenReady`) as defaulted fields: a send from before either decodes as "at the back"
+    /// with no operation, and an older daemon reads one that carries an operation but ignores it,
+    /// so `COMPATIBLE_SINCE` stays.
     #[test]
-    fn a_follow_up_from_before_first_still_decodes_and_dropping_one_needs_a_daemon_that_knows_it() {
+    fn a_terminal_send_from_before_first_and_operation_ids_still_decodes_both_ways() {
         #[derive(Serialize)]
-        enum OldCommand {
+        enum BeforeFirst {
             QueueFollowUp { term: TermId, text: String },
         }
-        let bytes = encode(&OldCommand::QueueFollowUp { term: 3, text: "next".into() }).unwrap();
+        let bytes = encode(&BeforeFirst::QueueFollowUp { term: 3, text: "next".into() }).unwrap();
         let Command::QueueFollowUp { first, .. } = decode(&bytes).unwrap() else {
             panic!("expected a follow-up")
         };
         assert!(!first);
 
-    }
-
-    /// `operation` was added to `QueueFollowUp` and `SendWhenReady` as a defaulted field: a send
-    /// from before it decodes as one with no operation, and an older daemon reads one that carries
-    /// it but ignores the operation, so `COMPATIBLE_SINCE` stays and a send with one says it needs
-    /// a daemon that honours it.
-    #[test]
-    fn a_terminal_send_from_before_operation_ids_still_decodes_both_ways() {
         #[derive(Debug, Serialize, Deserialize)]
         enum OldCommand {
             QueueFollowUp { term: TermId, text: String, first: bool },
@@ -3303,14 +3625,6 @@ mod tests {
         assert!(matches!(decode::<OldCommand>(&new).unwrap(), OldCommand::QueueFollowUp { term: 3, first: false, .. }));
     }
 
-    #[test]
-    fn only_a_terminal_send_with_an_operation_needs_a_daemon_that_honours_it() {
-        let queue = |operation| ClientMsg::Command(Command::QueueFollowUp { term: 3, text: "next".into(), first: false, operation });
-        let hold = |operation| ClientMsg::Command(Command::SendWhenReady { term: 3, text: "fix it".into(), operation });
-        assert_eq!(queue(None).introduced_in(), COMPATIBLE_SINCE);
-        assert_eq!(hold(None).introduced_in(), COMPATIBLE_SINCE);
-    }
-
     /// `choice` was added to `ConversationSend` as a defaulted field: a send from before it still
     /// decodes, as "nothing picked", and one that carries a choice round-trips.
     #[test]
@@ -3337,83 +3651,6 @@ mod tests {
             panic!("expected a send")
         };
         assert_eq!(choice, Some(picked));
-    }
-
-    /// A worktree from a folder is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough.
-    #[test]
-    fn a_branch_worktree_is_asked_only_of_a_daemon_that_knows_it() {
-        let Command::BranchWorktree { project, branch } = decode(&encode(&Command::BranchWorktree {
-            project: PathBuf::from("/code"),
-            branch: "feat/x".into(),
-        })
-        .unwrap())
-        .unwrap() else {
-            panic!("expected a branch worktree request")
-        };
-        assert_eq!((project, branch.as_str()), (PathBuf::from("/code"), "feat/x"));
-    }
-
-    /// Writing a file is a new command: a daemon built before it cannot read it, so a client asks only a
-    /// daemon that says it is new enough.
-    #[test]
-    fn a_file_write_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum Old115Command {
-            WriteFile { term: TermId, tag: u64, path: String, contents: String },
-        }
-        let save = Command::SaveFile {
-            term: 3,
-            tag: 1,
-            path: "README.md".into(),
-            contents: "# hi\r\n".into(),
-            version: Some("5-abc".into()),
-        };
-        assert!(decode::<Old115Command>(&encode(&save).unwrap()).is_err());
-        // Every peer inside the window reads it, so it is as old as the window.
-        assert_eq!(ClientMsg::Command(save).introduced_in(), COMPATIBLE_SINCE);
-        // The wire shapes are pinned: a peer on the same version reads these bytes.
-        let reply = crate::repo::RepoReply::Saved { version: "7-ab".into() };
-        assert_eq!(
-            encode(&reply).unwrap().as_ref(),
-            [0x81, 0xa5, b'S', b'a', b'v', b'e', b'd', 0x81, 0xa7, b'v', b'e', b'r', b's', b'i', b'o', b'n', 0xa4, b'7', b'-', b'a', b'b']
-        );
-        assert_eq!(encode(&crate::repo::RepoReply::ChangedOnDisk).unwrap().as_ref(), [0xad, b'C', b'h', b'a', b'n', b'g', b'e', b'd', b'O', b'n', b'D', b'i', b's', b'k']);
-    }
-
-    /// Counting a restore is a new repository question: a daemon from before it cannot read it, so it is not
-    /// asked, while every older question keeps the window's version.
-    #[test]
-    fn a_restore_count_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldRepoRequest {
-            Snapshots,
-        }
-        let count = crate::repo::RepoRequest::RestoreCount {
-            commit: "abc123".into(),
-        };
-        assert!(decode::<OldRepoRequest>(&encode(&count).unwrap()).is_err());
-        let ask = |request| ClientMsg::Query(Query::Repo { term: 3, tag: 1, request });
-        assert_eq!(ask(crate::repo::RepoRequest::Snapshots).introduced_in(), COMPATIBLE_SINCE);
-    }
-
-    /// Finding files is a new repository question: a daemon from before it cannot read it, so it is
-    /// not asked.
-    #[test]
-    fn a_file_search_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldRepoRequest {
-            Snapshots,
-            RestoreCount { commit: String },
-        }
-        let find = crate::repo::RepoRequest::FindFiles {
-            query: "main".into(),
-            limit: 20,
-        };
-        assert!(decode::<OldRepoRequest>(&encode(&find).unwrap()).is_err());
     }
 
     /// `agent` and `prompt` were added to `NewWorktree` as defaulted fields: a peer that does not
@@ -3629,77 +3866,30 @@ mod tests {
     }
 
     #[test]
-    fn a_daemon_id_round_trips_without_a_new_protocol_version() {
-        assert_eq!(PROTOCOL_VERSION, 122);
-        let snapshot = Snapshot {
-            daemon_id: Some("0123456789abcdef0123456789abcdef".into()),
-            ..Snapshot::default()
-        };
-        let back: Snapshot = decode(&encode(&snapshot).unwrap()).unwrap();
-        assert_eq!(back.daemon_id, snapshot.daemon_id);
-    }
-
-    #[test]
-    fn a_pane_without_a_check_decodes_and_one_with_a_check_round_trips() {
-        let mut term: TermInfo = serde_json::from_value(serde_json::json!({
-            "id": 3, "cols": 80, "rows": 24, "title": "", "process": "", "agent": null,
-            "status": "Done", "cwd": "/code", "summary": "", "name": "", "model": "", "said": "",
-            "branch": null, "linked": false, "subagents": [], "root": null, "top": null,
-            "since": 0, "asleep": false, "win32_input": false,
-        }))
-        .expect("a pane from a peer that knows no checks");
-        assert_eq!(term.check(), None);
-        term.checks = vec![CheckInfo {
-            command: "npm test".into(),
-            state: CheckState::Overridden,
-            exit_code: Some(1),
-            started_at: 100,
-            duration_ms: 14_200,
-            after_turn_ended_at: 90,
-            first_failing_line: "FAIL footer.test.ts".into(),
-            rerun_queued: true,
-            overridden_at: Some(130),
-            override_reason: "flaky".into(),
-            ..Default::default()
-        }];
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_pane_asking_for_helpers_round_trips_and_one_not_asking_has_none() {
-        let mut term = pane_from(serde_json::json!({}));
-        assert!(
-            term.helper_ask.is_empty(),
-            "a peer that knows no helper requests"
-        );
-        term.helper_ask = vec!["fix the login test".into(), "port the footer".into()];
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_pane_from_a_peer_that_reads_no_screens_has_no_last_lines() {
-        let mut term = pane_from(serde_json::json!({}));
-        assert!(term.last_lines.is_empty(), "an older peer sends none");
-        term.last_lines = "All three migrations ran clean.".into();
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
     fn a_check_from_an_older_peer_fills_in_what_it_lacks() {
         let bytes = rmp_serde::to_vec_named(&BTreeMap::from([("command", "npm test")])).unwrap();
         let info: CheckInfo = decode(&bytes).expect("only the command");
         assert_eq!(
             (info.command.as_str(), info.exit_code, info.rerun_queued),
             ("npm test", None, false)
+        );
+
+        // A v43 check has the first fields and reads with the newer ones defaulted.
+        let v43 = serde_json::json!({
+            "command": "npm test", "state": "Failed", "exit_code": 1, "started_at": 100, "duration_ms": 14200,
+            "after_turn_ended_at": 90, "first_failing_line": "FAIL", "rerun_queued": false,
+            "overridden_at": null, "override_reason": "",
+        });
+        let info: CheckInfo = decode(&rmp_serde::to_vec_named(&v43).unwrap()).expect("a v43 check");
+        assert_eq!((info.state, info.exit_code), (CheckState::Failed, Some(1)));
+        assert_eq!(
+            (
+                info.name.as_str(),
+                info.source,
+                info.changed_files.len(),
+                info.previous_command
+            ),
+            ("", CheckSource::User, 0, None)
         );
     }
 
@@ -3755,109 +3945,67 @@ mod tests {
         decode(&rmp_serde::to_vec_named(&v).unwrap()).expect("a pane")
     }
 
-    /// A peer from before diff counts sends none: the pane reads as having no changes.
+    /// Every field added to a pane after the first peers is defaulted: a pane from a peer that
+    /// sends none of them reads as unset (no checks, no helpers asked for, no changes, a terminal,
+    /// awake, neither pinned nor archived, no question, no exit, no repeats), and one that sends
+    /// them reads them and round-trips.
     #[test]
-    fn a_pane_from_before_diff_counts_reads_as_zero() {
+    fn a_pane_from_an_older_peer_reads_every_newer_field_as_unset() {
         let old = pane_from(serde_json::json!({}));
-        assert_eq!((old.diff_added, old.diff_removed), (0, 0));
-        let new = pane_from(serde_json::json!({"diff_added": 7, "diff_removed": 2}));
-        assert_eq!((new.diff_added, new.diff_removed), (7, 2));
-        assert_eq!(old.diff_files, 0, "a peer from before the file count sends none");
-        let counted = pane_from(serde_json::json!({"diff_files": 3}));
-        assert_eq!(counted.diff_files, 3);
-    }
+        assert_eq!(old.check(), None);
+        assert!(old.helper_ask.is_empty(), "a peer that knows no helper requests");
+        assert!(old.last_lines.is_empty(), "a peer that reads no screens sends none");
+        assert_eq!((old.diff_added, old.diff_removed, old.diff_files), (0, 0, 0));
+        assert!(!old.began_as_agent, "a pane from before began_as_agent is a terminal");
+        assert_eq!(old.effort, None);
+        assert_eq!(old.snoozed_until, None);
+        assert!(!old.pinned && !old.archived);
+        assert_eq!(old.ask, None);
+        assert_eq!(old.exit, None);
+        assert_eq!(old.repeats, None);
 
-    /// A daemon from before `began_as_agent` sends none: the pane reads as a terminal, which is
-    /// never ended for an agent, so no peer is misread and the version stays.
-    #[test]
-    fn a_pane_from_before_began_as_agent_reads_as_a_terminal() {
-        assert!(!pane_from(serde_json::json!({})).began_as_agent);
-        assert!(pane_from(serde_json::json!({"began_as_agent": true})).began_as_agent);
-    }
-
-    /// A peer from before the effort field sends none: the pane reads as not saying, and one that does is read.
-    #[test]
-    fn a_pane_from_before_the_effort_field_reads_as_not_saying() {
-        assert_eq!(pane_from(serde_json::json!({})).effort, None);
-        let new = pane_from(serde_json::json!({"effort": "medium"}));
+        let mut new = pane_from(serde_json::json!({
+            "diff_added": 7, "diff_removed": 2, "diff_files": 3, "began_as_agent": true,
+            "effort": "medium", "snoozed_until": 1_000, "pinned": true, "archived": true,
+        }));
+        assert_eq!((new.diff_added, new.diff_removed, new.diff_files), (7, 2, 3));
+        assert!(new.began_as_agent);
         assert_eq!(new.effort.as_deref(), Some("medium"));
-    }
+        assert_eq!(new.snoozed_until, Some(1_000));
+        assert!(new.pinned && new.archived);
 
-    /// Pin and archive are new commands: a peer built before them can't read them.
-    #[test]
-    fn a_peer_from_before_pin_and_archive_cannot_read_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            RenamePane { term: TermId, name: String },
-        }
-        for command in [
-            Command::PinPane {
-                term: 3,
-                pinned: true,
-            },
-            Command::ArchivePane {
-                term: 3,
-                archived: true,
-            },
-        ] {
-            let bytes = encode(&command).unwrap();
-            assert!(decode::<OldCommand>(&bytes).is_err());
-            assert!(decode::<Command>(&bytes).is_ok());
-        }
-    }
-
-    /// Starting a fleet or a ship are new commands: a peer built before them can't read them.
-    #[test]
-    fn a_peer_from_before_fleets_and_ships_cannot_read_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            NewWorkspace {
-                cwd: Option<PathBuf>,
-                name: Option<String>,
-                cmd: Option<String>,
-            },
-            NewTab {
-                ws: WsId,
-                name: Option<String>,
-                cmd: Option<String>,
-            },
-        }
-        for command in [
-            Command::NewFleet {
-                name: "api".into(),
-                cwd: None,
-                colors: vec![3, 0],
-            },
-            Command::NewShip {
-                ws: 2,
-                cwd: Some(PathBuf::from("/srv")),
-                cmd: None,
-            },
-        ] {
-            let bytes = encode(&command).unwrap();
-            assert!(decode::<OldCommand>(&bytes).is_err());
-            assert!(decode::<Command>(&bytes).is_ok());
-        }
-    }
-
-    /// Soft close and undo are new commands: a peer built before them can't read them.
-    #[test]
-    fn a_peer_from_before_soft_close_cannot_read_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ClosePane { term: TermId },
-        }
-        for command in [
-            Command::CloseSession { term: 3 },
-            Command::UndoClose { term: 3 },
-        ] {
-            let bytes = encode(&command).unwrap();
-            assert!(decode::<OldCommand>(&bytes).is_err());
-            assert!(decode::<Command>(&bytes).is_ok());
-        }
+        new.helper_ask = vec!["fix the login test".into(), "port the footer".into()];
+        new.last_lines = "All three migrations ran clean.".into();
+        new.ask = Some(PermissionAsk {
+            tool: "Bash".into(),
+            detail: "cargo test".into(),
+            answerable: true,
+            choices: vec!["A".into(), "B".into()],
+            questions: Vec::new(),
+            form: Vec::new(),
+        });
+        new.exit = Some(ExitInfo {
+            code: Some(137),
+            at: 9,
+        });
+        new.repeats = Some(6);
+        new.checks = vec![CheckInfo {
+            command: "npm test".into(),
+            state: CheckState::Overridden,
+            exit_code: Some(1),
+            started_at: 100,
+            duration_ms: 14_200,
+            after_turn_ended_at: 90,
+            first_failing_line: "FAIL footer.test.ts".into(),
+            rerun_queued: true,
+            overridden_at: Some(130),
+            override_reason: "flaky".into(),
+            ..Default::default()
+        }];
+        round_trips(&ServerMsg::State(Snapshot {
+            terms: [(3, new)].into(),
+            ..Default::default()
+        }));
     }
 
     fn sample_settings() -> crate::settings_view::SharedSettings {
@@ -3929,157 +4077,6 @@ mod tests {
     }
 
     #[test]
-    fn settings_round_trip_through_the_codec() {
-        use crate::settings_view::*;
-        let settings = sample_settings();
-        let bytes = encode(&ServerMsg::Reply(Reply::Settings(settings.clone()))).unwrap();
-        match decode::<ServerMsg>(&bytes).unwrap() {
-            ServerMsg::Reply(Reply::Settings(back)) => assert_eq!(back, settings),
-            other => panic!("{other:?}"),
-        }
-        let bytes = encode(&ServerMsg::SettingsChanged(settings.clone())).unwrap();
-        match decode::<ServerMsg>(&bytes).unwrap() {
-            ServerMsg::SettingsChanged(back) => assert_eq!(back, settings),
-            other => panic!("{other:?}"),
-        }
-        round_trips(&ClientMsg::Query(Query::Settings));
-        for (key, value) in [
-            (SettingKey::ReduceMotion, SettingValue::Bool(true)),
-            (SettingKey::Spinner, SettingValue::List(vec!["x".into()])),
-            (SettingKey::StartDir, SettingValue::Text("~/code".into())),
-            (SettingKey::BypassOff, SettingValue::List(vec!["gemini".into()])),
-            (SettingKey::UpdateMachines, SettingValue::Bool(false)),
-            (
-                SettingKey::WindowStyle,
-                SettingValue::WindowStyle(WindowStyle::Glass),
-            ),
-        ] {
-            let command = Command::SetSetting {
-                key,
-                value: value.clone(),
-            };
-            let bytes = encode(&ClientMsg::Command(command)).unwrap();
-            match decode::<ClientMsg>(&bytes).unwrap() {
-                ClientMsg::Command(Command::SetSetting { key: k, value: v }) => {
-                    assert_eq!((k, v), (key, value));
-                }
-                other => panic!("{other:?}"),
-            }
-        }
-    }
-
-    /// The settings messages are new variants: a peer built before them can't read them.
-    #[test]
-    fn a_peer_from_before_the_settings_messages_cannot_read_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            RenamePane { term: TermId, name: String },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            UsageReport,
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldServerMsg {
-            Bye,
-        }
-        let command = Command::SetSetting {
-            key: crate::settings_view::SettingKey::ReduceMotion,
-            value: crate::settings_view::SettingValue::Bool(true),
-        };
-        let bytes = encode(&command).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        assert!(decode::<Command>(&bytes).is_ok());
-        let bytes = encode(&Query::Settings).unwrap();
-        assert!(decode::<OldQuery>(&bytes).is_err());
-        assert!(decode::<Query>(&bytes).is_ok());
-        let bytes = encode(&ServerMsg::SettingsChanged(sample_settings())).unwrap();
-        assert!(decode::<OldServerMsg>(&bytes).is_err());
-        assert!(decode::<ServerMsg>(&bytes).is_ok());
-    }
-
-    /// Snoozing is a new command: a daemon built before it cannot read it, so a client asks only a
-    /// daemon that says it is new enough.
-    #[test]
-    fn a_snooze_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ArchivePane { term: TermId, archived: bool },
-        }
-        let snooze = Command::SnoozePane { term: 3, until: Some(1_000) };
-        let bytes = encode(&snooze).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        assert!(matches!(
-            decode::<Command>(&bytes),
-            Ok(Command::SnoozePane { term: 3, until: Some(1_000) })
-        ));
-    }
-
-    /// Sending a queued message now is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough.
-    #[test]
-    fn sending_a_queued_message_now_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            ConversationDequeue { id: crate::conversation::ConversationId, generation: u64, operation: u64 },
-        }
-        let id = crate::conversation::ConversationId(3);
-        let now = Command::ConversationSendNow { id, generation: 2, operation: 5 };
-        let bytes = encode(&now).unwrap();
-        assert!(decode::<OldCommand>(&bytes).is_err());
-        assert!(matches!(
-            decode::<Command>(&bytes),
-            Ok(Command::ConversationSendNow { generation: 2, operation: 5, .. })
-        ));
-    }
-
-    /// A side answer is a new query and a new reply: a peer built before them cannot read either,
-    /// so a client asks only a daemon new enough and the daemon answers only such a client.
-    #[test]
-    fn side_answers_pass_only_between_peers_that_know_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            ListFolders { path: String, tag: u64 },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        let id = crate::conversation::ConversationId(4);
-        let ask = Query::SideAnswer { id, ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3 };
-        let answer = Reply::SideAnswer { tag: 3, answer: SideAnswer::Answered { text: "ok".into() } };
-        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err());
-        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err());
-        assert!(matches!(
-            decode::<Query>(&encode(&ask).unwrap()),
-            Ok(Query::SideAnswer { ask: SideAsk::Command(SideCommand::SkillDoctor), tag: 3, .. })
-        ));
-        assert_eq!(SideCommand::SkillDoctor.typed(), "/skill-doctor");
-    }
-
-    #[test]
-    fn a_pane_from_before_snooze_decodes_as_awake() {
-        assert_eq!(pane_from(serde_json::json!({})).snoozed_until, None);
-        let snoozed = pane_from(serde_json::json!({ "snoozed_until": 1_000 }));
-        assert_eq!(snoozed.snoozed_until, Some(1_000));
-    }
-
-    #[test]
-    fn a_pane_from_before_pin_and_archive_decodes_as_neither() {
-        let term = pane_from(serde_json::json!({}));
-        assert!(!term.pinned && !term.archived);
-        let term = pane_from(serde_json::json!({ "pinned": true, "archived": true }));
-        assert!(term.pinned && term.archived);
-    }
-
-    #[test]
     fn a_check_with_every_field_round_trips() {
         round_trips(&every_field_check());
         let mut term = pane_from(serde_json::json!({}));
@@ -4097,64 +4094,6 @@ mod tests {
         }));
     }
 
-    #[test]
-    fn a_pane_from_before_the_permission_question_reads_with_none_and_one_with_it_round_trips() {
-        let mut term = pane_from(serde_json::json!({}));
-        assert_eq!(term.ask, None, "an older peer sends none");
-        term.ask = Some(PermissionAsk {
-            tool: "Bash".into(),
-            detail: "cargo test".into(),
-            answerable: true,
-            choices: vec!["A".into(), "B".into()],
-            questions: Vec::new(),
-            form: Vec::new(),
-        });
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_pane_from_before_the_exit_mark_reads_with_none_and_one_with_it_round_trips() {
-        let mut term = pane_from(serde_json::json!({}));
-        assert_eq!(term.exit, None, "an older peer sends none");
-        term.exit = Some(ExitInfo {
-            code: Some(137),
-            at: 9,
-        });
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
-    }
-
-    #[test]
-    fn a_helper_read_and_specialists_are_asked_only_of_a_daemon_that_reads_them() {
-        let answer = ServerMsg::Reply(Reply::HelperRead(HelperRecord {
-            term: 1,
-            helper: "a1".into(),
-            entries: Vec::new(),
-            start_missing: true,
-        }));
-        round_trips(&answer);
-        let listed = ServerMsg::Reply(Reply::Specialists(crate::specialists::SpecialistList {
-            term: 1,
-            project: "/p".into(),
-            files: vec![crate::specialists::SpecialistFile {
-                tool: crate::specialists::SpecialistTool::Codex,
-                scope: crate::specialists::SpecialistScope::Home,
-                name: "code-reviewer".into(),
-                description: Some("Reviews a change".into()),
-                path: "/h/.codex/agents/code-reviewer.toml".into(),
-                text: "name = \"code-reviewer\"".into(),
-                text_cut: false,
-            }],
-            truncated: false,
-        }));
-        round_trips(&listed);
-    }
-
     /// Workflow reports are gone (ADR 0011). A pane from a daemon that still keeps runs reads
     /// without them, and a report from an older `maiker workflow report` is not read as anything
     /// else: that one-shot call is refused, never misread.
@@ -4168,17 +4107,6 @@ mod tests {
         }
         let old = OldClientMsg::WorkflowReport { term: 1, token: String::new(), run: serde_json::json!({}) };
         assert!(decode::<ClientMsg>(&encode(&old).unwrap()).is_err());
-    }
-
-    #[test]
-    fn a_pane_from_before_the_repeat_count_reads_with_none_and_one_with_it_round_trips() {
-        let mut term = pane_from(serde_json::json!({}));
-        assert_eq!(term.repeats, None, "an older peer sends none");
-        term.repeats = Some(6);
-        round_trips(&ServerMsg::State(Snapshot {
-            terms: [(3, term)].into(),
-            ..Default::default()
-        }));
     }
 
     #[test]
@@ -4505,26 +4433,6 @@ mod tests {
     }
 
     #[test]
-    fn a_v43_check_decodes_with_the_new_fields_defaulted() {
-        let v43 = serde_json::json!({
-            "command": "npm test", "state": "Failed", "exit_code": 1, "started_at": 100, "duration_ms": 14200,
-            "after_turn_ended_at": 90, "first_failing_line": "FAIL", "rerun_queued": false,
-            "overridden_at": null, "override_reason": "",
-        });
-        let info: CheckInfo = decode(&rmp_serde::to_vec_named(&v43).unwrap()).expect("a v43 check");
-        assert_eq!((info.state, info.exit_code), (CheckState::Failed, Some(1)));
-        assert_eq!(
-            (
-                info.name.as_str(),
-                info.source,
-                info.changed_files.len(),
-                info.previous_command
-            ),
-            ("", CheckSource::User, 0, None)
-        );
-    }
-
-    #[test]
     fn a_pane_with_the_old_single_check_reads_as_one_checkpoint() {
         let old = pane_from(
             serde_json::json!({ "check": { "command": "npm test", "state": "Failed", "exit_code": 1 } }),
@@ -4619,97 +4527,10 @@ mod tests {
         assert_eq!(got, ["pending", "needs_approval", "stale", "never"]);
     }
 
+    /// An older daemon's listing has no `can_create` and reads as one that cannot, so a window
+    /// asks only a daemon whose listing says it can; a new listing still reads to an old window.
     #[test]
-    fn a_permission_ask_from_before_choices_existed_still_reads() {
-        let ask: PermissionAsk =
-            serde_json::from_value(serde_json::json!({"tool": "Bash", "detail": "ls", "answerable": true})).unwrap();
-        assert!(ask.choices.is_empty(), "an older peer sends no choices");
-    }
-
-    /// The extensions page is a new request and a new reply: a daemon built before them is never
-    /// asked, a client built before them is never sent the answer, and nothing older changes.
-    #[test]
-    fn extensions_are_asked_only_of_a_daemon_that_knows_them_and_changes_nothing_older() {
-        use crate::extensions::{ExtAgent, ExtError, ExtReply, ExtRequest, ExtTarget, ExtKind, ExtScope};
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            GitIdentities { tag: u64 },
-        }
-        let target = ExtTarget { agent: ExtAgent::Claude, kind: ExtKind::Plugin, id: "a@b".into(), scope: ExtScope::User, project: None };
-        let query = Query::Extensions { request: ExtRequest::Remove { target }, tag: 7 };
-        let bytes = encode(&query).unwrap();
-        assert!(decode::<OldQuery>(&bytes).is_err());
-        assert!(matches!(decode::<Query>(&bytes), Ok(Query::Extensions { tag: 7, request: ExtRequest::Remove { .. } })));
-        for answer in [Ok(ExtReply::Done("x".into())), Err(ExtError::NeedsTerminal("claude mcp login x".into()))] {
-            let reply = ServerMsg::Reply(Reply::Extensions { tag: 7, answer });
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-    }
-
-    /// Asking an agent for its commands is a new query and a new reply: a daemon built before it is
-    /// never asked, and a client built before it is never sent the reply.
-    #[test]
-    fn an_agent_commands_ask_passes_only_between_peers_that_know_it() {
-        use crate::agent_commands::AgentCommand;
-        use crate::conversation::Provider;
-        let ask = Query::AgentCommands { agent: Provider::Claude, folder: "/code".into(), tag: 5 };
-        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::AgentCommands { agent: Provider::Claude, tag: 5, .. })));
-        let found = ServerMsg::Reply(Reply::AgentCommands {
-            tag: 5,
-            answer: Ok(vec![AgentCommand { name: "compact".into(), description: "d".into(), hint: String::new(), aliases: Vec::new() }]),
-        });
-        let refused = ServerMsg::Reply(Reply::AgentCommands { tag: 6, answer: Err("Claude Code is not installed".into()) });
-        for reply in [found, refused] {
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-    }
-
-    /// Listing a machine's repositories is a new query and a new reply: a peer built before them
-    /// cannot read either, so the window stays open (`COMPATIBLE_SINCE` does not move) and each
-    /// message has its own `introduced_in` arm; an older peer's messages still read.
-    #[test]
-    fn a_repositories_ask_passes_only_between_peers_that_know_it() {
-        use crate::repositories::{IndexedRepository, RepositoryIndex};
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            ListFolders { path: String, tag: u64 },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        let ask = Query::Repositories { rescan: true, tag: 8 };
-        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
-        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::Repositories { rescan: true, tag: 8 })));
-        let old_listing = encode(&Query::ListFolders { path: "~".into(), tag: 1 }).unwrap();
-        assert!(matches!(decode::<Query>(&old_listing), Ok(Query::ListFolders { tag: 1, .. })), "an older client's query still reads");
-        let found = RepositoryIndex {
-            repos: vec![IndexedRepository { path: "/home/me/app".into(), branch: Some("main".into()), last_used: 1_794_000_000 }],
-            indexed_at: 1_794_000_100,
-            more: false,
-        };
-        let answer = Reply::Repositories { tag: 8, found };
-        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err(), "a client from before cannot read the answer");
-        let reply = ServerMsg::Reply(answer);
-        let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-        assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-    }
-
-    /// Making a folder is a new query and a new reply: a daemon built before it cannot read the
-    /// question, so a window asks only one whose listing says `can_create`, and `COMPATIBLE_SINCE`
-    /// stays where it is. The fields added to older messages read as their old selves.
-    #[test]
-    fn a_folder_is_created_only_by_a_daemon_that_knows_how() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            ListFolders { path: String, tag: u64 },
-        }
+    fn a_folder_listing_from_an_older_daemon_reads_as_one_that_cannot_create() {
         #[derive(Debug, Deserialize)]
         #[allow(dead_code)]
         struct OldListing {
@@ -4718,25 +4539,6 @@ mod tests {
             entries: Vec<FolderEntry>,
             truncated: bool,
         }
-        let ask = Query::CreateFolder { parent: "~/code".into(), name: "new".into(), tag: 4 };
-        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err(), "a daemon from before cannot read the question");
-        assert_eq!(ClientMsg::Query(ask.clone()).introduced_in(), COMPATIBLE_SINCE);
-        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::CreateFolder { tag: 4, .. })));
-
-        // The answers keep their shape: a pinned encoding of each, so a reorder or a rename is seen.
-        let created = FolderCreated::Created { path: "/a/b".into() };
-        assert_eq!(
-            encode(&created).unwrap().as_ref(),
-            [0x81, 0xa7, b'C', b'r', b'e', b'a', b't', b'e', b'd', 0x81, 0xa4, b'p', b'a', b't', b'h', 0xa4, b'/', b'a', b'/', b'b']
-        );
-        assert_eq!(encode(&FolderCreated::Exists).unwrap().as_ref(), [0xa6, b'E', b'x', b'i', b's', b't', b's']);
-        for outcome in [created, FolderCreated::NotAllowed { reason: "x".into() }, FolderCreated::Failed { reason: "y".into() }] {
-            let reply = ServerMsg::Reply(Reply::FolderCreated { tag: 4, outcome });
-            let again: ServerMsg = decode(&encode(&reply).unwrap()).unwrap();
-            assert_eq!(encode(&again).unwrap(), encode(&reply).unwrap());
-        }
-
-        // An older daemon's listing has no `can_create` and reads as one that cannot; a new listing still reads to an old window.
         #[derive(Serialize)]
         struct Listing {
             path: String,
@@ -4748,111 +4550,6 @@ mod tests {
         assert!(!decode::<FolderListing>(&old).unwrap().can_create);
         let new = encode(&FolderListing { can_create: true, ..FolderListing::missing("/a") }).unwrap();
         assert!(decode::<OldListing>(&new).is_ok());
-    }
-
-    /// Listing saved conversations is a new query and a new reply: a daemon built before it is never
-    /// asked, a client built before it is never sent the reply, and neither could read the other's.
-    #[test]
-    fn saved_conversations_pass_only_between_peers_that_know_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            ListFolders { path: String, tag: u64 },
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        let ask = Query::SavedConversations { agent: "claude".into(), folder: "~/code/app".into(), tag: 2 };
-        let answer = Reply::SavedConversations { tag: 2, found: SavedConversations::NotSupported };
-        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err());
-        assert!(decode::<OldReply>(&encode(&answer).unwrap()).is_err());
-        assert!(matches!(
-            decode::<Query>(&encode(&ask).unwrap()),
-            Ok(Query::SavedConversations { tag: 2, .. })
-        ));
-        let old_listing = encode(&Query::ListFolders { path: "~".into(), tag: 1 }).unwrap();
-        assert!(matches!(decode::<Query>(&old_listing), Ok(Query::ListFolders { tag: 1, .. })), "an older client's query still reads");
-    }
-
-    /// Listing closed sessions is a new query and a new reply: a peer built before them cannot read
-    /// either, so a client asks only a daemon that says it is new enough.
-    #[test]
-    fn closed_sessions_are_asked_only_of_a_daemon_that_knows_them() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            List,
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        assert!(decode::<OldQuery>(&encode(&Query::ClosedSessions).unwrap()).is_err());
-
-        let closed = ClosedSession {
-            agent: "claude".into(),
-            session: "abc".into(),
-            cwd: PathBuf::from("/code/api"),
-            branch: Some("main".into()),
-            title: Some("fix the parser".into()),
-            at: 7,
-            worktree: None,
-            repo: None,
-        };
-        let reply = encode(&Reply::ClosedSessions(vec![closed.clone()])).unwrap();
-        assert!(decode::<OldReply>(&reply).is_err());
-        assert!(matches!(decode::<Reply>(&reply), Ok(Reply::ClosedSessions(list)) if list == [closed]));
-    }
-
-    /// Asking where a worktree stands is a new query and a new reply: a peer built before them
-    /// cannot read either, so a client asks only a daemon that says it is new enough, and the
-    /// window stays open.
-    #[test]
-    fn a_worktree_standing_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldQuery {
-            List,
-        }
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldReply {
-            Ok,
-        }
-        let ask = Query::WorktreeStanding { repo: PathBuf::from("/code/app"), folder: PathBuf::from("/code/app-worktrees/task") };
-        assert!(decode::<OldQuery>(&encode(&ask).unwrap()).is_err());
-        assert!(matches!(decode::<Query>(&encode(&ask).unwrap()), Ok(Query::WorktreeStanding { .. })));
-
-        let standing = WorktreeStanding {
-            dirty: 0,
-            branch: Some("task".into()),
-            merged: false,
-            last_commit: "5 weeks ago".into(),
-            inactive_days: Some(30),
-        };
-        let reply = Reply::WorktreeStanding(Some(standing.clone()));
-        assert!(decode::<OldReply>(&encode(&reply).unwrap()).is_err());
-        assert!(matches!(decode::<Reply>(&encode(&reply).unwrap()), Ok(Reply::WorktreeStanding(Some(read))) if read == standing));
-    }
-
-    /// Reopening a closed session is a new command: a daemon built before it cannot read it, so a
-    /// client asks only a daemon that says it is new enough.
-    #[test]
-    fn reopening_a_closed_session_is_asked_only_of_a_daemon_that_knows_it() {
-        #[derive(Debug, Deserialize)]
-        #[allow(dead_code)]
-        enum OldCommand {
-            DropPrewarm,
-        }
-        let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
-        assert!(decode::<OldCommand>(&encode(&reopen).unwrap()).is_err());
-        assert!(matches!(
-            decode::<Command>(&encode(&reopen).unwrap()),
-            Ok(Command::ReopenClosedSession { agent, session }) if agent == "claude" && session == "abc"
-        ));
     }
 
     /// A closed session from a peer that records no worktree still reads, with neither set.
@@ -4878,14 +4575,6 @@ mod tests {
         let read: ClosedSession = decode(&encode(&old).unwrap()).unwrap();
         assert_eq!((read.worktree, read.repo), (None, None));
         assert_eq!(read.branch.as_deref(), Some("feat"));
-    }
-
-    #[test]
-    fn an_agent_sign_in_is_a_new_message_older_peers_are_never_sent() {
-        use super::{SignInAgent, SignInState};
-        let waiting = SignInState::Waiting { link: Some("https://auth.example/device".into()), code: Some("AB-12".into()) };
-        let back: ServerMsg = decode(&encode(&ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state: waiting.clone() })).unwrap()).unwrap();
-        assert!(matches!(back, ServerMsg::Reply(Reply::AgentSignIn { tag: 1, agent: SignInAgent::Claude, state }) if state == waiting));
     }
 
     /// Version 121 added a provider. A list of conversations is sent to every client, so a peer
@@ -4966,15 +4655,6 @@ mod tests {
         assert_eq!((codex.agent_label(), acp.agent_label()), ("Codex".to_owned(), "gemini".to_owned()));
     }
 
-    /// Since 122 moved the window, no message is newer than it.
-    #[test]
-    fn every_message_is_as_old_as_the_window() {
-        let ask = ClientMsg::Query(Query::MachineFacts { tag: 1 });
-        let answer = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
-
-        assert_eq!((ask.introduced_in(), answer.introduced_in()), (COMPATIBLE_SINCE, COMPATIBLE_SINCE));
-    }
-
     /// The shapes version 118 wrote for what 119 still reads, as a peer of that version encodes them.
     #[test]
     fn what_118_sent_about_clones_and_sign_in_still_decodes() {
@@ -4987,17 +4667,5 @@ mod tests {
         assert!(matches!(answer, ServerMsg::Reply(Reply::Cloned { tag: 3, outcome: Ok(_) })));
         let state: ServerMsg = decode(&sent(serde_json::json!({"Reply": {"AgentSignIn": {"tag": 4, "agent": "claude", "state": {"Waiting": {"link": null, "code": "A-1"}}}}}))).unwrap();
         assert!(matches!(state, ServerMsg::Reply(Reply::AgentSignIn { agent: super::SignInAgent::Claude, .. })));
-    }
-
-    #[test]
-    fn the_new_folder_and_machine_messages_survive_the_wire() {
-        use super::{FolderBranch, FolderBranches, FolderGitAnswer, FolderGitRequest};
-        let ask = ClientMsg::Query(Query::FolderGit { folder: "~/shop".into(), request: FolderGitRequest::CheckoutRemote { remote_branch: "origin/x".into() }, tag: 8 });
-        let back: ClientMsg = decode(&encode(&ask).unwrap()).unwrap();
-        assert!(matches!(back, ClientMsg::Query(Query::FolderGit { request: FolderGitRequest::CheckoutRemote { remote_branch }, tag: 8, .. }) if remote_branch == "origin/x"));
-        let listing = FolderBranches { current: Some("main".into()), branches: vec![FolderBranch { name: "origin/x".into(), current: false, when: Some(5), remote: true }], worktrees: Vec::new() };
-        let answer = ServerMsg::Reply(Reply::FolderGit { tag: 8, outcome: Ok(FolderGitAnswer::Branches(listing.clone())) });
-        let back: ServerMsg = decode(&encode(&answer).unwrap()).unwrap();
-        assert!(matches!(back, ServerMsg::Reply(Reply::FolderGit { outcome: Ok(FolderGitAnswer::Branches(read)), .. }) if read == listing));
     }
 }

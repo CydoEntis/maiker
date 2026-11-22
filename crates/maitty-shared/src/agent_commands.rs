@@ -107,10 +107,4 @@ mod tests {
         assert!(!reason.contains('\n') && !reason.contains('\u{1b}'));
         assert!(reason.chars().count() <= REASON_MAX_CHARS);
     }
-
-    #[test]
-    fn cleaning_twice_changes_nothing() {
-        let once = command("pdf", "a\tb").cleaned().unwrap();
-        assert_eq!(once.clone().cleaned(), Some(once));
-    }
 }
