@@ -10,7 +10,8 @@ import { Slot } from "radix-ui"
  *   needs    the needs-you colour: the main answer to something waiting on the person, and nothing else
  *   solid    the text colour as a fill: the one main action of a dialog or a setup step (Continue, Connect, Start a session)
  *   outline  a hairline on nothing: the second answer beside a needs or solid one
- *   soft     a raised neutral: every other action beside a primary or needs one
+ *   soft     a neutral fill of the text colour at 10% with a hairline: every other action beside a primary or needs one. The text colour,
+ *            not `--raise`: a raised fill was one shade off a float or a card and did not read as a button there.
  *   ghost    text only until hovered: quiet actions in a header or toolbar
  *   danger   a red word on a soft red tint: an action that ends or removes something
  *   link     an inline text link
@@ -24,7 +25,7 @@ const buttonVariants = cva(
         needs: "border-(--needs) [--fold-line:var(--needs)] bg-(--needs) font-semibold text-(--on-needs) hover:enabled:bg-[color-mix(in_oklab,var(--needs)_90%,white)] active:enabled:bg-[color-mix(in_oklab,var(--needs)_80%,var(--bg))]",
         solid: "border-(--fg) [--fold-line:var(--fg)] bg-(--fg) font-semibold text-(--bg) hover:enabled:bg-[color-mix(in_oklab,var(--fg)_88%,var(--bg))] active:enabled:bg-[color-mix(in_oklab,var(--fg)_78%,var(--bg))] aria-disabled:cursor-not-allowed aria-disabled:opacity-42",
         outline: "border-(--line2) [--fold-line:var(--line2)] bg-transparent font-normal text-(--fg2) hover:enabled:bg-(--hover) hover:enabled:text-(--fg) active:enabled:bg-(--sel)",
-        soft: "border-(--line2) [--fold-line:var(--line2)] bg-(--raise) font-semibold text-(--fg) hover:enabled:bg-[color-mix(in_oklab,var(--raise)_88%,var(--fg))] active:enabled:bg-[color-mix(in_oklab,var(--raise)_80%,var(--bg))] aria-expanded:bg-(--sel)",
+        soft: "border-(--line2) [--fold-line:var(--line2)] bg-[color-mix(in_oklab,var(--fg)_10%,transparent)] font-semibold text-(--fg) hover:enabled:bg-[color-mix(in_oklab,var(--fg)_16%,transparent)] active:enabled:bg-[color-mix(in_oklab,var(--fg)_22%,transparent)] aria-expanded:bg-[color-mix(in_oklab,var(--fg)_16%,transparent)]",
         ghost: "border-transparent bg-transparent font-medium text-(--fg2) hover:enabled:bg-(--hover) hover:enabled:text-(--fg) active:enabled:bg-(--sel) aria-expanded:bg-(--sel)",
         danger: "border-[color-mix(in_oklab,var(--err)_45%,transparent)] [--fold-line:color-mix(in_oklab,var(--err)_45%,transparent)] bg-[color-mix(in_oklab,var(--err)_10%,transparent)] font-semibold text-(--err) hover:enabled:bg-[color-mix(in_oklab,var(--err)_18%,transparent)]",
         link: "h-auto border-transparent px-0 font-medium text-(--link) underline-offset-2 hover:underline",
