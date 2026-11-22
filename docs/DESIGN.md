@@ -557,17 +557,19 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   same pane; there is no page per machine; **+ Add machine** here, the sidebar's **Add a remote machine** (its foot) and the palette all open the
   palette's **New machine** level (see *Open a project palette*, below); there is no add-machine dialog. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
   button is the neutral primary, filled with the text colour. The list is a count, "Update all N" (from two older
-  Maikers, after a question) and **+ Add machine**; then one 40px row per machine: a glyph (`●` `○` `!` `×`), the name,
-  `user@host` in mono, the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Host key not accepted yet", "Can't reach it · 14 min", "N sessions ·
-  older Maiker", "Maiker not installed"), at most one outlined button (Fix opens the row's fold; Retry, Update and Install
-  run in place and say Retrying… or Updating… meanwhile), then **More** and **Remove** as text buttons. Order: failed, then to update, then connecting, then just
-  added, then connected by sessions. A search field shows past 12 machines. A "This computer" line with **Details**
-  sits under the list. **More** (or a click on the row) folds the machine's settings open under its row, one fold at a
+  Maikers, after a question) and **+ Add machine**; then one 52px row per machine: a glyph (`●` `○` `!` `×`), the name over
+  `user@host` (11.5px mono `--dim`, so neither is cut short for the other), the one line that matters (sessions, "Key rejected", "Needs a sign-in", "Host key changed", "Host key not accepted yet", "Can't reach it · 14 min", "Needs an update
+  to connect" in amber, since an older service turns the app away and nothing of it is reachable until it is updated,
+  "Maiker not installed"), at most one button (the settings pages' button: `--fg` 500 on the ink at 9% with a `--line2`
+  hairline; Fix opens the row's fold; Retry, Update and Install run in place and say Retrying… or Updating… meanwhile),
+  then a 28px caret that unfolds the row. Order: failed, then to update, then connecting, then just
+  added, then connected by sessions. A search field shows past 12 machines. A "This computer" row (its version and
+  sessions under the name) with **Details** sits under the list. The caret (named "More about <name>", or a click on the row) folds the machine's settings open under its row, one fold at a
   time (`MachineFold.tsx`, indented past the mark): for a failed machine first its status block (the host's shared sentence, how long,
   raw output behind Details; a rejected login adds the command the sentence names with Copy and **Try again**, and
   **Open a terminal** only when the machine asks for a password or a second code),
   then settings rows (Name, saved as you type as the sidebar nickname; Address; Maiker; Copy to your clipboard and
-  Notifications, two switches). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
+  Notifications, two switches; last **Remove from Maiker** with a red outlined **Remove…**). **Remove** asks in place under the row ("Remove <name>? Its sessions stop showing here.
   Nothing on <name> is deleted.", **Remove** and Cancel). The status block (`StatusBlock.tsx`) is the one place progress and problems show:
   a mark or teal spinner, one sentence, an optional command with Copy, the actions, and raw output behind
   Details. **Add a machine** is the dialog described above, never a page here.
@@ -1586,4 +1588,4 @@ text `--dim`; it is one flat box (no box inside a box), the same size in both st
 - **`--r-dialog`** is the corner of the big windows (the Open a project palette, the first-run window): 14px.
 - **Button** has a `solid` variant (the text colour as fill, the ground colour as text: the primary of the setup) and an `outline` variant (a `--line2` ring); sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
 - **First-run window**: 680 by 680px, header 52px (mark, two dots, Skip), body padded 26/28 with a 12px gap (14px on the style screen), title 22px with a 14px `--muted` lead, section labels 13.5px semibold with a 12.5px `--dim` line, a foot with Back, the Enter keycap and the `solid` `xl` primary. `ChoiceCards` are the view cards: a picture, a radio dot, a 14px title; the picked card is a 1.5px ring in the text colour; a card marked `recommended` carries a "Recommended" tag.
-- **Settings › Appearance › Session view** holds **Open sessions in** (an icon-less Chat | Terminal switch). A connected machine on an older Maiker shows the green dot with an Update button. The machine marks are drawn dots (round, hollow for connecting) so they match in every font.
+- **Settings › Appearance › Session view** holds **Open sessions in** (an icon-less Chat | Terminal switch). A machine on an older Maiker is not connected (its service turns the app away): it shows the amber `!`, "Needs an update to connect" and an Update button. The machine marks are drawn dots (round, hollow for connecting) so they match in every font.

@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
@@ -141,11 +142,10 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
                 busy={busy}
                 onFold={() => { setUnfolded(open ? null : head.key) }}
                 onAction={(action) => { act(head, action) }}
-                onRemove={() => { setRemoving(head.key) }}
               >
                 {flow.asking?.name === head.label && <UpdateAsk flow={flow} />}
+                {open && <MachineFold head={head} sessions={countOf(head)} machines={machines} appVersion={appVersion} onRemove={() => { setRemoving(head.key) }} />}
                 {removing === head.key && <RemoveAsk name={head.label} onRemove={() => { setRemoving(null); void machines.onRemove(head.label) }} onCancel={() => { setRemoving(null) }} />}
-                {open && <MachineFold head={head} sessions={countOf(head)} machines={machines} appVersion={appVersion} />}
               </MachineRowView>
             )
           })}
@@ -154,9 +154,11 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
       )}
       <div className="mx-rm-local">
         <StateMark glyph="●" tone="ok" />
-        <span>This computer</span>
-        <span className="mono mx-rm-localline">{localLine}</span>
-        <button type="button" className="mx-rm-text" onClick={onThisComputer}>Details</button>
+        <span className="mx-rm-who">
+          <span className="mx-rm-name">This computer</span>
+          <span className="mx-rm-addr mono">{localLine}</span>
+        </span>
+        <button type="button" className="mx-rm-out" onClick={onThisComputer}>Details</button>
       </div>
     </section>
   )
@@ -170,27 +172,32 @@ type RowProps = {
   busy: string | null
   onFold: () => void
   onAction: (action: RowAction) => void
-  onRemove: () => void
   children?: ReactNode
 }
 
-/** One line per machine: what matters now, at most one fix, More (its settings, folded) and Remove. Clicking the row folds it too. */
-function MachineRowView({ head, row, open, busy, onFold, onAction, onRemove, children }: RowProps) {
+/**
+ * One row per machine: its mark, its name over its address, what matters now, at most one fix, and a caret that unfolds
+ * its settings (Remove is there, at the foot). Clicking the row folds it too.
+ */
+function MachineRowView({ head, row, open, busy, onFold, onAction, children }: RowProps) {
   const name = nameOf(head)
   return (
     <div role="listitem" className="mx-rm-item" aria-label={name}>
       <div className="mx-rm-row" onClick={onFold}>
         <StateMark glyph={row.glyph} tone={row.tone} />
-        <span className="mx-rm-name">{name}</span>
-        <span className="mx-rm-addr mono">{head.target ?? ''}</span>
+        <span className="mx-rm-who">
+          <span className="mx-rm-name">{name}</span>
+          {head.target !== null && <span className="mx-rm-addr mono" title={head.target}>{head.target}</span>}
+        </span>
         <span className={`mx-rm-line is-${row.tone}`}>{row.line}{row.showsSince && head.downSince !== null && <> · <Since at={head.downSince} /></>}</span>
         <span className="mx-rm-act">
           {busy !== null
             ? <span className="mx-rm-busy">{busy}</span>
             : row.action !== null && <button type="button" className="mx-rm-out" aria-label={`${row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]} ${name}`} onClick={(event) => { event.stopPropagation(); onAction(row.action as RowAction) }}>{row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]}</button>}
         </span>
-        <button type="button" className="mx-rm-text" aria-expanded={open} aria-label={`More about ${name}`} onClick={(event) => { event.stopPropagation(); onFold() }}>More</button>
-        <button type="button" className="mx-rm-quiet" aria-label={`Remove ${name}…`} onClick={(event) => { event.stopPropagation(); onRemove() }}>Remove</button>
+        <button type="button" className={`mx-rm-fold-toggle${open ? ' is-open' : ''}`} aria-expanded={open} aria-label={`More about ${name}`} title={open ? 'Less' : 'More'} onClick={(event) => { event.stopPropagation(); onFold() }}>
+          <ChevronDown aria-hidden="true" />
+        </button>
       </div>
       {children}
     </div>

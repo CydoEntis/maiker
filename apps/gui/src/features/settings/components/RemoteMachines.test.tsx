@@ -206,6 +206,7 @@ describe('removing a machine from its row', () => {
   it('asks first, says what stays, and can be cancelled', async () => {
     const onRemove = vi.fn(() => Promise.resolve(true))
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), onRemove }))
+    await user.click(screen.getByRole('button', { name: 'More about devbox' }))
     await user.click(screen.getByRole('button', { name: 'Remove devbox…' }))
     expect(onRemove).not.toHaveBeenCalled()
     expect(within(rowOf('devbox')).getByRole('status')).toHaveTextContent('Remove devbox? Its sessions stop showing here. Nothing on devbox is deleted.')
@@ -217,6 +218,7 @@ describe('removing a machine from its row', () => {
   it('removes the machine once you say so', async () => {
     const onRemove = vi.fn(() => Promise.resolve(true))
     const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected'), machine(2, 'gpu', 'unreachable')), onRemove }))
+    await user.click(screen.getByRole('button', { name: 'More about gpu' }))
     await user.click(screen.getByRole('button', { name: 'Remove gpu…' }))
     await user.click(screen.getByRole('button', { name: 'Remove gpu' }))
     expect(onRemove).toHaveBeenCalledWith('gpu')

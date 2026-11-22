@@ -624,20 +624,29 @@
 .mx-rm-text { height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); }
 .mx-rm-text:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
 .mx-rm-text:disabled { color: var(--dim); }
-.mx-rm-out { height: 26px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; color: var(--fg); border: 1px solid var(--line2); }
-.mx-rm-out:hover { background: var(--m-hover); }
+.mx-rm-out { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; white-space: nowrap; color: var(--fg); background: rgba(var(--hl), calc(.09 * var(--hk))); box-shadow: inset 0 0 0 1px var(--line2); transition: background-color var(--t-fast) var(--ease); }
+.mx-rm-out:hover { background: rgba(var(--hl), calc(.14 * var(--hk))); }
+/* The caret that unfolds a machine's settings: the same 28px square on every row, turning as it opens. */
+.mx-rm-fold-toggle { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-control); color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-rm-fold-toggle svg { width: 15px; height: 15px; transition: transform var(--t-base) var(--ease); }
+.mx-rm-fold-toggle:hover { background: var(--icon-button-fill); color: var(--fg); }
+.mx-rm-fold-toggle.is-open svg { transform: rotate(180deg); }
+.mx-rm-danger { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; white-space: nowrap; color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-line); transition: background-color var(--t-fast) var(--ease); }
+.mx-rm-danger:hover { background: var(--danger-soft); }
 
 .mx-rm-head { display: flex; align-items: center; gap: 10px; min-height: 30px; }
 .mx-rm-count { flex: 1; font-size: 12.5px; color: var(--muted); }
 .mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }
 .mx-rm-list { border-top: 1px solid var(--line); }
 .mx-rm-item { border-bottom: 1px solid var(--line); }
-.mx-rm-row { display: grid; grid-template-columns: 14px minmax(90px, 140px) minmax(0, 1fr) auto 72px auto auto; align-items: center; column-gap: 12px; min-height: 39px; padding: 0 6px; cursor: pointer; }
+.mx-rm-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto 28px; align-items: center; column-gap: 12px; min-height: 52px; padding: 6px 6px 6px 10px; border-radius: var(--r-control); cursor: pointer; }
+/* A machine's name with its address under it, so neither is cut short to make room for the other. */
+.mx-rm-who { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-rm-row:hover { background: var(--m-hover); }
 .mx-rm-name { min-width: 0; text-align: left; font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-rm-addr { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-rm-addr { min-width: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-rm-line { font-size: 12.5px; color: var(--fg2); text-align: right; white-space: nowrap; }
-.mx-rm-line.is-needs { color: var(--fg2); }
+.mx-rm-line.is-needs { color: var(--needs); }
 .mx-rm-line.is-quiet { color: var(--dim); }
 .mx-rm-act { display: flex; justify-content: flex-end; }
 .mx-rm-busy { font-size: 12px; color: var(--muted); }
@@ -650,8 +659,7 @@
 .mx-rm-mark.is-quiet { color: var(--dim); }
 .mx-rm-mark.is-needs { color: var(--needs); }
 .mx-rm-mark.is-bad { color: var(--danger); }
-.mx-rm-local { display: flex; align-items: center; gap: 10px; padding: 6px; font-size: 12.5px; color: var(--fg); }
-.mx-rm-localline { flex: 1; min-width: 0; font-size: 11.5px; color: var(--dim); }
+.mx-rm-local { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 52px; padding: 6px 6px 6px 10px; }
 .mx-rm-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 20px; border: 1px dashed var(--line2); border-radius: var(--r-panel); }
 .mx-rm-empty strong { font-size: 14px; color: var(--fg); }
 .mx-rm-empty p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
@@ -684,7 +692,5 @@
 .mx-rm-fold { padding: 0 6px 6px 32px; }
 .mx-rm-foldvalue { font-size: 12.5px; color: var(--fg2); text-align: right; }
 .mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
-.mx-rm-quiet { padding: 0; font-size: 12.5px; color: var(--dim); }
-.mx-rm-quiet:hover { color: var(--danger); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
 

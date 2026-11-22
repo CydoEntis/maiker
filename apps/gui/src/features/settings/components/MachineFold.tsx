@@ -12,13 +12,15 @@ type Props = {
   machines: MachinesInfo
   /** This computer's own Maiker version, for the Maiker row. */
   appVersion: string | null
+  /** Asks, in place, to take the machine off the list. */
+  onRemove: () => void
 }
 
 /**
- * What a machine's row holds behind **More**: what is wrong in full when it failed, then plain rows. Update, Retry and
- * Remove stay on the row itself, so nothing here repeats them.
+ * What a machine's row holds behind its caret: what is wrong in full when it failed, then plain rows, and Remove at the
+ * foot, away from the row's one fix. Update and Retry stay on the row itself, so nothing here repeats them.
  */
-export function MachineFold({ head, sessions, machines, appVersion }: Props) {
+export function MachineFold({ head, sessions, machines, appVersion, onRemove }: Props) {
   const name = head.label
   const status = foldStatusOf(head, sessions)
   return (
@@ -45,6 +47,9 @@ export function MachineFold({ head, sessions, machines, appVersion }: Props) {
       </SettingsRow>
       <SettingsRow label="Notifications" detail="Tells you when its sessions need you or finish.">
         <Switch aria-label={`Allow ${name} to notify you`} checked={head.grants.notices} onCheckedChange={(on) => { machines.onGrant(name, 'notices', on) }} />
+      </SettingsRow>
+      <SettingsRow label="Remove from Maiker" detail={`Its sessions stop showing here. Nothing on ${nameOf(head)} is deleted.`}>
+        <button type="button" className="mx-rm-danger" aria-label={`Remove ${nameOf(head)}…`} onClick={onRemove}>Remove…</button>
       </SettingsRow>
     </div>
   )
