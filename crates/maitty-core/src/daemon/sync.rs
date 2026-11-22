@@ -245,6 +245,12 @@ mod tests {
     fn a_request_out_of_time_is_stopped_and_says_so() {
         let dir = crate::daemon::persist::scratch_dir();
         let alone = repository(dir.path(), "alone");
+        // A fetch with nothing to fetch can end before its time is first checked. This remote's
+        // upload-pack waits for input git never sends, so the fetch is still running when time is
+        // up however fast the machine is; stopping git closes that input and ends it too.
+        let remote = repository(dir.path(), "remote");
+        git(&alone, &["remote", "add", "origin", remote.to_str().expect("a path")]);
+        git(&alone, &["config", "remote.origin.uploadpack", "git hash-object --stdin"]);
         assert_eq!(sync(&alone, &GitRequest::Fetch, Duration::ZERO), Err("git was stopped after 0 seconds".into()));
     }
 }

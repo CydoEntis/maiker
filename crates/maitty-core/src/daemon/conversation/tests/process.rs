@@ -425,7 +425,7 @@ async fn kill_server_stops_every_provider_before_the_daemon_exits() {
     let root = scratch.path().to_owned();
     let data = root.join("data");
     std::fs::create_dir_all(&data).unwrap();
-    let mut daemon = std::process::Command::new(std::env::current_exe().unwrap())
+    let mut daemon = std::process::Command::new(crate::test_support::this_test_binary())
         .args([
             "--exact",
             "daemon::conversation::tests::process::kill_server_stand_in_daemon",
@@ -530,7 +530,7 @@ async fn provider_groups_stand_in_daemon() {
 fn start_groups_stand_in(root: &Path, mode: &str) -> (std::process::Child, Vec<u32>) {
     std::fs::create_dir_all(root).unwrap();
     std::fs::write(root.join("mode"), mode).unwrap();
-    let child = std::process::Command::new(std::env::current_exe().unwrap())
+    let child = std::process::Command::new(crate::test_support::this_test_binary())
         .args([
             "--exact",
             "daemon::conversation::tests::process::provider_groups_stand_in_daemon",

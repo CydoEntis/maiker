@@ -1673,7 +1673,7 @@ mod tests {
         }
         let fixture = DataDirectoryFixture::new();
         let path = fixture.0.join("state");
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
+        let output = std::process::Command::new(crate::test_support::this_test_binary())
             .args([
                 "--exact",
                 "config::tests::data_directory_is_captured_once_in_an_isolated_process",

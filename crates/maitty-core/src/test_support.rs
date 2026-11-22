@@ -58,3 +58,14 @@ pub(crate) fn copy_program(from: &std::path::Path, to: &std::path::Path) {
     #[cfg(not(unix))]
     std::fs::copy(from, to).unwrap();
 }
+
+/// This test binary, for a test that runs it again as a stand-in process. On Linux it is the running
+/// image itself, so a build that replaces the file on disk meanwhile cannot change what runs; a
+/// replaced test binary had different tests in it and the stand-in failed.
+pub(crate) fn this_test_binary() -> std::path::PathBuf {
+    if cfg!(target_os = "linux") {
+        std::path::PathBuf::from("/proc/self/exe")
+    } else {
+        std::env::current_exe().unwrap()
+    }
+}

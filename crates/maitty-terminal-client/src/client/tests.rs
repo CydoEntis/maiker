@@ -10950,16 +10950,17 @@ mod branch_view_tests {
         rx
     }
 
-    /// The next background result, once its thread is done.
+    /// The next background result, waited for on the channel itself. The limit only turns a
+    /// job that never answers into a failure; a busy machine running tests in parallel can take
+    /// seconds to finish a git read.
     pub(super) fn next_bg(rx: &mut mpsc::UnboundedReceiver<Bg>) -> Bg {
-        let until = Instant::now() + BACKGROUND_RESULT_TIMEOUT;
-        loop {
-            if let Ok(b) = rx.try_recv() {
-                return b;
-            }
-            assert!(Instant::now() < until, "no background work was queued");
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
+        tokio::runtime::Builder::new_current_thread()
+            .enable_time()
+            .build()
+            .expect("a runtime to wait on the channel")
+            .block_on(async { tokio::time::timeout(BACKGROUND_RESULT_TIMEOUT, rx.recv()).await })
+            .expect("no background work was queued")
+            .expect("the app keeps its end of the background channel")
     }
 
     /// The app with session 1 in `dir` and its Branch view open, git's answer landed from the
@@ -11260,6 +11261,7 @@ mod drawer_tests {
 }
 
 mod drawer_tab_tests {
+    use super::branch_view_tests::next_bg;
     use super::*;
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
@@ -11450,18 +11452,6 @@ mod drawer_tab_tests {
             "no button offers it either"
         );
         let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    /// The next background result, once its thread is done.
-    fn next_bg(rx: &mut mpsc::UnboundedReceiver<Bg>) -> Bg {
-        let until = Instant::now() + std::time::Duration::from_secs(20);
-        loop {
-            if let Ok(b) = rx.try_recv() {
-                return b;
-            }
-            assert!(Instant::now() < until, "no background work was queued");
-            std::thread::sleep(std::time::Duration::from_millis(10));
-        }
     }
 
     /// Changes open on a repo with one commit and one new file, its review read.

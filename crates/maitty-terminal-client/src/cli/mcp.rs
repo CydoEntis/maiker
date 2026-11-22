@@ -1111,6 +1111,16 @@ mod tests {
         (base, mine, other)
     }
 
+    /// Where the temp folder sits inside a git repo, both projects are that one repo and there is
+    /// nothing to keep apart, so the test says it skipped rather than passing unseen.
+    fn one_project(mine: &Path) -> bool {
+        let inside = crate::gitfs::head(mine).is_some();
+        if inside {
+            eprintln!("skipped: the temp folder is inside a git repo, so both projects are one");
+        }
+        inside
+    }
+
     fn refs_server(root: &Path, scope: &str) -> Server {
         let mut cfg = crate::config::Config::default();
         cfg.mcp.scope = scope.into();
@@ -1120,69 +1130,72 @@ mod tests {
     #[test]
     fn references_list_the_callers_project() {
         let (base, mine, _) = two_projects("mine");
-        // Skip where the temp folder sits inside a repo: then both are one project.
-        if crate::gitfs::head(&mine).is_none() {
-            let out = refs_server(&mine, "project")
-                .references(&json!({}))
-                .unwrap();
-            let v: Value = serde_json::from_str(&out).unwrap();
-            let rows = v["references"].as_array().unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["name"], "home.png");
-            assert_eq!(rows[0]["kind"], "image");
-            assert!(
-                Path::new(rows[0]["path"].as_str().unwrap()).is_absolute(),
-                "an absolute path to open"
-            );
-            let empty = refs_server(&base, "project")
-                .references(&json!({}))
-                .unwrap();
-            assert!(empty.starts_with("No references"), "{empty}");
+        if one_project(&mine) {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
         }
+        let out = refs_server(&mine, "project")
+            .references(&json!({}))
+            .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let rows = v["references"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["name"], "home.png");
+        assert_eq!(rows[0]["kind"], "image");
+        assert!(
+            Path::new(rows[0]["path"].as_str().unwrap()).is_absolute(),
+            "an absolute path to open"
+        );
+        let empty = refs_server(&base, "project")
+            .references(&json!({}))
+            .unwrap();
+        assert!(empty.starts_with("No references"), "{empty}");
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn references_never_reach_another_project() {
         let (base, mine, other) = two_projects("scope");
-        if crate::gitfs::head(&mine).is_none() {
-            let server = refs_server(&mine, "project");
-            let up = mine.join("..").join("other");
-            for path in [
-                other.to_string_lossy().into_owned(),
-                up.to_string_lossy().into_owned(),
-            ] {
-                let err = server.references(&json!({ "path": path })).unwrap_err();
-                assert!(err.contains("another project"), "{err}");
-            }
-            let ghost = base.join("no-such-folder");
-            let err = server.references(&json!({ "path": ghost })).unwrap_err();
-            assert!(
-                err.contains("another project"),
-                "refused by its words, not by probing it: {err}"
-            );
-            for unc in [r"\\server\share", r"\\?\UNC\server\share", "//server/share"] {
-                let err = server.references(&json!({ "path": unc })).unwrap_err();
-                assert!(err.contains("network"), "{unc}: {err}");
-            }
-            assert!(
-                server.references(&json!({ "path": 3 })).is_err(),
-                "a path is a string"
-            );
-            assert!(server.references(&json!({ "path": "" })).is_err());
-            assert!(server.references(&json!({ "path": "a\0b" })).is_err());
-            let inside = server
-                .references(&json!({ "path": crate::references::folder(&mine) }))
-                .unwrap();
-            assert!(
-                inside.contains("home.png") && !inside.contains("theirs.png"),
-                "{inside}"
-            );
-            let all = refs_server(&mine, "all")
-                .references(&json!({ "path": other }))
-                .unwrap();
-            assert!(all.contains("theirs.png"), "scope all reaches it: {all}");
+        if one_project(&mine) {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
         }
+        let server = refs_server(&mine, "project");
+        let up = mine.join("..").join("other");
+        for path in [
+            other.to_string_lossy().into_owned(),
+            up.to_string_lossy().into_owned(),
+        ] {
+            let err = server.references(&json!({ "path": path })).unwrap_err();
+            assert!(err.contains("another project"), "{err}");
+        }
+        let ghost = base.join("no-such-folder");
+        let err = server.references(&json!({ "path": ghost })).unwrap_err();
+        assert!(
+            err.contains("another project"),
+            "refused by its words, not by probing it: {err}"
+        );
+        for unc in [r"\\server\share", r"\\?\UNC\server\share", "//server/share"] {
+            let err = server.references(&json!({ "path": unc })).unwrap_err();
+            assert!(err.contains("network"), "{unc}: {err}");
+        }
+        assert!(
+            server.references(&json!({ "path": 3 })).is_err(),
+            "a path is a string"
+        );
+        assert!(server.references(&json!({ "path": "" })).is_err());
+        assert!(server.references(&json!({ "path": "a\0b" })).is_err());
+        let inside = server
+            .references(&json!({ "path": crate::references::folder(&mine) }))
+            .unwrap();
+        assert!(
+            inside.contains("home.png") && !inside.contains("theirs.png"),
+            "{inside}"
+        );
+        let all = refs_server(&mine, "all")
+            .references(&json!({ "path": other }))
+            .unwrap();
+        assert!(all.contains("theirs.png"), "scope all reaches it: {all}");
         let _ = std::fs::remove_dir_all(&base);
     }
 

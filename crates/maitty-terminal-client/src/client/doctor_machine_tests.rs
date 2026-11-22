@@ -13,6 +13,9 @@ use std::time::{Duration, Instant};
 /// What the shim's `--version` answers (`0.0.0-fake`) compares equal to.
 const OURS: &str = "0.0.0";
 
+/// How long past its budget a check may take to hand back on a busy machine.
+const HANDOFF_SLACK: Duration = Duration::from_secs(15);
+
 fn doctor(build: &Build, only: &[&str], budget: Duration) -> Vec<MachineReport> {
     let machines: Vec<_> = build
         .cfg
@@ -133,12 +136,16 @@ fn a_machine_that_needs_a_login_stops_after_one_failed_line_and_a_skip() {
 #[test]
 fn a_machine_that_never_answers_costs_the_budget_and_its_ssh_is_ended() {
     let build = Build::start(&[("slow", "hang")]);
+    let budget = Duration::from_secs(2);
     let started = Instant::now();
-    let reports = doctor(&build, &["slow"], Duration::from_secs(2));
+    let reports = doctor(&build, &["slow"], budget);
+    let took = started.elapsed();
+    // The hung ssh never exits, so ending at all shows the budget ended it. The slack over the
+    // budget is for a machine busy with other tests, where starting the shim alone can take
+    // seconds; it is not a looser promise to the user.
     assert!(
-        started.elapsed() < Duration::from_secs(8),
-        "{:?}",
-        started.elapsed()
+        took >= budget && took < budget + HANDOFF_SLACK,
+        "a {budget:?} budget took {took:?}"
     );
     let checks = find(&reports, "slow");
     assert_eq!(checks[0].ok, Some(false));
@@ -159,12 +166,15 @@ fn a_machine_that_never_answers_costs_the_budget_and_its_ssh_is_ended() {
 #[test]
 fn machines_are_checked_at_the_same_time() {
     let build = Build::start(&[("a", "hang"), ("b", "hang"), ("c", "hang")]);
+    let budget = Duration::from_secs(3);
     let started = Instant::now();
-    let reports = doctor(&build, &["a", "b", "c"], Duration::from_secs(3));
+    let reports = doctor(&build, &["a", "b", "c"], budget);
     let took = started.elapsed();
+    // One after another, three hung machines cost at least three budgets; anything under that
+    // means they overlapped, whatever else the machine is doing.
     assert!(
-        took < Duration::from_secs(7),
-        "three 3 s waits in parallel took {took:?}"
+        took >= budget && took < budget * 3,
+        "three {budget:?} waits in parallel took {took:?}"
     );
     assert_eq!(reports.len(), 3);
     assert!(reports.iter().all(|r| r.checks[0].ok == Some(false)));

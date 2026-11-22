@@ -1479,7 +1479,7 @@ mod tests {
         let dir = persist::scratch_dir();
         std::fs::create_dir_all(dir.path()).unwrap();
         let pidfile = dir.path().join("check.pid");
-        let mut daemon = std::process::Command::new(std::env::current_exe().unwrap())
+        let mut daemon = std::process::Command::new(crate::test_support::this_test_binary())
             .args([
                 "--exact",
                 "daemon::check::tests::a_check_dies_with_the_daemon_that_started_it",
