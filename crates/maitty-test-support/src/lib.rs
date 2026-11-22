@@ -278,7 +278,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_with_pwsh_gets_a_config_that_turns_history_off() {
+    fn only_windows_with_pwsh_gets_a_config_that_turns_history_off() {
         let text = config_text(true, true).expect("a config");
         let parsed: toml::Table = text.parse().expect("valid toml");
         assert_eq!(parsed["shell"].as_str(), Some("pwsh.exe"));
@@ -290,11 +290,7 @@ mod tests {
             .filter_map(|a| a.as_str())
             .collect();
         assert_eq!(args, ["-NoExit", "-Command", PWSH_PRIVATE_HISTORY]);
-    }
-
-    #[test]
-    fn other_setups_keep_the_default_config() {
-        assert_eq!(config_text(false, true), None);
+        assert_eq!(config_text(false, true), None, "other setups keep the default config");
         assert_eq!(config_text(true, false), None);
     }
 }

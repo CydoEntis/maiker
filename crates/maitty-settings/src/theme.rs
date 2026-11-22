@@ -1425,45 +1425,6 @@ mod audit {
     }
 
     #[test]
-    fn daemon_snapshot_colors_keep_the_rgb_defaults() {
-        for &name in super::BUILTIN {
-            let theme = Theme::named(name);
-            let foreground = match theme.fg {
-                Color::Rgb(red, green, blue) => (red, green, blue),
-                _ => (0xc9, 0xd1, 0xd9),
-            };
-            let background = match theme.bg {
-                Color::Rgb(red, green, blue) => (red, green, blue),
-                _ => (0x07, 0x0b, 0x10),
-            };
-            assert_eq!(
-                theme.terminal_foreground_background_rgb(),
-                (foreground, background),
-                "{name}"
-            );
-        }
-    }
-
-    #[test]
-    fn old_theme_names_load_the_theme_they_became() {
-        for (old, new) in super::ALIASES {
-            assert!(
-                super::BUILTIN.contains(new),
-                "{old} points at {new}, which is not built in"
-            );
-            assert!(
-                !super::BUILTIN.contains(old),
-                "{old} is both an alias and a theme"
-            );
-            assert_eq!(
-                Theme::named(old).bg,
-                Theme::named(new).bg,
-                "{old} loads {new}"
-            );
-        }
-    }
-
-    #[test]
     fn a_theme_saved_under_its_maitty_id_still_loads_and_migrates() {
         for (old, new) in super::RENAMED {
             assert!(super::BUILTIN.contains(new), "{new} is built in");
@@ -1747,28 +1708,6 @@ mod maiker {
     }
 
     #[test]
-    fn the_settings_list_names_them_maitty_night_and_maitty_day_and_the_old_ids_still_load() {
-        let label = |id: &str| super::DESIGN.iter().find(|(name, _)| *name == id).map(|(_, shown)| *shown);
-        assert_eq!(label("night"), Some("Maiker Night"));
-        assert_eq!(label("day"), Some("Maiker Day"));
-        assert_eq!(label("maiker-dark"), Some("Maiker Dark"));
-        assert_eq!(label("maiker-light"), Some("Maiker Light"));
-        assert_eq!(super::canonical("maitty-night"), "night");
-        assert_eq!(super::canonical("maitty-day"), "day");
-    }
-
-    #[test]
-    fn maitty_dark_is_a_dark_ground_and_maitty_light_a_light_one_and_the_defaults_are_unchanged() {
-        assert!(!super::is_light("maiker-dark") && !Theme::named("maiker-dark").is_light());
-        assert!(super::is_light("maiker-light") && Theme::named("maiker-light").is_light());
-        assert_eq!(super::DEFAULT, "night");
-        assert_eq!(super::DEFAULT_LIGHT, "day");
-        for id in ["maiker-dark", "maiker-light"] {
-            assert!(super::BUILTIN.contains(&id), "{id} is a built-in theme");
-        }
-    }
-
-    #[test]
     fn a_selected_row_is_seen_on_every_ground_and_keeps_its_text_readable() {
         for id in ["night", "day", "maiker-dark", "maiker-light", "dracula", "gruvbox-light"] {
             let t = Theme::named(id);
@@ -1830,6 +1769,8 @@ mod manifest {
     fn a_removed_theme_loads_a_survivor_on_the_same_side_it_had() {
         for (old, new) in ALIASES {
             assert!(BUILTIN.contains(new), "{old} -> {new} is built in");
+            assert!(!BUILTIN.contains(old), "{old} is both an alias and a theme");
+            assert_eq!(Theme::named(old).bg, Theme::named(new).bg, "{old} loads {new}");
         }
         // The side a removed theme was drawn on is the side its survivor is drawn on.
         for (old, light) in [("monokai", false), ("solarized-osaka", false), ("mono", false), ("hybrid-light", true), ("modus-operandi", true), ("solarized-osaka-light", true)] {

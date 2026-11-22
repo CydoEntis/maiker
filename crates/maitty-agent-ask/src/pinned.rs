@@ -87,14 +87,10 @@ export const LIST = [
 "#;
 
     #[test]
-    fn the_pinned_names_are_read_from_the_helper_calls() {
+    fn the_pinned_names_and_version_are_read_from_the_helper_calls_and_the_named_constant() {
         assert_eq!(pinned_names(SOURCE, &["only"]), ["add-dir", "copy", "quoted"]);
         assert_eq!(pinned_names(SOURCE, &["only", "said"]), ["add-dir", "copy", "quoted", "clear"]);
         assert!(pinned_names("nothing here", &["only"]).is_empty());
-    }
-
-    #[test]
-    fn the_pinned_version_is_the_one_constant_names() {
         assert_eq!(pinned_version(SOURCE, "CLAUDE_COMMANDS_PINNED_FOR"), Some("2.1.325".into()));
         assert_eq!(pinned_version(SOURCE, "CODEX_COMMANDS_PINNED_FOR"), None);
     }

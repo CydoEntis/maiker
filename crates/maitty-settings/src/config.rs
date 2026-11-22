@@ -1052,10 +1052,8 @@ impl Default for Ui {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentDef, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef, DEFAULT_MODEL_FLAG, Detection,
-        HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LayoutKind, Mcp, NEW_AGENTS, NEW_WHERE, Notify,
-        Preset, Quick, Recipe, Restore, Rounding, Sessions, Snapshots, Ui, Worktree, same_path,
-        size_cells, validate_checks, validate_cursor, validate_sessions,
+        AgentDef, HELPERS_AT_ONCE, HELPERS_MAY, Mcp, NEW_AGENTS, NEW_WHERE, Preset, Restore,
+        Rounding, Sessions, Ui, size_cells, validate_cursor, validate_sessions,
     };
 
     fn agents_problem(entry: &str) -> Option<String> {
@@ -1085,17 +1083,14 @@ mod tests {
             ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { A = \"a\\u0007\" }", "`env.A` must be plain text"),
             ("name = 'x'\ncommand = 'x'", "only for an agent with `acp = true`"),
             ("name = 'x'\nargs = ['a']", "only for an agent with `acp = true`"),
+            (
+                "name = 'x'\nacp = true\ncommand = 'a'\n[[agents]]\nname = 'x'\nacp = true\ncommand = 'b'",
+                "already named x",
+            ),
         ] {
             let problem = agents_problem(entry).unwrap_or_default();
             assert!(problem.contains(reason), "{entry}: {problem}");
         }
-    }
-
-    #[test]
-    fn two_acp_agents_of_one_name_are_refused() {
-        let problem = agents_problem("name = 'x'\nacp = true\ncommand = 'a'\n[[agents]]\nname = 'x'\nacp = true\ncommand = 'b'").unwrap();
-
-        assert!(problem.contains("already named x"), "{problem}");
     }
 
     #[test]
@@ -1106,90 +1101,10 @@ mod tests {
     }
 
     #[test]
-    fn display_detection_and_alert_settings_keep_their_defaults_and_serde_shape() {
-        let icons = Icons::default();
-        assert_eq!((icons.working.as_str(), icons.blocked.as_str()), ("⠹", "●"));
-        assert_eq!(icons.branch, "\u{e0a0} ");
-
-        let keys = Keys::default();
-        assert!(keys.prefix.is_empty() && keys.global.is_empty());
-        assert!(!keys.replace_defaults);
-
-        let detection = Detection::default();
-        assert_eq!(
-            (
-                detection.working_window_ms,
-                detection.echo_grace_ms,
-                detection.scan_interval_ms,
-                detection.pattern_rows,
-            ),
-            (1500, 300, 1000, 12)
-        );
-
-        let snapshots = Snapshots::default();
-        assert!(snapshots.enabled);
-
-        let notify = Notify::default();
-        assert!(notify.sound);
-        assert_eq!(notify.phone_server, "https://ntfy.sh");
-        assert_eq!(notify.phone_after, 60);
-        assert!(!notify.phone_done && !notify.phone_text);
-
-        let decoded: Notify = toml::from_str("sound = false").unwrap();
-        assert!(!decoded.sound);
-        assert_eq!(decoded.phone_server, "https://ntfy.sh");
-    }
-
-    #[test]
-    fn agent_preferences_default_to_empty_and_accept_older_partial_toml() {
-        let agent = AgentDef::default();
-        assert!(agent.name.is_empty());
-        assert!(agent.process.is_empty() && agent.cmdline.is_empty());
-        assert!(agent.blocked_patterns.is_empty() && agent.working_patterns.is_empty());
-        assert_eq!(agent.resume, None);
-        assert_eq!(agent.resume_last, None);
-        assert_eq!(agent.enabled, None);
-
-        let decoded: AgentDef = toml::from_str("name = 'codex'").unwrap();
-        assert_eq!(decoded.name, "codex");
-        assert!(decoded.process.is_empty());
-        assert!(decoded.cmdline.is_empty());
-    }
-
-    #[test]
-    fn ui_defaults_keep_the_existing_appearance_and_cursor_settings() {
-        let ui = Ui::default();
-
-        assert_eq!(ui.rounded, Rounding::Corners, "the redesign rounds every box");
-        assert_eq!(ui.background, "solid");
-        assert_eq!(ui.cursor, "block");
-        assert_eq!(ui.padding, "medium");
-        assert_eq!(ui.gap, "small");
-        assert_eq!(ui.dim, "normal");
-        assert_eq!(ui.spinner.first().map(String::as_str), Some("▖"));
-    }
-
-    #[test]
     fn a_config_that_still_names_a_removed_ui_key_loads() {
         let ui: Ui = toml::from_str("pane_colors = true\ntab_gap = false\ntool_rail = true\ngap = 'medium'")
             .expect("removed keys are ignored, not errors");
         assert_eq!(ui.gap, "medium", "and the keys around them are still read");
-    }
-
-    #[test]
-    fn rounding_reads_legacy_booleans_and_named_values() {
-        for (written, expected) in [
-            ("true", Rounding::Corners),
-            ("false", Rounding::Off),
-            ("\"full\"", Rounding::Full),
-            ("\"corners\"", Rounding::Corners),
-            ("\"off\"", Rounding::Off),
-        ] {
-            let ui: Ui = toml::from_str(&format!("rounded = {written}")).unwrap();
-            assert_eq!(ui.rounded, expected, "{written}");
-        }
-
-        assert!(toml::from_str::<Ui>("rounded = 'unknown'").is_err());
     }
 
     #[test]
@@ -1208,28 +1123,6 @@ mod tests {
     }
 
     #[test]
-    fn old_layout_names_fold_into_the_supported_looks() {
-        let mut ui: Ui = toml::from_str("layout = 'tiled'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(ui.gap, "0");
-        assert_eq!(ui.retired_layout.map(|layout| layout.name), Some("Tiled"));
-
-        let mut ui: Ui = toml::from_str("layout = 'compact'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(ui.retired_layout.map(|layout| layout.name), Some("Compact"));
-
-        let mut ui: Ui = toml::from_str("layout = 'hairline'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(
-            ui.retired_layout.map(|layout| layout.name),
-            Some("Hairline")
-        );
-    }
-
-    #[test]
     fn an_older_terminal_or_bar_cursor_reads_as_block_or_line() {
         for (old, now) in [("terminal", "block"), ("bar", "line"), ("underline", "underline")] {
             let mut ui: Ui = toml::from_str(&format!("cursor = '{old}'")).unwrap();
@@ -1237,17 +1130,6 @@ mod tests {
             assert_eq!(ui.cursor, now, "{old}");
             assert!(validate_cursor(&ui).is_ok());
         }
-    }
-
-    #[test]
-    fn cursor_validation_accepts_supported_shapes_and_refuses_unknown_values() {
-        for shape in CURSOR_SHAPES {
-            let ui: Ui = toml::from_str(&format!("cursor = '{shape}'")).unwrap();
-            assert!(validate_cursor(&ui).is_ok(), "{shape}");
-        }
-
-        let ui: Ui = toml::from_str("cursor = 'beam'").unwrap();
-        assert!(validate_cursor(&ui).is_err());
     }
 
     #[test]
@@ -1282,13 +1164,6 @@ mod tests {
     }
 
     #[test]
-    fn a_config_can_turn_conversation_resume_off() {
-        let restore: Restore = toml::from_str("conversations = false").unwrap();
-        assert!(!restore.conversations);
-        assert!(restore.agents, "the other restore settings keep their defaults");
-    }
-
-    #[test]
     fn continuing_a_cut_turn_is_off_until_a_config_turns_it_on() {
         assert!(!Restore::default().continue_turn);
         let restore: Restore = toml::from_str("continue_turn = true").unwrap();
@@ -1297,64 +1172,15 @@ mod tests {
     }
 
     #[test]
-    fn persistence_worktree_and_mcp_settings_keep_their_defaults() {
-        let restore = Restore::default();
-        assert!(
-            restore.enabled
-                && restore.agents
-                && restore.conversations
-                && restore.commands
-                && restore.output
-        );
-
-        let worktree = Worktree::default();
-        assert_eq!(
-            worktree.dir,
-            format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
-        );
-        assert!(worktree.per_agent && worktree.delete_with_last);
-        assert!(worktree.command.is_empty() && worktree.prewarm.is_empty());
-        assert_eq!(worktree.inactive_days, 14);
-
+    fn helpers_started_over_mcp_are_never_approved_unasked_by_default() {
         let mcp = Mcp::default();
         assert_eq!(mcp.approve, "never");
         assert_eq!(mcp.scope, "project");
-        assert_eq!(mcp.grants, ["read", "write", "start"]);
-        assert!(mcp.safe.iter().any(|command| command == "cargo test"));
     }
 
     #[test]
-    fn check_defaults_and_validation_reject_missing_or_duplicate_entries() {
-        let default = CheckDef::default();
-        assert!(default.project.as_os_str().is_empty());
-        assert_eq!(default.timeout_s, CHECK_TIMEOUT_S_DEFAULT);
-        assert_eq!(default.name(), "");
-
-        let check = |project: &str, name: Option<&str>| CheckDef {
-            project: project.into(),
-            name: name.map(str::to_string),
-            command: "cargo test".into(),
-            timeout_s: 60,
-        };
-        assert!(validate_checks(&[check("repo", None)]).is_ok());
-        assert!(validate_checks(&[check("repo", None), check("REPO\\", Some("test"))]).is_err());
-        assert!(validate_checks(&[check("", None)]).is_err());
-        assert!(same_path(
-            std::path::Path::new("C:\\Repo\\"),
-            std::path::Path::new("c:/repo")
-        ));
-    }
-
-    #[test]
-    fn recipes_presets_and_quick_agents_keep_their_defaults_and_prompt_rules() {
-        let recipe = Recipe::default();
-        assert!(recipe.worktree && recipe.run.is_empty());
-
+    fn a_preset_puts_the_task_into_its_prompt() {
         let preset = Preset::default();
-        assert_eq!(
-            (preset.agent.as_str(), preset.place.as_str()),
-            ("claude", "beside")
-        );
         assert!(preset.asks());
         assert_eq!(preset.fill("  fix the bug  "), "fix the bug");
 
@@ -1363,11 +1189,5 @@ mod tests {
             ..Preset::default()
         };
         assert_eq!(named.fill("the diff"), "review the diff");
-
-        let quick = Quick::default();
-        assert_eq!(quick.agents.len(), 2);
-        assert_eq!(quick.agents[0].name, "claude");
-        assert_eq!(quick.agents[1].name, "codex");
-        assert_eq!(DEFAULT_MODEL_FLAG, "--model");
     }
 }

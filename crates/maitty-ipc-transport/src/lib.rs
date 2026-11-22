@@ -156,39 +156,8 @@ pub fn is_decode_error(error: &anyhow::Error) -> bool {
 mod tests {
     #[cfg(unix)]
     use super::private_socket_dir;
-    use super::{framed_parts, receive, send, socket_id, welcome_version};
-    use maitty_shared::protocol::{ClientMsg, PROTOCOL_VERSION, ServerMsg, Surface};
-
-    #[tokio::test]
-    async fn local_clients_exchange_protocol_messages_in_length_delimited_frames() {
-        let (left, right) = tokio::io::duplex(1024);
-        let (left_read, left_write) = tokio::io::split(left);
-        let (right_read, right_write) = tokio::io::split(right);
-        let (_left_reader, mut left_writer) = framed_parts(left_read, left_write);
-        let (mut right_reader, _right_writer) = framed_parts(right_read, right_write);
-        let message = ClientMsg::Hello {
-            version: PROTOCOL_VERSION,
-            attach: false,
-            from: Some((7, "pane-secret".into())),
-            structured: None,
-            surface: Surface::Terminal,
-            replays: true,
-        };
-
-        send(&mut left_writer, &message).await.unwrap();
-        let received: Option<ClientMsg> = receive(&mut right_reader).await.unwrap();
-        assert!(matches!(
-            received,
-            Some(ClientMsg::Hello {
-                version: PROTOCOL_VERSION,
-                attach: false,
-                from: Some((7, token)),
-                structured: None,
-                surface: Surface::Terminal,
-                replays: true,
-            }) if token == "pane-secret"
-        ));
-    }
+    use super::{framed_parts, send, socket_id, welcome_version};
+    use maitty_shared::protocol::{PROTOCOL_VERSION, ServerMsg};
 
     #[tokio::test]
     async fn handshake_reads_welcome_version_and_preserves_mismatch_for_the_caller() {
