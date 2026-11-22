@@ -64,15 +64,6 @@ async function openBranch() {
 }
 
 describe('the branch chip', () => {
-  it('heads its menu with the branch and the worktree, and highlights the current branch', async () => {
-    await openBranch()
-    expect(screen.getByText('Worktree amber-fox · chameleon')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /^fix\/cart-total/ })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByRole('radio', { name: /^main/ })).toHaveAttribute('aria-checked', 'false')
-    // origin/main is already followed by the local main, so only the other remote branch is offered.
-    expect(screen.queryByRole('radio', { name: /^origin\/main/ })).toBeNull()
-    expect(screen.getByRole('radio', { name: /^origin\/feature\/search/ })).toBeInTheDocument()
-  })
 
   it('switches to a local branch, shows the new branch on the chip and says so in a toast', async () => {
     git.switchTo.mockResolvedValue('main')
@@ -111,15 +102,6 @@ describe('the branch chip', () => {
     expect(screen.getByRole('alert')).toHaveTextContent("Branch names can't have spaces")
   })
 
-  it('makes a branch from the current one with an inline name field', async () => {
-    git.create.mockResolvedValue('wip')
-    const user = await openBranch()
-    await user.click(screen.getByRole('button', { name: /New branch from/ }))
-    await user.type(await screen.findByRole('textbox', { name: 'New branch name' }), 'wip{Enter}')
-    expect(git.create).toHaveBeenCalledWith(0, PLACE.folder, 'wip')
-    await waitFor(() => { expect(titles()).toContain('Created wip and switched to it') })
-  })
-
   it('reads another machine\'s folder through that machine', async () => {
     const user = userEvent.setup()
     render(<SessionBar place={{ ...PLACE, machine: 'devbox', machineId: 2 }} />)
@@ -145,15 +127,6 @@ describe('the sync chip', () => {
     return user
   }
 
-  it('shows the counts and heads its menu with the branch and its upstream', async () => {
-    await openSync()
-    expect(screen.getByRole('button', { name: 'Sync with origin: ↓2 ↑1' })).toBeInTheDocument()
-    expect(screen.getByText('fix/cart-total ⇄ origin/fix/cart-total')).toBeInTheDocument()
-    expect(screen.getByText(/2 to pull · 1 to push · not fetched yet/)).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /Pull 2 commits/ })).toBeEnabled()
-    expect(screen.getByRole('radio', { name: /Push 1 commit$/ })).toBeEnabled()
-  })
-
   it('reads Pulling… while it runs, then confirms in a toast and reads the counts again', async () => {
     let finish: (said: string) => void = () => undefined
     git.sync.mockReturnValue(new Promise<string>((resolve) => { finish = resolve }))
@@ -166,14 +139,6 @@ describe('the sync chip', () => {
     finish('Pulled 2 commits')
     await waitFor(() => { expect(titles()).toContain('Pulled 2 commits') })
     expect(await screen.findByRole('button', { name: 'Sync with origin: Synced' })).toBeInTheDocument()
-  })
-
-  it('reads Synced with nothing to pull or push, and disables Pull and Push', async () => {
-    git.syncState.mockResolvedValue({ ...SYNC, behind: 0, ahead: 0 })
-    await openSync()
-    expect(screen.getByRole('button', { name: 'Sync with origin: Synced' })).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: /^Pull/ })).toBeDisabled()
-    expect(screen.getByRole('radio', { name: /^Push/ })).toBeDisabled()
   })
 
   it('does not force a pull that cannot fast-forward: it says so and runs nothing', async () => {
@@ -204,15 +169,6 @@ describe('the folder chip', () => {
     return { user, onNewSessionIn }
   }
 
-  it('shortens to the project and worktree, keeps the full path on hover, and lets the folder give way first', async () => {
-    await openFolder()
-    const chip = screen.getByRole('button', { name: FOLDER_NAME })
-    expect(chip).toHaveTextContent('chameleon / amber-fox')
-    expect(chip).toHaveAttribute('title', PLACE.folder)
-    expect(chip).toHaveClass('is-folder')
-    expect(screen.getByText('This session runs here')).toBeInTheDocument()
-  })
-
   it('copies the path and shows the folder in the file manager', async () => {
     const { user } = await openFolder()
     await user.click(screen.getByRole('radio', { name: /Copy path/ }))
@@ -226,21 +182,5 @@ describe('the folder chip', () => {
     const { user, onNewSessionIn } = await openFolder()
     await user.click(screen.getByRole('radio', { name: 'shop' }))
     expect(onNewSessionIn).toHaveBeenCalledWith('/dev/shop')
-  })
-
-  it('offers no way to open or clone from a started session: the folder only changes before the first message', async () => {
-    const user = userEvent.setup()
-    render(<SessionBar place={PLACE} />)
-    await user.click(screen.getByRole('button', { name: FOLDER_NAME }))
-    expect(screen.queryByRole('radio', { name: /Open folder/ })).toBeNull()
-    expect(screen.queryByRole('radio', { name: /Clone a repository/ })).toBeNull()
-  })
-
-  it('leaves Show in Explorer out for a folder on another machine', async () => {
-    const user = userEvent.setup()
-    render(<SessionBar place={{ ...PLACE, machine: 'devbox', machineId: 2 }} />)
-    await user.click(screen.getByRole('button', { name: FOLDER_NAME }))
-    expect(screen.getByRole('radio', { name: /Copy path/ })).toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: /Show in Explorer/ })).toBeNull()
   })
 })

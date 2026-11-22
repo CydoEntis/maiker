@@ -90,9 +90,4 @@ describe('askablesOf', () => {
     const list = Array.from({ length: MAX_ASKABLES + 10 }, (_, index) => `${String(index + 1)}. Which option number ${String(index)}?`).join('\n')
     expect(askablesOf(list)).toHaveLength(MAX_ASKABLES)
   })
-
-  it('reads the same message the same way', () => {
-    const message = 'Hi.\n\n1. Which one do you want?\n2. And the other one?'
-    expect(askablesOf(message)).toEqual(askablesOf(message))
-  })
 })

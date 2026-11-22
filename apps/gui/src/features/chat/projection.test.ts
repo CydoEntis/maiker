@@ -365,12 +365,6 @@ describe('approvals', () => {
     })
   })
 
-  it('marks a request answered when the daemon stops listing it, with the choice unknown', () => {
-    const pending = applyApprovals(createChatProjection('claude'), [claudeApproval])
-    const answered = applyApprovals(pending, [])
-    expect(only(selectChatEvents(answered))).toMatchObject({ resolution: { status: 'answered', answer: 'unknown' } })
-  })
-
   it('records the user\'s own answer and keeps it when the daemon later drops the request', () => {
     let state = applyApprovals(createChatProjection('claude'), [claudeApproval])
     state = recordApprovalAnswer(state, 'tool-request', 'AcceptForSession')

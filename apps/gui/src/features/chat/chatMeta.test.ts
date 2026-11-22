@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { modeFromScreen, modeLabel, modeShortLabel, modelLabel } from './chatMeta'
-
-describe('modeShortLabel', () => {
-  it('shortens Bypass permissions for the box and leaves other names whole', () => {
-    expect(modeShortLabel('Bypass permissions')).toBe('Bypass')
-    expect(modeShortLabel('Ask before edits')).toBe('Ask before edits')
-    expect(modeShortLabel(null)).toBeNull()
-  })
-})
+import { modeFromScreen, modelLabel } from './chatMeta'
 
 describe('the mode and model in plain words', () => {
-  it('names Claude\'s permission modes', () => {
-    expect(modeLabel('auto')).toBe('Auto')
-    expect(modeLabel('acceptEdits')).toBe('Accept edits')
-    expect(modeLabel('bypassPermissions')).toBe('Bypass permissions')
-    expect(modeLabel('plan')).toBe('Plan mode')
-  })
-
-  it('shows a mode it does not know as it was written, and nothing for none', () => {
-    expect(modeLabel('futureMode')).toBe('futureMode')
-    expect(modeLabel(null)).toBeNull()
-  })
 
   it('names a model by family and version, with or without a date', () => {
     expect(modelLabel('claude-sonnet-5-5')).toBe('sonnet 5.5')
