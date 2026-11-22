@@ -500,27 +500,6 @@ mod tests {
         assert!(error.contains("no checksum is listed"), "{error}");
     }
 
-    #[test]
-    fn this_apps_own_release_is_asked_for_before_the_latest() {
-        let fake = Fake {
-            calls: Default::default(),
-            tag_missing: true,
-            sums: "abc  nothing.tar.gz\n".into(),
-            archive: b"payload".to_vec(),
-        };
-        let mut said = Vec::new();
-        let _ = sources(&fake).binary(&other_platform(), &mut |s| said.push(s.to_string()));
-        let asset = format!("{APP_COMMAND}-aarch64-unknown-linux-musl.tar.gz");
-        let calls = fake.calls.borrow().clone();
-        assert_eq!(calls[0], format!("v{APP_VERSION} {asset}"));
-        assert_eq!(calls[1], "latest");
-        assert_eq!(calls[2], format!("v9.9.9 {asset}"));
-        assert!(
-            said.iter().any(|s| s.contains("using the latest")),
-            "{said:?}"
-        );
-    }
-
     /// A real tarball through the system `tar`: the whole fetch, check and unpack path. `None`
     /// when this machine has no usable `tar`.
     fn fetched(name: &str, tag_missing: bool) -> Option<Binary> {

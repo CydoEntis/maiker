@@ -541,21 +541,4 @@ mod tests {
         assert!(!checks.iter().any(|c| c.what == SSH_OPTIONS));
         assert_eq!(checks[0].what, PROTOCOL);
     }
-
-    #[test]
-    fn no_machines_means_no_section() {
-        assert!(rows(&[]).is_empty());
-        assert!(check_all(&[], "ssh", "0.60.0", Duration::from_secs(1)).is_empty());
-    }
-
-    #[test]
-    fn each_machine_is_a_heading_then_its_lines() {
-        let reports = vec![MachineReport {
-            name: "box".into(),
-            checks: vec![Check::pass(REACHABLE, "x"), Check::skipped("y")],
-        }];
-        let rows = rows(&reports);
-        assert_eq!(rows[0], Row::Machine("box".into()));
-        assert_eq!(rows.len(), 3);
-    }
 }

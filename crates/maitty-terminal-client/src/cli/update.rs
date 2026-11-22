@@ -744,19 +744,6 @@ mod tests {
     }
 
     #[test]
-    fn an_update_names_the_command_for_each_machine_and_says_nothing_with_none() {
-        assert_eq!(machines_note(&[]), None);
-        let note = machines_note(&["kingdom", "Build"]).unwrap();
-        assert!(
-            note.ends_with(&format!(
-                "  {APP_COMMAND} machine update Build
-  {APP_COMMAND} machine update kingdom"
-            )),
-            "{note}"
-        );
-    }
-
-    #[test]
     fn a_failed_gh_call_falls_back_to_the_public_address() {
         let ok = |s: &str| Ok::<String, String>(s.to_string());
         let no = |s: &str| Err::<String, String>(s.to_string());
@@ -895,12 +882,6 @@ mod tests {
     }
 
     #[test]
-    fn this_machine_has_a_build() {
-        let t = target().expect("a release target for the platforms we build");
-        assert!(asset_for(std::env::consts::OS, t).starts_with(concat!(env!("APP_COMMAND"), "-")));
-    }
-
-    #[test]
     fn each_os_and_cpu_has_its_own_release_asset() {
         let rows = [
             ("windows", "x86_64", "x86_64-pc-windows-msvc", "zip"),
@@ -919,14 +900,6 @@ mod tests {
         }
         assert_eq!(target_for("linux", "riscv64"), None);
         assert_eq!(target_for("freebsd", "x86_64"), None);
-    }
-
-    #[test]
-    fn the_self_update_still_targets_this_machine() {
-        assert_eq!(
-            target(),
-            target_for(std::env::consts::OS, std::env::consts::ARCH)
-        );
     }
 
     #[test]

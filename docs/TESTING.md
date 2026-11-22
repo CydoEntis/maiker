@@ -198,7 +198,8 @@ killed while the others are never touched.
 | `auth-fail` | prints `Permission denied (publickey).` on stderr, exits 255 (a refused key) |
 | `needs-person` | prints `Permission denied (password,keyboard-interactive).` on stderr, exits 255 (a login that needs a person) |
 | `hang` | says nothing and never exits |
-| `mismatch` | answers the handshake with a protocol version one ahead |
+| `mismatch` | answers the handshake with a protocol version older than this build accepts (`COMPATIBLE_SINCE - 1`) |
+| `mismatch-newer` | answers the handshake with a protocol version one ahead (`PROTOCOL_VERSION + 1`) |
 | `exit` | exits 0 at once, before any frame |
 | `unreachable` | prints `ssh: connect to host box port 22: Connection refused` on stderr, exits 255 |
 | `not-installed` | prints `bash: maiker: command not found` on stderr, exits 127 |
@@ -213,7 +214,7 @@ for it as they do for a proxy.
 
 The shim is also a machine's custom transport: put its path first in `via`, with `--mode=` and the rest in
 the later entries, and the remote command arrives as its last argument. The tests that run it
-(`custom_transport` in `apps/tui/tests/fake_ssh.rs`: end to end through a local pipe, noise, no marker,
+(`custom_transport` in `apps/tui/tests/fake_ssh.rs`: end to end through a local pipe, no marker,
 `Permission denied` with 255, exit 127, a hang dropped by a timeout with its process gone, plain pipes, the
 argv the transport is given) are `cfg(unix)`: a transport is unsupported on Windows, so there they only
 compile. Validation, argv construction, classification and the Windows refusal are pure tests that run on

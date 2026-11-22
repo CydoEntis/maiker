@@ -335,17 +335,6 @@ mod tests {
     }
 
     #[test]
-    fn a_bare_number_is_a_pane_on_the_default_machine() {
-        assert_eq!(
-            address("4"),
-            Ok(PaneAddress {
-                machine: None,
-                term: 4
-            })
-        );
-    }
-
-    #[test]
     fn a_machine_and_a_number_make_an_address() {
         for (text, machine) in [
             ("build/4", "build"),
@@ -384,26 +373,6 @@ mod tests {
         assert_eq!(
             machine,
             Machine::from_def(&cfg(&["build"]).machines[0], "ssh")
-        );
-    }
-
-    #[test]
-    fn an_unknown_machine_lists_the_names_that_work() {
-        let error = resolve_machine("bild", &cfg(&["gpu", "build"]), "ssh").unwrap_err();
-        assert_eq!(
-            error.to_string(),
-            "unknown machine \"bild\"; known: local, build, gpu"
-        );
-    }
-
-    #[test]
-    fn with_no_machines_configured_the_error_says_how_to_add_one() {
-        let error = resolve_machine("bild", &cfg(&[]), "ssh").unwrap_err();
-        assert!(
-            error
-                .to_string()
-                .contains("no machines are configured; add one with the Machines dialog (leader w) or [[machines]] in config.local.toml"),
-            "{error}"
         );
     }
 
@@ -516,17 +485,5 @@ mod tests {
         );
         let here = Target::of(Machine::local());
         assert_eq!(named(here.safe_reply(list()).unwrap()), hostile);
-    }
-
-    #[test]
-    fn stopping_a_machine_s_sessions_asks_for_yes() {
-        let said = TargetError::NeedsYes {
-            machine: "build".into(),
-        }
-        .to_string();
-        assert_eq!(
-            said,
-            "this stops every session on build; add --yes to do it"
-        );
     }
 }

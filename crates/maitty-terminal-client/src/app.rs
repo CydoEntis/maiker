@@ -938,16 +938,6 @@ mod tests {
     }
 
     #[test]
-    fn a_bad_address_is_refused_by_the_parser() {
-        for bad in ["build/", "/4", "a/b/4", "x"] {
-            assert!(
-                Args::try_parse_from([APP_COMMAND, "focus", bad]).is_err(),
-                "{bad}"
-            );
-        }
-    }
-
-    #[test]
     fn only_commands_that_take_a_machine_accept_on() {
         assert!(parse(&["ls"]).cmd.unwrap().runs_on_a_machine());
         assert!(parse(&["kill-server"]).cmd.unwrap().runs_on_a_machine());

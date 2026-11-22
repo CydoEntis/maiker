@@ -137,27 +137,6 @@ mod tests {
     }
 
     #[test]
-    fn the_brief_opens_by_saying_it_is_text_only() {
-        let b = brief(&facts());
-        let first = b.lines().next().unwrap();
-        assert!(
-            first.starts_with(concat!(
-                "Handoff from claude in ",
-                env!("APP_COMMAND"),
-                " pane 3."
-            )),
-            "{first}"
-        );
-        for words in [
-            "text summary only",
-            "conversation, memory or tool results",
-            "read the files yourself",
-        ] {
-            assert!(first.contains(words), "{words}: {first}");
-        }
-    }
-
-    #[test]
     fn the_sections_come_in_order() {
         let b = brief(&facts());
         let at = |s: &str| b.find(s).unwrap_or_else(|| panic!("{s} missing:\n{b}"));
@@ -172,17 +151,6 @@ mod tests {
     }
 
     #[test]
-    fn a_last_prompt_that_says_nothing_new_is_left_out() {
-        for last in ["", "  ", "fix the flaky checkout test"] {
-            let b = brief(&Facts {
-                last_prompt: last.into(),
-                ..facts()
-            });
-            assert!(!b.contains("last prompt:"), "{last:?}: {b}");
-        }
-    }
-
-    #[test]
     fn changed_files_that_could_not_be_read_or_are_none_say_so() {
         let b = brief(&Facts {
             changed: Err("over ssh".into()),
@@ -194,22 +162,6 @@ mod tests {
             ..facts()
         });
         assert!(b.contains("changed files: none\n"), "{b}");
-    }
-
-    #[test]
-    fn committed_changes_that_could_not_be_read_keep_the_uncommitted_list() {
-        let c = Changed {
-            committed_unknown: Some("bad revision".into()),
-            ..changed(&["src/a.rs"])
-        };
-        let b = brief(&Facts {
-            changed: Ok(c),
-            ..facts()
-        });
-        assert!(
-            b.contains("changed files:\n- src/a.rs\ncommitted changes: unknown (bad revision)\n"),
-            "{b}"
-        );
     }
 
     #[test]

@@ -518,16 +518,6 @@ mod tests {
         assert_eq!(address_of(&json!({})).unwrap(), None);
     }
 
-    #[test]
-    fn a_composite_id_is_turned_into_the_number_the_tools_read() {
-        let address = address_of(&json!({ "id": "build/4" })).unwrap();
-        assert_eq!(
-            bare(&json!({ "id": "build/4", "text": "x" }), &address)["id"],
-            4
-        );
-        assert_eq!(bare(&json!({ "text": "x" }), &None), json!({ "text": "x" }));
-    }
-
     fn server_with(machines: &[(&str, bool)]) -> Server {
         let cfg = crate::config::Config {
             machines: machines

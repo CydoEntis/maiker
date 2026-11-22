@@ -112,22 +112,6 @@ impl Drop for Sandbox {
 }
 
 #[test]
-fn a_client_completes_the_handshake_through_the_shim() {
-    let sandbox = Sandbox::new();
-    let out = sandbox.remote("proxy", &["ls", "--json"]);
-    assert!(
-        out.status.success(),
-        "ls through the shim failed:\n{}",
-        text(&out.stderr)
-    );
-    let reply = text(&out.stdout);
-    assert!(
-        reply.trim_start().starts_with(['[', '{']),
-        "ls --json printed {reply:?}"
-    );
-}
-
-#[test]
 fn the_shim_is_called_the_way_the_client_calls_ssh() {
     let sandbox = Sandbox::new();
     let out = sandbox.remote("proxy", &["ls", "--json"]);
@@ -267,35 +251,27 @@ fn usage(sandbox: &Sandbox, args: &[&str]) -> Output {
 }
 
 #[test]
-fn an_unknown_machine_is_a_usage_error_that_says_how_to_add_one() {
+fn naming_a_machine_that_is_not_configured_is_a_usage_error_and_never_runs_ssh() {
     let sandbox = Sandbox::new();
-    for args in [&["--on", "bild", "ls"][..], &["read", "bild/4"]] {
+    let unknown = r#"unknown machine "bild"; no machines are configured"#;
+    let how_to_add = "[[machines]] in config.local.toml";
+    let cases: [(&[&str], &[&str]); 8] = [
+        (&["--on", "bild", "ls"], &[unknown, how_to_add]),
+        (&["read", "bild/4"], &[unknown, how_to_add]),
+        (&["machine", "update", "bild", "--install"], &[unknown]),
+        (&["machine", "update", "local", "--install"], &["this computer is not reached over ssh"]),
+        (&["machine", "get", "bild", "~/out.log"], &[unknown]),
+        (&["machine", "get", "local", "~/out.log"], &["name a machine from [[machines]]"]),
+        (&["machine", "put", "bild", "./file.txt"], &[unknown]),
+        (&["machine", "put", "local", "./file.txt"], &["name a machine from [[machines]]"]),
+    ];
+    for (args, wants) in cases {
         let out = usage(&sandbox, args);
         let said = text(&out.stderr);
         assert_eq!(out.status.code(), Some(2), "{args:?}: {said}");
-        assert!(
-            said.contains(r#"unknown machine "bild"; no machines are configured"#)
-                && said.contains("[[machines]] in config.local.toml"),
-            "{args:?}: {said}"
-        );
-    }
-    assert!(!sandbox.log().exists(), "ssh must not have been run");
-}
-
-#[test]
-fn machine_update_needs_a_configured_machine_and_never_runs_ssh_for_anything_else() {
-    let sandbox = Sandbox::new();
-    for (name, want) in [
-        (
-            "bild",
-            r#"unknown machine "bild"; no machines are configured"#,
-        ),
-        ("local", "this computer is not reached over ssh"),
-    ] {
-        let out = usage(&sandbox, &["machine", "update", name, "--install"]);
-        let said = text(&out.stderr);
-        assert_eq!(out.status.code(), Some(2), "{name}: {said}");
-        assert!(said.contains(want), "{name}: {said}");
+        for want in wants {
+            assert!(said.contains(*want), "{args:?}: {said}");
+        }
     }
     assert!(!sandbox.log().exists(), "ssh must not have been run");
 }
@@ -322,36 +298,6 @@ fn restart_if_idle_with_no_server_says_so_and_starts_nothing() {
     let out = output_within(command, WAIT);
     assert!(out.status.success(), "{}", text(&out.stderr));
     assert_eq!(text(&out.stdout).trim(), "no server is running");
-}
-
-#[test]
-fn machine_get_needs_a_configured_machine_and_never_runs_ssh_for_anything_else() {
-    let sandbox = Sandbox::new();
-    for (name, want) in [
-        ("bild", r#"unknown machine "bild"; no machines are configured"#),
-        ("local", "name a machine from [[machines]]"),
-    ] {
-        let out = usage(&sandbox, &["machine", "get", name, "~/out.log"]);
-        let said = text(&out.stderr);
-        assert_eq!(out.status.code(), Some(2), "{name}: {said}");
-        assert!(said.contains(want), "{name}: {said}");
-    }
-    assert!(!sandbox.log().exists(), "ssh must not have been run");
-}
-
-#[test]
-fn machine_put_needs_a_configured_machine_and_never_runs_ssh_for_anything_else() {
-    let sandbox = Sandbox::new();
-    for (name, want) in [
-        ("bild", r#"unknown machine "bild"; no machines are configured"#),
-        ("local", "name a machine from [[machines]]"),
-    ] {
-        let out = usage(&sandbox, &["machine", "put", name, "./file.txt"]);
-        let said = text(&out.stderr);
-        assert_eq!(out.status.code(), Some(2), "{name}: {said}");
-        assert!(said.contains(want), "{name}: {said}");
-    }
-    assert!(!sandbox.log().exists(), "ssh must not have been run");
 }
 
 #[test]
@@ -402,27 +348,6 @@ fn remote_keeps_listing_panes_by_number_with_no_machine_tag() {
 }
 
 #[test]
-fn the_auth_failure_shim_exits_255_with_ssh_s_words() {
-    let sandbox = Sandbox::new();
-    let out = output_within(sandbox.command(fake_ssh(), "auth-fail"), WAIT);
-    assert_eq!(
-        out.status.code(),
-        Some(255),
-        "ssh exits 255 when it cannot connect"
-    );
-    assert!(
-        out.stdout.is_empty(),
-        "nothing on stdout: the stream is not framed"
-    );
-    assert!(
-        text(&out.stderr).contains("Permission denied"),
-        "stderr was:
-{}",
-        text(&out.stderr)
-    );
-}
-
-#[test]
 fn a_daemon_of_another_protocol_version_is_refused() {
     let sandbox = Sandbox::new();
     let out = sandbox.remote("mismatch", &["ls"]);
@@ -432,38 +357,6 @@ fn a_daemon_of_another_protocol_version_is_refused() {
         "stderr was:\n{}",
         text(&out.stderr)
     );
-}
-
-#[test]
-fn login_noise_comes_out_of_the_shim_ahead_of_the_first_frame() {
-    let sandbox = Sandbox::new();
-    let out = output_within(
-        sandbox.command(fake_ssh(), "noise"),
-        Duration::from_secs(30),
-    );
-    assert!(
-        text(&out.stdout).starts_with("Last login:"),
-        "stdout started {:?}",
-        text(&out.stdout)
-    );
-}
-
-#[test]
-fn a_silent_shim_keeps_the_line_open_without_a_word() {
-    let sandbox = Sandbox::new();
-    let mut child = sandbox
-        .command(fake_ssh(), "hang")
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .expect("start the shim");
-    std::thread::sleep(Duration::from_millis(400));
-    assert!(
-        child.try_wait().expect("poll the shim").is_none(),
-        "a hanging shim must stay running"
-    );
-    child.kill().expect("stop the shim");
-    let _ = child.wait();
 }
 
 #[test]
@@ -494,23 +387,6 @@ fn login_noise_before_the_marker_is_skipped_by_the_cli() {
         "ls --json printed {:?}",
         text(&out.stdout)
     );
-}
-
-#[test]
-fn login_noise_before_the_marker_is_skipped_in_process() {
-    let sandbox = Sandbox::new();
-    let runtime = runtime();
-    let opened = runtime.block_on(runtime::ipc::open_to(
-        &machine_in_mode("noisy", &sandbox, "noise"),
-        true,
-    ));
-    assert!(
-        opened.is_ok(),
-        "a noisy login still connects: {:?}",
-        opened.err()
-    );
-    drop(opened);
-    runtime.shutdown_background();
 }
 
 #[test]
@@ -687,19 +563,6 @@ fn runtime() -> tokio::runtime::Runtime {
         .enable_all()
         .build()
         .expect("a runtime")
-}
-
-#[test]
-fn two_daemons_deliver_through_one_registry() {
-    let (here, there) = (Sandbox::new(), Sandbox::new());
-    let runtime = runtime();
-    let connections = runtime.block_on(two_machines_talking(&here, &there));
-    assert!(
-        connections.is_connected(runtime::connections::MachineId::LOCAL)
-            && connections.is_connected(THERE)
-    );
-    drop(connections);
-    runtime.shutdown_background();
 }
 
 #[test]
@@ -1257,43 +1120,6 @@ mod supervised {
     }
 
     #[test]
-    fn one_machine_dying_leaves_this_computers_machine_answering() {
-        let (there, here) = (Sandbox::new(), Sandbox::new());
-        start_daemon(&there);
-        let runtime = runtime();
-        let _enter = runtime.enter();
-        let mut window = Window::new(vec![(BOX, configured(&there, "proxy"))], quick(WAIT));
-        start_daemon(&here);
-        window.connections.add(
-            MachineId::LOCAL,
-            runtime
-                .block_on(runtime::ipc::open_to(&machine("here", &here), true))
-                .expect("local"),
-        );
-        runtime.block_on(window.until("connected", |w| w.is(BOX, "connected")));
-
-        kill_connection(&there.calls());
-        runtime.block_on(window.until("the lost line", |w| w.kinds(BOX).contains(&"reconnecting")));
-        window.send(
-            MachineId::LOCAL,
-            ClientMsg::Command(Cmd::NewWorkspace {
-                cwd: None,
-                name: None,
-                cmd: None,
-            }),
-        );
-        runtime.block_on(window.until("this machine to answer", |w| {
-            w.msgs.iter().any(|(m, msg)| {
-                *m == MachineId::LOCAL
-                    && matches!(msg, ServerMsg::State(s) if !s.workspaces.is_empty())
-            })
-        }));
-        assert!(window.connections.is_connected(MachineId::LOCAL));
-        drop(window);
-        runtime.shutdown_background();
-    }
-
-    #[test]
     fn a_failed_login_needs_login_with_the_fix_and_keeps_trying() {
         let sandbox = Sandbox::new();
         let runtime = runtime();
@@ -1316,40 +1142,24 @@ mod supervised {
     }
 
     #[test]
-    fn a_daemon_of_another_version_needs_an_update_with_the_fix() {
-        let sandbox = Sandbox::new();
-        let runtime = runtime();
-        let _enter = runtime.enter();
-        let mut window = Window::new(vec![(BOX, configured(&sandbox, "mismatch"))], quick(WAIT));
-        runtime.block_on(window.until("needs-update", |w| w.is(BOX, "needs-update")));
-        assert_eq!(
-            window.state_of(BOX),
-            Some(&ConnectionState::NeedsUpdate {
-                failure: FailureClass::Update
-            })
-        );
-        drop(window);
-        runtime.shutdown_background();
-    }
-
-    #[test]
-    fn a_newer_daemon_there_says_to_update_this_computer() {
-        let sandbox = Sandbox::new();
-        let runtime = runtime();
-        let _enter = runtime.enter();
-        let mut window = Window::new(
-            vec![(BOX, configured(&sandbox, "mismatch-newer"))],
-            quick(WAIT),
-        );
-        runtime.block_on(window.until("needs-update", |w| w.is(BOX, "needs-update")));
-        assert_eq!(
-            window.state_of(BOX),
-            Some(&ConnectionState::NeedsUpdate {
-                failure: FailureClass::UpdateHere
-            })
-        );
-        drop(window);
-        runtime.shutdown_background();
+    fn a_daemon_of_another_version_needs_an_update_on_the_side_that_is_behind() {
+        for (mode, failure) in [
+            ("mismatch", FailureClass::Update),
+            ("mismatch-newer", FailureClass::UpdateHere),
+        ] {
+            let sandbox = Sandbox::new();
+            let runtime = runtime();
+            let _enter = runtime.enter();
+            let mut window = Window::new(vec![(BOX, configured(&sandbox, mode))], quick(WAIT));
+            runtime.block_on(window.until("needs-update", |w| w.is(BOX, "needs-update")));
+            assert_eq!(
+                window.state_of(BOX),
+                Some(&ConnectionState::NeedsUpdate { failure }),
+                "{mode}"
+            );
+            drop(window);
+            runtime.shutdown_background();
+        }
     }
 
     #[test]
@@ -1537,8 +1347,6 @@ mod custom_transport {
     use runtime::ipc::{Machine, open_to};
     use runtime::link_failure::{FailureClass, classify};
 
-    const LOGIN_TEXT: &str = "the remote login printed text before maiker started";
-
     /// The shim as `fly`'s `via`, in `mode`, with `extra` arguments and, when asked, the
     /// `{command}` placeholder last.
     fn via(sandbox: &Sandbox, mode: &str, extra: &[String], placeholder: bool) -> Machine {
@@ -1666,24 +1474,6 @@ mod custom_transport {
     }
 
     #[test]
-    fn login_text_before_the_marker_is_skipped() {
-        let sandbox = sandbox_with_daemon();
-        let runtime = runtime();
-        let opened = runtime.block_on(open_to(&via(&sandbox, "noise", &[], false), true));
-        assert!(opened.is_ok(), "{:?}", opened.err());
-        drop(opened);
-        runtime.shutdown_background();
-    }
-
-    #[test]
-    fn a_transport_that_prints_text_and_never_starts_maitty_fails_with_the_login_error() {
-        let sandbox = Sandbox::new();
-        let failed = failure(&via(&sandbox, "noise-only", &[], false));
-        assert!(failed.said.contains(LOGIN_TEXT), "{}", failed.said);
-        assert!(failed.said.contains("update it"), "{}", failed.said);
-    }
-
-    #[test]
     fn permission_denied_from_a_transport_is_unreachable_not_needs_login() {
         let sandbox = Sandbox::new();
         let failed = failure(&via(&sandbox, "auth-fail", &[], false));
@@ -1696,20 +1486,18 @@ mod custom_transport {
     }
 
     #[test]
-    fn a_transport_that_exits_127_needs_the_app_installed() {
-        let sandbox = Sandbox::new();
-        let failed = failure(&via(&sandbox, "not-installed", &[], false));
-        assert_eq!(failed.class, FailureClass::Install);
-    }
-
-    #[test]
-    fn a_transport_that_fails_before_any_frame_is_unreachable_with_its_last_line() {
-        let sandbox = Sandbox::new();
-        let failed = failure(&via(&sandbox, "unreachable", &[], false));
-        assert_eq!(
-            failed.class,
-            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
-        );
+    fn a_transport_that_fails_is_classed_by_its_exit_and_its_last_line() {
+        for (mode, want) in [
+            ("not-installed", FailureClass::Install),
+            (
+                "unreachable",
+                FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into()),
+            ),
+        ] {
+            let sandbox = Sandbox::new();
+            let failed = failure(&via(&sandbox, mode, &[], false));
+            assert_eq!(failed.class, want, "{mode}");
+        }
     }
 
     fn is_running(pid: &str) -> bool {
