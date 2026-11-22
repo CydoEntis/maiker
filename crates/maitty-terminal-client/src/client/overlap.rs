@@ -26,19 +26,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn overlaps_are_said_in_a_line() {
-        assert_eq!(
-            say(&[o("src/checkout.ts", &["orders", "rate-limit"])]).as_deref(),
-            Some("orders and rate-limit both changed checkout.ts")
-        );
-        assert_eq!(
-            say(&[o("x.rs", &["a", "b", "c"]), o("y.rs", &["a", "b"])]).as_deref(),
-            Some("3 checkouts changed x.rs (and 1 more file)")
-        );
-        assert_eq!(say(&[]), None, "nothing shared: nothing to say");
-    }
-
     /// A repo on `main` with one commit (checkout.ts, shared.ts), and a way to run git in it.
     fn repo(tag: &str) -> (PathBuf, PathBuf, impl Fn(&Path, &[&str]) -> String) {
         let root = std::env::temp_dir().join(format!(

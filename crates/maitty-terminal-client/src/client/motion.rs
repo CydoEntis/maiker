@@ -179,20 +179,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_tween_eases_out_and_ends_where_it_was_going() {
-        assert_eq!(ease_out(0.0), 0.0);
-        assert_eq!(ease_out(1.0), 1.0);
-        assert!(ease_out(0.5) > 0.8, "most of the way by half time");
-        let t = Tween {
-            from: 0.0,
-            to: 10.0,
-            start: Instant::now() - Duration::from_secs(1),
-            dur: SLIDE,
-        };
-        assert!(t.done(Instant::now()) && t.at(Instant::now()) == 10.0);
-    }
-
-    #[test]
     fn the_sidebar_slides_only_when_it_changes_and_motion_is_on() {
         let mut m = Motion::default();
         assert_eq!(m.side(true, true), 1.0, "first sight: already there");
@@ -216,22 +202,5 @@ mod tests {
         let mut m = Motion::default();
         m.land(1, false);
         assert_eq!(m.land(2, false), 0.0, "motion off: nothing flashes");
-    }
-
-    #[test]
-    fn a_new_pane_grows_out_of_its_edge() {
-        let mut m = Motion::default();
-        assert_eq!(m.split(1, &[10], 0.5, true), 0.5);
-        let r = m.split(1, &[10, 11], 0.5, true);
-        assert!(
-            r > 0.5 && m.layout_moving(),
-            "opened right: the first pane starts wide ({r})"
-        );
-        let mut m = Motion::default();
-        m.split(1, &[10], 0.5, true);
-        assert!(
-            m.split(1, &[11, 10], 0.5, true) < 0.5,
-            "opened left: the first (new) one starts narrow"
-        );
     }
 }

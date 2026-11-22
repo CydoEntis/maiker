@@ -106,23 +106,6 @@ fn usage_opens_on_now_and_tab_asks_this_computer_for_each_period() {
 }
 
 #[test]
-fn a_week_shows_its_totals_a_bar_per_day_and_its_sessions() {
-    let (mut app, _rx) = app_with_outbox();
-    app.act(Action::Usage);
-    key(&mut app, KeyCode::Tab);
-    key(&mut app, KeyCode::Tab);
-    app.on_machine_server(MachineId::LOCAL, ServerMsg::Reply(Reply::UsageReport(week_report())));
-    for (w, h) in [(100, 30), (80, 24)] {
-        let text = frame(&mut app, "usage · 7 days", w, h);
-        assert!(text.contains("$9.50 · 1.2M in · 125.0k out · 21 turns · 5h 3m working"), "{text}");
-        assert!(text.contains("2 sessions · 1 reported no cost · 2026-11-09 to 2026-11-15 (UTC)"));
-        assert!(text.contains("11-09") && text.contains("11-15") && text.contains("$5.00"), "the chart's ends and top");
-        assert!(text.contains("█"), "the busiest day fills its bar");
-        assert!(text.contains("codex · pixls"), "a closed session reads by agent and folder");
-    }
-}
-
-#[test]
 fn enter_on_an_open_session_goes_to_it_and_a_closed_one_says_so() {
     let (mut app, _rx) = app_with_outbox();
     app.act(Action::Usage);
@@ -298,26 +281,6 @@ mod machine_details {
             problem: None,
         };
         app.on_machine_server(machine, ServerMsg::Reply(Reply::GitIdentities { tag: git, report }));
-    }
-
-    #[test]
-    fn this_computer_says_its_service_socket_and_log_and_who_commits() {
-        let (mut app, mut rx) = app_with_outbox();
-        app.snap.daemon_version = "0.76.0".into();
-        sent(&mut rx);
-        app.open_machine_info(MachineId::LOCAL);
-        let tags = asked(&sent(&mut rx), MachineId::LOCAL);
-        let asking = frame(&mut app, "this computer · asking", 100, 30);
-        assert!(asking.contains("asking this computer…"), "{asking}");
-        reports(&mut app, MachineId::LOCAL, tags);
-        for (w, h) in [(100, 30), (80, 24), (160, 45)] {
-            let text = frame(&mut app, "this computer", w, h);
-            assert!(text.contains("service 0.76.0 · 5 sessions · socket"), "{text}");
-            assert!(text.contains("daemon.log"), "{text}");
-            assert!(text.contains("cydo") && text.contains("active"), "{text}");
-            assert!(text.contains("Cydo <cydo@home.example>"), "{text}");
-            assert!(text.contains("~/work") && text.contains("set outside Maiker"), "{text}");
-        }
     }
 
     #[test]

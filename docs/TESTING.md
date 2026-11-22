@@ -307,10 +307,9 @@ the interactive line, the machine dialled when the popup pane closes, `needs log
 login still fails), removing (config, supervisor, sidebar, daemon id, saved layout lane, and the remote
 daemon's pane still alive over a second connection), that what a removed machine's daemon or supervisor
 says afterwards does not bring it back (handed to the window directly, with no daemon), and retrying a
-refusal. Its frame tests (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture --test-threads=1`
-prints them at 80x24 and 100x30) draw the add while it connects and how each ending looks: added,
-unreachable, a refused key, a login that needs a person (the popup's toast), a changed host key, and
-Maiker missing or older; none may draw a step or `MACHINE ADDED`. The other frames of the dialog are
+refusal. Its one frame test (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture --test-threads=1`
+prints it at 80x24 and 100x30) draws an unreachable machine: the typed target stays in the field, nothing
+is added, and no step or `MACHINE ADDED` is drawn. The other frames of the dialog are
 `client/screen/machines_tests.rs` (`AGENT_SHOW=1 cargo test machines_tests -- --nocapture` prints them
 at 80x24, 100x30 and 160x45).
 

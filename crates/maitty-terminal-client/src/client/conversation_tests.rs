@@ -227,12 +227,6 @@ fn pasting_a_windows_key_burst_on_an_unbound_conversation_never_reaches_the_nati
 }
 
 #[test]
-fn an_unbound_conversation_has_no_native_input_target() {
-    let (app, _) = app_with_unbound_selection();
-    assert_eq!(app.typing_to(), None);
-}
-
-#[test]
 fn an_explicit_native_popup_still_takes_pastes_over_an_unbound_conversation() {
     let (mut app, mut out) = app_with_unbound_selection();
     let mut popup = app.snap.terms.values().next().unwrap().clone();

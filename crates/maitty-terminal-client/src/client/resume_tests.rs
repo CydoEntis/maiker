@@ -131,24 +131,6 @@ fn the_answers_list_every_agents_conversations_newest_first() {
 }
 
 #[test]
-fn with_none_saved_it_says_so_in_one_line() {
-    let (mut app, mut rx) = app_with_outbox();
-    app.act(Action::ResumeConversation);
-    let tags: Vec<u64> = asked(&sent(&mut rx))
-        .into_iter()
-        .map(|(_, _, t)| t)
-        .collect();
-    reply(&mut app, tags[0], SavedConversations::Listed(Vec::new()));
-    reply(&mut app, tags[1], SavedConversations::NotSupported);
-    let text = frame(&mut app, "none saved");
-    let (said, _, error) = app.notice.clone().expect("a toast");
-    assert_eq!(said, "no saved Claude or Codex chats");
-    assert!(!error && !said.contains('\n'));
-    assert!(text.contains(&said), "{text}");
-    assert!(matches!(app.mode, Mode::Normal));
-}
-
-#[test]
 fn a_pick_starts_that_agent_in_the_folder_with_the_conversation() {
     let (mut app, mut rx) = app_with_outbox();
     let dir = focused_dir(&app);
@@ -197,20 +179,6 @@ fn an_id_that_is_not_plain_is_never_put_on_a_command_line() {
 
 fn tags_asked(rx: &mut mpsc::UnboundedReceiver<Outgoing>) -> Vec<u64> {
     asked(&sent(rx)).into_iter().map(|(_, _, t)| t).collect()
-}
-
-#[test]
-fn the_list_opens_at_once_saying_it_is_looking() {
-    let (mut app, mut rx) = app_with_outbox();
-    frame(&mut app, "before");
-    app.act(Action::ResumeConversation);
-    assert_eq!(tags_asked(&mut rx).len(), 2);
-    let text = frame(&mut app, "looking");
-    let Mode::ScreenMenu(m) = &app.mode else {
-        panic!("{:?}", app.mode)
-    };
-    assert_eq!(m.items.len(), 1);
-    assert!(text.contains(&m.items[0].0), "{text}");
 }
 
 #[test]

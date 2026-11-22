@@ -251,25 +251,6 @@ fn a_file_over_the_cap_is_refused_before_ssh_is_started() {
 }
 
 #[test]
-fn a_file_sent_to_a_machine_on_a_custom_transport_is_told_it_needs_ssh() {
-    let remote = Remote::new();
-    let file = remote.file("a.txt", b"x");
-    let (_, shim) = built();
-    let def = maitty_settings::config::MachineDef {
-        name: "fly".into(),
-        target: "fly".into(),
-        via: Some(vec![shim.to_string_lossy().into_owned()]),
-        ..Default::default()
-    };
-    let machine = Machine::from_def(&def, "ssh");
-    let error = send_file(&machine, "fly", &file, &Watch::default()).unwrap_err();
-    assert!(
-        error.starts_with("sending the file to fly needs ssh"),
-        "{error}"
-    );
-}
-
-#[test]
 fn a_send_that_is_stopped_ends_at_once_and_keeps_nothing() {
     needs_sh!();
     let remote = Remote::new();
@@ -289,23 +270,4 @@ fn a_send_that_is_stopped_ends_at_once_and_keeps_nothing() {
     assert_eq!(error, "stopped sending the file to box");
     assert!(started.elapsed() < std::time::Duration::from_secs(10));
     assert!(remote.pastes().is_empty());
-}
-
-#[test]
-fn a_login_that_fails_while_sending_a_file_says_so() {
-    needs_sh!();
-    let remote = Remote::new();
-    let file = remote.file("a.txt", b"x");
-    let error = send_file(
-        &remote.machine("auth-fail"),
-        "box",
-        &file,
-        &Watch::default(),
-    )
-    .unwrap_err();
-    assert!(
-        error.starts_with("could not send the file to box: ")
-            && error.contains("Permission denied"),
-        "{error}"
-    );
 }

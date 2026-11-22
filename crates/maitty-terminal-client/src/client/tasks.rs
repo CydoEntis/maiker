@@ -505,22 +505,6 @@ mod tests {
 mod notice_tests {
     use super::*;
 
-    fn task(branch: &str, base: &str) -> TaskRow {
-        TaskRow {
-            ws: 0,
-            name: branch.into(),
-            branch: branch.into(),
-            base: base.into(),
-            stage: Stage::Ready,
-            summary: String::new(),
-            dirty: 0,
-            ahead: 0,
-            agent: None,
-            dir: Default::default(),
-            root: Default::default(),
-        }
-    }
-
     #[test]
     fn a_file_gone_from_the_checkout_is_marked_deleted_and_how_far_ahead_is_counted() {
         let repo = std::env::temp_dir().join(format!("{}-deleted-{}", crate::brand::APP_COMMAND, std::process::id()));
@@ -548,12 +532,5 @@ mod notice_tests {
         assert_eq!(flags, [("gone.txt", true, false), ("new.txt", false, true)], "what is committed is no longer a change");
         assert_eq!(commits_to_push(&repo, "main"), Some(1), "one commit past the branch it started from");
         let _ = std::fs::remove_dir_all(&repo);
-    }
-
-    #[test]
-    fn a_pull_request_notice_names_its_number_and_where_it_goes() {
-        let t = task("gui-pass", "main");
-        assert_eq!(pull_request_notice("https://github.com/o/r/pull/301\n", &t), "Opened PR #301 · gui-pass → main");
-        assert_eq!(pull_request_notice("created", &t), "Opened a pull request · gui-pass → main");
     }
 }

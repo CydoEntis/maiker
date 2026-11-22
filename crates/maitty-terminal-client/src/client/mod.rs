@@ -368,28 +368,22 @@ mod cursor_tests {
     }
 
     #[test]
-    fn your_cursor_shows_where_the_program_asks_for_none() {
-        assert_eq!(cursor_code(None, &ui("block", true)), 1);
-        assert_eq!(cursor_code(None, &ui("block", false)), 2);
-        assert_eq!(cursor_code(None, &ui("underline", true)), 3);
-        assert_eq!(cursor_code(None, &ui("underline", false)), 4);
-        assert_eq!(cursor_code(None, &ui("line", true)), 5);
-        assert_eq!(cursor_code(None, &ui("line", false)), 6);
-        assert_eq!(
-            cursor_code(Some(0), &ui("line", false)),
-            6,
-            "a program asking for the default gets yours"
-        );
-    }
-
-    #[test]
-    fn a_program_that_asks_for_its_own_cursor_gets_it() {
-        assert_eq!(
-            cursor_code(Some(5), &ui("block", false)),
-            5,
-            "vim's insert-mode bar wins over your block"
-        );
-        assert_eq!(cursor_code(Some(2), &ui("block", true)), 2);
+    fn the_cursor_is_yours_unless_the_program_asks_for_its_own() {
+        // (the program's request, your shape, your blink, the DECSCUSR code sent, why)
+        let cases = [
+            (None, "block", true, 1, "your blinking block"),
+            (None, "block", false, 2, "your steady block"),
+            (None, "underline", true, 3, "your blinking underline"),
+            (None, "underline", false, 4, "your steady underline"),
+            (None, "line", true, 5, "your blinking line"),
+            (None, "line", false, 6, "your steady line"),
+            (Some(0), "line", false, 6, "a program asking for the default gets yours"),
+            (Some(5), "block", false, 5, "vim's insert-mode bar wins over your block"),
+            (Some(2), "block", true, 2, "a program's steady block wins over your blinking one"),
+        ];
+        for (asked, shape, blink, want, why) in cases {
+            assert_eq!(cursor_code(asked, &ui(shape, blink)), want, "{why}");
+        }
     }
 }
 

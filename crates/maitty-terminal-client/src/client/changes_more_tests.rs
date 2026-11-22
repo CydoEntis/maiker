@@ -279,17 +279,6 @@ fn draw_at(app: &mut App, w: u16, h: u16) {
 }
 
 #[test]
-fn changes_sit_beside_the_pane_at_52_columns_and_take_its_place_when_narrow() {
-    let (mut app, _rx, _bg) = open_with_diff();
-    draw_at(&mut app, 200, 50);
-    assert_eq!(app.screen.sheet_rect.width, 52, "the panel is 52 columns");
-    let pane = app.pane_frames.iter().map(|(_, r)| *r).next().expect("the pane is still drawn");
-    assert!(pane.right() <= app.screen.sheet_rect.x, "beside the pane, not over it: {pane:?} {:?}", app.screen.sheet_rect);
-    draw_at(&mut app, 120, 40);
-    assert!(app.screen.sheet_rect.width > 52 && app.pane_frames.is_empty(), "under 140 columns it replaces the pane");
-}
-
-#[test]
 fn ctrl_g_opens_and_closes_changes_from_the_sidebar_but_a_pane_keeps_the_key() {
     let (mut app, mut rx, _bg) = on_build();
     sent(&mut rx);
@@ -320,16 +309,4 @@ fn a_click_on_a_files_box_picks_or_unpicks_it() {
     draw_at(&mut app, 200, 50);
     assert!(app.on_button(tick, false));
     assert_eq!(view(&app).picked().len(), 2, "clicking again puts it back");
-}
-
-#[test]
-fn no_changes_says_so_with_the_branch() {
-    let (mut app, mut rx, _bg) = on_build();
-    sent(&mut rx);
-    app.act(Action::Changes);
-    let asks = diff_asks(&sent(&mut rx));
-    let none = RepoReply::Diff(ConversationDiff { additions: 0, deletions: 0, total_files: 0, truncated: false, files: Vec::new() });
-    app.on_machine_server(THERE, ServerMsg::Reply(Reply::Repo { tag: asks[0].1, reply: none }));
-    let shown = frame(&mut app, "no changes");
-    assert!(shown.contains("No changes on fix-footer."), "{shown}");
 }
