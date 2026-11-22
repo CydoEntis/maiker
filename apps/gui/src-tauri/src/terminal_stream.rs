@@ -18,17 +18,16 @@
 use crate::hub::{Hub, HubHandle, LocalDial, MACHINE_STATE_EVENT, MachineState, Update, describe};
 use crate::routing::{self, machine_of};
 use crate::streams::{Out, Streams};
-use maitty_desktop_client::{FleetCommand, PaneCommand};
+use maitty_desktop_client::PaneCommand;
 use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
 use maitty_shared::agent_commands::AgentCommand;
-use maitty_shared::repositories::RepositoryIndex;
 use maitty_shared::conversation::Provider;
 use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
 use maitty_shared::protocol::{COMPATIBLE_SINCE, ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId};
-use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
+use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -72,8 +71,6 @@ const GITHUB_OWNERS_EVENT: &str = "github-owners";
 const MOST_GITHUB_WORD_BYTES: usize = 256;
 /// The slash commands and skills an agent takes on a machine: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
 const AGENT_COMMANDS_EVENT: &str = "agent-commands";
-/// The git repositories a machine's daemon found: `{machine, tag, answer}`, `answer` a `RepositoryIndex`.
-const REPOSITORIES_EVENT: &str = "repositories";
 /// Longer than any folder a daemon takes.
 const MOST_AGENT_FOLDER_BYTES: usize = 4096;
 /// Where an agent's sign-in stands on this computer: `{machine, tag, agent, state, link, code, failure}`.
@@ -453,12 +450,6 @@ impl Wire {
         )
     }
 
-    /// A fleet request for another machine's daemon: the machine's line takes it without waiting.
-    /// Refused, naming the machine, when the machine has no line or the request is not valid.
-    pub fn fleet(&self, machine: Option<u16>, command: FleetCommand) -> Result<(), String> {
-        self.send(machine_of(machine), command.message()?)
-    }
-
     /// Start a terminal session in `folder` on another machine. The folder is a path there: one
     /// that does not exist opens in that machine's home folder, so `~` is a fair default.
     /// Refused, naming the machine, when it has no line.
@@ -611,13 +602,6 @@ impl Wire {
             return Err("That folder cannot be sent".to_string());
         }
         self.send(machine_of(Some(machine)), ClientMsg::Query(Query::AgentCommands { agent, folder: folder.to_owned(), tag }))
-    }
-
-    /// Ask a machine's daemon (this computer's when none is named) for the git repositories it found on
-    /// its computer, searching again first when `rescan`. The daemon decides everything; nothing here
-    /// can be a bad request. The answer comes back as a `repositories` event carrying `tag`.
-    pub fn repositories(&self, machine: Option<u16>, rescan: bool, tag: u64) -> Result<(), String> {
-        self.send(machine_of(machine), ClientMsg::Query(Query::Repositories { rescan, tag }))
     }
 
     /// Ask this computer's daemon to list, add, switch or remove an extension. The daemon checks the request, and an add
@@ -797,14 +781,6 @@ pub fn agent_commands_on(wire: tauri::State<'_, Wire>, machine: u16, agent: Stri
     wire.agent_commands(machine, &agent, &folder, tag)
 }
 
-/// Asks a machine (this computer when `machine` is left out) for the git repositories its daemon found, for
-/// the folder picker; `rescan` makes it search again first. The answer arrives as a `repositories` event with
-/// the same `tag`.
-#[tauri::command]
-pub fn repositories(wire: tauri::State<'_, Wire>, machine: Option<u16>, rescan: bool, tag: u64) -> Result<(), String> {
-    wire.repositories(machine, rescan, tag)
-}
-
 /// Asks the daemon for the shared settings; the answer arrives as a `shared-settings` event.
 #[tauri::command]
 pub fn get_shared_settings(wire: tauri::State<'_, Wire>) -> Result<(), String> {
@@ -813,7 +789,7 @@ pub fn get_shared_settings(wire: tauri::State<'_, Wire>) -> Result<(), String> {
 
 /// Changes one shared setting. `key` is the setting's name in config.toml terms (`default_agent`,
 /// `new_session_view`, `sidebar_side`, `theme_dark`, `theme_light`, `appearance`, `spinner`,
-/// `start_dir`, `reduce_motion`, `window_style`) and `value` the kind it takes; anything else is
+/// `start_dir`, `reduce_motion`) and `value` the kind it takes; anything else is
 /// refused here, and the daemon checks the value again.
 #[tauri::command]
 pub fn set_shared_setting(
@@ -867,10 +843,6 @@ pub(crate) fn setting_from_wire(
         "appearance" => (
             SettingKey::Appearance,
             SettingValue::Appearance(word::<Appearance>(value)?),
-        ),
-        "window_style" => (
-            SettingKey::WindowStyle,
-            SettingValue::WindowStyle(word::<WindowStyle>(value)?),
         ),
         "update_machines" => match value {
             serde_json::Value::Bool(on) => (SettingKey::UpdateMachines, SettingValue::Bool(on)),
@@ -1086,12 +1058,6 @@ pub enum Reaction {
         tag: u64,
         answer: Result<Vec<AgentCommand>, String>,
     },
-    /// The git repositories a machine found, for the window that asked.
-    Repositories {
-        machine: MachineId,
-        tag: u64,
-        found: RepositoryIndex,
-    },
     /// What a request about extensions did, for the window that asked.
     Extensions {
         machine: MachineId,
@@ -1199,7 +1165,6 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
             Out::AgentCommands { machine, tag, answer } => Some(Reaction::AgentCommands { machine, tag, answer }),
-            Out::Repositories { machine, tag, found } => Some(Reaction::Repositories { machine, tag, found }),
             Out::Extensions { machine, tag, answer } => Some(Reaction::Extensions { machine, tag, answer }),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
@@ -1492,9 +1457,6 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::AgentCommands { machine, tag, answer } => {
                 let _ = app.emit(AGENT_COMMANDS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
-            Reaction::Repositories { machine, tag, found } => {
-                let _ = app.emit(REPOSITORIES_EVENT, TaggedAnswer { machine: machine.0, tag, answer: found });
-            }
             Reaction::Extensions { machine, tag, answer } => {
                 let _ = app.emit(EXTENSIONS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
             }
@@ -1557,6 +1519,7 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
 mod tests {
     use super::*;
     use maitty_shared::protocol::ServerMsg;
+    use maitty_shared::settings_view::WindowStyle;
 
     #[test]
     fn a_github_list_reaches_the_window_as_one_of_four_named_states() {
@@ -1696,8 +1659,8 @@ mod tests {
     fn a_shared_setting_is_typed_by_its_name_and_a_wrong_kind_is_refused() {
         use serde_json::json;
         assert_eq!(
-            setting_from_wire("window_style", json!("flat")).unwrap(),
-            (SettingKey::WindowStyle, SettingValue::WindowStyle(WindowStyle::Flat))
+            setting_from_wire("sidebar_side", json!("right")).unwrap(),
+            (SettingKey::SidebarSide, SettingValue::SidebarSide(SidebarSide::Right))
         );
         assert_eq!(
             setting_from_wire("reduce_motion", json!(true)).unwrap(),
@@ -1725,7 +1688,8 @@ mod tests {
         );
         assert!(setting_from_wire("helpers_at_once", json!("8")).is_err());
         assert!(setting_from_wire("helpers_at_once", json!(2.5)).is_err());
-        assert!(setting_from_wire("window_style", json!("tiled")).is_err(), "tiled is gone");
+        assert!(setting_from_wire("sidebar_side", json!("top")).is_err());
+        assert!(setting_from_wire("window_style", json!("flat")).is_err(), "the window has one style");
         assert!(setting_from_wire("reduce_motion", json!("yes")).is_err());
         assert!(setting_from_wire("start_dir", json!(3)).is_err());
         assert!(setting_from_wire("machines", json!("x")).is_err(), "only the shared keys are reachable");

@@ -21,7 +21,6 @@ mod new_chat;
 mod open_link;
 mod output_socket;
 mod performance;
-mod project_files;
 mod pull_requests;
 pub mod routing;
 pub mod streams;
@@ -31,7 +30,7 @@ mod terminal_stream;
 mod tray;
 mod worktrees;
 
-use maitty_desktop_client::{FleetCommand, PaneCommand};
+use maitty_desktop_client::PaneCommand;
 use tauri::Manager;
 
 /// The daemon to start. A packaged app runs the shared per-user `maiker`, which it first brings
@@ -193,17 +192,6 @@ async fn read_conversation(
     limit: usize,
 ) -> Result<serde_json::Value, String> {
     maitty_desktop_client::read_conversation(id, cursor, limit, wire.daemon(machine, || daemon_executable(&app))?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn conversation_diff(
-    app: tauri::AppHandle,
-    id: u64,
-    generation: u64,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::conversation_diff(id, generation, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -542,37 +530,6 @@ fn default_session_folder(app: tauri::AppHandle) -> Result<String, String> {
         .home_dir()
         .map(|home| home.display().to_string())
         .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-async fn suggest_project_folders(typed: String) -> Result<Vec<String>, String> {
-    tauri::async_runtime::spawn_blocking(move || project_files::suggest_folders(&typed))
-        .await
-        .map_err(|error| error.to_string())
-}
-
-#[tauri::command]
-async fn conversation_files(
-    app: tauri::AppHandle,
-    id: u64,
-    generation: u64,
-    path: Option<String>,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::conversation_files(id, generation, path, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn conversation_file(
-    app: tauri::AppHandle,
-    id: u64,
-    generation: u64,
-    path: String,
-) -> Result<String, String> {
-    maitty_desktop_client::conversation_file(id, generation, path, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
 }
 
 #[tauri::command]
@@ -919,17 +876,6 @@ async fn drop_prewarmed_agent() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn start_terminal_session(
-    app: tauri::AppHandle,
-    cwd: PathBuf,
-    provider: maitty_shared::conversation::Provider,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::start_terminal_session(cwd, provider, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
 async fn send_when_agent_ready(
     app: tauri::AppHandle,
     wire: tauri::State<'_, terminal_stream::Wire>,
@@ -1014,61 +960,6 @@ async fn rename_terminal_session(
 }
 
 #[tauri::command]
-async fn pin_terminal_session(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    pinned: bool,
-) -> Result<serde_json::Value, String> {
-    if routing::is_remote(machine) {
-        return wire
-            .command(machine, term, PaneCommand::Pin(pinned))
-            .map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::pin_terminal_session(term, pinned, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn archive_terminal_session(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    archived: bool,
-) -> Result<serde_json::Value, String> {
-    if routing::is_remote(machine) {
-        return wire
-            .command(machine, term, PaneCommand::Archive(archived))
-            .map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::archive_terminal_session(term, archived, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Snooze a pane until `until` (unix seconds), or wake it (`None`).
-#[tauri::command]
-async fn snooze_terminal_session(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    until: Option<u64>,
-) -> Result<serde_json::Value, String> {
-    if routing::is_remote(machine) {
-        return wire
-            .command(machine, term, PaneCommand::Snooze(until))
-            .map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::snooze_terminal_session(term, until, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
 async fn reload_terminal_session(
     app: tauri::AppHandle,
     wire: tauri::State<'_, terminal_stream::Wire>,
@@ -1131,59 +1022,8 @@ async fn answer_chat_helpers(id: u64, choice: String) -> Result<serde_json::Valu
         .map_err(|error| format!("{error:#}"))
 }
 
-/// Does something to a pane's checks: `rerun`, `override` (with a reason), `undo` an override, or `approve` a
-/// repo's check command (`choice`: `once`, `always` or `never`; `command` is the one the person was shown). Works for
-/// a pane on another machine as well: the checks are that machine's daemon's.
-#[tauri::command]
-#[allow(clippy::too_many_arguments)]
-async fn check_action(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    action: String,
-    name: Option<String>,
-    reason: Option<String>,
-    choice: Option<String>,
-    command: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let pane = match action.as_str() {
-        "rerun" => PaneCommand::RerunCheck { name },
-        "override" => PaneCommand::OverrideCheck { name, reason: reason.unwrap_or_default() },
-        "undo" => PaneCommand::UndoOverride { name },
-        "approve" => PaneCommand::ApproveCheck {
-            name: name.ok_or("a check approval names the check")?,
-            choice: maitty_desktop_client::approval_choice(&choice.ok_or("a check approval needs a choice")?).map_err(|error| format!("{error:#}"))?,
-            command: command.ok_or("a check approval needs the command that was shown")?,
-        },
-        other => return Err(format!("unknown check action: {other}")),
-    };
-    if routing::is_remote(machine) {
-        return wire.command(machine, term, pane).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::check_command(term, pane, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Saves the text of one existing file of the checkout `term` is in. The daemon checks the path (inside the
-/// checkout, no links, not under `.git`) and makes no new file. This computer's panes only.
-#[tauri::command]
-async fn write_project_file(
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    path: String,
-    contents: String,
-) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "Editing a file")?;
-    maitty_desktop_client::write_project_file(term, path, contents)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
 /// Saves an editor's text over an existing file of the checkout `term` is in, when it is still the `version`
-/// the editor read. The daemon makes the same checks as `write_project_file`. A pane of another machine saves
+/// the editor read. The daemon refuses anything but a plain file inside the checkout. A pane of another machine saves
 /// only a markdown document, through that machine's own daemon (ADR 0014).
 #[tauri::command]
 async fn save_project_file(
@@ -1250,38 +1090,6 @@ async fn handoff_brief(
         .map_err(|error| format!("{error:#}"))
 }
 
-/// The tail of a pane's last output for check `name` (None: the headline one). This computer's panes only.
-#[tauri::command]
-async fn check_output(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-    name: Option<String>,
-) -> Result<serde_json::Value, String> {
-    wire.require_local(machine, "A check's output")?;
-    maitty_desktop_client::check_output(term, name, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn close_terminal_session(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-) -> Result<serde_json::Value, String> {
-    if routing::is_remote(machine) {
-        return wire
-            .command(machine, term, PaneCommand::Close)
-            .map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::close_terminal_session(term, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
 #[tauri::command]
 async fn close_session_with_undo(
     app: tauri::AppHandle,
@@ -1295,112 +1103,6 @@ async fn close_session_with_undo(
             .map(|()| serde_json::Value::Null);
     }
     maitty_desktop_client::close_session_with_undo(term, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn undo_close_terminal_session(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    term: u32,
-) -> Result<serde_json::Value, String> {
-    if routing::is_remote(machine) {
-        return wire
-            .command(machine, term, PaneCommand::UndoClose)
-            .map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::undo_close_terminal_session(term, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Start a named fleet (holding one shell) on a machine. The answer to a request for another machine arrives with the next state update.
-#[tauri::command]
-async fn create_fleet(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    name: String,
-) -> Result<serde_json::Value, String> {
-    let command = FleetCommand::Create { name };
-    if routing::is_remote(machine) {
-        return wire.fleet(machine, command).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::fleet_command(command, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Rename a fleet. The answer to a request for another machine arrives with the next state update.
-#[tauri::command]
-async fn rename_fleet(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    fleet: u32,
-    name: String,
-) -> Result<serde_json::Value, String> {
-    let command = FleetCommand::Rename { fleet, name };
-    if routing::is_remote(machine) {
-        return wire.fleet(machine, command).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::fleet_command(command, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Recolour a fleet with one of `maitty_desktop_client::FLEET_COLORS`. The answer to a request for another machine arrives with the next state update.
-#[tauri::command]
-async fn recolor_fleet(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    fleet: u32,
-    color: u8,
-) -> Result<serde_json::Value, String> {
-    let command = FleetCommand::Recolor { fleet, color };
-    if routing::is_remote(machine) {
-        return wire.fleet(machine, command).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::fleet_command(command, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Move a session to another fleet of the same machine. The answer to a request for another machine arrives with the next state update.
-#[tauri::command]
-async fn move_session_to_fleet(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    session: u32,
-    fleet: u32,
-) -> Result<serde_json::Value, String> {
-    let command = FleetCommand::MoveSession { term: session, fleet };
-    if routing::is_remote(machine) {
-        return wire.fleet(machine, command).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::fleet_command(command, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-/// Start a shell in a fleet, in `folder` or the fleet's own folder. The answer to a request for another machine arrives with the next state update.
-#[tauri::command]
-async fn start_shell_in_fleet(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    fleet: u32,
-    folder: Option<String>,
-) -> Result<serde_json::Value, String> {
-    let command = FleetCommand::StartShell { fleet, folder };
-    if routing::is_remote(machine) {
-        return wire.fleet(machine, command).map(|()| serde_json::Value::Null);
-    }
-    maitty_desktop_client::fleet_command(command, daemon_executable(&app)?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1496,18 +1198,6 @@ async fn close_conversation_with_undo(
 }
 
 #[tauri::command]
-async fn undo_close_conversation(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    id: u64,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::undo_close_conversation(id, wire.daemon(machine, || daemon_executable(&app))?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
 async fn answer_conversation_input(
     app: tauri::AppHandle,
     wire: tauri::State<'_, terminal_stream::Wire>,
@@ -1582,43 +1272,6 @@ async fn rename_conversation(
         .map_err(|error| format!("{error:#}"))
 }
 
-#[tauri::command]
-async fn archive_conversation(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    id: u64,
-    archived: bool,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::archive_conversation(id, archived, wire.daemon(machine, || daemon_executable(&app))?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn resume_codex_conversation(
-    app: tauri::AppHandle,
-    id: u64,
-    generation: u64,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::resume_codex_conversation(id, generation, daemon_executable(&app)?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn end_conversation(
-    app: tauri::AppHandle,
-    wire: tauri::State<'_, terminal_stream::Wire>,
-    machine: Option<u16>,
-    id: u64,
-    generation: u64,
-) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::end_conversation(id, generation, wire.daemon(machine, || daemon_executable(&app))?)
-        .await
-        .map_err(|error| format!("{error:#}"))
-}
-
 /// A chat session (ADR 0003): a structured Claude or Codex conversation the daemon owns, in `cwd` or,
 /// with `branch`, in a new worktree of the project at `cwd`.
 /// `permissions` is the posture picked for it (ADR 0020): read-only, workspace-write, which asks before a
@@ -1678,50 +1331,6 @@ async fn start_acp_chat(
     maitty_desktop_client::start_acp_chat(cwd, agent, wire.start_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
-}
-
-#[tauri::command]
-async fn create_conversation(
-    app: tauri::AppHandle,
-    cwd: PathBuf,
-    provider: maitty_shared::conversation::Provider,
-    permissions: String,
-) -> Result<serde_json::Value, String> {
-    let permissions = maitty_desktop_client::Permissions::parse(&permissions)
-        .map_err(|error| format!("{error:#}"))?;
-    maitty_desktop_client::create_conversation(
-        cwd,
-        provider,
-        permissions,
-        None,
-        daemon_executable(&app)?,
-    )
-    .await
-    .map_err(|error| format!("{error:#}"))
-}
-
-/// Runs a search of the disk away from the window's own thread, where a plain command runs and
-/// would hold up every key and frame for as long as the search takes.
-async fn found_off_the_window_thread(
-    find: fn() -> anyhow::Result<PathBuf>,
-) -> Result<String, String> {
-    tauri::async_runtime::spawn_blocking(move || {
-        find()
-            .map(|path| path.to_string_lossy().into_owned())
-            .map_err(|error| format!("{error:#}"))
-    })
-    .await
-    .map_err(|error| format!("the search for the program stopped: {error}"))?
-}
-
-#[tauri::command]
-async fn codex_executable_path() -> Result<String, String> {
-    found_off_the_window_thread(maitty_desktop_client::codex_app_server_executable).await
-}
-
-#[tauri::command]
-async fn claude_executable_path() -> Result<String, String> {
-    found_off_the_window_thread(maitty_desktop_client::claude_executable).await
 }
 
 #[tauri::command]
@@ -1862,10 +1471,6 @@ pub fn run() {
             read_conversation,
             read_helper,
             read_specialists,
-            conversation_diff,
-            conversation_files,
-            conversation_file,
-            suggest_project_folders,
             default_session_folder,
             terminal_stream::terminal_history,
             terminal_stream::watch_terminal_output,
@@ -1880,7 +1485,6 @@ pub fn run() {
             terminal_stream::github_owners,
             pull_requests::pull_requests,
             terminal_stream::agent_commands_on,
-            terminal_stream::repositories,
             terminal_stream::extensions,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
@@ -1906,7 +1510,6 @@ pub fn run() {
             start_github_sign_in,
             prewarm_agent_session,
             drop_prewarmed_agent,
-            start_terminal_session,
             start_shell_session,
             rename_terminal_session,
             queue_follow_up,
@@ -1915,46 +1518,26 @@ pub fn run() {
             mark_terminal_seen,
             answer_helpers,
             answer_chat_helpers,
-            check_action,
             answer_secret,
             handoff_brief,
             worktree_overlaps,
-            write_project_file,
             save_project_file,
-            check_output,
-            pin_terminal_session,
-            archive_terminal_session,
-            snooze_terminal_session,
             reload_terminal_session,
-            close_terminal_session,
             close_session_with_undo,
-            undo_close_terminal_session,
-            create_fleet,
-            rename_fleet,
-            recolor_fleet,
-            move_session_to_fleet,
-            start_shell_in_fleet,
             send_conversation,
             approve_conversation,
             allow_conversation_always,
             allowed_commands,
             forget_allowed_command,
             close_conversation_with_undo,
-            undo_close_conversation,
             answer_conversation_input,
             cancel_conversation,
             dequeue_conversation,
             send_conversation_now,
             rename_conversation,
-            archive_conversation,
-            resume_codex_conversation,
-            create_conversation,
             start_chat_session,
             resume_chat_session,
             start_acp_chat,
-            end_conversation,
-            codex_executable_path,
-            claude_executable_path,
             daemon_restart_status,
             restart_mismatched_daemon,
             daemon_update_status,

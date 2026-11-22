@@ -1112,7 +1112,7 @@ plan limit does not end it: the daemon continues that agent itself. Snoozing nev
 clients display it. Only a person snoozes: an agent pane's connection is refused. The command has its own `introduced_in` arm
 (`SNOOZE_SINCE`); `COMPATIBLE_SINCE` stays 78, since an older daemon is simply not asked and an older client reads
 the pane without the field.
-The desktop app sends it through the `snooze_terminal_session { machine, term, until }` command (`PaneCommand::Snooze`).
+The desktop app does not snooze a pane.
 
 Protocol 95 adds `Query::CloneRepo { address, parent, tag }` and `Reply::Cloned { tag, outcome }`
 (`CLONE_SINCE`; `COMPATIBLE_SINCE` stays): `git clone` of `address` into a new folder, named after the

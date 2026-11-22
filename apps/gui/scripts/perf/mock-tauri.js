@@ -216,8 +216,6 @@
         return snapshot()
       case 'default_session_folder':
         return '/home/vox'
-      case 'suggest_project_folders':
-        return []
       case 'terminal_history': {
         // Raw bytes, as the host answers since the output moved to a channel: the sequence number
         // as 8 big-endian bytes, then the screen.

@@ -90,7 +90,6 @@ impl Host {
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
                 | Reaction::AgentCommands { .. }
-                | Reaction::Repositories { .. }
                 | Reaction::Extensions { .. }
                 | Reaction::CloneProgress { .. }
                 | Reaction::FolderGit { .. }
