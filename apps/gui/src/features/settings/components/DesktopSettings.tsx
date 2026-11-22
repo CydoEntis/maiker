@@ -18,7 +18,9 @@ import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
 import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
-import { type ChatAgent } from '@/features/workspace/model/chatView'
+import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
+import { asksFirst, confirmAsk, withSkipped } from '@/features/confirm/confirm'
+import { ConfirmHost } from '@/features/confirm/ConfirmDialog'
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { Icon } from '@/features/workspace/components/glyphs'
@@ -203,6 +205,8 @@ function foundLine(rows: number, query: string): string {
 export function DesktopSettings(props: DesktopSettingsProps) {
   const { section, preferences, onChange } = props
   const update = <K extends keyof SettingsPreferences>(key: K, value: SettingsPreferences[K]) => { onChange({ ...preferences, [key]: value }) }
+  // One change, not two: the view and a ticked "Don't ask again" are saved together, so neither overwrites the other.
+  const switchView = (view: PaneView, dontAskAgain: boolean) => { onChange({ ...preferences, openSessionsIn: view, confirmSkipped: dontAskAgain ? withSkipped(preferences.confirmSkipped, 'switch-view') : preferences.confirmSkipped }) }
 
   // Focus lands on the current section, not the first control; Radix traps it and gives it back on close.
   const focusSection = (event: Event) => {
@@ -268,7 +272,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
 
   const page = (id: DesktopSettingsSection): ReactNode => {
     switch (id) {
-      case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
+      case 'general': return <GeneralSection preferences={preferences} update={update} onSwitchView={switchView} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
       case 'chat': return <ChatSection preferences={preferences} update={update} />
       case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
@@ -436,16 +440,24 @@ function useSavedFlash(): [boolean, () => void] {
   return [shown, flash]
 }
 
-function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
+function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onSwitchView: (view: PaneView, dontAskAgain: boolean) => void; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
   // The folder comes from the system's folder picker, which only offers one that exists, so nothing is typed or checked.
   const home = preferences.startFolder === ''
   const [saved, flashSaved] = useSavedFlash()
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
+  // The view asked for, while the question about it is open. Open sessions stay what they are (ADR 0020), which is the surprise it explains.
+  const [switchTo, setSwitchTo] = useState<PaneView | null>(null)
+  const pickView = (view: PaneView) => {
+    if (view === preferences.openSessionsIn) return
+    if (asksFirst(preferences.confirmSkipped, 'switch-view')) setSwitchTo(view)
+    else onSwitchView(view, false)
+  }
   return (
     <>
       <Card title="How you work">
         <Row label="Open sessions in" detail="What a new session is: a chat, or the agent’s own CLI in a terminal. Sessions that are already open stay what they were started as. A chat stays a chat in either view; a terminal agent is shown as a chat only while this is on Chat.">
-          <ViewSwitch view={preferences.openSessionsIn} onChange={(view) => { update('openSessionsIn', view) }} />
+          <ViewSwitch view={preferences.openSessionsIn} onChange={pickView} />
+          <ConfirmHost pending={switchTo === null ? null : { ask: confirmAsk('switch-view', switchTo), answer: (confirmed, dontAskAgain) => { setSwitchTo(null); if (confirmed) onSwitchView(switchTo, dontAskAgain) } }} />
         </Row>
       </Card>
       <Card

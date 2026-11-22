@@ -54,7 +54,7 @@ function Body({ read, home, locked, onPick, onRetry }: { read: RecentRead; home:
       </p>
     )
   }
-  if (read.list.length === 0) return <p role="status">No closed sessions yet. A chat you close shows here once its Undo has passed.</p>
+  if (read.list.length === 0) return <p role="status">No closed sessions yet. A chat you close shows here a few seconds later.</p>
   const now = nowSeconds()
   return (
     <ul className="mx-recent-list" aria-label="Closed sessions">

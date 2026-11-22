@@ -90,4 +90,26 @@ describe('a project heading\'s starts in the window', () => {
     workspace.current = { ...windowWith(null, []), chatView: true, newTerminal }
     expect(renderHook(() => useProjectActions()).result.current(vi.fn()).onNewTerminal).toBeUndefined()
   })
+
+  it('asks before a project leaves the sidebar, by its name, and removes it only on the answer', () => {
+    const confirm = vi.fn()
+    const close = vi.fn()
+    workspace.current = { ...windowWith(null, []), confirm, openedProjects: { machines: [], close, closable: () => ({ ok: true, value: [] }) } }
+    const answer = renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')
+    expect(answer.ok).toBe(true)
+    expect(close).not.toHaveBeenCalled()
+    const [ask, run] = confirm.mock.calls[0] as [{ kind: string; title: string }, () => void]
+    expect(ask.kind).toBe('remove-project')
+    expect(ask.title).toContain('shop')
+    run()
+    expect(close).toHaveBeenCalledWith(SHOP)
+  })
+
+  it('refuses at once, without asking, while a session runs in the project', () => {
+    const confirm = vi.fn()
+    const refusal = { ok: false as const, error: { code: 'sessions-running' as const, running: [onMain()] } }
+    workspace.current = { ...windowWith(null, []), confirm, openedProjects: { machines: [], close: vi.fn(), closable: () => refusal } }
+    expect(renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')).toBe(refusal)
+    expect(confirm).not.toHaveBeenCalled()
+  })
 })

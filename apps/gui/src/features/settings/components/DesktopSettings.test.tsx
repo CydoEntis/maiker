@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -140,6 +140,32 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings(section)
     await user.click(within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: choice }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, ...patch })
+  })
+
+  it('asks once before the view changes, changes nothing on Cancel, and saves the view with the answer', async () => {
+    const user = userEvent.setup()
+    const { onChange } = renderSettings('general')
+    const chat = within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' })
+
+    await user.click(chat)
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
+    expect(onChange).not.toHaveBeenCalled()
+
+    await user.click(chat)
+    const question = await screen.findByRole('alertdialog')
+    await user.click(within(question).getByRole('checkbox', { name: 'Don’t ask again' }))
+    await user.click(within(question).getByRole('button', { name: 'Switch to Chat' }))
+    expect(onChange).toHaveBeenCalledTimes(1)
+    expect(onChange).toHaveBeenCalledWith({ ...PREFS, openSessionsIn: 'chat', confirmSkipped: ['switch-view'] })
+  })
+
+  it('changes the view without asking once Don\'t ask again was ticked', async () => {
+    const user = userEvent.setup()
+    const preferences: SettingsPreferences = { ...PREFS, confirmSkipped: ['switch-view'] }
+    const { onChange } = renderSettings('general', { preferences })
+    await user.click(within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' }))
+    expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
+    expect(onChange).toHaveBeenCalledWith({ ...preferences, openSessionsIn: 'chat' })
   })
 
   it('saves exports to Downloads until a folder is picked with the system picker', async () => {

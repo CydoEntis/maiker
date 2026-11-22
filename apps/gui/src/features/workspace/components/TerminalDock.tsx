@@ -32,7 +32,7 @@ function tabName(index: number): string {
  * daemon owns; closing the dock only hides them.
  */
 export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: boolean }) {
-  const { tabsOf, activeTerminals, setActiveTerminals, addAgentTerminal, closeAgentTerminal, sessionMap, preferences, setPreferences, look, online, canStart, modalOpen, openPath, pasteImage, terminalHandles, toggleTerminal, dockFocused, setDockFocused, platform, root } = useWorkspace()
+  const { tabsOf, activeTerminals, setActiveTerminals, addAgentTerminal, closeAgentTerminals, sessionMap, preferences, setPreferences, look, online, canStart, modalOpen, openPath, pasteImage, terminalHandles, toggleTerminal, dockFocused, setDockFocused, platform, root } = useWorkspace()
   const dock = preferences.terminalDock
   const axis = AXIS[dock]
   const tabs = tabsOf(agent.id)
@@ -125,7 +125,7 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
                 <button type="button" role="tab" aria-selected={on} className="mx-tdock-pick" onClick={() => { pick(tabIds(each).includes(picked ?? '') ? picked : lead) }}>
                   <span className="mx-tdock-prompt" aria-hidden="true">&gt;_</span>{tabName(index)}
                 </button>
-                <button type="button" className="mx-tdock-tab-close" aria-label={`Close ${tabName(index)}`} title="Close this tab · ends its shells" disabled={!online} onClick={() => { for (const id of tabIds(each)) closeAgentTerminal(id) }}><Icon name="close" size={10} /></button>
+                <button type="button" className="mx-tdock-tab-close" aria-label={`Close ${tabName(index)}`} title="Close this tab · ends its shells" disabled={!online} onClick={() => { closeAgentTerminals(tabIds(each), tabName(index)) }}><Icon name="close" size={10} /></button>
               </span>
             )
           })}
@@ -189,7 +189,7 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
                         else terminalHandles.current.delete(shell.id)
                       }}
                     />
-                    {total > 1 && <button type="button" className="mx-tdock-split-close" aria-label="Close this split" title="Close this split · ends its shell" disabled={!online} onClick={(event) => { event.stopPropagation(); closeAgentTerminal(id) }}><Icon name="close" size={11} /></button>}
+                    {total > 1 && <button type="button" className="mx-tdock-split-close" aria-label="Close this split" title="Close this split · ends its shell" disabled={!online} onClick={(event) => { event.stopPropagation(); closeAgentTerminals([id], 'this split') }}><Icon name="close" size={11} /></button>}
                   </div>
                 )
               })}

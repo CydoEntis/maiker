@@ -1,6 +1,7 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
 import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction, type ShortcutView } from './model/shortcuts'
 import { toast } from '@/lib/toast'
+import { isAlertDialogOpen } from '@/components/ui/alert-dialog'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
@@ -17,11 +18,10 @@ import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you
 export type OpenProject = (kind: 'folder') => void
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
-export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
+export function useShortcutKeys({ view, runShortcut, dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setAddMachineOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
   /** The view the focused session shows: in the chat view plain Ctrl+key forms are taken, in the terminal view never. */
   view: ShortcutView
   runShortcut: (action: ShortcutAction) => void
-  canUndoClose: boolean
   dialogOpen: boolean
   addMachineOpen: boolean
   onNewChatPage: boolean
@@ -40,8 +40,8 @@ export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, a
   platform: Platform
   keyOverrides: KeyOverrides
 }) {
-  const shortcutState = useRef({ view, runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
-  useEffect(() => { shortcutState.current = { view, runShortcut, canUndoClose: () => canUndoClose, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
+  const shortcutState = useRef({ view, runShortcut, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
+  useEffect(() => { shortcutState.current = { view, runShortcut, settingsOpen: dialogOpen, addMachineOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
   useEffect(() => {
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
@@ -56,6 +56,8 @@ export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, a
     const onKeyDown = (event: KeyboardEvent) => {
       const state = shortcutState.current
       if (state.welcomeOpen) return
+      // A question is on screen: every key, Esc too, is its own until it is answered.
+      if (isAlertDialogOpen()) return
       // Settings › Hotkeys is taking down a new key: every key, Esc too, is the field's.
       if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
       const match = matchShortcut(event, platform, state.keyOverrides, state.view)
@@ -89,8 +91,6 @@ export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, a
       }
       if (state.settingsOpen && !(state.onNewChatPage && match !== null && NEW_CHAT_PAGE_ACTIONS.has(match.action))) return
       if (!match) return
-      // Undo is the field's own inside a text field, and the terminal's own when nothing was just closed. A terminal takes its keys through a hidden textarea, which is not a text field here.
-      if (match.action === 'undo-close' && (!state.canUndoClose() || (event.target instanceof Element && event.target.closest('input, textarea:not(.xterm-helper-textarea), [contenteditable="true"]')))) return
       event.preventDefault()
       event.stopPropagation()
       state.runShortcut(match.action)
@@ -101,7 +101,7 @@ export function useShortcutKeys({ view, runShortcut, canUndoClose, dialogOpen, a
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   openProject: OpenProject
   newSession: (machine?: number) => void
   focusedMachineNumber: number
@@ -119,7 +119,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
   focusedSession: SessionView | undefined
   flash: (text: string) => void
   showSessionById: (sessionId: string) => void
-  undoLastClose: () => void
   setFocusMode: Dispatch<SetStateAction<boolean>>
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
   setTextSize: (size: number) => void
@@ -179,9 +178,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
       case 'performance':
         setSettingsSection('performance')
         return
-      case 'undo-close':
-        undoLastClose()
-        return
       case 'usage':
         setSettingsSection('usage')
         return
@@ -238,6 +234,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         }
         return
     }
-  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, undoLastClose, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
+  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

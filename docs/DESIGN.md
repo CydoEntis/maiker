@@ -572,7 +572,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   under chat or Move terminals to side panel (agents); then Rename…, Maximize pane, and New
   terminal (agents) or Clear and Copy folder path (shells); then **Close**. Closing one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
-  sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session as before, with Undo.
+  sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session, after the confirm.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
   or tabs. A 264px card on `--card` with a `--line` hairline, 8px from the window's edges. Its header reads **Chats**
   (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then three 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu** (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner: a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows before it scrolls, **All projects** first while the search is empty; picking one narrows the tree to that project's sessions, and the menu stays open; **Reset** appears while a project is picked, and the ≡ button turns `--accent-text` (`data-on`) then. It has no grouping or order choice: the list is always one tree, `model/sidebarTree.ts`), and the **Open a project** `+` (the Open a project dialog for this computer; see *Starting a session*, below).
@@ -709,7 +709,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   History, `/permissions` (`/allowed-tools`) Settings › Permissions with the approved commands, `/resume` Recent sessions,
   and `/help` puts a lone `/` in the box so the list shows every command. Typed with something after the name they go
   to Claude Code as typed, which has a use for it. `/exit` (`/quit`), `/background` (`/bg`) and `/clear` are tagged
-  `asks first`: a `ConfirmCloseDialog` with Cancel focused says what happens, and only a yes sends the command as typed
+  `asks first`: the confirm dialog (`ConfirmDialog`, no Don't ask again) with Cancel focused says what happens, and only a yes sends the command as typed
   (typed into the terminal for the terminal's ones), refused with a toast while the agent works.
   **Side answers** (tagged `answered here`): `/btw <question>` and the commands that only report, typed alone
   (`/context`, `/usage`, `/skill-doctor`, `/goal`, `/advisor`, `/config`, `/mcp`), are answered in a card above the
@@ -856,17 +856,24 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   easing a split made the terminal re-fit every frame and its text jumped. What the eye sees between the two layouts is the glide below,
   drawn from pictures; dragging a divider has no glide. A terminal pane, header included, is one
   surface (`--main`), with no band where the header ends.
-- **Close ends the session, asking first when there is work to lose, with Undo.** The pane's **×**, the pane menu's
-  Close session, a row's Close session and Ctrl+Shift+W (⌘W) first open the confirm dialog (`ConfirmCloseDialog`:
-  "Close name?", Cancel and a red Close, or "Stop claude" for a running agent; Enter confirms, Esc cancels) unless every
-  session in question has already ended or is a shell with nothing running in it, which Undo brings back as it was.
-  Closing sends the daemon `CloseSession`: the session leaves the list at once and
-  its process runs on for 6 seconds. A toast "Closed name" with **Undo** stays for the same 6 seconds;
-  the button or ⌘Z (Ctrl+Shift+Z elsewhere; passed to the terminal when nothing was just closed, and left to a
-  text field inside one) sends `UndoClose` and puts the pane back in its place. An agent's own terminals (its
-  "New terminal" tabs) end with it and come back with it on Undo; the notice names the agent, not the count. A chat session closes the same way
-  (`ConversationClose`): the daemon archives it at once and stops its agent when the 6 seconds pass; Undo
-  (`ConversationUndoClose`) brings it back running. Only closing the window leaves sessions running.
+- **Close ends the session, and asks first.** The pane's **×**, the pane menu's Close, a row's Close session or Close
+  shell and Ctrl+Shift+W (⌘W) open the confirm dialog unless every session in question has already ended. There is no
+  Undo: the answer is the one chance to keep it. A session asks as *close a session*: "Close “name”?", what closing
+  interrupts ("Claude is still working. Closing stops it mid-turn." or "…is waiting for your answer. Closing stops
+  it."), "The session leaves the sidebar.", and under it what stays on disk (its branch, and its worktree when it has
+  one); the button is a red **Close session**. A plain shell, a terminal tab of the dock (all its shells at once) and
+  one of its splits ask as *close a terminal*: "Anything still running in this terminal stops.", **Close terminal**.
+  Closing sends the daemon `CloseSession` (`ConversationClose` for a chat): the session leaves the list at once. An
+  agent's own terminals (its "New terminal" tabs) end with it. Only closing the window leaves sessions running.
+- **The one confirm dialog** (`features/confirm`: `confirm.ts`, `useConfirm`, `ConfirmDialog`, `confirm.css`). 460px on
+  the dialog float, above the middle of the window: a 15px title, one 13px line, an optional muted line, then a row of
+  **Don't ask again** at the left and Cancel and the primary button at the right (the ink on `--fg`, or `--danger` for
+  an action that stops or removes something). Focus starts on the primary button; Enter presses the focused button and
+  confirms from the checkbox; Esc or a click outside cancels; focus goes back where it was. A kind is one entry in
+  `CONFIRMS` (`confirm.ts`) with its words: *close a session*, *close a terminal*, *switch the view*, *remove a
+  project*. A ticked Don't ask again counts only with a yes, is saved per kind with the settings (`confirmSkipped`) and
+  makes that kind's action run straight away from then on; nothing in Settings turns a question back on. While any
+  question is open (`isAlertDialogOpen`, `components/ui/alert-dialog.tsx`) the window's shortcut keys do nothing.
 - **An agent that ends by itself takes its pane with it.** A pane the desktop app started as an agent runs the agent
   inside a shell, which is left when the agent goes (`/exit`). The daemon ends that pane three seconds after the agent's
   own hook said its session was over (`close_ended_agents`, `AGENT_ENDED_GRACE`), never on a process scan that missed
@@ -906,7 +913,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   J ...); where two actions want the same Ctrl+Shift letter the second takes Ctrl+Alt+Shift (split
   down, broadcast). Ctrl with a non-letter (`,` `.` `/` `[` `]` `=` `1`-`9` Tab) is the window's
   too. A binding with `available: false` is registered but its key does nothing and the overlay
-  hides it until the feature lands; none is off now (Undo close is on).
+  hides it until the feature lands; none is off now.
   Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
 - **One key set for both views.** An action has the same keys in the Chat view and the Terminal view. On Windows and
   Linux no plain Ctrl+letter is ever taken, so a chat box keeps Ctrl+A, C, V, X, Z and Backspace and a terminal gets

@@ -27,7 +27,6 @@ const TABLE: readonly [ShortcutAction, string, string][] = [
   ['focus-previous', '⌘[', 'Ctrl+['],
   ['focus-next', '⌘]', 'Ctrl+]'],
   ['close', '⌘W', 'Ctrl+Shift+W'],
-  ['undo-close', '⌘Z', 'Ctrl+Shift+Z'],
   ['broadcast', '⌘⇧B', 'Ctrl+Alt+Shift+B'],
   ['palette', '⌘K', 'Ctrl+Shift+K'],
   ['jump-needs', '⌘J', 'Ctrl+Shift+J'],

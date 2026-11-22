@@ -283,11 +283,15 @@ on another day) beside it, and **Unsnooze** on hover and in its menu. **Bring ba
 itself when its time comes, and at once when the session needs you: you cannot snooze one that needs you now. A snooze
 lasts at most a week and is kept by the daemon, so every window sees it.
 
-### Undo close
+### Closing a session
 
-A closed session is not gone at once. It leaves the list but keeps running for 6 seconds, and **Undo** brings it back. In the desktop app, click **Undo** in the toast, or press
-`Cmd+Z` on macOS and `Ctrl+Shift+Z` elsewhere. In the terminal app, press the leader (`Ctrl+Space`), then `Ctrl+Z`, while the banner
-shows. After 6 seconds the process ends. Putting away has the same 6-second Undo; it ends nothing, so Undo only lists it again.
+The desktop app asks before it closes a session or a terminal, and says what stops and what stays on disk. Tick **Don't ask
+again** and that kind of close goes straight through from then on. There is no Undo there: a closed chat can be opened again
+from Recent sessions.
+
+In the terminal app a closed session is not gone at once. It leaves the list but keeps running for 6 seconds, and **Undo** brings
+it back: press the leader (`Ctrl+Space`), then `Ctrl+Z`, while the banner shows. After 6 seconds the process ends. Putting away
+has the same 6-second Undo in both apps; it ends nothing, so Undo only lists it again.
 
 ## Follow-ups and snapshots
 

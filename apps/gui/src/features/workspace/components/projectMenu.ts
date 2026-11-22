@@ -21,8 +21,11 @@ export type ProjectActions = {
   onNewTerminal?: ((machine: number, project: OpenedProject) => void) | undefined
   /** Opens the Open worktree dialog: the project's linked worktrees, to start a session in one. `name` is the heading's. */
   onOpenWorktree: (machine: number, project: OpenedProject, name: string) => void
-  /** Takes the project off the list, or refuses while a session runs in it (`useOpenedProjects().close`). */
-  onClose: (project: OpenedProject) => CloseResult
+  /**
+   * Takes the project off the list once the person confirms, or refuses now while a session runs in it
+   * (`useOpenedProjects().close`). `name` is the heading's, for the question.
+   */
+  onClose: (project: OpenedProject, name: string) => CloseResult
 }
 
 /** The project a heading stands for, and what decides which of its actions can run. */
@@ -79,7 +82,7 @@ export function projectMenuEntries(commands: ProjectCommands): MenuEntry[] {
 
 /** Closing never hides a running session: a refusal names the sessions in the way, so the person knows what to close. */
 function closeOrSayWhy(actions: ProjectActions, target: ProjectTarget): void {
-  const result = actions.onClose(target.project)
+  const result = actions.onClose(target.project, target.name)
   if (result.ok) return
   const { title, description } = closeRefusalWords(target.name, result.error)
   toast.info(title, { id: CLOSE_REFUSED_TOAST, description })

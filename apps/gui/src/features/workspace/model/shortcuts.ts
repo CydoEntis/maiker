@@ -44,7 +44,6 @@ export type ShortcutAction =
   | 'focus-previous'
   | 'focus-next'
   | 'close'
-  | 'undo-close'
   | 'toggle-sidebar'
   | 'settings'
   | 'palette'
@@ -121,7 +120,6 @@ export const BINDINGS: readonly Binding[] = [
   { action: 'focus-next', label: 'Next pane', group: 'Panes', mac: [cmd(']')], other: [{ mods: ['ctrl'], key: ']' }], available: true },
   { action: 'close', label: 'Close pane or session', group: 'Panes', mac: [cmd('W')], other: [ctrlShift('W')], chat: [ctrl('W'), ctrlShift('W')], available: true },
   // Closing ends the session after a short window; this key brings back the last one closed inside it.
-  { action: 'undo-close', label: 'Undo close', group: 'Panes', mac: [cmd('Z')], other: [ctrlShift('Z')], available: true },
   { action: 'broadcast', label: 'Broadcast to the layout', group: 'Panes', mac: [cmd('B', 'shift')], other: [ctrlShift('B', 'alt')], available: true },
   { action: 'palette', label: 'Command palette', group: 'Find & jump', mac: [cmd('K')], other: [ctrlShift('K')], chat: [ctrl('K'), ctrlShift('K')], available: true },
   // Plain Ctrl+J is a line feed in a terminal, so Windows and Linux add Shift (the contract above).

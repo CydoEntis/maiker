@@ -4,6 +4,7 @@ import { readThemePreference, type ThemePreference } from '@/data/themePreferenc
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
 import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
+import { skippedConfirmsOf, type SkippedConfirms } from '@/features/confirm/confirm'
 
 export type CursorStyle = 'block' | 'bar' | 'underline'
 /** How wide the chat's column of messages may be: sized to the pane, a fixed narrow or wide column, or the whole pane. */
@@ -98,6 +99,8 @@ export type SettingsPreferences = {
   openSessionsIn: PaneView
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
+  /** The confirms the person ticked "Don't ask again" on: their actions run straight away. */
+  confirmSkipped: SkippedConfirms
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
   hideSuccessfulTools: boolean
   /**
@@ -180,6 +183,7 @@ function defaults(): SettingsPreferences {
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
     openSessionsIn: 'chat',
     defaultAgent: 'claude',
+    confirmSkipped: [],
     hideSuccessfulTools: false,
     colourFileNames: true,
     bypassOff: [],
@@ -274,6 +278,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       // Before one setting there was one per agent: what was chosen for Claude carries over.
       openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
+      confirmSkipped: skippedConfirmsOf(preferences.confirmSkipped) ?? fallback.confirmSkipped,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       colourFileNames: bool(preferences.colourFileNames, fallback.colourFileNames),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.

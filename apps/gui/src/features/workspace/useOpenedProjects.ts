@@ -26,6 +26,8 @@ export type OpenedProjects = {
    * listed session is in it (`closeProject`): the result says which, for the caller to tell the person.
    */
   readonly close: (project: OpenedProject) => CloseResult
+  /** What `close` would answer now, changing nothing: for asking the person before it runs. */
+  readonly closable: (project: OpenedProject) => CloseResult
 }
 
 /**
@@ -58,7 +60,8 @@ export function useOpenedProjectsState(sessions: readonly SessionView[]): Opened
     setSelected((current) => (current !== null && sameProject(current, project) ? null : current))
     return result
   }, [opened, sessions])
-  return { opened, machines, selected, open, select: setSelected, close }
+  const closable = useCallback((project: OpenedProject) => closeProject(opened, project, sessions), [opened, sessions])
+  return { opened, machines, selected, open, select: setSelected, close, closable }
 }
 
 /** The opened projects, from any part of the window. */

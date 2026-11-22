@@ -26,6 +26,7 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
+  confirmSkipped: [],
   sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 

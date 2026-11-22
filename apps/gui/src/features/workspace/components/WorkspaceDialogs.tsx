@@ -19,7 +19,7 @@ import { GetFileDialog } from './GetFileDialog'
 import { SpecialistsDialog } from './SpecialistsDialog'
 import { MachineUpdateDialog } from './MachineUpdateDialog'
 import { DraftGuardHost } from '@/features/documents/DraftGuardHost'
-import { ConfirmCloseDialog } from './ConfirmCloseDialog'
+import { ConfirmHost } from '@/features/confirm/ConfirmDialog'
 import { AddMachineDialog } from './AddMachineDialog'
 import { RenameDialog, RenameMachineDialog } from './RenameDialog'
 import { RecentSessionsDialog } from './RecentSessionsDialog'
@@ -41,7 +41,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
   const serviceFinishing = useServiceFinishing()
   const openWorktree = useOpenWorktreeDialog()
   // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
@@ -131,9 +131,7 @@ export function WorkspaceDialogs() {
               />
             )}
             <DraftGuardHost />
-            {closeAsk && (
-              <ConfirmCloseDialog title={closeAsk.title} body={closeAsk.body} confirmLabel={closeAsk.confirmLabel} onCancel={() => { setCloseAsk(null) }} onConfirm={() => { const run = closeAsk.run; setCloseAsk(null); run() }} />
-            )}
+            <ConfirmHost pending={pendingConfirm} />
             {renamingMachine !== null && (
               <RenameMachineDialog
                 machine={renamingMachine}

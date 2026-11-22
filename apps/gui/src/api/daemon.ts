@@ -1143,29 +1143,19 @@ export async function reloadAgentOnDaemon(conversation: Pick<Conversation, 'id'>
 }
 
 /**
- * Ends a terminal session with a six-second undo window: the daemon hides it at once and closes it
- * for real when the window passes. `undoCloseSession` brings it back while the window is open.
+ * Ends a session. The daemon hides it at once and stops its program a few seconds later (its own undo window, which
+ * the terminal app offers; this window asks before closing instead).
  */
-export async function closeSessionWithUndo(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<void> {
+export async function closeSession(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<void> {
   if (!isDesktop()) return
   const pane = addressOf(conversation.id)
   if (pane !== null) {
     await invokeParsed('close_session_with_undo', NullSchema, { term: pane.term, ...machineArgs(pane) })
     return
   }
-  // A chat: the daemon archives it at once and ends its agent when the window passes.
+  // A chat: the daemon archives it at once and ends its agent when its window passes.
   if (conversation.generation === undefined) throw new Error('Conversation generation is unavailable')
   await invokeParsed('close_conversation_with_undo', NullSchema, { ...chatArgs(conversation.id), generation: conversation.generation })
-}
-
-export async function undoCloseSession(conversation: Pick<Conversation, 'id'>): Promise<void> {
-  if (!isDesktop()) return
-  const pane = addressOf(conversation.id)
-  if (pane !== null) {
-    await invokeParsed('undo_close_terminal_session', NullSchema, { term: pane.term, ...machineArgs(pane) })
-    return
-  }
-  await invokeParsed('undo_close_conversation', NullSchema, chatArgs(conversation.id))
 }
 
 /** The person's answer to a session that asked to start helpers: this session, every session of its project, or none. */

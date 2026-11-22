@@ -512,7 +512,7 @@ describe('a project heading', () => {
     const actions = showProjects([], [NOTES])
     fireEvent.contextMenu(screen.getByRole('button', { name: 'notes', expanded: true }))
     await user.click(await screen.findByRole('menuitem', { name: 'Close project' }))
-    expect(actions.onClose).toHaveBeenCalledWith(NOTES)
+    expect(actions.onClose).toHaveBeenCalledWith(NOTES, 'notes')
     expect(actions.onClose.mock.results[0]?.value).toEqual({ ok: true, value: [] })
     expect(currentToasts().items).toHaveLength(0)
   })
@@ -543,7 +543,7 @@ describe('a project heading', () => {
     await user.keyboard('{Enter}')
     await waitForFocus('New session')
     await user.keyboard('{ArrowUp}{Enter}')
-    expect(actions.onClose).toHaveBeenCalledWith(SHOP)
+    expect(actions.onClose).toHaveBeenCalledWith(SHOP, 'shop')
   })
 })
 

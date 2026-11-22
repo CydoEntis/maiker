@@ -53,8 +53,8 @@ export function projectColor(project: string): string {
 }
 
 /**
- * Whether closing this session would lose something: it has not ended, and it is an agent, a chat, or a shell
- * with a program running in it. A plain idle shell loses nothing that Undo does not bring back.
+ * Whether this session has work in it that a closed pane must not take away: it has not ended, and it is an agent,
+ * a chat, or a shell with a program running in it. A plain idle shell has none.
  */
 export function keepsRunningUnseen(session: SessionView): boolean {
   return !session.ended && !(isShell(session) && !isChatSession(session.conversation))

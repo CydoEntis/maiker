@@ -4,6 +4,7 @@ import type { ProjectActions } from './components/projectMenu'
 import { sameProject, type OpenedProject } from './model/openedProjects'
 import { worktreeSourceOf } from './model/projectActions'
 import type { SessionView } from './model/session'
+import { confirmAsk } from '@/features/confirm/confirm'
 import { useWorkspace } from './workspaceContext'
 
 /**
@@ -38,9 +39,9 @@ function useDraftIn() {
  * so the overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm } = useWorkspace()
   const draftIn = useDraftIn()
-  const { close } = openedProjects
+  const { close, closable } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
     onNewSession: (machine, project) => { afterPick(); draftIn(machine, project.folder) },
     onNewWorktree: (machine, project, from) => {
@@ -50,8 +51,13 @@ export function useProjectActions(): (afterPick: () => void) => ProjectActions {
     },
     onNewTerminal: chatView ? undefined : (machine, project) => { afterPick(); newTerminal(machine, project.folder) },
     onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
-    onClose: close,
-  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, chatView, newTerminal])
+    // A refusal is said at once; only a removal that would go through is asked about.
+    onClose: (project, name) => {
+      const answer = closable(project)
+      if (answer.ok) confirm(confirmAsk('remove-project', name), () => { close(project) })
+      return answer
+    },
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closable, confirm, chatView, newTerminal])
 }
 
 /**

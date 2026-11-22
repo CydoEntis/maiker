@@ -199,8 +199,8 @@ service that does not take the request says "Restart the Maiker service to reope
 folder is gone and was not such a worktree, ("folder removed;
 cannot be made again"), when its agent is not Claude or Codex ("cannot be reopened here"), or when its id fails the
 rule ("no conversation to resume").
-It says "Looking for closed sessions…" while it reads, "No closed sessions yet. A chat you close shows here once its
-Undo has passed." when there are none, "Could not read the closed sessions." with **Try again** when the read fails,
+It says "Looking for closed sessions…" while it reads, "No closed sessions yet. A chat you close shows here a few
+seconds later." when there are none, "Could not read the closed sessions." with **Try again** when the read fails,
 and "Restart the Maiker service to see closed sessions." for a service that does not answer the query. Esc, Close or a click
 outside closes it. Only this computer's daemon is asked: another machine's closed sessions are not listed.
 
@@ -350,7 +350,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    inline on the row, from F2 or the row menu. Every row is the name at the left and the status mark at the right, with no time, no agent icon and no × (Close session is in its right-click menu); where it runs and its activity are in the hover card. A helper (a session another session's agent started, `TermInfo.started_by`) is listed right under that session, set in by one step, in the order the helpers were made, and stays there whatever its own status becomes: the starting session is ranked by the more urgent of its own status and its helpers' (`nestHelpers` in `model/sidebarTree.ts`). A helper whose starter is not listed in the project is an ordinary row that names its starter at the start of its second line. The starting session counts its listed helpers on its first line, amber while one waits on you; the count shows the helpers' statuses and is never a status of its own, and a row's accessible name says both (`helperLinks` in `model/helpers.ts`; a starter that is no longer listed leaves an ordinary row). The starter may be a chat (`TermInfo.started_by_chat`, ADR 0016): the helper then names the chat's session, or its pane's when the chat has a pane in the list. A session that asks to start helpers asks in the tray over its chat's message box (`HelpersTray`); in the Terminal view the agent's CLI asks in its own words, and Maiker draws no bar in the pane. A chat's answer goes out as `answer_chat_helpers` (`answerHelpers` in `api/daemon.ts`). Right-click menus share `MenuPopup` (focus, arrow keys, Esc, kept inside the
    window). Picking a session shows it at once, with no glide; panes that move (a split, a swap, a close) glide
    (`movePanes`). Split layouts are this window's own state, up to four panes, mixed right and down with draggable dividers; a
-   session closes with a 6 second Undo. **Put away** (the daemon's flag; the row menu no longer offers it, and the window's `usePutAway` keeps the call) sets the pane's `archived` flag (`Command::ArchivePane`) with a 6 second Undo; it closes, stops and moves
+   session closes after the confirm dialog, with no Undo. **Put away** (the daemon's flag; the row menu no longer offers it, and the window's `usePutAway` keeps the call) sets the pane's `archived` flag (`Command::ArchivePane`) with a 6 second Undo; it closes, stops and moves
    nothing, so the session keeps running, stays in the daemon's list and keeps its worktree in use. Put-away sessions are
    listed only under the folded **Put away** section at the foot of the list (`model/sidebar.ts`, `splitPutAway`), each
    with **Bring back** (its hover button and its menu). The rail shows no trace of put-away sessions (one that needs you
@@ -396,7 +396,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    is down or needs an update is refused by name (`<machine> is not connected`) under the field, and nothing is made.
    Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
    (`useProjectActions`). Close project is `useOpenedProjects().close`: while a listed session is in the project (put-away
-   ones too) it is refused and a toast names the sessions in the way; ended sessions are never in the sidebar's list, so a
+   ones too) it is refused and a toast names the sessions in the way; otherwise the confirm dialog asks first, by the
+   project's name (*remove a project*), and says its folder and git history stay on disk; ended sessions are never in the sidebar's list, so a
    closed project is not opened again by one. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
    `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It

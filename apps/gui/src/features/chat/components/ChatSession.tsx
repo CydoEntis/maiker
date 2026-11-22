@@ -57,7 +57,7 @@ import type { ChatProblem } from '../problem'
 import { SubagentBar, SubagentChat } from './SubagentChat'
 import { VirtualList } from './VirtualList'
 import { copyText } from '@/lib/clipboard'
-import { ConfirmCloseDialog } from '@/features/workspace/components/ConfirmCloseDialog'
+import { ConfirmDialog } from '@/features/confirm/ConfirmDialog'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { InspectView } from '@/features/inspect/InspectPanel'
 import type { ConfirmAsk, WindowRoute } from '../windowCommands'
@@ -791,8 +791,8 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
-      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
-      {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
+      {confirming !== null && <ConfirmDialog danger title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
+      {editFromHere.ask !== null && <ConfirmDialog danger title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
       {bypassTag && (
         <div className="mx-chat-notices">
