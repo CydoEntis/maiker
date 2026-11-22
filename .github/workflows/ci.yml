@@ -3,13 +3,12 @@
 # builds it again; a change to docs alone has nothing to build.
 #
 # A pull request runs the jobs its files can affect (scripts/ci-areas.sh) and compiles the
-# desktop app without packaging it. The installers are built on the push to dev, where a
-# failure no longer holds a pull request up but still shows before a release.
+# desktop app without packaging it. No installer is built here: the release workflow builds
+# them, and test-build.yml builds them on demand to try a branch before a release.
 #
 # No pull request job runs on a macOS runner: GitHub often has none to give, and a job that never
 # starts is cancelled after 15 minutes and fails the run. `check (macOS)` cross-checks from Linux
 # and leaves the desktop host out, because its Apple-only C helper does not cross-compile.
-# `desktop package (macOS)`, on the push to dev, is where the desktop host is compiled on macOS.
 #
 # Build caches: only dev saves one. A pull request reads dev's, and a copy per pull request
 # filled the repository's 10 GB and pushed the others out. A failed run saves what it compiled
@@ -156,122 +155,3 @@ jobs:
       - name: Typecheck and build the frontend
         working-directory: apps/gui
         run: pnpm build
-
-  # The installers, on the push to dev only (see the top of this file).
-  package-linux:
-    name: desktop package (Linux)
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
-          cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: apps/gui/pnpm-lock.yaml
-      - name: Install Tauri Linux dependencies
-        timeout-minutes: 15
-        uses: ./.github/actions/linux-deps
-      - name: Install GUI dependencies
-        working-directory: apps/gui
-        run: pnpm install --frozen-lockfile
-      - name: Build Linux desktop packages
-        working-directory: apps/gui
-        run: pnpm desktop:build
-
-  package-macos:
-    name: desktop package (macOS)
-    if: github.event_name == 'push'
-    runs-on: macos-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
-          cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: apps/gui/pnpm-lock.yaml
-      - name: Install GUI dependencies
-        working-directory: apps/gui
-        run: pnpm install --frozen-lockfile
-      - name: Build macOS desktop packages
-        working-directory: apps/gui
-        run: pnpm desktop:build
-
-  package-windows:
-    name: desktop package (Windows)
-    if: github.event_name == 'push'
-    runs-on: windows-latest
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
-          cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: apps/gui/pnpm-lock.yaml
-      - name: Install GUI dependencies
-        working-directory: apps/gui
-        run: pnpm install --frozen-lockfile
-      - name: Build Windows desktop packages
-        working-directory: apps/gui
-        run: pnpm desktop:build
-
-  package-archlinux:
-    name: desktop package (Arch Linux)
-    if: github.event_name == 'push'
-    runs-on: ubuntu-latest
-    container: archlinux:base-devel
-    timeout-minutes: 30
-    steps:
-      - name: Install Arch desktop and build dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --needed --noconfirm \
-            base-devel curl dpkg file git openssl patchelf appmenu-gtk-module \
-            libappindicator-gtk3 librsvg rpm-tools webkit2gtk-4.1 wget xdotool
-      - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
-          cache-on-failure: true
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 10.32.1
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: apps/gui/pnpm-lock.yaml
-      - name: Install GUI dependencies
-        working-directory: apps/gui
-        run: pnpm install --frozen-lockfile
-      - name: Build Linux desktop packages
-        working-directory: apps/gui
-        run: pnpm desktop:build
