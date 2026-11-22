@@ -44,7 +44,7 @@ impl Daemon {
                     thread_id: None,
                 };
                 self.pending_starts.push(pending.clone());
-                LaunchIdentity::Pending(pending)
+                LaunchIdentity::Pending(Box::new(pending))
             }
             StartTarget::Session {
                 settings,
@@ -85,7 +85,7 @@ impl Daemon {
                     thread_id: Some(thread_id),
                 };
                 self.pending_starts.push(pending.clone());
-                LaunchIdentity::Pending(pending)
+                LaunchIdentity::Pending(Box::new(pending))
             }
             StartTarget::Conversation { id, generation } => {
                 if self.conversation_runtimes.owns(id)
@@ -338,7 +338,7 @@ impl Daemon {
                     .iter_mut()
                     .find(|record| record.id == id)
                 {
-                    *record = p.clone();
+                    *record = (**p).clone();
                 }
                 !duplicate
             }

@@ -55,7 +55,7 @@ impl Daemon {
                 }
                 let matches = match &launch.identity {
                     LaunchIdentity::Pending(p) => {
-                        self.pending_starts.iter().any(|record| record == p)
+                        self.pending_starts.iter().any(|record| record == &**p)
                     }
                     LaunchIdentity::Existing(c) => {
                         self.conversations.iter().any(|record| record == &**c)
@@ -244,7 +244,7 @@ impl Daemon {
                     .is_some_and(|pending| match pending {
                         Pending::Launch { launch, .. } => match &launch.identity {
                             LaunchIdentity::Pending(p) => {
-                                snapshot.pending_starts.iter().any(|saved| saved == p)
+                                snapshot.pending_starts.iter().any(|saved| saved == &**p)
                             }
                             LaunchIdentity::Existing(c) => {
                                 snapshot.conversations.iter().any(|saved| saved == &**c)

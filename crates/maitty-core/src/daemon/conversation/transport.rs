@@ -35,7 +35,7 @@ pub(crate) struct Launch {
 
 pub(super) enum LaunchIdentity {
     Existing(Box<Conversation>),
-    Pending(PendingStart),
+    Pending(Box<PendingStart>),
 }
 
 impl Launch {
@@ -685,7 +685,7 @@ mod tests {
         });
         std::fs::write(&executable, b"fake claude executable").unwrap();
         let launch = Launch {
-            identity: LaunchIdentity::Pending(PendingStart {
+            identity: LaunchIdentity::Pending(Box::new(PendingStart {
                 id: crate::conversation::ConversationId(1),
                 generation: 1,
                 settings: LaunchSettings {
@@ -700,7 +700,7 @@ mod tests {
                     sandbox: crate::conversation::Sandbox::ReadOnly,
                 },
                 thread_id: None,
-            }),
+            })),
             environment: Vec::new(),
             arguments: Vec::new(),
             failure_point: None,
@@ -748,7 +748,7 @@ mod tests {
         symlink(std::env::current_exe().unwrap(), &codex).unwrap();
 
         let launch = Launch {
-            identity: LaunchIdentity::Pending(PendingStart {
+            identity: LaunchIdentity::Pending(Box::new(PendingStart {
                 id: ConversationId(1),
                 generation: 1,
                 settings: LaunchSettings {
@@ -763,7 +763,7 @@ mod tests {
                     sandbox: Sandbox::ReadOnly,
                 },
                 thread_id: None,
-            }),
+            })),
             environment: Vec::new(),
             arguments: Vec::new(),
             failure_point: None,
