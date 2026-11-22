@@ -67,7 +67,7 @@
 .mx-sb-helpers-sum.is-needs .mx-sb-helpers-state { font-weight: 500; color: var(--needs); }
 .mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-control); text-align: left; }
 .mx-sb-row:hover { background: rgba(var(--ink), .035); }
-.mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--t2); }
+.mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--c-sel-bg); }
 .mx-sb-row-name { flex: 1; min-width: 0; font-size: 13.5px; line-height: 20px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* What needs you and what is working read a step stronger; being picked changes the colour only, so a click never re-sets the text. */
 .mx-sb-row:is(.is-needs, .is-working) .mx-sb-row-name { font-weight: 500; color: var(--fg); }
@@ -170,7 +170,7 @@
 .mx-rail-group .mx-sb-badge { margin: 0; }
 .mx-rail-session { position: relative; width: 32px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); transition: background-color var(--t-fast) var(--ease); }
 .mx-rail-session:hover { background: rgba(var(--ink), .05); }
-.mx-rail-session[aria-current="page"], .mx-rail-session[aria-current="page"]:hover { background: var(--t2); }
+.mx-rail-session[aria-current="page"], .mx-rail-session[aria-current="page"]:hover { background: var(--c-sel-bg); }
 /* An idle session has no mark, and the button holds nothing else: a dim dot keeps it findable. */
 .mx-rail-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
 /* How many of a lead's helpers need you, on the corner of its mark. */

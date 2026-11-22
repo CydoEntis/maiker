@@ -25,21 +25,21 @@
   --m-sel: var(--sel);
   --m-hover: var(--hover);
   --m-pane: var(--pane);
-  /* A card on a panel (a sidebar group, the sidebar's foot): one small step lighter than the panel it sits on, measured from the
-     design (#1b1b1b on #151517), with a hairline a step lighter again and a selected row two steps up. Never darker than the panel. */
+  /* A card on a panel (a code block, a table, a field): a clear step lighter than the panel it sits on, with a hairline a
+     step lighter again and a selected row two steps up. Never darker than the panel. */
   /* Mixed from the panel toward the text colour, not from --raise: several themes set --raise equal to --main, which would leave no step. */
-  --m-card: var(--card-step, color-mix(in srgb, var(--main) 97%, var(--fg)));
-  /* The theme's own hairline at full strength: the design's card edge measures #272727, which a half-strength line (#202022) fell short of. */
-  --m-card-line: var(--line);
+  --m-card: var(--card-step, color-mix(in srgb, var(--main) 95%, var(--fg)));
+  /* The theme's stronger hairline: with the plain line a card, a field and a segment tray blurred into the panel. */
+  --m-card-line: var(--line2);
   /* A dark theme's two steps are computed with the theme (`cardSteps` in themes.ts); the mixes here are a light theme's. */
-  --m-card-sel: var(--card-sel-step, color-mix(in srgb, var(--m-sel) 97%, var(--fg)));
+  --m-card-sel: var(--card-sel-step, color-mix(in srgb, var(--m-sel) 94%, var(--fg)));
   /* The floating surface: what a menu, popover, toast or dialog is drawn on is the theme's `--float-bg`; its hairline is the
      ink, and its shadow is the one shadow in the app, scaled by the theme's shadow strength. Declared beside the theme's
      roles (not on the page root alone) so a root that carries its own theme mixes them from that theme's ink and strength. */
-  --float-line: rgba(var(--ink), .07);
-  /* A card of the window frame (the sidebar, a pane, the side panel) is lifted from the ground by its tone alone; its
-     edge is the ink at its faintest, there to finish the corner, not to draw a box. */
-  --panel-line: rgba(var(--ink), .05);
+  --float-line: rgba(var(--ink), .1);
+  /* A card of the window frame (the sidebar, a pane, the side panel) is lifted from the ground by its tone; its edge is a
+     faint ink that finishes the corner and keeps the card's outline readable where tone alone ran together. */
+  --panel-line: rgba(var(--ink), .08);
   /* The pane that has the keys, among several: the same edge in a brighter ink. Neutral in every theme, so it never
      reads as a state colour or the accent. */
   --pane-focus-line: rgba(var(--ink), .3);
@@ -147,7 +147,7 @@
    header; rows are parted by the ink at its faintest. Fields, pickers and segment trays are the field tone with a hairline
    edge: tone alone was too faint to tell a control from the text around it. */
 .mx-app .mx-settings {
-  --s-rule: rgba(var(--ink), .045);
+  --s-rule: rgba(var(--ink), .07);
   --c-field-bg: var(--t3); --c-field-sh: inset 0 0 0 1px var(--line2);
   --c-track-bg: var(--t3); --c-track-sh: inset 0 0 0 1px var(--line2);
 }

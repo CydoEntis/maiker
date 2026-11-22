@@ -226,7 +226,7 @@
 .mx-settings-nav-item { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-settings-nav-item:hover { color: var(--fg); background: rgba(var(--ink), .035); }
 /* The sidebar's selected row (sidebar.css). */
-.mx-settings-nav-item.is-current, .mx-settings-nav-item.is-current:hover { background: var(--t2); color: var(--fg); box-shadow: none; }
+.mx-settings-nav-item.is-current, .mx-settings-nav-item.is-current:hover { background: var(--c-sel-bg); color: var(--fg); box-shadow: none; }
 .mx-settings-nav-item.is-current:focus-visible { box-shadow: var(--focus-edge); }
 /* The nav icon: a plain glyph in its section's tint, with no tile behind it. */
 .mx-settings-nav-text { flex: 1; white-space: nowrap; }

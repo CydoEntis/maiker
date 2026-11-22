@@ -31,7 +31,7 @@
 /* The tab in front shows its icon, its name and a close; the others are their icon alone, so four or five still fit. */
 .mx-sp-tab { flex: none; height: 26px; display: inline-flex; align-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-sp-tab:hover { color: var(--fg); background: var(--m-hover); }
-.mx-sp-tab.is-on { color: var(--fg); background: var(--t2); }
+.mx-sp-tab.is-on { color: var(--fg); background: var(--c-sel-bg); }
 .mx-sp-tab-pick { height: 100%; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: inherit; white-space: nowrap; }
 .mx-sp-tab.is-on .mx-sp-tab-pick { padding: 0 4px 0 7px; }
 .mx-sp-tab-pick svg { flex: none; }

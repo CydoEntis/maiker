@@ -513,7 +513,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`terminal` in the binding table).
 - **The frame** (`frame.css`; the gaps are `--frame-edge` 8px, `--frame-top` 4px and `--frame-gap` 6px in
   `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
-  (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
+  (`--r-panel`) and a faint ink edge (`--panel-line`, the ink at 8%; `material.css`), 8px from the window's sides
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file
   pane and the terminal drawer are each a card of their own, the same 6px apart, and the panes of one session's splits
@@ -533,12 +533,12 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   grouping, so there is no rule beside the nav or under the header. A nav on `--t1` at the left, in three groups under
   dim caps: **APP** (General, Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Helpers, Terminal, Extensions)
   and **MACHINES** (Remote machines). Each item is 32px with a 15px monochrome glyph (the item's own text colour) and
-  its name, with no shortcut letter; the current one is the sidebar's selected row (`--t2`), and hover is the ink at
+  its name, with no shortcut letter; the current one is the sidebar's selected row (`--c-sel-bg`), and hover is the ink at
   3.5%. Inside the dialog every control reads as one: the search field, the folder fields, inputs, the pickers and the
   segment trays are `--t3` with a `--line2` hairline (`--c-field-*` and `--c-track-*`, set on `.mx-settings` in
   `material.css`), the chosen segment has its own hairline, and every button on a page (Browse…, Use home folder,
   Reset) is the pages' own button (`.mx-scard-button`: `--fg` 500 on the ink at 9% with a `--line2` hairline). Rows are
-  parted by the ink at 4.5% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). With nothing to
+  parted by the ink at 7% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). With nothing to
   report (Up to date, Not checked yet, Checking) it is one quiet line: the state in 12px `--muted`, the running
   version, and a small **Check** word (`.mx-scard-meta-button`, named "Check now"). Otherwise it is a card: a dot in the
   state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Update failed"), the running version at
@@ -589,7 +589,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   5px inside, radius 12, a float like the cards, a dim 11px heading that names what it is for, 30px rows of 13px text with
   their key at the right in mono, separators between groups. Every menu and popover (right-click menus, dropdowns, pickers,
   popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, as the floating surface
-  (`--float-bg`, `--float-line`, `--float-sh`); no blur, no gradient. The row under the pointer or the keys is `--float-hover`. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). A danger row is red; one that stops something running
+  (`--float-bg`, `--float-line`, `--float-sh`); no blur, no gradient. The row under the pointer or the keys is `--float-hover`. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). **Contrast between parts**: a card, a field or a tray is the panel 6% of the way to the text colour with a `--line2` hairline (`--m-card`, `--m-card-line`), and every selected thing (a sidebar row, the settings nav item, a side-panel tab, a palette row, a chosen segment) is 14% of the way (`--c-sel-bg`, `cardSteps` in `themes.ts`); the design's own 3.5% and 12% steps with the plain `--line` ran together on a real screen. A float's edge is the ink at 10%. A danger row is red; one that stops something running
   is handled by the app, which asks in a dialog first (see Close ends the session). Arrow keys, Home and End move, Esc or a click outside closes and
   gives focus back. **Session** (a sidebar row): its name as the heading, then Rename (F2), New worktree, Open worktree…,
   Copy path, a divider and Close session…, and nothing else (see *Session row*).
@@ -639,7 +639,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session row** (`SessionRow`; padding 6px 8px 6px 10px, radius `--r-control`): the name at the left (13.5px
   `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
-  status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
+  status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
   **Helpers** (`HelperGroup` in `Sidebar.tsx`, `model/helpers.ts`) sit under their lead in the order they were made,
   set in 16px with a 1px rule (the ink at 8%) down their left edge and 1px between rows; a helper row is 12.5px with
   padding 5px 8px. A helper is named by its task, never "New session": the daemon gives it the first line of the task
@@ -723,7 +723,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   while any of them needs you its mark is the needs-you one with a 13px amber count (9px 600, `--t1` on `--needs`) on
   its top right corner. A session with no mark of its own (the one on screen, held where it was picked, or an idle
   lead whose helpers work) is a 6px `--dim` dot. Hover is the ink at 5% and the open session has the selection fill,
-  `--t2`. Hovering or focusing a mark shows the same hover card as the full list, a click opens the session, and a
+  `--c-sel-bg`. Hovering or focusing a mark shows the same hover card as the full list, a click opens the session, and a
   right-click, the menu key or Shift+F10 gives the same five-item menu. No agent logos, initials or connection dot
   (the service's state is the title-bar chip). The width eases on the drawers' timing.
 - **The empty state** (`EmptyStart`; screenshot 18). What the main area shows whenever it has nothing in it: no tab and

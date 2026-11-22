@@ -277,11 +277,12 @@ export function generateTheme(inputs: ThemeInputs): ThemeTokens {
   }
 }
 
-// A card on a panel and its selected row, as steps from the panel toward the text colour, measured from the design
-// (#1b1b1b and #2a2a2a on #151517). On a panel that is all but grey the design's cards are pure grey, so the panel's
-// faint tint is dropped there; a theme with a real hue keeps it.
-const CARD_STEP = 3.5
-const CARD_SEL_STEP = 12
+// A card on a panel and its selected row, as steps from the panel toward the text colour. The design's own steps
+// (#1b1b1b and #2a2a2a on #151517, 3.5% and 12%) left a card, a field and a selected row too close to the panel to
+// tell apart on a real screen, so they are a step stronger. On a panel that is all but grey the cards are pure grey, so
+// the panel's faint tint is dropped there; a theme with a real hue keeps it.
+const CARD_STEP = 6
+const CARD_SEL_STEP = 14
 const NEAR_GREY_CHROMA = 0.01
 
 /** White on a dark theme, black on a light one: the one colour every hairline and hover fill is a low-opacity wash of. */
