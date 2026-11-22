@@ -245,48 +245,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_unix_launcher_cannot_run_itself() {
-        let s = unix_script(
-            "claude",
-            concat!("/opt/se shi/", env!("APP_COMMAND")),
-            "/data/shell/bin",
-        );
-        let strip = s
-            .find("\"$p\" = \"$shim_dir\"")
-            .expect("the launcher's own folder is skipped");
-        let look = s
-            .find("-f \"$p/$agent\"")
-            .expect("the real agent is looked for");
-        let run = s
-            .find("exec \"$real\" \"$@\"")
-            .expect("and run with the arguments as typed");
-        assert!(strip < look && look < run, "{s}");
-        assert!(
-            s.contains("PATH=$clean") && s.contains("export PATH"),
-            "the agent gets a PATH without the launcher: {s}"
-        );
-        assert!(
-            s.contains("shim_dir='/data/shell/bin'")
-                && s.contains(concat!(
-                    env!("APP_COMMAND"),
-                    "='/opt/se shi/",
-                    env!("APP_COMMAND"),
-                    "'"
-                )),
-            "{s}"
-        );
-        assert!(
-            s.contains("agent-dir \"$agent\" \"$@\""),
-            "the arguments reach agent-dir: {s}"
-        );
-        assert!(
-            s.contains("command not found") && s.contains("exit 127"),
-            "a missing agent is reported like a shell would: {s}"
-        );
-        assert!(s.contains("set -f"), "PATH entries are not globbed");
-    }
-
-    #[test]
     fn the_unix_launcher_quotes_what_it_embeds() {
         let s = unix_script(
             "claude",

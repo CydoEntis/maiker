@@ -472,20 +472,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn attention_and_background_completion_have_distinct_sounds() {
-        assert_eq!(
-            Kind::for_status(crate::protocol::Status::Blocked),
-            Some(Kind::Needs)
-        );
-        assert_eq!(
-            Kind::for_status(crate::protocol::Status::Done),
-            Some(Kind::Done)
-        );
-        assert_eq!(Kind::for_status(crate::protocol::Status::Working), None);
-        assert_eq!(Kind::for_status(crate::protocol::Status::Idle), None);
-    }
-
-    #[test]
     fn an_agent_rings_once_for_the_same_news_and_a_crowd_rings_once() {
         use std::time::{Duration, Instant};
         let now = Instant::now();

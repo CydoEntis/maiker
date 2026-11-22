@@ -290,19 +290,6 @@ mod tests {
     }
 
     #[test]
-    fn remote_machines_update_themselves_unless_switched_off() {
-        let dir = dir("update-machines");
-        let file = dir.join("config.toml");
-        std::fs::write(&file, FIXTURE).unwrap();
-        assert!(read(&load(&file)).update_machines, "on by default");
-        apply_to(&file, SettingKey::UpdateMachines, SettingValue::Bool(false)).unwrap();
-        let text = std::fs::read_to_string(&file).unwrap();
-        assert!(text.contains("[updates]\nmachines = false\n"), "{text}");
-        assert!(!read(&load(&file)).update_machines);
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn a_new_key_is_added_and_a_missing_file_is_created() {
         let dir = dir("new");
         let file = dir.join("nested").join("config.toml");

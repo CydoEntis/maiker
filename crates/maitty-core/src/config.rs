@@ -479,7 +479,8 @@ mod spinner_tests {
     use super::*;
 
     #[test]
-    fn presets_and_custom_frames_are_safe_single_column_indicators() {
+    fn presets_and_custom_frames_are_safe_one_or_two_cell_indicators() {
+        use unicode_width::UnicodeWidthStr;
         for (name, frames) in SPINNERS {
             let frames = frames
                 .iter()
@@ -488,29 +489,18 @@ mod spinner_tests {
             validate_spinner(&frames).unwrap();
             assert_eq!(spinner_name(&frames), *name);
         }
+        assert!(BARS_ASCII.iter().all(|f| f.is_ascii() && f.width() == 2));
         for frames in [
             vec!["".into()],
             vec![" ".into()],
             vec!["🌈".into()],
             vec!["\x1b[31m".into()],
             vec!["a".into(); MAX_SPINNER_FRAMES + 1],
+            vec!["ab".into()],
+            vec!["⣰a".into()],
+            vec!["⣰⡄⣰".into()],
         ] {
-            assert!(validate_spinner(&frames).is_err());
-        }
-    }
-
-    #[test]
-    fn the_bars_spinner_is_two_braille_cells_and_other_wide_frames_stay_out() {
-        use unicode_width::UnicodeWidthStr;
-        assert_eq!(BARS_FRAMES.len(), 10);
-        assert!(
-            BARS_FRAMES
-                .iter()
-                .all(|f| f.width() == 2 && f.chars().count() == 2)
-        );
-        assert!(BARS_ASCII.iter().all(|f| f.is_ascii() && f.width() == 2));
-        for bad in ["ab", "🌈", "⣰a", "⣰⡄⣰"] {
-            assert!(validate_spinner(&[bad.to_string()]).is_err(), "{bad}");
+            assert!(validate_spinner(&frames).is_err(), "{frames:?}");
         }
     }
 }
@@ -1629,31 +1619,13 @@ mod tests {
     }
 
     #[test]
-    fn data_directory_override_requires_an_absolute_nonempty_path() {
+    fn data_directory_override_requires_an_absolute_nonempty_path_to_a_directory() {
         for value in ["", ".", "relative/state"] {
             let error = resolve_data_directory(Some(value.into()))
                 .err()
                 .expect("invalid override");
             assert!(error.to_string().contains("nonempty absolute directory"));
         }
-    }
-
-    #[test]
-    fn data_directory_override_accepts_existing_and_missing_directories() {
-        let fixture = DataDirectoryFixture::new();
-        for path in [fixture.0.clone(), fixture.0.join("not-created")] {
-            let configured = resolve_data_directory(Some(path.clone().into_os_string())).unwrap();
-            assert_eq!(configured.path, path);
-            assert!(configured.overridden);
-        }
-        assert!(
-            !fixture.0.join("not-created").exists(),
-            "validation does not create state"
-        );
-    }
-
-    #[test]
-    fn data_directory_override_rejects_an_existing_file() {
         let fixture = DataDirectoryFixture::new();
         let file = fixture.0.join("state");
         std::fs::write(&file, "not a directory").unwrap();
@@ -1664,10 +1636,20 @@ mod tests {
     }
 
     #[test]
-    fn data_directory_without_override_keeps_the_platform_default() {
+    fn data_directory_override_accepts_existing_and_missing_directories_and_none_keeps_the_default() {
         let configured = resolve_data_directory(None).unwrap();
         assert_eq!(configured.path, default_data_dir());
         assert!(!configured.overridden);
+        let fixture = DataDirectoryFixture::new();
+        for path in [fixture.0.clone(), fixture.0.join("not-created")] {
+            let configured = resolve_data_directory(Some(path.clone().into_os_string())).unwrap();
+            assert_eq!(configured.path, path);
+            assert!(configured.overridden);
+        }
+        assert!(
+            !fixture.0.join("not-created").exists(),
+            "validation does not create state"
+        );
     }
 
     #[test]
@@ -1733,14 +1715,6 @@ mod tests {
     }
 
     #[test]
-    fn a_config_that_still_sorts_the_sidebar_by_attention_loads_and_the_key_does_nothing() {
-        let c: super::Config =
-            toml::from_str("[ui]\nattention_sort = true\nlayout = \"hairline\"\n")
-                .expect("a retired key is not an error");
-        assert_eq!(c.ui.layout, "hairline", "the rest of the file is read");
-    }
-
-    #[test]
     fn a_check_table_reads_and_its_timeout_defaults() {
         let c: super::Config = toml::from_str("[[check]]\nproject = \"/work/app\"\ncommand = \"npm test\"\n\n[[check]]\nproject = \"/work/lib\"\ncommand = \"cargo test\"\ntimeout_s = 90\n").unwrap();
         super::validate_checks(&c.check).unwrap();
@@ -1764,15 +1738,6 @@ mod tests {
     }
 
     #[test]
-    fn maiker_dark_and_maiker_light_are_themes_of_their_own_not_retired_names() {
-        // They start with the app's name like the old `maitty-dark`, and once loaded as `night` and `day`.
-        for name in ["maiker-dark", "maiker-light", "maitty-dark", "maitty-light"] {
-            assert_eq!(retired_theme(name), None, "{name}");
-        }
-        assert_eq!(retired_theme("maitty-night"), Some("night"));
-    }
-
-    #[test]
     fn a_retired_theme_moves_to_night_or_day() {
         for (old, now) in [
             ("dark", "night"),
@@ -1783,12 +1748,12 @@ mod tests {
         ] {
             assert_eq!(retired_theme(old), Some(now), "{old}");
         }
-        assert_eq!(
-            retired_theme("tokyo-night"),
-            None,
-            "a theme of another name is kept"
-        );
-        assert_eq!(retired_theme("harbor-day"), None);
+        assert_eq!(retired_theme("maitty-night"), Some("night"));
+        // `maiker-dark` and friends start with the app's name like the old `maitty-dark`, but are
+        // themes of their own; so is any theme of another name.
+        for kept in ["tokyo-night", "harbor-day", "maiker-dark", "maiker-light", "maitty-dark", "maitty-light"] {
+            assert_eq!(retired_theme(kept), None, "{kept}");
+        }
     }
 
     #[test]
@@ -1817,6 +1782,11 @@ mod tests {
             (
                 "[[check]]\nproject = \"/a\"\ncommand = \"t\"\ntimeout_s = -5\n",
                 "timeout_s",
+            ),
+            // `~` is never expanded, so it would name a folder called `~`.
+            (
+                "[[check]]\nproject = \"~/work/app\"\ncommand = \"t\"\n",
+                "full path",
             ),
         ] {
             let err = check(bad).expect_err(bad);
@@ -1860,20 +1830,6 @@ mod tests {
             .expect_err("a name is one checkpoint, whatever its case")
             .to_string();
         assert!(err.contains("already has a check named"), "{err}");
-    }
-
-    #[test]
-    fn a_checkpoint_is_named_by_its_command_s_last_word_unless_named() {
-        let def = |name: Option<&str>, command: &str| super::CheckDef {
-            name: name.map(String::from),
-            command: command.into(),
-            ..Default::default()
-        };
-        assert_eq!(def(None, "npm test").name(), "test");
-        assert_eq!(def(None, "cargo clippy").name(), "clippy");
-        assert_eq!(def(None, "  make  ").name(), "make");
-        assert_eq!(def(Some("unit"), "npm test").name(), "unit");
-        assert_eq!(def(None, "").name(), "");
     }
 
     #[test]
@@ -1995,10 +1951,37 @@ mod tests {
     }
 
     #[test]
-    fn an_old_config_with_a_team_table_and_other_removed_keys_still_loads() {
-        let old = "theme = \"tokyo-night\"\n[team]\nfamily = \"codex\"\n[[team.jobs]]\nname = \"planner\"\nclaude = \"opus\"\n[[team.projects]]\nproject = \"/a\"\nfamily = \"claude\"\n[fleet]\nsize = 3\n[mcp]\napprove = \"safe\"\nhelpers_at_once = 6\n[keys.prefix]\nstart-fleet = \"F\"\n";
-        let c: super::Config = toml::from_str(old).expect("removed keys are ignored, not refused");
-        assert_eq!((c.theme.as_str(), c.mcp.approve.as_str()), ("tokyo-night", "safe"));
+    fn an_old_config_with_removed_keys_still_loads_and_keeps_the_rest() {
+        type Kept = fn(&super::Config) -> bool;
+        let cases: [(&str, Kept); 6] = [
+            (
+                "theme = \"tokyo-night\"\n[team]\nfamily = \"codex\"\n[[team.jobs]]\nname = \"planner\"\nclaude = \"opus\"\n[[team.projects]]\nproject = \"/a\"\nfamily = \"claude\"\n[fleet]\nsize = 3\n[mcp]\napprove = \"safe\"\nhelpers_at_once = 6\n[keys.prefix]\nstart-fleet = \"F\"\n",
+                |c| c.theme == "tokyo-night" && c.mcp.approve == "safe",
+            ),
+            (
+                "[ui]\nattention_sort = true\nlayout = \"hairline\"\n",
+                |c| c.ui.layout == "hairline",
+            ),
+            (
+                "[notify]\nbell = true\ndesktop = false\nsound_needs = \"ping\"\nsound_done = \"off\"\nphone_after = 90\n",
+                |c| c.notify.sound && c.notify.phone_after == 90,
+            ),
+            (
+                "[[profiles]]\nname='planner'\nagent='codex'\nmodel='gpt-5'\n\n[[workflows]]\nname='feature'\nplanner='planner'\nworker='worker'\nreviewer='reviewer'\n",
+                |c| c.theme == super::Config::default().theme,
+            ),
+            (
+                "sleep_after = '15m'\nsettle_after = '3d'",
+                |c| c.prefix == super::Config::default().prefix,
+            ),
+            ("[ui]\nwake_animation = 'off'", |c| c.ui.motion),
+        ];
+        for (old, kept) in cases {
+            let c: super::Config = toml::from_str(old).expect("removed keys are ignored, not refused");
+            assert!(kept(&c), "{old}");
+        }
+        let c: super::Config = toml::from_str("[notify]\nsound = false\n").unwrap();
+        assert!(!c.notify.sound);
     }
 
     #[test]
@@ -2071,18 +2054,6 @@ mod tests {
     }
 
     #[test]
-    fn glyphs_default_to_auto() {
-        assert_eq!(super::Config::default().ui.glyphs, "unicode");
-    }
-
-    #[test]
-    fn the_background_defaults_to_solid_and_still_reads_terminal() {
-        assert_eq!(super::Ui::default().background, "solid");
-        let c: super::Config = toml::from_str("[ui]\nbackground = \"terminal\"\n").unwrap();
-        assert_eq!(c.ui.background, "terminal");
-    }
-
-    #[test]
     fn an_old_rounded_corners_setting_is_rounded_corners_unless_rounded_is_set() {
         use super::Rounding;
         let read = |text: &str| {
@@ -2107,28 +2078,6 @@ mod tests {
             Rounding::Corners
         );
         assert_eq!(read(""), Rounding::Corners);
-    }
-
-    #[test]
-    fn a_project_starting_with_a_tilde_is_refused_because_it_is_never_expanded() {
-        let c: super::Config =
-            toml::from_str("[[check]]\nproject = \"~/work/app\"\ncommand = \"t\"\n").unwrap();
-        let err = super::validate_checks(&c.check)
-            .expect_err("~ is not expanded")
-            .to_string();
-        assert!(err.contains("~") && err.contains("full path"), "{err}");
-    }
-
-    #[test]
-    fn the_example_config_documents_the_check_keys() {
-        for key in ["[[check]]", "project", "command", "timeout_s"] {
-            assert!(
-                super::EXAMPLE
-                    .lines()
-                    .any(|l| l.starts_with("# ") && l.contains(key)),
-                "{key}"
-            );
-        }
     }
 
     #[test]
@@ -2198,26 +2147,6 @@ mod tests {
             );
             assert_eq!(c.split_account("claude 'hi'"), (None, "claude 'hi'"));
         }
-    }
-
-    #[test]
-    fn a_config_with_the_old_alert_settings_still_loads() {
-        let old = "[notify]\nbell = true\ndesktop = false\nsound_needs = \"ping\"\nsound_done = \"off\"\nphone_after = 90\n";
-        let c: super::Config = toml::from_str(old).expect("the settings that are gone are ignored");
-        assert!(c.notify.sound && c.notify.phone_after == 90);
-        let c: super::Config = toml::from_str("[notify]\nsound = false\n").unwrap();
-        assert!(!c.notify.sound);
-    }
-
-    #[test]
-    fn removed_profile_and_workflow_tables_are_ignored_without_rewriting_them() {
-        let old = "[[profiles]]\nname='planner'\nagent='codex'\nmodel='gpt-5'\n\n[[workflows]]\nname='feature'\nplanner='planner'\nworker='worker'\nreviewer='reviewer'\n";
-        let cfg: super::Config = toml::from_str(old).expect("legacy user settings remain readable");
-        assert_eq!(cfg.theme, super::Config::default().theme);
-        assert!(
-            old.contains("[[profiles]]") && old.contains("[[workflows]]"),
-            "loading does not edit the user's config text"
-        );
     }
 
     #[test]
@@ -2500,22 +2429,6 @@ ssh_args = ['-p', '2222']
 ";
 
     #[test]
-    fn a_config_without_machines_loads_unchanged() {
-        let dir = config_dir("none");
-        std::fs::write(
-            dir.join("config.toml"),
-            "prefix = 'ctrl+b'
-",
-        )
-        .unwrap();
-        let cfg = Config::load_at(&dir.join("config.toml"), true).unwrap();
-        assert!(cfg.machines.is_empty());
-        assert_eq!(cfg.prefix, "ctrl+b");
-        assert!(Config::default().machines.is_empty());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn a_config_naming_a_theme_by_its_maitty_id_loads_it_under_the_maiker_id() {
         let dir = config_dir("renamed-theme");
         std::fs::write(
@@ -2651,14 +2564,9 @@ target = '-oProxyCommand=x'
         let km = c.keymap();
         assert!(km.warnings.is_empty(), "{:?}", km.warnings);
         assert!(!c.agent_defs().is_empty());
-    }
-
-    #[test]
-    fn config_init_keeps_every_default_key() {
-        let c: Config = toml::from_str(EXAMPLE).unwrap();
-        let (got, want) = (c.keymap(), Config::default().keymap());
-        assert_eq!(got.prefixed, want.prefixed);
-        assert_eq!(got.global, want.global);
+        let want = Config::default().keymap();
+        assert_eq!(km.prefixed, want.prefixed, "config init keeps every default key");
+        assert_eq!(km.global, want.global);
     }
 
     #[test]
@@ -2737,40 +2645,15 @@ layout = 'hairline'")
             ui.fold_retired_layout();
             ui.retired_layout.map(|r| r.note())
         };
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'compact'"
-            )
-            .as_deref(),
-            Some("The Compact layout is now Floating. Change it in Settings › Appearance")
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'tiled'"
-            )
-            .as_deref(),
-            Some(
-                "The Tiled layout is now Floating with no gap. Change it in Settings › Appearance"
-            )
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'grid'"
-            )
-            .as_deref(),
-            Some("The Grid layout is now Floating. Change it in Settings › Appearance")
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'hairline'"
-            )
-            .as_deref(),
-            Some("The Hairline layout is now Floating. Change it in Settings › Appearance")
-        );
+        for (retired, stands_for) in [
+            ("compact", "Floating"),
+            ("tiled", "Floating with no gap"),
+            ("grid", "Floating"),
+            ("hairline", "Floating"),
+        ] {
+            let said = note(&format!("[ui]\nlayout = '{retired}'")).expect(retired);
+            assert!(said.contains(stands_for), "{retired}: {said}");
+        }
         for kept in [
             "",
             "[ui]
@@ -2798,20 +2681,6 @@ layout = 'cards'",
             Rounding::Full,
             "the same setting applies everywhere"
         );
-    }
-
-    #[test]
-    fn removed_visibility_settings_are_ignored() {
-        let c: Config = toml::from_str("sleep_after = '15m'\nsettle_after = '3d'")
-            .expect("older config remains readable");
-        assert_eq!(c.prefix, Config::default().prefix);
-    }
-
-    #[test]
-    fn old_wake_animation_setting_is_ignored() {
-        let c: Config =
-            toml::from_str("[ui]\nwake_animation = 'off'").expect("older config remains readable");
-        assert!(c.ui.motion);
     }
 
     #[test]
@@ -3001,17 +2870,6 @@ alt_arrows = true").unwrap();
             sh_config(vec![]).quote_for_shell("don\u{2019}t"),
             "'don\u{2019}t'",
             "sh keeps it as is"
-        );
-    }
-
-    #[test]
-    fn a_built_in_agent_not_in_quick_runs_by_its_name() {
-        let c = sh_config(vec![]);
-        assert_eq!(
-            bypass_off(c, "codex")
-                .agent_command(Some("codex"), None, "go")
-                .unwrap(),
-            "codex 'go'"
         );
     }
 

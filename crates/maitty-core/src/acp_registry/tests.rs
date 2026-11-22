@@ -39,7 +39,7 @@ impl Drop for Scratch {
 }
 
 #[test]
-fn an_index_lists_its_well_formed_agents_and_leaves_out_the_rest() {
+fn an_index_lists_its_well_formed_agents_and_leaves_out_the_rest_and_adapter_helpers() {
     let good = binary("demo", &format!(r#"{{"archive":"https://example.com/a.tar.gz","cmd":"./demo","sha256":"{SUM}"}}"#));
     let bad_name = binary("Not A Name", r#"{"archive":"https://example.com/a.tar.gz","cmd":"demo"}"#);
     let bad_version = good.replace("1.2.3", "../1");
@@ -48,12 +48,8 @@ fn an_index_lists_its_well_formed_agents_and_leaves_out_the_rest() {
     let agents = parse_index(&index(&[good, bad_name, bad_version, not_an_agent.into()].join(","))).unwrap();
 
     assert_eq!(agents.iter().map(|agent| agent.id.as_str()).collect::<Vec<_>>(), ["demo"]);
-}
-
-#[test]
-fn the_helpers_of_agents_with_their_own_adapter_are_not_listed() {
+    // An agent with its own adapter has no use for the registry's helper for it.
     let helper = binary("claude-acp", &format!(r#"{{"archive":"https://example.com/a.tar.gz","cmd":"x","sha256":"{SUM}"}}"#));
-
     assert!(parse_index(&index(&helper)).unwrap().is_empty());
 }
 
@@ -97,18 +93,13 @@ fn a_binary_is_refused_in_words_when_any_part_of_it_is_not_safe_to_use() {
 }
 
 #[test]
-fn an_agent_with_no_download_for_this_computer_says_so() {
+fn an_agent_with_no_download_for_this_computer_says_so_and_windows_on_arm_takes_x86_64() {
     let listed = only(&index(&binary("demo", &format!(r#"{{"archive":"https://example.com/a","cmd":"demo","sha256":"{SUM}"}}"#))));
 
     assert!(source(&listed, "darwin-aarch64").unwrap_err().contains("this kind of computer"));
     assert!(source(&listed, "linux-x86_64").is_ok());
-}
-
-#[test]
-fn windows_on_arm_takes_the_x86_64_download_when_there_is_no_other() {
-    let listed = only(&index(&binary("demo", &format!(r#"{{"archive":"https://example.com/a","cmd":"demo","sha256":"{SUM}"}}"#)).replace("linux-x86_64", "windows-x86_64")));
-
-    assert!(source(&listed, "windows-aarch64").is_ok());
+    let windows = only(&index(&binary("demo", &format!(r#"{{"archive":"https://example.com/a","cmd":"demo","sha256":"{SUM}"}}"#)).replace("linux-x86_64", "windows-x86_64")));
+    assert!(source(&windows, "windows-aarch64").is_ok());
 }
 
 #[test]

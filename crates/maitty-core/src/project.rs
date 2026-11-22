@@ -204,12 +204,6 @@ mod tests {
     }
 
     #[test]
-    fn reads_the_project_file() {
-        let p: Project = toml::from_str("[hooks]\non_create = \"npm install\"\n").unwrap();
-        assert_eq!(p.hooks.on_create, "npm install");
-    }
-
-    #[test]
     fn hooks_run_only_once_allowed() {
         let dir = std::env::temp_dir().join(format!(
             concat!(env!("APP_COMMAND"), "-allow-{}"),

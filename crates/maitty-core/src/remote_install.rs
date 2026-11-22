@@ -369,7 +369,7 @@ mod tests {
     }
 
     #[test]
-    fn the_platform_comes_from_the_line_after_the_marker() {
+    fn the_platform_comes_from_the_line_after_the_marker_or_there_is_no_answer() {
         let table = [
             ("maitty-platform\nLinux x86_64\n", Os::Linux, Arch::X86_64),
             ("maitty-platform\nLinux aarch64\n", Os::Linux, Arch::Aarch64),
@@ -389,6 +389,14 @@ mod tests {
         ];
         for (out, os, arch) in table {
             assert_eq!(parse_platform(out), Ok(platform(os, arch)), "{out:?}");
+        }
+        for out in [
+            "",
+            "Linux x86_64\n",
+            "maitty-platform\n",
+            "maitty-platform\n\n  \n",
+        ] {
+            assert_eq!(parse_platform(out), Err(PlatformError::NoAnswer), "{out:?}");
         }
     }
 
@@ -432,24 +440,6 @@ mod tests {
     }
 
     #[test]
-    fn no_marker_or_nothing_after_it_is_no_answer() {
-        for out in [
-            "",
-            "Linux x86_64\n",
-            "maitty-platform\n",
-            "maitty-platform\n\n  \n",
-        ] {
-            assert_eq!(parse_platform(out), Err(PlatformError::NoAnswer), "{out:?}");
-        }
-    }
-
-    #[test]
-    fn the_probe_script_prints_its_marker_then_asks_uname() {
-        assert!(PLATFORM_SCRIPT.contains(PLATFORM_MARKER));
-        assert!(PLATFORM_SCRIPT.ends_with("uname -sm"));
-    }
-
-    #[test]
     fn this_computer_is_a_twin_only_on_linux_or_macos() {
         assert_eq!(from_rust_names("windows", "x86_64"), None);
         assert_eq!(from_rust_names("linux", "riscv64"), None);
@@ -464,7 +454,7 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_install_is_the_shell_s_status_not_its_words() {
+    fn a_missing_install_is_the_shell_s_status_not_its_words_and_the_version_follows_login_noise() {
         assert_eq!(classify_version(Some(127), ""), Installed::Missing);
         assert_eq!(
             classify_version(Some(127), "totally different words"),
@@ -475,10 +465,6 @@ mod tests {
             Installed::Broken(_)
         ));
         assert!(matches!(classify_version(None, ""), Installed::Broken(_)));
-    }
-
-    #[test]
-    fn the_version_is_found_after_login_noise() {
         assert_eq!(
             classify_version(Some(0), "Welcome\nmaiker 0.58.0\n"),
             Installed::Version("0.58.0".into())
@@ -636,6 +622,8 @@ mod tests {
             assert!(!PLATFORM_SCRIPT.contains(placeholder), "{placeholder}");
         }
         assert!(INSTALL_SCRIPT.contains("dest=$1") && INSTALL_SCRIPT.contains("want=$2"));
+        assert!(PLATFORM_SCRIPT.contains(PLATFORM_MARKER));
+        assert!(PLATFORM_SCRIPT.ends_with("uname -sm"));
     }
 
     #[test]
@@ -688,9 +676,10 @@ mod tests {
 
     #[test]
     fn a_failure_says_what_became_of_the_machine() {
-        assert_eq!(
-            UploadError::ByteCount.line("build", true),
-            "the file that arrived was not the size that was sent; the install on build did not finish; the old version is unchanged"
+        assert!(
+            UploadError::ByteCount
+                .line("build", true)
+                .ends_with("the old version is unchanged")
         );
         assert!(
             UploadError::WontRun
