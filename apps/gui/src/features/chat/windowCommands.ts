@@ -1,6 +1,6 @@
 import type { SignInAgent } from '@/api/agentSignIn'
 import type { SideAsk, SideCommand } from '@/api/daemon'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SlashCommand } from './slashCommands'
 
@@ -25,7 +25,7 @@ import type { SlashCommand } from './slashCommands'
  */
 export type WindowRoute =
   | { readonly kind: 'settings'; readonly section: DesktopSettingsSection }
-  | { readonly kind: 'panel'; readonly view: InspectView }
+  | { readonly kind: 'panel'; readonly view: RepoSurfaceKind }
   | { readonly kind: 'recent' }
   | { readonly kind: 'commands' }
   | { readonly kind: 'confirm'; readonly ask: ConfirmAsk }

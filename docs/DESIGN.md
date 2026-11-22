@@ -503,17 +503,17 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   pointer, so a press on them drags the window. At the right **one side-panel button** (`SidePanelButton`, the one
   `IconButton`, 6px before the window buttons) and then the platform's window buttons (46x36 captions on Windows,
   drawn as Windows draws them, close hovering `#c42b1c`; `TitleBarView.tsx`). On macOS the traffic lights come first
-  and the mark follows them. The button shows and hides the side panel on the view it last showed, is pressed
+  and the mark follows them. The button shows and hides the side panel with its tabs as they were, is pressed
   (`aria-pressed`) while the panel is on screen, names its key in its tooltip (`inspect` in the binding table) and is
-  disabled while no session is in focus. There are no Changes, Files or Terminal buttons: **Show changes** and
-  **Show files** are in the command palette, and the terminal docked under a chat is on its key (`terminal` in the
-  binding table) and in the palette (**Show or hide the terminal under the chat**).
+  disabled while no session is in focus. There are no Changes, Files or Terminal buttons: the surfaces are tabs of
+  the side panel. **Show changes** and **Show files** are in the command palette, and a chat's terminal is on its key
+  (`terminal` in the binding table) and in the palette (**Show the terminal**).
 - **The frame** (`frame.css`; the gaps are `--frame-edge` 8px, `--frame-top` 4px and `--frame-gap` 6px in
   `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
   (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, a file
-  opened beside a chat and the terminal dock are each a card of their own, the same 6px apart. Every gap between two
+  opened beside a chat and the terminal drawer are each a card of their own, the same 6px apart. Every gap between two
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
   side; the sidebar's and the side panel's edges resize them). There is no tools bar, no middle column and no tab bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
@@ -521,7 +521,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
   widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`. The chat column keeps at least
   **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
-  (`inspect.css`) the side panel lies over the chat instead of beside it.
+  (`inspect.css`) the side panel lies over the chat instead of beside it, still inside the frame, and takes the
+  float material there (`--float-bg`, `--float-line`, `--float-sh`) since it now floats over a card.
 - **Settings dialog** (⌘,). A nav on `--m-well` at the left, in three groups under dim caps: **APP** (General,
   Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
   the current one is on `--m-raise` with an inset `--line`. The nav's foot is the **update box** (`UpdateBox.tsx`): a
@@ -969,11 +970,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   daemon. No control on a session shows its terminal over its chat or back: a chat that cannot carry on says in a line
   what to do, and for a terminal agent that is the Terminal view in Settings. **An agent opens in the app's view** (Gemini always as its terminal); a shell is a
   terminal, and stays one when an agent is typed into it, and its ⋯ menu starts a chat in its folder.
-  Every session on this computer, agent or shell, has terminals of its own in its folder, shown in the **terminal
-  dock** (`components/TerminalDock.tsx`, layout 2h): one card beside the chat, for the focused session, opened and
-  closed by the ⋯ menu's Terminal, its New terminal or ⌃\` (Ctrl+Shift+\` on Windows and Linux,
-  where a plain Ctrl key is the shell's), all through one `toggleTerminal`. Whether it is open is the window's, so
-  switching chats keeps it open on that chat's terminals. It docks at the **bottom** (`clamp(120px, 100vh − 480px,
+  Every session on this computer, agent or shell, has terminals of its own in its folder. Each is a **Terminal tab
+  of the side panel** (below) until it is **pinned to the bottom**, which moves it to the **terminal drawer**
+  (`components/TerminalDock.tsx`): one card under the main pane, for the focused session's pinned terminals. The
+  Terminal key (⌃\`; Ctrl+Shift+\` on Windows and Linux, where a plain Ctrl key is the shell's), the palette and the
+  drawer's Hide are one `toggleTerminal`: with terminals pinned it shows and hides the drawer; with none it opens the
+  side panel on the session's terminal tab, starting the first terminal when there is none. Whether the drawer is
+  open is the window's, so switching chats keeps it open on that chat's pinned terminals. It docks at the **bottom** (`clamp(120px, 100vh − 480px,
   260px)` tall), on the **right** (`min(440px, 45%)` wide) or **full** (the chat steps aside), picked by the three
   icons in its bar or Settings › Terminal › Panes › Terminals open in; a dragged edge keeps its own size
   (`model/terminalDock.ts`, at most 60% of the room) and a double-click puts the design's back. It slides in from its
@@ -982,14 +985,14 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and everything below is one opaque `--term` ground (a see-through ground costs a blend per repaint, PERFORMANCE) with
   `--tdock-pad` (8px 12px) of text inset, on the session pane's own ground (`--card`), the same as the tab row and the terminal. No frame, ring or inner box around a terminal; shells of a split are told apart by
   one hairline between them, and the focused one of several by a 2px accent line along its top. Its 44px bar: mono tabs
-  "shell", "shell 2" with an accent `>_` (each tab is a 5px-cut control; the picked one has the `--m-hover` fill and a `--line2`
+  "Terminal", "Terminal 2" (the names their side-panel tabs had) with an accent `>_` (each tab is a 5px-cut control; the picked one has the `--m-hover` fill and a `--line2`
   edge). Every tab holds the room of its × at all times: the × is 18px, always there, and only its opacity changes (shown on the
   picked tab, on hover and on focus; it stays reachable by keyboard), so no tab changes width when picked or hovered; × ends the tab's shells), **+** for another tab, the folder in mono, Split right, Split down, the dock
-  choice, then hide and close; under 600px wide the folder goes, and under 380px the split and dock buttons fold into
+  choice, **Move to the side panel** (the picked tab's shells become panel tabs again), then hide and close; under 600px wide the folder goes, and under 380px the split and dock buttons fold into
   one **Split and dock** menu. A tab splits into up to four shells in columns and rows (`model/terminalTabs.ts`),
   each a shell of its own with a focus ring and its own ×; the keys go to the dock's focused shell from a click in it
-  until a pane is clicked. A session with no terminal gets one when the dock opens for it, once; closing the last
-  leaves a note with **New terminal**. The terminals are tabs of the session, not rows of the sidebar; which shell
+  until a pane is clicked. **+** and the splits start their shells in the drawer. With nothing pinned the drawer is
+  not drawn. The terminals are tabs of the session, not rows of the sidebar; which shell
   is whose, and how they are split, is the window's own memory (`data/agentTerminals.ts`, `data/terminalTabs.ts`),
   so the terminal app lists them as sessions, and one whose agent is gone is a row again. Closing the dock only
   hides them.
@@ -1108,16 +1111,31 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **A pasted image.** The same toast, titled `Sending the image to <machine>` (a progress bar named
   `Sending image`, **Cancel**), ending as `Sent the image to <machine>`. For a pane of this computer there is
   no progress: a short `Saving the image…` toast becomes `Pasted the image`.
-- **Side panel** (⌘I, the header's Changes and Files buttons, the ⋯ menu, a session's Show changes;
-  `features/inspect/InspectPanel.tsx`, `WorkspaceSidePanel.tsx`; layout 2h). It is docked beside the chat column
-  and the chat narrows to make room; there is no scrim. A card on `--main` with a `--line` hairline,
-  680px at first and at most 58% of the window; its inner edge drags (360 to 1100px) and the width is remembered (a
-  double-click goes back to 680). It slides in and out over `--panel-in`/`--panel-out`. Its 40px header is the view's
-  icon and name, its count (changed files) and × (Esc too, except in a
-  terminal, where Esc is the program's). The header's buttons and the ⋯ menu pick the view: **Changes** or **Files** (there is no History or Checks view); a shell's further terminals still open here.
+- **Side panel** (⌘I, the title bar's button, a session's Show changes, a project's Show files;
+  `features/inspect/SidePanel.tsx`, `WorkspaceSidePanel.tsx`). It is docked beside the main pane, which narrows to
+  make room; there is no scrim. A card of the frame, 680px at first and at most 58% of the window; its inner edge
+  drags (360 to 1100px) and the width is remembered (a double-click goes back to 680). It slides in and out over
+  `--panel-in`/`--panel-out`. It holds **tabs of surfaces**, each session its own: **Files**, **Changes** and
+  **Terminal** (`surfaces.ts`; a further kind is one entry there, its name in `panelTabs.ts` and its body in
+  `WorkspaceSidePanel`). Files and Changes open once and come forward after that; every Terminal is a new shell in
+  the session's folder, named "Terminal", "Terminal 2". Its **34px header is the tab strip** (`tablist`, 2px apart,
+  6px from the edge): the tab in front is its 14px icon, its name (12.5px 600) and a 16px ×, on `--t2`; the others
+  are their icon alone in `--muted`, with the name as tooltip; each is 26px tall on `--r-control`. After the tabs
+  **+** ("Open a surface") opens a 300px menu in the float material listing the surfaces; at the right, while a
+  terminal is in front, **Pin to the bottom**, then the panel's own × (Esc too, except in a terminal, where Esc is
+  the program's). A **right-click on a tab**: Close, Close others, and on a terminal also Pin to the bottom and New
+  terminal. Closing a terminal tab ends its shell, so it asks first (the confirm dialog's close-a-terminal kind);
+  Close others asks once for all the terminals among them. **With no tab open** the panel shows the surface picker:
+  "Open a surface" over one row per surface (icon, name 13px 500, a `--dim` 11.5px line saying what it is for, and
+  its letter in a 20px key cap), and the letters **F**, **D** and **T** open them while the picker or the + menu has
+  the keys (never with Ctrl, Alt or ⌘). A session of another machine is offered Files and Changes only. A chat with
+  no terminal has no pane to read its folder through, so Files and Changes say so there and offer **Open a
+  terminal**, which adds the tab behind them. Which tabs are open, which is in front and which terminals are pinned
+  is remembered per session (`panelTabsStorage.ts`); whether the panel is open is the window's, and hiding it keeps
+  the tabs and the shells.
   Files reads the focused session's top folder before the panel opens; while a list or a file is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
-  opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them). A session's own terminals are in the terminal dock, not here.
+  opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them).
   **Changes** has a top bar: the branch (a menu of the others with a ✓ on the current one, for a checkout on this
   computer), `↑a ↓b` against its upstream, and the remote as a split button (below). Under it a select-all row ("N
   changed", the totals), then two columns: the changed files (a tick, a letter for added, modified or deleted, the name

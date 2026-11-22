@@ -7,7 +7,7 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection, UsageInfo } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import { repoLocate } from '@/features/inspect/api'
 import type { LookAt } from '@/features/inspect/FilesTab'
 import type { OpenSubagent } from './model/subagents'
@@ -17,7 +17,7 @@ import { makeId } from './makeId'
 import { copyText as writeClipboard } from '@/lib/clipboard'
 
 /** What a session's row and menu do: show it, rename it, split it, copy its path, open one of its files. */
-export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, setInspectView, setInspectOpen }: {
+export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, openSurface }: {
   setRenameId: Dispatch<SetStateAction<string | null>>
   queryClient: QueryClient
   setOpenSubagent: Dispatch<SetStateAction<OpenSubagent | null>>
@@ -30,8 +30,8 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   setLookAt: Dispatch<SetStateAction<LookAt | null>>
-  setInspectView: Dispatch<SetStateAction<InspectView>>
-  setInspectOpen: Dispatch<SetStateAction<boolean>>
+  /** Opens the side panel on a session's Files or Changes. */
+  openSurface: (sessionId: string, kind: RepoSurfaceKind) => void
 }) {
   const saveName = useCallback((sessionId: string, name: string) => {
     setRenameId(null)
@@ -109,10 +109,9 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
       .then((relative) => {
         showSessionById(session.id)
         setLookAt({ path: relative, ...(line === undefined ? {} : { line }), key: Date.now() })
-        setInspectView('files')
-        setInspectOpen(true)
+        openSurface(session.id, 'files')
       })
       .catch((error: unknown) => { toast.failed('Could not open that file', error) })
-  }, [setInspectOpen, setInspectView, setLookAt, showSessionById])
+  }, [openSurface, setLookAt, showSessionById])
   return { showSessionById, openPath, copyPathOf, showSubagent, saveName, openInSplit, copyText, usageInfo }
 }

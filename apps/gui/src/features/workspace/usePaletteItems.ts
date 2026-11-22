@@ -28,7 +28,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
   showSessionById: (sessionId: string) => void
   home: string
   newSession: (machine?: number) => void
-  /** The whole app is in the Chat view: a terminal is the dock under a chat, never a shell of its own. */
+  /** The whole app is in the Chat view: a terminal is a chat's own, in the side panel, never a shell of its own. */
   chatView: boolean
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
@@ -44,7 +44,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
   setAddMachineOpen: (open: boolean) => void
   inspectRefusal: string | null
   setInspectOpen: Dispatch<SetStateAction<boolean>>
-  /** Opens the focused session's side panel on one view. */
+  /** Opens the focused session's side panel on one surface. */
   showPanelView: (view: 'changes' | 'files') => void
   setFindOpen: Dispatch<SetStateAction<boolean>>
   setFocusMode: Dispatch<SetStateAction<boolean>>
@@ -89,7 +89,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
       action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
-      action('new-terminal', chatView ? 'Show or hide the terminal under the chat' : 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
+      action('new-terminal', chatView ? 'Show the terminal' : 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
       ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this agent', () => { addAgentTerminal(focusedSession.id) })] : []),
       ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).flatMap((head) => [
         action(`new-on-${head.key}`, `New session on ${head.label}…`, () => { newSession(head.machine) }),

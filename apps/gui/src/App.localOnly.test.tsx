@@ -105,11 +105,16 @@ describe('a pane of another machine and the features that need its files', () =>
     const user = await openRemotePane()
     await user.click(screen.getByRole('button', { name: 'Side panel' }))
     const panel = within(await screen.findByRole('complementary', { name: 'Side panel' }))
-    expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
+    // A terminal is this computer's to start, so the machine's session is offered the surfaces that only read.
+    const picker = within(panel.getByRole('group', { name: 'Open a surface' }))
+    expect(picker.queryByRole('button', { name: /Terminal/ })).toBeNull()
+    await user.click(picker.getByRole('button', { name: /Changes/ }))
+    expect(await panel.findByRole('tab', { name: 'Changes', selected: true })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
     await user.click(screen.getByRole('button', { name: /Commands/ }))
     await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'Show files{Enter}')
     // Files is no longer refused: it lists the machine's folders and opens its markdown documents.
+    expect(await panel.findByRole('tab', { name: 'Files', selected: true })).toBeInTheDocument()
     expect(await panel.findByRole('navigation', { name: 'Files' })).toBeInTheDocument()
     expect(panel.queryByText(REFUSAL('Files'))).toBeNull()
   })

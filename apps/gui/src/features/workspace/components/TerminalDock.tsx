@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
+import { useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from 'react'
 import { TerminalView } from '@/TerminalView'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
@@ -6,7 +6,7 @@ import type { TerminalDock as Dock } from '@/features/settings/preferences'
 import { useWorkspace } from '../workspaceContext'
 import type { SessionView } from '../model/session'
 import { clampDockSize, readDockSize, writeDockSize, type DockAxis } from '../model/terminalDock'
-import { MAX_SPLITS, splitCount, tabIndexOf, tabIds } from '../model/terminalTabs'
+import { MAX_SPLITS, splitCount, tabIndexOf, tabIds, terminalName } from '../model/terminalTabs'
 import { shortcutText } from '../model/shortcuts'
 import { Icon, type IconName } from './glyphs'
 
@@ -21,18 +21,13 @@ const DOCKS: readonly { id: Dock; label: string; icon: IconName }[] = [
 
 const AXIS: Readonly<Record<Dock, DockAxis | null>> = { bottom: 'height', right: 'width', full: null }
 
-/** A shell tab is named for what it runs; the daemon only says it is a shell, so the first is "shell" and the next "shell 2". */
-function tabName(index: number): string {
-  return index === 0 ? 'shell' : `shell ${String(index + 1)}`
-}
-
 /**
- * The terminal dock (layout 2h): one card beside the chat, at the bottom, on the right or in its place, for the focused
- * session's own terminals. Tabs across the top, and each tab split into up to four shells. Every shell is a session the
- * daemon owns; closing the dock only hides them.
+ * The drawer under the main pane (the terminal dock): one card for the focused session's terminals that were pinned to
+ * the bottom from the side panel. Tabs across the top, and each tab split into up to four shells; a tab moves back to
+ * the side panel from here. Every shell is a session the daemon owns; hiding the drawer only hides them.
  */
 export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: boolean }) {
-  const { tabsOf, activeTerminals, setActiveTerminals, addAgentTerminal, closeAgentTerminals, sessionMap, preferences, setPreferences, look, online, canStart, modalOpen, openPath, pasteImage, terminalHandles, toggleTerminal, dockFocused, setDockFocused, platform, root } = useWorkspace()
+  const { tabsOf, activeTerminals, setActiveTerminals, addAgentTerminal, closeAgentTerminals, unpinTerminals, agentTerminals, sessionMap, preferences, setPreferences, look, online, canStart, modalOpen, openPath, pasteImage, terminalHandles, toggleTerminal, dockFocused, setDockFocused, platform, root } = useWorkspace()
   const dock = preferences.terminalDock
   const axis = AXIS[dock]
   const tabs = tabsOf(agent.id)
@@ -46,13 +41,9 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
   const [sizes, setSizes] = useState<Record<DockAxis, number | null>>(() => ({ height: readDockSize('height'), width: readDockSize('width') }))
   const [resizing, setResizing] = useState(false)
 
-  // A dock opened on a session with no terminal yet starts one, once: closing it afterwards leaves the empty note.
-  const started = useRef(new Set<string>())
-  useEffect(() => {
-    if (leaving || tabs.length > 0 || !canStart || started.current.has(agent.id)) return
-    started.current.add(agent.id)
-    addAgentTerminal(agent.id)
-  }, [leaving, tabs.length, canStart, agent.id, addAgentTerminal])
+  // A tab is named for its first shell, as that shell's tab in the side panel was.
+  const owned = agentTerminals.get(agent.id) ?? []
+  const tabName = (each: (typeof tabs)[number]) => terminalName(owned, tabIds(each)[0] ?? '')
 
   const pick = (id: string | undefined) => {
     if (id === undefined) return
@@ -60,7 +51,7 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
     setDockFocused(true)
   }
   const split = (down: boolean) => {
-    if (focusId === undefined) addAgentTerminal(agent.id)
+    if (focusId === undefined) addAgentTerminal(agent.id, 'drawer')
     else addAgentTerminal(agent.id, { beside: focusId, down })
   }
   const setDock = (terminalDock: Dock) => { setPreferences((current) => ({ ...current, terminalDock })) }
@@ -120,17 +111,18 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
           {tabs.map((each, index) => {
             const lead = tabIds(each)[0]
             const on = index === tabIndex
+            const name = tabName(each)
             return (
               <span key={lead} className={`mx-tdock-tab${on ? ' is-on' : ''}`}>
                 <button type="button" role="tab" aria-selected={on} className="mx-tdock-pick" onClick={() => { pick(tabIds(each).includes(picked ?? '') ? picked : lead) }}>
-                  <span className="mx-tdock-prompt" aria-hidden="true">&gt;_</span>{tabName(index)}
+                  <span className="mx-tdock-prompt" aria-hidden="true">&gt;_</span>{name}
                 </button>
-                <button type="button" className="mx-tdock-tab-close" aria-label={`Close ${tabName(index)}`} title="Close this tab · ends its shells" disabled={!online} onClick={() => { closeAgentTerminals(tabIds(each), tabName(index)) }}><Icon name="close" size={10} /></button>
+                <button type="button" className="mx-tdock-tab-close" aria-label={`Close ${name}`} title="Close this tab · ends its shells" disabled={!online} onClick={() => { closeAgentTerminals(tabIds(each), name) }}><Icon name="close" size={10} /></button>
               </span>
             )
           })}
         </div>
-        <button type="button" className="mx-tdock-tool" aria-label="New terminal tab" title={`New terminal tab in ${agent.cwdLabel}`} disabled={!canStart} onClick={() => { addAgentTerminal(agent.id) }}><Icon name="plus" size={13} /></button>
+        <button type="button" className="mx-tdock-tool" aria-label="New terminal tab" title={`New terminal tab in ${agent.cwdLabel}`} disabled={!canStart} onClick={() => { addAgentTerminal(agent.id, 'drawer') }}><Icon name="plus" size={13} /></button>
         <span className="mx-tdock-spacer" />
         <span className="mx-tdock-path" title={agent.cwd}>{agent.cwdLabel}</span>
         <span className="mx-tdock-rule mx-tdock-path" aria-hidden="true" />
@@ -154,14 +146,15 @@ export function TerminalDock({ agent, leaving }: { agent: SessionView; leaving: 
             </DropdownMenuContent>
           </DropdownMenu>
         </span>
+        <button type="button" className="mx-tdock-tool" aria-label="Move to the side panel" title="Move to the side panel" disabled={ids.length === 0} onClick={() => { unpinTerminals(agent.id, ids) }}><Icon name="panelRight" /></button>
         <button type="button" className="mx-tdock-tool" aria-label="Hide terminal" title={`Hide terminal (${key})`} onClick={toggleTerminal}><Icon name="chevronDown" size={14} /></button>
         <button type="button" className="mx-tdock-tool" aria-label="Close terminal" title={`Close terminal (${key})`} onClick={toggleTerminal}><Icon name="close" size={13} /></button>
       </div>
       {tab === undefined ? (
         <div className="mx-tdock-empty">
-          <strong>No terminal yet</strong>
-          <span>A terminal opens in {agent.cwdLabel}, beside the chat.</span>
-          <button type="button" className="mx-tdock-start" disabled={!canStart} onClick={() => { addAgentTerminal(agent.id) }}>New terminal</button>
+          <strong>No terminal pinned here</strong>
+          <span>A terminal opens in {agent.cwdLabel}, under the pane.</span>
+          <button type="button" className="mx-tdock-start" disabled={!canStart} onClick={() => { addAgentTerminal(agent.id, 'drawer') }}>New terminal</button>
         </div>
       ) : (
         <div className="mx-tdock-body">

@@ -11,7 +11,7 @@ import type { SettingsPreferences } from '@/features/settings/preferences'
 import { remoteStartRefusal } from './model/machines'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
-import type { SplitPlace } from './model/terminalTabs'
+import type { TerminalPlace } from './model/terminalTabs'
 import { resolveStartFolder } from './model/startFolder'
 import { makeId } from './makeId'
 import { chatAgentOf } from './model/chatView'
@@ -32,8 +32,8 @@ export function useAgentStarts({ sessionMap, endSessions, confirm, setAgentTermi
   endSessions: (ids: string[]) => void
   confirm: Confirm
   setAgentTerminals: Dispatch<SetStateAction<AgentTerminals>>
-  /** A terminal was started for an agent: the window shows it in the terminal dock, as a tab or split in at `place`. */
-  onTerminalAdded: (agentId: string, terminalId: string, place?: SplitPlace) => void
+  /** A terminal was started for an agent: the window shows it as a tab of the side panel, or in the drawer when `place` says so. */
+  onTerminalAdded: (agentId: string, terminalId: string, place?: TerminalPlace) => void
   runStart: (folder: () => Promise<string>, place: (sessionId: string) => void, launch?: (folder: string) => Promise<void>) => Promise<boolean>
   /** A shell in another machine's home folder, opened in the window once that machine lists it; its id, or null when it did not appear. */
   startRemoteShell: (machine: number) => Promise<string | null>
@@ -51,8 +51,8 @@ export function useAgentStarts({ sessionMap, endSessions, confirm, setAgentTermi
   preferences: SettingsPreferences
   home: string
 }) {
-  // "New terminal" on an agent: a shell in its folder, as another of its terminal tabs, or split in beside one of them.
-  const addAgentTerminal = useCallback((agentId: string, place?: SplitPlace) => {
+  // "New terminal" on an agent: a shell in its folder, as a tab of the side panel, or in the drawer under the pane (`place`).
+  const addAgentTerminal = useCallback((agentId: string, place?: TerminalPlace) => {
     const agent = sessionMap.get(agentId)
     if (!agent) return
     const refusal = remoteStartRefusal(agent.machine !== LOCAL_MACHINE, agent.machineName, 'Opening a terminal here')
@@ -66,9 +66,10 @@ export function useAgentStarts({ sessionMap, endSessions, confirm, setAgentTermi
     })
   }, [sessionMap, runStart, setAgentTerminals, onTerminalAdded])
 
-  // Closing a tab or a split ends its shells, so it asks first, once for all of them. `name` is what the dock calls it.
-  const closeAgentTerminals = useCallback((terminalIds: string[], name: string) => {
-    confirm(confirmAsk('close-terminal', { name }), () => { endSessions(terminalIds) })
+  // Closing a tab or a split ends its shells, so it asks first, once for all of them. `name` is what its tab calls it;
+  // `after` runs with the close, for what goes with it.
+  const closeAgentTerminals = useCallback((terminalIds: string[], name: string, after?: () => void) => {
+    confirm(confirmAsk('close-terminal', { name }), () => { endSessions(terminalIds); after?.() })
   }, [confirm, endSessions])
 
   // In the Chat view Claude Code, Codex and Gemini open the New session draft with that agent picked: the folder, branch, model

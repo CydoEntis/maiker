@@ -14,7 +14,7 @@ function mount() {
   const other = { id: 'other', machine: 0, machineName: null, pane: 2, conversation: terminal } as unknown as SessionView
   // A chat on another machine with no terminal of its own: its daemon has no pane to be asked about.
   const far = { id: 'far', machine: 2, machineName: 'build', pane: null, conversation: { kind: 'claude', execution: 'Structured', chat: {} } } as unknown as SessionView
-  const spies = { setInspectOpen: vi.fn(), setInspectView: vi.fn(), setTurnDiff: vi.fn(), showSessionById: vi.fn(), setLayout: vi.fn() }
+  const spies = { setInspectOpen: vi.fn(), openSurface: vi.fn(), setTurnDiff: vi.fn(), showSessionById: vi.fn(), setLayout: vi.fn() }
   const { result } = renderHook(() => useInspectActions({
     ...spies,
     focusedSession: here,
@@ -25,14 +25,13 @@ function mount() {
 
 describe('showing a session’s changes from its chat', () => {
   it('ties a turn to the session whose row was clicked and focuses its pane, keeping a helper chat open there', () => {
-    const { actions, setTurnDiff, showSessionById, setLayout, setInspectView, setInspectOpen } = mount()
+    const { actions, setTurnDiff, showSessionById, setLayout, openSurface } = mount()
     actions.showChanges('pane-2', 'other', 'a.ts', TURN)
     // showSessionById would close an open helper agent's chat; focusing the pane leaves it be.
     expect(showSessionById).not.toHaveBeenCalled()
     expect(setLayout).toHaveBeenCalledTimes(1)
     expect(setTurnDiff).toHaveBeenCalledWith({ sessionId: 'other', turn: TURN })
-    expect(setInspectView).toHaveBeenCalledWith('changes')
-    expect(setInspectOpen).toHaveBeenCalledWith(true)
+    expect(openSurface).toHaveBeenCalledWith('other', 'changes')
   })
 
   it('brings a session from its menu to the front, wherever it is, on the whole working tree', () => {
@@ -43,11 +42,11 @@ describe('showing a session’s changes from its chat', () => {
   })
 
   it('refuses a session on another machine and keeps no turn', () => {
-    const { actions, setTurnDiff, setInspectOpen } = mount()
+    const { actions, setTurnDiff, openSurface } = mount()
     actions.showChanges('pane-3', 'far', 'a.ts', TURN)
     expect(toast.info).toHaveBeenCalled()
     expect(setTurnDiff).not.toHaveBeenCalled()
-    expect(setInspectOpen).not.toHaveBeenCalled()
+    expect(openSurface).not.toHaveBeenCalled()
   })
 })
 

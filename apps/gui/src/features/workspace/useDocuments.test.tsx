@@ -19,7 +19,7 @@ function setup() {
   const layout = openDocumentBeside(opened, 'chat', 'README.md', makeId) ?? opened
   let current: Layout = layout
   const setLayout = vi.fn((change: Layout | ((was: Layout) => Layout)) => { current = typeof change === 'function' ? change(current) : change })
-  const hook = renderHook(() => useDocuments({ layout, setLayout, focusedSession: undefined, repoPaneOf: () => 1, showSessionById: vi.fn(), setLookAt: vi.fn(), setInspectView: vi.fn(), setInspectOpen: vi.fn() }))
+  const hook = renderHook(() => useDocuments({ layout, setLayout, focusedSession: undefined, repoPaneOf: () => 1, showSessionById: vi.fn(), setLookAt: vi.fn(), openSurface: vi.fn() }))
   const doc = activeArrangement(layout)?.panes.find((pane) => pane.doc)
   return { ...hook, setLayout, layout, doc, now: () => current }
 }

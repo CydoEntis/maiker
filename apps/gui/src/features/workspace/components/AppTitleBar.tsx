@@ -11,10 +11,10 @@ import { WindowServiceChip } from './WindowServiceStatus'
  * do is in the command palette.
  */
 export function AppTitleBar() {
-  const { inspectOpen, inspectTerm, focusedSession, focusMode, toggleInspect } = useWorkspace()
+  const { inspectOpen, inspectRefusal, focusedSession, focusMode, toggleInspect } = useWorkspace()
   const tip = useTipWithKeys()
-  // Pressed only while the panel is drawn: it is kept open across sessions, and one with no repository has no panel.
-  const shown = inspectOpen && !focusMode && focusedSession !== undefined && inspectTerm !== null
+  // Pressed only while the panel is drawn: it is kept open across sessions, and one it has nothing for has no panel.
+  const shown = inspectOpen && !focusMode && focusedSession !== undefined && inspectRefusal === null
   const start = (
     <>
       <span className="mx-tbar-logo" data-tauri-drag-region>

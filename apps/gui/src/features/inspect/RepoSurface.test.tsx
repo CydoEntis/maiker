@@ -2,7 +2,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { InspectPanel, type InspectView } from './InspectPanel'
+import type { RepoSurfaceKind } from './panelTabs'
+import { RepoSurface } from './RepoSurface'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }))
 
@@ -20,30 +21,30 @@ function daemonAnswers(replies: Record<string, unknown>) {
   })
 }
 
-function renderPanel(view: InspectView) {
+function renderPanel(view: RepoSurfaceKind) {
   const onNotice = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <InspectPanel term={5} changedFiles={2} view={view} lookAt={null} onClose={vi.fn()} onNotice={onNotice} />
+      <RepoSurface term={5} kind={view} lookAt={null} onNotice={onNotice} />
     </QueryClientProvider>,
   )
   return { onNotice }
 }
 
 /** The panel for pane 5 of the machine build. */
-function renderOnBuild(view: InspectView) {
+function renderOnBuild(view: RepoSurfaceKind) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view={view} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
+      <RepoSurface term={5} machine={1} machineName="build" kind={view} lookAt={null} onNotice={vi.fn()} />
     </QueryClientProvider>,
   )
 }
 
 beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
 
-describe('Inspect panel', () => {
+describe('the side panel’s Files and Changes', () => {
 
   it('lists the changed files and shows the picked file’s diff', async () => {
     daemonAnswers({
@@ -95,7 +96,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" changedFiles={2} view="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Commit b.txt' }))
@@ -121,7 +122,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" changedFiles={1} view="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Pull 2' }))
@@ -140,7 +141,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} machine={1} machineName="build" changedFiles={0} view="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Push 1' }))
@@ -175,7 +176,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} changedFiles={1} view="changes" lookAt={null} comments={{ agent: 'Claude', onSend }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <RepoSurface term={5} kind="changes" lookAt={null} comments={{ agent: 'Claude', onSend }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByText(/\+new/))
@@ -202,7 +203,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} changedFiles={1} view="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onClose={vi.fn()} onNotice={onNotice} />
+        <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     expect(await screen.findByLabelText('Commit message')).toHaveValue('Add refunds')
@@ -225,7 +226,7 @@ describe('Inspect panel', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <InspectPanel term={5} changedFiles={1} view="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onClose={vi.fn()} onNotice={vi.fn()} />
+        <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Commit 1 file' }))
@@ -301,7 +302,7 @@ describe('Inspect panel', () => {
   })
 })
 
-describe('Inspect changes', () => {
+describe('the Changes surface', () => {
   describe('a turn’s changes', () => {
     const diffOf = (path: string) => ({ files: [{ path, additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' }], additions: 1, deletions: 0, total_files: 1, truncated: false })
     type Turn = { startedAtMs: number; endedAtMs: number } | null
@@ -309,7 +310,7 @@ describe('Inspect changes', () => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
       const panel = (shown: Turn) => (
         <QueryClientProvider client={client}>
-          <InspectPanel term={5} changedFiles={2} view="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onClose={vi.fn()} onNotice={vi.fn()} />
+          <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onNotice={vi.fn()} />
         </QueryClientProvider>
       )
       const { rerender } = render(panel(turn))

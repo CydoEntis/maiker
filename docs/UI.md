@@ -546,10 +546,19 @@ The desktop window, unlike the terminal interface above, has one full-width foot
 
 - **Title bar** (`AppTitleBar` in `TitleBar`/`TitleBarView`): the mark and name at the left, at the right **one**
   side-panel button (`SidePanelButton`) and the platform's window buttons. The button is `toggleInspect`, the same as
-  the `inspect` key: it shows and hides the side panel on the view it last showed and carries `aria-pressed` while the
-  panel is drawn. The title bar holds no per-view button; a new way into a view goes in the side panel or the command
-  palette. Everything in the bar that is not a button must stay a drag area (`data-tauri-drag-region` on the element
+  the `inspect` key: it shows and hides the side panel with its tabs as they were and carries `aria-pressed` while the
+  panel is drawn. The title bar holds no per-surface button; a new way into a surface goes in the side panel or the
+  command palette. Everything in the bar that is not a button must stay a drag area (`data-tauri-drag-region` on the element
   the press lands on), on Windows, macOS and Linux alike.
+- **Side panel surfaces** (`features/inspect/`): the panel is tabs of surfaces, and its tab model is pure
+  (`panelTabs.ts`: open, show, close, close others, pin, and `livePanel`, which fits what was remembered to the
+  terminals the daemon still has). A new surface is registered, never special-cased: its kind in `SURFACE_KINDS`, its
+  entry in `SURFACES` (`surfaces.ts`: name, icon, letter, hint, whether it opens more than once) and its body in
+  `WorkspaceSidePanel`'s switch. The strip is a `tablist` of `tab`s over one `tabpanel`; a tab's name is its
+  accessible name even while only its icon shows. Anything outside the panel opens a surface through `openSurface`
+  (`useSidePanel.ts`), never by setting panel state itself. A terminal tab is a shell the daemon owns: the panel and
+  the drawer only say where it shows, closing its tab ends it and so asks first, and hiding the panel or pinning,
+  unpinning or switching tabs never ends it.
 - **Cards and gaps** (`frame.css`): the sidebar, the main area, a split pane, the terminal dock and the side panel
   are cards on `--t1`; their fill and edge come from the panel role in `material.css`, never from the component. Space
   between and around them is `--frame-gap`, `--frame-edge` and `--frame-top` (`tokens.css`), never a number of its
@@ -1455,11 +1464,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Claude Code or Codex run in it included once the daemon sees the agent (a session started from the New session draft is that agent from
   the first moment); a session with no chat (a plain shell, Gemini, OpenCode and any agent without an event stream) shows as its terminal. A plain shell
   is never made in the Chat view: a project's menu offers no Terminal, **Split** says why it
-  does nothing, and **New terminal** (the key, the palette) shows or hides the terminal docked under the chat, or says a chat is
-  needed first when none is in front. Shells therefore appear only in the Terminal view, in the dock, or as ones left from the Terminal view. In the
-  Terminal view every pane is a terminal and there is no dock. **The dock has no title-bar button**: it opens and closes on the Terminal key
-  (`terminal` in the binding table), from the command palette (**Show or hide the terminal under the chat**) and from the dock's own Hide button, for a chat of this computer in the
-  Chat view; all three are `toggleTerminal`, and the first one starts the chat's first terminal. The terminal stays mounted under the chat and keeps its size, and
+  does nothing, and **New terminal** (the key, the palette) shows the chat's own terminal, or says a chat is
+  needed first when none is in front. Shells therefore appear only in the Terminal view, as a session's own terminals (side-panel tabs, or the drawer once pinned), or as ones left from the Terminal view. In the
+  Terminal view every pane is a terminal and there is no drawer. **A session's terminals have no title-bar button**: the Terminal key
+  (`terminal` in the binding table), the command palette (**Show the terminal**) and the drawer's own Hide button are one `toggleTerminal`, for a chat of this computer in the
+  Chat view: with terminals pinned to the bottom it shows and hides their drawer; with none it opens the side panel on the chat's terminal tab, and starts the chat's first terminal when there is none. The terminal stays mounted under the chat and keeps its size, and
   no daemon command is sent. **No control on a session moves it between chat and terminal**
   ([ADR 0020](adr/0020-the-chat-view-talks-to-the-agent-directly.md)): there is no terminal log over a chat and no
   **Back to chat**. A terminal agent shown as a chat that cannot carry on (it never reports in, or it waits on a

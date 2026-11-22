@@ -4,7 +4,7 @@ import { useLatest } from '@/lib/useLatest'
 import { guardDrafts, inPane } from '@/features/documents/draftGuard'
 import { repoTree } from '@/features/inspect/api'
 import type { LookAt } from '@/features/inspect/FilesTab'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import { readmeOf } from '@/features/documents/documentPaths'
 import { movePanes } from './components/paneTransition'
 import { documentPaneReplaced, type Layout, MAX_PANES, openDocumentBeside } from './model/layout'
@@ -14,15 +14,15 @@ import { makeId } from './makeId'
 export type ReadmePlace = 'beside' | 'files'
 
 /** The window's ways to open a markdown file of a session's checkout: in a pane beside the chat, or in the Files panel. */
-export function useDocuments({ layout, setLayout, focusedSession, repoPaneOf, showSessionById, setLookAt, setInspectView, setInspectOpen }: {
+export function useDocuments({ layout, setLayout, focusedSession, repoPaneOf, showSessionById, setLookAt, openSurface }: {
   layout: Layout
   setLayout: Dispatch<SetStateAction<Layout>>
   focusedSession: SessionView | undefined
   repoPaneOf: (session: SessionView) => number | null
   showSessionById: (sessionId: string) => void
   setLookAt: Dispatch<SetStateAction<LookAt | null>>
-  setInspectView: Dispatch<SetStateAction<InspectView>>
-  setInspectOpen: Dispatch<SetStateAction<boolean>>
+  /** Opens the side panel on a session's Files or Changes. */
+  openSurface: (sessionId: string, kind: RepoSurfaceKind) => void
 }) {
   const layoutNow = useLatest(() => layout)
   /**
@@ -59,11 +59,10 @@ export function useDocuments({ layout, setLayout, focusedSession, repoPaneOf, sh
         if (place === 'beside') { openDocument(session.id, name); return }
         showSessionById(session.id)
         setLookAt({ path: name, key: Date.now() })
-        setInspectView('files')
-        setInspectOpen(true)
+        openSurface(session.id, 'files')
       })
       .catch((error: unknown) => { toast.failed('Could not look for the README', error) })
-  }, [focusedSession, repoPaneOf, openDocument, showSessionById, setLookAt, setInspectView, setInspectOpen])
+  }, [focusedSession, repoPaneOf, openDocument, showSessionById, setLookAt, openSurface])
 
   return { openDocument, openReadme }
 }

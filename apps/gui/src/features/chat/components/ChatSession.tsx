@@ -61,7 +61,7 @@ import { VirtualList } from './VirtualList'
 import { copyText } from '@/lib/clipboard'
 import { ConfirmDialog } from '@/features/confirm/ConfirmDialog'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
@@ -185,7 +185,7 @@ type Props = {
 /** The screens a command can open beside the chat: a Settings page, a tab of the session's side panel, the closed sessions. */
 export type WindowActions = {
   readonly openSettings: (section: DesktopSettingsSection) => void
-  readonly openPanel: (view: InspectView) => void
+  readonly openPanel: (view: RepoSurfaceKind) => void
   readonly openRecent: () => void
   /** Gives the session a new name in Maiker, as the sidebar's rename does. */
   readonly renameSession: (name: string) => void

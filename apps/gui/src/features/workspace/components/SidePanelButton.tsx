@@ -11,7 +11,7 @@ type Props = {
   onToggle: () => void
 }
 
-/** The title bar's one panel button: it shows and hides the side panel, which opens on the view it last showed. */
+/** The title bar's one panel button: it shows and hides the side panel, which keeps its tabs while it is hidden. */
 export function SidePanelButton({ shown, available, tip, onToggle }: Props) {
   return (
     <IconButton label="Side panel" tip={tip} aria-pressed={shown} disabled={!available} onClick={onToggle}>

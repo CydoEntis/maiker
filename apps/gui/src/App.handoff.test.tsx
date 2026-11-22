@@ -1173,7 +1173,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(await screen.findByRole('dialog', { name: /Rename/ })).toBeInTheDocument()
   })
 
-  it('docks a terminal in the chat folder from the command palette, for an agent chat in the Chat view', async () => {
+  it('opens a terminal in the chat folder from the command palette, for an agent chat in the Chat view', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
@@ -1181,7 +1181,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await screen.findByRole('button', { name: 'New session, claude, idle' })
 
     await user.click(screen.getByRole('button', { name: /Commands/ }))
-    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'terminal under the chat{Enter}')
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'Show the terminal{Enter}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })
