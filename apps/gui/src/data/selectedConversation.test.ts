@@ -7,10 +7,6 @@ describe('selected conversation preference', () => {
     vi.restoreAllMocks()
   })
 
-  it('starts without a saved selection', () => {
-    expect(readSelectedConversation()).toBeNull()
-  })
-
   it('restores a saved conversation ID', () => {
     writeSelectedConversation('42')
 

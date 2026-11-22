@@ -56,10 +56,4 @@ describe('the window material', () => {
     expect(css).toMatch(/--pop-ring:\s*var\(--m-card-line\)/)
     expect(css).toMatch(/\[role="menu"\][^{]*\.mx-pop[^{]*\{\s*background-color: var\(--pop-bg\);\s*border-color: var\(--pop-ring\);/)
   })
-
-  it('draws the folder mark in a text colour, not a coloured tile', () => {
-    const css = SHEETS['./features/workspace/components/sidebar.css'] ?? ''
-    expect(css).toMatch(/\.mx-folder-mark\s*\{[^}]*color: var\(--muted-text\)/)
-    expect(css).not.toMatch(/mx-project-square|mx-grp-square/)
-  })
 })

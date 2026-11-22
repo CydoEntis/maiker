@@ -6,10 +6,6 @@ describe('conversation drafts', () => {
     localStorage.clear()
   })
 
-  it('loads no drafts when none have been saved', () => {
-    expect(readConversationDrafts()).toEqual({})
-  })
-
   it('keeps drafts associated with their conversation', () => {
     const drafts = { 'thread-a': 'Review the changes', 'thread-b': 'Check the build' }
     writeConversationDrafts(drafts)

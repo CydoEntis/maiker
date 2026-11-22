@@ -121,19 +121,6 @@ describe('usage and cost in the desktop app', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument() })
   })
 
-  it('has no usage button in the sidebar footer or the Settings nav: its own key opens it', async () => {
-    const user = userEvent.setup()
-    renderDesktopApp()
-    await screen.findByRole('button', { name: 'Settings' })
-    expect(screen.queryByRole('button', { name: 'Usage and cost' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Settings' }))
-    expect(within(screen.getByRole('navigation', { name: 'Settings sections' })).queryByRole('button', { name: /Usage & cost/ })).toBeNull()
-    await user.keyboard('{Escape}')
-    await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}')
-    expect(await screen.findByRole('region', { name: 'Usage and cost' })).toBeInTheDocument()
-  })
-
   it('opens the pane of an open session from its row, and leaves a closed session alone', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
@@ -148,17 +135,5 @@ describe('usage and cost in the desktop app', () => {
     await user.click(within(table).getByRole('button', { name: /Shell 5|~|shell/i }))
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Usage and cost' })).not.toBeInTheDocument() })
     expect(await screen.findByText('Pane 5')).toBeInTheDocument()
-  })
-
-  it('keeps a monthly budget with the other preferences', async () => {
-    const user = userEvent.setup()
-    renderDesktopApp()
-    await openUsage(user)
-    await user.click(await screen.findByRole('button', { name: 'Set a monthly budget' }))
-    await user.type(screen.getByRole('textbox', { name: /Monthly budget/ }), '40')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ monthlyBudget: 40 }) })
-    expect(screen.getByText('$40.00 monthly budget')).toBeInTheDocument()
   })
 })

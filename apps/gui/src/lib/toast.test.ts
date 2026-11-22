@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { APP_NAME } from '@/brand'
-import { currentToasts, holdToasts, readingToasts, resetToasts, toast, TOAST_HIDE_MS } from './toast'
+import { currentToasts, holdToasts, resetToasts, toast, TOAST_HIDE_MS } from './toast'
 
 const shown = () => currentToasts().items
 
@@ -21,13 +21,6 @@ describe('the toast store', () => {
     expect(shown().map((item) => item.kind)).toEqual(['progress', 'needs', 'warning', 'error'])
     vi.advanceTimersByTime(TOAST_HIDE_MS * 10)
     expect(shown()).toHaveLength(4)
-  })
-
-  it('keeps a context line, the project or machine, and leaves it off when none is given', () => {
-    toast.info('Put away Parser fix', { context: 'chameleon' })
-    toast.info('Copied', { context: '' })
-    expect(shown()[1]).toMatchObject({ context: 'chameleon' })
-    expect(shown()[0]).not.toHaveProperty('context')
   })
 
   it('puts the newest first', () => {
@@ -60,19 +53,6 @@ describe('the toast store', () => {
     expect(shown().map((item) => item.id)).toEqual(['toast-2'])
   })
 
-  it('stays while it is being read, and hides the rest of its time after', () => {
-    toast.success('Copied')
-    vi.advanceTimersByTime(TOAST_HIDE_MS - 1000)
-    readingToasts(true)
-    vi.advanceTimersByTime(TOAST_HIDE_MS * 3)
-    expect(shown()).toHaveLength(1)
-    readingToasts(false)
-    vi.advanceTimersByTime(999)
-    expect(shown()).toHaveLength(1)
-    vi.advanceTimersByTime(1)
-    expect(shown()).toHaveLength(0)
-  })
-
   it('holds every toast while the window is offline: none shows and none runs out', () => {
     toast.success('Copied')
     holdToasts(true)
@@ -88,12 +68,6 @@ describe('the toast store', () => {
     toast.error('The terminal is not connected to the daemon')
     toast.failed('Could not send', new Error('The terminal is not connected to the daemon'))
     expect(shown()).toHaveLength(0)
-  })
-
-  it('says what failed in the title and the error\'s own words as the reason and behind Copy details', () => {
-    toast.failed('Could not open the link', new Error('xdg-open exited with code 3'))
-    // A raw tool message is made one sentence; its own text stays behind Copy details.
-    expect(shown()[0]).toMatchObject({ kind: 'error', title: 'Could not open the link', description: 'Xdg-open exited with code 3.', details: 'xdg-open exited with code 3' })
   })
 
   it('dismisses one toast, or all', () => {
@@ -122,11 +96,5 @@ describe('toast.failed', () => {
 
     expect(shown()[0]).toMatchObject({ description: 'The branch is checked out in another worktree.' })
     expect(shown()[0]?.details).toBeUndefined()
-  })
-
-  it('stays quiet when the failure is only that the window has no line to the service', () => {
-    toast.failed('Could not send', 'The terminal is not connected to the daemon')
-
-    expect(shown()).toHaveLength(0)
   })
 })

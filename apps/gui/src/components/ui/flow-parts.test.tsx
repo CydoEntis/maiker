@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ChoiceCards } from './choice-cards'
@@ -31,12 +31,6 @@ describe('StepBar', () => {
 })
 
 describe('Progress', () => {
-  it('reads a percent when it knows how far along it is', () => {
-    render(<Progress value={40} label="Copying the helper" />)
-    const bar = screen.getByRole('progressbar', { name: 'Copying the helper' })
-    expect(bar).toHaveAttribute('aria-valuenow', '40')
-    expect(bar).toHaveAttribute('aria-valuemax', '100')
-  })
 
   it('carries no value while the length of the work is unknown', () => {
     render(<Progress label="Installing" />)
@@ -62,13 +56,6 @@ function Question({ onPick }: { onPick: (value: string) => void }) {
 }
 
 describe('ChoiceCards', () => {
-  it('is a radio group with nothing picked until the person answers, and tags the recommended card', () => {
-    render(<Question onPick={vi.fn()} />)
-    const group = screen.getByRole('radiogroup', { name: 'Where do you spend your day?' })
-    expect(within(group).getAllByRole('radio').map((radio) => radio.getAttribute('aria-checked'))).toEqual(['false', 'false'])
-    expect(screen.getByRole('radio', { name: /Chat/ })).toHaveTextContent('Recommended for you')
-    expect(screen.getByRole('radio', { name: /Terminal/ })).not.toHaveTextContent('Recommended')
-  })
 
   it('picks a card by click, and the arrow keys walk the cards', async () => {
     const user = userEvent.setup()

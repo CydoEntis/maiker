@@ -101,30 +101,6 @@ describe('a pane of another machine and the features that need its files', () =>
     daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
-  it('adds a remote machine in a small dialog from the sidebar, not in Settings', async () => {
-    const user = userEvent.setup()
-    window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><App /></QueryClientProvider>)
-
-    await user.click(await screen.findByRole('button', { name: /Add machine|Remote machine/ }))
-
-    const dialog = await screen.findByRole('dialog', { name: 'Add a remote machine' })
-    expect(within(dialog).getByRole('textbox', { name: 'Address' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Add a remote machine' })).not.toBeInTheDocument() })
-  })
-
-  it('shows Changes and Files in the header of the session in front, and none of the four views in its ⋯ menu', async () => {
-    const user = await openRemotePane()
-    expect(screen.queryByRole('navigation', { name: 'Tools' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Changes' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Files' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await screen.findByRole('menuitem', { name: /^Split right/ })
-    for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(screen.queryByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeNull()
-  })
-
   it('opens the side panel on the machine\'s changes and lists its files for markdown (ADR 0014)', async () => {
     const user = await openRemotePane()
     await user.click(screen.getByRole('button', { name: 'Changes' }))

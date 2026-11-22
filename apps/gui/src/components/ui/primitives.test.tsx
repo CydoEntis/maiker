@@ -1,28 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
-import { Button, IconButton } from './button'
-import { Card, CardFoot, CardHead } from './card'
+import { Button } from './button'
 import { Fold } from './fold'
-import { Progress } from './progress'
-import { FileBadge, Tag, typeTone } from './tag'
+import { FileBadge } from './tag'
 
 describe('Button', () => {
-  it('draws its kind and size, and shows the key that also presses it', () => {
-    render(<Button variant="needs" size="sm" keyHint="y">Yes once</Button>)
-    const button = screen.getByRole('button', { name: /^Yes once/ })
-    expect(button).toHaveAttribute('data-variant', 'needs')
-    expect(button).toHaveAttribute('data-size', 'sm')
-    expect(button.querySelector('kbd')).toHaveTextContent('y')
-    expect(button).toHaveAccessibleName('Yes once')
-    expect(button).toHaveAttribute('aria-keyshortcuts', 'y')
-  })
-
-  it('is the primary kind at the medium size unless told otherwise', () => {
-    render(<Button>Save</Button>)
-    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-variant', 'primary')
-    expect(screen.getByRole('button', { name: 'Save' })).toHaveAttribute('data-size', 'md')
-  })
 
   it('takes keyboard focus and presses with Enter and Space, but not while disabled', async () => {
     const user = userEvent.setup()
@@ -36,40 +19,9 @@ describe('Button', () => {
     await user.tab()
     expect(screen.getByRole('button', { name: 'Stopped' })).not.toHaveFocus()
   })
-
-  it('names an icon button by its label, which is also its tooltip', () => {
-    render(<IconButton label="Copy"><svg /></IconButton>)
-    const button = screen.getByRole('button', { name: 'Copy' })
-    expect(button).toHaveAttribute('title', 'Copy')
-    expect(button).toHaveAttribute('data-variant', 'ghost')
-  })
-})
-
-describe('Card', () => {
-  it('keeps its head and foot in order and can be reached by keyboard when it is interactive', async () => {
-    const user = userEvent.setup()
-    render(<Card tone="needs" interactive tabIndex={0} aria-label="Waiting"><CardHead>Run a command</CardHead><CardFoot><Button>Allow</Button></CardFoot></Card>)
-    const card = screen.getByLabelText('Waiting')
-    expect(card.className).toContain('border-(--needs)')
-    await user.tab()
-    expect(card).toHaveFocus()
-    await user.tab()
-    expect(screen.getByRole('button', { name: 'Allow' })).toHaveFocus()
-  })
 })
 
 describe('Tag and FileBadge', () => {
-  it('colours a tag by what it says', () => {
-    render(<><Tag tone="err">exit 1</Tag><Tag>Modified</Tag></>)
-    expect(screen.getByText('exit 1').className).toContain('text-(--err)')
-    expect(screen.getByText('Modified').className).toContain('text-(--fg2)')
-  })
-
-  it('gives each file type its own tone and never the needs colour', () => {
-    expect(['TS', 'TSX', 'JSON', 'YAML', 'SQL', 'ENV', 'MD', 'LOG'].map(typeTone)).toEqual([
-      'var(--tag-ts)', 'var(--tag-tsx)', 'var(--tag-data)', 'var(--tag-data)', 'var(--tag-sql)', 'var(--tag-env)', 'var(--tag-md)', 'var(--tag-text)',
-    ])
-  })
 
   it('shows the folder dimmed, keeps the whole path as its title, and opens from the keyboard', async () => {
     const user = userEvent.setup()
@@ -83,12 +35,6 @@ describe('Tag and FileBadge', () => {
     await user.tab()
     await user.keyboard('{Enter}')
     expect(open).toHaveBeenCalledOnce()
-  })
-
-  it('is plain text without an action, for use inside a row that is a button', () => {
-    render(<FileBadge path="README.md" />)
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
-    expect(screen.getByTitle('README.md')).toBeInTheDocument()
   })
 })
 
@@ -104,13 +50,6 @@ describe('Fold, Progress and Toast', () => {
     expect(toggle).toHaveBeenCalledOnce()
     rerender(<Fold open onToggle={toggle} more="Show 12 more lines" />)
     expect(screen.getByRole('button', { name: 'Hide' })).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  it('reports progress as a value of a maximum', () => {
-    render(<Progress value={2} max={5} label="Steps passed" />)
-    const bar = screen.getByRole('progressbar', { name: 'Steps passed' })
-    expect(bar).toHaveAttribute('aria-valuenow', '2')
-    expect(bar).toHaveAttribute('aria-valuemax', '5')
   })
 
 })

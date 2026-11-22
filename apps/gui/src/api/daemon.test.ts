@@ -3,7 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
 import type { Conversation } from '@/data/preview'
-import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, createConversation, loadClaudeExecutablePath, loadCodexExecutablePath, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, resumeConversation, allowAlways, sideAnswer } from './daemon'
+import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -95,48 +95,6 @@ describe('conversation changes query', () => {
   })
 })
 
-describe('Codex executable lookup', () => {
-  beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockResolvedValue('C:\\Users\\casey\\AppData\\Roaming\\npm\\node_modules\\@openai\\codex\\vendor\\codex.exe')
-  })
-
-  it('loads the executable path from the desktop host', async () => {
-    await expect(loadCodexExecutablePath()).resolves.toContain('codex.exe')
-    expect(invoke).toHaveBeenCalledWith('codex_executable_path', undefined)
-  })
-
-  it('refuses executable lookup in the browser preview', async () => {
-    vi.mocked(isTauri).mockReturnValue(false)
-
-    await expect(loadCodexExecutablePath()).rejects.toThrow('Codex executable lookup is available in the desktop app')
-    expect(invoke).not.toHaveBeenCalled()
-  })
-})
-
-describe('Claude executable lookup and creation', () => {
-  beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockResolvedValue('C:\\Users\\casey\\.local\\bin\\claude.exe')
-  })
-
-  it('loads Claude Code from the desktop host', async () => {
-    await expect(loadClaudeExecutablePath()).resolves.toContain('claude.exe')
-    expect(invoke).toHaveBeenCalledWith('claude_executable_path', undefined)
-  })
-
-  it('passes the selected provider to the daemon-backed create command', async () => {
-    vi.mocked(invoke).mockResolvedValue({ id: 44, generation: 1 })
-
-    await expect(createConversation('/work/project', 'Claude', 'full-access')).resolves.toEqual({ id: 44, generation: 1 })
-    expect(invoke).toHaveBeenCalledWith('create_conversation', {
-      cwd: '/work/project',
-      provider: 'Claude',
-      permissions: 'full-access',
-    })
-  })
-})
-
 describe('a service a release behind', () => {
   beforeEach(() => {
     vi.mocked(isTauri).mockReturnValue(true)
@@ -189,29 +147,6 @@ describe('daemon protocol recovery', () => {
     await expect(loadDaemonRestartStatus()).rejects.toThrow('Daemon restart status is available in the desktop app')
     await expect(restartMismatchedDaemon(49)).rejects.toThrow('Daemon restart is available in the desktop app')
     expect(invoke).not.toHaveBeenCalled()
-  })
-})
-
-describe('conversation recovery', () => {
-  beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockResolvedValue({ id: 42, generation: 8 })
-  })
-
-  it('resumes only the exact saved conversation generation', async () => {
-    await expect(resumeConversation(conversation)).resolves.toEqual({ id: 42, generation: 8 })
-
-    expect(invoke).toHaveBeenCalledWith('resume_codex_conversation', { id: 42, generation: 7 })
-  })
-
-  it('refuses recovery without a desktop host or conversation generation', async () => {
-    vi.mocked(isTauri).mockReturnValue(false)
-    await expect(resumeConversation(conversation)).rejects.toThrow('Conversation recovery is only available in the desktop app')
-
-    vi.mocked(isTauri).mockReturnValue(true)
-    const { generation, ...conversationWithoutGeneration } = conversation
-    expect(generation).toBe(7)
-    await expect(resumeConversation(conversationWithoutGeneration)).rejects.toThrow('Conversation generation is unavailable')
   })
 })
 

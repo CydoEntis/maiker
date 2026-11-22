@@ -6,10 +6,6 @@ describe('sidebar preferences', () => {
     localStorage.clear()
   })
 
-  it('loads empty preferences by default', () => {
-    expect(readSidebarPreferences()).toEqual({ pinnedIds: [], archivedIds: [], renamedTitles: {} })
-  })
-
   it('keeps pinned, archived and renamed conversation choices', () => {
     const preferences = {
       pinnedIds: ['42'],

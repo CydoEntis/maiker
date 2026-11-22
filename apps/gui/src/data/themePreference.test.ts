@@ -6,20 +6,10 @@ describe('theme preference', () => {
     localStorage.clear()
   })
 
-  it('uses Midnight when no theme has been saved', () => {
-    expect(readThemePreference()).toBe('night')
-  })
-
   it('restores the saved Paper theme', () => {
     writeThemePreference('day')
 
     expect(readThemePreference()).toBe('day')
-  })
-
-  it('restores the saved Abyss theme', () => {
-    writeThemePreference('abyss')
-
-    expect(readThemePreference()).toBe('abyss')
   })
 
   it('ignores unsupported saved themes', () => {

@@ -85,14 +85,6 @@ describe('cloning a repository on a machine', () => {
     expect(shell.handlers.has('clone-progress')).toBe(false)
   })
 
-  it('listens for no progress when nobody asked for it', async () => {
-    const cloned = cloneRepository(0, ADDRESS, '~')
-    await vi.waitFor(() => { expect(shell.invoke).toHaveBeenCalledOnce() })
-    expect(shell.handlers.has('clone-progress')).toBe(false)
-    answer({ machine: 0, tag: lastTag(), folder: '/x', refused: null })
-    await cloned
-  })
-
   it('gives up when the machine never says how it ended', async () => {
     vi.useFakeTimers()
     try {

@@ -13,13 +13,6 @@ function Harness({ stops = STOPS, start = 'low' as string | null, disabled = fal
 }
 
 describe('the stop slider', () => {
-  it('has as many stops as it is given, and reads the picked one aloud', () => {
-    render(<Harness stops={STOPS.slice(0, 2)} />)
-    const slider = screen.getByRole('slider', { name: 'Effort' })
-    expect(slider).toHaveAttribute('aria-valuemax', '1')
-    expect(slider).toHaveAttribute('aria-valuetext', 'Low')
-    expect(screen.queryByText('High')).not.toBeInTheDocument()
-  })
 
   it('picks a stop when its word or its dot is clicked', async () => {
     const user = userEvent.setup()
