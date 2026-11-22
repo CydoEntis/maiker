@@ -588,9 +588,13 @@ async fn a_chats_helpers_follow_the_setting_the_limit_and_a_no() {
             let started = exchange_claim(&mut s, client, chat_helper("b"), None, Some(claim.clone()), None).await;
             assert!(!matches!(started, ServerMsg::Error(_)), "{started:?}");
         }
+        // Past the limit a helper is not refused: its row is made, and it waits for a free slot.
         let third = exchange_claim(&mut s, 313, chat_helper("c"), None, Some(claim.clone()), None).await;
-        assert!(matches!(third, ServerMsg::Error(ref e) if e.contains("at once is the limit")), "{third:?}");
-        assert_eq!(s.daemon.terms.len(), panes + 2);
+        assert!(!matches!(third, ServerMsg::Error(_)), "{third:?}");
+        assert_eq!(s.daemon.terms.len(), panes + 3);
+        let waiting: Vec<_> = s.daemon.terms.values().filter(|t| t.waiting.is_some()).collect();
+        assert_eq!(waiting.len(), 1);
+        assert_eq!(waiting[0].started_by_chat, Some(id));
         // No: it does the work alone for the rest of its run.
         s.daemon.cfg.sessions.helpers = "ask".into();
         s.daemon.cfg.sessions.helpers_at_once = "4".into();
@@ -600,7 +604,7 @@ async fn a_chats_helpers_follow_the_setting_the_limit_and_a_no() {
         let alone = exchange_claim(&mut s, 316, chat_helper("d"), None, Some(claim.clone()), None).await;
         assert!(matches!(alone, ServerMsg::Error(ref e) if e.contains("Do the work yourself")), "{alone:?}");
         assert!(summary_of(&s, id).helper_ask.is_empty());
-        assert_eq!(s.daemon.terms.len(), panes + 2);
+        assert_eq!(s.daemon.terms.len(), panes + 3);
     })
     .catch_unwind()
     .await;

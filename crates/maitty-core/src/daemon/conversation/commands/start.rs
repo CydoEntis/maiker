@@ -19,6 +19,9 @@ impl Daemon {
         let by = self
             .starting(client, "a structured Codex conversation")?
             .and_then(crate::daemon::helpers::Starter::pane);
+        if let Some(by) = by {
+            self.room_for_chat_helper(crate::daemon::helpers::Starter::Pane(by))?;
+        }
         let (target, program) = self.acp_target(target)?;
         let identity = match target {
             // `acp_target` turned it into a start with the config's own program.

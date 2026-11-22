@@ -5,7 +5,7 @@ use super::*;
 use std::time::Duration;
 use crate::test_support::own_data_folder;
 
-fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
+pub(super) fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
     let (tx, rx) = mpsc::channel(4096);
     let mut cfg = Config::default();
@@ -79,7 +79,7 @@ fn settle(d: &mut Daemon, rx: &mut mpsc::Receiver<Ev>, n: usize) -> usize {
     settle_within(d, rx, n, Duration::from_secs(10))
 }
 
-fn close(d: &mut Daemon, terms: &[TermId]) {
+pub(super) fn close(d: &mut Daemon, terms: &[TermId]) {
     for t in terms {
         d.close_term(*t);
     }
@@ -923,80 +923,6 @@ fn process_scan_cannot_erase_a_native_conversations_provider_identity() {
 }
 
 #[test]
-fn only_so_many_helpers_work_at_once() {
-    let (mut d, _rx) = daemon();
-    d.cfg.sessions.helpers_at_once = "2".into();
-    let here = Some(std::env::temp_dir());
-    d.command(
-        0,
-        Command::NewWorkspace {
-            cwd: here.clone(),
-            name: None,
-            cmd: None,
-        },
-    )
-    .unwrap();
-    let starter = d.workspaces[0].tabs[0].focus;
-    let token = d.terms[&starter].token.clone();
-    let mut c = from_pane(&mut d, 1, starter, &token);
-    let start = |d: &mut Daemon| {
-        d.handle(Ev::Msg(
-            1,
-            ClientMsg::Command(Command::NewWorkspace {
-                cwd: Some(std::env::temp_dir()),
-                name: None,
-                cmd: None,
-            }),
-        ))
-    };
-    let refused = |c: &mut mpsc::Receiver<ServerMsg>| {
-        std::iter::from_fn(|| c.try_recv().ok()).find_map(|m| {
-            if let ServerMsg::Error(e) = m {
-                Some(e)
-            } else {
-                None
-            }
-        })
-    };
-    // Two helpers, just started: both count as working until their agents report.
-    start(&mut d);
-    start(&mut d);
-    assert_eq!(d.terms.len(), 3);
-    assert!(refused(&mut c).is_none());
-    // A third is refused, and told what to do.
-    start(&mut d);
-    let why = refused(&mut c).expect("the third is refused");
-    assert!(
-        d.terms.len() == 3
-            && why.contains("2 helpers are already working")
-            && why.contains("Wait for one to finish"),
-        "{why}"
-    );
-    // One finishes (and has been up a while): there's room again.
-    let helpers: Vec<TermId> = d.terms.keys().copied().filter(|t| *t != starter).collect();
-    let done = d.terms.get_mut(&helpers[0]).unwrap();
-    (done.status, done.born) = (
-        Status::Done,
-        Instant::now() - super::HELPER_SETTLES - Duration::from_secs(1),
-    );
-    start(&mut d);
-    assert_eq!(d.terms.len(), 4, "a helper finished: the next may start");
-    // What you start yourself never counts, and never waits.
-    d.command(
-        0,
-        Command::NewWorkspace {
-            cwd: here.clone(),
-            name: None,
-            cmd: None,
-        },
-    )
-    .unwrap();
-    assert_eq!(d.terms.len(), 5);
-    let all: Vec<TermId> = d.terms.keys().copied().collect();
-    close(&mut d, &all);
-}
-
-#[test]
 fn with_no_window_a_transient_question_cannot_ring_after_work_resumes() {
     let (mut d, _) = daemon();
     let term = pane(&mut d);
@@ -1753,7 +1679,7 @@ fn reloading_an_agent_restarts_it_in_place_and_keeps_what_you_called_it() {
 }
 
 /// A connection acting from `term`, as its agent's `<app>` commands do.
-fn from_pane(
+pub(super) fn from_pane(
     d: &mut Daemon,
     client: ClientId,
     term: TermId,

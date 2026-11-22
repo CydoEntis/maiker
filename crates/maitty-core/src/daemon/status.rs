@@ -705,6 +705,11 @@ impl Daemon {
         let Some(t) = self.terms.get_mut(&term) else {
             return;
         };
+        // No agent runs in a pane whose start is held: the hold alone says what it is, and
+        // nothing else read off its shell may (ADR 0003).
+        if t.waiting.is_some() {
+            return;
+        }
         if let Some(seen) = why.strip_prefix("screen: ") {
             let now = term::unix_now();
             if t.last_screen
@@ -1020,9 +1025,11 @@ impl Daemon {
     }
 
     pub(super) fn update_statuses(&mut self) {
+        // Nothing below is typed into a pane whose start is held: only a shell runs there,
+        // which would run a message meant for its agent. What waits for it goes in once it starts.
         // A follow-up queued for an agent goes in when its turn is over: never into a question
         // it's asking, and one at a time (the next waits for the turn this one starts).
-        for t in self.terms.values_mut() {
+        for t in self.terms.values_mut().filter(|t| t.waiting.is_none()) {
             // Helpers running in the background keep the agent working, but its own turn is over
             // and it is at its prompt: a message waiting for it goes in, as one typed there would.
             let at_prompt = matches!(t.status, Status::Idle | Status::Done)
@@ -1044,7 +1051,7 @@ impl Daemon {
                 self.dirty = true;
             }
         }
-        for t in self.terms.values_mut() {
+        for t in self.terms.values_mut().filter(|t| t.waiting.is_none()) {
             let agent_here = t.agent.is_some() && !t.asleep;
             let at_rest = matches!(t.status, Status::Idle | Status::Done);
             if t.pending_input.is_none()
@@ -1059,7 +1066,7 @@ impl Daemon {
         }
         // Messages typed to a sleeping agent: deliver once it's ready (its hooks say idle) or
         // after a few seconds.
-        for t in self.terms.values_mut() {
+        for t in self.terms.values_mut().filter(|t| t.waiting.is_none()) {
             let ready = matches!(t.status, Status::Idle | Status::Done) && t.hooked;
             // Nothing waiting goes into a question the agent asks, deadline or not: a message's
             // Enter, a beat after its text, would pick the menu's first answer (often "Yes") for a
@@ -1426,7 +1433,8 @@ impl Daemon {
             self.set_status(id, s, &why);
         }
         for (id, t) in &mut self.terms {
-            let quiet = quiet_since(t, term::unix_now());
+            // A helper waiting for a slot is silent because nothing runs in it, not because it hangs.
+            let quiet = quiet_since(t, term::unix_now()).filter(|_| t.waiting.is_none());
             if quiet.is_some() != t.quiet_since.is_some() {
                 t.quiet_since = quiet;
                 self.dirty = true;

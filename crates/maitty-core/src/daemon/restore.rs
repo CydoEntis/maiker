@@ -314,6 +314,7 @@ impl Daemon {
             tab_of: term.tab_of,
             queue: term.queue.iter().cloned().collect(),
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
+            waiting: term.waiting.clone(),
             account: term.account.clone(),
             subagent_activity: term.subagent_activity.clone(),
             checks: term.checks.infos(),
@@ -607,6 +608,7 @@ impl Daemon {
         let mut started: Vec<(TermId, TermId)> = Vec::new();
         let mut started_by_chat: Vec<(TermId, crate::conversation::ConversationId)> = Vec::new();
         let mut owned: Vec<(TermId, TermId)> = Vec::new();
+        let mut held: Vec<(TermId, helper_queue::Waiting)> = Vec::new();
         let mut resuming = HashSet::new();
         for sw in saved.workspaces {
             let mut tabs = Vec::new();
@@ -622,6 +624,13 @@ impl Daemon {
                     // Linked runtimes require explicit recovery; legacy resume may choose --last.
                     if pane.conversation_id.is_some() {
                         continue;
+                    }
+                    // A start that was held never ran: it comes back as the shell it was, with
+                    // nothing to resume and no turn that was cut, and is held again below.
+                    let waiting = pane.waiting.take();
+                    if waiting.is_some() {
+                        (pane.agent, pane.session, pane.cmd) = (None, None, None);
+                        (pane.was_working, pane.interrupted) = (false, None);
                     }
                     // Saved after it lost which agent it was (asleep, before 0.26.2): its
                     // command still says, so it comes back as that agent, resumed.
@@ -688,6 +697,7 @@ impl Daemon {
                                     activity
                                 }).collect();
                             }
+                            held.extend(waiting.map(|waiting| (new, waiting)));
                             map.insert(old, new);
                             ids.insert(old, new);
                             started.extend(pane.started_by.map(|by| (new, by)));
@@ -755,6 +765,9 @@ impl Daemon {
             if let Some(t) = self.terms.get_mut(&term) {
                 t.tab_of = ids.get(&owner).copied();
             }
+        }
+        for (term, waiting) in held {
+            self.hold(term, waiting);
         }
         self.active_ws = self
             .workspaces

@@ -32,7 +32,8 @@ unseen (Claude).
 1. **The conversation owns the consent.** What a chat has asked, and whether the person said
    Allow or No, is held on the conversation's state for as long as it runs, as a pane's is held
    on the pane. `[sessions] helpers`, `helpers_at_once` and `helper-projects.json` apply
-   unchanged; there is no second setting.
+   unchanged; there is no second setting. Over the limit a helper that is a terminal session waits for a
+   free slot instead of being refused; a chat started as a helper is still refused.
 2. **Who asks is the runtime, proven as its status is** ([0003](0003-status-and-conversation-trust.md)):
    a start counts as the chat's only on a connection that authenticated with the current
    runtime identity. A stale, revoked or partial claim is refused and is never read as a person.

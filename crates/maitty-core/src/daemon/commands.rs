@@ -124,12 +124,21 @@ impl Daemon {
                     .unwrap_or_else(home);
                 let (cols, rows) = self.guess_size();
                 let by = self.starting(client, &helpers::task_label(cmd.as_deref(), None))?;
-                // An agent kept warm for exactly this is the session: it is already running.
-                let term = match self.take_warm(&cwd, cmd.as_deref(), cols, rows) {
-                    Some(term) => term,
-                    None => self.spawn(cmd.as_deref(), &cwd, cols, rows)?,
+                let holds = self.holds_start(by, cmd.as_deref(), &cwd)?;
+                // An agent kept warm for exactly this is the session: it is already running, so
+                // a start that waits for a slot never takes it.
+                let warm = if holds {
+                    None
+                } else {
+                    self.take_warm(&cwd, cmd.as_deref(), cols, rows)
                 };
-                self.started(term, by);
+                let term = match warm {
+                    Some(term) => {
+                        self.started(term, by);
+                        term
+                    }
+                    None => self.start_or_hold(by, holds, cmd.as_deref(), &cwd, cols, rows)?,
+                };
                 let owner = self.owner_of_start(client, by);
                 if let Some(t) = self.terms.get_mut(&term) {
                     t.owner = owner;
@@ -219,8 +228,8 @@ impl Daemon {
                     .map_or_else(|| self.surface_of(client), |t| t.owner);
                 let (cols, rows) = self.guess_size();
                 let by = self.starting(client, &helpers::task_label(cmd.as_deref(), None))?;
-                let term = self.spawn(cmd.as_deref(), &cwd, cols, rows)?;
-                self.started(term, by);
+                let holds = self.holds_start(by, cmd.as_deref(), &cwd)?;
+                let term = self.start_or_hold(by, holds, cmd.as_deref(), &cwd, cols, rows)?;
                 if let Some(t) = self.terms.get_mut(&term) {
                     t.owner = owner;
                 }
@@ -243,8 +252,8 @@ impl Daemon {
                 let cwd = self.ws_mut(ws)?.cwd.clone();
                 let (cols, rows) = self.guess_size();
                 let by = self.starting(client, &helpers::task_label(cmd.as_deref(), None))?;
-                let term = self.spawn(cmd.as_deref(), &cwd, cols, rows)?;
-                self.started(term, by);
+                let holds = self.holds_start(by, cmd.as_deref(), &cwd)?;
+                let term = self.start_or_hold(by, holds, cmd.as_deref(), &cwd, cols, rows)?;
                 let id = self.next();
                 let w = self.ws_mut(ws)?;
                 w.tabs.push(TabInfo {
@@ -318,8 +327,8 @@ impl Daemon {
                     (cols, rows / 2)
                 };
                 let by = self.starting(client, &helpers::task_label(cmd.as_deref(), None))?;
-                let new = self.spawn(cmd.as_deref(), &cwd, cols, rows)?;
-                self.started(new, by);
+                let holds = self.holds_start(by, cmd.as_deref(), &cwd)?;
+                let new = self.start_or_hold(by, holds, cmd.as_deref(), &cwd, cols, rows)?;
                 let w = self.ws_mut(ws)?;
                 if let Some(t) = w.tabs.iter_mut().find(|t| t.id == tab) {
                     t.layout.split(term, dir, new);
@@ -584,8 +593,15 @@ impl Daemon {
                 let from_default = self.cfg.worktree.base_on_default;
                 let cmd = cmd
                     .or_else(|| Some(self.cfg.worktree.command.clone()).filter(|c| !c.is_empty()));
+                // Said before a worktree is made for it: whether it can wait at all, and a
+                // helper that will wait takes no spare, whose agent already runs.
+                let waits = match by {
+                    Some(by) => self.must_wait(by, cmd.as_deref())?,
+                    None => false,
+                };
                 let repo = crate::gitfs::head(&dir).map(|h| h.main_root);
                 if base.is_none()
+                    && !waits
                     && let (Some(repo), Some(c)) = (&repo, &cmd)
                     && let Some(task) = self.spare_fits(repo, c)
                     && let Some((_, path, term)) = self.spare.take()
@@ -1190,6 +1206,8 @@ impl Daemon {
                 let before = crate::shared_settings::read(&self.cfg);
                 self.cfg = Config::load()?;
                 let after = crate::shared_settings::read(&self.cfg);
+                // A raised limit starts the helpers waiting for it now, not on the next tick.
+                self.start_waiting_helpers();
                 if after != before {
                     // Whoever changed them (either app, or a hand edit followed by a reload),
                     // every window shows the new ones at once.

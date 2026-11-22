@@ -17,7 +17,9 @@ and the same bugs came back.
    conversation, an event on the daemon-owned connection at the current generation. An
    unverified or superseded source cannot change status.
 2. **The daemon alone decides status and alerts.** Clients display what it sends. A client never
-   derives "done", "needs you" or "ring" from its own diffs.
+   derives "done", "needs you" or "ring" from its own diffs. The daemon's own hold is also a
+   source: a helper past its starter's limit reads working while the daemon holds its start
+   (`TermInfo.waiting_for_slot`), and nothing read off that pane moves it until the agent starts.
 3. **The screen scan is a labelled fallback.** It may set status only for an agent with no
    trusted hook source, and never overrides a hook-reported status.
 4. **History is display, not status.** Reading a provider's transcript never changes status, and

@@ -277,6 +277,9 @@ pub struct Term {
     pub pending_input: Option<(Vec<u8>, Instant)>,
     /// A message for the agent starting here, typed in once it takes input (`SendWhenReady`).
     pub held_message: Option<HeldMessage>,
+    /// Its start is held until the session that started it has a free slot
+    /// (`helper_queue.rs`); only a shell runs here until then.
+    pub waiting: Option<super::helper_queue::Waiting>,
     /// Its branch has had commits that were nowhere else: once they are somewhere else,
     /// its work is merged (a branch that never had any is merely new).
     /// The account it runs as, if its command says one (`<app> account <name> -- …`).
@@ -1073,6 +1076,7 @@ impl Term {
             restore_unseen: false,
             pending_input: None,
             held_message: None,
+            waiting: None,
             account: None,
             conversation_id: None,
             queue: Default::default(),

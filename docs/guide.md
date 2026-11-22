@@ -116,9 +116,11 @@ start 4 helpers`. Press Enter on the row (or click the line) to see the tasks, t
 **1** Allow, **2** Always in this project, **3** No, do it alone, or Esc to decide later.
 Their permission prompts come to your Inbox, and nothing merges.
 
-Settings › Sessions sets the rest: **Sessions may start helpers** (`ask`, `always` or
-`never`; `never` refuses with a clear error to the agent) and **Helpers at once** (2, 3 or 4
-per session; an extra one is told to wait). "Always in this project" is kept in
+Settings › Sessions sets the rest (in the desktop app, Settings › Permissions › Helpers):
+**Sessions may start helpers** (`ask`, `always` or `never`; `never` refuses with a clear error
+to the agent) and **Helpers at once** (2, 4 or 8 per session, 4 unless you change it). A helper
+past the limit still gets its row at once, reads working with "waiting for a free slot", and
+starts when one of its lead's helpers finishes; raising the limit starts the waiting ones. "Always in this project" is kept in
 `helper-projects.json` in Maiker's data folder, not in the repo, so an agent cannot give itself
 helpers. An older `[mcp] helpers_at_once` in `config.toml` still counts until `[sessions]
 helpers_at_once` is set. The commander and `[team]` jobs are gone; an old `config.toml` that

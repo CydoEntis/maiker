@@ -459,10 +459,40 @@ it, with `Command::AnswerHelpers { term, choice }`: `Allow` (this session may fr
 `Always` (and every session in its project; kept in `helper-projects.json` in Maiker's data
 folder), or `No` (its starts are refused for the rest of its run). A pane may not send it, and
 it is an error unless the pane is asking. `always` and `never` skip the question; `never`
-refuses with an error the agent can read. `sessions.helpers_at_once` (2, 3 or 4) bounds the
-helpers one session has working at once; a start past it is refused with what to do. A
+refuses with an error the agent can read. `sessions.helpers_at_once` (2, 4 or 8; default 4)
+bounds the helpers one session has working at once; consent comes first, and a start past the
+limit is not refused but waits for a free slot (*A helper waiting for a slot*, below). A
 person's shell (no agent in the pane) is never asked. Sessions saved before a restart keep
 `started_by`; any fleet or commander field in a saved file is ignored on load.
+
+**A helper waiting for a slot** (`daemon/helper_queue.rs`). A helper counts as working while
+its status is Working or it is younger than `HELPER_SETTLES` (`Daemon::busy_helpers`); a waiting
+one does not count. A start past the limit, or while its starter has others waiting, is answered
+as a success: the pane is made at once as a plain shell in its folder (with the worktree, when
+one was asked for), so the session number the starter is told stays its own, and the daemon
+holds its command. The daemon itself sets the row to Working with
+`TermInfo.waiting_for_slot` (one function, `helper_queue::waiting_for_slot`, makes the flag) and
+`status_why` and `summary` reading `waiting for a free slot: 2 of 3 in line, 4 helpers at once is
+the limit`, which is what the starter reads as `on` and `status_why` in `maiker_list` (the
+`maiker_start` reply still says "started … as session N"). Nothing read off that pane (hooks, the
+screen, the process scan) changes its status, it never rings and it is never quiet. On each tick,
+and at once after `ReloadConfig`, the daemon starts the oldest waiting helper of each starter that
+has room, one at a time in order; lowering the limit stops nothing. The start types into the
+pane's shell the same line `Daemon::spawn` would have run: the account wrapper around the taught
+command, built from the held command as the starter sent it (`maiker_start` quoted the task for
+the shell then; nothing new is put into the line here). Several lines go in as one bracketed
+paste, or joined into one line when the shell does not take one. A command with any other control
+character is never held: past the limit it is refused as before. At most `MOST_WAITING` (12) wait
+per starter; past that a start is refused with what to do. A start whose worktree was already made
+is never refused. Text an agent sends a waiting helper is kept (up to 64 KiB, an error past it) and
+typed once its agent takes input, as `SendWhenReady` is; a person's own keys reach the shell.
+Closing a waiting helper takes it out of the line. When its starter is gone (closed, or not back
+after a restart), each waiting helper is cancelled: its pane closes and its unused worktree is
+cleaned up, and any text held for it is dropped (logged). The hold is saved with the session
+(`SavedPane.waiting`, absent from an older file, which loads as not waiting): after a restart the
+pane comes back as a shell, still waiting, and the hold is cleared and saved the moment it starts,
+so it never starts twice. A chat started as a helper (`StartConversation` from a pane) is not
+held: past the limit it is refused as before.
 
 **A chat's helpers** ([ADR 0016](adr/0016-a-chat-asks-before-it-starts-helpers.md), proposed). A
 start from a connection that authenticated as a chat's current runtime (`Hello.structured`) is that
@@ -835,6 +865,16 @@ test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYP
 later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also adds `SharedSettings.update_machines`
 (defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
 `UPDATE_MACHINES_SINCE`.
+Protocol 123 adds `SharedSettings.helpers` (`HelpersMay`: `ask`, `always` or `never`; absent reads as `ask`) and
+`SharedSettings.helpers_at_once` (a number; absent reads as 4, `HELPERS_AT_ONCE_UNSAID`, which a test holds equal to
+the config default), both defaulted (a test decodes the shape from before them), and `SettingKey::Helpers` and
+`SettingKey::HelpersAtOnce`, each taking `SettingValue::Text` (`"always"`, `"8"`) that the daemon checks against
+`HELPERS_MAY` and `HELPERS_AT_ONCE` before the file is opened. A client sends them only to a daemon at
+`HELPER_SETTINGS_SINCE` (`ClientMsg::introduced_in`); the desktop app's `set_newer_shared_setting` reads the running
+daemon's version first and refuses an older one in words, and `set_shared_setting` refuses those two keys. It also
+adds the defaulted `TermInfo.waiting_for_slot` (a test decodes the pane from before it). `COMPATIBLE_SINCE` stays 122:
+an older daemon is never sent the keys, and an older client reads a waiting helper as the working pane its status
+says.
 
 Protocol 119 adds four things, none of which an older peer was ever sent, so `COMPATIBLE_SINCE` stayed 115 then (test:
 `what_118_sent_about_clones_and_sign_in_still_decodes`):

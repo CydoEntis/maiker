@@ -120,6 +120,10 @@ pub struct SavedPane {
     /// A message that was waiting for the agent starting here to take input.
     #[serde(default)]
     pub held_message: Option<String>,
+    /// Its start was held for a free slot (`helper_queue.rs`): it comes back still waiting,
+    /// and starts once. Absent from a session saved before starts were held.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<super::helper_queue::Waiting>,
     /// Child activity records survive daemon restarts and completed turns.
     #[serde(default)]
     pub subagent_activity: Vec<SubagentActivity>,

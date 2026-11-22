@@ -73,6 +73,9 @@ impl Daemon {
         if asking {
             self.may(client, Grant::Respond, Some(term))?;
         }
+        if self.keeps_for_waiting(client, term, &data)? {
+            return Ok(());
+        }
         if let Some(pane) = self.terms.get_mut(&term) {
             pane.input(&data);
         }

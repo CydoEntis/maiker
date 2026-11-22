@@ -27,6 +27,7 @@ mod git;
 mod git_identity;
 mod git_rule;
 mod github;
+mod helper_queue;
 mod helpers;
 pub mod hook_repair;
 mod identity;
@@ -599,6 +600,9 @@ struct Daemon {
     /// The pane the next session is started for, when its connection can't say (the
     /// worktree it asked for took a while).
     next_starter: Option<helpers::Starter>,
+    /// The session being started now goes into a worktree made for it, so it was let through
+    /// when it was asked for and is not refused now (`helper_queue::must_wait`).
+    starting_in_made_worktree: bool,
     /// The prewarmed agent: (repo, its worktree, its pane), and whether one is being made.
     spare: Option<(PathBuf, PathBuf, TermId)>,
     spare_making: bool,
@@ -1433,6 +1437,7 @@ impl Daemon {
             last_effort: Instant::now() - Duration::from_secs(3600),
             next_once: false,
             next_starter: None,
+            starting_in_made_worktree: false,
             spare: None,
             spare_making: false,
             warm: None,
@@ -1461,6 +1466,7 @@ impl Daemon {
                     self.finish_closes();
                     self.finish_chat_closes();
                     self.close_ended_agents();
+                    self.start_waiting_helpers();
                     self.expire_warm();
                     self.wake_snoozed(term::unix_now());
                     self.update_statuses();
@@ -2201,6 +2207,11 @@ impl Daemon {
                     if t.asleep {
                         continue;
                     }
+                    // Only a shell runs in a pane whose start is held; what it will be, and
+                    // that it works, is the hold's to say until it starts.
+                    if t.waiting.is_some() {
+                        continue;
+                    }
                     // A conversation pane's agent and exact session are assigned by the
                     // daemon when it starts the provider. Process-name detection is only a
                     // best-effort status signal; for example Codex can appear as `node`.
@@ -2338,6 +2349,7 @@ impl Daemon {
                 }
                 self.pending_ops -= 1;
                 self.next_starter = by;
+                self.starting_in_made_worktree = true;
                 let as_pane = split.filter(|t| self.terms.contains_key(t));
                 let opened = result.map_err(anyhow::Error::msg).and_then(|(path, repo)| {
                     match as_pane {
@@ -2373,6 +2385,7 @@ impl Daemon {
                     Ok(path)
                 });
                 self.next_starter = None;
+                self.starting_in_made_worktree = false;
                 if let Ok(p) = &opened {
                     self.made_worktrees.push(p.clone());
                     if self.adopted.as_ref().is_some_and(|a| same_path(a, p)) {
@@ -2799,6 +2812,14 @@ impl Daemon {
                 {
                     self.send(client, ServerMsg::Error(format!("{e:#}")));
                     return;
+                }
+                match self.keeps_for_waiting(client, term, &data) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(e) => {
+                        self.send(client, ServerMsg::Error(format!("{e:#}")));
+                        return;
+                    }
                 }
                 if self.terms.get(&term).is_some_and(|t| t.asleep) {
                     // Wake it, and hand over what was typed once it's ready.
@@ -3874,7 +3895,7 @@ impl Daemon {
                         helper_ask: t.helpers.asked.clone(),
                         pr: self.pr_of(t),
                         queued: t.queue.iter().cloned().collect(),
-                        waiting_for_slot: false,
+                        waiting_for_slot: helper_queue::waiting_for_slot(t),
                         own_turn_over: t.own_turn_over,
                         subagent_activity: t.subagent_activity.clone(),
                         session: t.session.clone(),
@@ -3988,11 +4009,10 @@ impl Daemon {
         .then_some(by)
     }
 
-    /// Whose agent a start comes from, once it may start `task` and there's room for it. A
-    /// session another agent starts is a helper (see `helpers.rs` for who may), and each helper
-    /// runs builds and tests of its own: an agent that starts ten takes the whole machine. Past
-    /// `sessions.helpers_at_once` of its own working at once the start is refused, with what to
-    /// do instead.
+    /// Whose agent a start comes from, once it may start `task`. A session another agent starts
+    /// is a helper (see `helpers.rs` for who may). How many of them work at once is bounded
+    /// where the helper is made: a pane past the limit waits (`holds_start`), a chat is
+    /// refused (`room_for_chat_helper`).
     fn starting(&mut self, client: ClientId, task: &str) -> Result<Option<helpers::Starter>> {
         // A worktree asked for earlier was let through then: don't strand it now.
         let let_through = self.next_starter.is_some();
@@ -4012,15 +4032,61 @@ impl Daemon {
             && !let_through
         {
             self.may_start_helper(by, task)?;
-            let most = self.cfg.helpers_at_once();
-            let busy = self.busy_helpers(by, None);
-            if busy >= most {
-                anyhow::bail!(
-                    "{busy} helpers are already working, and {most} at once is the limit (Settings, Sessions). Wait for one to finish, then start this one."
-                );
-            }
         }
         Ok(by)
+    }
+
+    /// A chat started as a helper is not held for a slot: past the limit it is refused, with
+    /// what to do instead.
+    fn room_for_chat_helper(&self, by: helpers::Starter) -> Result<()> {
+        let most = self.cfg.helpers_at_once();
+        let busy = self.busy_helpers(by, None);
+        if busy >= most {
+            anyhow::bail!(
+                "{busy} helpers are already working, and {most} at once is the limit (Settings, Sessions). Wait for one to finish, then start this one."
+            );
+        }
+        Ok(())
+    }
+
+    /// Whether a start from `by` in `cwd` is held for a free slot. Each helper runs builds and
+    /// tests of its own, and an agent that starts ten takes the whole machine: past
+    /// `sessions.helpers_at_once` of its starter's working at once, the next one waits
+    /// (`helper_queue.rs`). What a person starts never waits, and a spare worktree about to be
+    /// adopted already runs its agent, so it is never held either.
+    fn holds_start(
+        &self,
+        by: Option<helpers::Starter>,
+        cmd: Option<&str>,
+        cwd: &std::path::Path,
+    ) -> Result<bool> {
+        let adopting = self
+            .adopt
+            .as_ref()
+            .is_some_and(|(dir, term)| same_path(dir, cwd) && self.terms.contains_key(term));
+        match by {
+            Some(by) if !adopting => self.must_wait(by, cmd),
+            _ => Ok(false),
+        }
+    }
+
+    /// Make the pane for a start and note who started it. A start that `holds` is made as a
+    /// plain shell, its command kept until a slot frees.
+    fn start_or_hold(
+        &mut self,
+        by: Option<helpers::Starter>,
+        holds: bool,
+        cmd: Option<&str>,
+        cwd: &std::path::Path,
+        cols: u16,
+        rows: u16,
+    ) -> Result<TermId> {
+        let term = self.spawn(cmd.filter(|_| !holds), cwd, cols, rows)?;
+        self.started(term, by);
+        if holds {
+            self.hold_start(term, cmd);
+        }
+        Ok(term)
     }
 
     fn busy_helpers(
@@ -4034,6 +4100,8 @@ impl Daemon {
             .filter(|t| {
                 (by.pane().is_some_and(|pane| t.started_by == Some(pane))
                     || by.chat().is_some_and(|chat| t.started_by_chat == Some(chat)))
+                    // One waiting for a slot reads as working, and holds none.
+                    && t.waiting.is_none()
                     && (t.status == Status::Working || t.born.elapsed() < HELPER_SETTLES)
             })
             .count();
@@ -4377,6 +4445,8 @@ fn home() -> PathBuf {
 
 #[cfg(test)]
 mod branch_agent_tests;
+#[cfg(test)]
+mod helper_queue_tests;
 #[cfg(test)]
 mod logic_tests;
 #[cfg(test)]
