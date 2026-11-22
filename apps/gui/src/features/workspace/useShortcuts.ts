@@ -246,7 +246,7 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         toggleSidebar()
         return
       case 'settings':
-        setSettingsSection((current) => current ?? 'appearance')
+        setSettingsSection((current) => current ?? 'general')
         return
       case 'palette':
         setPaletteOpen((open) => !open)

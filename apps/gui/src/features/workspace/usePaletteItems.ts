@@ -113,7 +113,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),
       action('focus', 'Focus mode', () => { setFocusMode(true) }, keys('focus-mode')),
-      action('settings', 'Open settings', () => { setSettingsSection('appearance') }, keys('settings')),
+      action('settings', 'Open settings', () => { setSettingsSection('general') }, keys('settings')),
       action('machines', 'Add a remote machine…', () => { setOpenProject(ADD_MACHINE) }, keys('add-machine')),
       action('switch-view', chatView ? 'Switch to Terminal view' : 'Switch to Chat view', () => { runShortcut('switch-view') }, keys('switch-view')),
       action('shortcuts', 'Keyboard shortcuts', () => { setShortcutsOpen(true) }, keys('shortcuts')),

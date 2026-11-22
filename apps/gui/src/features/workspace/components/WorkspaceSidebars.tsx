@@ -73,7 +73,7 @@ export function WorkspaceSidebars() {
       onNewWorktree={(id) => { afterPick(); newWorktreeFrom(id) }}
       onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}
-      onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
+      onOpenSettings={() => { afterPick(); setSettingsSection('general') }}
       pullRequests={{
         needYou: pullRequests.needsYou,
         onOpen: () => {

@@ -169,8 +169,8 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
 ]
 
 const PAGE: Record<DesktopSettingsSection, [string, string]> = {
-  general: ['General', 'Where sessions start and what happens to them.'],
-  appearance: ['Appearance', 'Your theme, and whether sessions open as a chat or as the agent’s own terminal.'],
+  general: ['General', 'How sessions open, where they start and what happens to them.'],
+  appearance: ['Appearance', 'Your theme, motion and the sidebar.'],
   notifications: ['Notifications', 'When the system should tell you a session needs you.'],
   keys: ['Hotkeys', 'Everything the window handles before the shell does.'],
   chat: ['Chat', 'How a chat starts, and how wide and large it is drawn.'],
@@ -266,11 +266,11 @@ export function DesktopSettings(props: DesktopSettingsProps) {
 
   const page = (id: DesktopSettingsSection): ReactNode => {
     switch (id) {
-      case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
+      case 'general': return <GeneralSection preferences={preferences} update={update} onSwitchView={switchView} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
       case 'chat': return <ChatSection preferences={preferences} update={update} />
       case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /><HelpersSection /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
-      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} onSwitchView={switchView} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
+      case 'appearance': return <><AppearanceSection preferences={preferences} update={update} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
@@ -432,13 +432,14 @@ function useSavedFlash(): [boolean, () => void] {
   return [shown, flash]
 }
 
-function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
+function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onSwitchView: (view: PaneView, dontAskAgain: boolean) => void; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
   // The folder comes from the system's folder picker, which only offers one that exists, so nothing is typed or checked.
   const home = preferences.startFolder === ''
   const [saved, flashSaved] = useSavedFlash()
   const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
   return (
     <>
+      <SessionViewCard preferences={preferences} onSwitchView={onSwitchView} />
       <Card
         title="Start folder"
         meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}
@@ -596,8 +597,8 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
 
 const MODE_OPTIONS = [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']] as const
 
-function AppearanceSection({ preferences, update, onSwitchView, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; onSwitchView: (view: PaneView, dontAskAgain: boolean) => void; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
-  const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
+/** Chat or Terminal for every new session. It heads General, the page Settings opens on, so it is the first thing seen. */
+function SessionViewCard({ preferences, onSwitchView }: { preferences: SettingsPreferences; onSwitchView: (view: PaneView, dontAskAgain: boolean) => void }) {
   // The view asked for, while the question about it is open. Open sessions stay what they are (ADR 0020), which is the surprise it explains.
   const [switchTo, setSwitchTo] = useState<PaneView | null>(null)
   const pickView = (view: PaneView) => {
@@ -605,6 +606,18 @@ function AppearanceSection({ preferences, update, onSwitchView, systemDark, onPr
     if (asksFirst(preferences.confirmSkipped, 'switch-view')) setSwitchTo(view)
     else onSwitchView(view, false)
   }
+  return (
+    <Card title="Session view">
+      <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent’s own CLI. Gemini has no chat view, so it always opens in Terminal.">
+        <ViewSwitch view={preferences.openSessionsIn} onChange={pickView} />
+        <ConfirmHost pending={switchTo === null ? null : { ask: confirmAsk('switch-view', switchTo), answer: (confirmed, dontAskAgain) => { setSwitchTo(null); if (confirmed) onSwitchView(switchTo, dontAskAgain) } }} />
+      </Row>
+    </Card>
+  )
+}
+
+function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
+  const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
   return (
     <>
       <Card title="Theme">
@@ -616,12 +629,6 @@ function AppearanceSection({ preferences, update, onSwitchView, systemDark, onPr
         </Row>
         <Row label="Light theme" detail="Used when the window is light.">
           <ThemePicker kind="light" value={preferences.lightTheme} inUse={!darkInUse} dimmed={darkInUse && preferences.themeMode !== 'system'} onPick={(name) => { update('lightTheme', name) }} onPreview={onPreviewTheme} />
-        </Row>
-      </Card>
-      <Card title="Session view">
-        <Row label="Open sessions in" detail="Chat shows a conversation; Terminal shows the agent’s own CLI. Gemini has no chat view, so it always opens in Terminal.">
-          <ViewSwitch view={preferences.openSessionsIn} onChange={pickView} />
-          <ConfirmHost pending={switchTo === null ? null : { ask: confirmAsk('switch-view', switchTo), answer: (confirmed, dontAskAgain) => { setSwitchTo(null); if (confirmed) onSwitchView(switchTo, dontAskAgain) } }} />
         </Row>
       </Card>
       <Card title="Motion">

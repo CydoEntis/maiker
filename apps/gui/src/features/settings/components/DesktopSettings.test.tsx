@@ -141,7 +141,7 @@ describe('desktop settings', () => {
 
   it('asks once before the view changes, changes nothing on Cancel, and saves the view with the answer', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
+    const { onChange } = renderSettings('general')
     const chat = within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' })
 
     await user.click(chat)
@@ -159,7 +159,7 @@ describe('desktop settings', () => {
   it('changes the view without asking once Don\'t ask again was ticked', async () => {
     const user = userEvent.setup()
     const preferences: SettingsPreferences = { ...PREFS, confirmSkipped: ['switch-view'] }
-    const { onChange } = renderSettings('appearance', { preferences })
+    const { onChange } = renderSettings('general', { preferences })
     await user.click(within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(onChange).toHaveBeenCalledWith({ ...preferences, openSessionsIn: 'chat' })

@@ -293,7 +293,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   pane is the agent's real CLI, and **Maiker draws nothing inside it**: no approve buttons, no footer, no bar, no
   overlay. Maiker owns the pane header, the sidebar mark and the toasts, all outside the pane. Never parse CLI output
   to drive a button: a menu the CLI reorders would send the wrong key to an agent about to run a real command.
-  **The view is app-wide**, set only in Settings › Appearance › **Open sessions in**; there is no per-session or
+  **The view is app-wide**, set in Settings › General › **Open sessions in** (or `Ctrl Shift Y` and the palette's
+  Switch to … view, which ask the same question); there is no per-session or
   per-pane switch. Changing it asks once: new sessions use the new view, and open ones stay as they are. An agent with
   no chat adapter always opens in Terminal.
 - **One palette for picking things.** Opening a project, browsing folders on any machine, cloning and adding a remote
@@ -535,7 +536,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   in `material.css`), and rows are parted by the ink at 4.5% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`): a
   dot in the state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Up to date", "Update
   failed"), the running version at its right, a dim note when there is one, the download bar while it downloads, and
-  the one button the state offers (Restart to update, Download, Check now, Try again). General keeps only the two
+  the one button the state offers (Restart to update, Download, Check now, Try again), drawn as the pages' own button
+  (`.mx-scard-button`, full width) on the dialog's ground. General keeps only the two
   update switches. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
   button, tooltip "Close (Esc)", no label) above a body that scrolls; the page itself never scrolls. The title and
   description slide with the page. A page is groups (`Card`) of up to 640px: an uppercase 11px `--dim` title over
@@ -766,7 +768,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   by conversation number and belongs to its session: when the daemon gives the session's chat a new number, it moves
   to that number (`followComposer`).
 - **Settings pages.** The nav's groups are App (General, Appearance, Notifications, Hotkeys), Agents (Chat,
-  Permissions, Terminal) and Machines (Remote machines). **General** (start and export folders, each the folder shown with **Browse…**, which
+  Permissions, Terminal) and Machines (Remote machines). Settings always opens on **General** (the ⚙, the palette and
+  `Ctrl ,`); only Usage and Remote machines open on their own page. **General** (first **Session view**: **Open
+  sessions in**, the only setting for the view, so it is the first thing seen; then start and export folders, each the folder shown with **Browse…**, which
   opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
   and says "Saved" for two seconds after a change; updates; sessions, whose last row, **Questions you turned off**,
   has **Ask again**: it empties `confirmSkipped`, so every confirm asks again, and is disabled while none is skipped) and **Chat** (how a
@@ -775,8 +779,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). **Terminal** (text, scrollback, and Panes: where an
   agent's terminals open) and **Appearance** (**Theme**: System, Dark or Light and the dark and light theme pickers,
-  each over every theme of its kind; **Session view**: **Open sessions in**, the only place the view is set; then
-  Motion, with Reduce motion, and the sidebar's position and width). **Notifications** has two switches, Needs you and
+  each over every theme of its kind; then Motion, with Reduce motion, and the sidebar's position and width). **Notifications** has two switches, Needs you and
   Done, and the test toast. **Extensions** is the last page under Agents. No page offers corners, density, icon size
   or colour, an accent, interface text size or status headings.
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
@@ -1058,7 +1061,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   macOS) have their page default cancelled (`features/shortcuts/pageKeys.ts`). The key is not stopped, so a terminal
   or a text box with the keyboard still gets it.
 - **One app-wide view.** The pane header has no Chat | Terminal toggle: the whole app is in the chat view or the terminal
-  view, picked in Settings › Appearance › **Open sessions in**. Changing it asks once in the confirm
+  view, picked in Settings › General › **Open sessions in**. Changing it asks once in the confirm
   dialog: new sessions use the new view, and open ones stay as they are. In the chat view the chat covers the pane body while the terminal stays
   mounted underneath, hidden by `visibility`, so it keeps streaming and keeps its size, and nothing is sent to the
   daemon. No control on a session shows its terminal over its chat or back: a chat that cannot carry on says in a line

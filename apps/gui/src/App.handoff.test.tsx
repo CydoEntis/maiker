@@ -898,7 +898,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await user.keyboard('{Control>},{/Control}')
     const dialog = screen.getByRole('dialog', { name: 'Settings' })
     expect(dialog).toHaveAttribute('role', 'dialog')
-    expect(within(dialog).getByRole('button', { name: /Appearance/ })).toHaveFocus()
+    expect(within(dialog).getByRole('button', { name: /General/ })).toHaveFocus()
 
     await user.click(within(dialog).getByRole('button', { name: 'Terminal' }))
     expect(within(dialog).getByRole('heading', { name: 'Terminal' })).toBeInTheDocument()
