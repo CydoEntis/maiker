@@ -5,7 +5,6 @@ const DEFAULTS: SettingsPreferences = {
   spinner: 'braille',
   restoreLayout: true,
   reduceMotion: false,
-  animateSidebarActivity: true,
   compactSidebar: false,
   notifyNeedsYou: true,
   notifyFinished: true,

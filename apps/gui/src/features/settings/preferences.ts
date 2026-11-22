@@ -51,7 +51,6 @@ export type SettingsPreferences = {
   /** Reopen the panes and splits of last time at launch. Saved as `restoreTabs` before fleets; that name is still read. */
   restoreLayout: boolean
   reduceMotion: boolean
-  animateSidebarActivity: boolean
   /** File names in a chat's messages are drawn in the colour of their type. */
   colourFileNames: boolean
   /** The desktop sidebar is collapsed to its rail. */
@@ -145,7 +144,6 @@ function defaults(): SettingsPreferences {
     spinner: 'braille',
     restoreLayout: true,
     reduceMotion: false,
-    animateSidebarActivity: true,
     compactSidebar: false,
     notifyNeedsYou: true,
     notifyFinished: true,
@@ -238,7 +236,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       spinner: isSpinnerStyle(preferences.spinner) ? preferences.spinner : fallback.spinner,
       restoreLayout: bool(preferences.restoreLayout ?? saved.restoreTabs, fallback.restoreLayout),
       reduceMotion: bool(preferences.reduceMotion, fallback.reduceMotion),
-      animateSidebarActivity: bool(preferences.animateSidebarActivity, fallback.animateSidebarActivity),
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
