@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { asksFirst, canSkip, CONFIRM_KINDS, discardAsk, skippedConfirmsOf, withSkipped, type SkippedConfirms } from './confirm'
+import { asksFirst, canSkip, CONFIRM_KINDS, confirmAsk, discardAsk, skippedConfirmsOf, withSkipped, type SkippedConfirms } from './confirm'
 
 describe('the remembered "Don\'t ask again"', () => {
   it('asks about every kind until one is skipped, and then only that kind runs without asking', () => {
@@ -26,9 +26,19 @@ describe('the remembered "Don\'t ask again"', () => {
   })
 
   it('reads a saved list, dropping what is not a kind, and reads anything else as nothing saved', () => {
-    expect(skippedConfirmsOf(['remove-project', 'no-such-kind', 3])).toEqual(['remove-project'])
+    expect(skippedConfirmsOf(['close-project', 'no-such-kind', 3])).toEqual(['close-project'])
     expect(skippedConfirmsOf('close-session')).toBeNull()
     expect(skippedConfirmsOf(undefined)).toBeNull()
+  })
+})
+
+describe('what closing a project asks', () => {
+  it('names the sessions that stop with it, counts past three, and says the folder stays', () => {
+    expect(confirmAsk('close-project', { name: 'shop', running: [] })).toMatchObject({ title: 'Close shop?', body: 'It leaves the sidebar.', confirmLabel: 'Close project', danger: true })
+    expect(confirmAsk('close-project', { name: 'shop', running: ['Fix tests'] }).body).toBe('Fix tests stops, and the project leaves the sidebar.')
+    expect(confirmAsk('close-project', { name: 'shop', running: ['A', 'B'] }).body).toBe('A and B stop, and the project leaves the sidebar.')
+    expect(confirmAsk('close-project', { name: 'shop', running: ['A', 'B', 'C', 'D', 'E'] }).body).toBe('A, B, C and 2 more stop, and the project leaves the sidebar.')
+    expect(confirmAsk('close-project', { name: 'shop', running: [] }).note).toContain('stay on disk')
   })
 })
 

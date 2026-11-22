@@ -4,6 +4,7 @@ import { toast } from '@/lib/toast'
 import { useLatest } from '@/lib/useLatest'
 import { asksToSay, askToastOf, outsideAsksOf, type AsksSaid, type OutsideAsk } from './model/outsideAsks'
 import type { SessionView } from './model/session'
+import { isShell } from './model/sidebar'
 
 /** The request whose dialog is open, by what names it: never its answer. */
 export type OpenAsk = { readonly kind: 'helpers'; readonly sessionId: string } | { readonly kind: 'secret'; readonly sessionId: string; readonly askId: number }
@@ -70,7 +71,8 @@ function raise(ask: OutsideAsk, session: SessionView, acts: Acts, open: (ask: Op
     toast.warning(words.title, {
       ...shared,
       action: { label: words.action, onClick: () => { acts().restartSession(ask.sessionId) } },
-      secondary: { label: 'Close pane', onClick: () => { acts().closeSessionPane(ask.sessionId) } },
+      // The same words as the session's own close: an ended pane closing takes its row with it.
+      secondary: { label: isShell(session) ? 'Close terminal' : 'Close session', onClick: () => { acts().closeSessionPane(ask.sessionId) } },
     })
     return
   }

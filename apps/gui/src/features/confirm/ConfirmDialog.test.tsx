@@ -12,14 +12,14 @@ function Remover({ run }: { run: () => void }) {
   const { confirm, pending } = useConfirm(skipped, (kind) => { setSkipped((current) => withSkipped(current, kind)) })
   return (
     <>
-      <button type="button" onClick={() => { confirm(confirmAsk('remove-project', 'shop'), run) }}>Remove shop</button>
+      <button type="button" onClick={() => { confirm(confirmAsk('close-project', { name: 'shop', running: [] }), run) }}>Close shop</button>
       <ConfirmHost pending={pending} />
     </>
   )
 }
 
 const ask = async (user: ReturnType<typeof userEvent.setup>) => {
-  await user.click(screen.getByRole('button', { name: 'Remove shop' }))
+  await user.click(screen.getByRole('button', { name: 'Close shop' }))
   return screen.findByRole('alertdialog')
 }
 
@@ -36,7 +36,7 @@ describe('the confirm dialog', () => {
     render(<Remover run={run} />)
     await ask(user)
     expect(run).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Remove' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Close project' })).toHaveFocus()
     await user.keyboard('{Enter}')
     expect(run).toHaveBeenCalledTimes(1)
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
@@ -52,7 +52,7 @@ describe('the confirm dialog', () => {
     await ask(user)
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Remove shop' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Close shop' })).toHaveFocus()
     expect(run).not.toHaveBeenCalled()
   })
 
@@ -62,9 +62,9 @@ describe('the confirm dialog', () => {
     render(<Remover run={run} />)
     await ask(user)
     await user.click(screen.getByRole('checkbox', { name: 'Don’t ask again' }))
-    await user.click(screen.getByRole('button', { name: 'Remove' }))
+    await user.click(screen.getByRole('button', { name: 'Close project' }))
     expect(run).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Remove shop' }))
+    await user.click(screen.getByRole('button', { name: 'Close shop' }))
     expect(run).toHaveBeenCalledTimes(2)
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
   })
@@ -90,7 +90,7 @@ describe('the confirm dialog', () => {
     await user.click(box)
     await user.keyboard('{Enter}')
     expect(run).toHaveBeenCalledTimes(1)
-    await user.click(screen.getByRole('button', { name: 'Remove shop' }))
+    await user.click(screen.getByRole('button', { name: 'Close shop' }))
     expect(run).toHaveBeenCalledTimes(2)
   })
 })

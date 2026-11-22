@@ -624,8 +624,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Terminal** (Terminal view only), a divider, **New worktree…** and **Open worktree…** (both open their dialogs).
   Keys shown are the binding table's. **Project right-click menu**: the project's name (and machine when it is
   remote), **New session**, **New worktree…**, a divider, **Copy path**, **Show files** (the side panel's Files beside
-  a session of the project; off while it has none), a divider, **Remove from sidebar…** (the confirm dialog; refused
-  with a toast naming the sessions while one runs in it).
+  a session of the project; off while it has none), a divider, **Close project…** (the confirm dialog, which names the
+  sessions still running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
+  a terminal or a project stops what runs in it and takes it off the sidebar, and every menu, toast and question says
+  **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session row** (`SessionRow`; padding 6px 8px 6px 10px, radius `--r-control`): the name at the left (13.5px
   `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
   status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
@@ -1376,9 +1378,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Ended panes.** A pane never disappears because a refresh missed its session: it
   stays in its tab with its output and reads idle, and the tab keeps its name. Nothing is drawn in a terminal pane to
   say so: an agent's session that ended raises one toast outside it, "… ended", with **Restart shell** (a new shell in
-  the same folder, in the same place) and **Close pane** (which stops nothing); a plain shell that ended raises none,
+  the same folder, in the same place) and **Close session** (which stops nothing); a plain shell that ended raises none,
   and **Restart shell** is in its pane's right-click menu, as it is for an agent's. A pane shown as a chat keeps the
-  card along its bottom (**Session ended**, **Restart shell**, **Close pane**). The first list after launch drops panes of sessions that died while the app
+  card along its bottom (**Session ended**, **Restart shell**, **Close session**). The first list after launch drops panes of sessions that died while the app
   was closed, and a later list drops the pane of a session the daemon says has left (closed from another client,
   exited, put away), so no pane stays beside a sidebar that no longer lists its session; a session that left with
   no reason keeps its pane as ended. A split is a pane of its session and is never listed; when its session is gone and it still runs, it is listed as a terminal of its own, so no shell is out of sight. The sidebar lists the sessions the daemon lists. A row goes at once when the daemon says why it

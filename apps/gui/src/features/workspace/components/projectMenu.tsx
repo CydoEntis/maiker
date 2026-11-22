@@ -1,16 +1,12 @@
-import { toast } from '@/lib/toast'
 import { CHAT_AGENTS, type ChatAgent } from '../model/chatView'
 import { agentIsOffered } from '../model/emptyStart'
-import type { CloseResult, OpenedProject } from '../model/openedProjects'
-import { closeRefusalWords, worktreeSourceOf } from '../model/projectActions'
+import type { OpenedProject } from '../model/openedProjects'
+import { worktreeSourceOf } from '../model/projectActions'
 import { offersOpenWorktree } from '../model/projectWorktrees'
 import { agentLabel, type SessionView } from '../model/session'
 import type { ShortcutAction } from '../model/shortcuts'
 import { AppIcon, Icon } from './glyphs'
 import type { MenuEntry, MenuItem } from './MenuPopup'
-
-/** One refusal toast at a time: a second refused removal replaces the first instead of stacking. */
-const CLOSE_REFUSED_TOAST = 'close-project-refused'
 
 /** The size of a mark before a row of the `+` menu. */
 const MARK_PX = 14
@@ -33,10 +29,10 @@ export type ProjectActions = {
   /** Shows a session of the project with the side panel's Files beside it: the files are read through a session. */
   onShowFiles: (sessionId: string) => void
   /**
-   * Takes the project off the list once the person confirms, or refuses now while a session runs in it
-   * (`useOpenedProjects().close`). `name` is the heading's, for the question.
+   * Closes the project once the person confirms: its sessions stop and it leaves the sidebar. `name` is the heading's,
+   * for the question.
    */
-  onClose: (project: OpenedProject, name: string) => CloseResult
+  onClose: (project: OpenedProject, name: string) => void
 }
 
 /** The project a heading stands for, and what decides which of its actions can run. */
@@ -116,14 +112,6 @@ export function projectContextMenu(actions: ProjectActions, target: ProjectTarge
     { label: 'Copy path', run: () => { actions.onCopyPath(target.project) } },
     { label: 'Show files', disabled: shown === undefined, why: 'Start a session here first: the files are read through one', run: () => { if (shown !== undefined) actions.onShowFiles(shown.id) } },
     'separator',
-    { label: 'Remove from sidebar…', danger: true, run: () => { closeOrSayWhy(actions, target) } },
+    { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } },
   ]
-}
-
-/** Removing never hides a running session: a refusal names the sessions in the way, so the person knows what to close. */
-function closeOrSayWhy(actions: ProjectActions, target: ProjectTarget): void {
-  const result = actions.onClose(target.project, target.name)
-  if (result.ok) return
-  const { title, description } = closeRefusalWords(target.name, result.error)
-  toast.info(title, { id: CLOSE_REFUSED_TOAST, description })
 }

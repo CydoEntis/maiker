@@ -28,6 +28,26 @@ export type ClosingSession = {
 /** What a close asks about: one session, or how many when several close together. */
 export type ClosingSessions = ClosingSession | { count: number }
 
+/** A project about to be closed: what its heading calls it, and the sessions still running in it, as their rows name them. */
+export type ClosingProject = { name: string; running: readonly string[] }
+
+/** How many running sessions a project's close names before it counts the rest. */
+const NAMED_RUNNING = 3
+
+function listed(names: readonly string[]): string {
+  const named = names.slice(0, NAMED_RUNNING)
+  const rest = names.length - named.length
+  if (rest > 0) return `${named.join(', ')} and ${String(rest)} more`
+  return named.length <= 1 ? named.join('') : `${named.slice(0, -1).join(', ')} and ${named[named.length - 1] ?? ''}`
+}
+
+function closingProjectCopy({ name, running }: ClosingProject): ConfirmCopy {
+  const body = running.length === 0
+    ? 'It leaves the sidebar.'
+    : `${listed(running)} ${running.length === 1 ? 'stops' : 'stop'}, and the project leaves the sidebar.`
+  return { title: `Close ${name}?`, body, note: 'The folder and its git history stay on disk, and you can open it again any time.', confirmLabel: 'Close project', danger: true }
+}
+
 /** A plain shell, or the shells of one terminal tab, about to be closed. */
 export type ClosingTerminal = { name: string }
 
@@ -82,8 +102,7 @@ const CONFIRMS = {
     confirmLabel: `Switch to ${VIEW_NAME[view]}`,
     danger: false,
   }),
-  // The action refuses while a session runs in the project, so by the time this asks there is none to close.
-  'remove-project': (name: string): ConfirmCopy => ({ title: `Remove ${name} from the sidebar?`, body: 'No session is running in it. The folder and its git history stay on disk, and you can open it again any time.', confirmLabel: 'Remove', danger: true }),
+  'close-project': closingProjectCopy,
   'discard-file': discardingCopy,
   'delete-new-file': (path: string): ConfirmCopy => ({ title: `Delete “${nameOf(path)}”?`, body: `${path} is a new file that was never committed, so discarding it deletes it for good.`, note: 'It cannot be brought back.', confirmLabel: 'Delete file', danger: true }),
 }

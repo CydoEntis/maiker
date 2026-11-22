@@ -91,25 +91,31 @@ describe('a project heading\'s starts in the window', () => {
     expect(renderHook(() => useProjectActions()).result.current(vi.fn()).onNewTerminal).toBeUndefined()
   })
 
-  it('asks before a project leaves the sidebar, by its name, and removes it only on the answer', () => {
+  it('asks before an empty project closes, by its name, and closes it only on the answer', () => {
     const confirm = vi.fn()
     const close = vi.fn()
-    workspace.current = { ...windowWith(null, []), confirm, openedProjects: { machines: [], close, closable: () => ({ ok: true, value: [] }) } }
-    const answer = renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')
-    expect(answer.ok).toBe(true)
+    workspace.current = { ...windowWith(null, []), confirm, openedProjects: { machines: [], close, closeOnceEmpty: vi.fn() } }
+    renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')
     expect(close).not.toHaveBeenCalled()
-    const [ask, run] = confirm.mock.calls[0] as [{ kind: string; title: string }, () => void]
-    expect(ask.kind).toBe('remove-project')
-    expect(ask.title).toContain('shop')
+    const [ask, run] = confirm.mock.calls[0] as [{ kind: string; title: string; confirmLabel: string }, () => void]
+    expect(ask).toMatchObject({ kind: 'close-project', title: 'Close shop?', confirmLabel: 'Close project' })
     run()
     expect(close).toHaveBeenCalledWith(SHOP)
   })
 
-  it('refuses at once, without asking, while a session runs in the project', () => {
+  it('names the sessions running in a project, stops them on the answer, and closes it once they are gone', () => {
     const confirm = vi.fn()
-    const refusal = { ok: false as const, error: { code: 'sessions-running' as const, running: [onMain()] } }
-    workspace.current = { ...windowWith(null, []), confirm, openedProjects: { machines: [], close: vi.fn(), closable: () => refusal } }
-    expect(renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')).toBe(refusal)
-    expect(confirm).not.toHaveBeenCalled()
+    const endSessions = vi.fn()
+    const closeOnceEmpty = vi.fn()
+    const running = onMain()
+    const gone = { ...onMain({ id: 't9', nativePane: 9 }), ended: true }
+    workspace.current = { ...windowWith(null, []), confirm, endSessions, openedProjects: { machines: [{ machineName: null, projects: [{ project: SHOP, sessions: [running, gone] }] }], close: vi.fn(), closeOnceEmpty } }
+    renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')
+    const [ask, run] = confirm.mock.calls[0] as [{ body: string }, () => void]
+    expect(ask.body).toContain('stops')
+    expect(endSessions).not.toHaveBeenCalled()
+    run()
+    expect(endSessions).toHaveBeenCalledWith([running.id, gone.id])
+    expect(closeOnceEmpty).toHaveBeenCalledWith(SHOP)
   })
 })

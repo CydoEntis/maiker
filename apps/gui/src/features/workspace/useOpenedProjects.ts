@@ -26,8 +26,11 @@ export type OpenedProjects = {
    * listed session is in it (`closeProject`): the result says which, for the caller to tell the person.
    */
   readonly close: (project: OpenedProject) => CloseResult
-  /** What `close` would answer now, changing nothing: for asking the person before it runs. */
-  readonly closable: (project: OpenedProject) => CloseResult
+  /**
+   * Takes `project` off the list as soon as no listed session is in it: for a close whose sessions are still stopping.
+   * Ended sessions count too, since one still listed would open the project again.
+   */
+  readonly closeOnceEmpty: (project: OpenedProject) => void
 }
 
 /**
@@ -60,8 +63,17 @@ export function useOpenedProjectsState(sessions: readonly SessionView[]): Opened
     setSelected((current) => (current !== null && sameProject(current, project) ? null : current))
     return result
   }, [opened, sessions])
-  const closable = useCallback((project: OpenedProject) => closeProject(opened, project, sessions), [opened, sessions])
-  return { opened, machines, selected, open, select: setSelected, close, closable }
+  const [emptying, setEmptying] = useState<readonly OpenedProject[]>([])
+  const closeOnceEmpty = useCallback((project: OpenedProject) => { setEmptying((current) => [...current, project]) }, [])
+  // Adjusted while rendering, as the grouping is above: a project whose last session has gone leaves in the same render.
+  const emptied = emptying.filter((project) => !machines.some((machine) => machine.projects.some((entry) => entry.sessions.length > 0 && sameProject(entry.project, project))))
+  if (emptied.length > 0) {
+    const done = (candidate: OpenedProject) => emptied.some((project) => sameProject(candidate, project))
+    setSaved((current) => current.filter((candidate) => !done(candidate)))
+    setSelected((current) => (current !== null && done(current) ? null : current))
+    setEmptying((current) => current.filter((candidate) => !done(candidate)))
+  }
+  return { opened, machines, selected, open, select: setSelected, close, closeOnceEmpty }
 }
 
 /** The opened projects, from any part of the window. */

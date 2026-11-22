@@ -407,10 +407,11 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    (removing and merging stay this computer's), and the host sends the request to that machine's daemon; a machine that
    is down or needs an update is refused by name (`<machine> is not connected`) under the field, and nothing is made.
    Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
-   (`useProjectActions`). Remove from sidebar is `useOpenedProjects().close`: while a listed session is in the project
-   it is refused and a toast names the sessions in the way; otherwise the confirm dialog asks first, by the
-   project's name (*remove a project*), and says its folder and git history stay on disk; ended sessions are never in the sidebar's list, so a
-   closed project is not opened again by one. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
+   (`useProjectActions`). **Close project…** asks once, by the project's name (*close-project*), naming up to three of
+   the sessions still running in it and counting the rest, and says its folder and git history stay on disk. On the
+   answer an empty project leaves at once (`useOpenedProjects().close`); otherwise every listed session in it, ended
+   ones too, is closed (`endSessions`) and `closeOnceEmpty` takes the project off the list in the render its last
+   session leaves, since a listed session would open it again. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
    `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through

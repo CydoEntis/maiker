@@ -5,6 +5,7 @@ import { sameProject, type OpenedProject } from './model/openedProjects'
 import { worktreeSourceOf } from './model/projectActions'
 import type { ChatAgent } from './model/chatView'
 import type { SessionView } from './model/session'
+import { rowTitle } from './model/sidebar'
 import { confirmAsk } from '@/features/confirm/confirm'
 import { useWorkspace } from './workspaceContext'
 
@@ -43,9 +44,9 @@ function useDraftIn() {
  * overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm, copyText, showFilesOf } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm, copyText, showFilesOf, endSessions } = useWorkspace()
   const draftIn = useDraftIn()
-  const { close, closable } = openedProjects
+  const { close, closeOnceEmpty, machines } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
     onNewSession: (machine, project, agent) => { afterPick(); draftIn(machine, project.folder, agent === undefined ? {} : { agent }) },
     onNewWorktree: (machine, project, from) => {
@@ -57,13 +58,21 @@ export function useProjectActions(): (afterPick: () => void) => ProjectActions {
     onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
     onCopyPath: (project) => { copyText(project.folder, 'Path') },
     onShowFiles: (sessionId) => { afterPick(); showFilesOf(sessionId) },
-    // A refusal is said at once; only a removal that would go through is asked about.
+    // One question for the whole project: its running sessions are named in it and stop with it. Ended ones close too,
+    // since a listed session would open the project again.
     onClose: (project, name) => {
-      const answer = closable(project)
-      if (answer.ok) confirm(confirmAsk('remove-project', name), () => { close(project) })
-      return answer
+      const listed = machines.flatMap((machine) => machine.projects).filter((entry) => sameProject(entry.project, project)).flatMap((entry) => entry.sessions)
+      const running = listed.filter((session) => !session.ended).map(rowTitle)
+      confirm(confirmAsk('close-project', { name, running }), () => {
+        if (listed.length === 0) {
+          close(project)
+          return
+        }
+        endSessions(listed.map((session) => session.id))
+        closeOnceEmpty(project)
+      })
     },
-  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closable, confirm, chatView, newTerminal, copyText, showFilesOf])
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closeOnceEmpty, machines, endSessions, confirm, chatView, newTerminal, copyText, showFilesOf])
 }
 
 /**

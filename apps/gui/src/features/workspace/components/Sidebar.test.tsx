@@ -2,9 +2,9 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { currentToasts, resetToasts } from '@/lib/toast'
+import { resetToasts } from '@/lib/toast'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
-import { closeProject, groupByProject, type OpenedProject } from '../model/openedProjects'
+import { groupByProject, type OpenedProject } from '../model/openedProjects'
 import { toSessionView, type SessionView } from '../model/session'
 import type { ProjectActions } from './projectMenu'
 import { Sidebar, type SidebarProps } from './Sidebar'
@@ -35,7 +35,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened:
   const grouping = groupByProject(sessions, opened)
   const projectActions = {
     onNewSession: vi.fn(), onNewWorktree: vi.fn(), onNewTerminal: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onShowFiles: vi.fn(),
-    onClose: vi.fn((project: OpenedProject) => closeProject(grouping.opened, project, sessions)),
+    onClose: vi.fn(),
   } satisfies ProjectActions
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
@@ -314,7 +314,7 @@ describe('a project heading', () => {
     const { projectActions } = show([onDevbox(1, 'There', { status: 'working', repo: 'api', branch: 'main' })], { machines: [LOCAL_HEAD, DEVBOX] })
     fireEvent.contextMenu(heading('api'))
     await screen.findByRole('menu', { name: 'api' })
-    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Remove from sidebar…'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Close project…'])
     await user.click(screen.getByRole('menuitem', { name: /New session/ }))
     expect(projectActions.onNewSession).toHaveBeenLastCalledWith(4, API)
     fireEvent.contextMenu(heading('api'))
@@ -343,22 +343,15 @@ describe('a project heading', () => {
     expect(menuItems()).toEqual(['Claude', 'Codex', 'Gemini', 'Terminal'])
   })
 
-  it('removes a project with no running session and says nothing', async () => {
+  it('closes a project from its menu, whether or not a session runs in it', async () => {
     const user = userEvent.setup()
-    const { projectActions } = show([], {}, [NOTES])
+    const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES])
     fireEvent.contextMenu(screen.getByRole('button', { name: 'notes, no sessions' }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Remove from sidebar…' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Close project…' }))
     expect(projectActions.onClose).toHaveBeenCalledWith(NOTES, 'notes')
-    expect(currentToasts().items).toHaveLength(0)
-  })
-
-  it('refuses to remove a project a session runs in, and says so', async () => {
-    const user = userEvent.setup()
-    const { projectActions } = show([session(1, 'One', { status: 'working' })])
     fireEvent.contextMenu(heading('shop'))
-    await user.click(await screen.findByRole('menuitem', { name: 'Remove from sidebar…' }))
-    expect(projectActions.onClose.mock.results[0]?.value).toMatchObject({ ok: false, error: { code: 'sessions-running' } })
-    expect(currentToasts().items).toHaveLength(1)
+    await user.click(await screen.findByRole('menuitem', { name: 'Close project…' }))
+    expect(projectActions.onClose).toHaveBeenLastCalledWith(SHOP, 'shop')
   })
 })
 
