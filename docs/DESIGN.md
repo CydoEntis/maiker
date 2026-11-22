@@ -1194,7 +1194,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   chat, project, action or theme (themes only once something is typed). Results are grouped under **Chats** (most
   urgent first, each named as its row is with its agent and project, "Needs you" in amber), **Actions** (themes too)
   and **Projects**, each row with a 22px mark (a chat, an action, a folder) and its keys as a keycap. A
-  run of the typed text ranks above letters that merely appear in order; ↑ ↓ move, ↵ runs, Esc closes. Three or more
+  run of the typed text ranks above letters that merely appear in order; ↑ ↓ move, ↵ runs, Esc closes. **An action is
+  offered only where it can act**: the side-panel actions (Show the side panel, changes, files, pull requests) need a
+  session in front; splits are the Terminal view's, with a pane in front; a loose **New terminal** (in the folder of the
+  session in front) is the Terminal view's, and in the Chat view the palette offers **Show the terminal**, the
+  session's own. The search is the card's header, with no ring of its own for the rounded frame to cut. Three or more
   typed characters also search what this computer's sessions printed recently (`search_panes`, the same search as
   Find's *All sessions*; a session on another machine is not searched), 300 ms after typing pauses, one search at a
   time (a query typed while one runs waits, and only the newest is sent): up to 10 hits, one per session (its newest

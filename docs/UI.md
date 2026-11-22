@@ -1567,7 +1567,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   does nothing, and **New terminal** (the key, the palette) shows the chat's own terminal, or says a chat is
   needed first when none is in front. Shells therefore appear only in the Terminal view, as a session's own terminals (side-panel tabs, or the drawer once pinned), or as ones left from the Terminal view. In the
   Terminal view every pane is a terminal and there is no drawer. **A session's terminals have no title-bar button**: the Terminal key
-  (`terminal` in the binding table), the command palette (**Show the terminal**) and the drawer's own Hide button are one `toggleTerminal`, for a chat of this computer in the
+  (`terminal` in the binding table), the command palette (**Show the terminal**, offered in the Chat view with a session in front), the New terminal key in the Chat view, and the drawer's own Hide button are one `toggleTerminal`, for a chat of this computer in the
   Chat view: with terminals pinned to the bottom it shows and hides their drawer; with none it opens the side panel on the chat's terminal tab, and starts the chat's first terminal when there is none. The terminal stays mounted under the chat and keeps its size, and
   no daemon command is sent. **No control on a session moves it between chat and terminal**
   ([ADR 0020](adr/0020-the-chat-view-talks-to-the-agent-directly.md)): there is no terminal log over a chat and no

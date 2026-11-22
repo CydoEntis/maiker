@@ -123,7 +123,7 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
   openProject: OpenProject
   newSession: (machine?: number) => void
   focusedMachineNumber: number
-  newTerminal: (machine?: number) => void
+  newTerminal: (machine?: number, folder?: string) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   preferences: SettingsPreferences
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
@@ -218,7 +218,10 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         newSession(focusedMachineNumber)
         return
       case 'new-terminal':
-        newTerminal(focusedMachineNumber)
+        // In Chat view a terminal is the session's own, in its side panel; a loose shell is the Terminal view's, and it
+        // opens in the folder of the session in front.
+        if (preferences.openSessionsIn === 'chat') toggleTerminal()
+        else newTerminal(focusedMachineNumber, focusedSession?.cwd)
         return
       case 'split-right':
         split(null, 'right')

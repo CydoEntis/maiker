@@ -1257,7 +1257,10 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await screen.findByRole('button', { name: 'New session, claude, idle' })
 
     await user.click(screen.getByRole('button', { name: /Commands/ }))
-    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'Show the terminal{Enter}')
+    const palette = await screen.findByRole('dialog', { name: 'Command palette' })
+    // A loose shell is the Terminal view's; in Chat view the palette offers only the session's own terminal.
+    expect(within(palette).queryByRole('option', { name: /^New terminal/ })).not.toBeInTheDocument()
+    await user.type(within(palette).getByRole('combobox'), 'Show the terminal{Enter}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })

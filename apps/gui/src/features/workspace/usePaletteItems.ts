@@ -34,7 +34,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
   /** The whole app is in the Chat view: a terminal is a chat's own, in the side panel, never a shell of its own. */
   chatView: boolean
   focusedMachineNumber: number
-  newTerminal: (machine?: number) => void
+  newTerminal: (machine?: number, folder?: string) => void
   focusedSession: SessionView | undefined
   addAgentTerminal: (agentId: string) => void
   runShortcut: RunShortcut
@@ -91,8 +91,14 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
-      action('new-terminal', chatView ? 'Show the terminal' : 'New terminal', () => { newTerminal(focusedMachineNumber) }, keys('new-terminal')),
-      ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this agent', () => { addAgentTerminal(focusedSession.id) })] : []),
+      // Everything here acts where the palette was opened. A loose shell is a Terminal view door only, and opens in the
+      // folder of the session in front; in Chat view a terminal belongs to the session, in its side panel.
+      ...(chatView
+        ? (focusedSession ? [action('show-terminal', 'Show the terminal', () => { runShortcut('terminal') }, keys('terminal'))] : [])
+        : [
+            action('new-terminal', 'New terminal', () => { newTerminal(focusedMachineNumber, focusedSession?.cwd) }, keys('new-terminal')),
+            ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this session', () => { addAgentTerminal(focusedSession.id) })] : []),
+          ]),
       ...heads.filter((head) => head.name !== null && head.chip?.tone === 'ok' && online).flatMap((head) => [
         action(`new-on-${head.key}`, `New session on ${head.label}…`, () => { newSession(head.machine) }),
         ...(chatView ? [] : [action(`new-terminal-on-${head.key}`, `New terminal on ${head.label}…`, () => { newTerminal(head.machine) })]),
@@ -100,14 +106,20 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       ...(focusedSession && focusedSession.machineName !== null ? [action('get-file', `Get a file from ${machineLabel(focusedSession.machineName)}…`, () => { setGetFileId(focusedSession.id) })] : []),
       action('sidebar-side', preferences.sidebarSide === 'left' ? 'Move sidebar to the right' : 'Move sidebar to the left', () => { setPreferences((current) => ({ ...current, sidebarSide: current.sidebarSide === 'left' ? 'right' : 'left' })) }),
       ...(focusedSession && focusedSession.machineName === null ? [action('open-readme', 'Open README', () => { openReadme('files') }), action('open-readme-beside', 'Open README beside the chat', () => { openReadme('beside') })] : []),
-      action('split-right', 'Split right', () => { split(null, 'right') }, keys('split-right')),
-      action('split-down', 'Split down', () => { split(null, 'down') }, keys('split-down')),
+      // Splits are the Terminal view's, of the pane in front.
+      ...(chatView || !focusedSession ? [] : [
+        action('split-right', 'Split right', () => { split(null, 'right') }, keys('split-right')),
+        action('split-down', 'Split down', () => { split(null, 'down') }, keys('split-down')),
+      ]),
       action('usage', 'Open usage and cost', () => { setSettingsSection('usage') }, keys('usage')),
       action('jump-needs', 'Jump to the next session that needs you', () => { runShortcut('jump-needs') }, keys('jump-needs')),
-      action('inspect', 'Show the side panel', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
-      action('show-changes', 'Show changes', () => { showPanelView('changes') }, keys('changes')),
-      action('show-files', 'Show files', () => { showPanelView('files') }, keys('files')),
-      action('show-pull-requests', 'Show pull requests', () => { showPanelView('pulls') }),
+      // The side panel shows the session in front, so with none there is nothing for it to show.
+      ...(focusedSession ? [
+        action('inspect', 'Show the side panel', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
+        action('show-changes', 'Show changes', () => { showPanelView('changes') }, keys('changes')),
+        action('show-files', 'Show files', () => { showPanelView('files') }, keys('files')),
+        action('show-pull-requests', 'Show pull requests', () => { showPanelView('pulls') }),
+      ] : []),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
       action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),
