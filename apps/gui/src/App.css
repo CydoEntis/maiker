@@ -19,6 +19,9 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .terminal-screen:focus-within { box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); }
 .terminal-screen .xterm { height: 100%; }
 .terminal-screen .xterm-screen { padding-bottom: 1px; }
+/* xterm's own sheet paints the viewport black, and the strip under the last whole row showed as a black bar: the
+   viewport takes the terminal's ground instead, which the view sets from the theme. */
+.terminal-screen .xterm-viewport { background-color: var(--terminal-ground, transparent); }
 .terminal-input-error { color: var(--danger); font-size: 11px; margin: 8px 2px; }
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 

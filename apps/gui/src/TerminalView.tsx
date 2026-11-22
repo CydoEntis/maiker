@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { CircleAlert, TerminalSquare } from 'lucide-react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
@@ -736,7 +736,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   return <div className="terminal-view">
     {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
     {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the Maiker service connection and reopen this session.</p></div>}
-    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
+    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} style={{ '--terminal-ground': (look.theme ?? DEFAULT_THEME).background } as CSSProperties} />
     {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the Maiker service could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
     {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
