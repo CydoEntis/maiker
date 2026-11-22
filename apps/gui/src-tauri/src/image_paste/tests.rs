@@ -9,18 +9,13 @@ use crate::file_send::{SendEvent, run};
 use maitty_test_support::fake_ssh;
 #[cfg(unix)]
 use std::sync::atomic::AtomicBool;
-use std::sync::atomic::{AtomicU32, Ordering};
 #[cfg(unix)]
 use std::sync::{Arc, Mutex};
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDRrest-of-the-image";
 
 fn folder(label: &str) -> PathBuf {
-    static NEXT: AtomicU32 = AtomicU32::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("image-paste-{label}-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("make a test folder");
-    dir
+    maitty_test_support::TempFolder::new(&format!("image-paste-{label}")).until_test_ends()
 }
 
 fn def(name: &str) -> MachineDef {

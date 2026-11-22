@@ -4,6 +4,7 @@ use crate::conversation::{ExecutionKind, Provider};
 use crate::daemon::conversation::history::{Content, Role};
 use crate::daemon::{ServerMsg, persist};
 use crate::protocol::{Reply, Surface};
+use crate::test_support::own_data_folder;
 use serde_json::json;
 use tokio::sync::mpsc;
 
@@ -285,19 +286,6 @@ fn a_gemini_transcript_is_matched_by_the_start_of_the_session_id_in_its_name() {
 }
 
 // ---- the daemon ----
-
-fn own_data_folder() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!(
-            "{}-follow-test-data-{}",
-            crate::brand::APP_COMMAND,
-            std::process::id()
-        ));
-        // SAFETY: before any pane of this test binary reads the environment, as the other daemon tests do.
-        unsafe { std::env::set_var("XDG_DATA_HOME", dir) };
-    });
-}
 
 struct World {
     daemon: Daemon,

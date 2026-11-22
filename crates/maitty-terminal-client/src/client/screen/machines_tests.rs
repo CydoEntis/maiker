@@ -510,8 +510,7 @@ fn the_reconnect_button_answers_in_the_dialog_and_a_click_on_a_row_chooses_it() 
 fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_says_so() {
     let mut app = app_with(&[("build", "dev@build.lan")]);
     // The entry has to be in the file for a change to be written to it.
-    let dir = std::env::temp_dir().join(format!("grants-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = maitty_test_support::TempFolder::new("grants");
     app.machine_flow.local_config = dir.join("config.local.toml");
     crate::client::machine_config::add_machine(&app.machine_flow.local_config, "build", "dev@build.lan").unwrap();
 
@@ -540,10 +539,8 @@ fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_say
 #[test]
 fn c_turns_copies_off_at_once_and_asks_before_turning_them_on() {
     let mut app = app_with(&[("build", "dev@build.lan")]);
-    let dir = std::env::temp_dir().join(format!("clipboard-grant-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = maitty_test_support::TempFolder::new("clipboard-grant");
     app.machine_flow.local_config = dir.join("config.local.toml");
-    let _ = std::fs::remove_file(&app.machine_flow.local_config);
     crate::client::machine_config::add_machine(&app.machine_flow.local_config, "build", "dev@build.lan").unwrap();
     let mut v = view(Some(hosts()));
     v.machine_sel = Some(0);

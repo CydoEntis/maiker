@@ -89,15 +89,8 @@ fn read_machines(file: &Path) -> Result<Vec<MachineDef>> {
 mod tests {
     use super::*;
 
-    fn dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-local-machines-{}-{}"),
-            label,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(label: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("local-machines-{label}"))
     }
 
     fn list_of(local: &str) -> MachineList {

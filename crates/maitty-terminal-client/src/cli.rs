@@ -3856,14 +3856,7 @@ mod bundled_daemon_tests {
     use std::path::Path;
 
     fn scratch(label: &str) -> std::path::PathBuf {
-        let folder = std::env::temp_dir().join(format!(
-            "{}-bundled-{label}-{}",
-            env!("APP_COMMAND"),
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&folder);
-        std::fs::create_dir_all(&folder).unwrap();
-        folder
+        maitty_test_support::TempFolder::new(&format!("bundled-{label}")).until_test_ends()
     }
 
     #[test]

@@ -3,20 +3,7 @@
 use super::branch_agent::MAX_PROMPT_CHARS;
 use super::*;
 use std::path::Path;
-
-/// Panes write launchers and startup files to the data folder: point it at a scratch one, as the
-/// other daemon tests do (the same value, so the two cannot disagree).
-fn own_data_folder() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-data-{}"),
-            std::process::id()
-        ));
-        // SAFETY: the first thing a daemon test does, before its panes read the environment.
-        unsafe { std::env::set_var("XDG_DATA_HOME", dir) };
-    });
-}
+use crate::test_support::own_data_folder;
 
 pub(super) fn daemon_with(mut cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
@@ -24,19 +11,12 @@ pub(super) fn daemon_with(mut cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     cfg.worktree.dir = super::worktree_path::SIBLING_TEMPLATE.into();
     let (tx, rx) = mpsc::channel(4096);
     let mut d = Daemon::new(cfg, tx, || {});
-    d.check_dir = persist::scratch_dir().path().to_path_buf();
+    d.check_dir = persist::scratch_dir_for_this_thread();
     (d, rx)
 }
 
-pub(super) fn scratch(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        concat!(env!("APP_COMMAND"), "-{}-{}"),
-        name,
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    root
+pub(super) fn scratch(name: &str) -> maitty_test_support::TempFolder {
+    maitty_test_support::TempFolder::new(name)
 }
 
 pub(super) fn repo_in(root: &Path) -> PathBuf {

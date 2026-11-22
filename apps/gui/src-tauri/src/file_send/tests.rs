@@ -11,11 +11,7 @@ use maitty_test_support::fake_ssh;
 use std::sync::Mutex;
 
 fn folder(label: &str) -> PathBuf {
-    static NEXT: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("file-send-{label}-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("make a test folder");
-    dir
+    maitty_test_support::TempFolder::new(&format!("file-send-{label}")).until_test_ends()
 }
 
 fn file(dir: &std::path::Path, name: &str, bytes: &[u8]) -> String {

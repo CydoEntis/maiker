@@ -59,6 +59,35 @@ pub(crate) fn copy_program(from: &std::path::Path, to: &std::path::Path) {
     std::fs::copy(from, to).unwrap();
 }
 
+/// Points the data folder at a scratch one for this test binary: panes write launchers and
+/// startup files there (Linux honours `XDG_DATA_HOME`), and tests leave the real one alone. Every
+/// daemon test uses the same one, so two cannot disagree. It lives as long as the process, so it
+/// is removed when the process exits.
+pub(crate) fn own_data_folder() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        // SAFETY: the first thing a daemon test does, before the panes it starts read the environment.
+        unsafe { std::env::set_var("XDG_DATA_HOME", data_folder()) };
+        // SAFETY: registers a plain function that takes nothing; libc runs it once at exit.
+        #[cfg(unix)]
+        unsafe {
+            libc::atexit(remove_data_folder);
+        }
+    });
+}
+
+fn data_folder() -> std::path::PathBuf {
+    std::env::temp_dir().join(format!(
+        concat!(env!("APP_COMMAND"), "-test-data-{}"),
+        std::process::id()
+    ))
+}
+
+#[cfg(unix)]
+extern "C" fn remove_data_folder() {
+    let _ = std::fs::remove_dir_all(data_folder());
+}
+
 /// This test binary, for a test that runs it again as a stand-in process. On Linux it is the running
 /// image itself, so a build that replaces the file on disk meanwhile cannot change what runs; a
 /// replaced test binary had different tests in it and the stand-in failed.

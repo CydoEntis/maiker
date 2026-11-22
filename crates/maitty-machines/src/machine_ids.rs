@@ -187,11 +187,7 @@ mod tests {
 
     #[test]
     fn a_corrupt_file_starts_empty() {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-machine-ids-{}"),
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = maitty_test_support::TempFolder::new("machine-ids");
         let file = dir.join(FILE_NAME);
         std::fs::write(&file, "{ not json").unwrap();
         let known: MachineIds = crate::files::read_state(&file);

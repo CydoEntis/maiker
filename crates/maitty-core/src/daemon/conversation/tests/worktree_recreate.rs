@@ -14,9 +14,8 @@ fn git(dir: &Path, args: &[&str]) {
 
 /// A repository with one commit, a worktree `task` on its own branch, and a launch of a chat
 /// that runs in that worktree. The worktree's folder is then deleted, as a person would.
-fn chat_in_deleted_worktree(name: &str) -> (Launch, PathBuf, PathBuf) {
-    let root = std::env::temp_dir().join(format!("maitty-recreate-{name}-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&root);
+fn chat_in_deleted_worktree(name: &str) -> (maitty_test_support::TempFolder, Launch, PathBuf, PathBuf) {
+    let root = maitty_test_support::TempFolder::new(&format!("recreate-{name}"));
     let main = root.join("main");
     std::fs::create_dir_all(&main).unwrap();
     git(&main, &["init", "-q", "-b", "main"]);
@@ -37,12 +36,12 @@ fn chat_in_deleted_worktree(name: &str) -> (Launch, PathBuf, PathBuf) {
     chat.settings.as_mut().unwrap().cwd = folder.clone();
     chat.worktree_origin = Some(WorktreeOrigin { main: main.clone(), folder: folder.clone(), branch: "task".into() });
     std::fs::remove_dir_all(&folder).unwrap();
-    (launch, main, folder)
+    (root, launch, main, folder)
 }
 
 #[tokio::test]
 async fn a_missing_worktree_is_made_again_from_its_branch_before_the_send() {
-    let (launch, _main, folder) = chat_in_deleted_worktree("branch-kept");
+    let (_root, launch, _main, folder) = chat_in_deleted_worktree("branch-kept");
     assert!(!folder.exists());
     let launch = launch.validate().await.expect("the folder comes back");
     assert!(folder.join("a.txt").is_file());
@@ -52,7 +51,7 @@ async fn a_missing_worktree_is_made_again_from_its_branch_before_the_send() {
 
 #[tokio::test]
 async fn a_missing_worktree_whose_branch_is_gone_fails_naming_the_branch() {
-    let (launch, main, folder) = chat_in_deleted_worktree("branch-gone");
+    let (_root, launch, main, folder) = chat_in_deleted_worktree("branch-gone");
     git(&main, &["worktree", "prune"]);
     git(&main, &["branch", "-D", "task"]);
     let error = launch.validate().await.err().expect("nothing to make it from").to_string();
@@ -62,7 +61,7 @@ async fn a_missing_worktree_whose_branch_is_gone_fails_naming_the_branch() {
 
 #[tokio::test]
 async fn a_chat_folder_missing_from_the_remade_worktree_says_so() {
-    let (mut launch, _main, folder) = chat_in_deleted_worktree("subfolder-gone");
+    let (_root, mut launch, _main, folder) = chat_in_deleted_worktree("subfolder-gone");
     let LaunchIdentity::Existing(chat) = &mut launch.identity else { unreachable!() };
     chat.binding.cwd = folder.join("not-in-the-branch");
     chat.settings.as_mut().unwrap().cwd = chat.binding.cwd.clone();
@@ -72,7 +71,7 @@ async fn a_chat_folder_missing_from_the_remade_worktree_says_so() {
 
 #[tokio::test]
 async fn two_sends_to_one_deleted_folder_both_succeed() {
-    let (launch, _main, folder) = chat_in_deleted_worktree("two-sends");
+    let (_root, launch, _main, folder) = chat_in_deleted_worktree("two-sends");
     let LaunchIdentity::Existing(chat) = &launch.identity else { unreachable!() };
     let twin = Launch {
         identity: LaunchIdentity::Existing(chat.clone()),

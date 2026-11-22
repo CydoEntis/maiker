@@ -3,20 +3,7 @@
 use super::worktrees::Removal;
 use super::*;
 use std::time::Duration;
-
-/// Shell panes write their startup files and agent launchers to the data folder: point it at a
-/// scratch folder (Linux honours this) so tests leave the real one alone.
-fn own_data_folder() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-data-{}"),
-            std::process::id()
-        ));
-        // SAFETY: first thing a daemon test does, before the panes it starts read the environment.
-        unsafe { std::env::set_var("XDG_DATA_HOME", dir) };
-    });
-}
+use crate::test_support::own_data_folder;
 
 fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
@@ -28,7 +15,7 @@ fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     // Not this machine's Claude folder: tests never depend on its saved conversations.
     d.claude_folder = None;
     // Its own folder (made only if something is written to it), so tests never share check tails.
-    d.check_dir = persist::scratch_dir().path().to_path_buf();
+    d.check_dir = persist::scratch_dir_for_this_thread();
     (d, rx)
 }
 
@@ -7286,12 +7273,13 @@ fn outside_git_a_pass_never_goes_stale() {
     close(&mut d, &[t]);
 }
 
-/// A daemon whose approvals are kept in a scratch file (held by the returned guard), never
-/// in your own data folder.
-fn approving_daemon() -> (Daemon, mpsc::Receiver<Ev>, persist::ScratchDir) {
+/// A daemon whose approvals are kept in a scratch file, never in your own data folder. The
+/// folder (returned) lasts until the test's thread ends: the daemon saves off its loop, and a
+/// save can land after the test's own variables are gone.
+fn approving_daemon() -> (Daemon, mpsc::Receiver<Ev>, std::path::PathBuf) {
     let (mut d, rx) = daemon();
-    let dir = persist::scratch_dir();
-    d.approvals_file = dir.path().join("check-approvals.json");
+    let dir = persist::scratch_dir_for_this_thread();
+    d.approvals_file = dir.join("check-approvals.json");
     (d, rx, dir)
 }
 
@@ -7415,7 +7403,7 @@ fn always_and_never_are_kept_by_the_exact_command_in_app_s_data_folder() {
             vec![kept],
             "saved off the loop"
         );
-        assert!(d.approvals_file.starts_with(scratch.path()));
+        assert!(d.approvals_file.starts_with(&scratch));
         close(&mut d, &[t]);
     }
     let (d, _rx) = daemon();

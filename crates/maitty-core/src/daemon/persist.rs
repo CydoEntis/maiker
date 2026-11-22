@@ -382,19 +382,31 @@ pub fn forget_outputs() -> std::io::Result<()> {
 
 /// Where each pane's recent output is kept, so its history is still there after the server
 /// restarts (an update, a reboot): one file per pane, named by its id.
+#[cfg(not(test))]
 pub fn output_dir() -> PathBuf {
-    if cfg!(test) {
-        // One folder per test (each runs on a thread of its own): a test that clears the saved
-        // output must not take away what another test saved a moment ago.
-        return std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-output-{}-{:?}"),
-            std::process::id(),
-            std::thread::current().id()
-        ));
-    }
     let label =
         maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("output-{label}"))
+}
+
+/// One folder per test (each runs on a thread of its own): a test that clears the saved output
+/// must not take away what another test saved a moment ago. It goes when its thread ends.
+#[cfg(test)]
+pub fn output_dir() -> PathBuf {
+    struct RemovedWithThread(PathBuf);
+    impl Drop for RemovedWithThread {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    thread_local! {
+        static DIR: RemovedWithThread = RemovedWithThread(std::env::temp_dir().join(format!(
+            concat!(env!("APP_COMMAND"), "-test-output-{}-{:?}"),
+            std::process::id(),
+            std::thread::current().id()
+        )));
+    }
+    DIR.with(|dir| dir.0.clone())
 }
 
 fn output_file(dir: &Path, term: TermId) -> PathBuf {
@@ -712,6 +724,19 @@ pub(super) fn scratch_dir() -> ScratchDir {
         crate::brand::APP_COMMAND,
         std::process::id()
     )))
+}
+
+/// A scratch folder for something that outlives the call but has nowhere to keep the guard, such
+/// as a folder a daemon is told to write in: it is removed when the test's thread ends.
+#[cfg(test)]
+pub(super) fn scratch_dir_for_this_thread() -> PathBuf {
+    thread_local! {
+        static KEPT: std::cell::RefCell<Vec<ScratchDir>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    let dir = scratch_dir();
+    let path = dir.path().to_path_buf();
+    KEPT.with(|kept| kept.borrow_mut().push(dir));
+    path
 }
 
 #[cfg(test)]

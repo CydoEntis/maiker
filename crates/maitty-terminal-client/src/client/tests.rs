@@ -2137,12 +2137,8 @@ mod screen_tests {
     #[test]
     fn changes_outside_git_offers_git_init() {
         let (_, mut app) = super::design_tests::render_with(160, 45);
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-nogit-{}"),
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
-        app.open_changes(dir.clone());
+        let dir = maitty_test_support::TempFolder::new("nogit");
+        app.open_changes(dir.to_path_buf());
         let o = draw(&mut app, 160, 45);
         show(&o);
         let cap = screen::ends(app.theme.btn).0.0.to_string();
@@ -2151,7 +2147,6 @@ mod screen_tests {
                 && o.contains(&format!("{cap}Make it a git repo g"))
                 && o.contains(&format!("{cap}Cancel Esc"))
         );
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -9655,12 +9650,7 @@ mod files_panel_tests {
 
     /// A folder with `src/main.rs` (60 numbered lines) and `notes.txt`, unique to `name`.
     fn project(name: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-files-{}-{}"),
-            name,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
+        let dir = maitty_test_support::TempFolder::new(&format!("files-{name}")).until_test_ends();
         std::fs::create_dir_all(dir.join("src")).unwrap();
         let body: String = (1..=60).map(|i| format!("let line_{i} = {i};\n")).collect();
         std::fs::write(dir.join("src").join("main.rs"), body).unwrap();
@@ -11206,11 +11196,7 @@ mod drawer_tests {
     /// The main screen with the drawer floating, and the focused pane in a git repo.
     fn app() -> App {
         let (_, mut app) = super::design_tests::render_with(W, H);
-        static NEXT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
-        let n = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let dir = std::env::temp_dir().join(format!("{APP_COMMAND}-rail-{}-{n}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = maitty_test_support::TempFolder::new("rail").until_test_ends();
         crate::proc::git(&dir, &["init", "-q"]).unwrap();
         std::fs::write(dir.join("notes.txt"), "remember the milk\n").unwrap();
         let pane = app.snap.terms.get_mut(&1).expect("the focused pane");

@@ -2,7 +2,7 @@ use super::*;
 use crate::daemon::branch_agent_tests::{close_all, daemon_with, repo_in, scratch};
 
 /// A repository with a worktree on `feat` beside it, at the usual place.
-fn repo_with_worktree(name: &str) -> (PathBuf, PathBuf, PathBuf) {
+fn repo_with_worktree(name: &str) -> (maitty_test_support::TempFolder, PathBuf, PathBuf) {
     let root = scratch(name);
     let repo = repo_in(&root);
     let top = root.join("repo-worktrees").join("feat");
@@ -176,7 +176,7 @@ fn a_session_not_kept_one_with_an_unsafe_id_or_a_panes_request_is_refused() {
     assert!(error.contains("can't be resumed"), "{error}");
     assert_eq!(d.pending_ops, 0, "nothing was started");
 
-    d.command(0, Command::NewWorkspace { cwd: Some(folder.clone()), name: None, cmd: None }).unwrap();
+    d.command(0, Command::NewWorkspace { cwd: Some(folder.to_path_buf()), name: None, cmd: None }).unwrap();
     let pane = *d.terms.keys().next().unwrap();
     let (tx, mut agent) = mpsc::channel(16);
     d.handle(Ev::Connected(8, tx, false, crate::protocol::Surface::Terminal, true));

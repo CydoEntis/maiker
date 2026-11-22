@@ -268,17 +268,9 @@ pub fn refusal_of(existing: &[MachineDef], def: &MachineDef) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
-    fn dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-machine-config-{}-{}"),
-            label,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(label: &str) -> std::path::PathBuf {
+        maitty_test_support::TempFolder::new(&format!("machine-config-{label}")).until_test_ends()
     }
 
     #[test]

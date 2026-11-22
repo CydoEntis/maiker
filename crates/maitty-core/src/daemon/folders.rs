@@ -147,15 +147,8 @@ fn branch_of(folder: &Path) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn scratch(label: &str) -> PathBuf {
-        let folder = std::env::temp_dir().join(format!(
-            "{}-folders-{label}-{}",
-            env!("APP_COMMAND"),
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&folder);
-        std::fs::create_dir_all(&folder).unwrap();
-        folder
+    fn scratch(label: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("folders-{label}"))
     }
 
     #[test]

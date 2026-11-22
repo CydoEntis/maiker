@@ -50,16 +50,8 @@ fn expand_home(path: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
-
-    static NEXT: AtomicU64 = AtomicU64::new(0);
-
     fn project() -> PathBuf {
-        let root = std::env::temp_dir().join(format!(
-            "maitty-folder-suggestions-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ));
+        let root = maitty_test_support::TempFolder::new("folder-suggestions").until_test_ends();
         std::fs::create_dir_all(root.join("src")).unwrap();
         std::fs::create_dir_all(root.join(".git")).unwrap();
         std::fs::write(root.join("README.md"), "# hello

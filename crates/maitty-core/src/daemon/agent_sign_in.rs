@@ -479,10 +479,8 @@ mod tests {
             Cli { program, login: &["login"], status: &["status"], style: StatusStyle::Line }
         }
 
-        fn folder(name: &str) -> PathBuf {
-            let dir = std::env::temp_dir().join(format!("maitty-sign-in-{name}-{}", std::process::id()));
-            std::fs::create_dir_all(&dir).unwrap();
-            dir
+        fn folder(name: &str) -> maitty_test_support::TempFolder {
+            maitty_test_support::TempFolder::new(&format!("sign-in-{name}"))
         }
 
         async fn until(ins: &SignIns, agent: SignInAgent, done: impl Fn(&SignInState) -> bool) -> SignInState {

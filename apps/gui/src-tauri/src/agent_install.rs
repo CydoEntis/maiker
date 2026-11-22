@@ -517,8 +517,7 @@ mod tests {
 
     #[test]
     fn a_program_is_found_in_the_path_or_in_the_extra_folders() {
-        let dir = std::env::temp_dir().join(format!("agent-install-find-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = maitty_test_support::TempFolder::new("agent-install-find").until_test_ends();
         let file = program_files("fake-agent").remove(0);
         std::fs::write(dir.join(&file), "").unwrap();
         let empty = std::ffi::OsString::new();

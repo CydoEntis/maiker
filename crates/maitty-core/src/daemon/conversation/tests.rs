@@ -23,14 +23,22 @@ use tokio::sync::mpsc;
 /// A test helper program compiled from `fixtures/<source>`, once for every test of every run with
 /// that source. Each fixture used to compile its own: some sixty compilers at once, and as many
 /// new programs for a virus scanner to read, left Windows too busy to stop a process within five
-/// seconds or to let go of a fixture's folder within a minute.
+/// seconds or to let go of a fixture's folder within a minute. It is kept beside the test binary,
+/// so it outlasts the run without being left in the temp folder. Windows keeps it in the temp
+/// folder, on the fixtures' drive: a fixture gets a link to it, which the scanner has already read,
+/// and CI checks the code out on another drive, where only a copy would do.
 pub(super) fn compiled(cell: &'static std::sync::OnceLock<PathBuf>, source: &str) -> &'static Path {
     cell.get_or_init(|| {
         use std::hash::{Hash, Hasher};
         let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/daemon/conversation/fixtures").join(source);
         let mut hasher = std::collections::hash_map::DefaultHasher::new();
         std::fs::read(&file).unwrap().hash(&mut hasher);
-        let built = std::env::temp_dir().join(format!(
+        let cache = if cfg!(windows) {
+            std::env::temp_dir()
+        } else {
+            std::env::current_exe().unwrap().parent().unwrap().to_path_buf()
+        };
+        let built = cache.join(format!(
             "{}-test-{}-{:016x}{}",
             crate::brand::APP_COMMAND,
             source.trim_end_matches(".rs"),

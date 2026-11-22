@@ -47,6 +47,7 @@ vt100 = "0.16"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["fs"] }
+maitty-test-support = { path = "../maitty-test-support" }
 ratatui = "0.30"
 
 [target.'cfg(windows)'.dependencies]
