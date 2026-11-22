@@ -1,14 +1,15 @@
-/* The side panel (layout 2h): docked between the chat column and the tools bar, which narrows the chat to make room.
-   No scrim: the chat stays usable beside it. It slides in from the window's edge and out again. */
-.mx-inspect { --inspect-max: 58%; position: relative; flex: 0 1 auto; min-width: 300px; margin: 0 8px 8px 0; display: flex; flex-direction: column; background: var(--main); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: visible; animation: mx-inspect-in var(--panel-in); }
-.mx-app[data-side="right"] .mx-inspect { margin: 0 0 8px 8px; animation-name: mx-inspect-in-left; }
+/* The side panel: a card of the window frame beside the main one, the frame's gap from it, which narrows the chat to
+   make room. No scrim: the chat stays usable beside it. It slides in from the window's edge and out again. Its fill
+   and edge are the panel role (material.css). */
+.mx-inspect { --inspect-max: 58%; position: relative; flex: 0 1 auto; min-width: 300px; margin: 0 0 0 var(--frame-gap); display: flex; flex-direction: column; border-radius: var(--r-panel); overflow: visible; animation: mx-inspect-in var(--panel-in); }
+.mx-app[data-side="right"] .mx-inspect { margin: 0 var(--frame-gap) 0 0; animation-name: mx-inspect-in-left; }
 .mx-inspect.is-leaving { animation: mx-inspect-out var(--panel-out) forwards; pointer-events: none; }
 .mx-app[data-side="right"] .mx-inspect.is-leaving { animation-name: mx-inspect-out-left; }
-.mx-app.is-narrow .mx-inspect { position: absolute; top: 0; right: 56px; bottom: 0; z-index: 30; max-width: calc(100% - 72px); }
-/* The panel shrinks to its 300px before the chat's 400px gives; where even both do not fit beside the sidebar's rail
-   and the tools bar, it lies over the chat instead of pushing the tools bar off the window. */
+/* The panel shrinks to its 300px before the chat's 400px gives; where even both do not fit beside the sidebar's rail,
+   it lies over the chat, inside the window's frame, instead of squeezing the chat away. */
+.mx-app.is-narrow .mx-inspect { position: absolute; top: var(--frame-top); right: var(--frame-edge); bottom: var(--frame-edge); z-index: 30; margin: 0; max-width: calc(100% - 2 * var(--frame-edge)); }
 @media (max-width: 899px) {
-  .mx-app .mx-inspect { position: absolute; top: 0; right: 56px; bottom: 0; z-index: 30; max-width: calc(100% - 72px); }
+  .mx-app .mx-inspect { position: absolute; top: var(--frame-top); right: var(--frame-edge); bottom: var(--frame-edge); z-index: 30; margin: 0; max-width: calc(100% - 2 * var(--frame-edge)); }
 }
 .mx-inspect-grip { position: absolute; top: 0; bottom: 0; left: -6px; width: 8px; cursor: col-resize; z-index: 2; }
 .mx-app[data-side="right"] .mx-inspect-grip { left: auto; right: -6px; }
@@ -24,10 +25,10 @@
 .mx-inspect-close:hover { background: var(--m-hover); color: var(--fg); }
 .mx-inspect-close:focus-visible { box-shadow: var(--focus-underline); }
 /* The design's drawer motion: it grows from nothing as it slides, so the chat beside it narrows with it instead of jumping. */
-@keyframes mx-inspect-in { from { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-right: 0; } }
-@keyframes mx-inspect-in-left { from { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-left: 0; } }
-@keyframes mx-inspect-out { to { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-right: 0; border-width: 0; } }
-@keyframes mx-inspect-out-left { to { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-left: 0; border-width: 0; } }
+@keyframes mx-inspect-in { from { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-left: 0; } }
+@keyframes mx-inspect-in-left { from { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-right: 0; } }
+@keyframes mx-inspect-out { to { opacity: 0; transform: translateX(28px); width: 0; min-width: 0; margin-left: 0; border-width: 0; } }
+@keyframes mx-inspect-out-left { to { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-right: 0; border-width: 0; } }
 :root[data-motion="reduced"] .mx-inspect, .mx-app[data-motion="reduced"] .mx-inspect { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-inspect { animation: none; } }
 .mx-inspect-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px; }

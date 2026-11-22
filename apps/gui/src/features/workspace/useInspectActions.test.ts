@@ -19,9 +19,6 @@ function mount() {
     ...spies,
     focusedSession: here,
     sessionMap: new Map([['here', here], ['other', other], ['far', far]]),
-    inspectOpen: false,
-    inspectView: 'changes',
-    focusedId: 'here',
   }))
   return { actions: result.current, ...spies }
 }

@@ -1100,15 +1100,52 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.startShellSession).not.toHaveBeenCalled()
   })
 
-  it('shows the Terminal button in the title bar for an agent chat in the Chat view, and it docks a terminal in the chat folder', async () => {
+  it('docks a terminal in the chat folder from the command palette, for an agent chat in the Chat view', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
     renderDesktopApp()
+    await screen.findByRole('button', { name: 'New session, claude, idle' })
 
-    await user.click(await screen.findByRole('button', { name: 'Terminal' }))
+    await user.click(screen.getByRole('button', { name: /Commands/ }))
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'terminal under the chat{Enter}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
+  })
+
+  it('shows and hides the side panel from the one title-bar button, which says whether it is showing', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    const button = screen.getByRole('button', { name: 'Side panel' })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+
+    await user.click(button)
+    expect(await screen.findByRole('complementary', { name: 'Side panel' })).toBeInTheDocument()
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(button)
+    await waitFor(() => { expect(screen.queryByRole('complementary', { name: 'Side panel' })).not.toBeInTheDocument() })
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('opens the command palette and the shortcut sheet from the status bar hints', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    const bar = within(screen.getByRole('contentinfo', { name: 'Status bar' }))
+
+    await user.click(bar.getByRole('button', { name: /Commands/ }))
+    expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument() })
+
+    await user.click(bar.getByRole('button', { name: /Shortcuts/ }))
+    expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
   })
 
   it('lists a terminal made by splitting in the sidebar, so no pane shows a session the sidebar leaves out', async () => {

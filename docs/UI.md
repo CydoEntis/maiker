@@ -537,22 +537,34 @@ Only the area with the keyboard is lit: the focused pane's whole border, or the 
 The desktop window, unlike the terminal interface above, has one full-width foot: the status bar. Its parts are all in
 `apps/gui/src/features/workspace/components/` (look in [DESIGN](DESIGN.md#desktop-app)).
 
+- **Title bar** (`AppTitleBar` in `TitleBar`/`TitleBarView`): the mark and name at the left, at the right **one**
+  side-panel button (`SidePanelButton`) and the platform's window buttons. The button is `toggleInspect`, the same as
+  the `inspect` key: it shows and hides the side panel on the view it last showed and carries `aria-pressed` while the
+  panel is drawn. The title bar holds no per-view button; a new way into a view goes in the side panel or the command
+  palette. Everything in the bar that is not a button must stay a drag area (`data-tauri-drag-region` on the element
+  the press lands on), on Windows, macOS and Linux alike.
+- **Cards and gaps** (`frame.css`): the sidebar, the main area, a split pane, the terminal dock and the side panel
+  are cards on `--t1`; their fill and edge come from the panel role in `material.css`, never from the component. Space
+  between and around them is `--frame-gap`, `--frame-edge` and `--frame-top` (`tokens.css`), never a number of its
+  own, so every gap is the same and a drag handle fits any of them. A card casts no shadow.
+
 - **Pane header** (`PaneHeadId`, shared by the terminal and the chat view): the status mark (`StatusIcon`), a machine tag for a
   session on another machine only, the whole path cut from its start (`<bdi>` in a right-to-left box keeps the folder it ends in
   in view), the branch crumb, then the `···` menu. The agent's icon and the `~`-shortened path are not in the header.
 - **No pane foot.** A terminal pane is the agent's own CLI, and Maiker draws no foot, bar or overlay inside it
   ([DESIGN](DESIGN.md#design-language)). The permission shield and the context bar (`ContextMeter`: a 56px bar and the
   figure, once the agent has said how full it is) are in the pane header.
-- **Status bar** (`StatusBar`, one row under the cards): `Maiker <version>` and the update button (`UpdateSlot`, the only place the app draws it) at
-  the left; at the right one meter per agent that has reported a limit, then the commands key (`useShortcutText('palette')`) and
-  **Commands**. Each meter is a pill: the agent's mark, the window's short name in lower case (`5h`, `day`, `week`), a 36px bar and the figure, in mono; the keys sit after a hairline. A meter shows that agent's tightest limit (`agentUsages`), plan-aware: Claude **Max** has no 5-hour window, so only
+- **Status bar** (`StatusBar`, one row under the cards): the mark, `Maiker <version>` and the update button (`UpdateSlot`, the only place the app draws it) at
+  the left; at the right one meter per agent that has reported a limit, then two hints: **Commands** (opens the command palette) and
+  **Shortcuts** (opens the shortcut sheet). A hint's keycap is read from the binding table (`useShortcutText('palette')`, `useShortcutText('shortcuts')`), never
+  written into the bar; a hint with no key on the platform keeps its word and still opens its sheet. Each meter is a pill: the agent's mark, the window's short name in lower case (`5h`, `day`, `week`), a 36px bar and the figure, in mono; the hints sit after a hairline, which is drawn only when there is a meter. A meter shows that agent's tightest limit (`agentUsages`), plan-aware: Claude **Max** has no 5-hour window, so only
   the weekly one counts (the plan is read once with `loadAgentAuth`; a failed read keeps the limits as sent). The meter turns amber
   from 70% and red from 90% (`levelOf`); the focused session's agent is lit. A click opens `UsagePopover`: every limit of every
   agent with its reset, in a list that scrolls and carries no sticky note. An agent that has reported no limit has no meter: usage
   is provider-reported only ([ADR 0009](adr/0009-usage-is-provider-reported-never-estimated.md)). The meters and the popover come
   from `Snapshot.limits` as it reaches each session; nothing new crosses the protocol.
 
-The chat box's usage row and the status bar draw the same `UsageMeter` (`features/usage/`): always as a bar (`MeterBar`), never a ring; the pane header's `ContextMeter` uses the same `MeterBar`.
+The chat box's usage row and the status bar draw the same `UsageMeter` (`features/usage/`), and the usage popover and the pane header's `ContextMeter` the same `MeterBar`: a meter is always a bar, and the code has no ring to draw.
 
 ## Project-specific: UI conventions
 
@@ -1385,9 +1397,9 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   is never made in the Chat view: a project's menu offers no Terminal, **Split** says why it
   does nothing, and **New terminal** (the key, the palette) shows or hides the terminal docked under the chat, or says a chat is
   needed first when none is in front. Shells therefore appear only in the Terminal view, in the dock, or as ones left from the Terminal view. In the
-  Terminal view every pane is a terminal and there is no dock button. **The dock button** (`TitleBarPanelButtons`, beside Changes and
-  Files at the right of the title bar, Terminal icon, `aria-pressed` while the dock shows) is drawn only for a chat of this computer in the
-  Chat view; it is `toggleTerminal`, the same as the Terminal key, and the first press starts the chat's first terminal. The terminal stays mounted under the chat and keeps its size, and
+  Terminal view every pane is a terminal and there is no dock. **The dock has no title-bar button**: it opens and closes on the Terminal key
+  (`terminal` in the binding table), from the command palette (**Show or hide the terminal under the chat**) and from the dock's own Hide button, for a chat of this computer in the
+  Chat view; all three are `toggleTerminal`, and the first one starts the chat's first terminal. The terminal stays mounted under the chat and keeps its size, and
   no daemon command is sent. **No control on a session moves it between chat and terminal**
   ([ADR 0020](adr/0020-the-chat-view-talks-to-the-agent-directly.md)): there is no terminal log over a chat and no
   **Back to chat**. A terminal agent shown as a chat that cannot carry on (it never reports in, or it waits on a

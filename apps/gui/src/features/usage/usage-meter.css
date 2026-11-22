@@ -1,11 +1,6 @@
-/* What the agent has used, at the right of the box's bottom row: a name, a ring and the figure for each, in the theme's meter colours. */
+/* What the agent has used, at the right of the box's bottom row: a name, a bar and the figure for each, in the theme's meter colours. */
 .mx-usage { display: inline-flex; align-items: center; gap: 10px; padding: 0 6px 0 8px; font: 500 11px/12px var(--mono); font-variant-numeric: tabular-nums; }
-.mx-usage-ring { flex: none; display: block; overflow: visible; }
-.mx-usage-ring path { fill: none; stroke-width: 2; }
-.mx-usage-track { stroke: var(--line2); }
-/* Neutral: the meters say how much is used, never how worried to be; colour is for status only (design rule 1). */
-.mx-usage-fill { stroke: var(--fg2); }
-/* The bar: 4px, in the same track and fill roles as the ring, graded the same way. */
+/* The bar: 4px on the hairline track, filled in the text colour. Neutral until a limit is near: colour is for status only. */
 .mx-usage-bar { flex: none; display: block; width: 36px; height: 4px; border-radius: var(--r-badge); overflow: hidden; background: var(--line2); }
 .mx-usage-bar i { display: block; height: 100%; border-radius: var(--r-badge); background: var(--fg2); }
 .mx-usage-item.is-warn .mx-usage-bar i, .mx-context-meter.is-warn .mx-usage-bar i { background: var(--needs); }
@@ -16,15 +11,13 @@
 button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-underline); }
 /* Under the message box the context is only its ring and figure: the design draws no name beside it. */
 .mx-session-bar .mx-usage-item.is-context .mx-usage-name { display: none; }
-/* The short names go first on a narrow window; the rings and figures stay. */
+/* The short names go first on a narrow window; the bars and figures stay. */
 @media (max-width: 1180px) { .mx-usage-name { display: none; } }
 .mx-usage-figure { color: var(--muted); }
 /* A status-bar meter nearing its limit takes the theme's needs colour, then its danger colour (spec: 70 and 90). */
-.mx-usage-item.is-warn .mx-usage-fill { stroke: var(--needs); }
-.mx-usage-item.is-hot .mx-usage-fill { stroke: var(--danger); }
 .mx-usage-item.is-warn .mx-usage-figure { color: var(--needs); }
 .mx-usage-item.is-hot .mx-usage-figure { color: var(--danger); }
-/* The context ring beside its figure on its own (the pane footer). */
+/* The context bar beside its figure on its own (the pane header). */
 .mx-context-meter { display: inline-flex; align-items: center; gap: 8px; font: 400 11px/12px var(--mono); font-variant-numeric: tabular-nums; color: var(--fg2); }
 .mx-context-meter .mx-usage-bar { width: 56px; }
 .mx-context-meter .mx-usage-name { font: 400 12px var(--ui); }
@@ -38,8 +31,10 @@ button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-usage-pop-agent { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px; }
 .mx-usage-pop-head { margin: 0; display: flex; align-items: center; gap: 8px; font: 600 12.5px var(--ui); }
 .mx-usage-pop-plan { font: 500 10.5px var(--mono); text-transform: uppercase; color: var(--dim); }
-.mx-usage-pop-row { display: grid; grid-template-columns: 1fr auto 12px 38px; align-items: center; gap: 8px; height: 24px; font: 400 12px var(--ui); }
-.mx-usage-pop-reset { font: 400 11px var(--mono); color: var(--dim); }
+/* A limit in the popover: its name and figure on one line, the bar across the row, then when it starts over. */
+.mx-usage-pop-row { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 6px 8px; height: auto; padding: 6px 0; font: 400 12px var(--ui); }
+.mx-usage-pop-row .mx-usage-bar { grid-column: 1 / -1; width: 100%; height: 5px; }
+.mx-usage-pop-reset { grid-column: 1 / -1; font-size: 11.5px; color: var(--dim); }
 .mx-usage-pop-label { color: var(--fg2); }
 .mx-usage-pop-row .mx-usage-figure { text-align: right; font: 500 11px var(--mono); }
 .mx-usage-pop-all { align-self: flex-start; height: 24px; padding: 0 6px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); }

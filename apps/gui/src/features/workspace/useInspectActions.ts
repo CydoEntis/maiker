@@ -35,16 +35,13 @@ function panelRefusal(session: SessionView | undefined): string | null {
 }
 
 /** Opens and closes the side panel. For a session of another machine it shows that machine's changes; one with no pane to ask is told so instead. */
-export function useInspectActions({ focusedSession, setInspectOpen, setInspectView, setTurnDiff, sessionMap, showSessionById, inspectOpen, inspectView, focusedId, setLayout }: {
+export function useInspectActions({ focusedSession, setInspectOpen, setInspectView, setTurnDiff, sessionMap, showSessionById, setLayout }: {
   focusedSession: SessionView | undefined
   setInspectOpen: Dispatch<SetStateAction<boolean>>
   setInspectView: Dispatch<SetStateAction<InspectView>>
   setTurnDiff: Dispatch<SetStateAction<TurnDiff | null>>
   sessionMap: Map<string, SessionView>
   showSessionById: (sessionId: string) => void
-  inspectOpen: boolean
-  inspectView: InspectView
-  focusedId: string | null
   setLayout: Dispatch<SetStateAction<Layout>>
 }) {
   const inspectRefusal = panelRefusal(focusedSession)
@@ -70,22 +67,28 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
   }, [openChanges, setLayout])
   // A session menu's Show changes: the session may be out of sight, so it is brought to the front.
   const showChangesOf = useCallback((sessionId: string) => { openChanges(sessionId, () => { showSessionById(sessionId) }) }, [openChanges, showSessionById])
-  // The pane takes the focus and the panel shows for it, on `view` when one is asked for; `open` false closes it.
-  const showPanel = useCallback((paneId: string, sessionId: string, view: InspectView | undefined, open: (showing: boolean) => boolean) => {
+  // The pane takes the focus and the panel shows `view` for it. A chat command such as /diff only ever opens it:
+  // typing it twice must not hide what it asked for.
+  const openPanel = useCallback((paneId: string, sessionId: string, view: InspectView) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
     if (refusal !== null) {
       toast.info(refusal)
       return
     }
-    const showing = inspectOpen && focusedId === sessionId && (view === undefined || inspectView === view)
     setLayout((current) => focusPane(current, paneId))
     setTurnDiff(null)
-    if (view !== undefined) setInspectView(view)
-    setInspectOpen(open(showing))
-  }, [sessionMap, inspectOpen, inspectView, focusedId, setLayout, setInspectView, setInspectOpen, setTurnDiff])
-  // A pane's side-panel button closes the panel when it already showed that.
-  const togglePanel = useCallback((paneId: string, sessionId: string, view?: InspectView) => { showPanel(paneId, sessionId, view, (showing) => !showing) }, [showPanel])
-  // A chat command such as /diff only ever opens it: typing it twice must not hide what it asked for.
-  const openPanel = useCallback((paneId: string, sessionId: string, view: InspectView) => { showPanel(paneId, sessionId, view, () => true) }, [showPanel])
-  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel, openPanel }
+    setInspectView(view)
+    setInspectOpen(true)
+  }, [sessionMap, setLayout, setInspectView, setInspectOpen, setTurnDiff])
+  // The focused session's panel on one view, for the command palette: the title bar's button only shows and hides it.
+  const showPanelView = useCallback((view: InspectView) => {
+    if (inspectRefusal !== null) {
+      toast.info(inspectRefusal)
+      return
+    }
+    setTurnDiff(null)
+    setInspectView(view)
+    setInspectOpen(true)
+  }, [inspectRefusal, setTurnDiff, setInspectView, setInspectOpen])
+  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, openPanel, showPanelView }
 }

@@ -15,7 +15,7 @@ import { SETUP_AGENTS } from '@/features/welcome/setup'
 import type { OpenProjectRequest } from './useOpenProject'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
-export function usePaletteItems({ openReadme, paletteOpen, platform, view, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
+export function usePaletteItems({ openReadme, paletteOpen, platform, view, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
   /** Opens the focused session's README, beside the chat or in the Files panel. */
   openReadme: (place: 'beside' | 'files') => void
   paletteOpen: boolean
@@ -44,6 +44,8 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
   setAddMachineOpen: (open: boolean) => void
   inspectRefusal: string | null
   setInspectOpen: Dispatch<SetStateAction<boolean>>
+  /** Opens the focused session's side panel on one view. */
+  showPanelView: (view: 'changes' | 'files') => void
   setFindOpen: Dispatch<SetStateAction<boolean>>
   setFocusMode: Dispatch<SetStateAction<boolean>>
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
@@ -100,6 +102,8 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
       action('usage', 'Open usage and cost', () => { setSettingsSection('usage') }, keys('usage')),
       action('jump-needs', 'Jump to the next session that needs you', () => { runShortcut('jump-needs') }, keys('jump-needs')),
       action('inspect', 'Inspect the repository', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
+      action('show-changes', 'Show changes', () => { showPanelView('changes') }),
+      action('show-files', 'Show files', () => { showPanelView('files') }),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
       action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),
@@ -114,7 +118,7 @@ export function usePaletteItems({ openReadme, paletteOpen, platform, view, layou
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, view, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject, openReadme])
+  }, [paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, view, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, setAddMachineOpen, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject, openReadme])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)

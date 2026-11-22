@@ -12,7 +12,7 @@ const usages = agentUsages([
 ], { claude: 'pro' }, NOW)
 
 function bar(extra: Partial<Parameters<typeof StatusBar>[0]> = {}) {
-  const props = { version: '0.80.0', update: <button type="button">Update to 0.81.0</button>, usages, currentAgent: 'claude', commandsKeys: 'Ctrl+Shift+K', onOpenCommands: vi.fn(), onOpenUsage: vi.fn(), ...extra }
+  const props = { version: '0.80.0', update: <button type="button">Update to 0.81.0</button>, usages, currentAgent: 'claude', commandsKeys: 'Ctrl+Shift+K', shortcutsKeys: 'Ctrl+/', onOpenCommands: vi.fn(), onOpenShortcuts: vi.fn(), onOpenUsage: vi.fn(), ...extra }
   render(<StatusBar {...props} />)
   return props
 }
@@ -30,10 +30,22 @@ describe('StatusBar', () => {
     expect(props.onOpenUsage).toHaveBeenCalled()
   })
 
-  it('says the commands key and opens the palette', async () => {
-    const props = bar()
-    await userEvent.click(screen.getByRole('button', { name: /Commands/ }))
-    expect(screen.getByText('Ctrl+Shift+K')).toBeInTheDocument()
-    expect(props.onOpenCommands).toHaveBeenCalled()
+  it('says the keys it was given, never its own, and each hint opens its sheet', async () => {
+    const props = bar({ commandsKeys: 'F1', shortcutsKeys: 'F2' })
+    const commands = screen.getByRole('button', { name: /Commands/ })
+    const shortcuts = screen.getByRole('button', { name: /Shortcuts/ })
+    expect(commands).toHaveTextContent('F1')
+    expect(shortcuts).toHaveTextContent('F2')
+    await userEvent.click(commands)
+    expect(props.onOpenCommands).toHaveBeenCalledOnce()
+    expect(props.onOpenShortcuts).not.toHaveBeenCalled()
+    await userEvent.click(shortcuts)
+    expect(props.onOpenShortcuts).toHaveBeenCalledOnce()
+  })
+
+  it('keeps a hint that has no key on this platform, so its sheet can still be opened', async () => {
+    const props = bar({ shortcutsKeys: '' })
+    await userEvent.click(screen.getByRole('button', { name: 'Shortcuts' }))
+    expect(props.onOpenShortcuts).toHaveBeenCalledOnce()
   })
 })

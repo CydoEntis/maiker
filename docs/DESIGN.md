@@ -455,7 +455,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `--muted`, `--fg` on hover, the corner `--r-control`. Hover, a pressed toggle (`aria-pressed`), an open menu
   (`aria-expanded`) and `on` fill it with `--icon-button-fill` (the ink at 7%); there is no accent and no second size.
   `label` is required and is its accessible name; `tip` is the tooltip when it says more (the keys that do the same). A
-  caller places the button and never sizes or colours it. The title bar's panel buttons, the sidebar's head and its
+  caller places the button and never sizes or colours it. The title bar's side-panel button, the sidebar's head and its
   Settings button, Show sidebar, a pane's `⋯` and every dialog's close use it.
 - **Selection.** One fill everywhere: the picked row of a menu or list is `--m-sel` (the `--t2` role) and bold
   (`mx-menu-row`, `components/ui/menu-row.css`), never a tick and never an accent outline. The shared menus have no
@@ -482,15 +482,26 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **App icon.** The desktop app's icons (window, taskbar, dock, tray, installers) are generated from one 1024px-plus
   source with `pnpm tauri icon <source.png>` into `src-tauri/icons/` (only the desktop sizes listed there are kept);
   every bundle and the updater carry them, so an update changes the icon too.
-- **Title bar** (`AppTitleBar`, `frame.css`). 36px on the window ground (`--bg`), all of it a drag area
-  but the window buttons: at the left the 18px **M mark** (`components/ui/maiker-mark.tsx`, an inline SVG: ribbons
-  `--fg`, folded faces 70% `--fg` over `--bg`, outline `--bg`, all set through `style` so the variables apply; white in a dark theme, black in a light one)
-  and "Maiker" (13px 600 `--fg`), plain, with no menu; at the right the platform's window buttons (46x38 captions on Windows, drawn as
-  Windows draws them, close hovering `#c42b1c`; `TitleBarView.tsx`). What the old menu started is in the command palette and the sidebar.
-- **No tools bar.** The right-hand tools column is gone; its jobs live in the title bar (Changes and Files buttons, and in the Chat view the
-  Terminal button that shows or hides the dock under the chat), the ⋯ menu and the terminal dock. The ⋯ menu lists **Changes**, **Files** and **Terminal**
-  (shows or hides the dock, adding the first terminal when the session has none; `toggleTerminal`), then the pane's own entries.
-  A view button opens the side panel on that view, or closes it when it already shows it. There is no middle column and no tab bar: the window is the sidebar, the workspace and the side panel.
+- **Title bar** (`AppTitleBar`, `frame.css`). 36px on the window ground (`--t0`), 12px from the left edge, all of it
+  a drag area but its buttons (a double-click on it maximises, as the platform does). At the left the **M mark**
+  (`components/ui/maiker-mark.tsx`: 18x14, one ink, `currentColor` with the folded face at half strength, so it is
+  right on every theme) and "Maiker" (13px 600 `--fg`), 8px apart, plain, with no menu; the mark and the name take no
+  pointer, so a press on them drags the window. At the right **one side-panel button** (`SidePanelButton`, the one
+  `IconButton`, 6px before the window buttons) and then the platform's window buttons (46x36 captions on Windows,
+  drawn as Windows draws them, close hovering `#c42b1c`; `TitleBarView.tsx`). On macOS the traffic lights come first
+  and the mark follows them. The button shows and hides the side panel on the view it last showed, is pressed
+  (`aria-pressed`) while the panel is on screen, names its key in its tooltip (`inspect` in the binding table) and is
+  disabled while no session is in focus. There are no Changes, Files or Terminal buttons: **Show changes** and
+  **Show files** are in the command palette, and the terminal docked under a chat is on its key (`terminal` in the
+  binding table) and in the palette (**Show or hide the terminal under the chat**).
+- **The frame** (`frame.css`; the gaps are `--frame-edge` 8px, `--frame-top` 4px and `--frame-gap` 6px in
+  `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
+  (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
+  and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
+  A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, a file
+  opened beside a chat and the terminal dock are each a card of their own, the same 6px apart. Every gap between two
+  cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
+  side; the sidebar's and the side panel's edges resize them). There is no tools bar, no middle column and no tab bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
@@ -758,13 +769,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   picking another model, effort or mode moves nothing beside it; at its right, attach (a paperclip) and then send. The model and effort lock while the agent works (tooltip:
   "You can change the model and effort when it finishes, or after Esc"); the mode waits for the turn's end as before. The
   rest sits in **Under the box**, one row below it (`SessionBar`, `data-screen-label="Under the box"`): at the left, as plain text with no ground and no border, **folder · branch · sync**, and at the right the usage
-  meters (`ContextRing`, amber from 80%). The row is never wider than the box and the folder's text gives way first (full path on hover). 
+  meters (`MeterBar`, amber from 80%). The row is never wider than the box and the folder's text gives way first (full path on hover). 
   The **folder** chip reads the project, then `/` and the worktree's name in a linked worktree; its menu (the one plain-menu look, `PlaceHead` over `ChipMenu`) heads with the full path and "This session runs here", then Copy path, Show in Explorer (this computer only), **New session in:** your projects, Open folder… (Ctrl O) and Clone a repository… (both open the Open a project dialog). The **branch** chip's menu heads with the branch and "Worktree <name> · <project>", has a "Find or switch branch" search (a name that is not a branch offers "Create branch …"), "New branch from <current>…" (an inline name, Enter creates and switches), Local (the current one highlighted) and Remote (checks out and tracks); every switch ends in a toast, and it works on another machine's folder. The **sync** chip (`↻ ↓2 ↑1`, this computer only) heads with `branch ⇄ origin/branch` and "2 to pull · 1 to push · fetched 4m ago", offers Fetch (Ctrl Shift F), Pull and Push (off at 0), reads "Pulling…" with a turning mark while it runs and "Synced" when level; a pull that cannot fast-forward is never forced, it says so in a toast. The place comes from what the session list already holds (`sessionPlace.ts`); the chips read git only when asked. 
   usage meters. `SessionBar` takes the place and the controls as
   props and knows nothing of chat internals, so the terminal view draws the same row. An **ended** session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder); Under the box keeps the place and drops the controls. Its focus is the border turning `--focus` with a 1px inset glow (the one bordered focus). The meters
   (`UsageMeters`, `usageStrip.ts`) are the context, then each plan limit, each a short name (`Context`, `5h`, `Week`, which
-  go below a 1180px window), a 12px ring and the
-  figure in mono, ring and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
+  go below a 1180px window), a 36px bar and the
+  figure in mono, bar and figure in the theme's meter colour for the quarter it is in (`--m-ok` under 25%, `--m-mid`
   under 50%, `--m-or` under 75%, `--m-hi` from there). A meter shows once it is at least half used
   (`METER_SHOWN_FROM`), when it is worth a look; below that Settings › Usage & cost has it. Each opens that page. When
   a limit starts over is in its tooltip. A plan limit shows only once the agent has reported it, in the order context, 5-hour, weekly, then any other: a plan without a 5-hour window (an API key, some
@@ -1251,10 +1262,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
 - **Pane header, pane foot and status bar.** The header is one 32px line: the status mark, a machine tag (remote only), the whole
-  path in mono cut from its start, the branch crumb, `···`. A terminal pane has no foot and no bar of Maiker's inside it: the permission shield, the context bar, split right, split down and close are in its header. The window ends in a 26px status bar on the window ground: `Maiker 0.80.0` and the
-  update button (the dot and its words) at the left; at the right one pill per agent (mark, window name in lower case, a 36px bar, figure; mono 11px) at its
-  tightest limit, the focused session's agent on a selected ground, amber (`--needs`) from 70% and red (`--danger`) from 90%,
-  then a hairline, the commands key as a keycap and **Commands**. A meter opens the usage popover (300px, scrolls, no sticky note).
+  path in mono cut from its start, the branch crumb, `···`. A terminal pane has no foot and no bar of Maiker's inside it: the permission shield, the context bar, split right, split down and close are in its header. The window ends in a 26px status bar on the window ground (`--t0`; `StatusBar`, `status-bar.css`): the 12x10 M mark, `Maiker 0.80.0` (mono 11px) and the
+  update button (the dot and `Update to …`) at the left; at the right one pill per agent (mark, window name in lower case, a 36px bar, figure; mono 11px) at its
+  tightest limit, the focused session's agent lit with the ink at 6%, amber (`--needs`) from 70% and red (`--danger`) from 90%,
+  then a hairline and two hints, each a keycap and a word: **Commands** opens the command palette and **Shortcuts** the shortcut sheet. The keycaps are the
+  binding table's keys (`palette`, `shortcuts`), so a rebound key shows its new key. A meter opens the usage popover (300px, scrolls, no sticky note), where
+  each limit is its name and figure over a full-width 5px bar and its reset. **Every meter is a bar** (`MeterBar`); there is no ring. In a window under 800px
+  the hints keep their words and drop their keycaps, and the meters drop their window names.
   Rules: [UI](UI.md#project-specific-window-chrome-desktop).
 - **Usage and cost (⌘⇧U / Ctrl+Shift+U).** Settings › Workspace › **Usage & cost** (key U), above Notifications,
   drawn as one Settings card; the shortcut and the palette open Settings on that page, and Esc closes Settings.

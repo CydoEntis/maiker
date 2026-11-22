@@ -14,9 +14,9 @@ const MINUTE_MS = 60_000
 const PLAN_FRESH_MINUTES = 10
 const PLAN_FRESH_MS = PLAN_FRESH_MINUTES * MINUTE_MS
 
-/** The status bar, fed from the window: the running version and its update, the limits the agents last reported, the palette key. */
+/** The status bar, fed from the window: the running version and its update, the limits the agents last reported, and the keys of the palette and the shortcut sheet from the binding table. */
 export function WorkspaceStatusBar() {
-  const { sessions, focusedSession, runningVersion, updater, skippedVersion, setSkippedVersion, restartNow, root, setPaletteOpen, setSettingsSection } = useWorkspace()
+  const { sessions, focusedSession, runningVersion, updater, skippedVersion, setSkippedVersion, restartNow, root, setPaletteOpen, setShortcutsOpen, setSettingsSection } = useWorkspace()
   const shortcutText = useShortcutText()
   const claudeReports = sessions.some((session) => session.process === 'claude' && session.limits.length > 0)
   // The plan decides which windows bind (Max has no 5-hour one); a failed read leaves the limits as the agent sent them.
@@ -41,7 +41,9 @@ export function WorkspaceStatusBar() {
       usages={usages}
       currentAgent={focusedSession?.process ?? null}
       commandsKeys={shortcutText('palette')}
+      shortcutsKeys={shortcutText('shortcuts')}
       onOpenCommands={() => { setPaletteOpen(true) }}
+      onOpenShortcuts={() => { setShortcutsOpen(true) }}
       onOpenUsage={() => { setSettingsSection('usage') }}
     />
   )

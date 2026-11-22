@@ -531,7 +531,7 @@ function UsageMeters({ usage, agent, onOpen }: { usage: SessionUsage; agent: Cha
   if (items.length === 0) return null
   return (
     <span className="mx-usage" role="group" aria-label="Usage">
-      {items.map((item) => <UsageMeter key={item.key} item={item} onOpen={onOpen} bar />)}
+      {items.map((item) => <UsageMeter key={item.key} item={item} onOpen={onOpen} />)}
     </span>
   )
 }

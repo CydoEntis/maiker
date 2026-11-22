@@ -4,7 +4,7 @@ import { PopupContent } from '@/components/ui/popup'
 import { AppIcon } from '@/features/workspace/components/glyphs'
 import type { AgentUsage } from './agentLimits'
 import { levelOf } from './meterFacts'
-import { ContextRing } from './UsageMeter'
+import { MeterBar } from './UsageMeter'
 
 type Props = {
   usages: readonly AgentUsage[]
@@ -35,9 +35,9 @@ export function UsagePopover({ usages, open, onOpenChange, onOpenAll, children }
               return (
                 <div key={item.key} className={`mx-usage-pop-row mx-usage-item is-${item.tone}${level === null ? '' : ` is-${level}`}`}>
                   <span className="mx-usage-pop-label">{item.label}</span>
-                  <span className="mx-usage-pop-reset">{item.resetsIn === null ? '' : `resets in ${item.resetsIn}`}</span>
-                  <ContextRing percent={item.percent} label={`${usage.name} ${item.label}`} />
                   <span className="mx-usage-figure">{`${String(item.percent)}%`}</span>
+                  <MeterBar percent={item.percent} label={`${usage.name} ${item.label}`} />
+                  {item.resetsIn !== null && <span className="mx-usage-pop-reset">{`resets in ${item.resetsIn}`}</span>}
                 </div>
               )
             })}

@@ -103,11 +103,12 @@ describe('a pane of another machine and the features that need its files', () =>
 
   it('opens the side panel on the machine\'s changes and lists its files for markdown (ADR 0014)', async () => {
     const user = await openRemotePane()
-    await user.click(screen.getByRole('button', { name: 'Changes' }))
+    await user.click(screen.getByRole('button', { name: 'Side panel' }))
     const panel = within(await screen.findByRole('complementary', { name: 'Side panel' }))
     expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Files' }))
+    await user.click(screen.getByRole('button', { name: /Commands/ }))
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'Show files{Enter}')
     // Files is no longer refused: it lists the machine's folders and opens its markdown documents.
     expect(await panel.findByRole('navigation', { name: 'Files' })).toBeInTheDocument()
     expect(panel.queryByText(REFUSAL('Files'))).toBeNull()

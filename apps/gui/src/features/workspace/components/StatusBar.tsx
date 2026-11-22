@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { APP_NAME } from '@/brand'
+import { MaikerMark } from '@/components/ui/maiker-mark'
 import type { AgentUsage } from '@/features/usage/agentLimits'
 import { UsageMeter } from '@/features/usage/UsageMeter'
 import { UsagePopover } from '@/features/usage/UsagePopover'
@@ -17,41 +18,60 @@ type Props = {
   currentAgent: string | null
   /** The commands palette's key, as the platform writes it; empty when it has none. */
   commandsKeys: string
+  /** The shortcut sheet's key, likewise. */
+  shortcutsKeys: string
   onOpenCommands: () => void
+  onOpenShortcuts: () => void
   onOpenUsage: () => void
 }
 
-/** The window's foot: the version and its update at the left, each agent's tightest limit and the commands hint at the right. */
-export function StatusBar({ version, update, usages, currentAgent, commandsKeys, onOpenCommands, onOpenUsage }: Props) {
+/** The mark beside the version, at the size the design draws it in the foot. */
+const MARK_WIDTH = 12
+const MARK_HEIGHT = 10
+
+/** A key and what it opens: the way to the command palette and to the shortcut sheet, for someone who has not learnt the key. */
+function Hint({ keys, label, onOpen }: { keys: string; label: string; onOpen: () => void }) {
+  return (
+    <button type="button" className="mx-status-hint" onClick={onOpen}>
+      {keys !== '' && <kbd>{keys}</kbd>}
+      {label}
+    </button>
+  )
+}
+
+/** The window's foot: the mark, the version and its update at the left; each agent's tightest limit, then the Commands and Shortcuts hints at the right. */
+export function StatusBar({ version, update, usages, currentAgent, commandsKeys, shortcutsKeys, onOpenCommands, onOpenShortcuts, onOpenUsage }: Props) {
   const [open, setOpen] = useState(false)
   return (
     <footer className="mx-status-bar" aria-label="Status bar">
-      <span className="mx-status-version">{version === null ? APP_NAME : `${APP_NAME} ${version}`}</span>
+      <span className="mx-status-version">
+        <MaikerMark width={MARK_WIDTH} height={MARK_HEIGHT} decorative />
+        {version === null ? APP_NAME : `${APP_NAME} ${version}`}
+      </span>
       {update}
       <span className="mx-status-fill" />
       {usages.length > 0 && (
-        <UsagePopover usages={usages} open={open} onOpenChange={setOpen} onOpenAll={() => { setOpen(false); onOpenUsage() }}>
-          <span className="mx-status-meters" role="group" aria-label="Usage limits">
-            {usages.map((usage) => (
-              <UsageMeter
-                key={usage.agent}
-                item={usage.tightest}
-                graded
-                bar
-                className={`mx-status-meter${usage.agent === currentAgent ? ' is-current' : ''}`}
-                lead={<AppIcon process={usage.agent} size={14} />}
-                openLabel="Show usage limits"
-                onOpen={() => { setOpen(true) }}
-              />
-            ))}
-          </span>
-        </UsagePopover>
+        <>
+          <UsagePopover usages={usages} open={open} onOpenChange={setOpen} onOpenAll={() => { setOpen(false); onOpenUsage() }}>
+            <span className="mx-status-meters" role="group" aria-label="Usage limits">
+              {usages.map((usage) => (
+                <UsageMeter
+                  key={usage.agent}
+                  item={usage.tightest}
+                  graded
+                  className={`mx-status-meter${usage.agent === currentAgent ? ' is-current' : ''}`}
+                  lead={<AppIcon process={usage.agent} size={14} />}
+                  openLabel="Show usage limits"
+                  onOpen={() => { setOpen(true) }}
+                />
+              ))}
+            </span>
+          </UsagePopover>
+          <span className="mx-status-sep" aria-hidden="true" />
+        </>
       )}
-      <span className="mx-status-sep" aria-hidden="true" />
-      <button type="button" className="mx-status-commands" onClick={onOpenCommands}>
-        {commandsKeys !== '' && <kbd>{commandsKeys}</kbd>}
-        Commands
-      </button>
+      <Hint keys={commandsKeys} label="Commands" onOpen={onOpenCommands} />
+      <Hint keys={shortcutsKeys} label="Shortcuts" onOpen={onOpenShortcuts} />
     </footer>
   )
 }

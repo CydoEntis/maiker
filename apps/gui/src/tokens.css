@@ -48,6 +48,11 @@
 
   /* Spacing */
   --s1: 2px; --s2: 4px; --s3: 6px; --s4: 8px; --s5: 12px; --s6: 16px; --s7: 20px; --s8: 24px; --s9: 32px;
+  /* The window frame: the cards sit this far from the window's sides and foot, a little closer to the title bar, and
+     this far from each other. Every gap between two cards reads the one value, so a drag handle fits any of them. */
+  --frame-edge: 8px;
+  --frame-top: 4px;
+  --frame-gap: 6px;
 
   /* Type */
   /* `--ui` and `--mono` are the look's two fonts (`theme/look.ts`). */
