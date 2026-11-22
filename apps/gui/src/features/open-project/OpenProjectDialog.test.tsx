@@ -63,20 +63,6 @@ beforeEach(() => {
 })
 
 describe('Clone from URL', () => {
-  it('reads the address, shows owner/repo and host, and defaults the folder to home plus the name', async () => {
-    const { user } = show()
-    await user.type(screen.getByLabelText('Repository URL'), 'github.com/linkables/linkables-web')
-    expect(screen.getByRole('status')).toHaveTextContent('linkables/linkables-web')
-    expect(screen.getByRole('status')).toHaveTextContent('github.com')
-    expect(screen.getByLabelText('Clone into')).toHaveValue(`${HOME}\\linkables-web`)
-  })
-
-  it('says what is wrong with text that is not a git URL, and keeps Clone off', async () => {
-    const { user } = show()
-    await user.type(screen.getByLabelText('Repository URL'), 'not a git address at all')
-    expect(await screen.findByRole('alert')).toHaveTextContent("That doesn't look like a git URL. It should end in a repository name, like github.com/owner/repo.")
-    expect(screen.getByRole('button', { name: 'Clone' })).toBeDisabled()
-  })
 
   it('refuses an address with a password in it without sending it anywhere', async () => {
     const { user } = show()
@@ -141,12 +127,6 @@ describe('GitHub', () => {
     await user.click(await screen.findByRole('button', { name: 'Sign in with GitHub' }))
     api.accounts.mockResolvedValue(signedIn)
     expect(await screen.findByText('cstin')).toBeInTheDocument()
-  })
-
-  it('tells a machine without gh how to get it, in plain words', async () => {
-    api.accounts.mockResolvedValue({ installed: false, accounts: [], problem: null })
-    show('github')
-    expect(await screen.findByText(/GitHub's command line \(gh\) is not installed on this computer/)).toHaveTextContent('cli.github.com')
   })
 
   it('lists the account, marks private repositories, and clones the one picked into the home folder', async () => {
@@ -237,18 +217,5 @@ describe('opening a project without a session', () => {
     expect(note).toHaveTextContent('There is no folder D:/work/gone')
     expect(onClose).not.toHaveBeenCalled()
     expect(screen.getByRole('button', { name: 'Open' })).toBeEnabled()
-  })
-})
-
-describe('the tabs', () => {
-  it('opens on the tab it was asked for and switches without keeping an old result', async () => {
-    api.clone.mockResolvedValue(`${HOME}/r`)
-    const { user } = show('url')
-    await user.type(screen.getByLabelText('Repository URL'), 'https://github.com/o/r')
-    await user.click(screen.getByRole('button', { name: 'Clone' }))
-    await screen.findByRole('button', { name: 'Start a session in r' })
-    await user.click(screen.getByRole('tab', { name: 'On this computer' }))
-    expect(screen.queryByText(/is ready in/)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
   })
 })

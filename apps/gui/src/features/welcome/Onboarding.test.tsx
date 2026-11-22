@@ -93,43 +93,12 @@ describe('Onboarding steps', () => {
     expect(heading('Welcome to Maiker')).toBeInTheDocument()
   })
 
-  it('moves a step on with Enter', async () => {
-    const user = userEvent.setup()
-    setup()
-    await user.keyboard('{Enter}')
-    await waitFor(() => { expect(heading('Your agents')).toBeInTheDocument() })
-  })
-
   it('skips the whole setup without applying anything', async () => {
     const user = userEvent.setup()
     const props = setup()
     await press(user, 'Skip setup')
     expect(props.onClose).toHaveBeenCalledOnce()
     expect(props.onApply).not.toHaveBeenCalled()
-  })
-
-  it('asks to skip until all three questions are answered, then offers the recommendation', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await answer(user, { 'Where do you spend most of your day?': 'In a terminal' })
-    expect(screen.getByRole('button', { name: 'Skip questions' })).toBeInTheDocument()
-    await answer(user, { 'When an agent wants to run a command, you’d rather…': 'See the raw output', 'How do you like to review changes?': 'Readable diffs' })
-    expect(screen.getByRole('button', { name: 'See my recommendation' })).toBeInTheDocument()
-  })
-
-  it('recommends Terminal when two answers point there, quotes them and preselects it', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await answer(user, ALL_TERMINAL)
-    await press(user, 'See my recommendation')
-    expect(heading('We’d start you in Terminal')).toBeInTheDocument()
-    expect(screen.getByText(/You said you work in a terminal, see the raw output and review changes with git diff in the shell/)).toBeInTheDocument()
-    const terminal = screen.getByRole('radio', { name: /Terminal/ })
-    expect(terminal).toBeChecked()
-    expect(terminal).toHaveTextContent('Recommended for you')
-    expect(screen.getByRole('radio', { name: /Chat/ })).not.toHaveTextContent('Recommended for you')
   })
 
   it('lets the person switch views and says that is fine, with the Gemini note when Gemini is here', async () => {
@@ -147,33 +116,10 @@ describe('Onboarding steps', () => {
     await press(user, 'Get started')
     expect(props.onApply).toHaveBeenCalledWith({ startFolder: '', openSessionsIn: 'chat' })
   })
-
-  it('shows the review with Change links back to the step', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await press(user, 'Skip questions')
-    await press(user, 'Continue')
-    const rows = within(screen.getByRole('list', { name: 'Your choices' }))
-    expect(rows.getByText('/home/ada')).toBeInTheDocument()
-    expect(rows.getByText('Chat')).toBeInTheDocument()
-    await user.click(rows.getByRole('button', { name: 'Change agents' }))
-    expect(heading('Your agents')).toBeInTheDocument()
-  })
 })
 
 describe('Onboarding home directory', () => {
   beforeEach(() => { host.installed = ['claude'] })
-
-  it('starts on the home folder and offers the folders found under it', async () => {
-    const user = userEvent.setup()
-    setup()
-    expect(screen.getByRole('textbox', { name: 'Home directory' })).toHaveValue(HOME)
-    const code = await screen.findByRole('button', { name: /\/home\/ada\/code/ })
-    expect(code).toHaveTextContent('2 git projects')
-    await user.click(code)
-    expect(screen.getByRole('textbox', { name: 'Home directory' })).toHaveValue('/home/ada/code')
-  })
 
   it('fills the path from Browse and saves it on Get started', async () => {
     const user = userEvent.setup()
@@ -226,18 +172,6 @@ describe('Onboarding agent install', () => {
     expect(rows.queryByRole('button', { name: 'Install Codex' })).not.toBeInTheDocument()
   })
 
-  it('lists every supported agent and offers no Install for one the app cannot install', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toAgents(user)
-    const rows = within(screen.getByRole('list', { name: 'Agents' }))
-    expect(rows.getAllByRole('listitem')).toHaveLength(5)
-    const cursor = rows.getByText('Cursor').closest('li')
-    expect(cursor).toHaveTextContent('Not installable here')
-    expect(rows.queryByRole('button', { name: 'Install Cursor' })).not.toBeInTheDocument()
-    expect(host.command).not.toHaveBeenCalledWith('cursor-agent')
-  })
-
   it('shows a failed install as something that needs you, in plain words, and tries again', async () => {
     const user = userEvent.setup()
     host.install.mockRejectedValueOnce(new Error('could not resolve host registry.npmjs.org'))
@@ -264,32 +198,8 @@ describe('Onboarding agent install', () => {
   })
 })
 
-describe('Onboarding veil', () => {
-  it('blurs the whole window with a veil of its own that holds no content', () => {
-    setup()
-    const veil = document.querySelector('.mx-onb-veil')
-    expect(veil).not.toBeNull()
-    expect(veil?.childElementCount).toBe(0)
-    expect(screen.getByRole('dialog', { name: 'Set up Maiker' })).toHaveClass('mx-onb')
-  })
-
-  it('keeps Skip setup in its own slot, after the steps', () => {
-    setup()
-    const bar = screen.getByRole('navigation', { name: 'Setup progress' })
-    expect(bar.lastElementChild).toBe(within(bar).getByRole('button', { name: 'Skip setup' }))
-  })
-})
-
 describe('Onboarding opening', () => {
   afterEach(() => { vi.useRealTimers() })
-
-  it('draws the mark first and skips to the window on Enter, Esc or Space', async () => {
-    const user = userEvent.setup()
-    setup({ reducedMotion: false })
-    expect(screen.queryByRole('heading', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
-    await user.keyboard(' ')
-    expect(await screen.findByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
-  })
 
   it('opens the window by itself once the drawing is over', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })

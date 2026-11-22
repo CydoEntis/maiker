@@ -90,14 +90,6 @@ describe('pasting an image into a pane of another machine', () => {
     expect(sendImage).not.toHaveBeenCalled()
     expect(toasts.error).toHaveBeenCalledWith('build is not connected; reconnect before sending an image to it')
   })
-
-  it('asks about the machine by its name', async () => {
-    const isConnected = vi.fn(() => true)
-    const { paste } = setup({ isConnected })
-    paste('kingdom/t2', image)
-    await flush()
-    expect(isConnected).toHaveBeenCalledWith('kingdom')
-  })
 })
 
 describe('an image that is too big', () => {

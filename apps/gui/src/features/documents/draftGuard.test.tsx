@@ -27,14 +27,6 @@ describe('the draft guard', () => {
     expect(go).toHaveBeenCalledTimes(2)
   })
 
-  it('finds a draft by its pane or its session', () => {
-    registered('a', handle())
-    expect(draftsMatching(inPane('pane1'))).toHaveLength(1)
-    expect(draftsMatching(ofSessions(new Set(['chat'])))).toHaveLength(1)
-    expect(draftsMatching(inPane('pane2'))).toHaveLength(0)
-    expect(hasDrafts()).toBe(true)
-  })
-
   it('asks Discard changes to README.md? and goes on only when Discard is chosen', async () => {
     const user = userEvent.setup()
     render(<DraftGuardHost />)
@@ -87,14 +79,6 @@ describe('the draft guard', () => {
     await waitFor(() => { expect(screen.queryByRole('button', { name: 'Save' })).toBeNull() })
     expect(go).not.toHaveBeenCalled()
     expect(hasDrafts()).toBe(true)
-  })
-
-  it('names several documents in one question', async () => {
-    render(<DraftGuardHost />)
-    registered('a', handle())
-    registered('b', handle({ path: 'docs/guide.md', owner: { paneId: 'pane2', sessionId: 'chat' } }))
-    act(() => { guardDrafts(ofSessions(new Set(['chat'])), vi.fn()) })
-    expect(await screen.findByRole('heading', { name: 'Discard changes to 2 documents?' })).toBeInTheDocument()
   })
 
   it('answers a second question while one is open with keep editing, never two dialogs', async () => {

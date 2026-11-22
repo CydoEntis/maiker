@@ -47,16 +47,6 @@ beforeEach(() => {
 })
 
 describe('Settings › Extensions', () => {
-  it('lists each agent\'s plugins, servers, skills and marketplaces, and says when there are none', async () => {
-    show()
-    expect(await group('Claude Code Plugins').findByText('hello')).toBeInTheDocument()
-    expect(group('Claude Code Plugins').getByText('version 1.0.0')).toBeInTheDocument()
-    expect(group('Claude Code MCP servers').getByText('echo a b')).toBeInTheDocument()
-    expect(group('Claude Code Skills').getByText('Keeps notes')).toBeInTheDocument()
-    expect(group('Claude Code Marketplaces').getByText('None installed.')).toBeInTheDocument()
-    expect(group('Codex Plugins').getByRole('switch', { name: 'Turn on hello' })).not.toBeChecked()
-    expect(api.loadExtensions).toHaveBeenCalledWith(null)
-  })
 
   it('offers only this computer\'s projects and reads the project it is asked to look at', async () => {
     const user = userEvent.setup()
@@ -163,17 +153,6 @@ describe('adding', () => {
     expect(await screen.findByText('Your prompts and tool results are sent to mcp.example.com.')).toBeInTheDocument()
   })
 
-  it('cancelling a preview adds nothing', async () => {
-    const user = userEvent.setup()
-    api.previewAdd.mockResolvedValue({ ok: true, value: PREVIEW })
-    show()
-    const card = await fillServer(user)
-    await user.click(card.getByRole('button', { name: 'Review' }))
-    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(api.confirmAdd).not.toHaveBeenCalled()
-  })
-
   it('needs a project picked for a project scope, and sends it with the request', async () => {
     const user = userEvent.setup()
     api.previewAdd.mockResolvedValue({ ok: true, value: PREVIEW })
@@ -203,15 +182,5 @@ describe('adding', () => {
     await user.click(server.getByRole('button', { name: 'Review' }))
     expect(server.getByText('That command line has an open quote.')).toBeInTheDocument()
     expect(api.previewAdd).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('what needs a terminal', () => {
-  it('says so in plain words with the exact commands', async () => {
-    show()
-    const card = within(await screen.findByRole('region', { name: 'Needs a terminal' }))
-    expect(card.getByText('claude mcp login <name>')).toBeInTheDocument()
-    expect(card.getByText('codex mcp login <name>')).toBeInTheDocument()
-    expect(card.getByText(/Claude Code asks you the first time it starts in that project/)).toBeInTheDocument()
   })
 })

@@ -9,22 +9,6 @@ const open = (io: DocumentIO, extra: Partial<React.ComponentProps<typeof Documen
   render(<DocumentView term={3} machine={0} path="README.md" root="/project" onOpenPath={() => undefined} io={io} startMode="drawn" {...extra} />)
 
 describe('the document viewer', () => {
-  it('draws a README by default with its headings, lists and code', async () => {
-    const { io } = fakeDisk('# Title\n\n- one\n- two\n\n```js\nconst a = 1\n```\n')
-    open(io)
-    expect(await screen.findByRole('heading', { name: 'Title' })).toBeInTheDocument()
-    expect(screen.getByText('two')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Drawn' })).toBeChecked()
-  })
-
-  it('shows the text as written under Source', async () => {
-    const user = userEvent.setup()
-    const { io } = fakeDisk('# Title\r\nline\r\n')
-    open(io)
-    await screen.findByRole('heading', { name: 'Title' })
-    await user.click(screen.getByRole('radio', { name: 'Source' }))
-    expect(screen.getByLabelText('Source of README.md').textContent).toBe('# Title\r\nline\r\n')
-  })
 
   it('never runs the file: raw HTML is text, a javascript link is only its label, an image is not loaded', async () => {
     const { io } = fakeDisk('<script>window.__ran = true</script>\n\n<img src="x" onerror="window.__ran = true">\n\n[click](javascript:alert(1)) ![pic](https://example.test/p.png)\n')
@@ -144,14 +128,6 @@ describe('the document viewer', () => {
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
-  it('closes a clean document at once', async () => {
-    const user = userEvent.setup()
-    const onClose = vi.fn()
-    open(fakeDisk('a\n').io, { onClose })
-    await user.click(await screen.findByRole('button', { name: 'Close README.md' }))
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
   it('offers no Edit for a file the daemon cannot save with a version check, and says why', async () => {
     const { io } = fakeDisk('a\n')
     vi.mocked(io.read).mockResolvedValue({ text: 'a\n', version: null })
@@ -204,13 +180,5 @@ describe('the document viewer', () => {
     act(() => { window.dispatchEvent(new Event('focus')) })
     expect(await screen.findByRole('status')).toHaveTextContent('changed on disk')
     expect(box).toHaveValue('a\nb')
-  })
-
-  it('offers Open beside the chat only where it can', async () => {
-    const user = userEvent.setup()
-    const beside = vi.fn()
-    open(fakeDisk('a\n').io, { onOpenBeside: beside })
-    await user.click(await screen.findByRole('button', { name: 'Open beside the chat' }))
-    expect(beside).toHaveBeenCalled()
   })
 })

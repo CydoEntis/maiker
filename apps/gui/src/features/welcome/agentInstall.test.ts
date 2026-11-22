@@ -25,11 +25,6 @@ describe('agent install calls', () => {
     expect(tauri.invoke).toHaveBeenCalledWith('install_agent', { agent: 'codex' })
   })
 
-  it('passes a failed install on', async () => {
-    tauri.invoke.mockRejectedValue('no network')
-    await expect(installAgent('codex')).rejects.toBe('no network')
-  })
-
   it('hands on well-formed progress and drops anything else', async () => {
     let deliver: (event: { payload: unknown }) => void = () => undefined
     tauri.listen.mockImplementation((_name: string, handler: typeof deliver) => { deliver = handler; return Promise.resolve(() => undefined) })

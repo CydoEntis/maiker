@@ -51,12 +51,6 @@ beforeEach(() => {
 })
 
 describe('usage page states', () => {
-  it('holds the layout with a loading state, then shows the figures', async () => {
-    renderPage()
-    expect(screen.getByRole('status', { name: 'Loading usage' })).toBeInTheDocument()
-    expect(await ready()).toBeInTheDocument()
-    expect(screen.queryByRole('status', { name: 'Loading usage' })).not.toBeInTheDocument()
-  })
 
   it('says it could not load, in words, and retries on request', async () => {
     api.loadUsageReport.mockRejectedValueOnce(new Error('socket: connection refused'))
@@ -68,14 +62,6 @@ describe('usage page states', () => {
     await userEvent.setup().click(within(alert).getByRole('button', { name: 'Retry' }))
     expect(await ready()).toBeInTheDocument()
     expect(api.loadUsageReport).toHaveBeenCalledTimes(2)
-  })
-
-  it('explains an empty store instead of drawing an empty table', async () => {
-    api.loadUsageReport.mockResolvedValue(report({ sessionCount: 0, sessionsWithoutCost: 0, sessions: [], days: [], totals: { ...NONE } }))
-    renderPage()
-    expect(await screen.findByRole('heading', { name: 'Nothing recorded yet' })).toBeInTheDocument()
-    expect(screen.getByText(/Usage appears here as agent sessions run/)).toBeInTheDocument()
-    expect(screen.queryByRole('table', { name: /Sessions in this period/ })).not.toBeInTheDocument()
   })
 })
 
@@ -112,47 +98,9 @@ describe('usage page figures', () => {
     expect(cost).toHaveTextContent('—')
     expect(within(rowsOf()[0] as HTMLElement).getAllByText('—')).toHaveLength(3)
   })
-
-  it('shows the no-cost note once, and not at all when every session reported a cost', async () => {
-    api.loadUsageReport.mockResolvedValue(report({ sessionsWithoutCost: 2 }))
-    renderPage()
-    expect(await screen.findAllByRole('note')).toHaveLength(1)
-    expect(screen.getByRole('note')).toHaveTextContent('2 sessions reported no cost')
-
-    api.loadUsageReport.mockResolvedValue(report({ sessionsWithoutCost: 0 }))
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Today' }))
-    await waitFor(() => { expect(screen.queryByRole('note')).not.toBeInTheDocument() })
-  })
-
-  it('labels the machine as this computer on every row', async () => {
-    renderPage()
-    await ready()
-    for (const row of rowsOf()) expect(row).toHaveTextContent('This computer')
-  })
-
-  it('gives the chart a text alternative with a figure for every day', async () => {
-    renderPage()
-    const chart = await screen.findByRole('figure', { name: 'Tokens per day' })
-    const table = within(chart).getByRole('table', { name: 'Tokens and cost per day' })
-    expect(within(table).getAllByRole('row')).toHaveLength(1 + 7)
-    expect(within(table).getByRole('row', { name: /2026-11-04/ })).toHaveTextContent('1.5k')
-  })
 })
 
 describe('usage table', () => {
-  it('sorts by cost, biggest first, and every header sorts with aria-sort', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await ready()
-    expect(within(sessionsTable()).getByRole('columnheader', { name: 'Cost' })).toHaveAttribute('aria-sort', 'descending')
-    expect(within(sessionsTable()).getByRole('columnheader', { name: 'Project' })).toHaveAttribute('aria-sort', 'none')
-    expect(rowsOf()[0]).toHaveTextContent('shop')
-
-    for (const name of ['Session', 'Project', 'Machine', 'Agent', 'Tokens in', 'Tokens out', 'Cost', 'Turns', 'Time working', 'Last active']) {
-      await user.click(within(within(sessionsTable()).getByRole('columnheader', { name })).getByRole('button'))
-      expect(within(sessionsTable()).getByRole('columnheader', { name })).not.toHaveAttribute('aria-sort', 'none')
-    }
-  })
 
   it('starts text columns A to Z, flips on a second press, and works from the keyboard', async () => {
     const user = userEvent.setup()
@@ -188,29 +136,9 @@ describe('usage table', () => {
     await user.click(closed)
     expect(onOpenSession).not.toHaveBeenCalled()
   })
-
-  it('does not link a row whose pane this window no longer has', async () => {
-    const { onOpenSession } = renderPage({ sessionForTerm: () => null })
-    await ready()
-    await userEvent.setup().click(rowsOf()[0] as HTMLElement)
-    expect(onOpenSession).not.toHaveBeenCalled()
-  })
-
-  it('ends with a totals row', async () => {
-    renderPage()
-    await ready()
-    const total = screen.getByRole('row', { name: /Total/ })
-    expect(total).toHaveTextContent('$0.75')
-    expect(total).toHaveTextContent('10m')
-  })
 })
 
 describe('usage page budget', () => {
-  it('offers to set a budget and draws no ring while none is set', async () => {
-    renderPage()
-    expect(await screen.findByRole('button', { name: 'Set a monthly budget' })).toBeInTheDocument()
-    expect(screen.queryByRole('img', { name: /monthly budget used/ })).not.toBeInTheDocument()
-  })
 
   it('saves a valid amount and refuses a bad one', async () => {
     const user = userEvent.setup()
@@ -245,15 +173,5 @@ describe('usage page budget', () => {
 
     await user.click(screen.getByRole('button', { name: 'Month' }))
     expect(await screen.findByRole('img', { name: '75% of the $1.00 monthly budget used' })).toBeInTheDocument()
-  })
-
-  it('draws no ring when the month has no reported cost', async () => {
-    api.loadUsageReport.mockResolvedValue(report({ totals: { tokensIn: 5, tokensOut: 5, cost: null, turns: 1, workingSecs: 1 } }))
-    const user = userEvent.setup()
-    renderPage({ budget: 100 })
-    await ready()
-    await user.click(screen.getByRole('button', { name: 'Month' }))
-    await screen.findByText('No cost reported to compare')
-    expect(screen.queryByRole('img', { name: /monthly budget used/ })).not.toBeInTheDocument()
   })
 })

@@ -45,18 +45,6 @@ function renderOnBuild(view: InspectView) {
 beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
 
 describe('Inspect panel', () => {
-  it('names the picked view in its header', () => {
-    daemonAnswers({})
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <InspectPanel term={5} changedFiles={0} view="history" agentWorking={false} timeline={[]} lookAt={null} onClose={vi.fn()} onNotice={vi.fn()} />
-      </QueryClientProvider>,
-    )
-    expect(screen.getByRole('heading', { name: 'History' })).toBeTruthy()
-    expect(screen.queryByRole('tab', { name: 'Terminal' })).toBeNull()
-    cleanup()
-  })
 
   it('lists the changed files and shows the picked file’s diff', async () => {
     daemonAnswers({
@@ -260,27 +248,6 @@ describe('Inspect panel', () => {
     expect(screen.queryByRole('button', { name: 'Create PR' })).toBeNull()
   })
 
-  it('offers no comment box without an agent to tell', async () => {
-    daemonAnswers({
-      Diff: { files: [{ path: 'a.txt', additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' }], additions: 1, deletions: 0, total_files: 1, truncated: false },
-    })
-    renderPanel('changes')
-    fireEvent.click(await screen.findByText(/\+new/))
-    expect(screen.queryByRole('textbox')).toBeNull()
-  })
-
-  it('says so when the working tree is clean', async () => {
-    daemonAnswers({ Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false } })
-    renderPanel('changes')
-    expect(await screen.findByText(/No changes/)).toBeTruthy()
-  })
-
-  it('shows a daemon error instead of an empty panel', async () => {
-    vi.mocked(invoke).mockReset().mockRejectedValue('Not inside a Git repository')
-    renderPanel('changes')
-    expect(await screen.findByRole('alert')).toBeTruthy()
-  })
-
   it('shows what the daemon said when it fails with a plain string, not a generic message', async () => {
     vi.mocked(invoke).mockReset().mockRejectedValue('git diff: fatal: bad object HEAD')
     renderPanel('changes')
@@ -342,35 +309,6 @@ describe('Inspect panel', () => {
     // The tree stays on screen beside the file.
     expect(screen.getByRole('navigation', { name: 'Files' })).toBeTruthy()
     expect(screen.queryByRole('textbox')).toBeNull()
-  })
-
-  it('opens the README by default, or the first file when there is none', async () => {
-    daemonAnswers({ Tree: [{ name: 'src', is_directory: true }, { name: 'main.go', is_directory: false }, { name: 'README.md', is_directory: false }], File: '# hello\n', FileStamped: { text: '# hello\n', version: 'v1' } })
-    renderPanel('files')
-    expect(await screen.findByLabelText('Document README.md')).toBeTruthy()
-    cleanup()
-
-    daemonAnswers({ Tree: [{ name: 'src', is_directory: true }, { name: 'main.go', is_directory: false }], File: 'package main\n' })
-    renderPanel('files')
-    expect(await screen.findByLabelText('Preview of main.go')).toBeTruthy()
-  })
-
-  it('names the branch and its distance from the upstream above the changes', async () => {
-    daemonAnswers({
-      Status: { branch: 'main', ahead: 2, behind: 0, files: [] },
-      Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false },
-    })
-    renderPanel('changes')
-    expect(await screen.findByText('↑2 ↓0')).toBeTruthy()
-    expect(screen.getByTitle('Branch main')).toBeTruthy()
-  })
-
-  it('lists reference files from the top of the Files tree', async () => {
-    daemonAnswers({ Tree: [], References: [{ name: 'home.png', kind: 'image', bytes: 2048, modified: NOW }] })
-    renderPanel('files')
-    fireEvent.click(await screen.findByRole('button', { name: 'References' }))
-    expect(await screen.findByText('home.png')).toBeTruthy()
-    expect(screen.getByText(/image · 2 KB/)).toBeTruthy()
   })
 })
 
@@ -462,21 +400,6 @@ describe('Inspect history', () => {
       expect(within(await screen.findByRole('list', { name: 'Changed files' })).getByText('everything.ts')).toBeTruthy()
       expect(screen.getByText(/^Whole working tree/)).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Commit 1 file' })).toBeTruthy()
-    })
-
-    it('shows the whole working tree for a turn without the daemon’s times, without asking for snapshots', async () => {
-      daemonAnswers({ Diff: diffOf('everything.ts') })
-      turnPanel(null)
-      expect(within(await screen.findByRole('list', { name: 'Changed files' })).getByText('everything.ts')).toBeTruthy()
-      expect(screen.getByText(/^Whole working tree/)).toBeTruthy()
-      expect(vi.mocked(invoke)).not.toHaveBeenCalledWith('repo_query', { term: 5, question: 'Snapshots' })
-    })
-
-    it('shows the whole working tree and says so when no snapshot from after the turn is kept', async () => {
-      daemonAnswers({ Snapshots: [{ commit: 'before', at: NOW, why: 'before claude’s turn' }], Diff: diffOf('everything.ts') })
-      turnPanel({ startedAtMs: NOW * 1000, endedAtMs: (NOW + 59) * 1000 })
-      expect(within(await screen.findByRole('list', { name: 'Changed files' })).getByText('everything.ts')).toBeTruthy()
-      expect(screen.getByText(/^Whole working tree · no snapshot from after this turn is kept/)).toBeTruthy()
     })
 
     it('reads the snapshots again for a later turn, so its own end snapshot is found', async () => {

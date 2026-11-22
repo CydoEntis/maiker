@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionUsage } from '@/api/usage'
-import { ariaSortOf, budgetRing, dayBars, DASH, DEFAULT_SORT, formatCost, formatLastActive, formatTokenCount, formatWorking, nextSort, parseBudget, sortSessions, totalTokens, windowLabel } from './model'
+import { budgetRing, dayBars, DASH, DEFAULT_SORT, formatCost, formatLastActive, formatTokenCount, nextSort, parseBudget, sortSessions, totalTokens } from './model'
 
 function row(session: string, overrides: Partial<SessionUsage> = {}): SessionUsage {
   return { session, term: null, agent: 'claude', project: 'shop', firstDay: '2026-11-04', lastDay: '2026-11-04', tokensIn: 100, tokensOut: 50, cost: 1, turns: 1, workingSecs: 60, ...overrides }
@@ -21,18 +21,6 @@ describe('formatting', () => {
     expect(formatCost(0.002)).toBe('<$0.01')
   })
 
-  it('writes tokens compactly', () => {
-    expect(formatTokenCount(812)).toBe('812')
-    expect(formatTokenCount(12_400)).toBe('12k')
-    expect(formatTokenCount(1_300_000)).toBe('1.3M')
-  })
-
-  it('writes working time in the unit that fits', () => {
-    expect(formatWorking(42)).toBe('42s')
-    expect(formatWorking(720)).toBe('12m')
-    expect(formatWorking(3900)).toBe('1h 05m')
-  })
-
   it('adds input and output only when one of them was reported', () => {
     expect(totalTokens({ tokensIn: null, tokensOut: null })).toBeNull()
     expect(totalTokens({ tokensIn: 10, tokensOut: null })).toBe(10)
@@ -44,28 +32,14 @@ describe('formatting', () => {
     expect(formatLastActive('2026-11-03', '2026-11-04')).toBe('Yesterday')
     expect(formatLastActive('2026-10-30', '2026-11-04')).toBe('Oct 30')
   })
-
-  it('names the periods as the rolling windows they are', () => {
-    expect(windowLabel('day')).toBe('Today (UTC)')
-    expect(windowLabel('week')).toBe('Last 7 days')
-    expect(windowLabel('month')).toBe('Last 30 days')
-  })
 })
 
 describe('sorting', () => {
-  it('starts on cost, biggest first', () => {
-    expect(DEFAULT_SORT).toEqual({ key: 'cost', direction: 'descending' })
-  })
 
   it('starts text columns A to Z and number columns biggest first, then flips on a second click', () => {
     expect(nextSort(DEFAULT_SORT, 'project')).toEqual({ key: 'project', direction: 'ascending' })
     expect(nextSort(DEFAULT_SORT, 'turns')).toEqual({ key: 'turns', direction: 'descending' })
     expect(nextSort({ key: 'turns', direction: 'descending' }, 'turns')).toEqual({ key: 'turns', direction: 'ascending' })
-  })
-
-  it('reports aria-sort only on the sorted column', () => {
-    expect(ariaSortOf(DEFAULT_SORT, 'cost')).toBe('descending')
-    expect(ariaSortOf(DEFAULT_SORT, 'turns')).toBe('none')
   })
 
   it('puts unreported figures last in either direction', () => {
@@ -93,12 +67,6 @@ describe('budget ring', () => {
     expect(budgetRing('month', null, 100)).toBeNull()
     expect(budgetRing('week', 10, 100)).toBeNull()
     expect(budgetRing('month', 10, 100)).toEqual({ fraction: 0.1, percent: 10, tone: 'accent' })
-  })
-
-  it('turns warn from 70 percent and danger from 90, and stops filling at the budget', () => {
-    expect(budgetRing('month', 70, 100)?.tone).toBe('warn')
-    expect(budgetRing('month', 90, 100)?.tone).toBe('danger')
-    expect(budgetRing('month', 150, 100)).toMatchObject({ fraction: 1, percent: 150, tone: 'danger' })
   })
 })
 

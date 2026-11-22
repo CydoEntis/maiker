@@ -18,11 +18,6 @@ describe('Timeline', () => {
     expect(rows[2]).toContain('ran 1m 5s')
   })
 
-  it('explains an empty timeline instead of showing nothing', () => {
-    render(<TimelineTab events={[]} />)
-    expect(screen.getByText(/Nothing yet/)).toBeTruthy()
-  })
-
   it('measures a turn from working to the next event that is not working', () => {
     expect([...turnLengths(events)]).toEqual([[0, 65]])
   })

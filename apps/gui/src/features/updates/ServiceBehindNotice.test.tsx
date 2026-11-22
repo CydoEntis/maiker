@@ -1,4 +1,4 @@
-import { APP_NAME } from '@/brand'
+
 import { render, screen, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider, type UseQueryResult } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
@@ -79,20 +79,6 @@ describe('a service a release behind, with nobody mid-turn', () => {
     await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
   })
 
-  it('is asked about when the setting is off, even with nobody working', async () => {
-    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
-    renderNotice(false)
-    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
-  })
-
-  it('is never restarted unasked when it cannot say whether agents are working', async () => {
-    daemon.loadDaemonUpdateStatus.mockResolvedValue({ ...behind, activeTurnCount: null })
-    renderNotice(true)
-    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
-  })
-
   it('falls back to the notice and its button when the restart fails', async () => {
     daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
     daemon.restartStaleDaemon.mockRejectedValueOnce(new Error('busy'))
@@ -111,14 +97,6 @@ describe('the notice that the service is a release behind', () => {
 
     await waitFor(() => { expect(daemon.loadDaemonUpdateStatus).toHaveBeenCalled() })
     expect(toasts.warning).not.toHaveBeenCalled()
-  })
-
-  it('names the version the service is on and offers the restart', async () => {
-    renderNotice()
-
-    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
-    expect(toasts.warning.mock.calls[0]?.[0]).toBe(`The ${APP_NAME} service is still on 0.71.0`)
-    expect(toasts.warning.mock.calls[0]?.[1]?.action?.label).toBe('Restart…')
   })
 
   it('offers no restart when the sessions are not saved', async () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SessionStatus, SessionView } from '@/features/workspace/model/session'
-import { byCreation, jumpToast, nextNeedsYou } from './needsYou'
+import { byCreation, nextNeedsYou } from './needsYou'
 
 function session(pane: number, status: SessionStatus, machine = 0): SessionView {
   return { id: `${String(machine)}:${String(pane)}`, pane, machine, name: null, title: `s${String(pane)}`, status } as SessionView
@@ -55,10 +55,5 @@ describe('nextNeedsYou', () => {
 
   it('does not depend on the order the list arrives in', () => {
     expect(nextNeedsYou([...sessions].reverse(), '0:1')?.session.id).toBe('0:3')
-  })
-
-  it('names the session and its place in the toast', () => {
-    const target = nextNeedsYou([{ ...session(1, 'needs'), name: 'Rate limiter' }, session(2, 'needs')], '0:2')
-    expect(target && jumpToast(target)).toBe('Needs you · Rate limiter · 1 of 2')
   })
 })

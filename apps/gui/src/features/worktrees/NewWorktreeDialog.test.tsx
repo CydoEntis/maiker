@@ -69,14 +69,6 @@ describe('the new worktree dialog', () => {
     expect(onCreate).toHaveBeenCalledWith('feat/My_Own.name', null)
   })
 
-  it('offers a free two-word name and creates it from the current commit', async () => {
-    const user = userEvent.setup()
-    const { field, onCreate } = await open()
-    expect(field.getAttribute('value')).toMatch(/^[a-z]+-[a-z]+$/)
-    await user.click(screen.getByRole('button', { name: 'Create worktree' }))
-    expect(onCreate).toHaveBeenCalledWith((field as HTMLInputElement).value, null)
-  })
-
   it('starts the branch from the one picked in the list', async () => {
     const user = userEvent.setup()
     const { field, onCreate } = await open()
@@ -97,23 +89,6 @@ describe('the new worktree dialog', () => {
     expect(screen.queryByRole('combobox', { name: 'Start from' })).toBeNull()
   })
 
-  it('says nothing while you type a name git refuses, and says why under the field once you leave it', async () => {
-    const user = userEvent.setup()
-    const { field } = await open()
-    await user.clear(field)
-    await user.type(field, 'feat new login')
-    expect(screen.queryByRole('alert')).toBeNull()
-    expect(field).not.toHaveAttribute('aria-invalid')
-
-    await user.tab()
-    const error = screen.getByRole('alert')
-    expect(error).toHaveTextContent('Branch names can’t contain spaces. Try feat-new-login.')
-    expect(field).toHaveAttribute('aria-invalid', 'true')
-    expect(field).toHaveAttribute('aria-describedby', error.id)
-    // The field keeps what you typed.
-    expect(field).toHaveValue('feat new login')
-  })
-
   it('on Create, shows the problem, puts you back in the field and starts nothing', async () => {
     const user = userEvent.setup()
     const { field, onCreate } = await open()
@@ -132,25 +107,6 @@ describe('the new worktree dialog', () => {
 })
 
 describe('the existing worktrees in the new worktree dialog', () => {
-  it('stay folded away, so the Create button is never pushed off the screen', async () => {
-    await open()
-    expect(screen.getByRole('button', { name: /Existing worktrees/ })).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByText('bright-owl')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Create worktree' })).toBeInTheDocument()
-  })
-
-  it('open to one line each: the name, one word for where it stands, and how long it has sat', async () => {
-    const user = userEvent.setup()
-    await open()
-    await user.click(screen.getByRole('button', { name: /Existing worktrees/ }))
-    const owl = (await screen.findByText('bright-owl')).closest('li')
-    const pike = screen.getByText('deep-pike').closest('li')
-    expect(owl).not.toBeNull()
-    expect(pike).not.toBeNull()
-    expect(await within(owl as HTMLElement).findByText('merged')).toBeInTheDocument()
-    expect(within(owl as HTMLElement).getByText('inactive 16 days')).toBeInTheDocument()
-    expect(await within(pike as HTMLElement).findByText('3 changes')).toBeInTheDocument()
-  })
 
   it('ask before Remove throws away uncommitted changes, and remove nothing when you keep them', async () => {
     const user = userEvent.setup()

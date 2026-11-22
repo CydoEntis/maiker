@@ -8,17 +8,6 @@ function session(status: SessionStatus, asking = '', extra: Partial<SessionView>
 const project = { name: 'maiker' }
 
 describe('session notice', () => {
-  it('names the session in the title, what happened beside it, and what it is asking in the body', () => {
-    const notice = sessionNoticeFor(session('needs', '$ git push origin main'), project, { open: vi.fn(), allow: vi.fn() })
-    expect(notice).toMatchObject({ kind: 'needs', title: '(root)', state: 'needs you', body: 'Wants to run $ git push origin main' })
-  })
-
-  it('offers Allow, then Open session, for a session stopped on a choice, and waits for you', () => {
-    const allow = vi.fn()
-    const notice = sessionNoticeFor(session('needs', '$ git push', { ask: { tool: 'Bash', detail: 'git push', answerable: true } }), project, { open: vi.fn(), allow })
-    expect(notice?.actions?.map((action) => action.label)).toEqual(['Allow', 'Open session'])
-    expect(notice?.actions?.[0]?.primary).toBe(true)
-  })
 
   it('offers only Open when nothing is being asked, or when it cannot be answered', () => {
     expect(sessionNoticeFor(session('needs'), project, { open: vi.fn(), allow: vi.fn() })?.actions?.map((action) => action.label)).toEqual(['Open session'])

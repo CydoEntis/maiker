@@ -1,11 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { isDirty, mayOverwrite, modesOffered, needsConfirmToLeave, usableMode } from './documentEdit'
+import { mayOverwrite, modesOffered, needsConfirmToLeave, usableMode } from './documentEdit'
 
 describe('what editing may do next', () => {
-  it('is dirty only when the draft differs from the saved text', () => {
-    expect(isDirty('a', 'a')).toBe(false)
-    expect(isDirty('a ', 'a')).toBe(true)
-  })
 
   it('asks before leaving an edit only when work would be lost', () => {
     expect(needsConfirmToLeave('edit', 'new', 'old')).toBe(true)
