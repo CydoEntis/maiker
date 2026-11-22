@@ -81,6 +81,13 @@ ratatui's `TestBackend` and assert on the text and cell styles;
 `AGENT_SHOW=1 cargo test <name> -- --nocapture` prints the frames. One test:
 `cargo test <name>`.
 
+Tests run in parallel (the default threads). `scripts/test.sh` (Linux and macOS, arguments go to
+`cargo test`) gives the run a temp folder of its own and fails if the tests left anything in it,
+naming the first 20 leftovers; CI's Linux job runs it. Windows CI still runs one test at a time:
+its machines stall when several tests start ConPTY shells at once. A test's folder is a
+`maitty_test_support::TempFolder`, removed when it drops, or `.until_test_ends()` for a helper
+that hands back a plain path. `TEST_TMP_ROOT` must stay short and outside any git checkout.
+
 ### Agent command lists
 
 The window pins the commands an agent will not list (`terminalCommands.ts`, `codexCommands.ts`, `geminiCommands.ts`), and each file names
@@ -307,7 +314,7 @@ the interactive line, the machine dialled when the popup pane closes, `needs log
 login still fails), removing (config, supervisor, sidebar, daemon id, saved layout lane, and the remote
 daemon's pane still alive over a second connection), that what a removed machine's daemon or supervisor
 says afterwards does not bring it back (handed to the window directly, with no daemon), and retrying a
-refusal. Its one frame test (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture --test-threads=1`
+refusal. Its one frame test (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture`
 prints it at 80x24 and 100x30) draws an unreachable machine: the typed target stays in the field, nothing
 is added, and no step or `MACHINE ADDED` is drawn. The other frames of the dialog are
 `client/screen/machines_tests.rs` (`AGENT_SHOW=1 cargo test machines_tests -- --nocapture` prints them

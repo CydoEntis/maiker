@@ -97,15 +97,21 @@ jobs:
       - name: The desktop app stays off the daemon, the terminal client and settings (ADR 0007)
         shell: bash
         run: scripts/check-gui-deps.sh
-      # One test at a time: CI's Windows machines stall when several tests start real
-      # shells (ConPTY) at once. It also names a stuck test in the log.
-      # A test that still stalls would hold the job for its whole 45 minute limit, so the
-      # step has its own, well above the 5 to 10 minutes a passing run takes.
+      # A test that stalls would hold the job for its whole 45 minute limit, so the test step
+      # has its own, well above the 5 to 10 minutes a passing run takes.
       # Compile first, with its own limit: a cold Windows build takes longer than the 15 minutes
       # meant for running the tests, and a compile that was cut off looked like a stuck test.
       - run: cargo test --locked --no-run
         timeout-minutes: 30
-      - run: cargo test --locked -- --test-threads=1
+      # In parallel, in a temp folder of the run's own that must be empty afterwards, so a test
+      # that leaks a folder fails the check by name (scripts/test.sh).
+      - if: runner.os == 'Linux'
+        run: scripts/test.sh --locked
+        timeout-minutes: 15
+      # One test at a time: CI's Windows machines stall when several tests start real
+      # shells (ConPTY) at once. It also names a stuck test in the log.
+      - if: runner.os == 'Windows'
+        run: cargo test --locked -- --test-threads=1
         timeout-minutes: 15
       - run: cargo clippy --locked --all-targets -- -D warnings
       - run: node --experimental-vm-modules --test crates/maitty-terminal-client/src/cli/integrations.test.mjs
