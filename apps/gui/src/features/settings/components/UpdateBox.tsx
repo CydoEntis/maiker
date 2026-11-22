@@ -40,7 +40,7 @@ export function UpdateBox({ updates, appVersion }: { updates: SettingsUpdates; a
       {face.note !== null && <span className="mx-settings-update-note">{face.note}</span>}
       {updates.status === 'downloading' && <DownloadProgress progress={updates.download?.progress ?? null} transfer={updates.download?.transfer ?? null} />}
       {face.button !== null && (
-        <button type="button" className={`mx-settings-update-button${face.button.primary ? ' is-primary' : ''}`} onClick={face.button.run}>{face.button.label}</button>
+        <button type="button" className={`mx-scard-button mx-settings-update-button${face.button.primary ? ' is-primary' : ''}`} onClick={face.button.run}>{face.button.label}</button>
       )}
     </div>
   )
