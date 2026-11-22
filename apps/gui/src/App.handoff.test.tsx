@@ -276,7 +276,7 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code`) })
   })
 
-  it('lists the projects with something going on by urgency, then the idle sessions by project, each session named by its folder', async () => {
+  it('lists the project opened last first, each with all its sessions, the most urgent first, each named by its folder', async () => {
     daemon.loadConversations.mockResolvedValue([
       term(9, `${HOME}/Downloads`),
       inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker/crates/maitty-core`, { agent: 'codex', status: 'working' }),
@@ -288,8 +288,8 @@ describe('desktop terminal multiplexer', () => {
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     await within(sidebar).findByRole('button', { name: 'maiker, shell, idle' })
     const rows = within(sidebar).getAllByRole('button', { name: /, (shell|codex), / }).map((row) => row.getAttribute('aria-label'))
-    expect(rows).toEqual(['docs, shell, needs you', 'maiker, codex, working', 'Downloads, shell, idle', 'maiker, shell, idle'])
-    expect(within(sidebar).getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['docs', 'maiker', 'Idle in Downloads', 'Idle in maiker'])
+    expect(rows).toEqual(['Downloads, shell, idle', 'docs, shell, needs you', 'maiker, codex, working', 'maiker, shell, idle'])
+    expect(within(sidebar).getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Downloads', 'docs', 'maiker'])
     expect(sidebar).not.toHaveTextContent(`${DAEMON_NAME} ·`)
   })
 
@@ -879,7 +879,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument() })
     await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
     expect(await screen.findByRole('region', { name: 'Shell in ~/b' })).toBeInTheDocument()
-    await user.keyboard('{Alt>}1{/Alt}')
+    // The number is the row's in the sidebar, where the project opened last comes first.
+    await user.keyboard('{Alt>}2{/Alt}')
     expect(await screen.findByRole('region', { name: 'Shell in ~/a' })).toBeInTheDocument()
   })
 
@@ -993,10 +994,10 @@ describe('desktop overlays and pane tools', () => {
       await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
       // The window sees the status change and raises the card itself; the daemon's own alert for the same event replaces it, never stacks.
-      const card = (await screen.findByText(/needs you$/)).closest('.mx-toast')
+      const card = (await screen.findByText(/needs you$/, { ignore: '.sr-only, script, style' })).closest('.mx-toast')
       expect(card).not.toBeNull()
       act(() => { alerts.emit?.({ machine: LOCAL_MACHINE, term: 3, status: 'blocked' }) })
-      expect(screen.getAllByText(/needs you$/)).toHaveLength(1)
+      expect(screen.getAllByText(/needs you$/, { ignore: '.sr-only, script, style' })).toHaveLength(1)
       expect(card).toHaveTextContent('$ git push origin main')
       expect(within(card as HTMLElement).getAllByRole('button').map((button) => button.getAttribute('aria-label') ?? button.textContent)).toEqual(['Allow', 'Open session', 'Dismiss'])
 
@@ -1017,7 +1018,7 @@ describe('desktop overlays and pane tools', () => {
       daemon.loadConversations.mockResolvedValue([at(2), at(3, { status: 'needs-you', agent: 'claude', details: { asking: '', ask: { tool: 'Bash', detail: 'git push origin main', answerable: true }, interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } } })])
       await act(async () => { await client.refetchQueries({ queryKey: ['conversations'] }) })
 
-      const card = (await screen.findByText(/needs you$/)).closest('.mx-toast')
+      const card = (await screen.findByText(/needs you$/, { ignore: '.sr-only, script, style' })).closest('.mx-toast')
       expect(card).not.toBeNull()
       expect(card).toHaveTextContent('Wants to run git push origin main')
       await user.click(within(card as HTMLElement).getByRole('button', { name: 'Allow' }))
@@ -1172,7 +1173,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('button', { name: 'a, 1 idle session' })
+    await screen.findByRole('button', { name: 'a, 1 session' })
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
     const box = within(await screen.findByRole('region', { name: 'New session' })).getByRole('textbox', { name: /^Message / })
     await user.click(box)
@@ -1191,7 +1192,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('button', { name: 'a, 1 idle session' })
+    await screen.findByRole('button', { name: 'a, 1 session' })
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 

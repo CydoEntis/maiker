@@ -41,7 +41,9 @@ export function SidebarRail(props: SidebarProps) {
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
   const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const order = sidebarOrder(props.machines, props.projects, NO_FILTER, useHeldRow(props.focusedId, props.sessions))
+  const order = sidebarOrder(props.machines, props.projects, NO_FILTER, useHeldRow(props.focusedId, props.sessions), props.sort, props.opened)
+  // The rail is for what is going on: a project's idle rows, and a project with nothing going on, are left to the full sidebar.
+  const going = order.projects.map((group) => ({ ...group, rows: group.rows.filter((node) => node.mark !== 'idle') })).filter((group) => group.rows.length > 0)
   const openMenu = (event: MouseEvent | KeyboardEvent, session: SessionView, at: { x: number; y: number }) => {
     event.preventDefault()
     // Some web views also send a right-click for the menu key; the menu the key opened under the mark stays where it is.
@@ -90,7 +92,7 @@ export function SidebarRail(props: SidebarProps) {
     <div className="mx-rail">
       <IconButton label="Expand sidebar" tip={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></IconButton>
       <div className="mx-rail-list mx-no-scrollbar" onScroll={endHover}>
-        {order.active.map((group) => (
+        {going.map((group) => (
           <div key={group.key} className="mx-rail-group" role="list" aria-label={group.name}>
             {/* The name is on the badge alone: on the group it would also show over each mark, against its hover card. */}
             <span className="mx-rail-badge" title={group.name}><ProjectBadge name={group.name} /></span>

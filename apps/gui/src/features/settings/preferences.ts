@@ -4,6 +4,7 @@ import { readThemePreference, type ThemePreference } from '@/data/themePreferenc
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
 import { detectPlatform, NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
+import { SIDEBAR_SORTS, type SidebarSort } from '@/features/workspace/model/sidebarTree'
 import { skippedConfirmsOf, type SkippedConfirms } from '@/features/confirm/confirm'
 
 export type CursorStyle = 'block' | 'bar' | 'underline'
@@ -84,6 +85,8 @@ export type SettingsPreferences = {
   /** The docked sidebar's width in px; dragged with the mouse. */
   sidebarWidth: number
   sidebarSide: SidebarSide
+  /** How the sidebar orders its projects, picked in its filter menu. */
+  sidebarSort: SidebarSort
   terminalDock: TerminalDock
   /** The keys chosen in Settings › Hotkeys, in place of the actions' own. */
   keyOverrides: KeyOverrides
@@ -168,6 +171,7 @@ function defaults(): SettingsPreferences {
     terminalScreenReader: false,
     sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     sidebarSide: 'left',
+    sidebarSort: 'recent',
     terminalDock: 'bottom',
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
@@ -258,6 +262,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalScreenReader: bool(preferences.terminalScreenReader, fallback.terminalScreenReader),
       sidebarWidth: clampNumber(preferences.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, fallback.sidebarWidth),
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
+      sidebarSort: SIDEBAR_SORTS.find((sort) => sort === preferences.sidebarSort) ?? fallback.sidebarSort,
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,

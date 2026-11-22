@@ -48,6 +48,9 @@ export function WorkspaceSidebars() {
       side={preferences.sidebarSide}
       projects={openedProjects.machines}
       selectedProject={openedProjects.selected}
+      opened={openedProjects.opened}
+      sort={preferences.sidebarSort}
+      onSort={(sort) => { setPreferences((current) => ({ ...current, sidebarSort: sort })) }}
       installedAgents={installedAgents}
       onSearch={() => { afterPick(); setPaletteOpen(true) }}
       width={sidebarWidth}

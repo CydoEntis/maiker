@@ -1,7 +1,7 @@
 import { markOf, type StatusMarkKind } from '@/lib/statusMark'
 import { baseName } from './folderPick'
 import { machineTitle, type MachineHead } from './machines'
-import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
+import { sameProject, type MachineProjects, type OpenedProject, type ProjectSessions } from './openedProjects'
 import { inCreationOrder, type SessionView } from './session'
 import { byLatestChange, mostUrgent, URGENCY } from './sidebar'
 
@@ -13,7 +13,7 @@ const settles = (mark: StatusMarkKind): boolean => mark === 'done' || mark === '
 
 /**
  * The state a session is placed by. The `held` one stays where it was picked: looking at a finished agent makes it idle,
- * and a row that drops to the Idle section the moment it is clicked reads as the app fighting you. Only that shift between
+ * and a row that drops to the bottom of its project the moment it is clicked reads as the app fighting you. Only that shift between
  * finished and idle is held: a session that starts working, or asks, moves at once.
  */
 function placedMark(session: SessionView, held: HeldRow | null): StatusMarkKind {
@@ -80,17 +80,6 @@ export function projectFoldKey(project: OpenedProject): string {
   return `project:${machineKey(project.machineName)}:${project.folder}`
 }
 
-/** The Idle section's own fold, kept with the projects' (`data/sidebarFolds.ts`). */
-export const IDLE_FOLD_KEY = 'section:idle'
-
-/**
- * The fold of a project's heading in the Idle section (`projectKey` is its `projectFoldKey`), kept with the others. It is
- * its own because a project with both kinds of session is listed in both places, and folding one must not hide the other.
- */
-export function idleProjectFoldKey(projectKey: string): string {
-  return `idle:${projectKey}`
-}
-
 /** The fold of a lead's helpers, kept with the others; a lead is its session id for as long as it is listed. */
 export function helpersFoldKey(leadId: string): string {
   return `helpers:${leadId}`
@@ -117,7 +106,7 @@ export function badgeLetters(name: string): string {
   return letters.slice(0, BADGE_LETTERS).join('').toUpperCase()
 }
 
-/** A project (a folder on a machine) with the rows one section of the sidebar lists under it. */
+/** A project (a folder on a machine) with its rows. */
 export type ProjectGroup = {
   /** Stable across restarts and renames: the machine's name and the project's folder, which is what makes a project. */
   readonly key: string
@@ -125,8 +114,10 @@ export type ProjectGroup = {
   readonly project: OpenedProject
   readonly head: MachineHead
   readonly rows: readonly SessionNode[]
-  /** Every session placed in the project, whatever section or filter shows it: what its menus act on. */
+  /** Every session placed in the project, whatever the filter shows: what its menus act on. */
   readonly sessions: readonly SessionView[]
+  /** The project's own state, its most urgent row's (needs you, working, done, idle); null with no session in it. */
+  readonly mark: StatusMarkKind | null
 }
 
 /** What narrows the sidebar: one project by its heading's name, one machine by its `machineKey`; null is all of them. */
@@ -134,15 +125,13 @@ export type SidebarFilter = { readonly project: string | null; readonly machine:
 
 export const NO_FILTER: SidebarFilter = { project: null, machine: null }
 
-/** The sidebar from top to bottom. */
-export type SidebarOrder = {
-  /** The projects with something going on, the one with the most urgent session first. */
-  readonly active: readonly ProjectGroup[]
-  /** The Idle section: every project with idle sessions or none at all, those with nothing going on first. */
-  readonly idle: readonly ProjectGroup[]
-  /** How many rows the Idle section holds; a helper under its lead is not counted. */
-  readonly idleCount: number
-}
+/** How the projects are ordered: the one opened last first, by name, or by machine (this computer first). */
+export type SidebarSort = 'recent' | 'name' | 'machine'
+
+export const SIDEBAR_SORTS: readonly SidebarSort[] = ['recent', 'name', 'machine']
+
+/** The sidebar from top to bottom: one list of projects, each holding all its sessions and saying its own state. */
+export type SidebarOrder = { readonly projects: readonly ProjectGroup[] }
 
 /** Whether the filter leaves a project of this name on this machine in the list. */
 export function passesFilter(filter: SidebarFilter, project: { readonly head: MachineHead; readonly name: string }): boolean {
@@ -159,34 +148,33 @@ export function listedProjects(heads: readonly MachineHead[], machines: readonly
   })
 }
 
+const byName = (a: ProjectGroup, b: ProjectGroup): number => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' })
+
 /**
  * The order the sidebar lists everything in. A project is a folder on a machine, so the same folder on two machines is
- * two projects. Those with something going on come first, ranked by their most urgent row (needs you, then working, then
- * done); projects of the same rank keep the order they were opened in, so a heading only moves when its rank changes.
- * Idle rows go to the one Idle section, grouped by project, which also lists a project with no session; a project with
- * both kinds of row is in both places. `held` keeps the session on screen where it was picked (`placedMark`).
+ * two projects. Each holds all its sessions, the most urgent first (`sessionNodes`), and says its own state on its
+ * heading, so nothing moves between sections and a project stays where `sort` puts it whatever its sessions do:
+ * `recent` is the one opened last first (`opened` is every opened project in the order it was opened), `name` is A to Z,
+ * and `machine` is this computer's first, then each machine's by name. `held` keeps the session on screen where it was
+ * picked (`placedMark`).
  */
-export function sidebarOrder(heads: readonly MachineHead[], machines: readonly MachineProjects[], filter: SidebarFilter = NO_FILTER, held: HeldRow | null = null): SidebarOrder {
-  const shown = listedProjects(heads, machines).filter((project) => passesFilter(filter, project))
-  const split = shown.map(({ head, entry, name }) => {
-    const nodes = sessionNodes(entry.sessions, held)
-    const group = { key: projectFoldKey(entry.project), name, project: entry.project, head, sessions: entry.sessions }
-    return { group, busy: nodes.filter((node) => node.mark !== 'idle'), idle: nodes.filter((node) => node.mark === 'idle') }
+export function sidebarOrder(heads: readonly MachineHead[], machines: readonly MachineProjects[], filter: SidebarFilter = NO_FILTER, held: HeldRow | null = null, sort: SidebarSort = 'recent', opened: readonly OpenedProject[] = []): SidebarOrder {
+  const listed = listedProjects(heads, machines).filter((project) => passesFilter(filter, project))
+  const placed = listed.map(({ head, entry, name }, at) => {
+    const rows = sessionNodes(entry.sessions, held)
+    const openedAt = opened.findIndex((candidate) => sameProject(candidate, entry.project))
+    const group: ProjectGroup = {
+      key: projectFoldKey(entry.project), name, project: entry.project, head, rows, sessions: entry.sessions,
+      mark: rows.length === 0 ? null : mostUrgent(rows.map((node) => node.mark)),
+    }
+    return { group, at: openedAt === -1 ? at : openedAt, headAt: heads.indexOf(head) }
   })
-  const rankOf = (rows: readonly SessionNode[]): number => URGENCY[rows[0]?.mark ?? 'idle']
-  const active = split
-    .filter((project) => project.busy.length > 0)
-    .sort((a, b) => rankOf(a.busy) - rankOf(b.busy))
-    .map(({ group, busy }): ProjectGroup => ({ ...group, rows: busy }))
-  const quiet = split.filter((project) => project.busy.length === 0)
-  const alsoIdle = split.filter((project) => project.busy.length > 0 && project.idle.length > 0)
-  const idle = [...quiet, ...alsoIdle].map(({ group, idle: rows }): ProjectGroup => ({ ...group, rows }))
-  return { active, idle, idleCount: idle.reduce((total, group) => total + group.rows.length, 0) }
-}
-
-/** Whether a row of the group waits on the person: what a folded heading still has to say. */
-export function needsYou(group: ProjectGroup): boolean {
-  return group.rows.some((node) => node.mark === 'needs')
+  const sorted = [...placed].sort((a, b) => {
+    if (sort === 'name') return byName(a.group, b.group) || a.headAt - b.headAt
+    if (sort === 'machine') return a.headAt - b.headAt || byName(a.group, b.group)
+    return b.at - a.at
+  })
+  return { projects: sorted.map(({ group }) => group) }
 }
 
 /**
@@ -196,7 +184,7 @@ export function needsYou(group: ProjectGroup): boolean {
 export function orderPlacement(order: SidebarOrder): string {
   const groupsOf = (groups: readonly ProjectGroup[]): string =>
     groups.map((group) => `${group.key}{${group.rows.map((node) => [node.session, ...node.helpers].map((session) => session.id).join('+')).join(',')}}`).join(';')
-  return `${groupsOf(order.active)}/${groupsOf(order.idle)}`
+  return groupsOf(order.projects)
 }
 
 export type ProjectChoice = { readonly name: string; readonly count: number }

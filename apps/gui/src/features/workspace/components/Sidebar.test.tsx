@@ -38,7 +38,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened:
     onClose: vi.fn(),
   } satisfies ProjectActions
   const props: SidebarProps = {
-    sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, opened: grouping.opened, sort: 'recent', onSort: none, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none, projectActions,
     onOpenProject: none, onAddMachine: none, onMachineSettings: none, onRetryMachine: none, onSignInMachine: none, onCopyCommand: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onCopyPath: none, onEndSession: none, onOpenSettings: none,
@@ -54,8 +54,7 @@ beforeEach(() => { localStorage.clear() })
 afterEach(() => { resetToasts() })
 
 const rowsIn = (scope: HTMLElement) => within(scope).queryAllByRole('button', { name: /, (idle|working|needs you|done|stopped|offline)$/ }).map((row) => row.getAttribute('aria-label')?.split(',')[0])
-const idleSection = () => screen.getByRole('region', { name: /^(Idle|Projects)$/ })
-const heading = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}, \\d+ sessions?$`) })
+const heading = (name: string) => screen.getByRole('button', { name: new RegExp(`^${name}, \\d+ sessions?(, (needs you|working|done))?$`) })
 /** What each row of the open menu says, without its mark and its key, which are hidden from a screen reader. */
 const menuItems = () => screen.getAllByRole('menuitem').map((item) => {
   const spoken = item.cloneNode(true) as HTMLElement
@@ -89,13 +88,13 @@ describe('the foot\'s pull-request button', () => {
 })
 
 describe('the list', () => {
-  it('lists the projects with something going on, the most urgent first, and each session with its status in its name', () => {
+  it('lists the project opened last first, its sessions the most urgent first, each with its status in its name', () => {
     show([session(1, 'Tidy up', { status: 'working', cwd: '/home/me/docs' }), session(2, 'Which key?', { status: 'needs-you' }), session(3, 'Shipped', { status: 'done' })])
     const lists = screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))
     expect(lists).toEqual(['shop', 'docs'])
     expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Which key?', 'Shipped'])
     expect(screen.getByRole('button', { name: 'Which key?, claude, needs you' })).toBeTruthy()
-    expect(heading('shop')).toHaveAccessibleName('shop, 2 sessions')
+    expect(heading('shop')).toHaveAccessibleName('shop, 2 sessions, needs you')
   })
 
   it('keeps a helper under the session that started it', () => {
@@ -171,93 +170,54 @@ describe('the list', () => {
   })
 })
 
-describe('the Idle section', () => {
-  it('holds every idle session under its project with a count, and the project with no session', () => {
+describe('a project', () => {
+  it('holds all its sessions, idle ones too, under one heading, and lists a project with no session', () => {
     show([session(1, 'Busy', { status: 'working' }), session(2, 'Quiet'), session(3, 'Old notes', { cwd: '/home/me/docs' })], {}, [NOTES])
-    const idle = idleSection()
-    expect(within(idle).getByRole('button', { name: /^Idle\s*2$/, expanded: true })).toBeTruthy()
-    expect(rowsIn(idle)).toEqual(expect.arrayContaining(['Quiet', 'Old notes']))
-    expect(rowsIn(idle)).not.toContain('Busy')
-    expect(within(idle).getByRole('button', { name: 'notes, no sessions' })).toBeTruthy()
-    // The project with both kinds is in both places.
-    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Busy'])
-    expect(rowsIn(within(idle).getByRole('list', { name: 'Idle in shop' }))).toEqual(['Quiet'])
+    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Busy', 'Quiet'])
+    expect(rowsIn(screen.getByRole('list', { name: 'docs' }))).toEqual(['Old notes'])
+    expect(screen.getByRole('button', { name: 'notes, no sessions' })).toBeTruthy()
+    expect(screen.queryByRole('region', { name: 'Idle' })).toBeNull()
   })
 
-  it('folds from its heading and stays folded after a restart', async () => {
-    const user = userEvent.setup()
-    const sessions = [session(1, 'Quiet')]
-    const first = render(<Sidebar {...propsOf(sessions)} />)
-    await user.click(within(idleSection()).getByRole('button', { name: /^Idle/, expanded: true }))
-    expect(within(idleSection()).getByRole('button', { name: /^Idle/, expanded: false })).toBeTruthy()
-    expect(screen.queryByRole('button', { name: /^Quiet,/ })).toBeNull()
-    first.unmount()
-    render(<Sidebar {...propsOf(sessions)} />)
-    expect(within(idleSection()).getByRole('button', { name: /^Idle/, expanded: false })).toBeTruthy()
+  it('says its own state on its heading, the most urgent of its sessions, and none while all of them are idle', () => {
+    show([session(1, 'Busy', { status: 'working' }), session(2, 'Asking', { status: 'needs-you' }), session(3, 'Old notes', { cwd: '/home/me/docs' })])
+    expect(screen.getByRole('button', { name: 'shop, 2 sessions, needs you' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'docs, 1 session' })).toBeTruthy()
   })
 
-  it('folds a project from its heading, on its own, and keeps the fold after a restart', async () => {
-    const user = userEvent.setup()
-    const sessions = [session(1, 'Busy', { status: 'working' }), session(2, 'Quiet'), session(3, 'Helper', startedBy('t2'))]
-    const first = render(<Sidebar {...propsOf(sessions)} />)
-    const idleHeading = () => within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' })
-    expect(idleHeading()).toHaveAttribute('aria-expanded', 'true')
-    act(() => { idleHeading().focus() })
-    await user.keyboard('{Enter}')
-    expect(idleHeading()).toHaveAttribute('aria-expanded', 'false')
-    expect(screen.queryByRole('button', { name: /^Quiet,/ })).toBeNull()
-    expect(screen.queryByRole('button', { name: /^Helper,/ })).toBeNull()
-    // The same project above, with its busy row, keeps its own fold.
-    expect(heading('shop')).toHaveAttribute('aria-expanded', 'true')
-    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Busy'])
-    first.unmount()
-    render(<Sidebar {...propsOf(sessions)} />)
-    expect(idleHeading()).toHaveAttribute('aria-expanded', 'false')
-    await user.click(idleHeading())
-    expect(rowsIn(within(idleSection()).getByRole('list', { name: 'Idle in shop' }))).toEqual(['Quiet', 'Helper'])
-  })
-
-  it('unfolds an idle project just opened or picked', async () => {
-    const user = userEvent.setup()
-    const { again } = show([session(1, 'Quiet')])
-    await user.click(within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' }))
-    again({ selectedProject: { ...SHOP } })
-    expect(within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' })).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  it('draws its headings and rows, helpers too, as idle, and the busy ones above as they are', () => {
-    show([session(1, 'Busy', { status: 'working' }), session(2, 'Quiet'), session(3, 'Helper', startedBy('t2'))])
-    const idle = idleSection()
-    for (const row of [within(idle).getByRole('button', { name: 'shop, 1 idle session' }), within(idle).getByRole('button', { name: /^Quiet,/ }), within(idle).getByRole('button', { name: /^Helper,/ })]) {
-      expect(row.closest('.mx-sb-group')).toHaveClass('is-idle')
-    }
-    expect(within(idle).getByRole('button', { name: 'shop, 1 idle session' }).closest('.mx-sb-head')).toHaveClass('is-idle')
+  it('draws a project with nothing going on as idle, and a busy one as it is', () => {
+    show([session(1, 'Busy', { status: 'working' }), session(2, 'Quiet', { cwd: '/home/me/docs' }), session(3, 'Helper', { cwd: '/home/me/docs', ...startedBy('t2') })])
+    expect(heading('docs').closest('.mx-sb-head')).toHaveClass('is-idle')
+    expect(screen.getByRole('button', { name: /^Helper,/ }).closest('.mx-sb-group')).toHaveClass('is-idle')
     expect(heading('shop').closest('.mx-sb-group')).not.toHaveClass('is-idle')
-    expect(screen.getByRole('button', { name: /^Busy,/ }).closest('.mx-sb-group')).not.toHaveClass('is-idle')
+  })
+
+  it('stays in its place when its sessions change state', () => {
+    const before = [session(1, 'First', { cwd: '/home/me/docs' }), session(2, 'Second')]
+    const { again } = show(before)
+    const order = () => screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))
+    expect(order()).toEqual(['shop', 'docs'])
+    const after = [session(1, 'First', { cwd: '/home/me/docs', status: 'needs-you' }), session(2, 'Second')]
+    again({ sessions: after, projects: groupByProject(after, []).machines, opened: groupByProject(after, []).opened })
+    expect(order()).toEqual(['shop', 'docs'])
   })
 
   it('lists a session that stopped or whose machine is out of reach, so none goes missing', () => {
     show([session(1, 'Crashed', { status: 'recovery' }), session(2, 'Far away', { status: 'unknown' })])
-    expect(within(idleSection()).getByRole('button', { name: 'Crashed, claude, stopped' })).toBeTruthy()
-    expect(within(idleSection()).getByRole('button', { name: 'Far away, claude, offline' })).toBeTruthy()
-  })
-
-  it('is headed Projects while it only lists projects with no session', () => {
-    show([], {}, [NOTES])
-    expect(within(idleSection()).getByRole('button', { name: 'Projects', expanded: true })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Crashed, claude, stopped' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Far away, claude, offline' })).toBeTruthy()
   })
 })
 
 describe('a project heading', () => {
-  it('folds its sessions, says so while one of them needs you, and keeps the fold after a restart', async () => {
+  it('folds its sessions, still says one of them needs you, and keeps the fold after a restart', async () => {
     const user = userEvent.setup()
     const sessions = [session(1, 'Which key?', { status: 'needs-you' })]
     const first = render(<Sidebar {...propsOf(sessions)} />)
-    expect(screen.queryByRole('img', { name: 'Something here needs you' })).toBeNull()
     await user.click(heading('shop'))
     expect(heading('shop')).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('button', { name: /^Which key\?,/ })).toBeNull()
-    expect(screen.getByRole('img', { name: 'Something here needs you' })).toBeTruthy()
+    expect(heading('shop')).toHaveAccessibleName('shop, 1 session, needs you')
     first.unmount()
     render(<Sidebar {...propsOf(sessions)} />)
     expect(heading('shop')).toHaveAttribute('aria-expanded', 'false')
@@ -531,20 +491,34 @@ describe('the header and the foot', () => {
     const user = userEvent.setup()
     show([session(1, 'Here', { status: 'working' }), session(2, 'Docs', { status: 'working', cwd: '/home/me/docs' }), onDevbox(3, 'There', { status: 'working' })], { machines: [LOCAL_HEAD, DEVBOX] })
     const shown = () => screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))
-    await user.click(screen.getByRole('button', { name: 'Filter' }))
+    await user.click(screen.getByRole('button', { name: 'Sort and filter' }))
     await user.click(within(screen.getByRole('group', { name: 'Projects' })).getByRole('button', { name: /docs/ }))
     expect(shown()).toEqual(['docs'])
     await user.click(screen.getByRole('button', { name: 'Reset' }))
     expect(shown()).toHaveLength(3)
     await user.click(within(screen.getByRole('group', { name: 'Machines' })).getByRole('button', { name: /devbox/ }))
     expect(shown()).toEqual(['api'])
-    expect(screen.getByRole('button', { name: 'Filter (on)' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Sort and filter (on)' })).toBeTruthy()
+  })
+
+  it('orders the projects as picked in its menu', async () => {
+    const user = userEvent.setup()
+    const onSort = vi.fn()
+    show([session(1, 'Zed', { cwd: '/home/me/zoo' }), session(2, 'Alpha', { cwd: '/home/me/apps' })], { onSort, sort: 'name' })
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['apps', 'zoo'])
+    await user.click(screen.getByRole('button', { name: 'Sort and filter' }))
+    const sorts = within(screen.getByRole('group', { name: 'Sort by' }))
+    expect(sorts.getByRole('button', { name: 'Name, A to Z' })).toHaveAttribute('aria-pressed', 'true')
+    // Machine is offered only once there is more than this computer.
+    expect(sorts.queryByRole('button', { name: 'Machine' })).toBeNull()
+    await user.click(sorts.getByRole('button', { name: 'Recently opened' }))
+    expect(onSort).toHaveBeenCalledWith('recent')
   })
 
   it('shows the project just opened whatever the filter said', async () => {
     const user = userEvent.setup()
     const { again } = show([session(1, 'Here', { status: 'working' }), session(2, 'Docs', { status: 'working', cwd: '/home/me/docs' })])
-    await user.click(screen.getByRole('button', { name: 'Filter' }))
+    await user.click(screen.getByRole('button', { name: 'Sort and filter' }))
     await user.click(within(screen.getByRole('group', { name: 'Projects' })).getByRole('button', { name: /docs/ }))
     await user.keyboard('{Escape}')
     again({ selectedProject: SHOP })
@@ -606,7 +580,7 @@ describe('the rail of a narrow window', () => {
 function propsOf(sessions: SessionView[]): SidebarProps {
   const none = () => undefined
   return {
-    sessions, listed: true, machines: [LOCAL_HEAD], projects: groupByProject(sessions, []).machines, selectedProject: null, installedAgents: null, focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
+    sessions, listed: true, machines: [LOCAL_HEAD], projects: groupByProject(sessions, []).machines, opened: groupByProject(sessions, []).opened, sort: 'recent', onSort: none, selectedProject: null, installedAgents: null, focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none,
     onOpenProject: none, onAddMachine: none, onMachineSettings: none, onRetryMachine: none, onSignInMachine: none, onCopyCommand: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
     onCopyPath: none, onEndSession: none, onOpenSettings: none,

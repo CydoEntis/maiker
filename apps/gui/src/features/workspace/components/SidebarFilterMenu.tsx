@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { Popover } from 'radix-ui'
 import { IconButton } from '@/components/ui/icon-button'
 import { PopupContent } from '@/components/ui/popup'
-import type { MachineChoice, ProjectChoice, SidebarFilter } from '../model/sidebarTree'
+import { SIDEBAR_SORTS, type MachineChoice, type ProjectChoice, type SidebarFilter, type SidebarSort } from '../model/sidebarTree'
 import { Icon, MachineIcon } from './glyphs'
 import { ProjectBadge } from './ProjectBadge'
 
@@ -16,13 +16,19 @@ type Props = {
   machines: readonly MachineChoice[]
   filter: SidebarFilter
   onFilter: (filter: SidebarFilter) => void
+  /** How the projects are ordered; a pick is kept with the settings. */
+  sort: SidebarSort
+  onSort: (sort: SidebarSort) => void
 }
 
+const SORT_WORDS: Readonly<Record<SidebarSort, string>> = { recent: 'Recently opened', name: 'Name, A to Z', machine: 'Machine' }
+
 /**
- * The sidebar's filter: which project and which machine it shows. A pick applies at once and the menu stays open; Reset
- * appears while anything is picked. The machines are offered only once there is more than this computer.
+ * The sidebar's filter: how its projects are ordered, and which project and which machine it shows. A pick applies at once
+ * and the menu stays open; Reset appears while anything is narrowed. The machines are offered only once there is more
+ * than this computer, and ordering by machine only then too.
  */
-export function SidebarFilterMenu({ projects, machines, filter, onFilter }: Props) {
+export function SidebarFilterMenu({ projects, machines, filter, onFilter, sort, onSort }: Props) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const matching = projects.filter((choice) => needle === '' || choice.name.toLowerCase().includes(needle))
@@ -31,9 +37,18 @@ export function SidebarFilterMenu({ projects, machines, filter, onFilter }: Prop
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <IconButton label={narrowed ? 'Filter (on)' : 'Filter'} tip="Filter by project or machine" on={narrowed}><Icon name="filter" /></IconButton>
+        <IconButton label={narrowed ? 'Sort and filter (on)' : 'Sort and filter'} tip="Sort, or filter by project or machine" on={narrowed}><Icon name="filter" /></IconButton>
       </Popover.Trigger>
-      <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Filter the sidebar" className="mx-sbf">
+      <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Sort and filter the sidebar" className="mx-sbf">
+        <div className="mx-sbf-label" aria-hidden="true">Sort by</div>
+        <div className="mx-sbf-list" role="group" aria-label="Sort by">
+          {SIDEBAR_SORTS.filter((each) => each !== 'machine' || machines.length > 1 || sort === 'machine').map((each) => (
+            <button key={each} type="button" aria-pressed={sort === each} className={`mx-sbf-choice${sort === each ? ' is-on' : ''}`} onClick={() => { onSort(each) }}>
+              <span className="mx-sbf-name">{SORT_WORDS[each]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="mx-sbf-label" aria-hidden="true">Show</div>
         <label className="mx-sbf-search">
           <Icon name="search" size={13} />
           <input value={query} onChange={(event) => { setQuery(event.target.value) }} placeholder={projects.length > PROJECT_ROWS_SHOWN ? `Find one of ${String(projects.length)} projects` : 'Filter projects'} aria-label="Filter projects" spellCheck={false} />

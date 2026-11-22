@@ -8,7 +8,7 @@ import { machineTitle, type MachineHead, type UpdateAction } from '../model/mach
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
 import type { SessionView } from '../model/session'
 import { rowTitle } from '../model/sidebar'
-import { filterChoices, helpersFoldKey, IDLE_FOLD_KEY, idleProjectFoldKey, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
+import { filterChoices, helpersFoldKey, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter, type SidebarSort } from '../model/sidebarTree'
 import { Collapse } from './Collapse'
 import { Icon } from './glyphs'
 import { machineMenuEntries, type MachineActions } from './machineMenu'
@@ -40,6 +40,11 @@ export type SidebarProps = {
   projects: readonly MachineProjects[]
   /** The project last opened or picked (`useOpenedProjects().selected`): it is unfolded when it changes. */
   selectedProject: OpenedProject | null
+  /** Every opened project in the order it was opened (`useOpenedProjects().opened`), for the Recent order. */
+  opened: readonly OpenedProject[]
+  /** How the projects are ordered, and how the filter menu changes it. */
+  sort: SidebarSort
+  onSort: (sort: SidebarSort) => void
   /** The agent programs on this computer, for a project's `+` menu; null while that is unknown. */
   installedAgents: readonly string[] | null
   /** Opens the search over every session, project and action. */
@@ -145,8 +150,8 @@ function Expanded(props: SidebarProps) {
   // The project just opened or picked is shown whatever the filter said: opening a project and not seeing it reads as a failure.
   const selected = props.selectedProject
   const [filteredFor, setFilteredFor] = useState(selected)
-  const everything = sidebarOrder(props.machines, props.projects)
-  const listedSelected = selected === null ? null : [...everything.active, ...everything.idle].find((group) => sameProject(group.project, selected)) ?? null
+  const everything = sidebarOrder(props.machines, props.projects, NO_FILTER, null, props.sort, props.opened)
+  const listedSelected = selected === null ? null : everything.projects.find((group) => sameProject(group.project, selected)) ?? null
   const valid = validFilter(picked, choices)
   const hidesSelected = selected !== filteredFor && listedSelected !== null && !passesFilter(valid, listedSelected)
   if (selected !== filteredFor) {
@@ -154,11 +159,10 @@ function Expanded(props: SidebarProps) {
     if (hidesSelected) setPicked(NO_FILTER)
   }
   const filter = hidesSelected ? NO_FILTER : valid
-  const order = sidebarOrder(props.machines, props.projects, filter, held)
-  // Unfolded with the fold keys the list spells: its own project, or the Idle section and its heading there when that is where it sits.
-  const revealKeys = listedSelected === null ? [] : everything.active.some((group) => group.key === listedSelected.key) ? [listedSelected.key] : [IDLE_FOLD_KEY, idleProjectFoldKey(listedSelected.key)]
+  const order = sidebarOrder(props.machines, props.projects, filter, held, props.sort, props.opened)
+  // The project just opened or picked is unfolded, so its sessions show.
+  const revealKeys = listedSelected === null ? [] : [listedSelected.key]
   const folds = useSidebarFolds(selected, revealKeys)
-  const idleOpen = folds.isOpen(IDLE_FOLD_KEY)
   // Measured to slide only when a row or heading can have moved: its place, its name, or a fold.
   useFlip(body, reduced, `${orderPlacement(order)}#${folds.signature}#${props.sessions.map((session) => `${session.id}:${rowTitle(session)}`).join('|')}`)
 
@@ -245,7 +249,7 @@ function Expanded(props: SidebarProps) {
     </Fragment>
   ))
 
-  const nothingListed = order.active.length === 0 && order.idle.length === 0
+  const nothingListed = order.projects.length === 0
   return (
     <div className="mx-sidebar-expanded">
       <div className="mx-sb-top">
@@ -253,7 +257,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-sb-title">Chats</span>
         <span className="mx-spacer" />
         <IconButton label="Search" tip={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" /></IconButton>
-        <SidebarFilterMenu projects={choices.projects} machines={choices.machines} filter={filter} onFilter={setPicked} />
+        <SidebarFilterMenu projects={choices.projects} machines={choices.machines} filter={filter} onFilter={setPicked} sort={props.sort} onSort={props.onSort} />
         <IconButton label="Open a project" tip={tip('Open a project', 'open-folder')} disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><FolderPlus strokeWidth={1.9} aria-hidden="true" /></IconButton>
       </div>
       <div ref={body} className="mx-sb-body">
@@ -265,31 +269,12 @@ function Expanded(props: SidebarProps) {
               <span>{nothingListed ? 'Open a project, then start a session in it. It shows here, with the ones that need you on top.' : 'Start one from the main screen. It shows here, with the ones that need you on top.'}</span>
             </div>
           )}
-          {order.active.map((group) => (
-            <ActiveProject key={group.key} group={group} open={folds.isOpen(group.key)} onToggle={() => { folds.toggle(group.key) }} menus={headOf(group)}>
+          {order.projects.map((group) => (
+            <Project key={group.key} group={group} open={folds.isOpen(group.key)} onToggle={() => { folds.toggle(group.key) }} menus={headOf(group)}>
               {renderRows(group.rows)}
-            </ActiveProject>
+            </Project>
           ))}
         </div>
-        {order.idle.length > 0 && (
-          <section className="mx-sb-idle" aria-label={order.idleCount > 0 ? 'Idle' : 'Projects'}>
-            <button type="button" className="mx-sb-idle-head" data-flip="head:idle" aria-expanded={idleOpen} onClick={() => { folds.toggle(IDLE_FOLD_KEY) }}>
-              <span>{order.idleCount > 0 ? 'Idle' : 'Projects'}</span>
-              {order.idleCount > 0 && <span className="mx-sb-count">{order.idleCount}</span>}
-              <span className="mx-spacer" />
-              <span className={`mx-sb-caret${idleOpen ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
-            </button>
-            <Collapse open={idleOpen}>
-              <div className="mx-sb-idle-list" onScroll={endHover}>
-                {order.idle.map((group) => (
-                  <IdleProject key={group.key} group={group} open={folds.isOpen(idleProjectFoldKey(group.key))} onToggle={() => { folds.toggle(idleProjectFoldKey(group.key)) }} menus={headOf(group)}>
-                    {renderRows(group.rows)}
-                  </IdleProject>
-                ))}
-              </div>
-            </Collapse>
-          </section>
-        )}
       </div>
       <div className="mx-sb-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
@@ -359,45 +344,23 @@ function HelperGroup({ lead, helpers, open, onToggle, children }: { lead: Sessio
   )
 }
 
-/** `count` sessions as a heading's name says it, `kind` (such as "idle") before the noun. */
-const sessionsWord = (count: number, kind = ''): string => `${String(count)} ${kind === '' ? '' : `${kind} `}${count === 1 ? 'session' : 'sessions'}`
+/** `count` sessions as a heading's name says it. */
+const sessionsWord = (count: number): string => `${String(count)} ${count === 1 ? 'session' : 'sessions'}`
+
+/** How a project's own state is said on its heading and to a screen reader. */
+const PROJECT_STATE_WORDS: Readonly<Record<'needs' | 'working' | 'done', string>> = { needs: 'needs you', working: 'working', done: 'done' }
 
 /**
- * A project with something going on: its heading (badge, name, machine tag, how many sessions) folds its rows, `+` opens
- * what can start in it, and a right-click its menu. Folded, it keeps an amber dot while a row under it needs you.
+ * A project and all its sessions, self-contained: its heading (badge, name, machine tag, how many sessions, and its own
+ * state, the most urgent of its rows) folds its rows, `+` opens what can start in it, and a right-click its menu. A project
+ * with nothing going on is drawn grey (`.is-idle`) until the pointer or the keyboard is on it. One with no session has
+ * nothing to fold: its heading opens the `+` menu itself, with "No sessions" at its right.
  */
-function ActiveProject({ group, open, onToggle, menus, children }: { group: ProjectGroup; open: boolean; onToggle: () => void; menus: HeadMenus; children: ReactNode }) {
-  const { onPlus } = menus
-  return (
-    <div className="mx-sb-group">
-      {/* A row holding the folding button and the buttons beside it: a button cannot hold a button. */}
-      <div className="mx-sb-head" data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
-        <button type="button" className="mx-sb-head-main" aria-expanded={open} title={group.project.folder} onClick={onToggle}>
-          <ProjectBadge name={group.name} />
-          <span className="mx-sb-head-name">{group.name}</span>
-          <span className="sr-only">{`, ${sessionsWord(group.rows.length)}`}</span>
-        </button>
-        {menus.tag}
-        <span className="mx-sb-count" aria-hidden="true">{group.rows.length}</span>
-        {!open && needsYou(group) && <span className="mx-sb-alert" role="img" aria-label="Something here needs you" title="Something here needs you" />}
-        <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
-        {onPlus !== null && <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} aria-haspopup="menu" onClick={onPlus}><Icon name="plus" /></IconButton>}
-      </div>
-      <Collapse open={open}>
-        <div className="mx-sb-rows" role="list" aria-label={group.name}>{children}</div>
-      </Collapse>
-    </div>
-  )
-}
-
-/**
- * A project in the Idle section (drawn grey, `.is-idle`, until the pointer or the keyboard is on a row). Its heading folds
- * its idle rows as a busy project's does, with its own fold (`idleProjectFoldKey`), and `+` opens what can start in it. A
- * project with no session has nothing to fold: its heading opens that menu itself, with "No sessions" at its right.
- */
-function IdleProject({ group, open, onToggle, menus, children }: { group: ProjectGroup; open: boolean; onToggle: () => void; menus: HeadMenus; children: ReactNode }) {
+function Project({ group, open, onToggle, menus, children }: { group: ProjectGroup; open: boolean; onToggle: () => void; menus: HeadMenus; children: ReactNode }) {
   const { onPlus } = menus
   const empty = group.rows.length === 0
+  const quiet = group.mark === null || group.mark === 'idle'
+  const state = group.mark === null || group.mark === 'idle' ? null : group.mark
   const name = (
     <>
       <ProjectBadge name={group.name} />
@@ -405,8 +368,9 @@ function IdleProject({ group, open, onToggle, menus, children }: { group: Projec
     </>
   )
   return (
-    <div className="mx-sb-group is-idle">
-      <div className="mx-sb-head is-idle" data-project={group.key} data-flip={`idle-head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
+    <div className={`mx-sb-group${quiet ? ' is-idle' : ''}`}>
+      {/* A row holding the folding button and the buttons beside it: a button cannot hold a button. */}
+      <div className={`mx-sb-head${quiet ? ' is-idle' : ''}`} data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
         {empty ? (
           <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
             {name}
@@ -415,14 +379,16 @@ function IdleProject({ group, open, onToggle, menus, children }: { group: Projec
         ) : (
           <button type="button" className="mx-sb-head-main" aria-expanded={open} title={group.project.folder} onClick={onToggle}>
             {name}
-            <span className="sr-only">{`, ${sessionsWord(group.rows.length, 'idle')}`}</span>
+            <span className="sr-only">{`, ${sessionsWord(group.rows.length)}${state === null ? '' : `, ${PROJECT_STATE_WORDS[state]}`}`}</span>
           </button>
         )}
         {menus.tag}
         <span className="mx-spacer" />
         {empty
           ? <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>
-          : <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>}
+          : <span className="mx-sb-count" aria-hidden="true">{group.rows.length}</span>}
+        {state !== null && <span className="mx-sb-head-state" aria-hidden="true" title={PROJECT_STATE_WORDS[state]}><StatusIcon status={state} size={SUMMARY_MARK_PX} /></span>}
+        {!empty && <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>}
         {/* With no session the heading itself opens this menu from the keyboard, so the + is only the pointer's second way in. */}
         {onPlus !== null && (
           <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} {...(empty ? { tabIndex: -1, 'aria-hidden': true } : { 'aria-haspopup': 'menu' as const })} onClick={onPlus}>
@@ -432,7 +398,7 @@ function IdleProject({ group, open, onToggle, menus, children }: { group: Projec
       </div>
       {!empty && (
         <Collapse open={open}>
-          <div className="mx-sb-rows" role="list" aria-label={`Idle in ${group.name}`}>{children}</div>
+          <div className="mx-sb-rows" role="list" aria-label={group.name}>{children}</div>
         </Collapse>
       )}
     </div>

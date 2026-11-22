@@ -331,9 +331,11 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   the side panel floats over the file pane and does not squeeze it. The **status bar**: version and `Update to …` at the
   left; at the right one usage bar per agent (its tightest limit), then the Commands and Shortcuts keys. **Context is
   always a bar, never a ring.** The side panel holds tabs of four surfaces: Files, Changes, Terminal, Pull requests.
-- **The sidebar's order.** Projects with something going on come first, ranked by their most urgent session: needs
-  you, then working, then done. **Idle** is one dimmed section at the bottom, grouped by project, and it also lists
-  projects with no session. There are no machine headings, no status headings and no pinned needs-you list: a remote
+- **The sidebar's order.** One list of projects, each self-contained: it holds all its sessions (the most urgent
+  first: needs you, working, done, idle) and says its own state, the most urgent of them, on its heading. A project
+  never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
+  opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
+  is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
   project carries a machine tag, amber while that machine is offline. A session row is its name at the left and its
   status mark at the right, with no time and no agent icon. A lead sorts by its most urgent helper. There is no Put
   away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
@@ -603,19 +605,21 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; handoff v5, section 4). A 264px card on the
   panel role, lifted from the ground by its tone. Agents and shells only: no fleets, ships or tabs.
   **Header** (44px): **Hide sidebar**, the title **Chats** (13px 500 `--fg2`), then three 26px icon buttons: **Search**
-  (the command palette), **Filter** (`SidebarFilterMenu`: a 262px popover with a project search, the projects with
+  (the command palette), **Sort and filter** (`SidebarFilterMenu`: a 262px popover; **Sort by** first, three choices
+  (Recently opened, Name A to Z, and Machine only once another machine is configured), kept with the settings
+  (`sidebarSort`); then **Show**, a project search, the projects with
   their session counts, six rows before they scroll, **All projects** first while the search is empty, then, once
   another machine is configured, the **Machines** with their counts, an offline one amber and marked `offline`; a pick
   applies at once and the menu stays open, pressing the picked machine again clears it, **Reset** shows while anything
   is picked and the button is in its on state then) and **Open a project** (a folder with a plus; the Open a project
   dialog for this computer; see *Starting a session*, below).
   **Order** (`model/sidebarTree.ts`, `sidebarOrder`): *The sidebar's order* in [Design language](#design-language).
-  The projects with something going on scroll at the top. A **project** is a heading and its rows, with no card and no
-  rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
+  A **project** is a heading and all its rows, with no card and no rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
   letters, in the project's colour on an 18% tint of it), the name (12px 600 `--fg`; the folder is its tooltip), on
-  another machine the machine tag, and the session count (10.5px mono, dim). A click folds it: the caret shows on hover
-  and while folded, and a folded project with a row that needs you keeps a 7px amber dot. A `+` button shows on hover
-  and on focus. The project just opened or picked is unfolded, and shown whatever the filter said.
+  another machine the machine tag, the session count (10.5px mono, dim) and the project's **own state**: the 14px status
+  mark of its most urgent session (needs you, working, done), nothing while all are idle. The mark stays when the
+  project is folded, so a folded project still says it needs you. A click folds it: the caret shows on hover and while
+  folded. A `+` button shows on hover and on focus. The project just opened or picked is unfolded, and shown whatever the filter said.
   **Machine tag** (`MachineTag`): the machine's name with a 10px server mark, in `--accent-text`, 10.5px mono, with no
   fill; amber (`--needs`) while that machine is not connected. Its tooltip is the host's one sentence for what failed
   (ADR 0017), and it opens the machine's menu (`machineMenu.ts`): while the machine is down that sentence, then
@@ -660,20 +664,15 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   saves, Esc cancels, and an empty or unchanged name changes nothing; a session nothing was sent to starts with an empty
   field over "New session". Enter and Esc give the row the keyboard back. The rail and a pane's menu, which show no
   name to type on, open the rename dialog instead, where an empty name clears it.
-  **Idle** is one section fixed under the list (at most 45% of the height, with its own scroll): its heading (12px 600
-  `--muted`, the count, a caret) folds it. Under it each project is a heading (badge, name in 500, machine tag) that
-  folds its idle rows as a busy project's heading does (the same button, `aria-expanded`, quiet caret and `+`), then
-  its idle rows, set in under the name with no mark. A project with no session has nothing to fold: its heading's click
-  opens the project's `+` menu, with **No sessions** at its right. A project with both kinds of session is in both
-  places, and each place folds on its own; the projects with nothing going on come first. While the section lists only
-  projects with no session it is headed **Projects** and has no count. A session the daemon has put away or snoozed is
-  listed like any other.
-  **Everything in the Idle section is grey**: names, badge letters and fill, and machine tags in `--dim` (a badge on the
-  ink at 6%, no project colour), never a raw colour or a filter. The row the pointer is on, the heading or row that holds
-  keyboard focus (`:focus-visible`), and the selected session take their own colours back (a heading `--fg` with its
-  badge's colour, a row `--fg2`, the selected row `--fg`), fading over `--t-fast`; only colour changes, never the weight.
-  A machine tag that is not connected stays amber.
-  Which headings are folded, the Idle section's and its projects' too, is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
+  A project with no session has nothing to fold: its heading's click opens the project's `+` menu, with **No
+  sessions** at its right. A session the daemon has put away or snoozed is listed like any other.
+  **A project with nothing going on is grey**: its name, badge letters and fill, machine tag and rows in `--dim` (a badge
+  on the ink at 6%, no project colour), never a raw colour or a filter. The row the pointer is on, the heading or row
+  that holds keyboard focus (`:focus-visible`), and the selected session take their own colours back (a heading `--fg`
+  with its badge's colour, a row `--fg2`, the selected row `--fg`), fading over `--t-fast`; only colour changes, never
+  the weight or the place, so a project that starts working only brightens. A machine tag that is not connected stays
+  amber.
+  Which headings are folded, projects' and helpers', is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
   by machine name and folder), so a fold survives a restart.
   A row whose status changes glides to its new place, and the headings and rows it passes glide with it (`useFlip`);
   Reduce motion turns it off. A row is never tinted or flashed when its status changes.

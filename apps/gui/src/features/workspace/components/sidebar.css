@@ -14,7 +14,7 @@
 .mx-sb-top { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 14px; }
 .mx-sb-title { font-size: 13px; font-weight: 500; color: var(--fg2); }
 
-/* The projects with something going on scroll; the Idle section under them keeps its place and scrolls on its own. */
+/* The projects scroll as one list between the header and the foot. */
 .mx-sb-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .mx-sb-list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px 8px 8px; scrollbar-width: thin; }
 .mx-sb-note { padding: 6px 10px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
@@ -23,7 +23,6 @@
 
 /* A project: no card and no rule, the badge and the bold name head it and the space under it ends it. */
 .mx-sb-group { display: flex; flex-direction: column; margin-bottom: 14px; }
-.mx-sb-group.is-idle { margin-bottom: 6px; }
 /* The heading is one row; its folding button is stretched over all of it, and the tag and the + sit above that. */
 .mx-sb-head { position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 2px 0 8px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); white-space: nowrap; transition: background-color var(--t-fast) var(--ease); }
 .mx-sb-head:hover { background: rgba(var(--ink), .035); }
@@ -31,8 +30,8 @@
 .mx-sb-head-main::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .mx-sb-head-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-sb-count { flex: none; font: 500 10.5px var(--mono); color: var(--dim); opacity: .7; font-variant-numeric: tabular-nums; }
-/* A folded project that hides a session waiting on you. */
-.mx-sb-alert { flex: none; width: 7px; height: 7px; margin-left: 4px; border-radius: 50%; background: var(--needs); }
+/* A project's own state, the most urgent of its sessions, so a folded project still says it. */
+.mx-sb-head-state { flex: none; display: flex; }
 .mx-sb-caret { flex: none; display: flex; margin-left: auto; color: var(--dim); transition: transform var(--t-base) var(--ease), opacity var(--t-fast) var(--ease); }
 .mx-sb-caret.is-open { transform: rotate(90deg); }
 /* A project's caret shows while it is folded or the pointer is on the heading; an open heading at rest is its name alone. */
@@ -88,31 +87,17 @@
 /* A finished helper stays listed until it is closed, a step quieter than the ones still at work. */
 .mx-sb-item.is-nested .mx-sb-row.is-done:not(.is-selected) .mx-sb-row-name { color: var(--muted); }
 
-/* Idle: one section at the bottom, dimmed, at most 45% of the height, past which it scrolls on its own. */
-.mx-sb-idle { flex: none; display: flex; flex-direction: column; max-height: 45%; min-height: 0; padding: 4px 8px 0; }
-.mx-sb-idle-head { flex: none; width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; }
-.mx-sb-idle-head:hover { background: rgba(var(--ink), .035); color: var(--fg); }
-.mx-sb-idle-head .mx-sb-caret { margin-left: 0; }
-.mx-sb-idle > .mx-collapse-grid { flex: 1 1 auto; min-height: 0; }
-.mx-sb-idle > .mx-collapse-grid > .mx-collapse-inner { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
-.mx-sb-idle-list { padding-top: 2px; }
-/* Everything in an Idle project is grey (`--dim`, the badge and a machine tag too) until the pointer or the keyboard is on
-   a row: that row alone, and the selected one, take their own colours back over `--t-fast`. Only colour changes, so the
-   text never re-sets; a machine that is not connected keeps its amber. */
-.mx-sb-head.is-idle { height: 26px; }
+/* A project with nothing going on is grey (`--dim`, the badge and a machine tag too) until the pointer or the keyboard is
+   on it: that row alone, and the selected one, take their own colours back over `--t-fast`. Only colour changes, so the
+   text never re-sets and nothing moves when a project starts or stops; a machine that is not connected keeps its amber. */
 .mx-sb-head.is-idle .mx-sb-head-main { font-weight: 500; color: var(--dim); }
 .mx-sb-head.is-idle:is(:hover, :has(:focus-visible)) .mx-sb-head-main { color: var(--fg); }
 .mx-sb-group.is-idle .mx-sb-badge { transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
 .mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-badge { color: var(--dim); background: rgba(var(--ink), .06); }
 .mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-tag:not(.is-down) { color: var(--dim); }
-/* Idle rows line up under the project's name, past its badge. */
-.mx-sb-group.is-idle .mx-sb-row { padding-left: 34px; }
 .mx-sb-group.is-idle .mx-sb-row-name { color: var(--dim); transition: color var(--t-fast) var(--ease); }
 .mx-sb-group.is-idle .mx-sb-row:is(:hover, :focus-visible) .mx-sb-row-name { color: var(--fg2); }
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
-/* An idle lead's helpers start under its name, and their rows keep a helper's own inset. */
-.mx-sb-group.is-idle .mx-sb-helpers { margin-left: 40px; }
-.mx-sb-group.is-idle .mx-sb-item.is-nested .mx-sb-row { padding-left: 8px; }
 
 /* The foot: add a remote machine and pull requests at the left, Settings at the right. */
 .mx-sb-foot { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 10px; }
