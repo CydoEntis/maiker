@@ -510,9 +510,7 @@ async fn a_claude_chats_process_is_told_it_is_this_chat_and_nothing_else() {
         .await
         .unwrap();
     loop {
-        if let Payload::Notification { method, .. } = receive_claude_payload(&mut received, owner).await
-            && method == "turn/completed"
-        {
+        if let Payload::Event(ProviderEvent::TurnCompleted { .. }) = receive_claude_payload(&mut received, owner).await {
             break;
         }
     }
