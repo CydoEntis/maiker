@@ -4,7 +4,7 @@ import { useConfirm } from '@/features/confirm/useConfirm'
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
-import { isDesktop, markSeenOnDaemon } from '@/api/daemon'
+import { isDesktop, markSeenOnDaemon, renameConversationOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import { readSettingsPreferences, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
@@ -30,7 +30,7 @@ import { asksOutside } from './model/outsideAsks'
 import { useMachineToasts } from './useMachineToasts'
 import { useTrayItem } from './useTrayItem'
 import { useSystemDark, useSystemReducedMotion, useWindowNarrowerThan } from './useWindowQueries'
-import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withoutTerminals, writeAgentTerminals } from '@/data/agentTerminals'
+import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withTerminals, writeAgentTerminals } from '@/data/agentTerminals'
 import { useAgentExits } from './useAgentExits'
 import { readMachineNicknames } from '@/data/machineNicknames'
 import type { OpenSubagent } from './model/subagents'
@@ -113,7 +113,6 @@ export function useWorkspaceState() {
   // Which shells are an agent's own terminals (kept between runs), and which of them each agent shows.
   const [savedAgentTerminals, setAgentTerminals] = useState(readAgentTerminals)
   useEffect(() => { writeAgentTerminals(savedAgentTerminals) }, [savedAgentTerminals])
-  const { savedSplits, setSavedSplits, splitShells } = useSplitStore()
   const [activeTerminals, setActiveTerminals] = useState<ReadonlyMap<string, string>>(new Map())
   const [getFileId, setGetFileId] = useState<string | null>(null)
   const [specialistsId, setSpecialistsId] = useState<string | null>(null)
@@ -163,6 +162,7 @@ export function useWorkspaceState() {
 
   const { machines, machinesRef, machinesKnown, machineSaid, forgetMachine } = useRemoteMachines()
   const { sessions, sessionMap, setExpectedAgents, paneSessions } = useSessionList({ sessionsQuery, online, machines, home, layout })
+  const { savedSplits, setSavedSplits, setFresh, provenOf, splitOwned } = useSplitStore(sessionMap)
   const focusedId = focusedSessionId(layout)
   const [turnDiff, setTurnDiff] = useTurnDiff(focusedId)
   // A click anywhere outside the panes takes the border off the focused pane; a click in a pane, or focus moving to another pane, puts it back.
@@ -195,11 +195,11 @@ export function useWorkspaceState() {
   const { retryNamed, addNamed, openLoginNamed, grantNamed, updateNamed, updateProgress, copyCommand, cancelAdding, removeNamed } = useMachineActions(sessionsQuery.data, forgetMachine)
   // The sidebar is one flat list in creation order; a status change, a pin or a focus never moves a row.
   const ordered = useMemo(() => inCreationOrder(sessions), [sessions])
-  // A session's own shells are not sessions to list; one whose session is gone is listed again. They end with it.
-  const ownedShells = useMemo(() => liveAgentTerminals(savedAgentTerminals, new Set(sessionMap.keys())), [savedAgentTerminals, sessionMap])
+  // An agent's own terminals are tabs of that agent, not sessions to list; one whose agent is gone is listed again.
+  const agentTerminals = useMemo(() => liveAgentTerminals(savedAgentTerminals, new Set(sessionMap.keys()), (id) => Boolean(sessionMap.get(id)?.conversation.agent)), [savedAgentTerminals, sessionMap])
+  // With a session's proven splits, the shells that are a session's own: none is a session to list, and each ends with it.
+  const ownedShells = useMemo(() => withTerminals(agentTerminals, splitOwned), [agentTerminals, splitOwned])
   const ownedTerminals = useMemo(() => ownedTerminalIds(ownedShells), [ownedShells])
-  // Of those, the ones that are tabs of the side panel or its drawer: a split is a pane of its session instead.
-  const agentTerminals = useMemo(() => withoutTerminals(ownedShells, splitShells), [ownedShells, splitShells])
   // The side panel's tabs, each session's own: Files, Changes and the session's terminals that are not pinned to the bottom.
   const { panelOf, changePanel, openSurface } = useSidePanel({ agentTerminals, sessionMap, setInspectOpen })
   // A shell pane left open from the Terminal view is taken out of the Chat view's layout (state adjusted while rendering, as it follows from the view); the shell itself keeps running.
@@ -307,9 +307,14 @@ export function useWorkspaceState() {
     setNewChatOpen(true)
   }, [])
   const { addAgentTerminal, closeAgentTerminals, startAgent } = useAgentStarts({ sessionMap, endSessions, confirm, setAgentTerminals, onTerminalAdded, runStart, startRemoteShell, startNewChat, openDraft, chatView, machineNameOf: (machine) => heads.find((head) => head.machine === machine)?.name ?? '', setLayout, focusedSession, setSettingsSection, preferences, home })
-  // The Terminal view's splits: each session's own tree of panes, its shells recorded with the session's other terminals.
+  // The Terminal view's splits: each session's own tree of panes. A split's shell carries a mark as its name on the daemon.
+  const nameShell = useCallback((shellId: string, name: string) => {
+    void renameConversationOnDaemon({ id: shellId }, name)
+      .then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
+      .catch((error: unknown) => { console.warn('Could not mark the split; it is the session’s only until the app restarts', error) })
+  }, [queryClient])
   const shownAsTerminal = useCallback((session: SessionView) => !chatView && chatOf(session).view === 'terminal', [chatView, chatOf])
-  const sessionSplits = useSessionSplits({ savedSplits, setSavedSplits, ownedShells, knownTerminals: savedAgentTerminals, setAgentTerminals, sessionMap, layout, setLayout, shownAsTerminal, online, listed: online && sessionsQuery.isSuccess, runStart, closeAgentTerminals, endSessions })
+  const sessionSplits = useSessionSplits({ savedSplits, setSavedSplits, setFresh, provenOf, nameShell, sessionMap, layout, setLayout, shownAsTerminal, online, listed: online && sessionsQuery.isSuccess, runStart, closeAgentTerminals, endSessions })
   const { split, splitsOf, paneCountOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit } = sessionSplits
   // The Terminal key, the command palette and the drawer's own buttons all call it. With terminals pinned to the bottom it shows
   // and hides their drawer; without, it opens the side panel on the session's terminal, starting the first one when there is none.

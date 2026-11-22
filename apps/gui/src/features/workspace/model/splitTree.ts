@@ -18,11 +18,18 @@ export type SplitDir = 'right' | 'down'
 export type SplitBranch = { dir: SplitDir; a: SplitTree; b: SplitTree; ratio: number }
 export type SplitTree = string | SplitBranch
 
-/** `focus` is the leaf the keys go to; `numbers` is each shell's `Split n`, kept while the shell lives. */
-export type SessionSplits = { tree: SplitTree; focus: string; numbers: Readonly<Record<string, number>> }
+/**
+ * `focus` is the leaf the keys go to; `numbers` is each shell's `Split n`, kept while the shell lives. `marks` is the
+ * name each shell was given on the daemon when it was made: a pane's number is handed out again by a daemon that
+ * restarted, so the number alone never says a listed pane is this split (`provenShells`).
+ */
+export type SessionSplits = { tree: SplitTree; focus: string; numbers: Readonly<Record<string, number>>; marks: Readonly<Record<string, string>> }
 
 /** A session with no splits: its agent's pane alone. */
-export const UNSPLIT: SessionSplits = { tree: AGENT_LEAF, focus: AGENT_LEAF, numbers: {} }
+export const UNSPLIT: SessionSplits = { tree: AGENT_LEAF, focus: AGENT_LEAF, numbers: {}, marks: {} }
+
+/** What the daemon's list says of a pane, as far as telling a split goes: the name it carries, and whether an agent runs in it. */
+export type ListedPane = { name: string | null; agent: boolean }
 
 /** Where a pane sits in its session's room, as shares of it (0 to 1). */
 export type PaneRect = { id: string; x: number; y: number; w: number; h: number }
@@ -53,13 +60,13 @@ function replaceLeaf(tree: SplitTree, id: string, branch: SplitBranch): SplitTre
 
 /**
  * Halves the pane `leaf`: it keeps the first half and the new shell `id` takes the other, with the focus and the
- * lowest free `Split n`. Unchanged when the session is full, `leaf` is not one of its panes, or `id` already is.
+ * lowest free `Split n`. `mark` is the name the shell is given on the daemon, which proves it later. Unchanged when the session is full, `leaf` is not one of its panes, or `id` already is.
  */
-export function splitLeaf(splits: SessionSplits, leaf: string, dir: SplitDir, id: string): SessionSplits {
+export function splitLeaf(splits: SessionSplits, leaf: string, dir: SplitDir, id: string, mark: string): SessionSplits {
   const leaves = leavesOf(splits.tree)
   if (leaves.length >= MAX_SESSION_PANES || !leaves.includes(leaf) || leaves.includes(id) || id === AGENT_LEAF) return splits
   const tree = replaceLeaf(splits.tree, leaf, { dir, a: leaf, b: id, ratio: HALF })
-  return { tree, focus: id, numbers: { ...splits.numbers, [id]: lowestFree(Object.values(splits.numbers)) } }
+  return { tree, focus: id, numbers: { ...splits.numbers, [id]: lowestFree(Object.values(splits.numbers)) }, marks: { ...splits.marks, [id]: mark } }
 }
 
 /** `tree` without the leaf `id`, and the pane that took its room: the nearest one of the side that stays. */
@@ -81,8 +88,23 @@ export function closeLeaf(splits: SessionSplits, id: string): SessionSplits {
   if (id === AGENT_LEAF) return splits
   const { tree, heir } = dropLeaf(splits.tree, id)
   if (heir === null) return splits
-  const numbers = Object.fromEntries(Object.entries(splits.numbers).filter(([shell]) => shell !== id))
-  return { tree, focus: splits.focus === id ? heir : splits.focus, numbers }
+  const without = <T>(record: Readonly<Record<string, T>>) => Object.fromEntries(Object.entries(record).filter(([shell]) => shell !== id))
+  return { tree, focus: splits.focus === id ? heir : splits.focus, numbers: without(splits.numbers), marks: without(splits.marks) }
+}
+
+/**
+ * The shells of the tree that are proven to be this session's splits. A listed pane is one only when it carries the
+ * split's own mark as its name, or is a shell this window started in this run (`fresh`) that has no name yet; and never
+ * when the daemon says an agent runs in it. Anything else at that number is somebody else's pane: after a daemon
+ * restart the numbers start again, and a stale record must neither hide such a pane nor end it.
+ */
+export function provenShells(splits: SessionSplits, paneOf: (id: string) => ListedPane | undefined, fresh: ReadonlySet<string>): Set<string> {
+  return new Set(leavesOf(splits.tree).filter((id) => {
+    const pane = id === AGENT_LEAF ? undefined : paneOf(id)
+    if (pane === undefined || pane.agent) return false
+    const mark = splits.marks[id]
+    return (mark !== undefined && pane.name === mark) || (pane.name === null && fresh.has(id))
+  }))
 }
 
 /** The splits whose shells are in `live`: one that is gone leaves the tree as if it had been closed. */
@@ -148,18 +170,23 @@ function parseTree(value: unknown): SplitTree | null {
 /** Reads one session's stored splits; null for anything that is not a tree of the agent's pane and up to five shells. */
 export function parseSplits(value: unknown): SessionSplits | null {
   if (typeof value !== 'object' || value === null) return null
-  const record = value as { tree?: unknown; focus?: unknown; numbers?: unknown }
+  const record = value as { tree?: unknown; focus?: unknown; numbers?: unknown; marks?: unknown }
   const tree = parseTree(record.tree)
   if (tree === null) return null
   const leaves = leavesOf(tree)
   if (leaves.length > MAX_SESSION_PANES || new Set(leaves).size !== leaves.length || !leaves.includes(AGENT_LEAF)) return null
   const stored = typeof record.numbers === 'object' && record.numbers !== null ? (record.numbers as Record<string, unknown>) : {}
+  const storedMarks = typeof record.marks === 'object' && record.marks !== null ? (record.marks as Record<string, unknown>) : {}
   const numbers: Record<string, number> = {}
+  const marks: Record<string, string> = {}
   for (const id of leaves) {
     if (id === AGENT_LEAF) continue
+    const mark = storedMarks[id]
+    // A split with no mark can never be proven, so it is never shown; it is kept out of the marks, not given one.
+    if (typeof mark === 'string' && mark !== '') marks[id] = mark
     const n = stored[id]
     const taken = Object.values(numbers)
     numbers[id] = typeof n === 'number' && Number.isInteger(n) && n > 0 && !taken.includes(n) ? n : lowestFree(taken)
   }
-  return { tree, focus: typeof record.focus === 'string' && leaves.includes(record.focus) ? record.focus : AGENT_LEAF, numbers }
+  return { tree, focus: typeof record.focus === 'string' && leaves.includes(record.focus) ? record.focus : AGENT_LEAF, numbers, marks }
 }

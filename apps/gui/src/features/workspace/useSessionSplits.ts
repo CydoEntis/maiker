@@ -1,7 +1,7 @@
-import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useState } from 'react'
 import { daemonSaidEnded } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { type AgentTerminals, withAgentTerminal } from '@/data/agentTerminals'
+import type { AgentTerminals } from '@/data/agentTerminals'
 import { toast } from '@/lib/toast'
 import { wasClosed } from './closedSessions'
 import { movePanes } from './components/paneTransition'
@@ -9,7 +9,7 @@ import { activeArrangement, cycleFocus, type Layout, type PaneSlot } from './mod
 import { remoteStartRefusal } from './model/machines'
 import type { SessionView } from './model/session'
 import { readSessionSplits, type SavedSplits, writeSessionSplits } from './model/splitStorage'
-import { AGENT_LEAF, closeLeaf, focusLeaf, leavesOf, liveSplits, MAX_SESSION_PANES, type SessionSplits, setRatio, type SplitDir, splitLeaf, stepFocus, UNSPLIT } from './model/splitTree'
+import { AGENT_LEAF, closeLeaf, focusLeaf, leavesOf, type ListedPane, liveSplits, MAX_SESSION_PANES, provenShells, type SessionSplits, setRatio, type SplitDir, splitLeaf, stepFocus, UNSPLIT } from './model/splitTree'
 
 export const SPLIT_IN_CHAT_VIEW = 'Split makes a terminal, which belongs to the Terminal view. In the Chat view, open a terminal in the side panel instead.'
 const SESSION_FULL = 'Six panes is the most one session can hold'
@@ -18,17 +18,43 @@ const NOTHING_TO_SPLIT = 'A split belongs to a session’s terminal. Click one f
 /** What a split is called, in its header and in the question its close asks. */
 export const splitName = (number: number | undefined): string => `Split ${String(number ?? 1)}`
 
-/** Every shell that is a pane of some session's split tree. */
-function splitShellIds(saved: SavedSplits): ReadonlySet<string> {
-  return new Set([...saved.values()].flatMap((splits) => leavesOf(splits.tree)).filter((id) => id !== AGENT_LEAF))
+const TOKEN_BYTES = 6
+const HEX = 16
+const HEX_DIGITS = 2
+
+/**
+ * The name a split's shell is given on the daemon, where a restart keeps it: the one thing about a pane that says
+ * "this is that split" when its number may have been handed out again. Random, so no other pane carries it, and
+ * short, because the daemon cuts a long name.
+ */
+function newMark(): string {
+  const token = Array.from(crypto.getRandomValues(new Uint8Array(TOKEN_BYTES)), (byte) => byte.toString(HEX).padStart(HEX_DIGITS, '0')).join('')
+  return `Split ${token}`
 }
 
-/** The split trees, kept between runs, and which shells are panes of one (so the side panel leaves them out of its tabs). */
-export function useSplitStore() {
+/**
+ * The split trees, kept between runs, and the shells proven to be each listed session's splits (`provenShells`).
+ * Only those are a session's own: hidden from the sidebar, drawn in its tree, ended with it. A record that names a
+ * pane it cannot prove is left alone, and the pane stays an ordinary session.
+ */
+export function useSplitStore(sessionMap: ReadonlyMap<string, SessionView>) {
   const [savedSplits, setSavedSplits] = useState<SavedSplits>(readSessionSplits)
   useEffect(() => { writeSessionSplits(savedSplits) }, [savedSplits])
-  const splitShells = useMemo(() => splitShellIds(savedSplits), [savedSplits])
-  return { savedSplits, setSavedSplits, splitShells }
+  // The shells this window started in this run: one is its session's split before the daemon lists it under its mark.
+  const [fresh, setFresh] = useState<ReadonlySet<string>>(() => new Set())
+  // Once the daemon lists a shell under a name, that name alone says whose it is: the number may be another pane's later.
+  const named = [...fresh].filter((id) => (sessionMap.get(id)?.name ?? null) !== null)
+  if (named.length > 0) setFresh(new Set([...fresh].filter((id) => !named.includes(id))))
+  const paneOf = useCallback((id: string): ListedPane | undefined => {
+    const session = sessionMap.get(id)
+    return session === undefined ? undefined : { name: session.name, agent: Boolean(session.conversation.agent) }
+  }, [sessionMap])
+  const provenOf = useCallback((splits: SessionSplits) => provenShells(splits, paneOf, fresh), [paneOf, fresh])
+  const splitOwned = useMemo<AgentTerminals>(() => new Map([...savedSplits]
+    .filter(([owner]) => sessionMap.has(owner))
+    .map(([owner, splits]): [string, string[]] => [owner, [...provenOf(splits)]])
+    .filter(([, ids]) => ids.length > 0)), [savedSplits, sessionMap, provenOf])
+  return { savedSplits, setSavedSplits, setFresh, provenOf, splitOwned }
 }
 
 /** The first pane the keys reach when they come into a session from the pane before it, or the last when from the one after. */
@@ -39,17 +65,17 @@ function edgeLeaf(splits: SessionSplits, step: 1 | -1): string {
 
 /**
  * A session's splits (the Terminal view only). A split is an ordinary shell the daemon owns, started in the session's
- * folder and recorded as one of the session's own terminals (`data/agentTerminals.ts`): that record is what keeps it
- * out of the sidebar and ends it with its session. The tree here is only where each one sits.
+ * folder and named with a mark of its own. The tree records where each one sits and that mark; a shell is the
+ * session's (out of the sidebar, ended with it) only while the daemon lists it under that mark.
  */
-export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, knownTerminals, setAgentTerminals, sessionMap, layout, setLayout, shownAsTerminal, online, listed, runStart, closeAgentTerminals, endSessions }: {
+export function useSessionSplits({ savedSplits, setSavedSplits, setFresh, provenOf, nameShell, sessionMap, layout, setLayout, shownAsTerminal, online, listed, runStart, closeAgentTerminals, endSessions }: {
   savedSplits: SavedSplits
   setSavedSplits: Dispatch<SetStateAction<SavedSplits>>
-  /** The shells that are a listed session's own right now, its splits among them. */
-  ownedShells: AgentTerminals
-  /** The same record as the window keeps it, with the sessions that are gone still in it. */
-  knownTerminals: AgentTerminals
-  setAgentTerminals: Dispatch<SetStateAction<AgentTerminals>>
+  setFresh: Dispatch<SetStateAction<ReadonlySet<string>>>
+  /** The shells of a tree that are proven to be its splits (`useSplitStore`). */
+  provenOf: (splits: SessionSplits) => Set<string>
+  /** Gives a shell its mark as its name on the daemon. */
+  nameShell: (shellId: string, name: string) => void
   sessionMap: ReadonlyMap<string, SessionView>
   layout: Layout
   setLayout: Dispatch<SetStateAction<Layout>>
@@ -63,14 +89,11 @@ export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, kno
   closeAgentTerminals: (terminalIds: string[], name: string, after?: () => void) => void
   endSessions: (ids: string[]) => void
 }) {
-  // A shell this window just started is a split before the list the window draws from has it.
-  const fresh = useRef(new Set<string>())
-
   const splitsOf = useCallback((session: SessionView): SessionSplits => {
     const saved = savedSplits.get(session.id)
     if (saved === undefined || !shownAsTerminal(session)) return UNSPLIT
-    return liveSplits(saved, new Set(ownedShells.get(session.id) ?? []))
-  }, [savedSplits, ownedShells, shownAsTerminal])
+    return liveSplits(saved, provenOf(saved))
+  }, [savedSplits, provenOf, shownAsTerminal])
 
   /** How many panes the slot draws: a session's tree, or one for a file pane. */
   const paneCountOf = useCallback((pane: PaneSlot): number => {
@@ -80,12 +103,12 @@ export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, kno
 
   // Every change is made to the tree as it is now: a shell that is gone has left it first, so a path or a number
   // worked out from what is on screen means the same thing here.
-  const change = useCallback((sessionId: string, edit: (splits: SessionSplits) => SessionSplits) => {
-    for (const id of fresh.current) if (sessionMap.has(id)) fresh.current.delete(id)
-    const live = new Set([...(ownedShells.get(sessionId) ?? []), ...fresh.current])
+  // `started` is a shell this very change adds: the list the window draws from may not have it yet.
+  const change = useCallback((sessionId: string, edit: (splits: SessionSplits) => SessionSplits, started?: string) => {
     setSavedSplits((current) => {
       const stored = current.get(sessionId)
-      const after = edit(liveSplits(stored ?? UNSPLIT, live))
+      const before = stored ?? UNSPLIT
+      const after = edit(liveSplits(before, started === undefined ? provenOf(before) : provenOf(before).add(started)))
       const split = leavesOf(after.tree).length > 1
       if (after === stored || (!split && stored === undefined)) return current
       const next = new Map(current)
@@ -93,7 +116,7 @@ export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, kno
       else next.delete(sessionId)
       return next
     })
-  }, [ownedShells, sessionMap, setSavedSplits])
+  }, [provenOf, setSavedSplits])
 
   const splitRefusalOf = useCallback((session: SessionView): string | null => {
     if (!shownAsTerminal(session)) return SPLIT_IN_CHAT_VIEW
@@ -116,20 +139,23 @@ export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, kno
     }
     const from = leaf ?? splitsOf(session).focus
     void runStart(() => Promise.resolve(session.cwd), (id) => {
-      fresh.current.add(id)
-      setAgentTerminals((current) => withAgentTerminal(current, session.id, id, new Set([...sessionMap.keys(), id])))
+      const mark = newMark()
+      setFresh((current) => new Set(current).add(id))
+      nameShell(id, mark)
       // The pane it came from may have closed while the shell started: the new one then halves the pane with the focus.
-      // A tree that filled up meanwhile leaves the shell as a terminal of the session's side panel, never with no place.
-      movePanes(() => { change(session.id, (splits) => splitLeaf(splits, leavesOf(splits.tree).includes(from) ? from : splits.focus, direction, id)) })
+      // A tree that filled up meanwhile leaves the shell an ordinary terminal in the sidebar, never out of sight.
+      movePanes(() => { change(session.id, (splits) => splitLeaf(splits, leavesOf(splits.tree).includes(from) ? from : splits.focus, direction, id, mark), id) })
     })
-  }, [layout, sessionMap, splitRefusalOf, splitsOf, runStart, setAgentTerminals, change])
+  }, [layout, sessionMap, splitRefusalOf, splitsOf, runStart, setFresh, nameShell, change])
 
   const focusSplit = useCallback((sessionId: string, leaf: string) => { change(sessionId, (splits) => focusLeaf(splits, leaf)) }, [change])
   const resizeSplit = useCallback((sessionId: string, path: string, ratio: number | null) => { change(sessionId, (splits) => setRatio(splits, path, ratio)) }, [change])
 
   // Closing a split ends its shell, so it asks first (as closing a terminal). Its pane goes with the answer, not when
-  // the daemon's next list comes; a shell that then fails to end is still the session's, as a terminal of its side panel.
+  // the daemon's next list comes; a shell that then fails to end is listed as a terminal of its own.
   const closeSplit = useCallback((session: SessionView, shellId: string) => {
+    // Only a pane of the session's tree is closed here, and the tree holds proven splits only.
+    if (!leavesOf(splitsOf(session).tree).includes(shellId)) return
     closeAgentTerminals([shellId], splitName(splitsOf(session).numbers[shellId]), () => { movePanes(() => { change(session.id, (splits) => closeLeaf(splits, shellId)) }) })
   }, [closeAgentTerminals, splitsOf, change])
 
@@ -162,19 +188,17 @@ export function useSessionSplits({ savedSplits, setSavedSplits, ownedShells, kno
     if (entered !== undefined) focusSplit(entered.id, edgeLeaf(splitsOf(entered), step))
   }, [focusedSession, layout, splitsOf, focusSplit, setLayout])
 
-  // A session that is gone takes its tree with it. When the daemon says it was closed or exited somewhere else (the
-  // terminal app, its own `exit`), its splits are ended here, as closing it in this window ends them; one this
-  // window closed has ended them already. Only shells this window recorded as that session's are touched.
+  // A session that is gone takes its tree with it. When the daemon says it was closed or exited (somewhere else, or
+  // by its own `exit`), its splits are ended here, as closing it in this window ends them. Only a shell proven to be
+  // one of its splits is ended, and never one a close is already ending.
   useEffect(() => {
     if (!listed) return
-    const gone = [...savedSplits.keys()].filter((owner) => !sessionMap.has(owner))
+    const gone = [...savedSplits].filter(([owner]) => !sessionMap.has(owner))
     if (gone.length === 0) return
-    const orphans = gone
-      .filter((owner) => daemonSaidEnded(owner) && !wasClosed(owner))
-      .flatMap((owner) => leavesOf(savedSplits.get(owner)?.tree ?? AGENT_LEAF).filter((id) => sessionMap.has(id) && (knownTerminals.get(owner) ?? []).includes(id)))
+    const orphans = gone.filter(([owner]) => daemonSaidEnded(owner)).flatMap(([, splits]) => [...provenOf(splits)]).filter((id) => !wasClosed(id))
     if (orphans.length > 0) endSessions(orphans)
-    setSavedSplits((current) => new Map([...current].filter(([owner]) => !gone.includes(owner))))
-  }, [listed, savedSplits, sessionMap, knownTerminals, endSessions, setSavedSplits])
+    setSavedSplits((current) => new Map([...current].filter(([owner]) => !gone.some(([left]) => left === owner))))
+  }, [listed, savedSplits, sessionMap, provenOf, endSessions, setSavedSplits])
 
   return { splitsOf, paneCountOf, splitRefusalOf, split, focusSplit, resizeSplit, closeSplit, closeFocusedSplit, stepPaneFocus }
 }

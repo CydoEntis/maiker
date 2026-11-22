@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_LEAF, closeLeaf, focusLeaf, layoutOf, leavesOf, liveSplits, MAX_SESSION_PANES, parseSplits, type SessionSplits, setRatio, splitLeaf, stepFocus, UNSPLIT } from './splitTree'
+import { AGENT_LEAF, closeLeaf, focusLeaf, layoutOf, leavesOf, type ListedPane, liveSplits, MAX_SESSION_PANES, parseSplits, provenShells, type SessionSplits, setRatio, splitLeaf, stepFocus, UNSPLIT } from './splitTree'
 
-const split = (splits: SessionSplits, leaf: string, dir: 'right' | 'down', id: string) => splitLeaf(splits, leaf, dir, id)
+const split = (splits: SessionSplits, leaf: string, dir: 'right' | 'down', id: string) => splitLeaf(splits, leaf, dir, id, `mark ${id}`)
 const rectOf = (splits: SessionSplits, id: string) => {
   const rect = layoutOf(splits.tree).panes.find((pane) => pane.id === id)
   if (rect === undefined) throw new Error(`no pane ${id}`)
@@ -136,5 +136,38 @@ describe('moving the focus with the keys', () => {
     expect(stepFocus(focusLeaf(two, 's2'), 1)).toBeNull()
     expect(stepFocus(focusLeaf(two, 's1'), -1)).toBe(AGENT_LEAF)
     expect(stepFocus(focusLeaf(two, AGENT_LEAF), -1)).toBeNull()
+  })
+})
+
+describe('which listed panes are a session’s splits', () => {
+  const two = split(split(UNSPLIT, AGENT_LEAF, 'right', 's1'), 's1', 'down', 's2')
+  const listed = (panes: Record<string, ListedPane>) => (id: string) => panes[id]
+  const none = new Set<string>()
+
+  it('takes a pane that carries the split’s own mark', () => {
+    const proven = provenShells(two, listed({ s1: { name: 'mark s1', agent: false }, s2: { name: 'mark s2', agent: false } }), none)
+    expect([...proven]).toEqual(['s1', 's2'])
+  })
+
+  it('takes none of the panes a restarted daemon lists at the same numbers', () => {
+    const proven = provenShells(two, listed({ s1: { name: null, agent: false }, s2: { name: 'Login fix', agent: false } }), none)
+    expect(proven.size).toBe(0)
+  })
+
+  it('never takes a pane an agent runs in, whatever it is called', () => {
+    const proven = provenShells(two, listed({ s1: { name: 'mark s1', agent: true }, s2: { name: null, agent: true } }), new Set(['s2']))
+    expect(proven.size).toBe(0)
+  })
+
+  it('takes a shell this window just started while it has no name yet, and no longer once it has another', () => {
+    const fresh = new Set(['s1'])
+    expect([...provenShells(two, listed({ s1: { name: null, agent: false } }), fresh)]).toEqual(['s1'])
+    expect(provenShells(two, listed({ s1: { name: 'Login fix', agent: false } }), fresh).size).toBe(0)
+  })
+
+  it('never proves a split that was stored without a mark', () => {
+    const read = parseSplits({ tree: two.tree, focus: 's1', numbers: two.numbers })
+    expect(read).not.toBeNull()
+    expect(provenShells(read ?? UNSPLIT, listed({ s1: { name: 'mark s1', agent: false }, s2: { name: null, agent: false } }), none).size).toBe(0)
   })
 })

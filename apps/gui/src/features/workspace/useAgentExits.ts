@@ -44,7 +44,8 @@ export function useAgentExits({ sessions, listed, setLayout, agentTerminals, end
     const gone = ended.map((session) => session.id)
     // The agent ended on purpose: its row goes now, not after the grace a lost row gets.
     markClosed(gone)
-    const theirs = ended.flatMap((session) => agentTerminals.get(session.id) ?? []).filter((id) => now.has(id))
+    // The record is by pane number, which a restarted daemon hands out again: a pane an agent runs in is never ended as a terminal.
+    const theirs = ended.flatMap((session) => agentTerminals.get(session.id) ?? []).filter((id) => now.has(id) && !now.get(id)?.conversation.agent)
     // With terminals to end, the close takes the agents' panes out as well, in the one layout change it makes when
     // the daemon has answered: a change made here first would be undone by it.
     if (theirs.length > 0) endSessions([...gone, ...theirs])

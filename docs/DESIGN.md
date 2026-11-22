@@ -940,9 +940,15 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   terminal again); dragging a branch's line resizes it (never under 15% a side), double-click halves it. The tree is
   kept per session in `localStorage` (`maiker.gui.session-splits.v1`, `model/splitStorage.ts`), so going to another
   session and back, or restarting the app, shows the same shells in the same places; a split whose shell is gone is
-  dropped from the tree. The shell is an ordinary session of the daemon's, recorded in this window as its session's
-  own (`data/agentTerminals.ts`): that record keeps it out of the sidebar and out of the side panel's tabs, and ends it
-  with its session, whether the session is closed here, exits, or the daemon says it was closed somewhere else. A
+  dropped from the tree. The shell is an ordinary session of the daemon's. A pane's number is no proof of which pane
+  it is (a restarted daemon numbers its panes again), so each split is given a random name on the daemon (`Split` and
+  a token, its **mark**), which the daemon keeps across its restarts, and the tree stores that mark. A listed pane is
+  a session's split only while it carries the mark, or is a shell this window started in this run that has no name
+  yet, and never when an agent runs in it (`provenShells`). Only a proven split is kept out of the sidebar, drawn in
+  the tree, and ended with its session, whether the session is closed here, exits, or the daemon says it was closed
+  somewhere else; any other pane at a recorded number is left alone as a session of its own. Renaming a split
+  elsewhere therefore makes it an ordinary terminal. The same rule guards an agent's own terminals
+  (`data/agentTerminals.ts`) as far as it can without a mark: a pane an agent runs in is never one. A
   split's × and the close key on a split close only that split, after the *close a terminal* question; the session's own
   pane closes the session. Next pane and Previous pane step through a session's own panes before going on to the next
   pane of the arrangement. The Chat view shows no splits and starts none; the shells keep running and are there again
