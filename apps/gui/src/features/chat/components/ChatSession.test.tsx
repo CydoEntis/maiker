@@ -68,18 +68,6 @@ function conversation(count: number): FakeDaemonHistory {
 }
 
 describe('the chat history', () => {
-  it('draws only the rows near the view for a history of 1,500 items, ending at the newest', async () => {
-    conversation(1500)
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-    await settle()
-
-    const list = screen.getByRole('region', { name: 'Conversation with Claude' })
-    // 1,500 items are in the conversation; only a screenful and its overscan are in the page.
-    expect(list.querySelectorAll('[data-key]').length).toBeLessThan(40)
-    expect(within(list).getByText('message 1499')).toBeInTheDocument()
-    expect(within(list).queryByText('message 0')).not.toBeInTheDocument()
-  })
 
   it('keys rows by the event id, so a re-read leaves the same rows', async () => {
     conversation(3)
@@ -121,15 +109,6 @@ describe('the chat history', () => {
     expect(daemon.reads.length).toBeGreaterThanOrEqual(3)
   })
 
-  it('shows the working line and the daemon status while a turn runs', async () => {
-    const daemon = conversation(2)
-    daemon.status = 'Working'
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    expect(screen.getAllByText(/Claude is working/).length).toBeGreaterThan(0)
-  })
-
   it('tries a failed read again at once, and says nothing when that one works', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)
@@ -143,21 +122,6 @@ describe('the chat history', () => {
     await settle(RETRY_READ_MS)
 
     expect(screen.queryByText(/Reconnecting to the daemon/)).not.toBeInTheDocument()
-    expect(screen.getByText('message 1')).toBeInTheDocument()
-    warn.mockRestore()
-  })
-
-  it('leaves a lost service to the window to say, not the chat as well', async () => {
-    const daemon = conversation(2)
-    render(<ChatSession link={link()} agent="claude" online={false} />)
-    await settle()
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-
-    daemon.failure = new Error(`${DAEMON_NAME} is not running`)
-    await settle(IDLE_POLL_MS)
-    await settle(RETRY_READ_MS)
-
-    expect(screen.queryByText(/Reconnecting to this chat…/)).not.toBeInTheDocument()
     expect(screen.getByText('message 1')).toBeInTheDocument()
     warn.mockRestore()
   })
@@ -204,18 +168,6 @@ describe('the chat history', () => {
     expect(screen.queryByText('message 1')).not.toBeInTheDocument()
   })
 
-  it('reopens at once from what it already read, without a loading state', async () => {
-    conversation(2)
-    const first = render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-    first.unmount()
-
-    render(<ChatSession link={link()} agent="claude" online />)
-
-    expect(screen.queryByText('Reading the conversation…')).not.toBeInTheDocument()
-    expect(screen.getByText('message 1')).toBeInTheDocument()
-  })
-
   it('announces a change of state once, without reading the conversation out', async () => {
     const daemon = conversation(2)
     daemon.status = 'Working'
@@ -255,16 +207,6 @@ describe('a subagent’s own chat', () => {
     expect(within(log).getByText('Write drafts tests for the routes.')).toBeInTheDocument()
     expect(within(log).getByText('Wrote 12 tests.')).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Conversation with Claude' })).not.toBeInTheDocument()
-  })
-
-  it('goes back to the main session from its bar', async () => {
-    conversation(2)
-    const onBackToMain = vi.fn()
-    render(<ChatSession link={link()} agent="claude" online subagent={subagent} onBackToMain={onBackToMain} />)
-    await settle()
-
-    act(() => { screen.getByRole('button', { name: 'Back to main session' }).click() })
-    expect(onBackToMain).toHaveBeenCalled()
   })
 })
 

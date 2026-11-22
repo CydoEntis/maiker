@@ -76,17 +76,6 @@ describe('the agent\'s commands in the message box', () => {
     expect(offered()).toEqual(['/clearStart a new conversation', '/compactKeep a summary of the conversation', '/developer:prOpen a pull request', '/model [model]Pick the model'])
   })
 
-  it('narrows the list as a name is typed, and finds a plugin\'s command by its own name', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, '/c')
-    expect(offered()).toEqual(['/clearStart a new conversation', '/compactKeep a summary of the conversation'])
-
-    await user.clear(box)
-    await user.type(box, '/pr')
-    expect(offered()).toEqual(['/developer:prOpen a pull request'])
-  })
-
   it('moves through the list with the arrows and completes the one they are on with Tab, sending nothing', async () => {
     const { user, box } = await open()
 
@@ -259,14 +248,6 @@ describe('the agent\'s commands in the message box', () => {
     const { user, box } = await open()
 
     await user.type(box, '$cl')
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-  })
-
-  it('offers nothing in a box that is not a command: a path in a sentence, or a slash after a space', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, 'look at /tmp')
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })

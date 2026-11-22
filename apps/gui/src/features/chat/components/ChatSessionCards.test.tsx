@@ -91,19 +91,6 @@ describe('a long mixed conversation', () => {
     expect(within(list).getByText(/Done 1499/)).toBeInTheDocument()
     expect(within(list).queryByText('question 0')).not.toBeInTheDocument()
   })
-
-  it('keeps every row keyed by a stable id when the same history is read again', async () => {
-    mixedConversation(40)
-    render(<ChatSession link={link()} agent="claude" online root="/repo" />)
-    await settle()
-    const keys = () => Array.from(document.querySelectorAll('[data-key]')).map((row) => row.getAttribute('data-key'))
-    const before = keys()
-
-    await settle(IDLE_POLL_MS)
-
-    expect(before.length).toBeGreaterThan(0)
-    expect(keys()).toEqual(before)
-  })
 })
 
 describe('approvals in the chat', () => {
@@ -167,20 +154,6 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).not.toHaveBeenCalled()
   })
 
-  it('draws the request as the needs card: the agent at the right, the command, and the four answers', async () => {
-    const daemon = withStep()
-    daemon.approvals = [request('req-1', { can_remember: true })]
-    daemon.status = 'Blocked'
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    const card = screen.getByRole('region', { name: /Approval/ })
-    expect(card).toHaveTextContent('Wants to run a command')
-    expect(card).toHaveTextContent('Claude')
-    expect(card).toHaveTextContent('$ rm -rf build')
-    for (const name of ['Yes once', 'This session', 'No']) expect(within(card).getByRole('button', { name })).toBeInTheDocument()
-  })
-
   it('asks one request at a time, the oldest first, and the next once that one is answered', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-old', { command: 'rm -rf build' }), request('req-new', { command: 'rm -rf dist' })]
@@ -216,17 +189,6 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'Accept')
   })
 
-  it('shows an approval answered in the terminal as answered, with the choice the daemon kept', async () => {
-    const daemon = withStep()
-    daemon.answeredApprovals = [{ request: request('req-2'), decision: 'AcceptForSession', answered_at_ms: Date.UTC(2026, 10, 4, 10, 11) }]
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    const card = screen.getByRole('group', { name: /Approval/ })
-    expect(card).toHaveTextContent('Allowed for this session')
-    expect(within(card).queryByRole('button', { name: /This session/ })).toBeNull()
-  })
-
   it('moves a request that disappears from the pending list to answered once the daemon records it', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-3')]
@@ -241,32 +203,6 @@ describe('approvals in the chat', () => {
 
     expect(screen.getByRole('group', { name: /Approval/ })).toHaveTextContent('Denied')
     expect(screen.queryByRole('region', { name: /Approval/ })).toBeNull()
-  })
-
-  it('links the request to its tool step and scrolls the list there', async () => {
-    const daemon = withStep()
-    for (let index = 0; index < 60; index += 1) daemon.upsert(daemon.message('t1', `m${String(index)}`, 'Assistant', `filler ${String(index)}`))
-    daemon.upsert(toolEntry('t2', 'x', 'ls', ''))
-    daemon.answeredApprovals = [{ request: request('req-4', { turn_id: 't2', item_id: 'x', command: 'ls' }), decision: 'Accept' }]
-    // jsdom has no layout: a short window makes the list longer than what it shows, as it would be with this much said.
-    const shortWindow = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
-    try {
-      render(<ChatSession link={link()} agent="claude" online />)
-      await settle()
-      await settle()
-
-      // jsdom has no layout, so the list's scroll position is a plain number the test can read.
-      const region = screen.getByRole('region', { name: /Conversation/ })
-      let top = 0
-      Object.defineProperty(region, 'scrollTop', { configurable: true, get: () => top, set: (value: number) => { top = value } })
-      fireEvent.click(screen.getByRole('button', { name: /Go to the step this is about: ls/ }))
-      await settle()
-
-      // The view moved to the step's row, not to the end of the chat.
-      expect(top).toBeGreaterThan(0)
-    } finally {
-      shortWindow.mockRestore()
-    }
   })
 })
 

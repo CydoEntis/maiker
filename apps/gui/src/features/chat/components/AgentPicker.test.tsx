@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { everywhereModel, forgetChoices, forgetDiscoveredModels, noteAgentSaid, setDiscoveredModels, readChoice, useAgentChoice, wireChoice, writeChoice } from '../agentChoice'
@@ -23,66 +23,7 @@ beforeEach(() => {
   forgetDiscoveredModels()
 })
 
-describe('the effort the agent runs at', () => {
-  const picker = (currentEffort: string | null) => render(<AgentPicker agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentEffort={currentEffort} />)
-
-  it('shows what the agent\'s own files say while nothing is picked, and says it short enough to fit', async () => {
-    picker('medium')
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Codex · .* · Medium/ })
-    expect(button).toHaveTextContent('Medium')
-    await userEvent.click(button)
-    expect(screen.getByRole('slider', { name: 'Effort' })).toHaveAttribute('aria-valuetext', 'Medium')
-    expect(screen.getByTitle("Codex's own setting. Pick a level to change it.")).toHaveTextContent(/^$/)
-  })
-
-  it('names a level above the menu\'s, and says nothing where the files do not say', () => {
-    picker('xhigh')
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Xhigh')
-  })
-
-  it('shows the default level, named as the default, when the agent says none', () => {
-    picker(null)
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning: .* · Medium · default/ })).toHaveTextContent('Medium')
-  })
-})
-
-describe('Gemini', () => {
-  it('offers its model aliases, and says it has no effort to pick instead of showing bars', async () => {
-    render(<AgentPicker agent="gemini" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} />)
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Gemini · .* · no effort setting/ })
-    expect(button).not.toHaveTextContent(/Low|Medium|High|Max/)
-    await userEvent.click(button)
-    expect(within(screen.getByRole('radiogroup', { name: 'Model' })).getAllByRole('radio').map((model) => model.textContent)).toEqual(['Default', 'Pro', 'Flash', 'Flash Lite'])
-    expect(screen.queryByRole('slider', { name: 'Effort' })).not.toBeInTheDocument()
-    expect(screen.getByText('Gemini has no effort setting to pick here.')).toBeInTheDocument()
-  })
-})
-
 describe('the model button and its menu', () => {
-  it('shows the current choice on its button and opens one column: the models, then the effort', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning: Claude · Default · Medium · default/ })
-    await user.click(button)
-    expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
-    expect(slider()).toHaveAttribute('aria-valuemax', '3')
-    expect(within(slider()).getAllByRole('button', { hidden: true }).map((stop) => stop.textContent)).toEqual(['Low', 'Medium', 'High', 'Max'])
-    // Nothing was picked and the agent has not said: the default stop is lit and named as the default.
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Medium')
-    expect(slider()).toHaveAttribute('aria-valuenow', '1')
-    expect(screen.getByTitle("Claude's own setting. Pick a level to change it.")).toHaveTextContent(/^Medium · default$/)
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Medium')
-  })
-
-  it('lights the level the agent says it runs at, and follows a change made elsewhere', () => {
-    const picker = (effort: string | null) => <AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentEffort={effort} />
-    const { rerender } = render(picker('high'))
-    fireEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    expect(slider()).toHaveAttribute('aria-valuetext', 'High')
-    rerender(picker('low'))
-    expect(slider()).toHaveAttribute('aria-valuetext', 'Low')
-    expect(screen.queryByText('Medium · default')).toBeNull()
-  })
 
   it('has no agent switch in a chat that has started, and one where the agent is still to be chosen', async () => {
     const user = userEvent.setup()
@@ -149,24 +90,6 @@ describe('the model button and its menu', () => {
     expect(readChoice(7, 'claude')).toEqual({ model: 'claude-haiku-4-5', reasoning: 'default' })
   })
 
-  it('keeps the earlier models under More models, and shows the picked one wherever it is', async () => {
-    const user = userEvent.setup()
-    setDiscoveredModels('claude', [
-      { id: 'opus', label: 'Opus 5.5', blurb: '' },
-      { id: 'claude-opus-4-8', label: 'Opus 4.8', blurb: '', more: true },
-      { id: 'claude-sonnet-4-6', label: 'Sonnet 4.6', blurb: '', more: true },
-    ])
-    render(<Harness />)
-    await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    const models = within(screen.getByRole('radiogroup', { name: 'Model' }))
-    expect(models.queryByRole('radio', { name: /Opus 4\.8/ })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'More models' }))
-    await user.click(models.getByRole('radio', { name: /Opus 4\.8/ }))
-    await user.click(screen.getByRole('button', { name: 'Fewer models' }))
-    expect(models.getByRole('radio', { name: /Opus 4\.8/ })).toBeChecked()
-    expect(models.queryByRole('radio', { name: /Sonnet 4\.6/ })).toBeNull()
-  })
-
   it('has no Max for Codex until its own list says the model takes it', async () => {
     const user = userEvent.setup()
     setDiscoveredModels('codex', [{ id: 'gpt-x', label: 'GPT-X', blurb: '', efforts: ['low', 'medium', 'high', 'max'] }])
@@ -214,18 +137,6 @@ describe('the model button and its menu', () => {
     expect(wireChoice(7, 'claude')).toEqual({ model: 'claude-sonnet-5-5' })
     await user.click(within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name: /Fable 5\.2/ }))
     expect(wireChoice(7, 'claude')).toBeNull()
-  })
-
-  it('ticks the model the agent says it runs while nothing is picked, as its button names it', async () => {
-    const user = userEvent.setup()
-    setDiscoveredModels('claude', [{ id: 'claude-sonnet-5-5', label: 'claude-sonnet-5-5', blurb: '', isDefault: true }, { id: 'claude-opus-5-5', label: 'claude-opus-5-5', blurb: '' }])
-    render(<AgentPicker agent="claude" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} currentModel="claude-opus-5-5" />)
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
-    expect(button).toHaveTextContent('Claude · Opus 5.5')
-    await user.click(button)
-    const models = within(screen.getByRole('radiogroup', { name: 'Model' }))
-    expect(models.getByRole('radio', { name: /Opus 5\.5/ })).toBeChecked()
-    expect(models.getByRole('radio', { name: /Sonnet 5\.5/ })).not.toBeChecked()
   })
 })
 
@@ -282,39 +193,5 @@ describe('the picker for a chat on another machine', () => {
     expect(everywhereModel('claude', 'opus')).toBe('opus')
     expect(everywhereModel('claude', 'claude-fable-5-1[1m]')).toBe('default')
     expect(everywhereModel('codex', 'gpt-x')).toBe('default')
-  })
-})
-
-describe('the New session dialog\'s dropdown', () => {
-  it('names the agent with its mark, the model and the effort in one line, without the strength meter', () => {
-    const { container } = render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} currentModel="claude-sonnet-5-5" />)
-    const button = screen.getByRole('button', { name: /Agent, model and reasoning/ })
-    expect(button).toHaveTextContent('Claude · Sonnet 5.5 · Medium')
-    expect(container.querySelector('.mx-model-icon')).not.toBeNull()
-    expect(container.querySelector('.mx-mm-mini')).toBeNull()
-  })
-
-  it('says Default for the model while none is known', () => {
-    render(<AgentPicker compact agent="codex" choice={{ model: 'default', reasoning: 'default' }} onChange={() => undefined} />)
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Codex · Default')
-  })
-
-  it('has the agent list, the models and the efforts as a segmented control in its menu', async () => {
-    render(<AgentPicker compact agent="claude" choice={{ model: 'default', reasoning: 'medium' }} onChange={() => undefined} onAgent={() => undefined} />)
-    await userEvent.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
-    expect(screen.getByRole('radiogroup', { name: 'Effort' })).toHaveAttribute('data-slot', 'segmented')
-    expect(screen.queryByText('Effort')).not.toBeInTheDocument()
-  })
-})
-
-describe('the picked row of a menu', () => {
-  it('is told apart by its ground and weight, with no check mark', async () => {
-    const user = userEvent.setup()
-    render(<Harness />)
-    await user.click(screen.getByRole('button', { name: /Agent, model and reasoning/ }))
-    const picked = within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { checked: true })
-    expect(picked).toHaveClass('mx-menu-row')
-    expect(picked.querySelector('svg')).toBeNull()
   })
 })

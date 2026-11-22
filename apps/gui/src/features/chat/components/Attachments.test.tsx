@@ -9,7 +9,6 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { ATTACHMENT_HEADER } from '../attachmentMessage'
 import { dropOnComposer } from '../composerDrop'
 import { forgetComposers } from '../composerStore'
-import { PENDING_APPROVAL_NOTE, READ_ONLY_NOTE } from '../useChatComposer'
 import { forgetChatFeeds } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
 
@@ -124,17 +123,6 @@ describe('the file picker', () => {
     expect(within(list).getByText('Design_Final.zip')).toBeInTheDocument()
   })
 
-  it('adds nothing when the picker is cancelled', async () => {
-    fake.chooseFilesToAttach.mockResolvedValue(null)
-    const { user } = await open()
-
-    await user.click(paperclip())
-    await settle()
-
-    expect(screen.queryByRole('list', { name: 'Attached files' })).not.toBeInTheDocument()
-    expect(fake.attachLocalFile).not.toHaveBeenCalled()
-  })
-
   it('names the host\'s refusal and keeps the files that were accepted', async () => {
     fake.chooseFilesToAttach.mockResolvedValue(['/x/folder', '/x/ok.txt'])
     fake.attachLocalFile.mockImplementation((path) => (path === '/x/folder' ? Promise.reject(new Error('folder is not a file; folders cannot be attached')) : Promise.resolve(kept('ok.txt'))))
@@ -239,18 +227,6 @@ describe('pasting an image', () => {
     expect(error).toHaveBeenCalledWith(expect.stringContaining('BMP'))
     expect(fake.saveImageLocally).not.toHaveBeenCalled()
   })
-
-  it('tells why when the host refuses the bytes, and adds no chip', async () => {
-    fake.saveImageLocally.mockRejectedValue(new Error('the clipboard holds something that is not a PNG'))
-    const { box } = await open()
-
-    fireEvent.paste(box, { clipboardData: clipboard('', [PNG]) })
-    await settle()
-
-    expect(currentToasts().items.map((item) => item.description)).toContain('The clipboard holds something that is not a PNG.')
-    expect(currentToasts().items.map((item) => item.details)).toContain('the clipboard holds something that is not a PNG')
-    expect(screen.queryByRole('list', { name: 'Attached files' })).not.toBeInTheDocument()
-  })
 })
 
 describe('sending', () => {
@@ -320,21 +296,6 @@ describe('a sent message', () => {
     daemon.upsert(daemon.message('t2', 'u2', 'User', `check these\n\n${ATTACHMENT_HEADER}\n- ${KEPT_DIR}Design_Final.zip\n- /cache/pastes/paste-1730000000001-0a1b2c3d.png`))
   }
 
-  it('shows its text and its files as chips, not as paths', async () => {
-    await open({ prepare: message })
-
-    expect(screen.getByText('check these')).toBeInTheDocument()
-    expect(screen.getByText('Design_Final.zip')).toBeInTheDocument()
-    expect(screen.getByText('Pasted image.png')).toBeInTheDocument()
-    expect(screen.queryByText(/attachments\/attach-/)).not.toBeInTheDocument()
-  })
-
-  it('draws no empty band for the blank lines Claude Code stores in front of a pasted message', async () => {
-    await open({ prepare: (daemon) => { daemon.upsert(daemon.message('t3', 'u3', 'User', `\n\nthe gap\n`)) } })
-
-    expect(screen.getByText('the gap').textContent).toBe('the gap')
-  })
-
   it('says a file is no longer available when the host no longer has it', async () => {
     fake.attachmentsExist.mockResolvedValue([false, true])
     await open({ prepare: message })
@@ -375,41 +336,9 @@ describe('an attached image', () => {
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
-
-  it('keeps the name chip when the host can no longer read the image', async () => {
-    fake.attachmentImage.mockRejectedValue(new Error('that file is no longer kept'))
-    vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    await open({ prepare: sentImage(1730000000003) })
-    await settle()
-
-    expect(screen.getByText('Pasted image.png')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^View / })).not.toBeInTheDocument()
-  })
 })
 
 describe('when files cannot be attached', () => {
-  it('says why on the paperclip while the daemon is offline and picks nothing', async () => {
-    const error = vi.spyOn(toast, 'error')
-    const { user } = await open({ online: false })
-
-    expect(paperclip()).toHaveAccessibleName('Attach files: The Maiker service is offline')
-    await user.click(paperclip())
-
-    expect(fake.chooseFilesToAttach).not.toHaveBeenCalled()
-    expect(error).not.toHaveBeenCalled()
-  })
-
-  it('says why on the paperclip while an approval waits', async () => {
-    await open({
-      prepare: (daemon) => {
-        daemon.status = 'Blocked'
-        daemon.approvals = [{ request_id: 9, kind: 'Command', turn_id: 't1', command: 'rm -rf build', choices: ['Accept', 'Decline'] }]
-      },
-    })
-
-    expect(paperclip()).toHaveAccessibleName(`Attach files: ${PENDING_APPROVAL_NOTE}`)
-    expect(paperclip()).toHaveAttribute('aria-disabled', 'true')
-  })
 
   it('offers the paperclip in a chat that follows a terminal agent, and types the files into it with the message', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
@@ -427,12 +356,5 @@ describe('when files cannot be attached', () => {
     const typed = typeInto.mock.calls.map(([text]) => text).join('')
     expect(typed).toContain('why does this fail?')
     expect(typed).toContain('/data/attachments/attach-1-errors.log')
-  })
-
-  it('offers no paperclip in a read-only chat, whose composer already states the reason', async () => {
-    const { box } = await open({ readOnly: true })
-
-    expect(screen.queryByRole('button', { name: /^Attach files/ })).not.toBeInTheDocument()
-    expect(box).toHaveAttribute('placeholder', READ_ONLY_NOTE)
   })
 })

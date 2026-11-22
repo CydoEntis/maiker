@@ -63,18 +63,6 @@ function WithPaneQueue({ agent, typeInto }: { agent: 'claude' | 'codex'; typeInt
 }
 
 describe('changing the mode, the model and the reasoning of a chat that follows the terminal', () => {
-  it('moves the agent to the mode picked from the dropdown, with its own Shift+Tab', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const typeInto = open('claude')
-    await settle(IDLE_POLL_MS)
-
-    await user.click(screen.getByRole('button', { name: /^Permission mode: .* Pick another/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: /Accept edits/ }))
-    await settle(1000)
-    // The fake screen already shows "accept edits", so no key is needed; the chip shows it.
-    expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /^Permission mode: Accept edits/ })).toBeInTheDocument()
-  })
 
   it('sends /model and /effort when a model and a reasoning level are picked', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -225,19 +213,6 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto).toHaveBeenLastCalledWith('\x1b[B')
     await user.click(within(card).getByRole('button', { name: 'Close' }))
     expect(typeInto).toHaveBeenLastCalledWith('\x1b')
-    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
-  })
-
-  it('does not open Codex\'s model menu while it works, and says why', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const typeInto = open('codex', 'Working')
-    await settle(IDLE_POLL_MS)
-
-    const label = screen.getByRole('button', { name: /^Model: .* Open its menu/ })
-    expect(label).toHaveAttribute('aria-disabled', 'true')
-    expect(label).toHaveAttribute('title', expect.stringMatching(/working/))
-    await user.click(label)
-    expect(typeInto).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
   })
 })

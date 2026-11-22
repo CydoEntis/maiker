@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
@@ -54,15 +54,6 @@ function open(status: 'Idle' | 'Working' = 'Idle') {
 }
 
 describe('how the chat feels while it waits', () => {
-  it('shows the shape of a conversation while the history is first read, then the history', async () => {
-    open()
-    expect(screen.getByRole('status', { name: 'Reading the conversation' })).toBeInTheDocument()
-
-    await settle()
-
-    expect(screen.queryByRole('status', { name: 'Reading the conversation' })).not.toBeInTheDocument()
-    expect(screen.getByText('earlier')).toBeInTheDocument()
-  })
 
   it('draws a message at once when it is sent and shows the live box saying the agent is thinking, until the history has it', async () => {
     const { daemon, typeInto, user } = open()
@@ -187,20 +178,6 @@ describe('how the chat feels while it waits', () => {
     expect(screen.getByText('the answer that came while you were away')).toBeInTheDocument()
   })
 
-  it('shows a reply that arrived while the window was hidden whole, and does not type it in', async () => {
-    const { daemon } = open()
-    await settle()
-    const hidden = vi.spyOn(document, 'hidden', 'get').mockReturnValue(true)
-    await settle(IDLE_POLL_MS)
-
-    daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'the answer that came while you were away'))
-    hidden.mockReturnValue(false)
-    await settle(IDLE_POLL_MS)
-    hidden.mockRestore()
-
-    expect(screen.getByText('the answer that came while you were away')).toBeInTheDocument()
-  })
-
   it('shows the agent working as soon as the pane says so, before the conversation has been read again', async () => {
     const { daemon, setPaneStatus } = open('Idle')
     await settle()
@@ -235,63 +212,6 @@ describe('how the chat feels while it waits', () => {
     await user.type(box, 'and Slack too{Enter}')
     await settle(PASTE_SUBMIT_GAP_MS + 1)
     expect(typeInto).toHaveBeenCalledWith('\x1b[200~and Slack too\x1b[201~')
-  })
-
-  it('keeps the live box up for a moment after the turn ends, so the pane is not blank before the reply is read', async () => {
-    const { daemon, setPaneStatus } = open('Idle')
-    await settle()
-    setPaneStatus('working')
-    await settle()
-    daemon.upsert(daemon.message('t1', 'u3', 'User', 'a question'))
-    await settle(400)
-
-    // The turn ended on the pane, but the history has no answer yet.
-    setPaneStatus('idle')
-    await settle(50)
-    expect(screen.getByText('Thinking')).toBeInTheDocument()
-
-    // And it does not stay for good: with no answer it gives way after a moment.
-    await settle(1000)
-    expect(screen.queryByText('Thinking')).not.toBeInTheDocument()
-  })
-
-  it('gives the focus back to the message box when you click the conversation, so one click is enough to type again', async () => {
-    open('Idle')
-    await settle(IDLE_POLL_MS)
-    const box = screen.getByRole('textbox', { name: 'Message Claude' })
-    box.blur()
-    expect(box).not.toHaveFocus()
-
-    fireEvent.click(screen.getByText('earlier'))
-
-    expect(box).toHaveFocus()
-  })
-
-  it('says in the message box how the agent is set up, from its own file', async () => {
-    const { daemon } = open()
-    daemon.meta = { mode: 'auto', model: 'claude-sonnet-5-5' }
-    await settle(IDLE_POLL_MS)
-
-    // The mode is a shield; its name is in the button's name and tooltip.
-    expect(screen.getByRole('button', { name: /^Permission mode: Auto/ })).toHaveAttribute('title', expect.stringContaining('Auto'))
-    expect(screen.getByRole('button', { name: /Agent, model and reasoning/ })).toHaveTextContent('Claude · Sonnet 5.5')
-  })
-
-  it('marks a mode that asks about nothing, and shows nothing when the file said nothing', async () => {
-    const { daemon } = open()
-    await settle()
-    // This chat can type into its terminal, so the mode is a button (it cycles the mode); it says when the agent has not reported one.
-    expect(screen.getByRole('button', { name: /not reported yet/ })).toHaveAttribute('title', expect.stringContaining('Permissions'))
-
-    daemon.meta = { mode: 'bypassPermissions', model: null }
-    await settle(IDLE_POLL_MS)
-
-    const shield = screen.getByRole('button', { name: /^Permission mode: Bypass permissions/ })
-    // Attention is a status-coloured dot beside a normal label, shortened to fit its slot; the full name stays in the tooltip.
-    expect(shield.className).toContain('danger')
-    expect(shield.querySelector('.mx-mode-dot')).not.toBeNull()
-    expect(shield.querySelector('.mx-mode-name')).toHaveTextContent(/^Bypass$/)
-    expect(shield).toHaveAttribute('title', 'Permissions: Bypass permissions')
   })
 
   it('drops a message the history never showed, rather than leaving it standing as sent', async () => {

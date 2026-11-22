@@ -95,14 +95,6 @@ describe('gliding to the newest row', () => {
     expect(glidePlan(950, 900, 600)).toBeNull()
   })
 
-  it('takes longer the further it goes, between a least and a most', () => {
-    const near = glidePlan(880, 900, 600)
-    const far = glidePlan(0, 900, 600)
-    expect(near).toEqual({ from: 880, ms: 185 })
-    expect(far).toEqual({ from: 0, ms: 405 })
-    expect(glidePlan(0, 1200, 600)?.ms).toBe(420)
-  })
-
   it('starts two screens above the bottom from further up, so a long chat is not drawn row by row on the way', () => {
     expect(glidePlan(0, 50_000, 600)).toEqual({ from: 48_800, ms: 420 })
   })

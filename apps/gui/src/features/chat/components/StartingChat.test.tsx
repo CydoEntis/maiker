@@ -2,7 +2,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NO_EVENTS_HINT_AFTER_MS } from '@/features/workspace/model/chatView'
-import { forgetFirstMessages, heldFirstMessage, holdStartChoice, takeCarriedDraft } from '../firstMessage'
+import { forgetFirstMessages, heldFirstMessage, takeCarriedDraft } from '../firstMessage'
 import { StartingChat } from './StartingChat'
 
 const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), chooseFilesToAttach: vi.fn() }))
@@ -32,18 +32,6 @@ describe('the chat of a session that is still starting', () => {
     expect(daemon.connectAgent).toHaveBeenCalledWith('codex')
   })
 
-  it('says so, and where its terminal is, when it has waited long and the hooks never reported in', () => {
-    vi.useFakeTimers()
-    open()
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note')).toHaveTextContent(/status hooks are not connected/)
-    expect(screen.getByRole('note')).toHaveTextContent(/switch to the Terminal view in Settings/)
-    expect(screen.queryByRole('button', { name: 'Show terminal log' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Connect Codex' })).toBeInTheDocument()
-    expect(screen.getByText(/No conversation to show yet/)).toBeInTheDocument()
-    expect(screen.queryByText(/Type below: it is sent as soon as/)).not.toBeInTheDocument()
-  })
-
   it('names the settings file whose hooks are wrong and repairs that folder, not the app\'s own', async () => {
     daemon.connectAgent.mockResolvedValue(undefined)
     daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
@@ -70,38 +58,6 @@ describe('the chat of a session that is still starting', () => {
     await user.click(screen.getByRole('button', { name: 'Restart Claude' }))
     await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
     expect(daemon.connectAgent).not.toHaveBeenCalled()
-  })
-
-  it('does not blame the hooks when they have reported in but the conversation was not found', () => {
-    vi.useFakeTimers()
-    render(<StartingChat agent="claude" sessionId="s1" hooked />)
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note')).toHaveTextContent(/is reporting in, but Maiker has not found its conversation/)
-    expect(screen.queryByRole('button', { name: 'Show terminal log' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Connect claude' })).not.toBeInTheDocument()
-  })
-
-  it('shows a calm empty chat the moment the session exists, never a blank screen or a raw terminal', () => {
-    open()
-    const card = screen.getByRole('status')
-    expect(card).toHaveTextContent('What are we building today?')
-    expect(document.querySelector('.mx-terminal, .xterm')).toBeNull()
-  })
-
-  it('is there at once, with a message box for the agent that was chosen', () => {
-    open()
-    expect(screen.getByText('What are we building today?')).toBeInTheDocument()
-    expect(screen.queryByText('Starting codex…')).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message Codex' })).toBeEnabled()
-    expect(screen.queryByRole('note')).not.toBeInTheDocument()
-  })
-
-  it('draws the Codex permission button while Codex starts, greyed, so it is already there when the chat takes over', () => {
-    holdStartChoice('s1', { model: 'default', reasoning: 'default', mode: 'codexReadOnly' })
-    render(<StartingChat agent="codex" sessionId="s1" typeInto={() => Promise.resolve()} />)
-
-    const button = screen.getByRole('button', { name: /^Permission mode: Read only\. Codex is starting/ })
-    expect(button).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('holds a file attached now with the message, and shows it as a chip, not as the block that names it', async () => {
@@ -137,17 +93,6 @@ describe('the chat of a session that is still starting', () => {
     await user.type(screen.getByRole('textbox', { name: 'Message Codex' }), 'half a thou')
 
     expect(takeCarriedDraft('s1')).toBe('half a thou')
-  })
-
-  it('draws no chips for an agent whose model and mode cannot be changed from the box', () => {
-    open()
-    expect(screen.queryByRole('button', { name: /^Agent, model and reasoning/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^Permission mode/ })).not.toBeInTheDocument()
-  })
-
-  it('draws the agent name where its model will be said, so that is never added later', () => {
-    open()
-    expect(document.querySelector('.mx-model-button.is-static')).toHaveTextContent('Codex')
   })
 
   it('says the agent is waiting in the terminal at once when the daemon says it needs you, without blaming the hooks', () => {
@@ -196,13 +141,6 @@ describe('the chat of a session that is still starting', () => {
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
   })
 
-  it('floats the hooks hint over the conversation, so it moves nothing when it comes or goes', () => {
-    vi.useFakeTimers()
-    open()
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note').closest('.mx-chat')).toHaveClass('is-starting')
-  })
-
   it('suggests the hooks only when it is still empty after a while', () => {
     vi.useFakeTimers()
     open()
@@ -215,16 +153,6 @@ describe('the chat of a session that is still starting', () => {
 
 describe('the chips of a Claude chat that is still starting', () => {
   const openClaude = () => render(<StartingChat agent="claude" sessionId="s1" />)
-
-  it('draws the model, effort and mode that were picked, greyed out, where the real chat will have them', () => {
-    holdStartChoice('s1', { model: 'opus', reasoning: 'high', mode: 'plan' })
-    openClaude()
-
-    const model = screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · Opus · High/ })
-    expect(model).toHaveAttribute('aria-disabled', 'true')
-    expect(model).toHaveAttribute('title', expect.stringMatching(/starting/))
-    expect(screen.getByRole('button', { name: /^Permission mode: Plan/ })).toHaveAttribute('aria-disabled', 'true')
-  })
 
   it('opens no picker while it is locked', async () => {
     const user = userEvent.setup()

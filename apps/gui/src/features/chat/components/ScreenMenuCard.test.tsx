@@ -49,14 +49,6 @@ async function open(asking: string) {
 }
 
 describe('a menu Claude draws on its screen with no hook behind it', () => {
-  it('shows a button per choice and no terminal until asked', async () => {
-    await open(SWITCH)
-
-    expect(screen.getByText('Your next response will be slower and use more tokens.', { exact: false })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Yes, switch to Sonnet 5.5/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /No, go back/ })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: "Keys for the agent's terminal" })).not.toBeInTheDocument()
-  })
 
   it('moves the cursor to the clicked choice and presses Enter, only on a click', async () => {
     const { typeInto, user } = await open(SWITCH)

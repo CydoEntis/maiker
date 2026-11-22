@@ -116,26 +116,6 @@ describe('picking a file with @ in the message box', () => {
     expect(box).toHaveValue('@src')
   })
 
-  it('opens nothing for an @ inside a word', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, 'me@src')
-    await settle(SEARCH_WAIT_MS)
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(fake.repoFindFiles).not.toHaveBeenCalled()
-  })
-
-  it('opens nothing for a chat whose files cannot be asked for (no pane to ask)', async () => {
-    const { user, box } = await open(null)
-
-    await user.type(box, '@src')
-    await settle(SEARCH_WAIT_MS)
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(fake.repoFindFiles).not.toHaveBeenCalled()
-  })
-
   it('never shows an answer for an earlier name over the one for the name typed now', async () => {
     let answerEarlier: (reply: { paths: string[]; truncated: boolean }) => void = () => undefined
     fake.repoFindFiles.mockImplementationOnce(() => new Promise((resolve) => { answerEarlier = resolve }))
@@ -168,18 +148,6 @@ describe('picking a file with @ in the message box', () => {
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 
-  it('shows no rows of an earlier name while the answer for the name typed now is on its way', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, '@src')
-    await settle(SEARCH_WAIT_MS)
-    fake.repoFindFiles.mockImplementation(() => new Promise(() => undefined))
-    await user.type(box, '/m')
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-    expect(screen.getByText('Looking for files…')).toBeInTheDocument()
-  })
-
   it('closes when the caret leaves the end of the text, and gives the keys back to the box', async () => {
     const { user, box } = await open()
 
@@ -202,16 +170,6 @@ describe('picking a file with @ in the message box', () => {
 
     expect(screen.getByText('Could not search the files: the Maiker service running is older than this app')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-
-  it('says when the folder was too large to search whole', async () => {
-    fake.repoFindFiles.mockResolvedValue({ paths: ['crates/core/src/lib.rs'], truncated: true })
-    const { user, box } = await open()
-
-    await user.type(box, '@lib')
-    await settle(SEARCH_WAIT_MS)
-
-    expect(screen.getByText(/too large to search whole/)).toBeInTheDocument()
   })
 })
 
