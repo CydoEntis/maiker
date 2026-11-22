@@ -1,6 +1,6 @@
 # 0019. ACP is for agents without an adapter, and what it claims is labelled
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 
 ## Context

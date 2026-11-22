@@ -1,6 +1,6 @@
 # 0018. Every provider is one dialect with no I/O, named in one registry
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 
 ## Context

@@ -1,6 +1,6 @@
 # 0016. A chat asks before it starts helpers, and the consent belongs to the conversation
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-20
 
 ## Context
