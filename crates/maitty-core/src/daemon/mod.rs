@@ -4070,8 +4070,8 @@ impl Daemon {
         }
     }
 
-    /// Make the pane for a start and note who started it. A start that `holds` is made as a
-    /// plain shell, its command kept until a slot frees.
+    /// Make the pane for a start, note who started it and name a helper after its task. A start
+    /// that `holds` is made as a plain shell, its command kept until a slot frees.
     fn start_or_hold(
         &mut self,
         by: Option<helpers::Starter>,
@@ -4085,6 +4085,8 @@ impl Daemon {
         self.started(term, by);
         if holds {
             self.hold_start(term, cmd);
+        } else if by.is_some() {
+            self.name_after_task(term, cmd);
         }
         Ok(term)
     }

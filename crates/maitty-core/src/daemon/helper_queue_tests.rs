@@ -551,3 +551,53 @@ fn a_helper_that_waits_never_takes_an_agent_kept_warm() {
     );
     close_all(&mut d);
 }
+
+#[test]
+fn a_helper_is_named_by_its_task_whether_it_starts_at_once_or_waits_first() {
+    let (mut d, _starter, _told) = lead("2");
+    // A path nothing is at: the row reads as Claude, and no agent runs.
+    let task = |what: &str| format!("/no-such-folder/claude '{what}\nthen run the tests'");
+    let now = start(&mut d, Some(&task("Fix the login bug"))).unwrap();
+    let row = &d.snapshot().terms[&now];
+    assert_eq!(
+        row.name, "Fix the login bug",
+        "named by the first line of its task"
+    );
+    assert_eq!(
+        row.summary, "Fix the login bug",
+        "and that is what it is on"
+    );
+    start(&mut d, None).unwrap();
+    let later = start(&mut d, Some(&task("Port the footer"))).unwrap();
+    assert!(waits(&d, later));
+    let row = &d.snapshot().terms[&later];
+    assert_eq!(
+        row.name, "Port the footer",
+        "a waiting helper has its name already"
+    );
+    assert!(row.summary.contains("in line"), "{}", row.summary);
+    finish(&mut d, now);
+    age(&mut d, later);
+    d.start_waiting_helpers();
+    assert!(!waits(&d, later));
+    let row = &d.snapshot().terms[&later];
+    assert_eq!(
+        row.name, "Port the footer",
+        "it keeps its name once it starts"
+    );
+    assert_eq!(row.summary, "Port the footer");
+    // A session you start yourself is named by what you send it, not here.
+    d.command(
+        0,
+        Command::NewWorkspace {
+            cwd: Some(std::env::temp_dir()),
+            name: None,
+            cmd: Some(task("Not a helper")),
+        },
+    )
+    .unwrap();
+    let yours = *d.terms.keys().max().unwrap();
+    assert_eq!(d.terms[&yours].started_by, None);
+    assert_eq!(d.snapshot().terms[&yours].name, "");
+    close_all(&mut d);
+}

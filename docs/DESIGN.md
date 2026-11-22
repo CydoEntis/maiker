@@ -631,7 +631,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
   **Helpers** (`HelperGroup` in `Sidebar.tsx`, `model/helpers.ts`) sit under their lead in the order they were made,
   set in 16px with a 1px rule (the ink at 8%) down their left edge and 1px between rows; a helper row is 12.5px with
-  padding 5px 8px. The first line under the lead is the **summary line**, which is also the fold: a 24px button
+  padding 5px 8px. A helper is named by its task, never "New session": the daemon gives it the first line of the task
+  it was started on (API_PATTERNS › *A helper is named by its task*); one waiting for a slot reads its place in line
+  until it starts. The first line under the lead is the **summary line**, which is also the fold: a 24px button
   (11.5px `--dim`; `--fg2` and the ink at 3.5% on hover) with a 12px caret and `N helpers` at the left and, at the
   right, the most urgent one thing among them: the needs-you mark with how many need you (`? 2`, 500 `--needs`), else
   the working spinner, else the done mark, each 14px; nothing when every helper is idle. Its name says the same

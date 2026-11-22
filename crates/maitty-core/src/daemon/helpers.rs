@@ -24,6 +24,9 @@ use std::path::{Path, PathBuf};
 const FILE_NAME: &str = "helper-projects.json";
 /// Longest task shown on the row and in the popover.
 const TASK_CHARS: usize = 160;
+/// Longest name a helper is given from its task: a row shows less, and the whole task is its
+/// agent's to report as the prompt it was given.
+const TITLE_CHARS: usize = 80;
 /// Most tasks one request lists; more are counted by the ones already there.
 const MOST_TASKS: usize = 12;
 
@@ -129,6 +132,36 @@ pub fn task_label(cmd: Option<&str>, branch: Option<&str>) -> String {
     one_line.chars().take(TASK_CHARS).collect()
 }
 
+/// What a helper is called, from the command that starts it: the first line of the task quoted at
+/// its end, cut on a word boundary to `TITLE_CHARS` with `…` after it. None when the command quotes
+/// no task, so a helper started bare is named by its agent's own first prompt instead.
+pub fn task_title(cmd: &str) -> Option<String> {
+    let task = quoted_tail(cmd.trim())?;
+    let line = task.lines().map(str::trim).find(|l| !l.is_empty())?;
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let whole = words.join(" ");
+    if whole.chars().count() <= TITLE_CHARS {
+        return Some(whole);
+    }
+    let mut cut = String::new();
+    for word in &words {
+        let wider = cut.chars().count() + usize::from(!cut.is_empty()) + word.chars().count();
+        if wider > TITLE_CHARS {
+            break;
+        }
+        if !cut.is_empty() {
+            cut.push(' ');
+        }
+        cut.push_str(word);
+    }
+    // One word longer than the whole title has no boundary to cut on.
+    if cut.is_empty() {
+        cut = whole.chars().take(TITLE_CHARS).collect();
+    }
+    cut.push('…');
+    Some(cut)
+}
+
 /// The text of a trailing `'quoted'` or `"quoted"` word (a shell-quoted prompt), unescaped.
 fn quoted_tail(cmd: &str) -> Option<String> {
     let quote = cmd.chars().last().filter(|c| *c == '\'' || *c == '"')?;
@@ -163,6 +196,25 @@ fn quoted_tail(cmd: &str) -> Option<String> {
 }
 
 impl Daemon {
+    /// Name helper `term`, just started with `cmd`, after the task it was given (`task_title`). The
+    /// name is its first prompt, which `TermInfo.name` falls back to, and the task is also what it
+    /// is on (`summary`), which the desktop app titles a row by: an agent given its task on its
+    /// command line need never report that as a prompt, and its row would read "New session".
+    /// Its own reports replace both as usual.
+    pub(super) fn name_after_task(&mut self, term: TermId, cmd: Option<&str>) {
+        let Some(title) = cmd
+            .filter(|cmd| self.agent_in_cmd(cmd).is_some())
+            .and_then(task_title)
+        else {
+            return;
+        };
+        if let Some(t) = self.terms.get_mut(&term) {
+            t.first_prompt = title.clone();
+            t.summary = title;
+            self.dirty = true;
+        }
+    }
+
     /// The project a session works in: its repo's main checkout, else its folder.
     fn helper_project(&self, term: TermId) -> Option<PathBuf> {
         self.terms.get(&term).map(|t| {
@@ -331,6 +383,41 @@ mod tests {
                 .count(),
             TASK_CHARS
         );
+    }
+
+    #[test]
+    fn a_helper_is_named_by_the_first_line_of_its_task_cut_on_a_word() {
+        assert_eq!(
+            task_title("claude 'Fix the login bug'").as_deref(),
+            Some("Fix the login bug")
+        );
+        assert_eq!(
+            task_title("claude --dangerously-skip-permissions 'it'\\''s  late'").as_deref(),
+            Some("it's late"),
+            "unquoted, one space between words"
+        );
+        assert_eq!(
+            task_title("codex \"\n\n  Port the footer\nthen run the tests\"").as_deref(),
+            Some("Port the footer"),
+            "the first line that says something"
+        );
+        let long = format!("claude '{}'", "word ".repeat(40));
+        let title = task_title(&long).unwrap();
+        assert!(title.ends_with("word…"), "{title}");
+        assert!(title.chars().count() <= TITLE_CHARS + 1, "{title}");
+        let one_word = format!("claude '{}'", "x".repeat(200));
+        assert_eq!(
+            task_title(&one_word).unwrap().chars().count(),
+            TITLE_CHARS + 1,
+            "a word longer than a title is cut where it must be"
+        );
+        assert_eq!(task_title("claude"), None, "no task, no name");
+        assert_eq!(
+            task_title("claude '  \n '"),
+            None,
+            "an empty task names nothing"
+        );
+        assert_eq!(task_title("claude '"), None, "an unclosed quote is no task");
     }
 
     #[test]

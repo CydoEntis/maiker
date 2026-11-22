@@ -139,11 +139,13 @@ impl Daemon {
             .cmd
             .as_deref()
             .and_then(|cmd| self.agent_in_cmd(cmd));
+        // Named as it will be once it starts (`Daemon::name_after_task`); its summary is its
+        // place in line meanwhile.
         let task = waiting
             .cmd
             .as_deref()
             .filter(|_| agent.is_some())
-            .map(|cmd| super::helpers::task_label(Some(cmd), None));
+            .and_then(super::helpers::task_title);
         let Some(t) = self.terms.get_mut(&term) else {
             return;
         };
@@ -289,6 +291,7 @@ impl Daemon {
         if let Some(account) = repair {
             self.repair_hooks_for_spawn(term, account.as_deref());
         }
+        self.name_after_task(term, waiting.cmd.as_deref());
         self.dirty = true;
         self.persist(true);
     }

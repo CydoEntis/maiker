@@ -465,6 +465,15 @@ limit is not refused but waits for a free slot (*A helper waiting for a slot*, b
 person's shell (no agent in the pane) is never asked. Sessions saved before a restart keep
 `started_by`; any fleet or commander field in a saved file is ignored on load.
 
+**A helper is named by its task** (`helpers::task_title`, `Daemon::name_after_task`). When a
+helper's command starts a known agent with a task quoted at its end (as `maiker_start` builds it),
+the daemon names it as it starts: the task's first non-blank line, whitespace collapsed, cut on a
+word boundary to 80 characters with `…` after it. That is its first prompt, which `TermInfo.name`
+falls back to (and is saved with the session), and its `TermInfo.summary`, which the desktop app
+titles a row by: an agent given its task on its command line need not report it as a prompt, and
+the row would read "New session". The agent's own reports replace both as for any session. A
+command with no quoted task names nothing, and what a person starts is never named here.
+
 **A helper waiting for a slot** (`daemon/helper_queue.rs`). A helper counts as working while
 its status is Working or it is younger than `HELPER_SETTLES` (`Daemon::busy_helpers`); a waiting
 one does not count. A start past the limit, or while its starter has others waiting, is answered
@@ -474,7 +483,8 @@ holds its command. The daemon itself sets the row to Working with
 `TermInfo.waiting_for_slot` (one function, `helper_queue::waiting_for_slot`, makes the flag) and
 `status_why` and `summary` reading `waiting for a free slot: 2 of 3 in line, 4 helpers at once is
 the limit`, which is what the starter reads as `on` and `status_why` in `maiker_list` (the
-`maiker_start` reply still says "started … as session N"). Nothing read off that pane (hooks, the
+`maiker_start` reply still says "started … as session N"); its name is already its task, and its
+summary becomes the task when it starts. Nothing read off that pane (hooks, the
 screen, the process scan) changes its status, it never rings and it is never quiet. On each tick,
 and at once after `ReloadConfig`, the daemon starts the oldest waiting helper of each starter that
 has room, one at a time in order; lowering the limit stops nothing. The start types into the
