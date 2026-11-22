@@ -77,6 +77,32 @@ describe('the list', () => {
     show([session(1, 'Lead', { status: 'working' }), session(2, 'Helper', { status: 'working', ...startedBy('t1') }), session(3, 'Other', { status: 'needs-you' })])
     expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Other', 'Lead', 'Helper'])
     expect(screen.getByRole('button', { name: 'Helper, claude, helper of Lead, working' })).toBeTruthy()
+    expect(rowsIn(screen.getByRole('list', { name: 'Helpers of Lead' }))).toEqual(['Helper'])
+  })
+
+  it('folds a lead\'s helpers from their summary line, which says how many there are and what is most urgent', async () => {
+    const user = userEvent.setup()
+    const sessions = [session(1, 'Lead', { status: 'working' }), session(2, 'Cache', { status: 'needs-you', ...startedBy('t1') }), session(3, 'Resize', { status: 'working', ...startedBy('t1') })]
+    const { again } = show(sessions)
+    const summary = screen.getByRole('button', { name: /^2 helpers, 1 needs you/ })
+    expect(summary.getAttribute('aria-expanded')).toBe('true')
+    summary.focus()
+    await user.keyboard('{Enter}')
+    expect(summary.getAttribute('aria-expanded')).toBe('false')
+    expect(screen.queryByRole('list', { name: 'Helpers of Lead' })).toBeNull()
+    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Lead'])
+    // The fold is the lead's, so it holds while its helpers change state.
+    const next = sessions.map((each) => (each.id === 't2' ? session(2, 'Cache', { status: 'working', ...startedBy('t1') }) : each))
+    again({ sessions: next, projects: groupByProject(next, []).machines })
+    expect(screen.getByRole('button', { name: /^2 helpers, working/ }).getAttribute('aria-expanded')).toBe('false')
+    await user.click(screen.getByRole('button', { name: /^2 helpers, working/ }))
+    expect(rowsIn(screen.getByRole('list', { name: 'Helpers of Lead' }))).toEqual(['Cache', 'Resize'])
+  })
+
+  it('keeps a finished helper listed, saying what it changed', () => {
+    show([session(1, 'Lead', { status: 'working' }), session(2, 'Batch', { status: 'done', diffAdded: 86, diffRemoved: 12, ...startedBy('t1') })])
+    expect(screen.getByRole('button', { name: 'Batch, claude, helper of Lead, 86 added, 12 removed, done' })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^1 helper, done/ })).toBeTruthy()
   })
 
   it('shows the session picked and marks it as the current one', async () => {
@@ -469,19 +495,52 @@ describe('the header and the foot', () => {
 })
 
 describe('the rail of a narrow window', () => {
-  it('lists every session as a mark in the sidebar\'s order, the idle ones after a divider, and keeps its buttons', async () => {
+  const railMarks = (project: string) => within(screen.getByRole('list', { name: project })).getAllByRole('button').map((button) => button.getAttribute('aria-label')?.split(' · ')[0])
+
+  it('lists each project with something going on as one mark per session, in the sidebar\'s order, and leaves the idle ones out', async () => {
     const user = userEvent.setup()
     const onShowSession = vi.fn()
-    const onAddMachine = vi.fn()
-    show([session(1, 'Quiet'), session(2, 'Busy', { status: 'working' }), session(3, 'Asking', { status: 'needs-you', cwd: '/home/me/docs' })], { mode: 'rail', onShowSession, onAddMachine })
-    const list = screen.getByRole('list', { name: 'Sessions' })
-    expect(within(list).getAllByRole('button').map((button) => button.getAttribute('aria-label')?.split(' · ')[0])).toEqual(['Asking', 'Busy', 'Quiet'])
-    expect(within(list).getByRole('separator')).toBeTruthy()
-    await user.click(within(list).getByRole('button', { name: /^Busy/ }))
+    show([session(1, 'Quiet'), session(2, 'Busy', { status: 'working' }), session(4, 'Shipped', { status: 'done' }), session(3, 'Asking', { status: 'needs-you', cwd: '/home/me/docs' })], { mode: 'rail', onShowSession })
+    expect(screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['docs', 'shop'])
+    expect(railMarks('docs')).toEqual(['Asking'])
+    expect(railMarks('shop')).toEqual(['Busy', 'Shipped'])
+    await user.click(screen.getByRole('button', { name: /^Busy/ }))
     expect(onShowSession).toHaveBeenCalledWith('t2')
-    await user.click(screen.getByRole('button', { name: 'Add a remote machine' }))
-    expect(onAddMachine).toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Expand sidebar' })).toBeTruthy()
+  })
+
+  it('shows a lead for its helpers, saying how many of them need you', () => {
+    show([session(1, 'Lead', { status: 'working' }), session(2, 'Cache', { status: 'needs-you', ...startedBy('t1') }), session(3, 'Resize', { status: 'working', ...startedBy('t1') })], { mode: 'rail' })
+    expect(railMarks('shop')).toEqual(['Lead'])
+    expect(screen.getByRole('button', { name: /^Lead · .*2 helpers, 1 needs you$/ })).toBeTruthy()
+  })
+
+  it('keeps the session on screen listed when looking at it turns done into idle', () => {
+    const { again } = show([session(1, 'Shipped', { status: 'done' })], { mode: 'rail', focusedId: 't1' })
+    const sessions = [session(1, 'Shipped')]
+    again({ sessions, projects: groupByProject(sessions, []).machines })
+    expect(railMarks('shop')).toEqual(['Shipped'])
+  })
+
+  it('opens the row\'s menu from the keyboard, and Rename asks the window', async () => {
+    const user = userEvent.setup()
+    const onRenameSession = vi.fn()
+    show([session(2, 'Busy', { status: 'working' })], { mode: 'rail', onRenameSession, onSaveSessionName: vi.fn() })
+    screen.getByRole('button', { name: /^Busy/ }).focus()
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    await user.click(screen.getByRole('menuitem', { name: /^Rename/ }))
+    expect(onRenameSession).toHaveBeenCalledWith('t2')
+  })
+
+  it('keeps its own buttons: expand at the top, Open a project and Settings at the foot', async () => {
+    const user = userEvent.setup()
+    const calls = { onToggleRail: vi.fn(), onOpenProject: vi.fn(), onOpenSettings: vi.fn() }
+    show([], { mode: 'rail', ...calls })
+    await user.click(screen.getByRole('button', { name: 'Expand sidebar' }))
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
+    await user.click(screen.getByRole('button', { name: 'Settings' }))
+    expect(calls.onToggleRail).toHaveBeenCalledTimes(1)
+    expect(calls.onOpenProject).toHaveBeenCalledWith(null)
+    expect(calls.onOpenSettings).toHaveBeenCalledTimes(1)
   })
 })
 

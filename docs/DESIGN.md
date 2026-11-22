@@ -517,7 +517,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
   side; the sidebar's and the side panel's edges resize them). There is no tools bar, no middle column and no tab bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
-  52px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
+  56px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
   widths are `COMPACT_WIDTH_PX` and `NARROW_WIDTH_PX` in `model/windowSize.ts`. The chat column keeps at least
   **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
@@ -537,7 +537,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   Permissions. **Usage** has no nav item: Ctrl+Shift+U or the palette opens it,
   and it takes the whole dialog, with no nav (its groups run full width). There is no Extensions or Performance page.
   **Remote machines** (`MachinesPage.tsx`) is one list or this computer's details, one at a time in the
-  same pane; there is no page per machine; **+ Add machine** here, the sidebar's **+ Remote machine** (foot or rail) and the palette all open the
+  same pane; there is no page per machine; **+ Add machine** here, the sidebar's **Add a remote machine** (its foot) and the palette all open the
   same flow as one dialog (`AddMachineDialog`, a 600px `.mx-rename.mx-addmachine` card as tall as what it holds: a header with a
   server mark, the title and a close button; a scrolling body; a foot with Cancel). It has no steps and no second screen (ADR
   0017): the line that says Maiker connects with your keys and never asks for or keeps passwords, one mono `Address` field with
@@ -633,7 +633,16 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Session row** (`SessionRow`; padding 6px 8px 6px 10px, radius `--r-control`): the name at the left (13.5px
   `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
   status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
-  A helper is under its lead, set in 16px with a hairline down its left edge. There is no × on a row: closing is in its
+  **Helpers** (`HelperGroup` in `Sidebar.tsx`, `model/helpers.ts`) sit under their lead in the order they were made,
+  set in 16px with a 1px rule (the ink at 8%) down their left edge and 1px between rows; a helper row is 12.5px with
+  padding 5px 8px. The first line under the lead is the **summary line**, which is also the fold: a 24px button
+  (11.5px `--dim`; `--fg2` and the ink at 3.5% on hover) with a 12px caret and `N helpers` at the left and, at the
+  right, the most urgent one thing among them: the needs-you mark with how many need you (`? 2`, 500 `--needs`), else
+  the working spinner, else the done mark, each 14px; nothing when every helper is idle. Its name says the same
+  ("3 helpers, 1 needs you, under <lead>"). Helpers are open by default and the fold is kept per lead with the
+  sidebar's other folds. A **done helper** stays listed until it is closed, its name in `--muted`, with what it
+  changed (`+86 −12`, 11px mono `--dim`) before its done mark; a long name is cut short before the counts. The counts
+  are the session's diff against HEAD and are left out when it changed nothing. There is no × on a row: closing is in its
   right-click menu (`sessionMenu.ts`), which is the session's name as a dim heading and then exactly five rows:
   **Rename** (F2), **New worktree** (its key from the binding table), **Open worktree…**, **Copy path**, a divider and
   the red **Close session…** (its key; a shell says Close shell…). The two worktree rows are disabled outside a
@@ -689,13 +698,17 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Add a remote machine** dialog, `AddMachineDialog`, not Settings) and **Settings** at the right.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
-  `SidebarRail.tsx`) is 52px: expand, open a project and search (32px buttons) on top, then one 30px row per session
-  holding only its 14px `StatusIcon`, in the sidebar's own order with a 20px divider before the idle ones; the open
-  session has the selection fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
-  full list, a click opens the session and a right-click gives the same menu. The foot has Add a remote machine and
-  Settings. No agent logos, initials or connection dot (the service's state is the title-bar chip). The width eases on
-  the drawers' timing.
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu. The sidebar header's `+` (the rail's `+` when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session, the palette's "New session…" and the empty state's **New session** open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
+  `SidebarRail.tsx`) is 56px, padded 9px above and 10px below with 4px between its parts: the expand button on top,
+  then each project with something going on, in the sidebar's own order and 10px apart, as its 18px badge over one
+  32 by 28px button per session holding only its 14px `StatusIcon`; Open a project and Settings sit at the foot. All
+  three buttons are the one icon button. It lists no idle session and no helper: a lead stands for its helpers, and
+  while any of them needs you its mark is the needs-you one with a 13px amber count (9px 600, `--t1` on `--needs`) on
+  its top right corner. A session with no mark of its own (the one on screen, held where it was picked, or an idle
+  lead whose helpers work) is a 6px `--dim` dot. Hover is the ink at 5% and the open session has the selection fill,
+  `--t2`. Hovering or focusing a mark shows the same hover card as the full list, a click opens the session, and a
+  right-click, the menu key or Shift+F10 gives the same five-item menu. No agent logos, initials or connection dot
+  (the service's state is the title-bar chip). The width eases on the drawers' timing.
+- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session, the palette's "New session…" and the empty state's **New session** open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
@@ -873,7 +886,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   config.
 - **Sidebar width.** The docked sidebar's right edge is a
   drag handle (`role=separator`, 208–440 px, default 264): the width follows the pointer and is saved
-  on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 52px.
+  on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 56px.
 - **Terminal text.** Settings › Terminal sets, in one Text group of rows, the size (11 to 16), the cursor and its
   blink, the font family, the normal weight
   (Light 300, Regular 400, Medium 500, Semibold 600) and the bold weight (Semibold, Bold 700, Extra bold 800).

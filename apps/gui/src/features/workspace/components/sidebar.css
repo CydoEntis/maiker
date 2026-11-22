@@ -56,8 +56,16 @@
 /* A session: its name at the left, its status mark at the right. */
 .mx-sb-rows { display: flex; flex-direction: column; gap: 2px; }
 .mx-sb-item { display: flex; flex-direction: column; }
-/* A helper under the session that started it: set in by one step, with a rule down its left edge tying it to that row. */
-.mx-sb-item.is-nested { margin-left: 16px; padding-left: 6px; box-shadow: inset 1px 0 0 rgba(var(--ink), .08); }
+/* A lead's helpers: set in by one step, with a rule down their left edge tying them to that row. */
+.mx-sb-helpers { display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px 16px; padding-left: 6px; border-left: 1px solid rgba(var(--ink), .08); }
+.mx-sb-helpers-rows { display: flex; flex-direction: column; gap: 1px; }
+/* The summary line, which folds them: the caret and the count, then the most urgent state among them at the right. */
+.mx-sb-helpers-sum { min-width: 0; height: 24px; display: flex; align-items: center; gap: 5px; padding: 0 8px 0 2px; border-radius: var(--r-control); font-size: 11.5px; color: var(--dim); text-align: left; }
+.mx-sb-helpers-sum:hover { background: rgba(var(--ink), .035); color: var(--fg2); }
+.mx-sb-helpers-sum .mx-sb-caret { margin-left: 0; }
+.mx-sb-helpers-count { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sb-helpers-state { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-variant-numeric: tabular-nums; }
+.mx-sb-helpers-sum.is-needs .mx-sb-helpers-state { font-weight: 500; color: var(--needs); }
 .mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-control); text-align: left; }
 .mx-sb-row:hover { background: rgba(var(--ink), .035); }
 .mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--t2); }
@@ -69,12 +77,16 @@
 /* A session that has not been sent anything is a quiet, italic "New session". */
 .mx-sb-row.is-fresh .mx-sb-row-name { font-style: italic; color: var(--muted); }
 .mx-sb-row-mark { flex: none; }
+/* What a finished helper changed, before its mark; the name gives way to it. */
+.mx-sb-row-diff { flex: none; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
 /* A name while it is typed (`InlineName` in the row): a raised field with an accent edge, pulled 2px over the row's
    padding above and below, so the row keeps its height. */
 .mx-sb-row .mx-inline-name { height: 24px; margin: -2px 0; border-radius: var(--r-control); background: var(--t3); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); font: 500 13.5px var(--ui); }
 .mx-sb-item.is-nested .mx-sb-row { padding: 5px 8px; }
 .mx-sb-item.is-nested .mx-sb-row-name { font-size: 12.5px; }
 .mx-sb-item.is-nested .mx-sb-row .mx-inline-name { font-size: 12.5px; }
+/* A finished helper stays listed until it is closed, a step quieter than the ones still at work. */
+.mx-sb-item.is-nested .mx-sb-row.is-done:not(.is-selected) .mx-sb-row-name { color: var(--muted); }
 
 /* Idle: one section at the bottom, dimmed, at most 45% of the height, past which it scrolls on its own. */
 .mx-sb-idle { flex: none; display: flex; flex-direction: column; max-height: 45%; min-height: 0; padding: 4px 8px 0; }
@@ -95,6 +107,9 @@
 .mx-sb-group.is-idle .mx-sb-row.is-renaming { opacity: 1; }
 .mx-sb-group.is-idle .mx-sb-row-name { color: var(--muted); }
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
+/* An idle lead's helpers start under its name, and their rows keep a helper's own inset. */
+.mx-sb-group.is-idle .mx-sb-helpers { margin-left: 40px; }
+.mx-sb-group.is-idle .mx-sb-item.is-nested .mx-sb-row { padding-left: 8px; }
 
 /* The foot: add a remote machine at the left, Settings at the right. */
 .mx-sb-foot { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 10px; }
@@ -120,12 +135,6 @@
 .mx-sbf-foot { display: flex; justify-content: flex-end; padding: 4px 4px 2px; border-top: 1px solid rgba(var(--ink), .06); }
 .mx-sbf-reset { height: 26px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); }
 .mx-sbf-reset:hover { background: var(--float-hover); color: var(--fg); }
-
-/* The rail's buttons (the full sidebar's are the one icon button). */
-.mx-head-button { position: relative; width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-head-button:not(:disabled):hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
-.mx-head-button:disabled { opacity: .4; }
-.mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
 
 /* The card beside a row the pointer rests on (`RowHoverCard`): 290px, one hairline ring (no blurred shadow: the card is
    drawn over the busiest part of the window and a software painter pays a blur again on each repaint), easing in by
@@ -162,13 +171,20 @@
 @media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
 :root[data-reduced-motion="true"] .mx-hover-card { animation: none; }
 
-/* The rail of a narrow window: the starters, then a tile per session. */
-.mx-rail-session { width: 100%; height: 30px; display: flex; align-items: center; justify-content: center; transition: background-color var(--t-fast) var(--ease); }
-.mx-rail-session:hover { background: var(--m-hover); }
-.mx-rail-item.is-selected .mx-rail-session, .mx-rail-item.is-selected .mx-rail-session:hover { background: var(--m-sel); }
-.mx-rail-item.is-idle .mx-rail-session { opacity: .7; }
-/* An idle session has no mark, and the rail's button holds nothing else: a dim dot keeps the button findable. */
-.mx-rail-session:empty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
+/* The rail (`SidebarRail`): the expand button, then each project with something going on as its badge over one 32 by 28
+   mark per session, and Open a project and Settings at the foot. */
+.mx-rail { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 9px 0 10px; animation: v7fade .18s ease-out; }
+.mx-rail-list { flex: 0 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 10px; margin-top: 6px; overflow-y: auto; }
+.mx-rail-group { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.mx-rail-badge { display: flex; margin-bottom: 2px; }
+.mx-rail-group .mx-sb-badge { margin: 0; }
+.mx-rail-session { position: relative; width: 32px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); transition: background-color var(--t-fast) var(--ease); }
+.mx-rail-session:hover { background: rgba(var(--ink), .05); }
+.mx-rail-session[aria-current="page"], .mx-rail-session[aria-current="page"]:hover { background: var(--t2); }
+/* An idle session has no mark, and the button holds nothing else: a dim dot keeps it findable. */
+.mx-rail-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+/* How many of a lead's helpers need you, on the corner of its mark. */
+.mx-rail-count { position: absolute; top: 1px; right: 1px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; font: 600 9px/13px var(--ui); text-align: center; color: var(--t1); background: var(--needs); }
 
 /* A folded section: the row track shrinks to nothing and the content fades; `inert` in Collapse.tsx keeps it out of reach. */
 .mx-collapse-grid { contain: layout style; display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--t-base) var(--ease); }

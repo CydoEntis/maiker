@@ -2,7 +2,7 @@ import { z } from 'zod'
 
 const STORAGE_KEY = 'maiker.gui.sidebar-folds.v1'
 
-/** The fold keys of the folded project headings and of the Idle section (`projectFoldKey`, `IDLE_FOLD_KEY`). */
+/** The fold keys of what is folded: project headings, the Idle section and leads' helpers (`projectFoldKey`, `IDLE_FOLD_KEY`, `helpersFoldKey`). */
 const StoredSchema = z.array(z.string())
 
 /** The headings folded in the sidebar; none when nothing is kept or it cannot be read. Never throws. */

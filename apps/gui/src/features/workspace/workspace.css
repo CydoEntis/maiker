@@ -79,7 +79,7 @@
   .mx-chip, .mx-chip-row, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
   .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
   .mx-rm-row, .mx-rm-host, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
-  .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-dialog-close
+  .mx-crumb, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-dialog-close
 ) {
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
 }
@@ -123,7 +123,7 @@
 .mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: mx-panel-from-left var(--panel-in); }
 .mx-drawer .mx-sidebar { margin: 8px; max-width: calc(100vw - 48px); }
 
-.mx-sidebar.is-rail { width: 52px; }
+.mx-sidebar.is-rail { width: 56px; }
 /* While the edge is dragged the width follows the pointer with no easing. */
 .mx-sidebar.is-resizing { transition: none; }
 .mx-sidebar-expanded { flex: 1; min-height: 0; min-width: var(--sidebar-w, 264px); display: flex; flex-direction: column; animation: v7fade .24s ease-out; }
@@ -156,18 +156,6 @@
 @keyframes mx-wspin-bar { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
 @keyframes mx-wspin-ping { from { transform: scale(.35); opacity: 1; } to { transform: scale(1); opacity: 0; } }
 
-
-/* Rail: the collapsed sidebar (Sidebar.tsx, Rail), the design's 52px strip: three 32px buttons, then a 30px row per chat holding only
-   its status icon, in the full list's order, a 20px divider between groups, update and Settings at the foot. */
-.mx-rail { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; animation: v7fade .18s ease-out; }
-.mx-rail-top { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; }
-.mx-rail-rule { flex: none; width: 28px; height: 1px; background: var(--line); }
-.mx-rail-list { flex: 1; min-height: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: 6px 0 12px; }
-.mx-rail-sep { flex: none; width: 20px; height: 1px; margin: 6px 0; background: var(--line); }
-.mx-rail-item { position: relative; flex: none; width: 100%; }
-.mx-rail-bar { position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; z-index: 1; background: transparent; }
-.mx-rail-item.is-selected .mx-rail-bar { background: var(--fg); }
-.mx-rail-bottom { flex: none; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 10px; border-top: 1px solid var(--line); }
 
 /* App icons and status badges */
 .mx-app-icon { display: flex; align-items: center; justify-content: center; flex: none; font-family: var(--mono); font-weight: 600; letter-spacing: -.04em; box-shadow: var(--c-tile-ring); transition: transform var(--t-base) var(--ease); }

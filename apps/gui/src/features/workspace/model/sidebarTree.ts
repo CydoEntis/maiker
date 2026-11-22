@@ -3,7 +3,7 @@ import { baseName } from './folderPick'
 import { machineTitle, type MachineHead } from './machines'
 import type { MachineProjects, OpenedProject, ProjectSessions } from './openedProjects'
 import { inCreationOrder, type SessionView } from './session'
-import { byLatestChange, URGENCY } from './sidebar'
+import { byLatestChange, mostUrgent, URGENCY } from './sidebar'
 
 /** A session kept in the state it was in when it was picked, whatever its status says since. */
 export type HeldRow = { readonly id: string; readonly mark: StatusMarkKind }
@@ -20,9 +20,6 @@ function placedMark(session: SessionView, held: HeldRow | null): StatusMarkKind 
   const actual = markOf(session.status)
   return session.id === held?.id && settles(held.mark) && settles(actual) ? held.mark : actual
 }
-
-const mostUrgent = (marks: readonly StatusMarkKind[]): StatusMarkKind =>
-  marks.reduce<StatusMarkKind>((most, mark) => (URGENCY[mark] < URGENCY[most] ? mark : most), 'idle')
 
 /** One row of a project with the helpers listed under it. */
 export type SessionNode = {
@@ -85,6 +82,11 @@ export function projectFoldKey(project: OpenedProject): string {
 
 /** The Idle section's own fold, kept with the projects' (`data/sidebarFolds.ts`). */
 export const IDLE_FOLD_KEY = 'section:idle'
+
+/** The fold of a lead's helpers, kept with the others; a lead is its session id for as long as it is listed. */
+export function helpersFoldKey(leadId: string): string {
+  return `helpers:${leadId}`
+}
 
 /**
  * What a project heading says: the repository's name for a git project, else the folder's last part. A project with no
@@ -177,11 +179,6 @@ export function sidebarOrder(heads: readonly MachineHead[], machines: readonly M
 /** Whether a row of the group waits on the person: what a folded heading still has to say. */
 export function needsYou(group: ProjectGroup): boolean {
   return group.rows.some((node) => node.mark === 'needs')
-}
-
-/** Every session the groups list, top to bottom, each lead followed by its helpers: the narrow rail's one column. */
-export function sessionsInOrder(groups: readonly ProjectGroup[]): SessionView[] {
-  return groups.flatMap((group) => group.rows.flatMap((node) => [node.session, ...node.helpers]))
 }
 
 /**

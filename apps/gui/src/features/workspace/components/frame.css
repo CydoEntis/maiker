@@ -23,8 +23,6 @@
 .mx-app[data-side="right"] .mx-sidebar { margin: 0 0 0 var(--frame-gap); }
 /* Over a narrow window the sidebar is a drawer, off the window's edge on every side. */
 .mx-app .mx-drawer .mx-sidebar { margin: var(--frame-edge); }
-.mx-sidebar .mx-head-button { width: 26px; height: 26px; border-radius: var(--r-control); }
-.mx-sidebar .mx-head-button:not(:disabled):hover { background: var(--m-hover); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
 .mx-app-icon.is-dimmed { opacity: .45; }

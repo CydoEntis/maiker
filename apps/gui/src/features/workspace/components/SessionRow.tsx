@@ -1,6 +1,6 @@
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { helpersSpoken, type HelperCount } from '../model/helpers'
+import { diffSpoken, diffText, helpersSpoken, type HelperCount, type HelperDiff } from '../model/helpers'
 import { limitedWord, MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
 import { isFreshSession, rowTitle, sectionOf } from '../model/sidebar'
 import { beginPointerDrag } from './dragSession'
@@ -17,6 +17,8 @@ type Props = {
   starter?: string | null
   /** The helpers this session's agent started, when it has any listed. */
   helpers?: HelperCount | null
+  /** What a finished helper changed, written before its mark. */
+  diff?: HelperDiff | null
   /** The name is being typed in the row. */
   renaming: boolean
   onShow: () => void
@@ -31,20 +33,20 @@ type Props = {
 
 /**
  * What a screen reader hears after the name: what runs in it (the row shows no agent mark, so this is the only place a
- * row says it), whose helper it is, its own helpers, and its status in a word.
+ * row says it), whose helper it is, its own helpers, what a finished helper changed, and its status in a word.
  */
-function spokenState(session: SessionView, starter: string | null, helpers: HelperCount | null): string {
+function spokenState(session: SessionView, starter: string | null, helpers: HelperCount | null, diff: HelperDiff | null): string {
   const status = session.status === 'limited' ? limitedWord(session.resumeAt, Date.now()) : STATUS_WORD[session.status]
-  return [session.process, starter === null ? null : `helper of ${starter}`, helpers === null ? null : helpersSpoken(helpers), status].filter((part) => part !== null).join(', ')
+  return [session.process, starter === null ? null : `helper of ${starter}`, helpers === null ? null : helpersSpoken(helpers), diff === null ? null : diffSpoken(diff), status].filter((part) => part !== null).join(', ')
 }
 
 /**
- * One session in the sidebar: its name at the left and its status mark at the right, and nothing else. An idle session
- * has no mark and is dimmed; where it runs, what it is doing and for how long are the hover card's. While it is renamed
+ * One session in the sidebar: its name at the left and its status mark at the right, and nothing else but a finished
+ * helper's line counts before its mark (a long name is cut short first). An idle session has no mark and is dimmed; where it runs, what it is doing and for how long are the hover card's. While it is renamed
  * the name is a field in the same place: Enter or leaving it saves, Escape cancels, and an empty or unchanged name
  * changes nothing.
  */
-export function SessionRow({ session, selected, starter = null, helpers = null, renaming, onShow, onRename, onRenameSave, onRenameEnd, onContextMenu, onMenuKey }: Props) {
+export function SessionRow({ session, selected, starter = null, helpers = null, diff = null, renaming, onShow, onRename, onRenameSave, onRenameEnd, onContextMenu, onMenuKey }: Props) {
   const title = rowTitle(session)
   const mark = sectionOf(session)
   const fresh = isFreshSession(session)
@@ -83,7 +85,7 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
       type="button"
       className={className}
       onPointerDown={(event) => { beginPointerDrag(event, { kind: 'session', id: session.id, label: title }) }}
-      aria-label={`${title}, ${spokenState(session, starter, helpers)}`}
+      aria-label={`${title}, ${spokenState(session, starter, helpers, diff)}`}
       aria-current={selected ? 'page' : undefined}
       onClick={onShow}
       onKeyDown={(event) => {
@@ -95,6 +97,7 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
       onContextMenu={onContextMenu}
     >
       <span className="mx-sb-row-name">{title}</span>
+      {diff !== null && <span className="mx-sb-row-diff">{diffText(diff)}</span>}
       <StatusIcon status={session.status} size={MARK_PX} className="mx-sb-row-mark" />
     </button>
   )

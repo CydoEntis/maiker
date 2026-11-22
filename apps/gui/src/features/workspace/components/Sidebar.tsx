@@ -2,12 +2,13 @@ import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type R
 import { FolderPlus } from 'lucide-react'
 import { IconButton } from '@/components/ui/icon-button'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
-import { helperLinks } from '../model/helpers'
+import { StatusIcon } from '@/components/ui/status-icon'
+import { helperDiff, helperLinks, helpersWord, helperSummary, summarySpoken } from '../model/helpers'
 import { machineTitle, type MachineHead, type UpdateAction } from '../model/machines'
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
 import type { SessionView } from '../model/session'
-import { rowTitle, sectionOf } from '../model/sidebar'
-import { filterChoices, IDLE_FOLD_KEY, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type HeldRow, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
+import { rowTitle } from '../model/sidebar'
+import { filterChoices, helpersFoldKey, IDLE_FOLD_KEY, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
 import { Collapse } from './Collapse'
 import { Icon } from './glyphs'
 import { machineMenuEntries, type MachineActions } from './machineMenu'
@@ -24,6 +25,7 @@ import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { SidebarRail } from './SidebarRail'
 import { SidebarResizer } from './SidebarResizer'
 import { useFlip } from './useFlip'
+import { useHeldRow } from './useHeldRow'
 import { useHoverController } from './useHoverController'
 import { useSidebarFolds } from './useSidebarFolds'
 
@@ -137,12 +139,7 @@ function Expanded(props: SidebarProps) {
   const reduced = useReducedMotion()
   const choices = filterChoices(props.machines, props.projects)
   const [picked, setPicked] = useState<SidebarFilter>(NO_FILTER)
-  // The session on screen keeps the place it was picked in until another is picked (`sidebarOrder`'s `held`).
-  const [hold, setHold] = useState<{ for: string | null; row: HeldRow | null }>({ for: null, row: null })
-  if (hold.for !== props.focusedId) {
-    const focused = props.focusedId === null ? undefined : props.sessions.find((session) => session.id === props.focusedId)
-    setHold({ for: props.focusedId, row: focused === undefined ? null : { id: focused.id, mark: sectionOf(focused) } })
-  }
+  const held = useHeldRow(props.focusedId, props.sessions)
   // The project just opened or picked is shown whatever the filter said: opening a project and not seeing it reads as a failure.
   const selected = props.selectedProject
   const [filteredFor, setFilteredFor] = useState(selected)
@@ -155,7 +152,7 @@ function Expanded(props: SidebarProps) {
     if (hidesSelected) setPicked(NO_FILTER)
   }
   const filter = hidesSelected ? NO_FILTER : valid
-  const order = sidebarOrder(props.machines, props.projects, filter, hold.row)
+  const order = sidebarOrder(props.machines, props.projects, filter, held)
   // Unfolded with the fold keys the list spells: its own project, and the Idle section when that is where it sits.
   const revealKeys = listedSelected === null ? [] : [listedSelected.key, ...(everything.active.some((group) => group.key === listedSelected.key) ? [] : [IDLE_FOLD_KEY])]
   const folds = useSidebarFolds(selected, revealKeys)
@@ -224,6 +221,7 @@ function Expanded(props: SidebarProps) {
         selected={session.id === props.focusedId}
         starter={links.starterOf.get(session.id) ?? null}
         helpers={links.helpersOf.get(session.id) ?? null}
+        diff={nested ? helperDiff(session) : null}
         renaming={renaming === session.id}
         onShow={() => { props.onShowSession(session.id) }}
         onRename={() => { rename(session.id) }}
@@ -237,7 +235,11 @@ function Expanded(props: SidebarProps) {
   const renderRows = (rows: readonly SessionNode[]) => rows.map((node) => (
     <Fragment key={node.session.id}>
       {renderRow(node.session, false)}
-      {node.helpers.map((helper) => renderRow(helper, true))}
+      {node.helpers.length > 0 && (
+        <HelperGroup lead={node.session} helpers={node.helpers} open={folds.isOpen(helpersFoldKey(node.session.id))} onToggle={() => { folds.toggle(helpersFoldKey(node.session.id)) }}>
+          {node.helpers.map((helper) => renderRow(helper, true))}
+        </HelperGroup>
+      )}
     </Fragment>
   ))
 
@@ -305,6 +307,35 @@ type HeadMenus = {
   onKeyDown: ((event: KeyboardEvent<HTMLElement>) => void) | undefined
   /** The machine tag of a project on another machine. */
   tag: ReactNode
+}
+
+/** The marks on a helper summary line, the size of a row's. */
+const SUMMARY_MARK_PX = 14
+
+/**
+ * A lead's helpers, one step in under its row with a rule down their left edge. The first line is the summary and the
+ * fold: how many there are and, at the right, the most urgent thing among them (how many need you, else that one works,
+ * else that they are done), so a folded group still says whether it wants the person.
+ */
+function HelperGroup({ lead, helpers, open, onToggle, children }: { lead: SessionView; helpers: readonly SessionView[]; open: boolean; onToggle: () => void; children: ReactNode }) {
+  const summary = helperSummary(helpers)
+  const count = helpersWord(summary.count)
+  const leadName = rowTitle(lead)
+  return (
+    <div className="mx-sb-helpers" role="listitem">
+      <button type="button" className={`mx-sb-helpers-sum is-${summary.state}`} data-flip={`helpers:${lead.id}`} aria-expanded={open} aria-label={`${summarySpoken(summary)}, under ${leadName}`} onClick={onToggle}>
+        <span className={`mx-sb-caret${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
+        <span className="mx-sb-helpers-count">{count}</span>
+        {summary.state !== 'idle' && (
+          <span className="mx-sb-helpers-state">
+            <StatusIcon status={summary.state} size={SUMMARY_MARK_PX} />
+            {summary.state === 'needs' && summary.needs}
+          </span>
+        )}
+      </button>
+      {open && <div className="mx-sb-helpers-rows" role="list" aria-label={`Helpers of ${leadName}`}>{children}</div>}
+    </div>
+  )
 }
 
 const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)

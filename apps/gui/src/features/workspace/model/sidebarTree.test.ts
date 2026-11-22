@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { badgeLetters, filterChoices, machineKey, needsYou, NO_FILTER, orderPlacement, passesFilter, projectFoldKey, projectName, sessionNodes, sessionsInOrder, sidebarOrder, type ProjectGroup } from './sidebarTree'
+import { badgeLetters, filterChoices, machineKey, needsYou, NO_FILTER, orderPlacement, passesFilter, projectFoldKey, projectName, sessionNodes, sidebarOrder, type ProjectGroup } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 const HEADS = [LOCAL_HEAD, DEVBOX]
@@ -113,7 +113,29 @@ describe('helpers', () => {
   it('are not counted as rows of the Idle section', () => {
     const { idleCount, idle } = order([session(1, '/home/me/shop'), session(2, '/home/me/shop', startedBy('t1'))])
     expect(idleCount).toBe(1)
-    expect(sessionsInOrder(idle).map((each) => each.id)).toEqual(['t1', 't2'])
+    expect(idle.flatMap((group) => group.rows.map((node) => [node.session.id, node.helpers.map((each) => each.id)]))).toEqual([['t1', ['t2']]])
+  })
+
+  it('float their project to the top when one of them needs you', () => {
+    const sessions = [
+      session(1, '/home/me/shop', { status: 'working' }),
+      session(5, '/home/me/docs', { status: 'working' }),
+      session(6, '/home/me/docs', { status: 'working', ...startedBy('t5') }),
+    ]
+    expect(order(sessions).active.map((group) => group.name)).toEqual(['shop', 'docs'])
+    const asking = sessions.map((each) => (each.id === 't6' ? session(6, '/home/me/docs', { status: 'needs-you', ...startedBy('t5') }) : each))
+    expect(order(asking).active.map((group) => group.name)).toEqual(['docs', 'shop'])
+  })
+
+  it('keep an idle lead out of the Idle section while one of them is at work', () => {
+    const { active, idle } = order([session(1, '/home/me/shop'), helper(2)])
+    expect(shape(active)).toEqual([['shop', ['t1']]])
+    expect(idle).toEqual([])
+  })
+
+  it('that have finished rank their lead as done, under the rows still working', () => {
+    const nodes = sessionNodes([session(1, '/home/me/shop'), helper(2, { status: 'done' }), session(5, '/home/me/shop', { status: 'working' })])
+    expect(nodes.map((node) => [node.session.id, node.mark])).toEqual([['t5', 'working'], ['t1', 'done']])
   })
 
   it('whose starter is not listed are ordinary rows', () => {

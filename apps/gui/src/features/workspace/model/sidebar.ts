@@ -9,6 +9,10 @@ import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS,
  */
 export const URGENCY: Record<StatusMarkKind, number> = { needs: 0, working: 1, done: 2, idle: 3 }
 
+/** The most urgent of `marks`; idle when there are none. */
+export const mostUrgent = (marks: readonly StatusMarkKind[]): StatusMarkKind =>
+  marks.reduce<StatusMarkKind>((most, mark) => (URGENCY[mark] < URGENCY[most] ? mark : most), 'idle')
+
 export function byUrgency(sessions: readonly SessionView[]): SessionView[] {
   return inCreationOrder(sessions).sort((a, b) => URGENCY[markOf(a.status)] - URGENCY[markOf(b.status)])
 }
