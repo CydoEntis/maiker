@@ -652,7 +652,7 @@ What was changed, and how sure we are that it matters:
 | Change | Where | Basis |
 | --- | --- | --- |
 | Hover lives outside React state: `HoverController` (`model/hoverController.ts`) holds the card, the 450ms timer and the warm window; `RowHoverHost` is the only component that follows it. A hover no longer draws the sidebar's rows. | `Sidebar.tsx`, `RowHoverHost.tsx`, `useHoverController.ts` | Read in code: the old state sat in `Expanded`, so each show and hide re-ran every row and `useFlip`'s layout reads. Cost not measured. |
-| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `flipKey` in `Sidebar.tsx` | Read in code. |
+| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `orderPlacement` in `model/sidebarTree.ts` | Read in code. |
 | The card is placed from the row's box alone (`placeHoverCard`: `top` for a row in the upper half, `bottom` for the lower half, `max-height: calc(100vh - 16px)`), once, in the timer callback. It no longer renders hidden, measures itself and moves. | `hoverCard.ts`, `RowHoverCard.tsx` | Read in code. |
 | One card stays mounted while warm: leaving a row hides it (`data-open="false"`), and entering another within `HOVER_CARD_WARM_MS` (250ms) shows it there at once, no 450ms wait and no fade. The first card still waits 450ms. This is a small behaviour change. | `hoverController.ts` | By design. |
 | The card fades in by opacity only (`mx-hover-in`, 120ms) and has a 1px ring (`--pop-sh-flat`) in place of the blurred shadow, so its clip-path bleed is 4px instead of 48px (`--float-bleed`). Tips take the same ring. | `sidebar.css`, `material.css` | Shadow and clip costs are in the 2026-11-03 tables above; the card's share is a guess. |
@@ -726,7 +726,7 @@ over the redesign, so the likely cost is paint or animation, which a headless te
 
 Done: the pane's 200 ms entrance fade is gone (`pane.css`); the chat paints from the feed cache with no loading frame
 (`useChatFeed`, `CACHE_LIMIT`); a pointer on a sidebar row reads its feed ahead (`warmChatFeed`); the focused id is not in
-`flipKey`. **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
+the sidebar's slide key (`orderPlacement`). **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
 paused (`useChatFeed` `paused`: no reads and no listening, and one read at once when it shows again), so going back to
 one of the last two tabs shows its chat, scroll position, draft and open trays as they were. Cost is memory: two more chats.
 Not measured on screen yet; record one session click in the built app (F12, Performance) before taking Step B.

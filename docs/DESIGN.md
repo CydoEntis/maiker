@@ -334,7 +334,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   you, then working, then done. **Idle** is one dimmed section at the bottom, grouped by project, and it also lists
   projects with no session. There are no machine headings, no status headings and no pinned needs-you list: a remote
   project carries a machine tag, amber while that machine is offline. A session row is its name at the left and its
-  status mark at the right, with no time and no agent icon. A lead sorts by its most urgent helper.
+  status mark at the right, with no time and no agent icon. A lead sorts by its most urgent helper. There is no Put
+  away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
 
 ### Decisions that override the handoff
 
@@ -597,34 +598,54 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   terminal (agents) or Clear and Copy folder path (shells); in a terminal pane, **Restart shell** when it ended and an entry for each request it waits on (helpers, a secret); then **Close**. Closing one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session, after the confirm.
-- **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; the whole-app mock). Agents only: no fleets, ships
-  or tabs. A 264px card on `--card` with a `--line` hairline, 8px from the window's edges. Its header reads **Chats**
-  (12px 600 `--muted`) after a **Hide sidebar** button (Ctrl+Shift+B / ⌘B), then three 26px buttons: **Search** (the command palette; there is no filter field), the **≡ menu** (`SidebarFilterMenu`: a 264px popover that grows from the button's bottom-left corner: a project search ("Find one of N projects" above six) over the projects, busiest first, each with its count, six rows before it scrolls, **All projects** first while the search is empty; picking one narrows the tree to that project's sessions, and the menu stays open; **Reset** appears while a project is picked, and the ≡ button turns `--accent-text` (`data-on`) then. It has no grouping or order choice: the list is always one tree, `model/sidebarTree.ts`), and the **Open a project** `+` (the Open a project dialog for this computer; see *Starting a session*, below).
-  **Order** (`model/sidebarTree.ts`): *The sidebar's order* in [Design language](#design-language). There is no
-  needs-you strip, no machine card or heading and no status heading; a project on another machine carries a machine
-  tag after its name, amber while that machine is offline.
-  **Project**: an opened project (`model/openedProjects.ts`; a machine and a folder, so the same repository on two machines is two projects) is a folding heading (`ProjectSection`: a 12px caret, a muted folder mark, `FolderMark`, and the name: the repository's name for a git project, else the folder's last part; the folder is its tooltip), 12px 600 `--fg2`, with no card of its own. A project with no session stays, saying "No sessions". **Fold counts** (`FoldBadges`, `projectFoldCounts`): a folded project heading, after its name inside its folding button (`.mx-project-toggle`, so the hover actions beside it are untouched) shows how many of the sessions under it need you (`waitsOnYou`, so not one held by its plan limit) and how many finished and have not been opened since (the service keeps a finished agent `done` until it is looked at), each a 16px badge of 10.5px 600 mono on a 16% tint of `--needs` or `--done`, in `--r-badge` corners. A count of zero draws no badge, and an unfolded heading has none, as its rows say their status; each badge is named for what it counts ("2 sessions need you", "1 finished session not opened yet"). The project last opened or picked (`useOpenedProjects().selected`) is unfolded and its heading takes the picked row's fill (`--m-card-sel`, `aria-current`). While the pointer or focus is on a heading, 22px buttons fold out at its right (`ProjectHeadActions`; at no width otherwise, so a resting name keeps the row): **+** (New session), a tree (**New worktree**, only on a git project of this computer that has a session to make it from) and **⋯**, which opens the heading's right-click menu under it: New session, New worktree… (the same rule), Open worktree… (a project of this computer that is not a plain folder), a divider, Close project (`projectMenu.ts`). **Open worktree** is a dialog in the Recent sessions float (`OpenWorktreeDialog`): one row per linked worktree, a tree mark, its folder's name over its branch in `--muted`, and at the right in `--dim` "In use by <session> · Show" or "Folder missing" (the row greyed and not pickable, its tooltip saying where to make it again); an empty list says so and how to make one, and New worktree… sits beside Close when the project offers it. A session in a linked worktree is under its repository's project; there is no level below the project.
-  **Terminals**: in the tree, the sessions with no agent in them (a shell, a
-  program running in one, a shell that exited, the shell an agent left behind) are one **Terminals** section stuck
-  over the foot (`TerminalsSection`, `splitTerminals`): it never scrolls away with the list, takes at most a third of the
-  sidebar's height and scrolls its own rows past that, shows its count, folds from its heading, and has its own **+**
-  (New terminal), so a new terminal's row appears beside the button that made it.
-  A terminal that asks stays with Needs you, and a chat session is never listed here. In the 52px rail the section is
-  one terminal glyph over the foot with its count; each press opens the next terminal after the one on screen. A row
-  is the same everywhere (below).
-  Which projects are folded is kept in this window's storage (`maiker.gui.sidebar-folds.v1`, by machine name and folder), so a fold survives a restart.
-  While the new-chat page is open, a draft row (**New session** in italics, a dim `draft` tag and the agent's tile at
-  .75 opacity) is listed last, under the projects,
-  so the draft is never missing from the sidebar; it goes when the chat starts and the chat's own row takes its place.
-  A row whose status changes glides to its new place over 420ms, and the headings and rows it passes glide with it, so
-  nothing in the list snaps (`useFlip`); a new row slides in from the left; Reduce motion turns both off. A row is never tinted or flashed when its
-  status changes: its badge says the new status, and a flash on every finished turn read as noise.
-  **Put away** (`splitPutAway`) is the last heading of the scrolling list, folded until opened, with
-  its count and "still running": the sessions put away from their menu, terminals included, as created. A row there has
-  **Bring back** in its menu; a put-away session that needs you is listed in its project instead.
-  The rail leaves put-away sessions out.
-  A **row** (padding 7px 10px, radius `--r-control`) is one design everywhere: the name at the left and the status mark (`StatusIcon`) at the right, with no time and no agent icon. Where it runs, its branch and what the agent is doing are the hover card's. There is no × on a row: closing is in its right-click menu.
-  A row's **right-click menu** reads Rename (F2), Open in a new pane, Copy folder path, a divider, Close session (a shell says Close shell), a second divider, then the rest: Open, Open in split down, Show changes, New worktree, Rename machine, Get a file, Mark as done, Unsnooze and Bring back, each where it applies. There is no Put away or Snooze row.
+- **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; handoff v5, section 4). A 264px card on the
+  panel role, lifted from the ground by its tone. Agents and shells only: no fleets, ships or tabs.
+  **Header** (44px): **Hide sidebar**, the title **Chats** (13px 500 `--fg2`), then three 26px icon buttons: **Search**
+  (the command palette), **Filter** (`SidebarFilterMenu`: a 262px popover with a project search, the projects with
+  their session counts, six rows before they scroll, **All projects** first while the search is empty, then, once
+  another machine is configured, the **Machines** with their counts, an offline one amber and marked `offline`; a pick
+  applies at once and the menu stays open, pressing the picked machine again clears it, **Reset** shows while anything
+  is picked and the button is in its on state then) and **Open a project** (a folder with a plus; the Open a project
+  dialog for this computer; see *Starting a session*, below).
+  **Order** (`model/sidebarTree.ts`, `sidebarOrder`): *The sidebar's order* in [Design language](#design-language).
+  The projects with something going on scroll at the top. A **project** is a heading and its rows, with no card and no
+  rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
+  letters, in the project's colour on an 18% tint of it), the name (12px 600 `--fg`; the folder is its tooltip), on
+  another machine the machine tag, and the session count (10.5px mono, dim). A click folds it: the caret shows on hover
+  and while folded, and a folded project with a row that needs you keeps a 7px amber dot. A `+` button shows on hover
+  and on focus. The project just opened or picked is unfolded, and shown whatever the filter said.
+  **Machine tag** (`MachineTag`): the machine's name with a 10px server mark, in `--accent-text`, 10.5px mono, with no
+  fill; amber (`--needs`) while that machine is not connected. Its tooltip is the host's one sentence for what failed
+  (ADR 0017), and it opens the machine's menu (`machineMenu.ts`): while the machine is down that sentence, then
+  **Retry**, **Copy the command** when the sentence names one and **Sign in in a terminal** only for a login that
+  needs a person, or the one **Install Maiker** / **Update Maiker** when that is what it needs; while the machine is up, **Open a project on this
+  machine…** (the Open a project palette on that machine's folders); always **Rename…** and **Machine settings…**. A running install or update shows its percentage in the tag. A machine going down also raises
+  one warning toast with the same sentence and the same fix (`useMachineToasts`), which goes when the machine is back.
+  **Project `+` menu** (`projectMenu.tsx`, 300px): a line saying where it acts (`In <project> · <machine>`), **New
+  session** over the agents (Claude, Codex, Gemini), each with its mark and numbered from 1 while it is installed (the
+  number picks it while the menu is open), an agent that is not on this computer disabled and marked `not installed`,
+  **Terminal** (Terminal view only), a divider, **New worktree…** and **Open worktree…** (both open their dialogs).
+  Keys shown are the binding table's. **Project right-click menu**: the project's name (and machine when it is
+  remote), **New session**, **New worktree…**, a divider, **Copy path**, **Show files** (the side panel's Files beside
+  a session of the project; off while it has none), a divider, **Remove from sidebar…** (the confirm dialog; refused
+  with a toast naming the sessions while one runs in it).
+  **Session row** (`SessionRow`; padding 6px 8px 6px 10px, radius `--r-control`): the name at the left (13.5px
+  `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
+  status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
+  A helper is under its lead, set in 16px with a hairline down its left edge. There is no × on a row: closing is in its
+  right-click menu, which reads Rename (F2), Open in a new pane, Copy folder path, a divider, Close session (a shell
+  says Close shell), a second divider, then the rest: Open, Open in split down, Show changes, New worktree…, Open
+  worktree…, Rename machine…, Get a file… and Mark as done, each where it applies.
+  **Idle** is one section fixed under the list (at most 45% of the height, with its own scroll): its heading (12px 600
+  `--muted`, the count, a caret) folds it. Under it each project is a dimmed heading (badge, name, machine tag) whose
+  click opens the project's `+` menu, with **No sessions** at its right when it has none, then its idle rows, set in
+  under the name at .55 opacity with no mark. A project with both kinds of session is in both places; the projects
+  with nothing going on come first. While the section lists only projects with no session it is headed **Projects**
+  and has no count. A session the daemon has put away or snoozed is listed like any other.
+  Which headings are folded, the Idle section's too, is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
+  by machine name and folder), so a fold survives a restart.
+  A row whose status changes glides to its new place, and the headings and rows it passes glide with it (`useFlip`);
+  Reduce motion turns it off. A row is never tinted or flashed when its status changes.
   A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 300px, its top 4px above the row (a row in the lower half of the window stands the card on its
   bottom instead, so it grows up) and kept inside the window, fading in by opacity with a one-pixel ring and no blurred
   shadow; while it is warm, moving to another row within 250ms shows it there at once, with no 450ms wait and no fade;
@@ -633,27 +654,29 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   folder (locked for a worktree; a shell shows its working directory in mono), the branch in mono with an **own worktree** tag, the changes
   (`+added` `--ok`, `−removed` `--danger`) and the pull request (`#218` and its state in the state's colour), and a 30px footer with the agent's mark,
   `agent · machine` (the agent alone on this computer) and how long ago it last changed. It takes no pointer input and goes on leave, click, scroll or a menu.
-  The name is 13px, 600 and `--fg` for an agent that is doing anything. An idle row is dimmed. A stopped agent and an exited shell are idle rows:
-  the reason is the hover card's activity line and, for an agent, an error toast with the fix. An agent the daemon holds
+  A stopped agent and an exited shell are idle rows: the reason is the hover card's activity line and, for an agent,
+  an error toast with the fix.
+  An agent the daemon holds
   until its plan limit resets is **limited** (the daemon's `TermInfo.resume_at`; only that time makes a session limited,
   and only one the daemon calls idle or done): an idle row whose activity line says `Limited until 14:05` in this
   computer's time (`Limited until Thu 14:05` when that is not today). It is never listed, counted or announced as needs
-  you, because it waits on the limit and not on you, and its limit ending is not a new finish. A finished agent's menu has **Mark as
-  done**, which files it under Idle without opening it (`MarkSeen`). A shell's tile is a flat `--raise` square with a teal `>_`. The selected row is a raised pill. The row
-  is named by the name you gave it, else the folder it was made in (the agent is the mark beside it). **Rename**: double-click, F2 or the menu
-  turns the name into a field; Enter or leaving saves, Esc cancels, empty clears. Project colours are five tokens
-  (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name, never amber or red.
-  With nothing running the list says "Chats and shells you start appear here, sorted by what needs you."
-  The foot is a card too (40px, `--m-raise`, hairline, 8px from the sidebar's edges). It holds, at the left, a **+ Remote machine** button (12px `--muted`), and, at the right, the Settings gear (the update button is the status bar's, see *The update button*); **+ Remote machine** opens the small **Add a remote machine** dialog (`AddMachineDialog`) over the window, not Settings, and Recent sessions is in the command palette.
+  you, because it waits on the limit and not on you, and its limit ending is not a new finish.
+  A finished agent's menu has **Mark as done**, which makes it idle without opening it (`MarkSeen`). A row is named by
+  the name you gave it, else the folder it was made in. **Rename** (F2 or the menu) opens the rename dialog. Project
+  colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
+  never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
+  it shows a quiet card, **No sessions yet**.
+  **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the small
+  **Add a remote machine** dialog, `AddMachineDialog`, not Settings) and **Settings** at the right.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
-  sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (the collapsed sidebar, or a narrow
-  window's; `Rail` in `Sidebar.tsx`) is 52px: expand, open a project (its `+`), and search (32px buttons) on top, then one 30px row per
-  chat holding only its 14px `StatusIcon`, by status (Needs you, Working, Done, Idle, every machine and project together) with a 20px divider between statuses; the
-  open chat has the `--sel` fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
-  full list, a click opens the chat and a right-click gives the same menu. The foot has Remote machine (a `+` alone) and Settings.
-  No agent logos, initials or connection dot (the service's state is the title-bar chip), and no Recent sessions button
-  (it is in the command palette). The width eases on the drawers' timing.
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu. The sidebar header's `+` (the rail's `+` when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` is **New session** (the New session draft on the project's machine with its folder, where the agent is picked and **Own worktree** can be switched on), and its menu adds **New terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session, the palette's "New session…" and the empty state's **New session** open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
+  sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
+  `SidebarRail.tsx`) is 52px: expand, open a project and search (32px buttons) on top, then one 30px row per session
+  holding only its 14px `StatusIcon`, in the sidebar's own order with a 20px divider before the idle ones; the open
+  session has the selection fill and a 2px `--fg` bar on its left edge. Hovering a row shows the same hover card as the
+  full list, a click opens the session and a right-click gives the same menu. The foot has Add a remote machine and
+  Settings. No agent logos, initials or connection dot (the service's state is the title-bar chip). The width eases on
+  the drawers' timing.
+- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu. The sidebar header's `+` (the rail's `+` when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session, the palette's "New session…" and the empty state's **New session** open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
@@ -1238,20 +1261,6 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (0.18 to 0.42s by distance, easing in; `glidePlan`). From far up it starts two screens above the bottom, so a long
   chat is not drawn on the way. The reader's own wheel, key or touch ends the glide where it is, and with motion
   reduced it is a plain jump.
-- **A session's row.** The agent's tile and status badge at the left. To its right, two lines. First, small and
-  dim, where the session is: the project's colour square and folder at the left, and at the right the branch in mono
-  in the theme's magenta with the branch mark, or the tree and the branch in blue when it runs in a worktree. Under
-  it the title, with the time or the stop word at its right. Inside a project group the folder is in the heading, so
-  the first line is the branch alone, and a session with neither has only its title (`SessionRow.tsx`, `PlaceLine`).
-  Only a session on another machine, outside that machine's heading, has `· machine` after the folder, and only then is
-  the branch held to 58% of the line; otherwise it takes all the folder leaves, cut with `…` and its full name in the
-  tooltip.
-  A session another session's agent started (a helper) begins its place line with `↳` and that session's name, which
-  gives way with `…` before the place does. The session that started helpers says `2 helpers` in `--muted` before its
-  time, in `--needs` while one of them waits on you. Rows keep their place and their level: a helper is never indented
-  under its starter. The hover card adds `Started by <name>` or `2 helpers: <names>` (three names, then `+n more`). A
-  helper whose starter is no longer listed is an ordinary row (`model/helpers.ts`).
-  The close button shows on hover over the time.
 - **Rows slide, folds fold, never both.** A row that changes place slides there (`useFlip`). A section folding
   moves what is under it by itself, so while a fold runs nothing slides, and where things
   are when it ends is where the next slide starts from; the two together made the list bounce.
