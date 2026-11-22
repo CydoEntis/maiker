@@ -139,7 +139,8 @@
   body { @apply bg-background text-foreground; margin: 0; }
   button, input, textarea { font: inherit; }
   button { cursor: pointer; }
-  ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--foreground); }
+  /* Selected text takes the theme's accent, like everything else that is picked; the library's teal belonged to no theme. */
+  ::selection { background: color-mix(in srgb, var(--accent, var(--primary)) 32%, transparent); color: var(--fg, var(--foreground)); }
   /* Focus is a 1px underline in the accent, as in the desktop window (design rule 10). */
   :focus-visible { outline: none; box-shadow: var(--focus-edge, inset 0 0 0 1px var(--ring)); }
 }

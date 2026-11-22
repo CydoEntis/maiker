@@ -273,9 +273,11 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-thought-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
 /* The bar over text selected in the chat: Copy and Quote, just above where the mouse let go. */
-.mx-select-bar { position: fixed; z-index: var(--layer-pop); display: flex; gap: 2px; padding: 3px; border-radius: var(--r-control); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
+.mx-select-bar { position: fixed; z-index: var(--layer-pop); display: flex; gap: 2px; padding: 3px; border-radius: var(--r-panel); transform: translate(-50%, calc(-100% - 10px)); animation: v7fade .12s var(--ease-out); }
 .mx-select-action { display: inline-flex; height: 26px; align-items: center; gap: 6px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); cursor: pointer; }
-.mx-select-action:hover { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
+.mx-select-action:hover { background: var(--float-hover); color: var(--fg); }
+.mx-select-action svg { color: var(--muted); }
+.mx-select-action:hover svg { color: var(--fg); }
 @media (prefers-reduced-motion: reduce) { .mx-select-bar { animation: none; } }
 
 /* The message box. */
@@ -497,9 +499,12 @@ button.mx-row-button:not(.is-locked):hover, button.mx-row-button[data-state="ope
 .mx-msg-agent { position: relative; }
 .mx-chat-scroller [data-key].is-flash { box-shadow: inset 0 0 0 1px var(--focus-line); }
 /* The quote action of a message: floats over the gap above the agent's reply, sits in the meta line of the person's. */
-.mx-msg-quote { position: absolute; top: -13px; right: 0; z-index: 1; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--main); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-msg-quote { position: absolute; top: -13px; right: 0; z-index: 1; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-msg-agent:hover > .mx-msg-quote, .mx-msg-agent:focus-within > .mx-msg-quote, .mx-msg-user:hover .mx-msg-quote.is-own, .mx-msg-user:focus-within .mx-msg-quote.is-own { opacity: 1; }
+/* A small float over the message's corner: the float's ground and edge, so it reads like the menus and not like a hole. */
+.mx-msg-quote:not(.is-own) { background: var(--float-bg); border: 1px solid var(--float-line); }
 .mx-msg-quote:hover { color: var(--fg); }
+.mx-msg-quote.is-own:hover { background: var(--icon-button-fill); }
 .mx-msg-quote:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-msg-quote.is-own { position: static; width: 28px; height: 28px; border: 0; background: none; }
 /* A question the agent asked in plain words: a quiet Reply at its right edge, its room (56px) always kept. */

@@ -94,6 +94,7 @@
 .mx-app .mx-upd-card,
 .mx-app .mx-waiting,
 .mx-app .mx-focus-pill,
+.mx-app .mx-select-bar,
 .mx-pop {
   background: var(--float-bg);
   border: 1px solid var(--float-line);

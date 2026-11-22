@@ -9,10 +9,9 @@
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
 button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-edge); }
-/* By the chat box (its row, or the chips row of a new session) the context is only its bar and figure: the design draws no name beside it. */
-:is(.mx-session-bar, .mx-box-row) .mx-usage-item.is-context .mx-usage-name { display: none; }
-/* The short names go first on a narrow window; the bars and figures stay. */
-@media (max-width: 1180px) { .mx-usage-name { display: none; } }
+/* The short names go first on a narrow window; the bars and figures stay. The context keeps its name: a bare figure by
+   the chat box read as nothing in particular. */
+@media (max-width: 1180px) { .mx-usage-item:not(.is-context) .mx-usage-name { display: none; } }
 .mx-usage-figure { color: var(--muted); }
 /* A status-bar meter nearing its limit takes the theme's needs colour, then its danger colour (spec: 70 and 90). */
 .mx-usage-item.is-warn .mx-usage-figure { color: var(--needs); }
