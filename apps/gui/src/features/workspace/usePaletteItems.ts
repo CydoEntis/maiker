@@ -5,7 +5,8 @@ import { toast } from '@/lib/toast'
 import { machineLabel } from '@/data/machineNicknames'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { activeArrangement, type Layout, setColumnWidths, type SplitDirection } from './model/layout'
+import { activeArrangement, type Layout, setColumnWidths } from './model/layout'
+import type { SplitDir } from './model/splitTree'
 import { type SessionView, tildePath } from './model/session'
 import { byUrgency, isShell, rowTitle } from './model/sidebar'
 import { outputSnippet, type PaletteItem } from './model/palette'
@@ -42,7 +43,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
   online: boolean
   preferences: SettingsPreferences
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
-  split: (paneId: string | null, direction: SplitDirection) => void
+  split: (paneId: string | null, direction: SplitDir) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   inspectRefusal: string | null
   setInspectOpen: Dispatch<SetStateAction<boolean>>

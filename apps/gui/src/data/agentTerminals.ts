@@ -58,3 +58,13 @@ export function liveAgentTerminals(known: AgentTerminals, existing: ReadonlySet<
 export function ownedTerminalIds(live: AgentTerminals): ReadonlySet<string> {
   return new Set([...live.values()].flat())
 }
+
+/** `live` without `terminalIds`: an agent's terminals that are shown somewhere else than its tabs (the panes of its split tree). */
+export function withoutTerminals(live: AgentTerminals, terminalIds: ReadonlySet<string>): AgentTerminals {
+  const rest = new Map<string, readonly string[]>()
+  for (const [agentId, ids] of live) {
+    const kept = ids.filter((id) => !terminalIds.has(id))
+    if (kept.length > 0) rest.set(agentId, kept)
+  }
+  return rest
+}

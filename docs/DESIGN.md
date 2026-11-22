@@ -272,7 +272,7 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   on two machines is two projects. There is no session without a project: open a project, then start sessions and
   worktrees from its `+`. A **helper** is a session its lead started; it nests one level under the lead while the lead
   exists. A **split** is a plain shell that belongs to its session, in the Terminal view only: it is not in the sidebar
-  and it closes with the session.
+  and it closes with the session. A session holds six panes at most, its own among them.
 - **Four states, and only four.** There is no failed, error, starting or waiting state in the window.
 
   | State | Mark | Means |
@@ -514,9 +514,12 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file
-  pane and the terminal drawer are each a card of their own, the same 6px apart. Every gap between two
+  pane and the terminal drawer are each a card of their own, the same 6px apart, and the panes of one session's splits
+  8px apart (`--split-gap`). Among several panes the one with the keys has its edge in a brighter ink
+  (`--pane-focus-line`, the ink at 30%): neutral, never the accent, and the others are not dimmed. Every gap between two
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
-  side; the sidebar's and the side panel's edges resize them). There is no tools bar, no middle column and no tab bar.
+  side; a session's splits: `TreeSplitHandle`, the same handle over a branch's line; the sidebar's and the side panel's
+  edges resize them). There is no tools bar, no middle column and no tab bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
   56px rail, and its expand button opens the full sidebar as an overlay from the sidebar's side, over a scrim;
   picking a session, a click on the scrim or Esc closes it. Under **800px** the panes stack in one column. The
@@ -583,9 +586,12 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is handled by the app, which asks in a dialog first (see Close ends the session). Arrow keys, Home and End move, Esc or a click outside closes and
   gives focus back. **Session** (a sidebar row): its name as the heading, then Rename (F2), New worktree, Open worktree…,
   Copy path, a divider and Close session…, and nothing else (see *Session row*).
-  **Pane**: a terminal pane (a right-click anywhere in it) has Split right, Split down, Rename…, Maximize pane, Clear,
-  Copy folder path, **Restart shell** when it ended and an entry for each request it waits on (helpers, a secret), then
-  **Close**. A chat pane (a right-click on its header only) has **Rename…** and **Close session**, and Maximize pane
+  **Pane**: a session's terminal pane (a right-click anywhere in it) has Rename…, then Split right and Split down, then
+  Maximize pane (in an arrangement of several), Clear, Copy folder path, **Restart shell** when it ended and an entry
+  for each request it waits on (helpers, a secret), then **Close session** (a shell: Close terminal; one pane of
+  several with work in it: Close pane). A **split**'s menu is Split right, Split down, Clear, Copy folder path and
+  **Close split**: it has no name to change. A split row that cannot run (six panes, an ended session, another
+  machine) is disabled and says why. A chat pane (a right-click on its header only) has **Rename…** and **Close session**, and Maximize pane
   between them in a layout of several panes; it has no `⋯` button. Closing one pane of several closes only the pane when its
   session has work in it (an agent, a chat, a shell running a program): the session keeps running and stays in the
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session, after the confirm.
@@ -874,7 +880,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and status bar*). The header has no view switch: the view is one app-wide setting. The main area is one
   flat card on `--card` with a `--line` hairline, 8px from the window and the sidebar, and a lone pane fills it edge to
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
-  focused one gets a 2px accent line along its top edge, drawn above its content (as the focused terminal split does). A pane's status is the
+  focused one has its edge in a brighter ink (`--pane-focus-line`). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
 - **First-run setup.** On the first launch (no saved settings and no earlier welcome) the app behind goes under a flat veil
   (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first-run setup is on screen once over a still app) and the Maiker mark draws itself in the
@@ -919,12 +925,28 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   of the top, and beside it for a control marked `data-tip-side`. A control that opens its own hover
   card carries `data-hovercard` and gets no tip. A working row shows no run time, because the window only
   knows when it first saw the change.
-- **Layouts are local, sessions are the daemon's.** A session's split layout (one to four panes in columns, each
-  naming a session by id, each column with its relative width and each pane its relative height) is kept in this
-  window only, in `localStorage` under `maiker.gui.layout.v3` (`model/layout.ts`, `model/layoutStorage.ts`). Choosing a
-  session in the sidebar shows the layout it is in, else one of its own. Split right adds a column beside the focused
-  pane, taking half its width; split down a pane under it, taking half its height; they mix. Right-click a pane for its
-  menu.
+- **Layouts are local, sessions are the daemon's.** An arrangement (one to four panes in columns, each
+  naming a session by id or showing a file beside one, each column with its relative width and each pane its relative
+  height) is kept in this window only, in `localStorage` under `maiker.gui.layout.v3` (`model/layout.ts`,
+  `model/layoutStorage.ts`). Choosing a session in the sidebar shows the arrangement it is in, else one of its own.
+  Right-click a pane for its menu.
+- **Splits belong to their session.** In the Terminal view every terminal pane, the session's own and each split, has
+  split right, split down and ×. A split is a blank shell started at once in the folder its session runs in, with no
+  picker; it halves the pane it was made from, and takes the focus. Its header is `project / Split n` (n is the lowest
+  number no living split of the session has; the folder is its tooltip). A session holds six panes; at six the split
+  buttons are disabled and say so. The panes are a small binary tree per session (`model/splitTree.ts`: a leaf is the
+  session's pane or a shell, a branch is right or down with the share of its first side), drawn inside the session's
+  pane of the arrangement (`SplitTree.tsx` places each pane from the tree, in one box, so a split or a close mounts no
+  terminal again); dragging a branch's line resizes it (never under 15% a side), double-click halves it. The tree is
+  kept per session in `localStorage` (`maiker.gui.session-splits.v1`, `model/splitStorage.ts`), so going to another
+  session and back, or restarting the app, shows the same shells in the same places; a split whose shell is gone is
+  dropped from the tree. The shell is an ordinary session of the daemon's, recorded in this window as its session's
+  own (`data/agentTerminals.ts`): that record keeps it out of the sidebar and out of the side panel's tabs, and ends it
+  with its session, whether the session is closed here, exits, or the daemon says it was closed somewhere else. A
+  split's × and the close key on a split close only that split, after the *close a terminal* question; the session's own
+  pane closes the session. Next pane and Previous pane step through a session's own panes before going on to the next
+  pane of the arrangement. The Chat view shows no splits and starts none; the shells keep running and are there again
+  in the Terminal view. A split's terminal is built only while its session is on screen.
   One pane fills the workspace card; two or more are **separate cards** on the window's ground with a gap between them
   (the workspace card drops its own fill). The layout itself never eases: a pane that is added, closed or resized has its final size at once, because
   easing a split made the terminal re-fit every frame and its text jumped. What the eye sees between the two layouts is the glide below,
@@ -938,7 +960,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   one); the button is a red **Close session**. A plain shell, a terminal tab of the dock (all its shells at once) and
   one of its splits ask as *close a terminal*: "Anything still running in this terminal stops.", **Close terminal**.
   Closing sends the daemon `CloseSession` (`ConversationClose` for a chat): the session leaves the list at once. An
-  agent's own terminals (its "New terminal" tabs) end with it. Only closing the window leaves sessions running.
+  agent's own terminals (its "New terminal" tabs) and a session's splits end with it. Only closing the window leaves sessions running.
 - **The one confirm dialog** (`features/confirm`: `confirm.ts`, `useConfirm`, `ConfirmDialog`, `confirm.css`). 460px on
   the dialog float, above the middle of the window: a 15px title, one 13px line, an optional muted line, then a row of
   **Don't ask again** at the left and Cancel and the primary button at the right (the ink on `--fg`, or `--danger` for
@@ -1269,7 +1291,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   card along its bottom (**Session ended**, **Restart shell**, **Close pane**). The first list after launch drops panes of sessions that died while the app
   was closed, and a later list drops the pane of a session the daemon says has left (closed from another client,
   exited, put away), so no pane stays beside a sidebar that no longer lists its session; a session that left with
-  no reason keeps its pane as ended. A terminal made by splitting a pane is listed in the sidebar like any other. The sidebar lists the sessions the daemon lists. A row goes at once when the daemon says why it
+  no reason keeps its pane as ended. A split is a pane of its session and is never listed; when its session is gone and it still runs, it is listed as a terminal of its own, so no shell is out of sight. The sidebar lists the sessions the daemon lists. A row goes at once when the daemon says why it
   left (closed, exited, put away, moved, the daemon stopping, or a reason it did not record) or this window
   closed it; a row a list leaves out with no reason stays, shown as unknown, until a full list read from the
   daemon confirms it is gone, so a daemon restarting under the app makes no row flicker out.
@@ -1358,7 +1380,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (13px; the project `--muted`, the slash `--dim`, the name `--fg` at 500, cut with an ellipsis; the agent, its model and
   the folder in its tooltip), the permission shield (13px, `--dim`), the context bar (32px, with its figure in mono 11px),
   then **split right**, **split down** and **×** (`IconButton`). A plain shell's header is its name and the same three
-  buttons. The shield says only what Maiker knows: `--needs` when the session was started with its agent's Bypass
+  buttons; a split's is `project / Split n` and the same three, its × closing only that split. The shield says only what Maiker knows: `--needs` when the session was started with its agent's Bypass
   Permissions flag, else dim, since the mode after that is the agent's own and its screen is never read. × closes the
   session (a shell: the terminal) through the confirm dialog; on one pane of several that has work in it, it closes only
   the pane. Under 420px the project goes, under 300px the shield and the bar. There is no `⋯` and no status strip: the

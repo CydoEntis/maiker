@@ -34,7 +34,8 @@
 .mx-app .mx-main { border-radius: var(--r-panel); }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-/* A split pane's edge is the card's hairline until it is focused, then it fades to the focus colour: one edge, not a ring over another. */
+/* A split pane's edge is the card's hairline until it has the keys, then the same edge in a brighter ink: neutral, never
+   the accent, and the other panes are not dimmed. One edge, not a ring over another. */
 .mx-app .mx-pane.is-card { background: var(--t1); border-color: var(--panel-line); box-shadow: none; }
-.mx-app .mx-pane.is-card.is-focused { border-color: var(--focus-line); }
+.mx-app .mx-pane.is-card.is-focused { border-color: var(--pane-focus-line); }
 

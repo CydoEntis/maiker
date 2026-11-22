@@ -8,7 +8,8 @@ import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
 import { discardDraft } from './model/newSessionDraft'
-import { activeArrangement, cycleFocus, type Layout, type SplitDirection, toggleBroadcast } from './model/layout'
+import { activeArrangement, type Layout, toggleBroadcast } from './model/layout'
+import type { SplitDir } from './model/splitTree'
 import type { SessionView } from './model/session'
 import { type EscLayer, topmostOpen } from './model/escLadder'
 import { LOCAL_MACHINE } from '@/api/machines'
@@ -100,14 +101,18 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, 
 }
 
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, stepPaneFocus, closeFocusedSplit, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
   openProject: OpenProject
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   preferences: SettingsPreferences
-  split: (paneId: string | null, direction: SplitDirection) => void
+  split: (paneId: string | null, direction: SplitDir) => void
+  /** Moves the focus one pane on or back, through a session's splits and on to the next session. */
+  stepPaneFocus: (step: 1 | -1) => void
+  /** Closes the split with the focus, after asking; false when the focus is on a session's own pane. */
+  closeFocusedSplit: () => boolean
   setLayout: Dispatch<SetStateAction<Layout>>
   layout: Layout
   askToClose: (ids: string[], close: () => void) => void
@@ -142,12 +147,13 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         split(null, 'down')
         return
       case 'focus-previous':
-        setLayout((current) => cycleFocus(current, -1))
+        stepPaneFocus(-1)
         return
       case 'focus-next':
-        setLayout((current) => cycleFocus(current, 1))
+        stepPaneFocus(1)
         return
       case 'close': {
+        if (closeFocusedSplit()) return
         const tab = activeArrangement(layout)
         if (!tab) return
         const single = tab.panes.length > 1
@@ -230,6 +236,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         }
         return
     }
-  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, setLayout, toggleSidebar, setPaletteOpen, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
+  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, stepPaneFocus, closeFocusedSplit, setLayout, toggleSidebar, setPaletteOpen, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
   return { runShortcut }
 }

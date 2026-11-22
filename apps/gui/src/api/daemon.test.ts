@@ -3,7 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
 import type { Conversation } from '@/data/preview'
-import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
+import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, daemonSaidEnded, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -492,6 +492,8 @@ describe('terminal sessions shown beside chats', () => {
     conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '8': term({ id: 8 }) }, revision: 7, removed: { '3': 'Closed', '4': 'SomethingNewer' } })
     expect(localListRevision()).toBe(7)
     expect([daemonSaidRemoved('t3'), daemonSaidRemoved('t4'), daemonSaidRemoved('t8')]).toEqual([true, true, false])
+    // Only a close or an exit says the session is over: a reason this build does not know may be one that keeps it running.
+    expect([daemonSaidEnded('t3'), daemonSaidEnded('t4'), daemonSaidEnded('t8')]).toEqual([true, false, false])
 
     conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '3': term({ id: 3 }) } })
     expect(localListRevision()).toBe(0)

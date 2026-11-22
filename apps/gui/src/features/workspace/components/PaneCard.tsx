@@ -1,5 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react'
-import { MAX_PANES, type PaneSlot, type SplitDirection } from '../model/layout'
+import type { PaneSlot } from '../model/layout'
+import type { SplitDir } from '../model/splitTree'
 import type { SessionView } from '../model/session'
 import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
 import { startedBypassed } from '@/features/chat/bypassSessions'
@@ -12,6 +13,7 @@ import { Icon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
+import { focusTerminalFromPadding, isPaneMenuTarget } from './paneEvents'
 import type { PaneView } from '../model/chatView'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
 import { IconButton } from '@/components/ui/icon-button'
@@ -20,7 +22,12 @@ export type PaneCardProps = {
   pane: PaneSlot
   index: number
   session: SessionView
+  /** How many panes the arrangement holds: one of several can be dragged, maximized, and closed without ending its session. */
   paneCount: number
+  /** Drawn as a card of its own: the arrangement, or this session's splits, put another pane beside it. */
+  card: boolean
+  /** Why this pane cannot be split now (the session is full, ended, on another machine); null when it can. */
+  splitRefusal: string | null
   /** Typing in any pane of this layout goes to its idle ones too. */
   broadcast: boolean
   focused: boolean
@@ -43,7 +50,7 @@ export type PaneCardProps = {
   /** Where portalled menus mount, so they read the theme's colours. */
   portalContainer: HTMLElement | null
   onFocus: (paneId: string) => void
-  onSplit: (paneId: string, direction: SplitDirection) => void
+  onSplit: (paneId: string, direction: SplitDir) => void
   onToggleMaximize: (paneId: string) => void
   onClose: (paneId: string) => void
   /** Clears a shell's screen, as Ctrl+L does in it. */
@@ -66,29 +73,33 @@ export function PaneCard(props: PaneCardProps) {
   const tip = useTipWithKeys()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const multi = paneCount > 1
-  const full = paneCount >= MAX_PANES
+  const unsplittable = props.splitRefusal !== null
+  const splitWhy = props.splitRefusal ?? undefined
   const ended = session.ended
   const view = props.view ?? 'terminal'
   const shown = view
   const title = rowTitle(session)
   const shell = isShell(session)
 
-  // The whole of a terminal pane opens this one: Maiker draws nothing inside it, so what the pane asks or can restart is here too.
+  // One pane of several with work in it only leaves the layout; otherwise the close ends what runs in it, after asking.
+  const closeLabel = multi && keepsRunningUnseen(session) ? 'Close pane' : shell ? 'Close terminal' : 'Close session'
+  // The whole of a terminal pane opens this one: Maiker draws nothing inside it, so what the pane asks or can restart is
+  // here too. Rename, the two splits and the close are the menu (handoff 6.2); the rows between act on this pane alone.
   const terminalMenuItems: MenuEntry[] = [
-    { label: 'Split right', hint: shortcutText('split-right'), disabled: full, run: () => { props.onSplit(pane.id, 'right') } },
-    { label: 'Split down', hint: shortcutText('split-down'), disabled: full, run: () => { props.onSplit(pane.id, 'down') } },
-    'separator',
     { label: 'Rename…', hint: 'F2', run: props.onRename },
-    { label: maximized ? 'Restore layout' : 'Maximize pane', disabled: !multi && !maximized, run: () => { props.onToggleMaximize(pane.id) } },
+    'separator',
+    { label: 'Split right', hint: shortcutText('split-right'), disabled: unsplittable, ...(splitWhy === undefined ? {} : { why: splitWhy }), run: () => { props.onSplit(pane.id, 'right') } },
+    { label: 'Split down', hint: shortcutText('split-down'), disabled: unsplittable, ...(splitWhy === undefined ? {} : { why: splitWhy }), run: () => { props.onSplit(pane.id, 'down') } },
+    'separator',
+    ...(multi || maximized ? [{ label: maximized ? 'Restore layout' : 'Maximize pane', run: () => { props.onToggleMaximize(pane.id) } }] : []),
     { label: 'Clear', hint: 'Ctrl+L', disabled: !props.online || ended, run: props.onClear },
     { label: 'Copy folder path', run: props.onCopyPath },
     ...(ended ? [{ label: 'Restart shell', disabled: !props.online, run: () => { props.onRestart(pane.id) } }] : []),
     ...(!ended && props.outsideAsks !== undefined ? outsideEntries(session, props.outsideAsks) : []),
     'separator',
-    { label: 'Close', danger: true, run: () => { props.onClose(pane.id) } },
+    // The close key ends the focused session; a pane that only leaves the layout has no key.
+    { label: closeLabel, ...(closeLabel === 'Close pane' ? {} : { hint: shortcutText('close') }), danger: true, run: () => { props.onClose(pane.id) } },
   ]
-  // One pane of several with work in it only leaves the layout; otherwise the close ends what runs in it, after asking.
-  const closeLabel = multi && keepsRunningUnseen(session) ? 'Close pane' : shell ? 'Close terminal' : 'Close session'
   // A chat pane's menu is its header's alone (handoff 5): the chat has no splits, nothing of a terminal to clear, and its
   // folder is the chat box's and the sidebar row's to copy. Maximize shows only in a layout of several panes.
   const chatMenuItems: MenuEntry[] = [
@@ -101,15 +112,15 @@ export function PaneCard(props: PaneCardProps) {
   return (
     <>
     <section
-      className={`mx-pane${shown === 'terminal' ? ' is-terminal' : ' is-chat'}${multi ? ' is-card' : ''}${focused && multi ? ' is-focused' : ''}${props.broadcast ? ' is-broadcast' : ''}${props.dropTarget ? ' is-drop-target' : ''}${props.dragging ? ' is-dragging' : ''}`}
+      className={`mx-pane${shown === 'terminal' ? ' is-terminal' : ' is-chat'}${props.card ? ' is-card' : ''}${focused && props.card ? ' is-focused' : ''}${props.broadcast ? ' is-broadcast' : ''}${props.dropTarget ? ' is-drop-target' : ''}${props.dragging ? ' is-dragging' : ''}`}
       aria-label={`Terminal ${String(props.index + 1)}: ${session.cwdLabel}${focused ? ', focused' : ''}`}
       data-session-id={session.id}
       data-pane={pane.id}
       onMouseDown={() => { props.onFocus(pane.id) }}
       onContextMenu={(event) => {
-        // A text box keeps the system menu, for its paste. A terminal's whole pane opens the pane menu; a chat's opens
-        // it from the header only, and the conversation has no menu of the pane's.
-        if (!(event.target instanceof Element) || event.target.closest('textarea:not(.xterm-helper-textarea), input')) return
+        // A terminal's whole pane opens the pane menu; a chat's opens it from the header only, and the conversation has
+        // no menu of the pane's.
+        if (!isPaneMenuTarget(event.target)) return
         event.preventDefault()
         if (shown === 'terminal' || event.target.closest('.mx-pane-head') !== null) setMenuAt(menuPoint(event, false))
       }}
@@ -128,20 +139,15 @@ export function PaneCard(props: PaneCardProps) {
         {props.broadcast && <span className="mx-broadcast-pill">◉ Broadcast</span>}
         {shown === 'terminal' && (
           <>
-            <IconButton label="Split right" tip={tip('Split right', 'split-right')} disabled={full} onClick={() => { props.onSplit(pane.id, 'right') }}><Icon name="splitRight" /></IconButton>
-            <IconButton label="Split down" tip={tip('Split down', 'split-down')} disabled={full} onClick={() => { props.onSplit(pane.id, 'down') }}><Icon name="splitDown" /></IconButton>
+            <IconButton label="Split right" tip={splitWhy ?? tip('Split right', 'split-right')} disabled={unsplittable} onClick={() => { props.onSplit(pane.id, 'right') }}><Icon name="splitRight" /></IconButton>
+            <IconButton label="Split down" tip={splitWhy ?? tip('Split down', 'split-down')} disabled={unsplittable} onClick={() => { props.onSplit(pane.id, 'down') }}><Icon name="splitDown" /></IconButton>
           </>
         )}
         <IconButton label={closeLabel} onClick={() => { props.onClose(pane.id) }}><Icon name="close" /></IconButton>
       </div>
       <div
         className={`mx-pane-body${shown === 'chat' ? ' is-chat' : ''}`}
-        onMouseDown={(event) => {
-          // A click on the pane's padding still puts the cursor in its terminal.
-          if (event.target !== event.currentTarget) return
-          event.preventDefault()
-          event.currentTarget.querySelector<HTMLTextAreaElement>('.xterm-helper-textarea')?.focus()
-        }}
+        onMouseDown={focusTerminalFromPadding}
       >
         {props.terminal}
         {shown === 'chat' && props.chat}

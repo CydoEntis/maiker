@@ -53,6 +53,8 @@
   --frame-edge: 8px;
   --frame-top: 4px;
   --frame-gap: 6px;
+  /* The panes of one session's split tree sit this far apart, on the window's ground. */
+  --split-gap: 8px;
 
   /* Type */
   /* `--ui` and `--mono` are the look's two fonts (`theme/look.ts`). */

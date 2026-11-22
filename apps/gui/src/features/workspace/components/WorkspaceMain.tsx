@@ -65,7 +65,7 @@ function MainEmpty() {
 
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { newChatOpen, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, paneCountOf, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
@@ -129,8 +129,11 @@ export function WorkspaceMain() {
                   <div className="mx-pane-stack" inert={newChatOpen}>
                   {mountedTabs.map((tab) => {
                   const kept = tab.id !== layout.activeId
+                  // Two panes or more on screen, whether the arrangement holds several or a session is split: each is a card of its own.
+                  const onScreen = tab.max === null ? tab.panes : tab.panes.filter((pane) => pane.id === tab.max)
+                  const paneCount = onScreen.reduce((count, pane) => count + paneCountOf(pane), 0)
                   return (
-                  <div key={tab.id} className={`mx-panes${tab.panes.length > 1 && tab.max === null ? ' is-split' : ''}${kept ? ' is-kept' : ''}`} aria-hidden={kept ? true : undefined} inert={kept}>
+                  <div key={tab.id} className={`mx-panes${paneCount > 1 ? ' is-split' : ''}${kept ? ' is-kept' : ''}`} aria-hidden={kept ? true : undefined} inert={kept}>
                     {paneColumns(tab, narrow).map((column, columnIndex, columns) => (
                       <Fragment key={column[0]?.id ?? columnIndex}>
                         {columnIndex > 0 && tab.max === null && !narrow && (

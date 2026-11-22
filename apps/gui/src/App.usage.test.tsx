@@ -11,6 +11,7 @@ const daemon = vi.hoisted(() => ({
   // The daemon numbers no list here and says no session left: a row a list misses is held.
   localListRevision: () => 0,
   daemonSaidRemoved: () => false,
+  daemonSaidEnded: () => false,
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),

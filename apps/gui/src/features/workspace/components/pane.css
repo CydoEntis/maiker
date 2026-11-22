@@ -1,5 +1,5 @@
 /* The workspace card and its panes (README: Workspace and panes). One pane is no card of its own; two or
-   more each get a faint card, and the focused one a 2px accent line along its top edge, drawn above its content. */
+   more each get a faint card, and the one with the keys a brighter edge (frame.css). */
 
 /* The chat column keeps room to be used: the side panel beside it gives way first (inspect.css). */
 .mx-main-wrap { flex: 1; min-width: min(var(--chat-min, 400px), 100%); display: flex; padding: 12px; }
@@ -101,6 +101,14 @@
 .mx-split-handle.is-columns:hover, .mx-split-handle.is-columns.is-dragging { background: linear-gradient(90deg, transparent calc(50% - 1px), var(--accent-line) calc(50% - 1px), var(--accent-line) calc(50% + 1px), transparent calc(50% + 1px)); }
 .mx-split-handle.is-rows:hover, .mx-split-handle.is-rows.is-dragging { background: linear-gradient(180deg, transparent calc(50% - 1px), var(--accent-line) calc(50% - 1px), var(--accent-line) calc(50% + 1px), transparent calc(50% + 1px)); }
 .mx-app.is-narrow .mx-split-handle { display: none; }
+
+/* A session's own panes (its agent's and its splits): one box, each pane placed in it from the session's split tree
+   (`SplitTree.tsx`), the split gap apart. One pane fills the box. The handle is the same one, laid over a branch's line. */
+.mx-split-tree { position: relative; flex: 1 1 0; min-width: 0; min-height: 0; }
+.mx-split-leaf { position: absolute; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.mx-split-handle.is-tree { position: absolute; margin: 0; }
+.mx-split-handle.is-tree.is-columns { width: var(--split-gap); transform: translateX(-50%); }
+.mx-split-handle.is-tree.is-rows { height: var(--split-gap); transform: translateY(-50%); }
 
 /* The terminal inside a pane sits on the card's own ground; the pane carries the focus ring, the terminal none. */
 .mx-pane-body .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }

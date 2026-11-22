@@ -539,13 +539,15 @@ type DaemonSnapshot = z.infer<typeof DaemonSnapshotSchema>
 // arrive between two renders, so a reason is kept past its own list; a new daemon numbers its panes from 1 again,
 // so listing a pane forgets its old reason.
 let localRevision = 0
-const leftWithReason = new Set<string>()
+const leftWithReason = new Map<string, string>()
+// The reasons that say the pane's program is over (`RemovalReason`); one put away or moved elsewhere still runs.
+const ENDED_REASONS: ReadonlySet<string> = new Set(['Closed', 'Exited'])
 
 function noteList(snapshot: DaemonSnapshot, machine?: SnapshotMachine): void {
   if (machine === undefined) localRevision = snapshot.revision
   const idOf = (pane: string) => terminalSessionId(Number(pane), machine?.name ?? null)
   for (const pane of Object.keys(snapshot.terms)) leftWithReason.delete(idOf(pane))
-  for (const pane of Object.keys(snapshot.removed)) leftWithReason.add(idOf(pane))
+  for (const [pane, reason] of Object.entries(snapshot.removed)) leftWithReason.set(idOf(pane), reason)
 }
 
 /** The revision of the last list of this computer's sessions read, 0 when the daemon does not number them. */
@@ -553,6 +555,9 @@ export const localListRevision = (): number => localRevision
 
 /** Whether the session's daemon (this computer's or another machine's) said it left its list, for any reason, and has not listed it since. */
 export const daemonSaidRemoved = (sessionId: string): boolean => leftWithReason.has(sessionId)
+
+/** Whether the session's daemon said it was closed or its program exited: it is over, not put away or moved to another surface. */
+export const daemonSaidEnded = (sessionId: string): boolean => ENDED_REASONS.has(leftWithReason.get(sessionId) ?? '')
 
 // A session that fails to read for one refresh must not vanish from the sidebar and come back
 // 1.5 seconds later, so it keeps its last good state, and the reason is logged once.

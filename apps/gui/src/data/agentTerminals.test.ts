@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withAgentTerminal, writeAgentTerminals } from './agentTerminals'
+import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withAgentTerminal, withoutTerminals, writeAgentTerminals } from './agentTerminals'
 
 beforeEach(() => { localStorage.clear() })
 
@@ -20,6 +20,11 @@ describe('agent terminals', () => {
     const known = new Map([['a1', ['t2']], ['gone', ['t9']]])
     const live = liveAgentTerminals(known, new Set(['a1', 't2', 't9']))
     expect([...ownedTerminalIds(live)]).toEqual(['t2'])
+  })
+
+  it('leaves out the terminals shown as panes of a split, and an agent that has no other', () => {
+    const live = new Map([['a1', ['t2', 't3']], ['a2', ['t4']]])
+    expect([...withoutTerminals(live, new Set(['t3', 't4'])).entries()]).toEqual([['a1', ['t2']]])
   })
 
   it('remembers them between runs, and reads nothing from a value that is not a list of ids', () => {

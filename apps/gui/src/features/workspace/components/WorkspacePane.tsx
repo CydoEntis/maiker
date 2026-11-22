@@ -9,6 +9,9 @@ import { dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from 
 import { sendHelpersAnswer } from '../useOutsideAsks'
 import { isChatSession } from '../model/chatSession'
 import { PaneCard } from './PaneCard'
+import { SplitPane } from './SplitPane'
+import { SplitTree } from './SplitTree'
+import { AGENT_LEAF, leavesOf } from '../model/splitTree'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { TurnSpan } from '@/features/inspect/turnRange'
@@ -40,13 +43,21 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
   const session = paneSessions.get(pane.sessionId)
   if (!session) return null
   const focused = pane.id === shown.focus && !kept
+  // The session's own panes: its agent's, and a shell for each split. One pane is the whole tree.
+  const splits = splitsOf(session)
+  const isSplit = leavesOf(splits.tree).length > 1
+  const splitRefusal = splitRefusalOf(session)
+  const focusLeafOf = (leaf: string) => {
+    setLayout((current) => focusPane(current, pane.id))
+    focusSplit(session.id, leaf)
+  }
   const chat = chatOf(session)
   const chatOnly = isChatSession(session.conversation)
   // Every subagent the session reported, not only those the sidebar lists, so a finished one can still be opened.
@@ -96,15 +107,17 @@ export function WorkspacePane({ shown, pane, kept }: {
     const found = subagentNamed(session.subagents, title, asked)
     return found === null ? null : () => { showSubagent(session.id, found.id) }
   }
-  return (
+  const agentPane = (
     <PaneCard
       pane={pane}
       index={shown.panes.findIndex((candidate) => candidate.id === pane.id)}
       leading={sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
       session={session}
       paneCount={shown.panes.length}
+      card={isSplit || shown.panes.length > 1}
+      splitRefusal={splitRefusal}
       broadcast={shown.broadcast === true}
-      focused={focused && !outsidePanes}
+      focused={focused && !outsidePanes && splits.focus === AGENT_LEAF}
       maximized={shown.max === pane.id}
       dropTarget={dropId === pane.id && dragId !== pane.id}
       dragging={dragId === pane.id}
@@ -162,7 +175,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           label={`Shell in ${session.cwdLabel}`}
           inputDisabled={!online}
           ended={session.ended}
-          focused={focused && !modalOpen && view === 'terminal' && !dockFocused && !panelFocused}
+          focused={focused && splits.focus === AGENT_LEAF && !modalOpen && view === 'terminal' && !dockFocused && !panelFocused}
           paused={kept || view === 'chat'}
           onInput={(data) => { mirrorInput(session.id, data) }}
           onOpenPath={(path, line) => { openPath(session, path, line) }}
@@ -173,10 +186,10 @@ export function WorkspacePane({ shown, pane, kept }: {
           }}
         />
       }
-      onFocus={(paneId) => { setLayout((current) => focusPane(current, paneId)) }}
+      onFocus={() => { focusLeafOf(AGENT_LEAF) }}
       onSplit={(paneId, direction) => {
-        setLayout((current) => focusPane(current, paneId))
-        split(paneId, direction)
+        focusLeafOf(AGENT_LEAF)
+        split(paneId, direction, AGENT_LEAF)
       }}
       onToggleMaximize={(paneId) => { movePanes(() => { setLayout((current) => toggleMaximize(current, paneId)) }) }}
       onClose={closePaneById}
@@ -185,6 +198,35 @@ export function WorkspacePane({ shown, pane, kept }: {
       onRename={() => { setRenameId(session.id) }}
       onRestart={restartPane}
       outsideAsks={{ onHelpers: () => { setOpenAsk({ kind: 'helpers', sessionId: session.id }) }, onSecret: (askId) => { setOpenAsk({ kind: 'secret', sessionId: session.id, askId }) } }}
+    />
+  )
+  return (
+    <SplitTree
+      tree={splits.tree}
+      onResize={(path, ratio) => { resizeSplit(session.id, path, ratio) }}
+      renderPane={(leaf) => {
+        if (leaf === AGENT_LEAF) return agentPane
+        const shell = sessionMap.get(leaf)
+        // A shell's terminal is built when its session is on screen: one kept mounted out of sight would hold a GPU
+        // context for a pane nobody is looking at, and a browser has few of those.
+        if (shell === undefined || kept) return null
+        return (
+          <SplitPane
+            slotId={pane.id}
+            owner={session}
+            shell={shell}
+            number={splits.numbers[leaf]}
+            focused={focused && !outsidePanes && splits.focus === leaf}
+            splitRefusal={splitRefusal}
+            onFocus={() => { focusLeafOf(leaf) }}
+            onSplit={(direction) => {
+              focusLeafOf(leaf)
+              split(pane.id, direction, leaf)
+            }}
+            onClose={() => { closeSplit(session, leaf) }}
+          />
+        )
+      }}
     />
   )
 }

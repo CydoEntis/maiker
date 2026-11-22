@@ -20,6 +20,7 @@ const daemon = vi.hoisted(() => ({
   // The daemon numbers no list here and says no session left: a row a list misses is held.
   localListRevision: () => 0,
   daemonSaidRemoved: vi.fn<(id: string) => boolean>(() => false),
+  daemonSaidEnded: vi.fn<(id: string) => boolean>(() => false),
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
@@ -119,6 +120,11 @@ const inRepo = (pane: number, root: string, cwd: string, extra: Partial<Conversa
   term(pane, cwd, { folder: root, repo: root.split('/').at(-1) ?? null, branch: 'main', ...extra })
 
 const TERMINAL_VIEW = { openSessionsIn: 'terminal' }
+/** The window as it was left: these sessions side by side in one arrangement, the last one focused. */
+const seedArrangement = (...sessionIds: string[]) => {
+  const panes = sessionIds.map((sessionId, col) => ({ id: `pane-${sessionId}`, sessionId, col }))
+  window.localStorage.setItem('maiker.gui.layout.v3', JSON.stringify({ arrangements: [{ id: 'tab-1', panes, focus: panes.at(-1)?.id, max: null }], activeId: 'tab-1' }))
+}
 const setSettings = (extra: Record<string, unknown> = {}) => { window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ ...TERMINAL_VIEW, ...extra })) }
 
 describe('desktop terminal multiplexer', () => {
@@ -312,26 +318,75 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByText('Pane 3').closest('.mx-panes')).toHaveClass('is-kept')
   })
 
-  it('splits right in the focused shell’s folder, moves focus, and ends the focused pane’s session on Ctrl+Shift+W', async () => {
+  it('splits the focused pane into a shell of the session, in its folder and out of the sidebar, and Ctrl+Shift+W closes only that split', async () => {
     const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
+    const owner = inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)
+    daemon.loadConversations.mockResolvedValue([owner])
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/code/maiker/apps' })
-    daemon.loadConversations.mockResolvedValue([inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`), inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
+    daemon.loadConversations.mockResolvedValue([owner, inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
 
     await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code/maiker/apps`) })
-    expect(await screen.findByRole('region', { name: 'Terminal 2: ~/code/maiker/apps, focused' })).toBeInTheDocument()
+    const split = await screen.findByRole('region', { name: 'Split 1: ~/code/maiker/apps, focused' })
+    for (const name of ['Split right', 'Split down', 'Close split']) expect(within(split).getByRole('button', { name })).toBeInTheDocument()
+    expect(screen.getByRole('separator', { name: 'Resize panes' })).toBeInTheDocument()
+    expect(within(screen.getByRole('navigation', { name: 'Sessions' })).getAllByRole('button', { name: /, shell, idle$/ })).toHaveLength(1)
     await user.keyboard('{Control>}[[{/Control}')
     expect(screen.getByRole('region', { name: 'Terminal 1: ~/code/maiker/apps, focused' })).toBeInTheDocument()
+    await user.keyboard('{Control>}]{/Control}')
+    expect(screen.getByRole('region', { name: 'Split 1: ~/code/maiker/apps, focused' })).toBeInTheDocument()
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
     await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close terminal' }))
-    await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ })).toHaveLength(1) })
+    await waitFor(() => { expect(screen.queryByRole('region', { name: /^Split 1:/ })).not.toBeInTheDocument() })
+    expect(screen.getByRole('region', { name: /^Terminal 1/ })).toBeInTheDocument()
     expect(daemon.closeSession).toHaveBeenCalledTimes(1)
-    expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }))
+    expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't7' }))
     expect(daemon.archiveConversationOnDaemon).not.toHaveBeenCalled()
+  })
+
+  it('ends a session’s splits with it, and shows them again when the session is shown again', async () => {
+    const user = userEvent.setup()
+    const a = term(2, `${HOME}/a`)
+    const other = term(3, `${HOME}/b`)
+    daemon.loadConversations.mockResolvedValue([a, other])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    daemon.loadConversations.mockResolvedValue([a, other, term(7, `${HOME}/a`)])
+    await user.click(within(screen.getByRole('region', { name: /^Terminal 1/ })).getByRole('button', { name: 'Split down' }))
+    await screen.findByRole('region', { name: /^Split 1:/ })
+
+    await user.click(screen.getByRole('button', { name: 'b, shell, idle' }))
+    await user.click(screen.getByRole('button', { name: 'a, shell, idle' }))
+    expect(await screen.findByRole('region', { name: /^Split 1:/ })).toBeInTheDocument()
+
+    await user.click(within(screen.getByRole('region', { name: /^Terminal 1/ })).getByRole('button', { name: 'Close terminal' }))
+    await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close terminal' }))
+    await waitFor(() => { expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't7' })) })
+    expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' }))
+    expect(daemon.closeSession).not.toHaveBeenCalledWith(expect.objectContaining({ id: 't3' }))
+  })
+
+  it('offers a split its own menu, and the session’s pane the rename and the close of the session', async () => {
+    const user = userEvent.setup()
+    const owner = term(2, `${HOME}/a`, { agent: 'claude' })
+    daemon.loadConversations.mockResolvedValue([owner])
+    renderDesktopApp()
+    const agentPane = await screen.findByRole('region', { name: /^Terminal 1/ })
+    daemon.loadConversations.mockResolvedValue([owner, term(7, `${HOME}/a`)])
+    await user.click(within(agentPane).getByRole('button', { name: 'Split right' }))
+    const split = await screen.findByRole('region', { name: /^Split 1:/ })
+
+    fireEvent.contextMenu(split)
+    for (const name of [/^Split right/, /^Split down/, /^Close split/]) expect(await screen.findByRole('menuitem', { name })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /^Rename/ })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    fireEvent.contextMenu(screen.getByRole('region', { name: /^Terminal 1/ }))
+    for (const name of [/^Rename/, /^Split right/, /^Split down/, /^Close session/]) expect(await screen.findByRole('menuitem', { name })).toBeInTheDocument()
+    expect(screen.queryByRole('menuitem', { name: /^Close split/ })).not.toBeInTheDocument()
   })
 
   it('asks before a pane\'s terminal closes from its header, closes it on the answer, and leaves the window\'s keys alone meanwhile', async () => {
@@ -360,14 +415,15 @@ describe('desktop terminal multiplexer', () => {
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     daemon.loadConversations.mockResolvedValue([a, b])
     await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
-    await screen.findByRole('region', { name: 'Terminal 2: ~/a, focused' })
+    await screen.findByRole('region', { name: 'Split 1: ~/a, focused' })
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
     const question = await screen.findByRole('alertdialog')
     await user.click(within(question).getByRole('checkbox', { name: 'Don’t ask again' }))
+    daemon.loadConversations.mockResolvedValue([a])
     await user.click(within(question).getByRole('button', { name: 'Close terminal' }))
     await waitFor(() => { expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't7' })) })
-    await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ })).toHaveLength(1) })
+    await waitFor(() => { expect(screen.queryByRole('region', { name: /^Split 1:/ })).not.toBeInTheDocument() })
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
     await waitFor(() => { expect(daemon.closeSession).toHaveBeenCalledWith(expect.objectContaining({ id: 't2' })) })
@@ -379,14 +435,9 @@ describe('desktop terminal multiplexer', () => {
     const a = term(2, `${HOME}/a`)
     const b = term(7, `${HOME}/a`)
     const c = term(9, `${HOME}/a`)
-    daemon.loadConversations.mockResolvedValue([a])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-    daemon.loadConversations.mockResolvedValue([a, b])
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
-    await screen.findByRole('region', { name: 'Terminal 2: ~/a, focused' })
     daemon.loadConversations.mockResolvedValue([a, b, c])
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    seedArrangement('t2', 't7', 't9')
+    renderDesktopApp()
     const third = await screen.findByRole('region', { name: 'Terminal 3: ~/a, focused' })
     let ended: () => void = () => undefined
     daemon.closeSession.mockReturnValue(new Promise<void>((resolve) => { ended = resolve }))
@@ -409,11 +460,9 @@ describe('desktop terminal multiplexer', () => {
   it('asks about the pane you are in when Ctrl+Shift+W is pressed, and Cancel closes nothing', async () => {
     const user = userEvent.setup()
     const claude = inRepo(2, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`, { agent: 'claude' })
-    daemon.loadConversations.mockResolvedValue([claude])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: /^Terminal 1:/ })
     daemon.loadConversations.mockResolvedValue([claude, inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`, { agent: 'codex' })])
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    seedArrangement('t2', 't7')
+    renderDesktopApp()
     await screen.findByRole('region', { name: /^Terminal 2:.*focused/ })
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
@@ -1059,11 +1108,9 @@ describe('desktop overlays and pane tools', () => {
   it('broadcasts typing from one pane to the tab\'s idle panes only', async () => {
     const user = userEvent.setup()
     setSettings()
-    daemon.loadConversations.mockResolvedValue([at(2)])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: /^Shell in/ })
     daemon.loadConversations.mockResolvedValue([at(2), at(7), at(8, { status: 'working' })])
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    seedArrangement('t2', 't7')
+    renderDesktopApp()
     await screen.findByRole('region', { name: /^Terminal 2:/ })
 
     await user.keyboard('{Control>}{Alt>}{Shift>}b{/Shift}{/Alt}{/Control}')
@@ -1215,21 +1262,6 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
 
     await user.click(bar.getByRole('button', { name: /Shortcuts/ }))
     expect(await screen.findByRole('dialog', { name: 'Keyboard shortcuts' })).toBeInTheDocument()
-  })
-
-  it('lists a terminal made by splitting in the sidebar, so no pane shows a session the sidebar leaves out', async () => {
-    setSettings({ openSessionsIn: 'terminal' })
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(7, `${HOME}/a`)])
-
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
-
-    await waitFor(() => { expect(screen.getAllByRole('region', { name: /^Terminal \d/ })).toHaveLength(2) })
-    const rows = within(screen.getByRole('navigation', { name: 'Sessions' })).getAllByRole('button', { name: /^a,/ })
-    expect(rows).toHaveLength(2)
   })
 
   it('closes the pane of a session the daemon says has left, instead of keeping it beside an empty sidebar', async () => {
