@@ -32,17 +32,4 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     mark()
     return subscribeWindowActivity(mark)
   }, [])
-
-  useEffect(() => {
-    // One flat look; the corners are the only shape choice (`tokens.css` reads `data-corners`).
-    document.documentElement.dataset.corners = preferences.corners
-  }, [preferences.corners])
-
-  useEffect(() => {
-    document.documentElement.dataset.icons = preferences.iconColor
-  }, [preferences.iconColor])
-
-  useEffect(() => {
-    document.documentElement.dataset.toasts = preferences.toastPosition
-  }, [preferences.toastPosition])
 }

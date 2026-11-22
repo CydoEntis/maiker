@@ -1,7 +1,5 @@
 /* The dock between the chat and the message box (docs/DESIGN.md, "The dock"): the helpers line and its list, the queue,
-   and the record block a finished helpers line becomes in the chat. Colours are tokens; corners follow the root's
-   `data-corners` (Square is zeroed by material.css), so the
-   only corner rule here is Rounded's. Focus is an accent underline, as everywhere. */
+   and the record block a finished helpers line becomes in the chat. Colours and corners are tokens. Focus is an accent underline, as everywhere. */
 
 @keyframes mxDockGrow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
 @keyframes mxDockFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }

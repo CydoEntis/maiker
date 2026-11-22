@@ -7,7 +7,6 @@ export type PerformanceEnvironment = {
   userAgent: string
   /** `webgl` or `software`, as `data-gpu` on the root. */
   gpu: string
-  corners: string
   reduceMotion: boolean
   terminalFontSize: number
 }
@@ -52,7 +51,7 @@ export function buildPerformanceReport(environment: PerformanceEnvironment, samp
     `Maiker desktop ${environment.version ?? '(version unknown)'}`,
     `Web view: ${environment.userAgent}`,
     `GPU: ${environment.gpu}`,
-    `Corners: ${environment.corners}; reduce motion ${environment.reduceMotion ? 'on' : 'off'}; terminal ${String(environment.terminalFontSize)}px`,
+    `Reduce motion ${environment.reduceMotion ? 'on' : 'off'}; terminal ${String(environment.terminalFontSize)}px`,
     '',
   ]
   if (sample === null) {

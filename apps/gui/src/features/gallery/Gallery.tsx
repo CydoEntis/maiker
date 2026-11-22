@@ -5,7 +5,7 @@ import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
 import { StatusIcon, type StatusMarkKind } from '@/components/ui/status-icon'
 import { CodeChip, FileBadge, Tag, TextLink } from '@/components/ui/tag'
-import { CORNERS, withLook, type Corners } from '@/features/workspace/theme/corners'
+import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes'
 import { Copy } from 'lucide-react'
 import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
@@ -16,8 +16,8 @@ import { FlowPartsGallery } from './FlowPartsGallery'
 import { galleryParams, galleryHash } from './galleryParams'
 
 /*
- * Every shared primitive in every state, on any theme and either corner style, so the set can be checked against the
- * design's system page. Opened with `#gallery` (`#gallery?theme=Paper&corners=rounded`) in the desktop window or the
+ * Every shared primitive in every state, on any theme, so the set can be checked against the
+ * design's system page. Opened with `#gallery` (`#gallery?theme=Paper`) in the desktop window or the
  * browser preview. The hover and pressed samples are drawn with the state's own look, as the system page draws them.
  */
 
@@ -143,31 +143,25 @@ function useHashParams() {
   return params
 }
 
-/** The gallery page: a theme and corner switcher over the primitives and the chat's cards. */
+/** The gallery page: a theme switcher over the primitives and the chat's cards. */
 export function Gallery() {
-  const { theme: themeName, corners } = useHashParams()
+  const { theme: themeName } = useHashParams()
   const theme = withLook(findTheme(themeName))
   const style = themeStyle(theme)
   useEffect(() => {
     const root = document.documentElement
-    root.dataset.corners = corners
     for (const [name, value] of Object.entries(style)) if (name.startsWith('--')) root.style.setProperty(name, value)
     root.style.colorScheme = theme.light ? 'light' : 'dark'
-  }, [corners, style, theme.light])
+  }, [style, theme.light])
   return (
     <div className="mx-app" data-theme-kind={theme.light ? 'light' : 'dark'} style={{ ...style, position: 'static', minHeight: '100vh', overflow: 'auto', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--ui)' }}>
       <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-8 py-10">
         <header className="flex flex-col gap-3">
           <h1 className="m-0 text-[26px] font-[650] tracking-[-.015em]">Primitives</h1>
-          <p className="m-0 text-sm text-(--muted)">Every shared component in every state. {theme.name}, {corners} corners.</p>
+          <p className="m-0 text-sm text-(--muted)">Every shared component in every state. {theme.name}.</p>
           <nav aria-label="Theme" className="flex flex-wrap gap-1.5">
             {QUICK_THEMES.filter((name) => THEMES.some((entry) => entry.name === name)).map((name) => (
-              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'soft'}><a href={galleryHash(name, corners)}>{name}</a></Button>
-            ))}
-          </nav>
-          <nav aria-label="Corners" className="flex gap-1.5">
-            {CORNERS.map((option: Corners) => (
-              <Button key={option} asChild size="sm" variant={option === corners ? 'primary' : 'soft'}><a href={galleryHash(theme.name, option)}>{option}</a></Button>
+              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'soft'}><a href={galleryHash(name)}>{name}</a></Button>
             ))}
           </nav>
         </header>

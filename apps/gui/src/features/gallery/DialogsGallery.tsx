@@ -14,7 +14,7 @@ import { PickFolderDialog } from '@/features/workspace/components/PickFolderDial
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import type { PaletteItem } from '@/features/workspace/model/palette'
-import { withLook, type Corners } from '@/features/workspace/theme/corners'
+import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
 import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleProgress, sampleSessions } from './machinesSample'
@@ -23,7 +23,7 @@ import { Onboarding } from '@/features/welcome/Onboarding'
 import { galleryParams } from './galleryParams'
 
 /*
- * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night&corners=rounded`.
+ * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
  * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
@@ -81,7 +81,7 @@ function DockBox({ what }: { what: string }) {
   )
 }
 
-const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
+const PREFS = { exportFolder: '', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
 const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, onProgress: sampleProgress, open: SAME } }
 
@@ -217,9 +217,9 @@ function Show({ what }: { what: string }): ReactNode {
   return null
 }
 
-/** One dialog over an empty window, in the theme and corners the hash asks for. */
+/** One dialog over an empty window, in the theme the hash asks for. */
 export function DialogsGallery() {
-  const { theme: themeName, corners } = galleryParams(window.location.hash)
+  const { theme: themeName } = galleryParams(window.location.hash)
   const what = new URLSearchParams(window.location.hash.slice(window.location.hash.indexOf('?') + 1)).get('show') ?? 'new'
   const theme = withLook(findTheme(themeName))
   const style = themeStyle(theme)
@@ -227,10 +227,9 @@ export function DialogsGallery() {
   const [root, setRoot] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
     const root = document.documentElement
-    root.dataset.corners = corners satisfies Corners
     for (const [name, value] of Object.entries(style)) if (name.startsWith('--')) root.style.setProperty(name, value)
     root.style.colorScheme = theme.light ? 'light' : 'dark'
-  }, [corners, style, theme.light])
+  }, [style, theme.light])
   return (
     <div ref={setRoot} className="mx-app" data-theme-kind={theme.light ? 'light' : 'dark'} style={{ ...style, position: 'fixed', inset: 0, background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--ui)' }}>
       {root !== null && <Show what={what} />}

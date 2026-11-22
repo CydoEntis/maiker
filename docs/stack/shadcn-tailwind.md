@@ -68,8 +68,8 @@ pnpm dlx shadcn@latest add button dialog form
 Follow the chat handoff (`design_handoff_maitty_chat`, see [DESIGN](../DESIGN.md#desktop-app)) and
 `docs/features/chat-gui/design-brief.md`. Use Inter for interface text and JetBrains Mono for code,
 paths, shortcuts and diff numbers. Use the spacing tokens `--s1`..`--s9` and the radius tokens
-`--r-control` (6px), `--r-panel` (10px, panels, dialogs and menus) and `--r-badge` (3px), which are 0 under
-Square corners (`apps/gui/src/tokens.css`). A surface takes its fill from its role in `material.css` (panel,
+`--r-control` (6px), `--r-panel` (10px, panels, dialogs and menus) and `--r-badge` (3px)
+(`apps/gui/src/tokens.css`). A surface takes its fill from its role in `material.css` (panel,
 float or field), and a control inside it from the `--m-*` and `--c-*` tokens there; the look is flat, with no
 gradient or blur ([DESIGN](../DESIGN.md#desktop-app)).
 

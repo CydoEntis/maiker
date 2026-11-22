@@ -9,7 +9,7 @@ const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.m
 const SHEETS = Object.keys(import.meta.glob('./**/*.css')).filter((path) => path !== './App.css')
 const COMPONENTS = Object.keys(import.meta.glob(['./**/*.tsx', '!./**/*.test.tsx']))
 
-// A full pill (`999px`) and a circle (`50%`) are shapes of their own and stay round in Square corners too.
+// A full pill (`999px`) and a circle (`50%`) are shapes of their own, not corners.
 const FIXED_RADIUS = /border[a-z-]*-radius:\s*(?!0(?:px)?\s*[;}])(?!999px)[\d.]+(?:px|rem|em)/
 const FIXED_CLASS = /\brounded(?:-[trbl]{1,2})?-\[\d/
 const INLINE_RADIUS = /borderRadius:\s*['"]?\d/
@@ -23,7 +23,7 @@ describe('corners', () => {
     expect(COMPONENTS.length).toBeGreaterThan(0)
   })
 
-  // Settings › Corners turns every corner at once only if every corner reads `--r-control`, `--r-panel`, `--r-badge` or `--r-dialog`.
+  // The look's corners are set in one place only if every corner reads `--r-control`, `--r-panel`, `--r-badge` or `--r-dialog`.
   it('are never a fixed size in a stylesheet', () => {
     expect(offendersOf(SHEETS, FIXED_RADIUS)).toEqual([])
   })

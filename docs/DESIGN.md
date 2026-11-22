@@ -431,7 +431,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   of the three shadows, with the `--r-panel` radius: menus, popovers, toasts and dialogs only.
 
   **Fonts.** Two, both bundled: **Inter** for the interface (`--ui`) and **JetBrains Mono** for paths, branches,
-  commands and numbers (`--mono`); `theme/corners.ts` sets them. The terminal's own font is the user's setting.
+  commands and numbers (`--mono`); `theme/look.ts` sets them. The terminal's own font is the user's setting.
 
   Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
 - **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
@@ -440,7 +440,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `StatusMark` (`components/StatusMark.tsx`) only maps its own names onto it.
 - **Corners are rounded, and there is no option for them.** Every radius is a token (`--r-control` 6px, `--r-panel`
   10px, `--r-badge` 3px, `--r-dialog` 14px for the big windows); a component never sets a radius of its own. `withLook`
-  in `theme/corners.ts` sets the fonts and the shading. **Components are built once and read tokens.** Besides the base tokens, the shared pieces read the component
+  in `theme/look.ts` sets the fonts and the shading. **Components are built once and read tokens.** Besides the base tokens, the shared pieces read the component
   tokens declared in `material.css`: `--c-sel-*` (every selected state: a sidebar row, a settings nav item, a chosen
   segment, a palette row), `--c-field-*` (dropdown buttons, pickers, the new-session segments, inputs), `--c-track-*`
   (the tray behind a segmented control), `--c-sw-*` and `--c-knob-*` (the switch), `--c-tile-ring` (agent and shell

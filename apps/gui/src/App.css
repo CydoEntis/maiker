@@ -344,13 +344,6 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .theme-swatch-day { background: linear-gradient(135deg, #eef3f7 0 60%, #087e78 60%); }
 .settings-subsection-title { margin: 22px 0 10px; }
 .settings-subsection-title h3 { font-size: 12px; }
-.accent-options { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
-.accent-option { align-items: center; background: var(--background); border: 1px solid var(--border); border-radius: 6px; color: var(--foreground); display: inline-flex; font-size: 10px; gap: 7px; min-height: 34px; padding: 0 9px; }
-.accent-option.is-selected { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
-.accent-option > span { background: var(--swatch); border-radius: 50%; height: 11px; width: 11px; }
-.accent-teal { --swatch: #37d5c4; }
-.accent-blue { --swatch: #73b4ff; }
-.accent-violet { --swatch: #b8a2ff; }
 .settings-row { align-items: center; border-bottom: 1px solid var(--border); display: flex; gap: 14px; justify-content: space-between; min-height: 58px; }
 .settings-row > span, .daemon-status-row > span:nth-child(2) { display: flex; flex-direction: column; gap: 3px; }
 .settings-text-input { background: var(--background); border: 1px solid var(--border); border-radius: 6px; color: var(--foreground); font: 12px var(--font-mono); height: 30px; min-width: 200px; padding: 0 9px; }

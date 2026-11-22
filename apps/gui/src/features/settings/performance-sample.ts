@@ -14,7 +14,6 @@ export function environmentOf(preferences: SettingsPreferences, appVersion: stri
     version: appVersion,
     userAgent: navigator.userAgent,
     gpu: document.documentElement.dataset.gpu ?? 'unknown',
-    corners: preferences.corners,
     reduceMotion: preferences.reduceMotion,
     terminalFontSize: preferences.terminalFontSize,
   }

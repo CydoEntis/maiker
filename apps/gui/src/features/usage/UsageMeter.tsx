@@ -4,20 +4,16 @@ import { levelOf, meterTip, usageName } from './meterFacts'
 import './usage-meter.css'
 
 const PERCENT = 100
-/** The ring, square as the window's corners are: a path round a 12px box, starting at the top middle. */
-const METER_PATH = 'M6 1H11V11H1V1H6'
-/** The same ring under Rounded corners: a circle from the same start point. */
-const METER_ROUND = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
+/** The ring: a circle in a 12px box, starting at the top middle. */
+const METER_RING = 'M6 1A5 5 0 1 1 6 11A5 5 0 1 1 6 1'
 
 /** A ring filled to `percent`, in the theme's meter colours. */
 export function ContextRing({ percent, label }: { percent: number; label: string }) {
   const fill = `${String(percent)} ${String(PERCENT)}`
   return (
     <svg className="mx-usage-ring" role="meter" aria-label={label} aria-valuemin={0} aria-valuemax={PERCENT} aria-valuenow={percent} width="12" height="12" viewBox="0 0 12 12">
-      <path d={METER_PATH} className="mx-usage-track mx-usage-sq" />
-      <path d={METER_PATH} className="mx-usage-fill mx-usage-sq" pathLength={PERCENT} strokeDasharray={fill} />
-      <path d={METER_ROUND} className="mx-usage-track mx-usage-round" />
-      <path d={METER_ROUND} className="mx-usage-fill mx-usage-round" pathLength={PERCENT} strokeDasharray={fill} />
+      <path d={METER_RING} className="mx-usage-track" />
+      <path d={METER_RING} className="mx-usage-fill" pathLength={PERCENT} strokeDasharray={fill} />
     </svg>
   )
 }

@@ -14,7 +14,6 @@ const SHARED: SharedSettings = {
   spinner: [...framesOfTuiSpinner('snake')],
   start_dir: '/srv',
   reduce_motion: true,
-  window_style: 'glass',
   bypass_off: ['gemini'],
   update_machines: false,
 }

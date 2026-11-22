@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -129,14 +129,11 @@ describe('desktop settings', () => {
 
   it.each<[DesktopSettingsSection, string, string, Partial<SettingsPreferences>]>([
     ['chat', 'Default agent', 'Codex', { defaultAgent: 'codex' }],
-    ['notifications', 'Toast position', 'Top right', { toastPosition: 'top' }],
     ['terminal', 'Terminal text size', '15', { terminalFontSize: 15 }],
     ['terminal', 'Cursor', 'Underline', { cursorStyle: 'underline' }],
     ['terminal', 'Lines kept per pane', '100k', { scrollback: 100000 }],
     ['terminal', 'Terminal text weight', 'Medium', { terminalFontWeight: 500 }],
     ['terminal', 'Terminal bold weight', 'Extra bold', { terminalFontWeightBold: 800 }],
-    ['appearance', 'Sidebar icon size', 'Small', { iconSize: 'small' }],
-    ['appearance', 'Corners', 'Rounded', { corners: 'rounded' }],
     ['appearance', 'Appearance', 'Light', { themeMode: 'light' }],
   ])('on %s, choosing %s: %s saves it', async (section, group, choice, patch) => {
     const user = userEvent.setup()
@@ -300,10 +297,10 @@ describe('searching settings', () => {
 
   it('shows the matching rows of every page, titled with their page', async () => {
     renderSettings('general')
-    await search('corners')
+    await search('reduce motion')
     expect(screen.getByRole('heading', { name: 'Search' })).toBeInTheDocument()
-    expect(await screen.findByText(/setting(s)? match(es)? “corners”/)).toBeInTheDocument()
-    expect(screen.getByText('Corners')).toBeInTheDocument()
+    expect(await screen.findByText(/setting(s)? match(es)? “reduce motion”/)).toBeInTheDocument()
+    expect(screen.getByText('Reduce motion')).toBeInTheDocument()
     expect(screen.queryByText('Dark theme')).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Appearance · / }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { current: 'page' })).not.toBeInTheDocument()

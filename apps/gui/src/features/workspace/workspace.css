@@ -25,7 +25,7 @@
   --agent-gemini: #3186FF;
   --agent-opencode: #A78BFA;
   --agent-deepseek: #4D6BFE;
-  /* The look (`theme/corners.ts`) sets --ui and --mono inline; these are the fallbacks. */
+  /* The look (`theme/look.ts`) sets --ui and --mono inline; these are the fallbacks. */
   --ui: "Inter Variable", Inter, system-ui, sans-serif;
   --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
   position: fixed;
@@ -475,13 +475,13 @@
 .mx-menu-caps { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 
 /* The sidebar's and the rail's icons follow the Sidebar icons setting; pane headers keep their size. */
-.mx-sidebar .mx-app-icon.size-28 { width: calc(28px * var(--icon-scale, 1)); height: calc(28px * var(--icon-scale, 1)); font-size: calc(12px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-24 { width: calc(24px * var(--icon-scale, 1)); height: calc(24px * var(--icon-scale, 1)); font-size: calc(11px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-18 { width: calc(18px * var(--icon-scale, 1)); height: calc(18px * var(--icon-scale, 1)); font-size: calc(8.5px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-20 { width: calc(20px * var(--icon-scale, 1)); height: calc(20px * var(--icon-scale, 1)); font-size: calc(9px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-22 { width: calc(22px * var(--icon-scale, 1)); height: calc(22px * var(--icon-scale, 1)); font-size: calc(10px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-26 { width: calc(26px * var(--icon-scale, 1)); height: calc(26px * var(--icon-scale, 1)); font-size: calc(11.5px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-14 { width: calc(14px * var(--icon-scale, 1)); height: calc(14px * var(--icon-scale, 1)); font-size: calc(6.5px * var(--icon-scale, 1)); }
+.mx-sidebar .mx-app-icon.size-28 { width: 28px; height: 28px; font-size: 12px; }
+.mx-sidebar .mx-app-icon.size-24 { width: 24px; height: 24px; font-size: 11px; }
+.mx-sidebar .mx-app-icon.size-18 { width: 18px; height: 18px; font-size: 8.5px; }
+.mx-sidebar .mx-app-icon.size-20 { width: 20px; height: 20px; font-size: 9px; }
+.mx-sidebar .mx-app-icon.size-22 { width: 22px; height: 22px; font-size: 10px; }
+.mx-sidebar .mx-app-icon.size-26 { width: 26px; height: 26px; font-size: 11.5px; }
+.mx-sidebar .mx-app-icon.size-14 { width: 14px; height: 14px; font-size: 6.5px; }
 
 .mx-confirm-button.is-ghost { background: transparent; box-shadow: none; color: var(--muted); }
 .mx-confirm-button.is-ghost:hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
@@ -532,8 +532,6 @@
 
 /* Finish: the surfaces' fills, lines and shadows are material.css. What is left here is the rest of Flat: no glow, no resting rings and smaller radii. Accent and warn rings (the
    focused pane, needs-you) and every status colour stay. */
-/* Settings › Appearance › Icons: Grayscale. Neutral app icons in either style; status badges on them keep their colours. */
-:root[data-icons="grayscale"] .mx-app-icon:not(.is-shell) { color: var(--fg2); }
 
 /* A web view without GPU access (no WebGL 2) rasterises in software, where every blur and shadow is paid
    again on each repaint (docs/PERFORMANCE.md). It takes the same rules with cheaper token values: no blur,
@@ -713,7 +711,6 @@
 .mx-rm-mark[data-shape] { display: inline-flex; align-items: center; justify-content: center; font-size: 0; }
 .mx-rm-mark[data-shape]::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mx-rm-mark[data-shape='○']::before { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
-:root[data-corners="square"] .mx-rm-mark[data-shape]::before { border-radius: 0; }
 .mx-rm-mark.is-ok, .mx-rm-mark.is-done { color: var(--ok); }
 .mx-rm-mark.is-quiet { color: var(--dim); }
 .mx-rm-mark.is-needs { color: var(--needs); }

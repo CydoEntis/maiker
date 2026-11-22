@@ -193,7 +193,6 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
   }, [theme])
 
   useEffect(() => {
-    document.documentElement.dataset.accent = settingsPreferences.accent
     document.documentElement.dataset.reducedMotion = String(
       settingsPreferences.reduceMotion,
     )
@@ -204,7 +203,6 @@ export function usePreviewEffects({ desktop, sessionsQuery, sidebarPreferences, 
   }, [
     settingsPreferences.colourFileNames,
     settingsPreferences.spinner,
-    settingsPreferences.accent,
     settingsPreferences.animateSidebarActivity,
     settingsPreferences.reduceMotion,
   ])

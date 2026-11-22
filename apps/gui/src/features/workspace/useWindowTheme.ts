@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { activeThemeName, findTheme, terminalMinimumContrast, terminalSlab, themeStyle, xtermTheme } from './theme/themes'
-import { withLook } from './theme/corners'
+import { withLook } from './theme/look'
 
 /** A theme previews once the pointer rests on it, not as it passes over every row (each one repaints every terminal). */
 const THEME_PREVIEW_DELAY_MS = 140

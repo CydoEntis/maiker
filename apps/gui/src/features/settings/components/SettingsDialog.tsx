@@ -104,10 +104,6 @@ function SettingsDialog({ open, onClose, theme, onThemeChange, preferences, onPr
               <button type="button" className={`theme-option theme-option-abyss ${theme === 'abyss' ? 'is-selected' : ''}`} aria-pressed={theme === 'abyss'} onClick={() => { onThemeChange('abyss') }}><span className="theme-swatch theme-swatch-abyss" /><span><strong>Abyss</strong><small>Deeper blue-black</small></span></button>
               <button type="button" className={`theme-option theme-option-day ${theme === 'day' ? 'is-selected' : ''}`} aria-pressed={theme === 'day'} onClick={() => { onThemeChange('day') }}><span className="theme-swatch theme-swatch-day" /><span><strong>Paper</strong><small>Light and easy to read</small></span></button>
             </div>
-            <div className="settings-section-title settings-subsection-title"><h3>Accent</h3><p>Choose the color used for focus and active controls.</p></div>
-            <div className="accent-options" role="group" aria-label="Accent color">
-              {(['teal', 'blue', 'violet'] as const).map((accent) => <button key={accent} type="button" className={`accent-option accent-${accent} ${preferences.accent === accent ? 'is-selected' : ''}`} aria-pressed={preferences.accent === accent} onClick={() => { updatePreference('accent', accent) }}><span aria-hidden="true" />{accent === 'teal' ? 'Sea glass' : accent === 'blue' ? 'Blue' : 'Violet'}</button>)}
-            </div>
             <div className="settings-row"><span><strong>Terminal text size</strong><small>Size of the native terminal text, {preferences.terminalFontSize}px.</small></span><div className="segmented" role="group" aria-label="Terminal text size">
               <button type="button" aria-label="Smaller terminal text" disabled={preferences.terminalFontSize <= TERMINAL_FONT_SIZE_MIN} onClick={() => { updatePreference('terminalFontSize', preferences.terminalFontSize - 1) }}>A−</button>
               <button type="button" aria-label="Larger terminal text" disabled={preferences.terminalFontSize >= TERMINAL_FONT_SIZE_MAX} onClick={() => { updatePreference('terminalFontSize', preferences.terminalFontSize + 1) }}>A+</button>

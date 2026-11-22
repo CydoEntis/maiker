@@ -967,7 +967,7 @@ describe('desktop overlays and pane tools', () => {
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
 
     window.localStorage.removeItem('maiker.gui.welcomed.v1')
-    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue' }))
+    window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ spinner: 'bars' }))
     cleanup()
     renderDesktopApp({ firstRun: true })
     await screen.findByRole('heading', { name: 'No sessions running' })

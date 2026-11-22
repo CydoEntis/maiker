@@ -5,7 +5,6 @@ import type { Transfer } from '@/features/updates/downloadEta'
 import { Fragment, useContext, useEffect, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { GroupShowsAll, matchesQuery, SettingsSearch } from '../settingsSearch'
 import { ThemePicker } from './ThemePicker'
-import { CORNERS, CORNER_NAMES } from '@/features/workspace/theme/corners'
 import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
@@ -32,7 +31,7 @@ import type { AddMachineOptions, Added, Grant, HostChoice, MachineActivity, Upda
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, UI_TEXT_SIZE_DEFAULT, UI_TEXT_SIZE_LARGE, UI_TEXT_SIZE_SMALL, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
+import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'terminal' | 'extensions' | 'machines' | 'usage' | 'performance'
 
@@ -512,13 +511,8 @@ function GeneralSection({ preferences, update, onChooseFolder, onShowWelcome }: 
   )
 }
 
-const ICON_COLOR_OPTIONS = [['color', 'Color'], ['grayscale', 'Grayscale']] as const
 const DOCK_OPTIONS = [['bottom', 'Bottom'], ['right', 'Right'], ['full', 'Full']] as const
 const SIDE_OPTIONS = [['left', 'Left'], ['right', 'Right']] as const
-const TOAST_POSITION_OPTIONS = [['bottom', 'Bottom right'], ['top', 'Top right']] as const
-const ICON_OPTIONS = [['small', 'Small'], ['medium', 'Medium'], ['large', 'Large']] as const
-const DENSITY_OPTIONS = [['compact', 'Compact'], ['comfortable', 'Comfortable'], ['spacious', 'Spacious']] as const
-const UI_TEXT_OPTIONS = [[UI_TEXT_SIZE_SMALL, 'Small'], [UI_TEXT_SIZE_DEFAULT, 'Medium'], [UI_TEXT_SIZE_LARGE, 'Large']] as const
 
 const FONT_SIZES = Array.from({ length: TERMINAL_FONT_SIZE_MAX - TERMINAL_FONT_SIZE_MIN + 1 }, (_, index) => {
   const size = TERMINAL_FONT_SIZE_MIN + index
@@ -608,8 +602,6 @@ function TerminalSection({ preferences, update }: { preferences: SettingsPrefere
 
 const MODE_OPTIONS = [['system', 'System'], ['dark', 'Dark'], ['light', 'Light']] as const
 
-const CORNER_OPTIONS = CORNERS.map((id) => [id, CORNER_NAMES[id]] as const)
-
 function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: { preferences: SettingsPreferences; update: Update; systemDark: boolean; onPreviewTheme: (name: string | null) => void }) {
   const darkInUse = preferences.themeMode === 'dark' || (preferences.themeMode === 'system' && systemDark)
   return (
@@ -623,22 +615,6 @@ function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: 
         </Row>
         <Row label="Light theme" detail="Used when the window is light.">
           <ThemePicker kind="light" value={preferences.lightTheme} inUse={!darkInUse} dimmed={darkInUse && preferences.themeMode !== 'system'} onPick={(name) => { update('lightTheme', name) }} onPreview={onPreviewTheme} />
-        </Row>
-        <Row label="Corners" detail="Square keeps every panel, button and field sharp. Rounded softens them.">
-          <SegmentedChoice label="Corners" value={preferences.corners} options={CORNER_OPTIONS} onChange={(value) => { update('corners', value) }} />
-        </Row>
-      </Card>
-      <Card title="Surfaces">
-        <Row label="Icons" detail="Agent and folder icons in their own colours, or neutral gray tiles.">
-          <SegmentedChoice label="Icons" value={preferences.iconColor} options={ICON_COLOR_OPTIONS} onChange={(value) => { update('iconColor', value) }} />
-        </Row>
-      </Card>
-      <Card title="Interface size">
-        <Row label="Density" detail="How much room the sidebar rows, pane headers and gaps get.">
-          <SegmentedChoice label="Density" value={preferences.density} options={DENSITY_OPTIONS} onChange={(value) => { update('density', value) }} />
-        </Row>
-        <Row label="Pane title text" detail="The names on each pane's header.">
-          <SegmentedChoice label="Pane title text size" value={preferences.tabTextSize} options={UI_TEXT_OPTIONS} onChange={(value) => { update('tabTextSize', value) }} />
         </Row>
       </Card>
       <Card title="Motion">
@@ -756,12 +732,6 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
         </Row>
       </Card>
       <Card title="Sidebar size">
-        <Row label="Sidebar icons" detail="The project tiles, session icons and the collapsed rail.">
-          <SegmentedChoice label="Sidebar icon size" value={preferences.iconSize} options={ICON_OPTIONS} onChange={(value) => { update('iconSize', value) }} />
-        </Row>
-        <Row label="Sidebar text" detail="Folder names and session rows.">
-          <SegmentedChoice label="Sidebar text size" value={preferences.sidebarTextSize} options={UI_TEXT_OPTIONS} onChange={(value) => { update('sidebarTextSize', value) }} />
-        </Row>
         <Row label="Sidebar width" detail="Drag the sidebar's edge to change it, or focus the edge and use the arrow keys.">
           <button type="button" className="mx-text-button" disabled={preferences.sidebarWidth === SIDEBAR_WIDTH_DEFAULT} onClick={() => { update('sidebarWidth', SIDEBAR_WIDTH_DEFAULT) }}>Reset</button>
         </Row>
@@ -887,9 +857,6 @@ function NotificationsSection({ preferences, update, onTestNotice }: { preferenc
       </Row>
     </Card>
     <Card title="In-window toasts" foot="Notes and successes go after 5 seconds, or when you move off them. Anything that needs you stays until you act.">
-      <Row label="Toast position" detail="Which right-hand corner the toasts stack in.">
-        <SegmentedChoice label="Toast position" value={preferences.toastPosition} options={TOAST_POSITION_OPTIONS} onChange={(value) => { update('toastPosition', value) }} />
-      </Row>
       {onTestNotice && (
         <Row label="Try it" detail="Shows a toast like the ones above. Done is green, needs you amber and an error red.">
           <button type="button" className="mx-text-button mx-pos-test" onClick={onTestNotice}>Show a test</button>

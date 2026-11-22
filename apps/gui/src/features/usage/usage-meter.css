@@ -11,10 +11,6 @@
 .mx-usage-item.is-warn .mx-usage-bar i, .mx-context-meter.is-warn .mx-usage-bar i { background: var(--needs); }
 .mx-usage-item.is-hot .mx-usage-bar i, .mx-context-meter.is-hot .mx-usage-bar i { background: var(--danger); }
 .mx-usage-name { font-family: var(--ui); font-weight: 400; color: var(--dim); }
-/* The ring follows the corners: a square path under Square, a circle under Rounded. */
-.mx-usage-round { display: none; }
-:root[data-corners="rounded"] .mx-usage-round { display: inline; }
-:root[data-corners="rounded"] .mx-usage-sq { display: none; }
 /* A meter under half used waits out of sight until the box is hovered or focused, as in the mock. */
 .mx-usage-item { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0; white-space: nowrap; font: inherit; color: inherit; cursor: default; }
 button.mx-usage-item:focus-visible { outline: none; box-shadow: var(--focus-underline); }
