@@ -21,7 +21,7 @@
   --panel-out: .22s cubic-bezier(.4, 0, .7, .2);
   /* The agents' mark colours, defined once; `.mx-app-icon` reads them (below) so every mark is coloured the same wherever it is drawn. */
   --agent-claude: #D97757;
-  --agent-codex: #10A37F;
+  --agent-codex: var(--fg);
   --agent-gemini: #3186FF;
   --agent-opencode: #A78BFA;
   --agent-deepseek: #4D6BFE;

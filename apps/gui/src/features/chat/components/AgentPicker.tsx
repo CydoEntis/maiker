@@ -131,6 +131,8 @@ export function AgentPicker({ agent, choice, onChange, currentModel = null, curr
     onChange({ model: choiceFor(option) })
     live?.(`/model ${choiceFor(option)}`)
     if (choice.reasoning !== DEFAULT_PICK && !effortAllowed(agent, option, choice.reasoning)) pickLevel(effortAllowed(agent, option, FALLBACK_LEVEL) ? FALLBACK_LEVEL : DEFAULT_PICK)
+    // A running session's pick is made: the menu goes, as a picked menu does. Before the start it stays for the effort.
+    if (live !== undefined) change(false)
   }
   const showAgent = (entry: RailAgent) => {
     setQuery('')

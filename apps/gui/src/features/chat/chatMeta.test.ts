@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { modeFromScreen, modelLabel } from './chatMeta'
+import { asksToSwitchModel, modeFromScreen, modelLabel } from './chatMeta'
 
 describe('the mode and model in plain words', () => {
 
@@ -28,5 +28,20 @@ describe('reading the permission mode from the agent\'s screen', () => {
   it('is the default mode when the footer shows none, and unknown on an empty screen', () => {
     expect(modeFromScreen(screen('? for shortcuts'))).toBe('default')
     expect(modeFromScreen('  \n')).toBeNull()
+  })
+})
+
+describe('Claude Code asking to switch the model', () => {
+  const ask = ['> /model opus', '', 'Switch model?', 'Your next response will be slower and use more tokens', '', '  1 Yes, switch to Opus 5.5', '  2 No, go back'].join('\n')
+
+  it('is read from the last lines of the screen', () => {
+    expect(asksToSwitchModel(ask)).toBe(true)
+    expect(asksToSwitchModel(`${'older line\n'.repeat(40)}${ask}`)).toBe(true)
+  })
+
+  it('is not read from a screen where it has scrolled away, or one that only says the words', () => {
+    expect(asksToSwitchModel(`${ask}\n${'later line\n'.repeat(40)}`)).toBe(false)
+    expect(asksToSwitchModel('Set model to Haiku 5.5')).toBe(false)
+    expect(asksToSwitchModel('Switch model? is a question Claude asks')).toBe(false)
   })
 })

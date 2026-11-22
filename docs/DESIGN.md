@@ -483,7 +483,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   tiles) and `--c-head-bg` (sticky headers). A new control gets tokens first and is checked in both
   kinds of theme. **Agent marks** are flat glyphs with no tile or background anywhere (`AppIcon`): each agent has its
   own brand colour, defined once on `.mx-app` (`--agent-claude`, `--agent-codex`, `--agent-gemini`, `--agent-opencode`,
-  `--agent-deepseek`) and read by the one `.mx-app-icon` rule (`--mark`); a shell's is `--dim`. A hovered or focused menu
+  `--agent-deepseek`) and read by the one `.mx-app-icon` rule (`--mark`); a shell's is `--dim`. Codex's is the theme's
+  `--fg`, black by day and white by night, as OpenAI draws its own mark; it has no brand hue to borrow. A hovered or focused menu
   row keeps its mark's colour: only its ground changes. **Segmented control**: a 28px frame on `--well`
   with a 1px `--line` edge and 2px of room; 22px choices (12px/500, `--dim`, `--fg` on `--m-sel` while picked) with a
   13px mark 6px from the word. **Drawers** (Changes, Files, the terminal dock) grow as they slide: `from` opacity 0,

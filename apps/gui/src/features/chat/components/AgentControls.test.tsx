@@ -10,7 +10,7 @@ import { forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS } from '../useChatComposer'
 import { ChatSession } from './ChatSession'
 
-const fake = vi.hoisted(() => ({ current: null as null | { read: (cursor: never) => Promise<unknown> } }))
+const fake = vi.hoisted(() => ({ current: null as null | { read: (cursor: never) => Promise<unknown> }, screen: '> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n' }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/daemon')>()),
@@ -18,11 +18,12 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
     if (fake.current === null) throw new Error('no fake daemon')
     return fake.current.read(cursor as never)
   },
-  loadTerminalScreen: () => Promise.resolve('> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n'),
+  loadTerminalScreen: () => Promise.resolve(fake.screen),
   loadAgentModels: () => Promise.resolve([{ id: 'claude-opus-5-5', label: 'Opus 5.5', blurb: 'The most capable' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', blurb: 'Fast' }]),
 }))
 
 beforeEach(() => {
+  fake.screen = '> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n'
   vi.useFakeTimers({ shouldAdvanceTime: true })
   forgetChatFeeds()
   forgetComposers()
@@ -62,7 +63,23 @@ function WithPaneQueue({ agent, typeInto }: { agent: 'claude' | 'codex'; typeInt
   )
 }
 
+/** Longer than the pause before the screen is read for Claude Code's switch-model question. */
+const SWITCH_READ_MS = 1000
+
 describe('changing the mode, the model and the reasoning of a chat that follows the terminal', () => {
+
+  it('says yes for the person when Claude Code asks whether to switch the model they picked', async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    const typeInto = open('claude')
+    await settle(IDLE_POLL_MS)
+    fake.screen = '> /model opus\n\nSwitch model?\n\n  1 Yes, switch to Opus 5.5\n  2 No, go back\n'
+
+    await user.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await user.click(await screen.findByRole('radio', { name: /Opus 5.5/ }))
+    await settle(COMMAND_SUBMIT_GAP_MS + SWITCH_READ_MS)
+
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '1'])
+  })
 
   it('sends /model and /effort when a model and a reasoning level are picked', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
@@ -76,7 +93,11 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
+    // The pick is made, so the menu goes; the reasoning is a pick of its own.
+    expect(screen.queryByRole('radiogroup', { name: 'Reasoning' })).not.toBeInTheDocument()
+    await settle(SWITCH_READ_MS)
+    await user.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await user.click(within(await screen.findByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })

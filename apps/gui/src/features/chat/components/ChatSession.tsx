@@ -17,7 +17,7 @@ import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } f
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
 import { startedBypassed } from '../bypassSessions'
-import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
+import { asksToSwitchModel, CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
@@ -325,7 +325,12 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         if (level !== undefined) setLiveEffort({ base: effort, value: level })
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
-        const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
+        const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(async () => {
+          // Picking the model was the answer: Claude Code's own "Switch model?" that can follow it is said yes to here.
+          if (model === undefined || sessionId === undefined) return
+          await new Promise<void>((resolve) => { window.setTimeout(resolve, MODE_READ_MS) })
+          if (asksToSwitchModel(await loadTerminalScreen({ id: sessionId, generation: 0 }))) await typeInto('1')
+        }).then(refresh)
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
           if (level !== undefined) setLiveEffort(null)
