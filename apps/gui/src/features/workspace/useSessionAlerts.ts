@@ -24,12 +24,15 @@ type SessionAlerts = {
   projectOf: ReadonlyMap<string, { name: string; key: string }>
   online: boolean
   focusedId: string | null
-  preferences: { notifyNeedsYou: boolean; notifyFinished: boolean; notifyError: boolean; notificationSound: boolean }
+  preferences: { notifyNeedsYou: boolean; notifyFinished: boolean; notificationSound: boolean }
   showSessionById: (sessionId: string) => void
   answerSession: (sessionId: string, answer: 'y' | 'a' | 'n') => void
   /** What the session waits for has a toast of its own, which answers it: the plain card would say it twice. */
   saidByOwnToast: (session: SessionView) => boolean
 }
+
+/** A session that exited with an error is always told: Settings has a switch for needs you and for done, none for errors. */
+const NOTIFY_ERRORS = true
 
 /**
  * Tells you about a session that started needing you, finished or failed while you were not looking at it: a card
@@ -37,7 +40,7 @@ type SessionAlerts = {
  * for a chat session. A session that failed has no card from here: its stop toast is `useStopToasts`'s.
  */
 export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession, saidByOwnToast }: SessionAlerts): void {
-  const { notifyNeedsYou, notifyFinished, notifyError, notificationSound } = preferences
+  const { notifyNeedsYou, notifyFinished, notificationSound } = preferences
   const lastStatuses = useRef<ReadonlyMap<string, SessionView['status']> | null>(null)
   const lastNotified = useRef<{ sessionId: string; at: number } | null>(null)
 
@@ -80,7 +83,7 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
     // What another machine's agents do raises no system notice unless its entry says notices = true.
     const mine = sessions.filter((item) => item.machine === LOCAL_MACHINE || machines.get(item.machine)?.state.notices === true)
     const notices = online
-      ? noticesFor(lastStatuses.current, mine, { needs: notifyNeedsYou, finished: notifyFinished, error: notifyError }, document.hasFocus() ? focusedId : null, queuedFor)
+      ? noticesFor(lastStatuses.current, mine, { needs: notifyNeedsYou, finished: notifyFinished, error: NOTIFY_ERRORS }, document.hasFocus() ? focusedId : null, queuedFor)
       : []
     lastStatuses.current = new Map(mine.map((item) => [item.id, item.status]))
     // A card that said "Needs you" goes when the session stops needing you.
@@ -93,7 +96,7 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
       // The daemon rings only for a terminal session; a chat session that needs you or finished rings here, the same tone.
       if (notificationSound && target !== undefined && isChatSession(target.conversation)) playNotificationSound()
     }
-  }, [sessions, online, focusedId, notifyNeedsYou, notifyFinished, notifyError, notificationSound, machines, raiseNotice])
+  }, [sessions, online, focusedId, notifyNeedsYou, notifyFinished, notificationSound, machines, raiseNotice])
 
   // A terminal session the daemon says needs you, or finished. Kept in a ref so the one listener below always
   // reads the latest sessions and settings.
@@ -106,12 +109,12 @@ export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, on
       if (document.hasFocus() && target.id === focusedId) return
       // More is queued for it: the turn ended, the session did not finish, so it neither rings nor says so.
       if (attention.status === 'done' && queuedFor(target) > 0) return
-      const notice = noticeForAttention(target, attention.status, { needs: notifyNeedsYou, finished: notifyFinished, error: notifyError })
+      const notice = noticeForAttention(target, attention.status, { needs: notifyNeedsYou, finished: notifyFinished, error: NOTIFY_ERRORS })
       if (!notice) return
       raiseNotice(notice)
       if (notificationSound) playNotificationSound()
     }
-  }, [sessions, machines, focusedId, notifyNeedsYou, notifyFinished, notifyError, notificationSound, raiseNotice])
+  }, [sessions, machines, focusedId, notifyNeedsYou, notifyFinished, notificationSound, raiseNotice])
 
   useEffect(() => {
     if (!isDesktop()) return undefined

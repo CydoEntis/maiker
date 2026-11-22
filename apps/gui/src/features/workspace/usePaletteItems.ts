@@ -113,7 +113,6 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       action('broadcast', showing?.broadcast ? 'Stop broadcasting' : 'Broadcast typing to this tab', () => { runShortcut('broadcast') }, keys('broadcast')),
       action('focus', 'Focus mode', () => { setFocusMode(true) }, keys('focus-mode')),
       action('settings', 'Open settings', () => { setSettingsSection('appearance') }, keys('settings')),
-      action('performance', 'Open performance', () => { setSettingsSection('performance') }, keys('performance')),
       action('machines', 'Add a remote machine…', () => { setOpenProject(ADD_MACHINE) }),
       action('shortcuts', 'Keyboard shortcuts', () => { setShortcutsOpen(true) }, keys('shortcuts')),
       ...(showing?.widths ? [action('reset-widths', 'Reset pane widths', () => { setLayout((current) => setColumnWidths(current, showing.id, null)) })] : []),

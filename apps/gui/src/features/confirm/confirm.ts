@@ -62,7 +62,7 @@ const CONFIRMS = {
   'switch-view': (view: View): ConfirmCopy => ({
     title: `Open new sessions in ${VIEW_NAME[view]}?`,
     body: `Going forward, every new session opens in ${VIEW_NAME[view]} view. Sessions that are already open stay as they are.`,
-    note: 'You can change this any time in Settings › General.',
+    note: 'You can change this any time in Settings › Appearance.',
     confirmLabel: `Switch to ${VIEW_NAME[view]}`,
     danger: false,
   }),

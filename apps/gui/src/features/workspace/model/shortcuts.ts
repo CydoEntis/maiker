@@ -33,7 +33,7 @@ export function isMacPlatform(userAgent: string): boolean {
  * that leave for another session work from it. The ones that act on the pane it covers do not.
  */
 export const NEW_CHAT_PAGE_ACTIONS: ReadonlySet<ShortcutAction> = new Set<ShortcutAction>([
-  'palette', 'jump-needs', 'focus-previous', 'focus-next', 'new-terminal', 'open-folder', 'toggle-sidebar', 'usage', 'performance', 'settings', 'text-larger', 'text-smaller', 'shortcuts',
+  'palette', 'jump-needs', 'focus-previous', 'focus-next', 'new-terminal', 'open-folder', 'toggle-sidebar', 'usage', 'settings', 'text-larger', 'text-smaller', 'shortcuts',
 ])
 
 export type ShortcutAction =
@@ -59,7 +59,6 @@ export type ShortcutAction =
   | 'text-larger'
   | 'text-smaller'
   | 'usage'
-  | 'performance'
   | 'terminal'
 
 /** The sections of the shortcut overlay, in the order it shows them. */
@@ -130,7 +129,6 @@ export const BINDINGS: readonly Binding[] = [
   // The terminal dock. ⌃` is the usual terminal key on macOS, where Ctrl is not the shell's; elsewhere Shift joins it (the contract above).
   { action: 'terminal', label: 'Show or hide the terminal', group: 'Window', mac: [{ mods: ['ctrl'], key: '`' }], other: [ctrlShift('`')], available: true },
   { action: 'usage', label: 'Usage and cost', group: 'Window', mac: [cmd('U', 'shift')], other: [ctrlShift('U')], available: true },
-  { action: 'performance', label: 'Performance', group: 'Window', mac: [cmd('P', 'shift')], other: [ctrlShift('P')], available: true },
   { action: 'focus-mode', label: 'Focus mode', group: 'Window', mac: [cmd('.')], other: [{ mods: ['ctrl'], key: '.' }], available: true },
   { action: 'settings', label: 'Settings', group: 'Window', mac: [cmd(',')], other: [{ mods: ['ctrl'], key: ',' }], available: true },
   { action: 'text-larger', label: 'Larger text', group: 'Window', mac: [{ mods: ['cmd'], key: '=', anyShift: true }], other: [{ mods: ['ctrl'], key: '=', anyShift: true }], available: true },

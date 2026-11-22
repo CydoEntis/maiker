@@ -35,7 +35,6 @@ const TABLE: readonly [ShortcutAction, string, string][] = [
   ['toggle-sidebar', '⌘B', 'Ctrl+Shift+B'],
   ['terminal', '⌃`', 'Ctrl+Shift+`'],
   ['usage', '⌘⇧U', 'Ctrl+Shift+U'],
-  ['performance', '⌘⇧P', 'Ctrl+Shift+P'],
   ['focus-mode', '⌘.', 'Ctrl+.'],
   ['settings', '⌘,', 'Ctrl+,'],
   ['text-larger', '⌘=', 'Ctrl+='],

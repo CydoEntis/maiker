@@ -174,9 +174,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         }
         return
       }
-      case 'performance':
-        setSettingsSection('performance')
-        return
       case 'usage':
         setSettingsSection('usage')
         return

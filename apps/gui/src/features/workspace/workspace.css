@@ -236,22 +236,24 @@
 
 /* Settings */
 .mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(3, 5, 8, .62); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
-.mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-panel); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
-.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 16px 10px 18px; border-right: 1px solid var(--line); overflow-y: auto; background: transparent; }
+.mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
+.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 18px 10px; overflow-y: auto; background: transparent; }
 .mx-app.is-narrow .mx-settings-nav { width: 176px; }
-.mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 8px; }
-.mx-settings-search { display: flex; align-items: center; gap: 7px; height: 28px; margin: 0 2px 17px; padding: 0 8px; border-radius: var(--r-control); background: var(--main); box-shadow: inset 0 0 0 1px var(--line2); color: var(--dim); }
+.mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 10px; }
+/* A flat field: the theme's field tone and no edge until it has focus (material.css › field focus). */
+.mx-settings-search { display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--t3); color: var(--dim); }
 .mx-settings-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; }
 .mx-settings-search input::placeholder { color: var(--dim); }
 .mx-settings-nav-group { display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
 .mx-settings-nav-label { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; color: var(--dim); }
 .mx-settings-nav-item { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-settings-nav-item:hover { color: var(--fg); background: var(--m-hover); }
-.mx-settings-nav-item.is-current { background: var(--c-sel-bg); color: var(--fg); box-shadow: none; }
+.mx-settings-nav-item:hover { color: var(--fg); background: rgba(var(--ink), .035); }
+/* The sidebar's selected row (sidebar.css). */
+.mx-settings-nav-item.is-current, .mx-settings-nav-item.is-current:hover { background: var(--t2); color: var(--fg); box-shadow: none; }
 .mx-settings-nav-item.is-current:focus-visible { box-shadow: var(--focus-underline); }
 /* The nav icon: a plain glyph in its section's tint, with no tile behind it. */
 .mx-settings-nav-text { flex: 1; white-space: nowrap; }
-.mx-settings-nav-icon { flex: none; color: var(--fg2); }
+.mx-settings-nav-icon { flex: none; color: currentColor; opacity: .85; }
 .mx-settings-nav-spacer { flex: 1; min-height: 12px; }
 /* The update box sits at the foot of the nav, pinned while the nav scrolls. */
 .mx-settings-update { position: sticky; bottom: -18px; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: 0 -10px -18px; padding: 12px 14px 16px; background: var(--m-well); border-top: 1px solid var(--line); }
@@ -267,7 +269,6 @@
 .mx-settings-update-button:hover { background: var(--m-hover); color: var(--fg); }
 .mx-settings-update-button.is-primary { font-weight: 600; color: var(--on-accent); background: var(--accent); box-shadow: none; }
 .mx-settings-update-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 90%, #fff); color: var(--on-accent); }
-.mx-settings-nav-key { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .mx-settings-body { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .mx-settings-close { width: 30px; height: 30px; border-radius: var(--r-control); color: var(--muted); }
 .mx-settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 28px; scroll-behavior: smooth; }
@@ -293,18 +294,19 @@
 .mx-scard-body { padding: 0 0 14px; }
 .mx-folder-cd { font-size: 12.5px; color: var(--dim); }
 .mx-folder-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
-.mx-scard-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.mx-scard-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); }
 .mx-scard-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-scard-text > :first-child { font-size: 13px; color: var(--fg); }
 .mx-scard-text > :last-child:not(:first-child) { font-size: 12px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
 .mx-scard-value { font-family: var(--mono); font-size: 11.5px; color: var(--fg2); }
-.mx-scard-foot { padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; color: var(--dim); text-wrap: pretty; }
+.mx-scard-foot { padding: 12px 0 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12px; line-height: 1.5; color: var(--dim); text-wrap: pretty; }
 .mx-scard-foot.is-row { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; }
-.mx-switch { width: 26px; height: 14px; border-radius: var(--r-control); background: transparent; box-shadow: inset 0 0 0 1px var(--line2); position: relative; flex: none; transition: background-color var(--t-fast) var(--ease); }
-.mx-switch[aria-checked="true"] { background: color-mix(in srgb, var(--fg) 22%, transparent); box-shadow: inset 0 0 0 1px var(--fg2); }
-.mx-switch-knob { position: absolute; top: 3px; left: 2px; width: 8px; height: 8px; border-radius: var(--r-badge); background: var(--dim); transition: transform var(--t-base) var(--ease), background-color var(--t-fast) var(--ease); }
-.mx-switch[aria-checked="true"] .mx-switch-knob { transform: translateX(12px); background: var(--fg); }
-.mx-switch:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+/* A pill with a round knob; the track's tone says on or off, with no edge. */
+.mx-switch { width: 30px; height: 16px; border-radius: 999px; background: rgba(var(--ink), .1); position: relative; flex: none; transition: background-color var(--t-fast) var(--ease); }
+.mx-switch[aria-checked="true"] { background: color-mix(in srgb, var(--fg) 30%, transparent); }
+.mx-switch-knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: transform var(--t-base) var(--ease), background-color var(--t-fast) var(--ease); }
+.mx-switch[aria-checked="true"] .mx-switch-knob { transform: translateX(14px); background: var(--fg); }
+.mx-switch:focus-visible { outline: none; box-shadow: var(--focus-underline); }
 .mx-switch:disabled { cursor: default; opacity: .45; }
 .mx-switch:disabled .mx-switch-knob { background: var(--dim); }
 /* The segmented control, as the design draws it (Chat | Terminal): a 28px frame on --well with a 1px --line edge and 2px of
@@ -489,11 +491,11 @@
 .mx-confirm-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
 .mx-confirm-button:disabled { opacity: .5; }
 .mx-scard-button { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-scard-input.is-invalid { box-shadow: inset 0 0 0 1px var(--danger-line); }
 .mx-font-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .mx-font-error { font-size: 11.5px; color: var(--danger); }
-.mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
+.mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
 .mx-scard-button.is-danger { color: var(--danger); }
 /* Under a machine's row on the GitHub page: its accounts, who commits, and its folder rules. */
 .mx-github-details { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 16px 14px; font-size: 12.5px; color: var(--fg2); }
@@ -601,8 +603,6 @@
 @keyframes mx-upd-slide { from { transform: translateX(-100%); } to { transform: translateX(334%); } }
 :root[data-reduced-motion="true"] :is(.mx-upd-bar span, .mx-upd-bar span::after) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.mx-upd-bar span, .mx-upd-bar span::after) { animation: none; } }
-/* Settings › Performance › Overlay: a corner readout that never takes the pointer. */
-.mx-perf-hud { position: absolute; right: 12px; bottom: 36px; z-index: 80; display: flex; gap: 10px; padding: 4px 9px; border-radius: var(--r-control); background: var(--m-raise); box-shadow: inset 0 0 0 1px var(--pane-line); font-family: var(--mono); font-size: 11px; color: var(--fg2); pointer-events: none; white-space: nowrap; }
 .mx-restarting { position: absolute; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--bg); animation: v7scrim .2s ease-out; }
 .mx-restarting strong { font-size: 18px; font-weight: 600; }
 .mx-restarting span { font-size: 13px; color: var(--muted); }

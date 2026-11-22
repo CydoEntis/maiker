@@ -412,30 +412,6 @@ export async function exportDaemonLog(): Promise<string> {
   return invokeParsed('export_daemon_log', z.string(), {})
 }
 
-const ProcessLoadSchema = z.object({
-  pid: z.number().int().nonnegative(),
-  name: z.string(),
-  command: z.string(),
-  cpu: z.number(),
-  memory_bytes: z.number().nonnegative(),
-})
-const ProcessSampleSchema = z.object({
-  cores: z.number().int().positive(),
-  host: ProcessLoadSchema,
-  webview: z.array(ProcessLoadSchema),
-  daemons: z.array(ProcessLoadSchema),
-  terminal_frames_sent: z.number().int().nonnegative(),
-})
-
-export type ProcessLoad = z.infer<typeof ProcessLoadSchema>
-/** The host's, the web view's and the daemons' CPU (percent of one core) and memory. */
-export type ProcessSample = z.infer<typeof ProcessSampleSchema>
-
-export async function loadPerformanceSample(): Promise<ProcessSample> {
-  if (!isDesktop()) throw new Error('Process figures are available in the desktop app')
-  return invokeParsed('performance_sample', ProcessSampleSchema)
-}
-
 const MachineListSchema = z.object({ names: z.array(z.string()), error: z.string().nullable() })
 export type MachineList = z.infer<typeof MachineListSchema>
 

@@ -181,14 +181,16 @@ so the streaming scenario measured nothing until it was fixed).
 
 ## Measuring in the app
 
-Settings › Performance (`apps/gui/src/features/settings/components/PerformanceSection.tsx`) shows,
-once a second while it is open, what the web view and the processes are doing, and **Copy report**
-puts the same figures as plain text on the clipboard for a bug report or an agent. Its **Overlay**
-switch (`perfOverlay`) keeps a one-line readout in the window's corner (`PerfOverlay.tsx`) so a
-lag spike can be matched with what the app was doing. Nothing is sampled while neither is shown.
+The app has no Performance page and no overlay: Settings shows no figures, and no setting changes
+how a terminal draws (every pane uses WebGL where the web view has WebGL 2, xterm's DOM renderer
+where it has not). What is left is the instrumentation, with no screen of its own: the window's
+counters and once-a-second sample (`apps/gui/src/lib/perf-meter.ts`, read through `usePerfSample`;
+nothing is sampled while nothing reads one) and the host's `performance_sample` command
+(`performance.rs`). To measure, use the harness above, or mount a reader of `usePerfSample` in a
+local build. Where a dated entry below names Settings › Performance, its overlay or **Draw
+terminals without the GPU**, it means the page and switches that read these figures then.
 
-What the numbers are and where they come from (`apps/gui/src/lib/perf-meter.ts`, the host's
-`performance.rs`):
+What the numbers are:
 
 - **Frames**: animation frames per second, how many took over 50 ms (a hitch you feel), and the
   worst one. The web view's main thread is busy when this drops while the window is idle.
@@ -407,7 +409,7 @@ the local socket. Typing was still late. Switching the terminals to xterm's DOM 
 session. So the delay was in the WebGL renderer presenting its canvas on this web view, not in the
 keys, the daemon, the host or the output socket. The real cause was one level down: the page was
 drawn on the CPU (see *The page was drawn on the CPU* below), and with that fixed WebGL shows
-letters on time. Every platform now starts on WebGL; the setting stays for a machine that needs it.
+letters on time. Every platform now draws with WebGL, and there is no setting for it.
 
 ### How to run measurement 2 again
 
@@ -418,8 +420,6 @@ hyprctl clients -j | jq -r '.[] | select(.class=="maitty-gui") | "\(.at[0]),\(.a
 AGENT_SOCKET=default maiker send -p <pane> --no-enter x
 grim -g "<geometry>" shot.png     # every half second; compare with the shot before the key
 ```
-
-Turn the overlay on first (Settings › Performance): its B/s figure is in every screenshot.
 
 ### The gap in what we measure
 
@@ -438,7 +438,7 @@ Measure first, change second. No fix goes in on a theory.
 2. **Add the probe.** Stamp one key at each hop and log the six times:
    xterm `onData` → the `terminal_input` command received by the host → `Output` from the daemon
    received by the hub → `Streams::flush` → the channel message received in the window →
-   `emulator.write` done. Keep it behind Settings › Performance as **Key to echo** (median, 95th
+   `emulator.write` done. Keep it in `perf-meter.ts` as **Key to echo** (median, 95th
    percentile, worst), so the next report has it.
 3. **Read the six times.** The hop where the time goes is the bug. If the times are all small and
    the screen is still late, the wait is after `emulator.write`: xterm's own render, or the web

@@ -58,8 +58,6 @@ export type SettingsPreferences = {
   compactSidebar: boolean
   notifyNeedsYou: boolean
   notifyFinished: boolean
-  /** A session's program exited with an error (a native notification, while the window is in the background). */
-  notifyError: boolean
   notificationSound: boolean
   terminalFontSize: number
   /** One family name for the terminal text; empty uses the bundled Geist Mono. */
@@ -108,10 +106,6 @@ export type SettingsPreferences = {
   bypassOff: readonly ChatAgent[]
   /** Remote machines update themselves after this computer does, once their agents are idle. Shared with the terminal app (`[updates] machines`). */
   updateMachines: boolean
-  /** A small readout of frames and process load over the window, for finding what lags. */
-  perfOverlay: boolean
-  /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
-  terminalPlainDrawing: boolean
   /** The terminal cursor blinks while its pane is focused. xterm drives it, so it is off by default. */
   cursorBlink: boolean
   /** Fetch a new release in the background. Installing still waits for a restart. */
@@ -155,7 +149,6 @@ function defaults(): SettingsPreferences {
     compactSidebar: false,
     notifyNeedsYou: true,
     notifyFinished: true,
-    notifyError: true,
     notificationSound: false,
     terminalFontSize: 13,
     terminalFontFamily: '',
@@ -185,9 +178,6 @@ function defaults(): SettingsPreferences {
     colourFileNames: true,
     bypassOff: [],
     updateMachines: true,
-    perfOverlay: false,
-    // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
-    terminalPlainDrawing: false,
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
@@ -252,7 +242,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
-      notifyError: bool(preferences.notifyError, fallback.notifyError),
       notificationSound: bool(preferences.notificationSound, fallback.notificationSound),
       terminalFontSize: terminalFontSize(preferences.terminalFontSize, fallback.terminalFontSize),
       terminalFontFamily: isFontFamily(preferences.terminalFontFamily) ? preferences.terminalFontFamily.trim() : fallback.terminalFontFamily,
@@ -280,8 +269,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
       bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
       updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
-      perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
-      terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),

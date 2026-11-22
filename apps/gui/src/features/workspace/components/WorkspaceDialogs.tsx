@@ -1,7 +1,6 @@
 import { extensionProjects } from '@/features/extensions/projects'
 import { listenMachineUpdateProgress, listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings, type MachinesInfo } from '@/features/settings/components/DesktopSettings'
-import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
 import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
@@ -219,7 +218,6 @@ export function WorkspaceDialogs() {
             )}
             {/* Not while the service still runs the older version: the update is not finished, and its card says so. */}
             {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} serviceFinishing={serviceFinishing} onDone={() => { setUpdatedTo(null) }} />}
-            {preferences.perfOverlay && <PerfOverlay />}
             {restarting && (
               <div className="mx-restarting" role="status">
                 <strong>Restarting Maiker</strong>

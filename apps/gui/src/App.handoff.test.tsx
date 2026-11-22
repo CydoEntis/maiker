@@ -20,8 +20,6 @@ const daemon = vi.hoisted(() => ({
   // The daemon numbers no list here and says no session left: a row a list misses is held.
   localListRevision: () => 0,
   daemonSaidRemoved: vi.fn<(id: string) => boolean>(() => false),
-  // Opening Settings > Performance asks the host for a sample; this page has nothing to show before one arrives.
-  loadPerformanceSample: vi.fn<() => Promise<never>>(() => new Promise(() => {})),
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
@@ -810,7 +808,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(unnamed).toEqual([])
   })
 
-  it('looks for what needs you with Ctrl+Shift+J and opens Settings on Performance with Ctrl+Shift+P, and ignores a bare Ctrl+J', async () => {
+  it('looks for what needs you with Ctrl+Shift+J, and ignores a bare Ctrl+J', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'Nothing running' })
@@ -819,13 +817,9 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(screen.queryByText('Nothing needs you')).not.toBeInTheDocument()
     await user.keyboard('{Control>}{Shift>}j{/Shift}{/Control}')
     expect(await screen.findByText('Nothing needs you')).toBeInTheDocument()
-
-    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
-    const settings = screen.getByRole('dialog', { name: 'Settings' })
-    expect(within(settings).getByRole('heading', { name: 'Performance' })).toBeInTheDocument()
   })
 
-  it('opens Settings with Ctrl+comma, jumps by letter, traps focus and gives it back on Escape', async () => {
+  it('opens Settings with Ctrl+comma, changes page from the nav, traps focus and gives it back on Escape', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
     const addMachine = within(await screen.findByRole('region', { name: 'Nothing running' })).getByRole('button', { name: 'Add a remote machine' })
@@ -836,9 +830,9 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(dialog).toHaveAttribute('role', 'dialog')
     expect(within(dialog).getByRole('button', { name: /Appearance/ })).toHaveFocus()
 
-    await user.keyboard('t')
+    await user.click(within(dialog).getByRole('button', { name: 'Terminal' }))
     expect(within(dialog).getByRole('heading', { name: 'Terminal' })).toBeInTheDocument()
-    await user.keyboard('?')
+    await user.click(within(dialog).getByRole('button', { name: 'Hotkeys' }))
     expect(within(dialog).getByRole('group', { name: 'Ctrl Alt Shift D' }).querySelectorAll('kbd')).toHaveLength(4)
 
     within(dialog).getByRole('button', { name: 'Close settings' }).focus()

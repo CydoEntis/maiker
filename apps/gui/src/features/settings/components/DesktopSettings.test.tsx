@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -110,11 +110,8 @@ describe('desktop settings', () => {
     ['general', 'Restart the service when idle', false, { restartServiceWhenIdle: true, restartWhenIdle: false }],
     ['permissions', 'Bypass Permissions for Codex', true, { bypassOff: ['codex'] }],
     ['chat', 'Hide successful tool calls', false, { hideSuccessfulTools: true }],
-    ['notifications', 'Notify when a session errors', true, { notifyError: false }],
     ['notifications', 'Notify when a session finishes', true, { notifyFinished: false }],
     ['notifications', 'Notify when a session needs you', true, { notifyNeedsYou: false }],
-    ['performance', 'Show the performance overlay', false, { perfOverlay: true }],
-    ['performance', 'Draw terminals without the GPU', false, { terminalPlainDrawing: true }],
   ])('on %s, the %s switch shows the saved value and saves a flip', async (section, name, checked, patch) => {
     const user = userEvent.setup()
     accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: false, signedIn: null, account: '', plan: '' })
@@ -143,7 +140,7 @@ describe('desktop settings', () => {
 
   it('asks once before the view changes, changes nothing on Cancel, and saves the view with the answer', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
+    const { onChange } = renderSettings('appearance')
     const chat = within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' })
 
     await user.click(chat)
@@ -161,7 +158,7 @@ describe('desktop settings', () => {
   it('changes the view without asking once Don\'t ask again was ticked', async () => {
     const user = userEvent.setup()
     const preferences: SettingsPreferences = { ...PREFS, confirmSkipped: ['switch-view'] }
-    const { onChange } = renderSettings('general', { preferences })
+    const { onChange } = renderSettings('appearance', { preferences })
     await user.click(within(screen.getByRole('radiogroup', { name: 'View' })).getByRole('radio', { name: 'Chat' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
     expect(onChange).toHaveBeenCalledWith({ ...preferences, openSessionsIn: 'chat' })
@@ -298,6 +295,24 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontFamily: '' }))
   })
 
+  it('has no switch for errors on Notifications: a stopped agent always says so', () => {
+    renderSettings('notifications')
+    expect(screen.getAllByRole('switch').map((toggle) => toggle.getAttribute('aria-label'))).toEqual(['Notify when a session needs you', 'Notify when a session finishes'])
+  })
+
+  it('asks again about everything Don\'t ask again was ticked on', async () => {
+    const user = userEvent.setup()
+    const preferences: SettingsPreferences = { ...PREFS, confirmSkipped: ['close-session', 'switch-view'] }
+    const { onChange } = renderSettings('general', { preferences })
+    await user.click(screen.getByRole('button', { name: 'Ask again' }))
+    expect(onChange).toHaveBeenCalledWith({ ...preferences, confirmSkipped: [] })
+  })
+
+  it('has nothing to ask again while every question still asks', () => {
+    renderSettings('general')
+    expect(screen.getByRole('button', { name: 'Ask again' })).toBeDisabled()
+  })
+
   it('replays the welcome from General', async () => {
     const user = userEvent.setup()
     const { onShowWelcome } = renderSettings('general')
@@ -305,6 +320,35 @@ describe('desktop settings', () => {
     await user.click(screen.getByRole('button', { name: 'Show the welcome again' }))
 
     expect(onShowWelcome).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the nav', () => {
+  it('lists the pages as buttons, marks the current one and opens another', async () => {
+    const user = userEvent.setup()
+    const { onSection } = renderSettings('appearance')
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' })
+    expect(within(nav).getAllByRole('button', { current: 'page' })).toHaveLength(1)
+    expect(within(nav).getByRole('button', { name: 'Appearance' })).toHaveAttribute('aria-current', 'page')
+    expect(within(nav).queryByRole('button', { name: /Performance/ })).not.toBeInTheDocument()
+
+    await user.click(within(nav).getByRole('button', { name: 'Remote machines' }))
+    expect(onSection).toHaveBeenCalledWith('machines')
+  })
+
+  it('does not change page on a letter pressed in the dialog', async () => {
+    const user = userEvent.setup()
+    const { onSection } = renderSettings('general')
+    await user.keyboard('m')
+    expect(onSection).not.toHaveBeenCalled()
+  })
+
+  it('closes on Esc', async () => {
+    const user = userEvent.setup()
+    const onClose = vi.fn()
+    renderSettings('general', { onClose })
+    await user.keyboard('{Escape}')
+    expect(onClose).toHaveBeenCalled()
   })
 })
 
@@ -333,7 +377,7 @@ describe('searching settings', () => {
 
   it('opens the page of a result from its title and leaves the search', async () => {
     const { onSection } = renderSettings('general')
-    const user = await search('corners')
+    const user = await search('sidebar position')
     const [result] = screen.getAllByRole('button', { name: /^Appearance · / })
     if (result === undefined) throw new Error('no Appearance result')
     await user.click(result)
@@ -344,7 +388,7 @@ describe('searching settings', () => {
   it('empties the search on Esc before it closes Settings', async () => {
     const onClose = vi.fn()
     renderSettings('general', { onClose })
-    const user = await search('corners')
+    const user = await search('sidebar position')
     await user.keyboard('{Escape}')
     expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveValue('')
     expect(onClose).not.toHaveBeenCalled()
@@ -352,10 +396,11 @@ describe('searching settings', () => {
     expect(onClose).toHaveBeenCalled()
   })
 
-  it('does not jump pages on a letter typed into the search', async () => {
-    const { onSection } = renderSettings('general')
-    await search('m')
-    expect(onSection).not.toHaveBeenCalled()
+  it('puts the window\'s Find key in the search field', async () => {
+    renderSettings('general')
+    const user = userEvent.setup()
+    await user.keyboard('{Control>}{Shift>}f{/Shift}{/Control}')
+    expect(screen.getByRole('textbox', { name: 'Search settings' })).toHaveFocus()
   })
 })
 

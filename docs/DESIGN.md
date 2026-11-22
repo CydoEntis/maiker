@@ -346,7 +346,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   the key is the one in the binding table (*One key table*, below).
 - **Every existing theme stays.** The handoff's themes the app lacks are added to them.
 - **No options for** corners, density, icon size or colour, the accent, interface text size or toast position.
-  Settings has no Extensions page and no Performance page. The side panel has no History view and no Checks view.
+  Settings has no Performance page, and its Extensions page is to go: it stays, last under Agents, until the user
+  confirms its removal. The side panel has no History view and no Checks view.
 - **Where the handoff is older than the code, the code wins.** The daemon owns every PTY
   ([ADR 0001](adr/0001-the-daemon-owns-every-session.md)); the window never spawns one. GitHub goes through the `gh`
   CLI. Gemini chats over ACP ([ADR 0019](adr/0019-acp-for-agents-without-an-adapter.md)). Syntax highlighting is
@@ -523,9 +524,14 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **400px** (`--chat-min`): the side panel beside it shrinks first, down to its 300px, and under **900px**
   (`inspect.css`) the side panel lies over the chat instead of beside it, still inside the frame, and takes the
   float material there (`--float-bg`, `--float-line`, `--float-sh`) since it now floats over a card.
-- **Settings dialog** (⌘,). A nav on `--m-well` at the left, in three groups under dim caps: **APP** (General,
-  Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal) and **MACHINES** (Remote machines, M). Each item is 32px with a plain 15px glyph stroked in its section's colour and its jump key at the right;
-  the current one is on `--m-raise` with an inset `--line`. The nav's foot is the **update box** (`UpdateBox.tsx`): a
+- **Settings dialog** (⌘,). Flat and rounded: the float material with the `--r-dialog` corner, and tone does the
+  grouping, so there is no rule beside the nav or under the header. A nav on `--t1` at the left, in three groups under
+  dim caps: **APP** (General, Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Terminal, Extensions)
+  and **MACHINES** (Remote machines). Each item is 32px with a 15px monochrome glyph (the item's own text colour) and
+  its name, with no shortcut letter; the current one is the sidebar's selected row (`--t2`), and hover is the ink at
+  3.5%. Inside the dialog every field is flat: the search field, the folder fields, inputs, the pickers and the
+  segment trays are `--t3` with no edge until they have focus (`--c-field-*` and `--c-track-*`, set on `.mx-settings`
+  in `material.css`), and rows are parted by the ink at 4.5% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`): a
   dot in the state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Up to date", "Update
   failed"), the running version at its right, a dim note when there is one, the download bar while it downloads, and
   the one button the state offers (Restart to update, Download, Check now, Try again). General keeps only the two
@@ -535,7 +541,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   rows of 14px padding, each with a `--line` above it, and a dim foot note. A group has no box of its own. The
   sidebar settings sit in Appearance, the daemon's in Remote machines ("This computer") and the approved commands in
   Permissions. **Usage** has no nav item: Ctrl+Shift+U or the palette opens it,
-  and it takes the whole dialog, with no nav (its groups run full width). There is no Extensions or Performance page.
+  and it takes the whole dialog, with no nav (its groups run full width). There is no Performance page.
   **Remote machines** (`MachinesPage.tsx`) is one list or this computer's details, one at a time in the
   same pane; there is no page per machine; **+ Add machine** here, the sidebar's **Add a remote machine** (its foot) and the palette all open the
   palette's **New machine** level (see *Open a project palette*, below); there is no add-machine dialog. Settings is only where machines are managed. Colour only means status (green connected, amber needs you, red failed, teal working); the one filled
@@ -560,9 +566,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   none is left out; the header reads **Search** over "N settings match “q”", or "No settings match “q”." in the body.
   No nav item is current then. A group's title opens its page with focus in that group; a nav item opens its page;
   both empty the search, and Esc empties it before it closes Settings (`settingsSearch.ts`, the `Card` and `Row` of
-  `DesktopSettings.tsx`).
-  The **switch** is 32×18 with a
-  12px knob (`--c-sw-off` is the well, on is the accent, the knob `--muted` off and `--on-accent` on); a
+  `DesktopSettings.tsx`). The window's Find key puts focus in the field while Settings is open.
+  The **switch** is a 30×16 pill with a round
+  12px knob and no edge (off: the ink at 10% with a `--dim` knob; on: the text colour at 30% with a `--fg` knob); a
   **segmented** control sits on `--c-track-*` with its chosen segment on `--m-raise`.
 - **Keyboard shortcuts** (⌘/ or Ctrl+/, also in the palette). An 860px dialog over a dimmed scrim: "Keyboard
   shortcuts", "Change them in Settings › Hotkeys" and a close ×, then an auto-fit grid (240px minimum) of the groups
@@ -751,13 +757,16 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Settings pages.** The nav's groups are App (General, Appearance, Notifications, Hotkeys), Agents (Chat,
   Permissions, Terminal) and Machines (Remote machines). **General** (start and export folders, each the folder shown with **Browse…**, which
   opens the system's folder picker, and a way back to the default; nothing is typed; the start folder reads as `cd <folder>`
-  and says "Saved" for two seconds after a change; updates; sessions) and **Chat** (how a
+  and says "Saved" for two seconds after a change; updates; sessions, whose last row, **Questions you turned off**,
+  has **Ask again**: it empties `confirmSkipped`, so every confirm asks again, and is disabled while none is skipped) and **Chat** (how a
   chat starts and is drawn: default agent, width, text size) and **Permissions** (first a
   **Bypass Permissions** card, one switch per agent, all on, with a foot that says what it allows; then the account each
   of Claude and Codex is signed in to, as the agent's own command says, with **Sign in**, which opens the agent's own
   sign-in in a terminal, **Sign out**, and **Check again**). **Terminal** (text, scrollback, and Panes: where an
-  agent's terminals open) and **Appearance** (**Theme**: System, Dark or Light and the dark and light theme pickers;
-  **Session view**: **Open sessions in**, the only place the view is set). No page offers corners, density, icon size
+  agent's terminals open) and **Appearance** (**Theme**: System, Dark or Light and the dark and light theme pickers,
+  each over every theme of its kind; **Session view**: **Open sessions in**, the only place the view is set; then
+  Motion, with Reduce motion, and the sidebar's position and width). **Notifications** has two switches, Needs you and
+  Done, and the test toast. **Extensions** is the last page under Agents. No page offers corners, density, icon size
   or colour, an accent, interface text size or status headings.
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
   text size** (`chatTextSize`: 90 to 140%). Auto is the 760px column on a small pane and grows with a large one, to 62%
@@ -937,7 +946,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   confirms from the checkbox; Esc or a click outside cancels; focus goes back where it was. A kind is one entry in
   `CONFIRMS` (`confirm.ts`) with its words: *close a session*, *close a terminal*, *switch the view*, *remove a
   project*. A ticked Don't ask again counts only with a yes, is saved per kind with the settings (`confirmSkipped`) and
-  makes that kind's action run straight away from then on; nothing in Settings turns a question back on. While any
+  makes that kind's action run straight away from then on; Settings › General › **Ask again** turns every question back on. While any
   question is open (`isAlertDialogOpen`, `components/ui/alert-dialog.tsx`) the window's shortcut keys do nothing.
 - **An agent that ends by itself takes its pane with it.** A pane the desktop app started as an agent runs the agent
   inside a shell, which is left when the agent goes (`/exit`). The daemon ends that pane three seconds after the agent's
@@ -1332,14 +1341,14 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Sidebar position.** Settings › Appearance › Sidebar position, or the palette, puts the sidebar
   on the left or right. On the right the window mirrors: the resize edge is on its left, the narrow-window
   overlay slides from the right, Inspect opens from the left, and popovers open toward the middle.
-- **Notifications.** Settings › Notifications has one switch each for needs you, done and error. With
+- **Notifications.** Settings › Notifications has one switch each for needs you and done; a session that exited
+  with an error is always told, with no switch. With
   one on, a session that changes to that state while you are not looking at it (the window is in the
   background, or it is not the focused pane) sends a system notification, once per change. It names
   the session and where it is and never what the agent asked. Clicking it brings the window forward
   and shows that session. Opening the app, a session you are in, and a reconnect after the daemon
   was unreachable send nothing. The in-window toast follows the state: the done mark for done, the needs-you
-  mark for needs you; a session that stopped has its stop toast instead (*Errors* › Stop toasts), whatever the Error
-  switch says. It always sits bottom right; Settings › Notifications can show a test.
+  mark for needs you; a session that stopped has its stop toast instead (*Errors* › Stop toasts), always. It always sits bottom right; Settings › Notifications can show a test.
 - **Interrupted agents.** When the daemon restarted while an agent was mid-turn, its chat asks
   about it (see *Errors*, chat problem): which agent and the command that brings it back
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing

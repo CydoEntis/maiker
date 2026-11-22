@@ -1364,9 +1364,30 @@ when at least three screen corners use one explicit background color. Preserve
 the pane insets; isolated colored panels keep their existing theme treatment.
 Preserve colors applications paint explicitly.
 
+## Project-specific: Settings dialog (desktop)
+
+Rules for `apps/gui/src/features/settings/components/DesktopSettings.tsx` (look in [DESIGN](DESIGN.md#desktop-app)):
+
+- **The nav is a list of buttons** inside a `navigation` landmark named "Settings sections"; the current page's
+  button carries `aria-current="page"`, and none does while a search shows. A page has no jump letter: a letter
+  pressed in the dialog does nothing, so typing never changes the page.
+- **Esc** closes an open list first, then empties the search, then closes Settings. The window's own shortcuts are
+  off while it is open, except its **Find** key, which puts focus in **Search settings**.
+- **Search is a filter over the pages themselves**, not a second list: a row is a result when its label or detail
+  matches, and a group shows whole when its page or its title matches (`settingsSearch.ts`: `matchesQuery`,
+  `groupShowsWhole`, `rowIsResult`). A row added with `Row` and a group added with `Card` are searched with no further work.
+- **Every on/off setting is a `Switch`** (`role="switch"`) with an accessible name that says what it switches.
+- **Open sessions in** (Appearance › Session view) is the only control of the view. A change asks through the confirm
+  dialog (kind `switch-view`) unless that question was turned off, and the view and a ticked Don't ask again are saved
+  in one change (ADR 0020).
+- **A confirm that was turned off can be turned back on:** General › Sessions › **Ask again** empties
+  `confirmSkipped` for every kind at once.
+- **A setting is removed with what reads it.** A stored key the app no longer reads is ignored on read and dropped on
+  the next save.
+
 ## Project-specific: Extensions page (desktop)
 
-Settings › Extensions (`apps/gui/src/features/extensions/`, nav key X; data from `apps/gui/src/api/extensions.ts`) lists,
+Settings › Extensions (`apps/gui/src/features/extensions/`, the last page under Agents; data from `apps/gui/src/api/extensions.ts`) lists,
 switches, removes and adds the skills, plugins, MCP servers and marketplaces of Claude Code and Codex, so none of them
 needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin`, `/plugins`, `/marketplace`, `/skills`,
 `/hooks` and `/mcp`, typed alone, open it (`windowCommands.ts`); with an argument they still go to Claude Code. Rules:

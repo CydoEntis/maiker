@@ -7,10 +7,8 @@ const DEFAULTS: SettingsPreferences = {
   reduceMotion: false,
   animateSidebarActivity: true,
   compactSidebar: false,
- 
   notifyNeedsYou: true,
   notifyFinished: true,
-  notifyError: true,
   notificationSound: false,
   terminalFontSize: 13,
   terminalFontFamily: '',
@@ -27,7 +25,7 @@ const DEFAULTS: SettingsPreferences = {
   
   defaultAgent: 'claude',
   confirmSkipped: [],
-  sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -74,14 +72,6 @@ describe('settings preferences', () => {
     writeSettingsPreferences(saved)
 
     expect(readSettingsPreferences()).toEqual(saved)
-  })
-
-  it('keeps the choice to draw terminals without the GPU, and ignores a value that is not a switch', () => {
-    writeSettingsPreferences({ ...DEFAULTS, terminalPlainDrawing: true })
-    expect(readSettingsPreferences().terminalPlainDrawing).toBe(true)
-
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalPlainDrawing: 'yes' }))
-    expect(readSettingsPreferences().terminalPlainDrawing).toBe(false)
   })
 
   it('falls back safely when saved preferences are malformed', () => {
