@@ -344,6 +344,17 @@ impl Machine {
         )?)
     }
 
+    /// The line that stops the daemon there and ends its sessions, run with the configured
+    /// command (`remote_cmd`), the same app a connection runs. Only after the person confirmed it.
+    pub fn stop_server_argv(&self) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_stop_server(
+            &route.line(),
+            &route.target,
+            &route.remote_cmd,
+        )?)
+    }
+
     /// The line that asks the app installed at `program` there how many sessions are open.
     pub fn activity_argv(&self, program: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;

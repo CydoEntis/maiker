@@ -220,6 +220,11 @@ const RESTART_NOW: &str = "--now";
 /// Added to it to restart with sessions open, when they are saved and no agent is working or waiting.
 const RESTART_AGENTS_IDLE: &str = "--agents-idle";
 
+/// The subcommand that stops the far side's daemon whatever is open, ending its sessions. The
+/// installed app stops a daemon of an older version by its process (`kill_server`), so this works
+/// where the daemon itself can no longer be asked.
+const KILL_SERVER: &str = "kill-server";
+
 /// When the far daemon may restart to take a new version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestartWhen {
@@ -442,6 +447,18 @@ pub(crate) fn ssh_argv_restart_if_idle(
         remote.push(' ');
         remote.push_str(flag);
     }
+    Ok(build(ssh, target, remote, Shape::PROBE))
+}
+
+/// `<program> kill-server` on the far side: stops its daemon and ends every session it runs. The
+/// next connection starts the installed version there. Only for a restart the person confirmed.
+pub(crate) fn ssh_argv_stop_server(
+    ssh: &[String],
+    target: &str,
+    program: &str,
+) -> Result<Vec<String>, SshCommandError> {
+    validate_target(target)?;
+    let remote = format!("{} {KILL_SERVER}", remote_program(program)?);
     Ok(build(ssh, target, remote, Shape::PROBE))
 }
 
@@ -1014,6 +1031,10 @@ mod tests {
         assert_eq!(activity.last().unwrap(), "~/'.local/bin/maiker' activity");
         assert!(ssh_argv_restart_if_idle(&ssh, "box", "", RestartWhen::NoSession).is_err());
         assert!(ssh_argv_activity(&ssh, "box", "").is_err());
+        let stop = ssh_argv_stop_server(&ssh, "box", program).unwrap();
+        assert_eq!(stop.last().unwrap(), "~/'.local/bin/maiker' kill-server");
+        assert_eq!(stop[..stop.len() - 1], idle[..idle.len() - 1]);
+        assert!(ssh_argv_stop_server(&ssh, "box", "").is_err());
     }
 
     /// A POSIX shell reads the popup line back as exactly the argv it was built from.

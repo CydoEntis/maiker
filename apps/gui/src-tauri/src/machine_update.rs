@@ -72,10 +72,53 @@ fn refused_restart(name: &str, stderr: &str) -> Option<String> {
     let answer = daemon_answer(stderr)?;
     let why = answer.strip_prefix(LEFT_RUNNING)?.trim_start_matches(':').trim();
     Some(format!(
-        "The service on {name} was not restarted ({why}), so it still runs the old Maiker and this app cannot connect to it. \
-         Its open sessions are not saved where the new version can bring them back, so Maiker will not end them for you. \
-         To restart it anyway, run `maiker kill-server` on {name} (this ends what runs in those sessions), then press Retry."
+        "{NOT_RESTARTED_LEAD}{name}{NOT_RESTARTED} ({why}), so it still runs the old Maiker and this app cannot connect to it. \
+         Its open sessions are not saved where the new version can bring them back, so Maiker did not end them on its own. \
+         Restart it anyway to end them and connect (or run `maiker kill-server` on {name})."
     ))
+}
+
+/// How a refused restart reads, which the window looks for to offer "Restart anyway" (`isRefusedRestart` in
+/// `machineUpdate.ts`; the two must agree).
+const NOT_RESTARTED_LEAD: &str = "The service on ";
+const NOT_RESTARTED: &str = " was not restarted";
+
+/// How long the far side has to stop its service: a stop by process waits for it to go.
+const STOP_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Stop the service on `name` and end every session it runs, so the next connection starts the version installed there.
+/// The far side's own app does it (`kill-server`), which stops a service too old to be asked by its process. Only the
+/// window's confirmed "Restart anyway" calls this.
+fn stop_service(machines: &[maitty_machines::MachineDef], name: &str) -> Result<String, String> {
+    let def = machines
+        .iter()
+        .find(|def| def.name.eq_ignore_ascii_case(name))
+        .ok_or_else(|| format!("{name} is not one of this computer's machines"))?;
+    let ssh = [maitty_machines::SSH_PROGRAM.to_owned()];
+    let argv = maitty_machines::Machine::from_def_via(def, &ssh)
+        .stop_server_argv()
+        .map_err(|error| format!("Could not restart the service on {name}: {error:#}"))?;
+    let ran = maitty_machines::ssh_run::run(&argv, None, STOP_LIMIT)?;
+    if ran.code == Some(0) {
+        return Ok(last_line(&ran.stdout).unwrap_or("stopped").to_string());
+    }
+    let why = last_line(&ran.stderr).or_else(|| last_line(&ran.stdout)).unwrap_or("it did not say why");
+    Err(format!("Could not restart the service on {name}: {why}"))
+}
+
+/// The window's "Restart anyway" for a machine whose old service refused to restart: stop it there, off the UI thread.
+#[tauri::command]
+pub async fn restart_machine_service(
+    machines: tauri::State<'_, crate::machines::Machines>,
+    name: String,
+) -> Result<String, String> {
+    if !valid_name(&name) {
+        return Err("That is not a machine name.".into());
+    }
+    let defs = machines.0.machines.clone();
+    tauri::async_runtime::spawn_blocking(move || stop_service(&defs, &name))
+        .await
+        .map_err(|error| format!("The restart stopped unexpectedly: {error}"))?
 }
 
 fn run(
@@ -247,7 +290,13 @@ pub async fn update_machine(
 
 #[cfg(test)]
 mod tests {
-    use super::{Activity, arguments, parse_activity, parse_progress, refused_restart, summary, valid_name};
+    use super::{Activity, arguments, parse_activity, parse_progress, refused_restart, stop_service, summary, valid_name};
+
+    #[test]
+    fn restarting_anyway_names_only_a_machine_this_computer_knows() {
+        let said = stop_service(&[], "box").unwrap_err();
+        assert_eq!(said, "box is not one of this computer's machines");
+    }
 
     #[test]
     fn a_name_that_could_be_an_option_is_refused() {
@@ -313,6 +362,7 @@ mod tests {
         let stderr = "restarting the daemon on box…\ndaemon: left running: 4 open session(s); it keeps them\n";
         let refused = refused_restart("box", stderr).expect("a refusal");
         assert!(refused.starts_with("The service on box was not restarted (4 open session(s); it keeps them)"));
+        assert!(refused.contains("Restart it anyway"));
         assert!(refused.contains("`maiker kill-server` on box"));
         assert_eq!(refused_restart("box", "daemon: restarted: no session was open\n"), None);
         assert_eq!(refused_restart("box", "note: could not ask the daemon (x)\n"), None);

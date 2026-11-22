@@ -229,6 +229,16 @@ export async function updateMachine(name: string, install: boolean, whenIdle: bo
   return z.string().parse(await invoke('update_machine', { name, install, whenIdle }))
 }
 
+/**
+ * Stop the service on a machine whose old service refused to restart after an update, ending every session it runs, so
+ * the next connection starts the new version there. Only after the person confirmed it. Resolves with what the far side
+ * said; rejects with the real reason.
+ */
+export async function restartMachineService(name: string): Promise<string> {
+  if (!isTauri()) throw new Error('Restarting a machine needs the desktop app.')
+  return z.string().parse(await invoke('restart_machine_service', { name }))
+}
+
 const PERCENT_MAX = 100
 const UpdateProgressSchema = z.object({ name: z.string(), percent: z.number().int().min(0).max(PERCENT_MAX) })
 export type UpdateProgress = z.infer<typeof UpdateProgressSchema>

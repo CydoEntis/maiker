@@ -67,6 +67,9 @@ function discardingCopy({ path, change }: DiscardingFile): ConfirmCopy {
   return { title, body: `${path} goes back to how it was at the last commit.`, note: 'Your changes to it since then are lost and cannot be brought back.', confirmLabel: 'Discard changes', danger: true }
 }
 
+/** A machine whose old service is about to be restarted: its name, and how many sessions that ends when it said. */
+export type RestartingService = { name: string; sessions: number | null }
+
 type View = 'chat' | 'terminal'
 
 const VIEW_NAME: Readonly<Record<View, string>> = { chat: 'Chat', terminal: 'Terminal' }
@@ -104,6 +107,13 @@ const CONFIRMS = {
   }),
   'close-project': closingProjectCopy,
   'discard-file': discardingCopy,
+  'restart-machine-service': ({ name, sessions }: RestartingService): ConfirmCopy => ({
+    title: `Restart Maiker on ${name}?`,
+    body: `${name} still runs the old Maiker service, which this app cannot connect to, and ${sessions === null ? 'its open sessions' : `its ${String(sessions)} open ${sessions === 1 ? 'session' : 'sessions'}`} were not saved for the new version. Restarting ends what runs in them.`,
+    note: 'Files, branches and worktrees on it stay on disk.',
+    confirmLabel: 'Restart and end sessions',
+    danger: true,
+  }),
   'delete-new-file': (path: string): ConfirmCopy => ({ title: `Delete “${nameOf(path)}”?`, body: `${path} is a new file that was never committed, so discarding it deletes it for good.`, note: 'It cannot be brought back.', confirmLabel: 'Delete file', danger: true }),
 }
 
@@ -116,7 +126,7 @@ const COPY: { readonly [K in ConfirmKind]: (subject: Subject[K]) => ConfirmCopy 
 export const CONFIRM_KINDS = Object.keys(CONFIRMS) as readonly ConfirmKind[]
 
 /** The kinds that ask every time: what they do cannot be brought back by any means, so no earlier answer stands in for this one. */
-const ALWAYS_ASKED: ReadonlySet<ConfirmKind> = new Set<ConfirmKind>(['delete-new-file'])
+const ALWAYS_ASKED: ReadonlySet<ConfirmKind> = new Set<ConfirmKind>(['delete-new-file', 'restart-machine-service'])
 
 /** Whether `kind` offers "Don't ask again". */
 export function canSkip(kind: ConfirmKind): boolean {

@@ -1445,6 +1445,7 @@ pub fn run() {
             acp_agents::install_acp_agent,
             acp_agents::remove_acp_agent,
             machine_update::update_machine,
+            machine_update::restart_machine_service,
             machine_update::machine_activity,
             terminal_stream::start_session_on_machine,
             terminal_stream::remove_machine,

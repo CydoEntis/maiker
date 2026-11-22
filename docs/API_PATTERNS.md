@@ -400,7 +400,10 @@ managing worktrees (except New worktree off a pane, which `new_worktree_session`
 protocol-mismatch restart must recheck the exact local protocol before stopping
 an older daemon and must refuse to downgrade a newer one. It stops an older daemon that
 owns sessions only after the user confirms, and only when those sessions are saved on disk
-(the next daemon restores them); one that isn't saving them is left running.
+(the next daemon restores them); one that isn't saving them is left running. On another machine the
+same refusal comes back from `machine update`; the window then offers **Restart anyway**, which asks every time
+(`restart-machine-service`) and runs `<remote_cmd> kill-server` there over ssh (`restart_machine_service`), ending
+those sessions. The far side's own app stops a service too old to be asked by its process.
 
 ## Project-specific: response and error shapes
 
