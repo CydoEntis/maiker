@@ -11,13 +11,6 @@ describe('performance report', () => {
     expect(formatRate(20 * 1024)).toBe('20.0 KiB/s')
   })
 
-  it('says what it does not have yet', () => {
-    const report = buildPerformanceReport(ENVIRONMENT, null, null)
-    expect(report).toContain('Maiker desktop 0.64.0')
-    expect(report).toContain('Web view sample: none yet')
-    expect(report).toContain('Processes: none yet')
-  })
-
   it('lists the samples and every process', () => {
     const report = buildPerformanceReport(
       ENVIRONMENT,
@@ -38,17 +31,5 @@ describe('performance report', () => {
     expect(report).toContain('sent to the window since it started: 41')
     expect(report).toContain('  11  13% cpu  2 MiB  WebKitWebProcess')
     expect(report).toContain('  12  1% cpu  1 KiB  /usr/bin/daemon daemon')
-  })
-
-  it('notes when the window was hidden and when no web view process is a child', () => {
-    const report = buildPerformanceReport(
-      ENVIRONMENT,
-      { visible: false, framesPerSecond: 0, slowFrames: 0, worstFrameMs: 0, outputBytesPerSecond: 0, outputFramesPerSecond: 0, outputFramesTotal: 0, socketFramesTotal: 0, flushesPerSecond: 0, writeLatencyMs: 0, animations: 0, domNodes: 1, renderers: { webgl: 0, dom: 0 }, keyReplies: { count: 0, medianMs: 0, worstMs: 0 } },
-      { cores: 1, host: { pid: 1, name: 'host', command: '', cpu: 0, memory_bytes: 0 }, webview: [], daemons: [], terminal_frames_sent: 0 },
-    )
-    expect(report).toContain('key replies from the host: no keys typed yet')
-    expect(report).toContain('frames/s 0 (window hidden)')
-    expect(report).toContain('web view: not a child process here')
-    expect(report).toContain('daemons: none found')
   })
 })

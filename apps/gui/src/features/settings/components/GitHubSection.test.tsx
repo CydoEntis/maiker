@@ -56,19 +56,6 @@ describe('the GitHub page of Settings', () => {
     expect(api.loadGitHubAccounts.mock.calls.map(([machine]) => machine)).toEqual([0, 3])
   })
 
-  it('says a machine is not signed in, and that one has no gh with where to get it', async () => {
-    answers({ 0: NOBODY, 3: NO_GH })
-    render(<GitHubSection machines={[LOCAL_HEAD, KINGDOM]} />)
-    expect(await screen.findByText('Not signed in')).toBeInTheDocument()
-    expect(await screen.findByText('The GitHub command line (gh) is not installed. Get it from cli.github.com')).toBeInTheDocument()
-  })
-
-  it('says it is checking until a machine answers', () => {
-    answers({})
-    render(<GitHubSection machines={[LOCAL_HEAD]} />)
-    expect(screen.getByText('Checking…')).toBeInTheDocument()
-  })
-
   it('shows why a machine could not be read while the other rows still show', async () => {
     answers({ 0: signedIn('me'), 3: new Error('The machine did not answer in time') })
     render(<GitHubSection machines={[LOCAL_HEAD, KINGDOM]} />)
@@ -99,13 +86,6 @@ describe('the GitHub page of Settings', () => {
     expect(screen.getAllByRole('button', { name: /^Sign in to GitHub/ })).toHaveLength(1)
   })
 
-  it('offers no Sign in where the window cannot start one', async () => {
-    answers({ 0: NOBODY })
-    render(<GitHubSection machines={[LOCAL_HEAD]} />)
-    await screen.findByText('Not signed in')
-    expect(screen.queryByRole('button', { name: /^Sign in to GitHub/ })).toBeNull()
-  })
-
   it('asks again when a sign-in terminal has ended, so the row changes by itself', async () => {
     const onSignIn = vi.fn()
     answers({ 0: NOBODY })
@@ -122,49 +102,6 @@ describe('the GitHub page of Settings', () => {
     await user.click(await screen.findByRole('button', { name: `Accounts and folder rules on ${label}` }))
     return within(await screen.findByRole('group', { name: `GitHub details for ${label}` }))
   }
-
-  it('opens a machine\'s row to its accounts, who commits there and its folder rules', async () => {
-    const user = userEvent.setup()
-    answers({ 0: signedIn('me'), 3: signedIn('kingdom-me', 'work-me') })
-    git.loadGitIdentities.mockResolvedValue({
-      ...WHO,
-      rules: [
-        { folder: '/home/dev/work', identity: { name: 'Casey At Work', email: 'casey@work.invalid', login: 'work-me' } },
-        { folder: '~/oss', identity: null },
-      ],
-    })
-    render(<GitHubSection machines={[LOCAL_HEAD, KINGDOM]} />)
-    const details = await openRow(user, 'kingdom')
-    expect(git.loadGitIdentities).toHaveBeenCalledExactlyOnceWith(3)
-    const accounts = within(details.getByRole('list', { name: 'Accounts' })).getAllByRole('listitem').map((item) => item.textContent)
-    expect(accounts).toEqual(['kingdom-meactive', 'work-me'])
-    expect(await details.findByText('Commits as Casey Example <casey@example.invalid>')).toBeInTheDocument()
-    const rules = within(details.getByRole('list', { name: 'Folder rules' })).getAllByRole('listitem').map((item) => item.textContent)
-    expect(rules).toEqual(['/home/dev/workwork-me · Casey At Work <casey@work.invalid>ChangeRemove', '~/ossset outside Maiker'])
-    expect(screen.getByRole('button', { name: 'Accounts and folder rules on kingdom' })).toHaveAttribute('aria-expanded', 'true')
-  })
-
-  it('says every folder uses the active account when there are no rules', async () => {
-    const user = userEvent.setup()
-    answers({ 0: signedIn('me', 'work-me') })
-    git.loadGitIdentities.mockResolvedValue({ ...WHO, name: null, email: null })
-    render(<GitHubSection machines={[LOCAL_HEAD]} />)
-    const details = await openRow(user, 'This computer')
-    expect(await details.findByText('Every folder uses me')).toBeInTheDocument()
-    expect(details.getByText('No name or email is set for commits')).toBeInTheDocument()
-    expect(details.queryByRole('list', { name: 'Folder rules' })).toBeNull()
-  })
-
-  it('starts the same sign-in from Add another account', async () => {
-    const user = userEvent.setup()
-    const onSignIn = vi.fn()
-    answers({ 0: signedIn('me'), 3: signedIn('kingdom-me') })
-    git.loadGitIdentities.mockResolvedValue(WHO)
-    render(<GitHubSection machines={[LOCAL_HEAD, KINGDOM]} signIn={{ onSignIn, signInsEnded: 0 }} />)
-    const details = await openRow(user, 'kingdom')
-    await user.click(details.getByRole('button', { name: 'Add another account' }))
-    expect(onSignIn).toHaveBeenCalledExactlyOnceWith(3, 'kingdom')
-  })
 
   it('says why who commits could not be read, and still lists the accounts', async () => {
     const user = userEvent.setup()

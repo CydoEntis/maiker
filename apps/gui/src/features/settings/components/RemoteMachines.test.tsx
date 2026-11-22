@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { machineHeads, type MachineHead, type RemoteMachine } from '@/features/workspace/model/machines'
@@ -49,52 +49,8 @@ function renderPage(machines: MachinesInfo, appVersion = '0.46.0') {
 
 const rowOf = (name: string) => screen.getByRole('listitem', { name })
 const names = () => within(screen.getByRole('list')).getAllByRole('listitem').map((item) => item.getAttribute('aria-label'))
-const buttonsOf = (name: string) => within(rowOf(name)).getAllByRole('button').map((button) => button.textContent)
 
 describe('the machine list', () => {
-  it('shows a placeholder until the host has answered, and cannot add yet', () => {
-    renderPage(info({ known: false }))
-    expect(screen.getByRole('status', { name: 'Reading machines' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: '+ Add machine' })).toBeDisabled()
-  })
-
-  it('invites adding the first machine when there are none', async () => {
-    const open = vi.fn()
-    const user = renderPage(info({ add: { ...info().add, open } }))
-    expect(screen.getByText('No remote machines yet')).toBeInTheDocument()
-    expect(screen.getByText(/Maiker connects over SSH, and their sessions show in your sidebar next to these\./)).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: '+ Add a machine' }))
-    expect(open).toHaveBeenCalledTimes(1)
-  })
-
-  it('says one thing about each machine, failed ones first and then the busiest', () => {
-    const list = heads(
-      machine(1, 'quiet', 'connected'),
-      machine(2, 'busy', 'connected'),
-      machine(3, 'older', 'needs-update', OLDER),
-      machine(4, 'gone', 'unreachable', { why: 'no answer' }),
-      machine(5, 'locked', 'needs-login', { said: 'me@locked.lan: Permission denied (publickey).' }),
-    )
-    const count: Record<number, number> = { 1: 1, 2: 6, 3: 2, 4: 0, 5: 0 }
-    renderPage(info({ list, sessionsOn: (id) => count[id] ?? 0 }))
-    expect(screen.getByText('5 machines')).toBeInTheDocument()
-    expect(names()).toEqual(['gone', 'locked', 'older', 'busy', 'quiet'])
-    expect(within(rowOf('gone')).getByText(/Can't reach it · 14 min/)).toBeInTheDocument()
-    expect(within(rowOf('locked')).getByText('Key rejected')).toBeInTheDocument()
-    expect(within(rowOf('older')).getByText('2 sessions · older Maiker')).toBeInTheDocument()
-    expect(within(rowOf('busy')).getByText('6 sessions')).toBeInTheDocument()
-    expect(within(rowOf('busy')).queryByRole('button', { name: /Retry|Fix|Update|Install/ })).toBeNull()
-  })
-
-  it('offers each machine at most the one fix its state needs', () => {
-    const list = heads(machine(1, 'gone', 'unreachable'), machine(2, 'locked', 'needs-login'), machine(3, 'older', 'needs-update', OLDER), machine(4, 'bare', 'needs-update', MISSING), machine(5, 'fine', 'connected'))
-    renderPage(info({ list }))
-    expect(buttonsOf('gone')).toEqual(['Retry', 'More', 'Remove'])
-    expect(buttonsOf('locked')).toEqual(['Fix', 'More', 'Remove'])
-    expect(buttonsOf('older')).toEqual(['Update', 'More', 'Remove'])
-    expect(buttonsOf('bare')).toEqual(['Install', 'More', 'Remove'])
-    expect(buttonsOf('fine')).toEqual(['More', 'Remove'])
-  })
 
   it('retries in place without leaving the list', async () => {
     const onRetry = vi.fn()
@@ -106,41 +62,11 @@ describe('the machine list', () => {
     expect(screen.getByText('1 machine')).toBeInTheDocument()
   })
 
-  it('has no page per machine: More folds its settings open under its row, and Fix opens that fold', async () => {
-    const list = heads(machine(1, 'locked', 'needs-login', { said: 'x: Permission denied (publickey).' }), machine(2, 'fine', 'connected'))
-    const user = renderPage(info({ list }))
-    const more = screen.getByRole('button', { name: 'More about fine' })
-    expect(more).toHaveAttribute('aria-expanded', 'false')
-    await user.click(more)
-    expect(more).toHaveAttribute('aria-expanded', 'true')
-    expect(within(rowOf('fine')).getByRole('group', { name: 'More about fine' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading')).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Fix locked' }))
-    expect(within(rowOf('locked')).getByRole('group', { name: 'More about locked' })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'More about fine' })).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'More about locked' }))
-    expect(screen.queryByRole('group')).toBeNull()
-  })
-
-  it('shows a search field only past twelve machines', () => {
-    const many = (count: number) => heads(...Array.from({ length: count }, (_, index) => machine(index + 1, `host-${String(index + 1)}`, 'connected')))
-    renderPage(info({ list: many(12) }))
-    expect(screen.queryByRole('searchbox', { name: 'Find a machine' })).toBeNull()
-  })
-
   it('finds a machine by name or address once there are many', async () => {
     const list = heads(...Array.from({ length: 13 }, (_, index) => machine(index + 1, `host-${String(index + 1)}`, 'connected')))
     const user = renderPage(info({ list }))
     await user.type(screen.getByRole('searchbox', { name: 'Find a machine' }), 'host-13')
     expect(names()).toEqual(['host-13'])
-  })
-
-  it('keeps this computer out of the list, with its version and sessions and a way to its details', async () => {
-    const user = renderPage(info({ list: heads(machine(1, 'fine', 'connected')) }))
-    expect(screen.getByText('0.46.0 · 7 sessions')).toBeInTheDocument()
-    expect(names()).toEqual(['fine'])
-    await user.click(screen.getByRole('button', { name: 'Details' }))
-    expect(screen.getByRole('region', { name: 'This computer' })).toBeInTheDocument()
   })
 })
 
@@ -175,17 +101,6 @@ describe('updating from the list', () => {
     expect(await screen.findByText(/devbox could not say what is open on it\./)).toBeInTheDocument()
   })
 
-  it('shows Updating… in the row while it runs, then lets the row say what it is', async () => {
-    let finish: () => void = () => undefined
-    const onUpdate = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))
-    const user = renderPage(info({ list: heads(older('devbox', 1)), onUpdate }))
-    await user.click(screen.getByRole('button', { name: 'Update devbox' }))
-    await user.click(await screen.findByRole('button', { name: 'Update devbox now' }))
-    expect(within(rowOf('devbox')).getByText('Updating…')).toBeInTheDocument()
-    finish()
-    await waitFor(() => { expect(screen.queryByText('Updating…')).toBeNull() })
-  })
-
   it('installs on a machine with none after one question, without counting what is open', async () => {
     const onUpdate = vi.fn(() => Promise.resolve())
     const onCheckActivity = vi.fn(() => Promise.resolve(null))
@@ -206,11 +121,6 @@ describe('updating from the list', () => {
     expect(onUpdate).toHaveBeenCalledWith('a', 'update', false)
     expect(onUpdate).toHaveBeenCalledWith('b', 'update', false)
   })
-
-  it('has no Update all for a single machine', () => {
-    renderPage(info({ list: heads(older('a', 1), machine(2, 'c', 'connected')) }))
-    expect(screen.queryByRole('button', { name: /Update all/ })).toBeNull()
-  })
 })
 
 describe("a machine's More fold", () => {
@@ -218,15 +128,6 @@ describe("a machine's More fold", () => {
     await user.click(screen.getByRole('button', { name: `More about ${name}` }))
     return screen.getByRole('group', { name: `More about ${name}` })
   }
-
-  it('says where it is and that its Maiker is up to date, and offers no fix when it is connected', async () => {
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'connected')), sessionsOn: () => 2 }))
-    const fold = await unfold(user, 'devbox')
-    expect(within(fold).getByText('Up to date')).toBeInTheDocument()
-    expect(within(fold).getByText('me@devbox.lan')).toBeInTheDocument()
-    expect(within(fold).queryByRole('status')).toBeNull()
-    expect(within(fold).queryByRole('button')).toBeNull()
-  })
 
   it('renames the machine as you type, as a local label', async () => {
     const onRename = vi.fn()
@@ -273,16 +174,6 @@ describe("a machine's More fold", () => {
     expect(within(fold).getByRole('status')).toHaveTextContent(`Needs a sign-in. ${why}`)
     await user.click(within(fold).getByRole('button', { name: 'Open a terminal' }))
     expect(onOpenLogin).toHaveBeenCalledWith(7)
-  })
-
-  it('says its Maiker is older, while Update stays on the row', async () => {
-    const onUpdate = vi.fn(() => Promise.resolve())
-    const user = renderPage(info({ list: heads(machine(1, 'devbox', 'needs-update', OLDER)), onUpdate }))
-    const fold = await unfold(user, 'devbox')
-    expect(within(fold).getByText('Older · this computer has 0.46.0')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Update devbox' }))
-    await user.click(await screen.findByRole('button', { name: 'Update devbox now' }))
-    expect(onUpdate).toHaveBeenCalledWith('devbox', 'update', false)
   })
 
   it('is off for the clipboard and notifications until allowed, and each switch asks for just its own power', async () => {

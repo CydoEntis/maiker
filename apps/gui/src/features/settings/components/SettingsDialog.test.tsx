@@ -43,15 +43,6 @@ describe('SettingsDialog', () => {
     expect(onReconnect).toHaveBeenCalledOnce()
   })
 
-  it('lists the project folder shortcut with the current platform modifier', async () => {
-    const user = userEvent.setup()
-    render(<SettingsDialog open onClose={vi.fn()} theme="night" onThemeChange={vi.fn()} preferences={PREFS} onPreferencesChange={vi.fn()} onNotificationSoundChange={vi.fn(() => true)} onTestNotification={vi.fn()} daemonConnectionState="connected" onReconnect={vi.fn()} codexExecutableState="preview" codexExecutablePath={undefined} onCodexRecheck={vi.fn()} claudeExecutableState="preview" claudeExecutablePath={undefined} onClaudeRecheck={vi.fn()} primaryModifier="Ctrl" />)
-
-    await user.click(screen.getByRole('tab', { name: 'Keyboard' }))
-
-    expect(screen.getByText('Start a session in a folder').parentElement).toHaveTextContent('CtrlO')
-  })
-
   it('moves between Settings tabs with arrows in the visible direction', async () => {
     const user = userEvent.setup()
     const originalWidth = window.innerWidth

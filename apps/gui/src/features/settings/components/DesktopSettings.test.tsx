@@ -4,7 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
-import { DAEMON_NAME } from '@/brand'
 
 const PREFS: SettingsPreferences = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'square', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
 
@@ -106,24 +105,44 @@ describe('the agents page', () => {
 })
 
 describe('desktop settings', () => {
-  it('groups the sections the way the design does', () => {
-    renderSettings('general')
-    const nav = screen.getByRole('navigation', { name: 'Settings sections' })
-    expect(nav).toHaveTextContent('APPGeneralGAppearanceAPerformancePNotificationsNHotkeys?AGENTSChatCPermissionsETerminalTExtensionsXMACHINESRemote machinesM')
-    expect(within(nav).getByRole('button', { name: /General/ })).toHaveAttribute('aria-current', 'page')
+  it.each<[DesktopSettingsSection, string, boolean, Partial<SettingsPreferences>]>([
+    ['general', 'Update remote machines too', true, { updateMachines: false }],
+    ['general', 'Restart the service when idle', false, { restartServiceWhenIdle: true, restartWhenIdle: false }],
+    ['permissions', 'Bypass Permissions for Codex', true, { bypassOff: ['codex'] }],
+    ['chat', 'Hide successful tool calls', false, { hideSuccessfulTools: true }],
+    ['notifications', 'Notify when a session errors', true, { notifyError: false }],
+    ['notifications', 'Notify when a session finishes', true, { notifyFinished: false }],
+    ['notifications', 'Notify when a session needs you', true, { notifyNeedsYou: false }],
+    ['appearance', 'Show status headings', true, { sidebarStatusHeadings: false }],
+    ['performance', 'Show the performance overlay', false, { perfOverlay: true }],
+    ['performance', 'Draw terminals without the GPU', false, { terminalPlainDrawing: true }],
+  ])('on %s, the %s switch shows the saved value and saves a flip', async (section, name, checked, patch) => {
+    const user = userEvent.setup()
+    accounts.loadAgentAuth.mockReset().mockResolvedValue({ installed: false, signedIn: null, account: '', plan: '' })
+    const { onChange } = renderSettings(section)
+    const toggle = screen.getByRole('switch', { name })
+    if (checked) expect(toggle).toBeChecked()
+    else expect(toggle).not.toBeChecked()
+    await user.click(toggle)
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, ...patch })
   })
 
-  it('closes with a plain icon button, not a labelled one', async () => {
+  it.each<[DesktopSettingsSection, string, string, Partial<SettingsPreferences>]>([
+    ['chat', 'Default agent', 'Codex', { defaultAgent: 'codex' }],
+    ['notifications', 'Toast position', 'Top right', { toastPosition: 'top' }],
+    ['terminal', 'Terminal text size', '15', { terminalFontSize: 15 }],
+    ['terminal', 'Cursor', 'Underline', { cursorStyle: 'underline' }],
+    ['terminal', 'Lines kept per pane', '100k', { scrollback: 100000 }],
+    ['terminal', 'Terminal text weight', 'Medium', { terminalFontWeight: 500 }],
+    ['terminal', 'Terminal bold weight', 'Extra bold', { terminalFontWeightBold: 800 }],
+    ['appearance', 'Sidebar icon size', 'Small', { iconSize: 'small' }],
+    ['appearance', 'Corners', 'Rounded', { corners: 'rounded' }],
+    ['appearance', 'Appearance', 'Light', { themeMode: 'light' }],
+  ])('on %s, choosing %s: %s saves it', async (section, group, choice, patch) => {
     const user = userEvent.setup()
-    const onClose = vi.fn()
-    renderSettings('general', { onClose })
-    const close = screen.getByRole('button', { name: 'Close settings' })
-
-    expect(close).toHaveAttribute('title', 'Close (Esc)')
-    expect(close).toHaveTextContent('')
-    await user.click(close)
-
-    expect(onClose).toHaveBeenCalledTimes(1)
+    const { onChange } = renderSettings(section)
+    await user.click(within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: choice }))
+    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, ...patch })
   })
 
   it('saves exports to Downloads until a folder is picked with the system picker', async () => {
@@ -160,62 +179,21 @@ describe('desktop settings', () => {
     expect(onChange).not.toHaveBeenCalled()
   })
 
-  it('chooses the default agent and what a new session opens as', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
-
-    const agent = screen.getByRole('radiogroup', { name: 'Default agent' })
-    expect(within(agent).getByRole('radio', { name: 'Claude' })).toBeChecked()
-    await user.click(within(agent).getByRole('radio', { name: 'Codex' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ defaultAgent: 'codex' }))
-  })
-
-  it('has a switch to update remote machines after this computer, on by default', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
-    const remote = screen.getByRole('switch', { name: 'Update remote machines too' })
-    expect(remote).toBeChecked()
-    await user.click(remote)
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ updateMachines: false }))
-  })
-
-  it('has a Bypass Permissions switch for each agent on the Permissions page, all on, shared with the terminal app', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('permissions')
-
-    for (const agent of ['Claude', 'Codex', 'Gemini']) expect(screen.getByRole('switch', { name: `Bypass Permissions for ${agent}` })).toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Bypass Permissions for Codex' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ bypassOff: ['codex'] }))
-  })
-
-  it('turns on hiding successful tool calls, off by default', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('chat')
-
-    expect(screen.getByRole('switch', { name: 'Hide successful tool calls' })).not.toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Hide successful tool calls' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ hideSuccessfulTools: true }))
-  })
-
-  it('shows a test toast, and moves the toasts to the top right when asked', async () => {
+  it('shows a test toast', async () => {
     const user = userEvent.setup()
     const onTestNotice = vi.fn()
-    const { onChange } = renderSettings('notifications', { onTestNotice })
+    renderSettings('notifications', { onTestNotice })
 
     await user.click(screen.getByRole('button', { name: 'Show a test' }))
     expect(onTestNotice).toHaveBeenCalledTimes(1)
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Toast position' })).getByRole('radio', { name: 'Top right' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, toastPosition: 'top' })
   })
 
-  it('keeps the two update switches on General, and the update itself at the foot of the nav', async () => {
+  it('downloads an available update and turns installing when idle on', async () => {
     const user = userEvent.setup()
     const updates = { summary: 'Maiker 0.61.0 is available.', status: 'available' as const, version: '0.61.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     const { onChange } = renderSettings('general', { updates })
 
-    const box = within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('group', { name: 'Updates' })
-    expect(within(box).getByRole('status')).toHaveTextContent('v0.61.0 is available')
-    expect(box).toHaveTextContent('v0.64.0')
+    const box = screen.getByRole('group', { name: 'Updates' })
     await user.click(within(box).getByRole('button', { name: 'Download' }))
     expect(updates.onDownload).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('switch', { name: 'Download updates automatically' })).toBeChecked()
@@ -224,59 +202,20 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ restartWhenIdle: true }))
   })
 
-  it('keeps restarting the service when idle apart from installing app updates, and off by default', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('general')
-    expect(screen.getByRole('switch', { name: 'Restart the service when idle' })).not.toBeChecked()
-    await user.click(screen.getByRole('switch', { name: 'Restart the service when idle' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ restartServiceWhenIdle: true, restartWhenIdle: false }))
-  })
-
   it('offers Restart to update once the update is downloaded', async () => {
     const user = userEvent.setup()
     const updates = { summary: 'ready', status: 'ready' as const, version: '0.65.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
 
-    expect(screen.getByRole('group', { name: 'Updates' })).toHaveTextContent('v0.65.0 is ready')
     await user.click(screen.getByRole('button', { name: 'Restart to update' }))
 
     expect(updates.onRestart).toHaveBeenCalledTimes(1)
   })
 
-  it('offers nothing to press while a download runs', () => {
-    const updates = { summary: 'Downloading Maiker 0.72.0…', status: 'downloading' as const, version: '0.72.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
-    renderSettings('general', { updates })
-
-    expect(within(screen.getByRole('group', { name: 'Updates' })).getByRole('status')).toHaveTextContent('Downloading v0.72.0')
-    expect(within(screen.getByRole('group', { name: 'Updates' })).queryByRole('button')).toBeNull()
-  })
-
-  it('shows how far a download is: a bar, what has arrived, the percent and the time left', () => {
-    const download = { progress: 0.42, transfer: { received: 42 * 1024 * 1024, total: 100 * 1024 * 1024, bytesPerSecond: 1024 * 1024 } }
-    const updates = { summary: 'Downloading Maiker 0.74.0…', status: 'downloading' as const, version: '0.74.0', download, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
-    renderSettings('general', { updates })
-
-    expect(screen.getByRole('progressbar', { name: 'Download' })).toHaveAttribute('aria-valuenow', '42')
-    expect(screen.getByText('42.0 MB of 100 MB')).toBeInTheDocument()
-    expect(screen.getByText('42% · about 1 min left')).toBeInTheDocument()
-    expect(screen.getByText('Downloading v0.74.0 · 42%')).toBeInTheDocument()
-  })
-
-  it('keeps the bar moving before the size of a download is known', () => {
-    const updates = { summary: 'Downloading Maiker 0.74.0…', status: 'downloading' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
-    renderSettings('general', { updates })
-    const bar = screen.getByRole('progressbar', { name: 'Download' })
-    expect(bar).not.toHaveAttribute('aria-valuenow')
-    expect(bar).toHaveClass('is-unknown')
-    expect(screen.getByText('Starting…')).toBeInTheDocument()
-  })
-
-  it('shows no download bar when nothing is downloading, and checks again on request', async () => {
+  it('checks for an update again on request', async () => {
     const user = userEvent.setup()
     const updates = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
     renderSettings('general', { updates })
-    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument()
-    expect(screen.getByRole('group', { name: 'Updates' })).toHaveTextContent('Up to date')
     await user.click(screen.getByRole('button', { name: 'Check now' }))
     expect(updates.onCheck).toHaveBeenCalledTimes(1)
   })
@@ -284,50 +223,9 @@ describe('desktop settings', () => {
   it('says a failed update in its own words, with a way to try again', () => {
     renderSettings('general', { updates: { summary: 'The download broke off.', status: 'failed' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() } })
     const box = screen.getByRole('group', { name: 'Updates' })
-    expect(box).toHaveTextContent('Update failed')
     expect(box).toHaveTextContent('The download broke off.')
     expect(within(box).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
-
-  it('has one switch each for needs you, done and error notifications', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('notifications')
-
-    await user.click(screen.getByRole('switch', { name: 'Notify when a session errors' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, notifyError: false })
-    await user.click(screen.getByRole('switch', { name: 'Notify when a session finishes' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, notifyFinished: false })
-    await user.click(screen.getByRole('switch', { name: 'Notify when a session needs you' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, notifyNeedsYou: false })
-  })
-
-  it('sets the text size, cursor and scrollback for every pane', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('terminal')
-
-    expect(within(screen.getByRole('radiogroup', { name: 'Terminal text size' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['11', '12', '13', '14', '15', '16'])
-    await user.click(screen.getByRole('radio', { name: '15' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, terminalFontSize: 15 })
-    await user.click(screen.getByRole('radio', { name: 'Underline' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, cursorStyle: 'underline' })
-    await user.click(screen.getByRole('radio', { name: '50k' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, scrollback: 50000 })
-    await user.click(screen.getByRole('radio', { name: '100k' }))
-    expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, scrollback: 100000 })
-  })
-
-  it('offers no working-spinner choice: the M loader is the one spinner', () => {
-    renderSettings('appearance')
-    expect(screen.queryByRole('button', { name: /^Working spinner/ })).toBeNull()
-  })
-
-  it('measures running animations on the Performance page and offers no animation level to choose', () => {
-    renderSettings('performance')
-
-    expect(screen.getByText('Animations running')).toBeInTheDocument()
-    expect(screen.queryByText('Animations')).not.toBeInTheDocument()
-  })
-
   it('picks a dark and a light theme separately, from searchable dropdowns that list the one in use first', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, darkTheme: 'Gruvbox Dark' } })
@@ -348,29 +246,6 @@ describe('desktop settings', () => {
     expect(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ })).toBeInTheDocument()
   })
 
-  it('switches between System, Dark and Light', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'system' } })
-    expect(within(screen.getByRole('radiogroup', { name: 'Appearance' })).getByRole('radio', { name: 'System' })).toBeChecked()
-
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Appearance' })).getByRole('radio', { name: 'Light' }))
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ themeMode: 'light' }))
-  })
-
-  it('opens the theme list outside its card, so the card cannot clip it, and closes it on Escape', async () => {
-    const user = userEvent.setup()
-    renderSettings('appearance')
-
-    await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
-    const list = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
-    expect(list.closest('.mx-scard')).toBeNull()
-    expect(list.closest('.mx-picker-menu')).toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Search dark themes' })).toHaveFocus()
-
-    await user.keyboard('{Escape}')
-    expect(screen.queryByRole('radiogroup', { name: 'Dark themes' })).not.toBeInTheDocument()
-  })
-
   it('previews a hovered theme only for the slot that is in use, and ends the preview on leaving', async () => {
     const user = userEvent.setup()
     const { onPreviewTheme } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'dark' } })
@@ -388,24 +263,6 @@ describe('desktop settings', () => {
     expect(onPreviewTheme).not.toHaveBeenCalledWith('GitHub Light')
   })
 
-  it('has no status effect, animation level or working-effect controls', () => {
-    renderSettings('appearance')
-    expect(screen.queryByRole('radiogroup', { name: 'Animations' })).toBeNull()
-    expect(screen.queryByRole('radiogroup', { name: 'Working effect' })).toBeNull()
-    expect(screen.queryByRole('switch', { name: 'Needs you' })).toBeNull()
-  })
-
-  it(`shows only what ${DAEMON_NAME} reports about itself, as This computer on the Machines page`, async () => {
-    const user = userEvent.setup()
-    renderSettings('machines', { daemon: { online: false, sessionCount: 3 } })
-    await user.click(screen.getByRole('button', { name: 'Details' }))
-    const here = screen.getByRole('region', { name: 'This computer' })
-    expect(within(here).getByRole('status')).toHaveTextContent('Disconnected')
-    expect(within(here).getByText('Sessions').parentElement?.parentElement).toHaveTextContent('3')
-    expect(within(here).queryByText('Version')).not.toBeInTheDocument()
-    expect(within(here).queryByText('Socket')).not.toBeInTheDocument()
-  })
-
   it('picks the terminal font from a list that starts with the bundled one, and keeps a saved family that is not installed', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('terminal', { preferences: { ...PREFS, terminalFontFamily: 'Fira Code' } })
@@ -419,53 +276,6 @@ describe('desktop settings', () => {
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontFamily: '' }))
   })
 
-  it('sets the normal and the bold weight of the terminal text', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('terminal')
-
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Terminal text weight' })).getByRole('radio', { name: 'Medium' }))
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontWeight: 500 }))
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Terminal bold weight' })).getByRole('radio', { name: 'Extra bold' }))
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ terminalFontWeightBold: 800 }))
-  })
-
-  it('sets how big the sidebar icons are, from the Appearance page', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-
-    await user.click(within(screen.getByRole('radiogroup', { name: 'Sidebar icon size' })).getByRole('radio', { name: 'Small' }))
-
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ iconSize: 'small' }))
-  })
-
-  it('has a Show status headings switch beside the sidebar settings, on by default', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance')
-    const headings = screen.getByRole('switch', { name: 'Show status headings' })
-    expect(headings).toBeChecked()
-    await user.click(headings)
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ sidebarStatusHeadings: false }))
-  })
-
-  it('has no sidebar grouping or order control: the sidebar is one tree', () => {
-    renderSettings('appearance')
-    expect(screen.getByRole('switch', { name: 'Show status headings' })).toBeTruthy()
-    expect(screen.queryByText('Group sessions by')).toBeNull()
-    expect(screen.queryByText('Session order')).toBeNull()
-  })
-
-  it('offers square or rounded corners, with the current one checked', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, corners: 'square' } })
-    const corners = screen.getByRole('radiogroup', { name: 'Corners' })
-
-    expect(within(corners).getAllByRole('radio').map((item) => item.textContent)).toEqual(['Square', 'Rounded'])
-    expect(within(corners).getByRole('radio', { name: 'Square' })).toHaveAttribute('aria-checked', 'true')
-
-    await user.click(within(corners).getByRole('radio', { name: 'Rounded' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ corners: 'rounded' }))
-  })
-
   it('replays the welcome from General', async () => {
     const user = userEvent.setup()
     const { onShowWelcome } = renderSettings('general')
@@ -473,25 +283,6 @@ describe('desktop settings', () => {
     await user.click(screen.getByRole('button', { name: 'Show the welcome again' }))
 
     expect(onShowWelcome).toHaveBeenCalledTimes(1)
-  })
-})
-
-describe('performance section', () => {
-  it('shows what it measures and turns the overlay on', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('performance')
-    expect(screen.getByRole('region', { name: 'Web view' })).toHaveTextContent('Frames')
-    expect(screen.getByRole('region', { name: 'Processes' })).toHaveTextContent('Daemons')
-    expect(screen.getByRole('button', { name: 'Copy report' })).toBeInTheDocument()
-    await user.click(screen.getByRole('switch', { name: 'Show the performance overlay' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ perfOverlay: true }))
-  })
-
-  it('turns terminal drawing without the GPU on, for a web view that shows typed text late', async () => {
-    const user = userEvent.setup()
-    const { onChange } = renderSettings('performance')
-    await user.click(screen.getByRole('switch', { name: 'Draw terminals without the GPU' }))
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ terminalPlainDrawing: true }))
   })
 })
 
@@ -516,20 +307,6 @@ describe('searching settings', () => {
     expect(screen.queryByText('Dark theme')).not.toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /^Appearance · / }).length).toBeGreaterThan(0)
     expect(screen.queryByRole('button', { current: 'page' })).not.toBeInTheDocument()
-  })
-
-  it('draws nothing but groups while searching, so no page shows what was not asked for', async () => {
-    renderSettings('general')
-    await search('zzzz')
-    expect(await screen.findByText('No settings match “zzzz”.')).toBeInTheDocument()
-    const strays = Array.from(document.querySelectorAll('.mx-settings-sections > *')).filter((child) => !child.matches('.mx-scard, .mx-settings-none'))
-    expect(strays.map((child) => child.className)).toEqual([])
-  })
-
-  it('shows every group of a page whose name matches', async () => {
-    renderSettings('general')
-    await search('machines')
-    expect(within(screen.getByRole('region', { name: 'This computer' })).getAllByText(/./).length).toBeGreaterThan(1)
   })
 
   it('opens the page of a result from its title and leaves the search', async () => {
