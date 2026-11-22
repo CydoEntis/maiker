@@ -4,12 +4,23 @@ import { StatusIcon } from '@/components/ui/status-icon'
 import { diffSpoken, diffText, helpersSpoken, WAITING_FOR_SLOT, type HelperCount, type HelperDiff } from '../model/helpers'
 import { limitedWord, MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
 import { isFreshSession, rowTitle, sectionOf } from '../model/sidebar'
+import { useNow } from '@/lib/clock'
+import { formatAgo, formatAge } from '../model/tracking'
 import { beginPointerDrag } from './dragSession'
 import { InlineName } from './InlineName'
 import { isMenuKey } from './menuPoint'
 
 /** The status mark at a row's right edge. */
 const MARK_PX = 14
+
+/**
+ * How long the session has been as it is now (`4m`, `2h`), quiet beside its mark: the time it has worked, waited or sat
+ * done. Its own component, so the clock redraws this word and not the row. Nothing when the daemon did not say.
+ */
+function SessionAge({ since, status }: { since: number; status: SessionView['status'] }) {
+  const elapsed = Math.max(0, useNow() - since)
+  return <span className="mx-sb-row-age" aria-hidden="true" title={`${STATUS_WORD[status]} for ${formatAge(elapsed)}`}>{formatAgo(elapsed)}</span>
+}
 
 type Props = {
   session: SessionView
@@ -100,6 +111,7 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
     >
       <span className="mx-sb-row-name">{title}</span>
       {diff !== null && <span className="mx-sb-row-diff">{diffText(diff)}</span>}
+      {session.statusSince !== null && <SessionAge since={session.statusSince} status={session.status} />}
       <StatusIcon status={session.status} size={MARK_PX} className="mx-sb-row-mark" />
     </button>
   )

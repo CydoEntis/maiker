@@ -336,8 +336,9 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
   opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
-  project carries a machine tag, amber while that machine is offline. A session row is its name at the left and its
-  status mark at the right, with no time and no agent icon. A lead sorts by its most urgent helper. There is no Put
+  project carries a machine tag, amber while that machine is offline. A project's sessions are set in under its badge
+  with a rule down their left edge. A session row is its name at the left, then how long it has been as it is (`4m`, when
+  the daemon says) and its status mark at the right; no agent icon. A lead sorts by its most urgent helper. There is no Put
   away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
 
 ### Decisions that override the handoff
@@ -640,9 +641,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   sessions still running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
   a terminal or a project stops what runs in it and takes it off the sidebar, and every menu, toast and question says
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
-  **Session row** (`SessionRow`; padding 6px 8px 6px 10px, radius `--r-control`): the name at the left (13.5px
-  `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
-  status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
+  **Session rows** sit under their project set in 16px, with 6px and a 1px rule (the ink at 8%) down their left edge.
+  **Session row** (`SessionRow`; padding 6px 8px, radius `--r-control`): the name at the left (13.5px
+  `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent), how long it
+  has been as it is (`SessionAge`: `formatAgo` from `statusSince`, mono 11px `--dim`; absent when the daemon did not say;
+  chat sessions carry no such time yet) and the 14px status mark at the right. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
   **Helpers** (`HelperGroup` in `Sidebar.tsx`, `model/helpers.ts`) sit under their lead in the order they were made,
   set in 16px with a 1px rule (the ink at 8%) down their left edge and 1px between rows; a helper row is 12.5px with
   padding 5px 8px. A helper is named by its task, never "New session": the daemon gives it the first line of the task

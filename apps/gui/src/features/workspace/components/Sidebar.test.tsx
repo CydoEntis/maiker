@@ -62,6 +62,15 @@ const menuItems = () => screen.getAllByRole('menuitem').map((item) => {
   return spoken.textContent
 })
 
+describe('a session row\'s age', () => {
+  it('says how long the session has been as it is, and nothing when the daemon did not say', () => {
+    const since = Math.floor((Date.now() - 4 * 60_000) / 1000)
+    show([session(1, 'build', { status: 'working', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since } }), session(2, 'notes')])
+    expect(screen.getByRole('button', { name: /^build,/ }).querySelector('.mx-sb-row-age')).toHaveTextContent('4m')
+    expect(screen.getByRole('button', { name: /^notes,/ }).querySelector('.mx-sb-row-age')).toBeNull()
+  })
+})
+
 describe('the foot\'s pull-request button', () => {
   it('counts only the pull requests that need you, and opens the surface', async () => {
     const onOpen = vi.fn()

@@ -53,7 +53,8 @@
 .mx-sb-tag-progress { flex: none; color: var(--dim); }
 
 /* A session: its name at the left, its status mark at the right. */
-.mx-sb-rows { display: flex; flex-direction: column; gap: 2px; }
+/* Set in under the project's badge, with a rule down their left edge from it, so each session reads as that project's. */
+.mx-sb-rows { display: flex; flex-direction: column; gap: 2px; margin: 1px 0 6px 16px; padding-left: 6px; border-left: 1px solid rgba(var(--ink), .08); }
 .mx-sb-item { display: flex; flex-direction: column; }
 /* A lead's helpers: set in by one step, with a rule down their left edge tying them to that row. */
 .mx-sb-helpers { display: flex; flex-direction: column; gap: 1px; margin: 0 0 4px 16px; padding-left: 6px; border-left: 1px solid rgba(var(--ink), .08); }
@@ -65,7 +66,7 @@
 .mx-sb-helpers-count { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-sb-helpers-state { flex: none; display: inline-flex; align-items: center; gap: 4px; margin-left: auto; font-variant-numeric: tabular-nums; }
 .mx-sb-helpers-sum.is-needs .mx-sb-helpers-state { font-weight: 500; color: var(--needs); }
-.mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-control); text-align: left; }
+.mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-control); text-align: left; }
 .mx-sb-row:hover { background: rgba(var(--ink), .035); }
 .mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--c-sel-bg); }
 .mx-sb-row-name { flex: 1; min-width: 0; font-size: 13.5px; line-height: 20px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -76,6 +77,9 @@
 /* A session that has not been sent anything is a quiet, italic "New session". */
 .mx-sb-row.is-fresh .mx-sb-row-name { font-style: italic; color: var(--muted); }
 .mx-sb-row-mark { flex: none; }
+/* How long the session has been as it is: mono, quiet, before the mark. */
+.mx-sb-row-age { flex: none; font: 400 11px var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
+.mx-sb-row.is-selected .mx-sb-row-age { color: var(--muted); }
 /* What a finished helper changed, before its mark; the name gives way to it. */
 .mx-sb-row-diff { flex: none; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
 /* A name while it is typed (`InlineName` in the row): a raised field with an accent edge, pulled 2px over the row's
