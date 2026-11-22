@@ -181,7 +181,7 @@ There are no banners. Every surface but the toast (below: the status mark, no ed
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
-- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a `!` in a `--danger` circle, a warning the same in `--needs`, a note none). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
+- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a 14px `!` in a `--danger` circle, a warning the same in `--needs`, a note none; the `!` circle is the toast's own mark, because neither is a state a session can be in). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
   OS failure of a known kind in plain words), with **Copy details** when the tool's text says more (CODE-STANDARDS ›
   error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
@@ -193,12 +193,25 @@ its line, then outlined ones, then text ones (Copy details); Copy details says C
   shows once the field is left or the form sent, never while typing.
 - **Inline notes** (`InlineNote`). A failure on the page you came to read (a start that failed in New session, a clone, a
   git rule): the edge, a title, the reason in full, and text actions (Put back, Dismiss, Copy details).
-- **Chat problem** (`ScopedAlert` scope `chat`, `ChatProblem.tsx`). A problem that stops a chat dims only the chat column
-  (a flat veil of `--bg` at 72%, nothing blurs) under one 480px dialog: "devbox stopped answering" / the reason / **Try
-  again** (or **Restart**), **Not now**, and **Copy details** at the right. Not now leaves the **problem line** at the top
-  of the dock: the edge, the title in bold and the reason on one line, the fix and Copy details at its right. A context at
-  95% or more is a caution line there instead ("Context almost full", **New chat with summary**, **Compact**), never a
-  dialog. The chat dialog does not trap focus, as the sidebar and other panes still work.
+- **Chat problem** (`ScopedAlert` scope `chat`, `ChatProblem.tsx`). A machine that stopped answering, or a turn a service
+  restart cut, dims only the chat column (a flat veil of `--bg` at 72%, nothing blurs) under one 480px dialog: "devbox
+  stopped answering" / the reason / **Try again** (or **Restart**), **Not now**, and **Copy details** at the right. Not
+  now leaves the **problem line** at the top of the dock: the edge, the title in bold and the reason on one line, the fix
+  and Copy details at its right. **A stopped agent is never a dialog**: the session is idle, its problem line is in the
+  dock from the start ("Claude stopped", why, **Restart** where the session has a terminal to restart, **Copy details**),
+  and the stop toast (below) says it once. A context at 95% or more is a caution line there instead ("Context almost
+  full", **New chat with summary**, **Compact**), never a dialog. The chat dialog does not trap focus, as the sidebar and
+  other panes still work.
+- **Stop toasts** (`features/notifications/stops.ts`, `useStopToasts.ts`). An agent that stopped (the daemon's `error`)
+  raises one **error toast**: the title says what happened ("Couldn’t start Gemini", "Claude stopped"), the context is the
+  session's project, the reason is one sentence, and the first action is the fix where there is one, then **Open**, which
+  selects the session. The one fix is **Install <agent>**, offered when the host does not find the agent's program on
+  this computer's PATH; it runs the app's own installer (`install_agent`) under a progress toast that shows the command
+  and becomes "Gemini installed" or the failure. A session the daemon holds for its plan limit raises one **warning
+  toast** ("Claude hit its plan limit", "Limited until 14:05. It carries on by itself then.", **Open**). Each is raised
+  once per occurrence, named by what the daemon reported (the exit's time and code, the resume time), so a re-render, a
+  new list or a reconnect says nothing twice, and opening the app tells of nothing that had already happened. The toast
+  goes when the stop does. A shell whose command failed raises none.
 - **Service offline** (`ServiceStatus.tsx`). A blip (under 3 s) is a title-bar chip, **Reconnecting…** with the running
   mark. Then the whole window dims (`--bg` at 78%) under one dialog that traps focus: "Maiker can’t reach its background
   service", **Start service** (then "Starting…"), **Not now**, **Copy details**, and "Trying again in Ns" in mono at its
@@ -447,7 +460,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   the same bubble holding a tick in `--ok`, working an 11px ring in `--working` with half of it lit, turning once in
   `--t-spin`; idle draws **nothing** (no element at all), and the row that holds it does the dimming. With motion
   reduced the ring stands still and is lit all the way round. `markOf` is the one function that files a status under a
-  mark, and nothing else decides it: it files `error` and `limited` under needs you and `unknown` under idle. A mark is
+  mark (the table is `lib/statusMark.ts`), and nothing else decides it: it files `error`, `limited` and `unknown` under idle. Sections, counts, the rail, the tray, the title badge and the jump all read it (`sectionOf`). A mark is
   decoration beside words that say the status; `named` makes it an image named for its state (`markName`) where there
   are no such words. There is no failed mark. The preview's `StatusMark` (`components/StatusMark.tsx`) only maps its own
   names onto it.
@@ -1255,8 +1268,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   background, or it is not the focused pane) sends a system notification, once per change. It names
   the session and where it is and never what the agent asked. Clicking it brings the window forward
   and shows that session. Opening the app, a session you are in, and a reconnect after the daemon
-  was unreachable send nothing. The in-window toast follows the state: green for done, amber
-  for needs you, red for an error. It always sits bottom right; Settings › Notifications can show a test.
+  was unreachable send nothing. The in-window toast follows the state: the done mark for done, the needs-you
+  mark for needs you; a session that stopped has its stop toast instead (*Errors* › Stop toasts), whatever the Error
+  switch says. It always sits bottom right; Settings › Notifications can show a test.
 - **Interrupted agents.** When the daemon restarted while an agent was mid-turn, its chat asks
   about it (see *Errors*, chat problem): which agent and the command that brings it back
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
@@ -1335,7 +1349,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 
 ### Notification toasts
 
-A session that needs you, finished or failed while you look elsewhere is a toast (`features/notifications/notify.ts`, `noticeForSession.ts`): its title names the session and what happened, the reason says what it asks (a command in mono), and its actions are **Allow** (only when the session is stopped on a choice the GUI can answer) and **Open session**. It is keyed by its session, so the daemon's alert for the same event replaces it.
+A session that needs you or finished while you look elsewhere is a toast (`features/notifications/notify.ts`, `noticeForSession.ts`): its title names the session and what happened, the reason says what it asks (a command in mono), and its actions are **Allow** (only when the session is stopped on a choice the GUI can answer) and **Open session**. It is keyed by its session, so the daemon's alert for the same event replaces it.
 
 - **Working badge.** The spinner in `--working` on a 9px square at the tile's corner, ringed in `--card`; it is the same badge on the sidebar row and the pane header. The chat's scroll area fades to transparent over its top 36px.
 

@@ -5,6 +5,7 @@ import { OpenSubagentContext } from '../openSubagent'
 import { CYCLE_MS, currentHelper, helperCounts, stripOrder, type DockHelper, type HelperStatus } from '../helpersDock'
 import { ChevronGlyph, HelpersGlyph } from './DockIcons'
 
+/** A failed helper is filed like any stop (`markOf`): it has no mark, and its line says what went wrong. */
 const ICON: Record<HelperStatus, StatusIconKind> = { working: 'working', done: 'done', failed: 'error' }
 const WORD: Record<HelperStatus, string> = { working: 'Working', done: 'Done', failed: 'Failed' }
 

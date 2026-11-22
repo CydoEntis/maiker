@@ -1,23 +1,6 @@
 import { cn } from "@/lib/utils"
+import { markOf, type StatusIconKind, type StatusMarkKind } from "@/lib/statusMark"
 import "./status-icon.css"
-
-/** The four states there are. Idle is one of them, and the only one with nothing drawn. */
-type StatusMarkKind = "needs" | "working" | "done" | "idle"
-
-/** What a caller may hand over: the four states, or a daemon status that is none of them. */
-type StatusIconKind = StatusMarkKind | "error" | "limited" | "unknown"
-
-/**
- * The one place a status becomes a mark. The daemon reports more than four statuses and the window draws only four, so
- * every status with no mark of its own is filed here: a stopped agent and one held by its plan limit as needs you (as
- * `sectionOf` files them), one nobody knows as idle.
- */
-const MARK_OF: Record<StatusIconKind, StatusMarkKind> = {
-  needs: "needs", working: "working", done: "done", idle: "idle", error: "needs", limited: "needs", unknown: "idle",
-}
-
-/** The mark a status is drawn as. */
-const markOf = (status: StatusIconKind): StatusMarkKind => MARK_OF[status]
 
 /** What a screen reader hears for a mark; idle has no mark, so it has no name. */
 const MARK_NAME: Record<StatusMarkKind, string | null> = { needs: "Needs you", working: "Working", done: "Done", idle: null }

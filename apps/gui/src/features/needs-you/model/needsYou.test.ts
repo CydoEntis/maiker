@@ -20,8 +20,8 @@ describe('nextNeedsYou', () => {
     expect(nextNeedsYou([], null)).toBeNull()
   })
 
-  it('counts an agent that stopped on an error, as the sidebar lists it with what needs you', () => {
-    expect(nextNeedsYou([session(1, 'done'), session(2, 'error')], '0:1')?.session.id).toBe('0:2')
+  it('passes over an agent that stopped or is held by its plan limit: neither is a question', () => {
+    expect(nextNeedsYou([session(1, 'done'), session(2, 'error'), session(3, 'limited')], '0:1')).toBeNull()
   })
 
   it('starts at the first one when nothing is focused', () => {

@@ -44,7 +44,11 @@
 .mx-toast-slot[data-ghosts="2"] { margin-top: 18px; }
 .mx-toast[data-float] { position: relative; z-index: 1; pointer-events: auto; display: flex; align-items: flex-start; gap: 9px; padding: 10px 8px 12px 11px; color: var(--fg); border-radius: var(--r-panel); overflow: hidden; animation: mx-toast-in .24s cubic-bezier(.2, .8, .2, 1); }
 .mx-toast.is-note[data-float] { align-items: center; min-height: 40px; padding: 6px 6px 6px 11px; }
-.mx-toast > .mx-status-icon { height: 20px; }
+/* The mark sits in the title's 20px line. A failure and a warning are not session states, so they share one mark of their own: a 14px `!` in a circle. */
+.mx-toast > .mx-toast-mark { flex: none; width: 16px; height: 20px; display: inline-flex; align-items: center; justify-content: center; }
+.mx-toast-mark > svg { width: 14px; height: 14px; }
+.mx-toast-mark.is-error { color: var(--danger); }
+.mx-toast-mark.is-warning { color: var(--needs); }
 .mx-toast-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-toast-head { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
 .mx-toast-title { flex: 1; min-width: 0; font-size: 13.5px; font-weight: 500; line-height: 20px; color: var(--fg); overflow-wrap: anywhere; }

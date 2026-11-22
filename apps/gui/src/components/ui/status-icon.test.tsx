@@ -4,9 +4,9 @@ import { StatusMark, type StatusMarkState } from '../StatusMark'
 import { StatusIcon, markName, markOf, type StatusIconKind } from './status-icon'
 
 describe('the status-to-mark model', () => {
-  it('draws only four states: a stopped agent and one held by its plan limit are needs you, an unknown one is idle', () => {
+  it('draws only four states: a stopped agent, one held by its plan limit and an unknown one are idle', () => {
     const statuses: readonly StatusIconKind[] = ['needs', 'working', 'done', 'idle', 'error', 'limited', 'unknown']
-    expect(statuses.map(markOf)).toEqual(['needs', 'working', 'done', 'idle', 'needs', 'needs', 'idle'])
+    expect(statuses.map(markOf)).toEqual(['needs', 'working', 'done', 'idle', 'idle', 'idle', 'idle'])
   })
 
   it('names every mark but idle, which has none', () => {
@@ -25,14 +25,9 @@ describe('StatusIcon', () => {
     expect(screen.getByRole('img', { name: markName(status) ?? '' })).toBeInTheDocument()
   })
 
-  it('draws nothing at all for idle', () => {
-    const { container } = render(<><StatusIcon status="idle" named /><StatusIcon status="unknown" named /></>)
+  it.each(['idle', 'unknown', 'error', 'limited'] as const)('draws nothing at all for %s', (status) => {
+    const { container } = render(<StatusIcon status={status} named />)
     expect(container).toBeEmptyDOMElement()
-  })
-
-  it('draws a status with no mark of its own as the mark it is filed under', () => {
-    render(<StatusIcon status="limited" named />)
-    expect(screen.getByRole('img', { name: markName('needs') ?? '' })).toBeInTheDocument()
   })
 
   it('is decoration unless asked for a name, so it adds nothing to the name of a row that already says its status', () => {
@@ -49,8 +44,8 @@ describe('the preview StatusMark', () => {
     return name
   }
 
-  it('is the same mark: a stopped conversation needs you and an unknown one is idle', () => {
-    expect(nameOf('recovery')).toBe(nameOf('needs-you'))
+  it('is the same mark: a stopped conversation and an unknown one are idle', () => {
+    expect(nameOf('recovery')).toBeNull()
     expect(nameOf('needs-you')).toBe(markName('needs'))
     expect(nameOf('working')).toBe(markName('working'))
     expect(nameOf('done')).toBe(markName('done'))

@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react'
 import { machineLabel } from '@/data/machineNicknames'
 import { STATUS_WORD, type SessionView } from '../model/session'
-import { isFreshSession, isShell, projectOf, rowTitle, rowWord } from '../model/sidebar'
+import { isFreshSession, isShell, projectOf, rowTitle, rowWord, sectionOf } from '../model/sidebar'
 import { helpersSpoken, helpersWord, type HelperCount } from '../model/helpers'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { MachineIcon } from './glyphs'
@@ -54,9 +54,9 @@ function PlaceLine({ session, project, machine, starter }: { session: SessionVie
  */
 export function SessionRow({ session, selected, showProject, machine = null, starter = null, helpers = null, nested = false, onShow, onRename, onContextMenu }: Props) {
   const title = rowTitle(session)
-  const active = !isShell(session) && session.status !== 'idle'
+  const active = !isShell(session) && sectionOf(session) !== 'idle'
   const word = rowWord(session)
-  const className = `mx-row${session.status === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${session.status === 'working' ? ' is-working' : ''}${isShell(session) ? ' is-shell' : ''}${isFreshSession(session) ? ' is-fresh' : ''}${session.status === 'unknown' ? ' is-offline' : ''}${session.status === 'limited' ? ' is-limited' : ''}`
+  const className = `mx-row${sectionOf(session) === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${session.status === 'working' ? ' is-working' : ''}${isShell(session) ? ' is-shell' : ''}${isFreshSession(session) ? ' is-fresh' : ''}${session.status === 'unknown' ? ' is-offline' : ''}`
   const project = showProject ? projectOf(session) : null
   return (
     <button

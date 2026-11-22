@@ -146,12 +146,9 @@ export function withSessionsOnly(tree: readonly MachineNode[], keep: (head: Mach
 /** A session that waits on the person, with the machine and the project the tree lists it under. */
 export type WaitingSession = { readonly session: SessionView; readonly machine: MachineHead; readonly project: ProjectNode }
 
-/**
- * Whether a session waits on the person: what the tree lists under Needs you (it asks, or an agent stopped), except one held
- * by its plan limit, which waits on the limit and not on the person, so nothing that says "needs you" counts it but the tree.
- */
+/** Whether a session waits on the person: it asks something only they can answer, which is what the tree lists under Needs you. */
 export function waitsOnYou(session: SessionView): boolean {
-  return sectionOf(session) === 'needs' && session.status !== 'limited'
+  return sectionOf(session) === 'needs'
 }
 
 /**

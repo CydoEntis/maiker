@@ -25,6 +25,7 @@ import type { NewChatSeed } from './components/NewChatPage'
 import { chatAvailability, chatSourceOf, effectiveView, type ChatAgent } from './model/chatView'
 import { useMachineActions, useRemoteMachines } from './useMachines'
 import { useSessionAlerts } from './useSessionAlerts'
+import { useStopToasts } from './useStopToasts'
 import { useTrayItem } from './useTrayItem'
 import { useSystemDark, useSystemReducedMotion, useWindowNarrowerThan } from './useWindowQueries'
 import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, writeAgentTerminals } from '@/data/agentTerminals'
@@ -32,7 +33,7 @@ import { useAgentExits } from './useAgentExits'
 import { readMachineNicknames } from '@/data/machineNicknames'
 import type { OpenSubagent } from './model/subagents'
 import { useSharedSettings } from '@/features/settings/sharedSettings'
-import { leftOutOfChatView } from './model/sidebar'
+import { leftOutOfChatView, sectionOf } from './model/sidebar'
 import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type Layout, MAX_PANES, openArrangement, removeSessions, type SplitDirection, splitPane, visibleSessionIds } from './model/layout'
 import { LAYOUT_RESET_NOTICE, readLayout, writeLayout } from './model/layoutStorage'
 import { byPriority } from './model/attentionOrder'
@@ -396,15 +397,15 @@ export function useWorkspaceState() {
       window.removeEventListener('blur', lost)
     }
   }, [])
-  // What the tray menu lists: every session that needs you, finished or exited, but not an error you are looking at.
+  // What the tray menu lists: every session that needs you or finished.
   const attentionSessions = useMemo(() => {
     const activity = (id: string) => tracks.get(id)?.changedAt ?? 0
     return sessions
-      .filter((item) => (item.status === 'needs' || item.status === 'error' || item.status === 'done') && !(item.status === 'error' && item.id === focusedId && windowFocused))
+      .filter((item) => sectionOf(item) === 'needs' || sectionOf(item) === 'done')
       .sort(byPriority(activity))
-  }, [sessions, tracks, focusedId, windowFocused])
+  }, [sessions, tracks])
   useTrayItem(attentionSessions, showSessionById)
-  const needsElsewhere = sessions.filter((item) => item.status === 'needs' && item.id !== focusedId).length
+  const needsElsewhere = sessions.filter((item) => sectionOf(item) === 'needs' && item.id !== focusedId).length
 
   // Inspect looks at the focused pane's own repository; the Inspector's changed-file count comes from the same daemon question.
   // A pane of another machine is asked of that machine's daemon, and only for its changes.
@@ -462,6 +463,7 @@ export function useWorkspaceState() {
   const moveToWorktree = useMoveToWorktree({ sessionMap, sendTo })
 
   useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession })
+  useStopToasts({ sessions, listed: sessionsQuery.data !== undefined, online, showSessionById })
   // With broadcast on, what is typed in one pane also goes to the layout's other panes, but only the idle ones: never into a busy agent.
   const mirrorInput = useCallback((fromSessionId: string, data: string | Uint8Array) => {
     const showing = activeArrangement(layout)

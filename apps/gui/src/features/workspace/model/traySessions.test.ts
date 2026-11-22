@@ -12,6 +12,11 @@ describe('what the tray menu lists', () => {
     expect(tray.needs[0]?.label).not.toBe('')
   })
 
+  it('lists no session that stopped, is held by its plan limit or is out of reach: none of them asks anything', () => {
+    const tray = traySessionsOf([session('t1', 'error', 'api'), session('t2', 'limited', 'web'), session('t3', 'unknown', 'docs')])
+    expect(tray).toEqual({ needs: [], finished: [] })
+  })
+
   it('has a key that changes only when the menu would', () => {
     const before = traySessionsOf([session('t2', 'needs', 'web')])
     expect(trayKey(traySessionsOf([session('t2', 'needs', 'web'), session('t9', 'working', 'other')]))).toBe(trayKey(before))

@@ -19,9 +19,9 @@ function limited(pane: number): SessionView {
 }
 
 describe('the sidebar’s order', () => {
-  it('puts an agent that stopped above work in progress, and a failed shell command last', () => {
-    const order = byUrgency([session(1, { details: exited }), session(2, { agent: 'claude', details: exited }), session(3, { agent: 'claude', status: 'working' }), session(4)])
-    expect(order.map((item) => item.id)).toEqual(['t2', 't3', 't4', 't1'])
+  it('puts what asks first, then work in progress, then what finished, and an agent that stopped or is limited with the idle', () => {
+    const order = byUrgency([session(1, { agent: 'claude', details: exited }), limited(2), session(3, { agent: 'claude', status: 'done' }), session(4, { agent: 'claude', status: 'working' }), session(5, { agent: 'claude', status: 'needs-you' }), session(6)])
+    expect(order.map((item) => item.id)).toEqual(['t5', 't4', 't3', 't1', 't2', 't6'])
   })
 
   it('keeps creation order within a rank', () => {
@@ -105,14 +105,14 @@ describe('status sections', () => {
     expect(sections.map((section) => [section.name, section.sessions.map((item) => item.id)])).toEqual([['Needs you', ['t3']], ['Done', ['t2']], ['Idle', ['t1']]])
   })
 
-  it('puts an agent that stopped with what needs you', () => {
+  it('puts an agent that stopped with the idle: a stop is not a question', () => {
     const sections = statusSections([session(2, { agent: 'claude', details: exited })])
-    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t2']]])
+    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['idle', ['t2']]])
   })
 
-  it('puts a session stopped by its plan limit with what needs you', () => {
+  it('puts a session held by its plan limit with the idle', () => {
     const sections = statusSections([session(1, { agent: 'claude', status: 'working' }), limited(2)])
-    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['needs', ['t2']], ['working', ['t1']]])
+    expect(sections.map((section) => [section.key, section.sessions.map((item) => item.id)])).toEqual([['working', ['t1']], ['idle', ['t2']]])
   })
 
   it('lists a held row that starts working under Working, not where it was picked', () => {
@@ -184,10 +184,10 @@ describe('putting a session away', () => {
     expect(listed[0]?.archived).toBe(true)
   })
 
-  it('lists a put-away agent that stopped under Needs you, and keeps an exited shell put away', () => {
+  it('keeps a put-away agent that stopped, and an exited shell, put away: neither asks anything', () => {
     const { listed, putAway } = splitPutAway([away(1, { agent: 'claude', details: exited }), away(2, { details: exited })])
-    expect(listed.map((item) => item.id)).toEqual(['t1'])
-    expect(putAway.map((item) => item.id)).toEqual(['t2'])
+    expect(listed).toEqual([])
+    expect(putAway.map((item) => item.id)).toEqual(['t1', 't2'])
   })
 
 })

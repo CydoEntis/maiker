@@ -30,6 +30,22 @@ function view(extra: Partial<Conversation> = {}) {
 }
 
 describe('what the hover card says', () => {
+  it('says what happened to an agent that stopped, with idle as its state', () => {
+    const stopped = view({ status: 'idle', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, exit: { code: 1, at: 1 } } })
+    const text = hoverCardText(stopped, 'x', true)
+    expect(text.activity).toContain('exit code 1')
+    expect(text.word).toBe('Idle')
+  })
+
+  it('says when an agent held by its plan limit carries on', () => {
+    const now = new Date(2026, 0, 5, 9, 30).getTime()
+    const resumeAt = new Date(2026, 0, 5, 14, 5).getTime() / 1000
+    const base = view({ status: 'idle', details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, resumeAt } }).conversation
+    const text = hoverCardText(toSessionView(base, '/home/me', now), 'x', true, null, null, now)
+    expect(text.activity).toBe('Limited until 14:05')
+    expect(text.word).toBe('Idle')
+  })
+
   it('names the project, the branch, the line changes and where the agent runs', () => {
     const text = hoverCardText({ ...view(), diffAdded: 12, diffRemoved: 3 }, 'Upgrade to React 19', true)
     expect(text).toMatchObject({ title: 'Upgrade to React 19', activity: 'Upgrade React', folder: { text: 'app', mono: false, ownWorktree: false }, branch: 'feat/x', changes: { added: 12, removed: 3 }, pr: null, who: 'Claude · This computer' })

@@ -18,9 +18,13 @@ export type ChatProblem =
   | { kind: 'interrupted'; agent: string; resume: string; onRestart: () => void; onDismiss: () => void }
   | { kind: 'context'; agent: string; percent: number; onCompact: () => void; /** Opens a new chat in the same folder with the summary as its first message. */ onNewWithSummary: (summary: string) => void }
 
-/** A problem that stops the chat: it is asked about over the chat, then kept as a line in the dock. A full context only warns. */
+/**
+ * A problem that is asked about over the chat, then kept as a line in the dock: a machine that stopped answering and a
+ * turn a service restart cut. A stopped agent is not asked about: it is idle, its reason stays as the dock's line with
+ * its fix, and a toast says it once (`features/notifications/stops.ts`). A full context only warns.
+ */
 export function blocksChat(problem: ChatProblem): boolean {
-  return problem.kind !== 'context'
+  return problem.kind === 'machine' || problem.kind === 'interrupted'
 }
 
 /** Names one problem, so a new one (another exit, another outage) is asked about again after Not now. */
@@ -70,7 +74,7 @@ export function exitWords(code: number | null): string {
   return `${why ?? 'Its process ended with an error'} (exit code ${String(code)}).`
 }
 
-/** What the dialog and the dock line say about a problem: a short title, one plain sentence, and the raw facts for Copy details. */
+/** What the dialog (`reason`) and the dock line (`line`) say about a problem: a short title, one plain sentence each, and the raw facts for Copy details. */
 export type ProblemWords = { title: string; reason: string; line: string; details: string }
 
 export function problemWords(problem: ChatProblem, now: number): ProblemWords {
@@ -80,12 +84,11 @@ export function problemWords(problem: ChatProblem, now: number): ProblemWords {
       const how = killed !== undefined
         ? `${problem.agent} stopped in the middle of a step. ${killed}.`
         : `${problem.agent}${problem.code === PLAIN_EXIT ? ` exited with code ${String(PLAIN_EXIT)}` : ' exited'} in the middle of a step.`
-      // A chat the daemon owns has no terminal to restart or to read (ADR 0020): its reason is the line under its box.
-      const carry = problem.onRestart !== null ? 'Restart to carry on from the last message.' : 'The reason is under the message box.'
+      const said = `${how} Your messages and changes are safe.`
       return {
         title: `${problem.agent} stopped`,
-        reason: `${how} Your messages and changes are safe. ${carry}`,
-        line: 'Your messages and changes are safe.',
+        reason: said,
+        line: said,
         details: `${problem.agent} stopped. ${exitWords(problem.code)}`,
       }
     }

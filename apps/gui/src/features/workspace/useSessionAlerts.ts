@@ -32,7 +32,7 @@ type SessionAlerts = {
 /**
  * Tells you about a session that started needing you, finished or failed while you were not looking at it: a card
  * in the window, the system's notice away from it, and a sound: the daemon's say for a terminal session, this window's
- * for a chat session.
+ * for a chat session. A session that failed has no card from here: its stop toast is `useStopToasts`'s.
  */
 export function useSessionAlerts({ sessions, sessionMap, machines, projectOf, online, focusedId, preferences, showSessionById, answerSession }: SessionAlerts): void {
   const { notifyNeedsYou, notifyFinished, notifyError, notificationSound } = preferences

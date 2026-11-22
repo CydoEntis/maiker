@@ -615,7 +615,7 @@ function Rail(props: SidebarProps) {
           <Fragment key={section.key}>
             {index > 0 && <div role="separator" aria-label={`${section.name} · ${String(section.sessions.length)}`} className="mx-rail-sep" />}
             {section.sessions.map((session) => (
-              <div key={session.id} role="listitem" className={`mx-rail-item${session.id === props.focusedId ? ' is-selected' : ''}${session.status === 'idle' ? ' is-idle' : ''}`}>
+              <div key={session.id} role="listitem" className={`mx-rail-item${session.id === props.focusedId ? ' is-selected' : ''}${sectionOf(session) === 'idle' ? ' is-idle' : ''}`}>
                 <span className="mx-rail-bar" aria-hidden="true" />
                 <button
                   type="button"

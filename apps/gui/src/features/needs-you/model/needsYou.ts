@@ -1,4 +1,5 @@
 import type { SessionView } from '@/features/workspace/model/session'
+import { sectionOf } from '@/features/workspace/model/sidebar'
 
 /**
  * Creation order. The daemon's pane number only grows and each machine numbers its own, so the
@@ -11,13 +12,13 @@ export function byCreation(a: Pick<SessionView, 'pane' | 'machine'>, b: Pick<Ses
 export type JumpTarget = { session: SessionView; /** 1-based place among the sessions that need you. */ position: number; total: number }
 
 /**
- * The next session that needs you (waiting on an answer, or stopped on an error) after `currentId`, wrapping. One held by its plan limit is listed
- * under the sidebar's Needs you but is not one of these: it waits on the limit, not on you. "After" is by creation order, so it
+ * The next session that needs you (`sectionOf`: it waits on an answer) after `currentId`, wrapping. One that stopped or is
+ * held by its plan limit is idle, not one of these. "After" is by creation order, so it
  * is right even when the current session does not need you itself. Null when nothing needs you: the
  * jump then only says so; it never falls back to a finished session.
  */
 export function nextNeedsYou(sessions: readonly SessionView[], currentId: string | null): JumpTarget | null {
-  const asking = sessions.filter((session) => session.status === 'needs' || session.status === 'error').sort(byCreation)
+  const asking = sessions.filter((session) => sectionOf(session) === 'needs').sort(byCreation)
   if (asking.length === 0) return null
   const current = sessions.find((session) => session.id === currentId)
   const next = (current && asking.find((session) => byCreation(session, current) > 0)) ?? asking[0]

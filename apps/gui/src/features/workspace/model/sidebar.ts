@@ -1,20 +1,16 @@
 import { isChatSession } from './chatSession'
-import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionStatus, type SessionView, STATUS_WORD } from './session'
+import { markOf, type StatusMarkKind } from '@/lib/statusMark'
+import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionView, STATUS_WORD } from './session'
 
 /**
- * The most urgent first: what needs you, an agent that stopped, one held by its plan limit, what is
- * working, then what finished, and a shell whose last command failed at the end. Within a rank the sessions keep their creation
- * order, so a row only moves when its state changes.
+ * The most urgent first, by the state each is shown as (`markOf`): what needs you, what is working, what finished, then
+ * what is idle, which is where a stopped, limited or unreachable session is. Within a rank the sessions keep their
+ * creation order, so a row only moves when its state changes.
  */
-const URGENCY: Record<SessionStatus, number> = { needs: 0, error: 1, limited: 2, working: 3, done: 4, unknown: 5, idle: 6 }
-const EXITED_SHELL = 7
-
-function urgencyOf(session: SessionView): number {
-  return session.status === 'error' && isShell(session) ? EXITED_SHELL : URGENCY[session.status]
-}
+const URGENCY: Record<StatusMarkKind, number> = { needs: 0, working: 1, done: 2, idle: 3 }
 
 export function byUrgency(sessions: readonly SessionView[]): SessionView[] {
-  return inCreationOrder(sessions).sort((a, b) => urgencyOf(a) - urgencyOf(b))
+  return inCreationOrder(sessions).sort((a, b) => URGENCY[markOf(a.status)] - URGENCY[markOf(b.status)])
 }
 
 /** The project a row names on its second line: the repository's folder, else the folder it is in. */
@@ -96,7 +92,10 @@ export function rowTitle(session: SessionView): string {
   return firstLine(session.lastPrompt) || (isFreshSession(session) ? NEW_SESSION : folderNameOf(session))
 }
 
-/** The words at the right of a row: only a stopped agent, an exited shell or a session held by its plan limit says anything. */
+/**
+ * The words at the right of a row: what happened to a session that is shown as idle though the daemon says more (a stopped
+ * agent, an exited shell, one held by its plan limit, one out of reach). Activity text, never a state of its own.
+ */
 export function rowWord(session: SessionView, now: number = Date.now()): string {
   if (session.snoozedUntil !== null) return untilWord(session.snoozedUntil, now)
   if (session.status === 'limited') return limitedWord(session.resumeAt, now)
@@ -105,6 +104,19 @@ export function rowWord(session: SessionView, now: number = Date.now()): string 
   if (session.status !== 'error') return ''
   // A shell that ended did not stop on a failure, so it says it exited.
   return isShell(session) ? 'exited' : STATUS_WORD.error
+}
+
+/**
+ * What happened to a session that is shown as idle though the daemon says more, as the one line its hover card reads:
+ * `limited until 14:05`, `stopped (exit code 1)`, `exited`, `offline`. Empty when its status is one of the four states.
+ */
+export function happenedLine(session: SessionView, now: number = Date.now()): string {
+  if (session.status === 'limited') return limitedWord(session.resumeAt, now)
+  if (session.status === 'unknown') return STATUS_WORD.unknown
+  if (session.status !== 'error') return ''
+  if (isShell(session)) return 'exited'
+  const code = session.conversation.details?.exit?.code ?? null
+  return code === null ? STATUS_WORD.error : `${STATUS_WORD.error} (exit code ${String(code)})`
 }
 
 /**
@@ -123,7 +135,7 @@ export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>
   return !session.conversation.agent && session.status !== 'needs'
 }
 
-export type StatusSectionKey = 'needs' | 'working' | 'done' | 'idle'
+export type StatusSectionKey = StatusMarkKind
 
 /** The status sections in the order they are listed, each with the few words that say what it means. */
 const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint: string }> = [
@@ -133,18 +145,9 @@ const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint
   { key: 'idle', name: 'Idle', hint: 'nothing to do' },
 ]
 
-/** The section a session is listed in. An agent that stopped, or one held by its plan limit, is yours to look at, so it sits with what needs you. */
-export function sectionOf(session: SessionView): StatusSectionKey {
-  switch (session.status) {
-    case 'needs': return 'needs'
-    // A shell that exited is just idle; only an agent that stopped needs a look.
-    case 'error': return session.conversation.agent ? 'needs' : 'idle'
-    case 'limited': return 'needs'
-    case 'working': return 'working'
-    case 'done': return 'done'
-    case 'idle':
-    case 'unknown': return 'idle'
-  }
+/** The section a session is listed in: the state it is shown as (`markOf`), so only a question the person can answer is under Needs you. */
+export function sectionOf(session: Pick<SessionView, 'status'>): StatusSectionKey {
+  return markOf(session.status)
 }
 
 export type StatusSection = { key: StatusSectionKey; name: string; hint: string; sessions: SessionView[] }
@@ -174,7 +177,7 @@ export function statusSections(sessions: readonly SessionView[], held: HeldRow |
 
 /**
  * Put away (`TermInfo.archived`) and listed only under Put away. It keeps running, and while Needs you would list it
- * (an agent that asks, stopped or is held by its plan limit, or a terminal that asks) it is listed there instead, so
+ * (an agent or a terminal that asks) it is listed there instead, so
  * nothing that waits on you is folded out of sight. The daemon's flag stays set: once it no longer needs you it goes
  * back under Put away, where the person left it. Only Bring back clears it.
  */

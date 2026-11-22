@@ -1,7 +1,7 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { messagePreview } from '@/features/chat/messagePreview'
 import { agentLabel, askWords, SHELL_PROCESS, STATUS_WORD, type SessionView } from './session'
-import { projectOf } from './sidebar'
+import { happenedLine, projectOf, sectionOf } from './sidebar'
 import { helpersWord, type HelperCount } from './helpers'
 import { pullRequestHeadline, pullRequestTone, type PullRequestTone } from './pullRequest'
 
@@ -53,19 +53,21 @@ function helpersLine(helpers: HelperCount): string {
 
 /**
  * What the card beside a hovered row says. Each line is something the daemon reported: what the agent
- * asks when it needs you, the prompt it was last given while it works. The status word is only a stand-in
- * for an activity the session did not report.
+ * asks when it needs you, the prompt it was last given while it works, and what happened to one that stopped, is held by
+ * its plan limit or is out of reach (`happenedLine`), since its mark only says idle. The status word is only a stand-in
+ * for an activity the session did not report, and names one of the four states.
  */
-export function hoverCardText(session: SessionView, title: string, namesMachine: boolean, starter: string | null = null, helpers: HelperCount | null = null): HoverCardText {
+export function hoverCardText(session: SessionView, title: string, namesMachine: boolean, starter: string | null = null, helpers: HelperCount | null = null, now: number = Date.now()): HoverCardText {
   const asked = session.ask === null ? session.asking : askWords(session.ask)
   const said = session.status === 'needs' ? asked : session.status === 'working' ? session.lastPrompt : ''
   const shell = session.process === SHELL_PROCESS
+  const happened = happenedLine(session, now)
   const pr = session.pr
   const number = pr === null ? '' : `#${String(pr.number)}`
   return {
     title,
-    activity: shell || clipped(said) === '' ? null : clipped(said),
-    word: sentence(STATUS_WORD[session.status]),
+    activity: happened !== '' ? sentence(happened) : shell || clipped(said) === '' ? null : clipped(said),
+    word: sentence(STATUS_WORD[sectionOf(session)]),
     folder: { text: shell ? session.cwdLabel : projectOf(session), mono: shell, ownWorktree: session.worktree },
     branch: shell ? null : session.branch,
     changes: session.diffAdded + session.diffRemoved > 0 ? { added: session.diffAdded, removed: session.diffRemoved } : null,

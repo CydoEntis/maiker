@@ -7,8 +7,31 @@ import { IconButton } from "./icon-button"
 import { CopyDetails } from "./feedback"
 import { StatusIcon, type StatusIconKind } from "./status-icon"
 
-/** The app's one status mark per kind: a note is idle, a success done, a progress working, and anything that needs a look needs you. */
-const MARK: Record<ToastKind, StatusIconKind> = { success: "done", info: "idle", error: "error", warning: "needs", needs: "needs", progress: "working" }
+/** The session state a toast's kind stands for; an error, a warning and a plain note are not session states. */
+const STATE_MARK: Partial<Record<ToastKind, StatusIconKind>> = { success: "done", needs: "needs", progress: "working" }
+
+/** The `!` in a circle (the design's shape, on a 24 grid). */
+const EXCLAIM_RADIUS = 8.8
+const EXCLAIM = "M12 7.6v5.2M12 16.3v.1"
+
+/**
+ * A toast's mark: needs you and done are the session marks, a failure a red `!` in a circle and a warning the same in
+ * amber, and a plain note has none. The failure and the warning have a shape of their own because neither is a state a
+ * session can be in. Decoration: the toast's words and its role already say what it is.
+ */
+function ToastMark({ kind }: { kind: ToastKind }) {
+  const state = STATE_MARK[kind]
+  if (state !== undefined) return <span className="mx-toast-mark" aria-hidden="true"><StatusIcon status={state} /></span>
+  if (kind !== "error" && kind !== "warning") return null
+  return (
+    <span className={`mx-toast-mark is-${kind}`} aria-hidden="true">
+      <svg viewBox="0 0 24 24" focusable="false" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round">
+        <circle cx="12" cy="12" r={EXCLAIM_RADIUS} />
+        <path d={EXCLAIM} />
+      </svg>
+    </span>
+  )
+}
 
 /** How many layers show behind the newest toast while the stack is folded. */
 const MAX_GHOSTS = 2
@@ -44,7 +67,7 @@ function ToastView({ item }: { item: ToastItem }) {
         toast.dismiss(item.id)
       }}
     >
-      <StatusIcon status={MARK[item.kind]} />
+      <ToastMark kind={item.kind} />
       <div className="mx-toast-body">
         <span className="mx-toast-head">
           <span id={titleId} className="mx-toast-title">

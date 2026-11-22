@@ -36,15 +36,13 @@ describe('session notice', () => {
     expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
   })
 
-  it('says a finished or failed session in its status kind, which decides how long it stays, with no Allow', () => {
-    for (const status of ['done', 'error'] as const) {
-      const notice = sessionNoticeFor(session(status, '$ ls'), project, { open: vi.fn(), allow: vi.fn() })
-      expect(notice?.kind).toBe(status)
-      expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
-    }
+  it('says a finished session in its status kind, which decides how long it stays, with no Allow', () => {
+    const notice = sessionNoticeFor(session('done', '$ ls'), project, { open: vi.fn(), allow: vi.fn() })
+    expect(notice?.kind).toBe('done')
+    expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
   })
 
-  it('makes no card for a state that needs nothing from you', () => {
-    expect(sessionNoticeFor(session('idle'), project, { open: vi.fn(), allow: null })).toBeNull()
+  it.each(['idle', 'error', 'limited'] as const)('makes no card for a %s session: it asks nothing, and a stop has its own toast', (status) => {
+    expect(sessionNoticeFor(session(status), project, { open: vi.fn(), allow: null })).toBeNull()
   })
 })

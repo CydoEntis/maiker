@@ -80,7 +80,7 @@ describe('the sessions that wait on you', () => {
   /** A last command that failed: an agent with it stopped, a shell with it exited. */
   const failed = (ago: number) => ({ details: { since: NOW - ago, exit: { code: 1, at: NOW - ago } } as NonNullable<Conversation['details']> })
 
-  it('lists the asking and the stopped on every machine, the one that started waiting last first, each with its machine and project', () => {
+  it('lists the asking on every machine, the one that started waiting last first, each with its machine and project, and no agent that stopped', () => {
     const sessions = [
       session(1, '/home/me/shop', { status: 'needs-you', ...since(300) }),
       session(2, '/srv/api', { machine: 4, machineName: 'devbox', status: 'needs-you', ...since(30) }),
@@ -90,7 +90,6 @@ describe('the sessions that wait on you', () => {
     const waiting = waitingSessions([LOCAL_HEAD, DEVBOX], groupByProject(sessions, []).machines)
     expect(waiting.map(({ session: row, machine, project }) => [row.id, machine.key, project.name])).toEqual([
       ['t2', 'machine-4', 'api'],
-      ['t4', 'machine-0', 'docs'],
       ['t1', 'machine-0', 'shop'],
     ])
   })

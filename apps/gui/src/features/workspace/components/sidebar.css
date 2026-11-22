@@ -141,7 +141,7 @@
 .mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 /* A worktree is told from a branch by its tree and its blue, on the row, the pane's header and under the message box. */
 .mx-row-branch.is-worktree svg { flex: none; }
-.mx-row-word { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--danger); }
+.mx-row-word { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
 /* How many helpers the session's agent started; amber, like any needs-you, while one of them waits on you. */
 .mx-row-helpers { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
 .mx-row-helpers.is-needs { color: var(--needs); }
@@ -192,7 +192,6 @@
 @media (prefers-reduced-motion: reduce) { .mx-collapse-grid, .mx-collapse-inner { transition: none; } }
 .mx-section-key { flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--dim); }
 .mx-row.is-offline { opacity: .5; }
-.mx-row.is-offline .mx-row-word, .mx-row.is-limited .mx-row-word { color: var(--muted); }
 
 
 /* The ≡ menu (`SidebarFilterMenu`): 264px, grows from the button's bottom-left corner. A project search heads it, then
