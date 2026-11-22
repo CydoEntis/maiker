@@ -1,77 +1,127 @@
-/* The sidebar (README: Sidebar). Sizes are the prototype's; its fill and edge are the panel role (material.css). */
+/*
+ * The sidebar (handoff v5, section 4). Its fill and edge are the panel role (material.css) and the frame places it
+ * (frame.css); this file draws what is inside. Sizes are the mock's. Every colour is a role token: a hover is the ink at
+ * low strength, the selected row is `--t2`, and the only other colours are a status, a project's badge and a machine tag.
+ */
 
 .mx-sidebar {
   background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.09 * var(--hk)));
   border-radius: var(--r14);
 }
-/* The top of the sidebar: New chat with the rest of what can start beside it, then Search. Rows, not a toolbar. */
-.mx-sidebar-top { flex: none; display: flex; flex-direction: column; gap: 2px; padding: 10px 8px 6px; }
-.mx-top-line { display: flex; align-items: center; gap: 2px; }
-.mx-top-button { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); text-align: left; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-top-button.is-new { font-weight: 500; color: var(--fg); }
-.mx-top-button:not(:disabled):hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
-.mx-top-button:disabled { opacity: .4; }
-.mx-top-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-top-keys { flex: none; font-size: 11px; font-weight: 500; color: var(--dim); }
+
+/* The header: collapse, the title, then search, filter and open a project. */
+.mx-sb-top { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 14px; }
+.mx-sb-title { font-size: 13px; font-weight: 500; color: var(--fg2); }
+
+/* The projects with something going on scroll; the Idle section under them keeps its place and scrolls on its own. */
+.mx-sb-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.mx-sb-list { flex: 1 1 auto; min-height: 0; overflow-x: hidden; overflow-y: auto; padding: 2px 8px 8px; scrollbar-width: thin; }
+.mx-sb-note { padding: 6px 10px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+.mx-sb-empty { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 10px; padding: 12px; border-radius: var(--r-panel); background: rgba(var(--ink), .03); font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
+.mx-sb-empty b { font-size: 13px; font-weight: 600; color: var(--fg); }
+
+/* A project: no card and no rule, the badge and the bold name head it and the space under it ends it. */
+.mx-sb-group { display: flex; flex-direction: column; margin-bottom: 14px; }
+.mx-sb-group.is-idle { margin-bottom: 6px; }
+/* The heading is one row; its folding button is stretched over all of it, and the tag and the + sit above that. */
+.mx-sb-head { position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 2px 0 8px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); white-space: nowrap; transition: background-color var(--t-fast) var(--ease); }
+.mx-sb-head:hover { background: rgba(var(--ink), .035); }
+.mx-sb-head-main { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--fg); text-align: left; }
+.mx-sb-head-main::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
+.mx-sb-head-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-sb-count { flex: none; font: 500 10.5px var(--mono); color: var(--dim); opacity: .7; font-variant-numeric: tabular-nums; }
+/* A folded project that hides a session waiting on you. */
+.mx-sb-alert { flex: none; width: 7px; height: 7px; margin-left: 4px; border-radius: 50%; background: var(--needs); }
+.mx-sb-caret { flex: none; display: flex; margin-left: auto; color: var(--dim); transition: transform var(--t-base) var(--ease), opacity var(--t-fast) var(--ease); }
+.mx-sb-caret.is-open { transform: rotate(90deg); }
+/* A project's caret shows while it is folded or the pointer is on the heading; an open heading at rest is its name alone. */
+.mx-sb-caret.is-quiet.is-open { opacity: 0; }
+.mx-sb-head:hover .mx-sb-caret.is-quiet, .mx-sb-head:focus-within .mx-sb-caret.is-quiet { opacity: 1; }
+.mx-sb-add { position: relative; z-index: 1; opacity: 0; transition: opacity var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-sb-head:hover .mx-sb-add, .mx-sb-add:focus-visible { opacity: 1; }
+.mx-sb-head-note { flex: none; font-size: 11px; color: var(--dim); }
+
+/* The two letters of a project, on a tint of its colour. */
+.mx-sb-badge { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-right: 1px; border-radius: var(--r-control); font: 700 8.5px var(--mono); letter-spacing: -.02em; color: var(--badge); background: color-mix(in srgb, var(--badge) 18%, transparent); }
+
+/* Another machine's name on its project: the accent's text colour, and amber while that machine is not connected. */
+.mx-sb-tag { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 96px; height: 18px; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding: 0 3px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--accent-text); }
+.mx-sb-tag:hover { background: rgba(var(--ink), .06); }
+.mx-sb-tag.is-down { color: var(--needs); }
+.mx-sb-tag svg { flex: none; }
+.mx-sb-tag-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-sb-tag-progress { flex: none; color: var(--dim); }
+
+/* A session: its name at the left, its status mark at the right. */
+.mx-sb-rows { display: flex; flex-direction: column; gap: 2px; }
+.mx-sb-item { display: flex; flex-direction: column; }
+/* A helper under the session that started it: set in by one step, with a rule down its left edge tying it to that row. */
+.mx-sb-item.is-nested { margin-left: 16px; padding-left: 6px; box-shadow: inset 1px 0 0 rgba(var(--ink), .08); }
+.mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 10px; border-radius: var(--r-control); text-align: left; }
+.mx-sb-row:hover { background: rgba(var(--ink), .035); }
+.mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--t2); }
+.mx-sb-row-name { flex: 1; min-width: 0; font-size: 13.5px; line-height: 20px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* What needs you and what is working read a step stronger; being picked changes the colour only, so a click never re-sets the text. */
+.mx-sb-row:is(.is-needs, .is-working) .mx-sb-row-name { font-weight: 500; color: var(--fg); }
+.mx-sb-row.is-idle .mx-sb-row-name { color: var(--muted); }
+.mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
+/* A session that has not been sent anything is a quiet, italic "New session". */
+.mx-sb-row.is-fresh .mx-sb-row-name { font-style: italic; color: var(--muted); }
+.mx-sb-row-mark { flex: none; }
+.mx-sb-item.is-nested .mx-sb-row { padding: 5px 8px; }
+.mx-sb-item.is-nested .mx-sb-row-name { font-size: 12.5px; }
+
+/* Idle: one section at the bottom, dimmed, at most 45% of the height, past which it scrolls on its own. */
+.mx-sb-idle { flex: none; display: flex; flex-direction: column; max-height: 45%; min-height: 0; padding: 4px 8px 0; }
+.mx-sb-idle-head { flex: none; width: 100%; display: flex; align-items: center; gap: 7px; height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; font-weight: 600; color: var(--muted); text-align: left; }
+.mx-sb-idle-head:hover { background: rgba(var(--ink), .035); color: var(--fg); }
+.mx-sb-idle-head .mx-sb-caret { margin-left: 0; }
+.mx-sb-idle > .mx-collapse-grid { flex: 1 1 auto; min-height: 0; }
+.mx-sb-idle > .mx-collapse-grid > .mx-collapse-inner { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
+.mx-sb-idle-list { padding-top: 2px; }
+.mx-sb-head.is-idle { height: 26px; }
+.mx-sb-head.is-idle .mx-sb-head-main { opacity: .7; }
+.mx-sb-head.is-idle:hover .mx-sb-head-main, .mx-sb-head.is-idle .mx-sb-head-main:focus-visible { opacity: 1; }
+/* An idle project's badge keeps a trace of its colour, so it is still told from its neighbours. */
+.mx-sb-group.is-idle .mx-sb-badge { color: color-mix(in srgb, var(--badge) 40%, var(--muted)); background: color-mix(in srgb, var(--badge) 8%, rgba(var(--ink), .06)); }
+/* Idle rows line up under the project's name, past its badge. */
+.mx-sb-group.is-idle .mx-sb-row { padding-left: 34px; opacity: .55; }
+.mx-sb-group.is-idle .mx-sb-row:hover, .mx-sb-group.is-idle .mx-sb-row.is-selected, .mx-sb-group.is-idle .mx-sb-row:focus-visible { opacity: .9; }
+.mx-sb-group.is-idle .mx-sb-row-name { color: var(--muted); }
+.mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
+
+/* The foot: add a remote machine at the left, Settings at the right. */
+.mx-sb-foot { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 10px; }
+
+/* The filter (`SidebarFilterMenu`): a project search, the projects (six rows, then they scroll), the machines, and Reset
+   while anything is picked. */
+.mx-pop.mx-sbf { width: 262px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+.mx-sbf-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-control); color: var(--dim); }
+.mx-sbf-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 13px; color: var(--fg); }
+.mx-sbf-search input::placeholder { color: var(--dim); }
+.mx-sbf-list { display: flex; flex-direction: column; gap: 1px; }
+.mx-sbf-list.is-projects { max-height: 188px; overflow-y: auto; padding-top: 4px; border-top: 1px solid rgba(var(--ink), .06); }
+.mx-sbf-choice { flex: none; width: 100%; height: 30px; display: flex; align-items: center; gap: 9px; padding: 0 10px; border-radius: var(--r-control); font-size: 13px; text-align: left; color: var(--fg2); }
+.mx-sbf-choice:hover { background: var(--float-hover); color: var(--fg); }
+.mx-sbf-choice.is-on, .mx-sbf-choice.is-on:hover { background: rgba(var(--ink), .08); color: var(--fg); }
+.mx-sbf-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sbf-count { flex: none; font: 400 11px var(--mono); color: var(--dim); }
+.mx-sbf-note { flex: none; font-size: 11px; color: var(--needs); }
+.mx-sbf-machine { flex: none; width: 18px; display: inline-flex; justify-content: center; color: var(--dim); }
+.mx-sbf-machine.is-down { color: var(--needs); }
+.mx-sbf-label { margin-top: 2px; padding: 8px 10px 3px; border-top: 1px solid rgba(var(--ink), .06); font-size: 11px; font-weight: 600; color: var(--dim); }
+.mx-sbf-none { padding: 10px; font-size: 12px; color: var(--dim); }
+.mx-sbf-foot { display: flex; justify-content: flex-end; padding: 4px 4px 2px; border-top: 1px solid rgba(var(--ink), .06); }
+.mx-sbf-reset { height: 26px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); }
+.mx-sbf-reset:hover { background: var(--float-hover); color: var(--fg); }
+
+/* The rail's buttons (the full sidebar's are the one icon button). */
 .mx-head-button { position: relative; width: 28px; height: 28px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-head-button.is-small { width: 26px; height: 26px; }
 .mx-head-button:not(:disabled):hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
 .mx-head-button:disabled { opacity: .4; }
 .mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
-.mx-sidebar .mx-head-button.mx-add-machine { width: auto; flex: none; gap: 6px; padding: 0 8px; font-size: 12px; white-space: nowrap; }
 
-/* Which project, and what the headings are: two quiet buttons, each opening a short list. */
-.mx-sidebar-filters { flex: none; display: flex; align-items: center; gap: 6px; padding: 2px 8px 6px; }
-.mx-filter-button { flex: none; min-width: 0; height: 28px; display: flex; align-items: center; gap: 6px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted); white-space: nowrap; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-filter-button.is-project { flex: 1; font-weight: 500; }
-.mx-filter-button:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); color: var(--fg); }
-.mx-filter-label { flex: 1; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
-
-.mx-sidebar-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0 8px 12px; display: flex; flex-direction: column; gap: 16px; }
-.mx-machines { display: flex; flex-direction: column; gap: 14px; }
-/* The status and project lists: a heading that says what the rows under it share, and folds them away. */
-.mx-sections { display: flex; flex-direction: column; gap: 6px; }
-.mx-section { display: flex; flex-direction: column; }
-.mx-section-head { height: 28px; display: flex; align-items: center; gap: 7px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; font-weight: 600; color: var(--fg); white-space: nowrap; }
-.mx-section-head:hover { background: rgba(var(--hl), calc(.03 * var(--hk))); }
-.mx-section-head.is-needs { color: var(--warn); }
-.mx-section-head.is-working { color: var(--working); }
-.mx-section-head.is-done { color: var(--ok); }
-.mx-section-head.is-idle { color: var(--muted); }
-.mx-section-name { flex: none; }
-.mx-section-count { flex: none; font-size: 11px; font-weight: 500; color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-section-hint { min-width: 0; font-weight: 400; color: var(--dim); overflow: hidden; text-overflow: ellipsis; }
-.mx-folder-mark { flex: none; color: var(--muted-text); }
-/* The caret points down while the project's sessions are showing and turns to the side when they are folded away. */
-.mx-section-caret { display: inline-flex; flex: none; transition: transform var(--t-fast) var(--ease); }
-.mx-section-caret:not(.is-open) { transform: rotate(-90deg); }
-/* Machines that need the app, under a list that has no machine headings to say so. */
-.mx-row-machine { flex: 0 1 auto; min-width: 0; max-width: 40%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-machine { display: flex; flex-direction: column; gap: 2px; }
-.mx-machine.is-away .mx-rows { opacity: .6; }
-.mx-machine-head { display: flex; align-items: center; gap: 6px; min-height: 26px; padding: 0 3px 0 0; }
-.mx-machine-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 8px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; color: var(--dim); border-radius: var(--r-control); text-transform: uppercase; }
-.mx-machine-toggle:hover { color: var(--fg2); }
-.mx-caret-wrap { display: flex; flex: none; width: 12px; color: var(--dim); transition: transform var(--t-base) var(--ease), color var(--t-fast) var(--ease); }
-.mx-caret-wrap.is-open { transform: rotate(90deg); }
-/* Machines and projects each get their own caret colour, so the two levels read apart at a glance. */
-.mx-machine-toggle .mx-caret-wrap { color: var(--accent-text); }
-.mx-machine-toggle:hover .mx-caret-wrap { color: color-mix(in srgb, var(--accent-text) 75%, #fff); }
-.mx-machine-icon { display: flex; flex: none; }
-.mx-machine-name { flex: 1; text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-machine-count { font-size: 11px; letter-spacing: 0; font-weight: 500; font-variant-numeric: tabular-nums; }
-.mx-machine-dot { width: 5px; height: 5px; flex: none; border-radius: 50%; opacity: .8; background: var(--ok); }
-.mx-machine-dot.is-offline { background: var(--err); border: 0; opacity: 1; }
-/* A machine that needs the app: its state and the one-click fix, under the heading, lined up with its mark. */
-/* A machine that needs the app: an amber text button in its header, and its dot turns amber. */
-.mx-machine-update { flex: none; height: 20px; display: flex; align-items: center; gap: 3px; padding: 0 6px; border-radius: var(--r-control); font-size: 11px; font-weight: 500; color: var(--warn); }
-.mx-machine-update:hover { background: rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-machine-dot.is-warn { background: var(--warn); border: 0; }
-
-.mx-rows { display: flex; flex-direction: column; gap: 2px; }
-
-/* A session row: the app tile with its status badge, the name over the project and branch, and a word when it stopped. */
 /* The card beside a row the pointer rests on (`RowHoverCard`): 300px, one hairline ring (no blurred shadow: the card is
    drawn over the busiest part of the window and a software painter pays a blur again on each repaint), easing in by
    opacity alone. One card is kept mounted while it is warm (`HoverController`): it is hidden with `data-open="false"`
@@ -106,64 +156,7 @@
 .mx-hover-when { font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
 :root[data-reduced-motion="true"] .mx-hover-card { animation: none; }
-.mx-row-wrap { position: relative; display: flex; flex-direction: column; gap: 2px; }
-/* A helper under the session that started it: set in by one step, with a rule down its left edge tying it to that row. */
-.mx-row-wrap.is-nested { margin-left: 14px; padding-left: 6px; box-shadow: inset 1px 0 0 var(--line2); }
-.mx-row { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 40px; padding: 4px 6px 4px 10px; border-radius: var(--r-control); text-align: left; transition: background-color var(--t-fast) var(--ease); }
-.mx-row:hover { background: rgba(var(--hl), calc(.045 * var(--hk))); }
-.mx-row.is-selected, .mx-row.is-selected:hover { background: var(--c-sel-bg); box-shadow: var(--c-sel-sh); }
-.mx-row.is-selected:focus-visible { box-shadow: var(--focus-underline); }
-/* The status icon sits level with the name, not centred on the two lines. */
-.mx-row { align-items: flex-start; }
-.mx-row { position: relative; }
-.mx-row .mx-row-icon { margin-top: 3px; }
-.mx-row-folder { display: inline-flex; flex: none; color: var(--dim); }
-.mx-row-slash { flex: none; color: var(--line2); }
-.mx-row-sub .mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-family: var(--mono); }
-/* An idle row is told by its grey dot, not by fading its words: the design keeps its title at --fg2 (measured #b2b2b0). */
-.mx-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
-.mx-row-name { height: 18px; font-size: 13px; line-height: 18px; font-weight: 400; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-row.is-selected .mx-row-name { color: var(--fg); }
-.mx-row .mx-inline-name { height: 20px; flex: none; width: 100%; margin-left: -5px; padding: 0 5px; border-radius: 0; font-size: 13px; font-weight: 600; background: transparent; border: 0; outline: none; box-shadow: var(--focus-underline); }
-.mx-row-sub { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 10.5px; line-height: 14px; color: var(--dim); white-space: nowrap; overflow: hidden; }
-.mx-row-project { display: inline-flex; align-items: center; gap: 5px; flex: 0 .2 auto; min-width: 7ch; }
-.mx-row-project-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* The name and, at its right, the time or the word for how it stopped. */
-.mx-row-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.mx-row-status { flex: none; }
-.mx-row-title > .mx-row-name { flex: 1; min-width: 0; }
-.mx-row-square { width: 6px; height: 6px; border-radius: var(--r-badge); }
-/* The icon and the name share one line: the name alone gives way when the row is narrow. */
-.mx-row-branch { display: inline-flex; align-items: center; gap: 3px; min-width: 0; margin-left: auto; font-family: var(--mono); color: var(--branch); }
-/* Capped only beside another machine's name; otherwise the branch takes what the folder leaves, the folder keeping 7ch. */
-.mx-row-sub:has(.mx-row-machine) .mx-row-branch { max-width: 58%; }
-.mx-row-branch svg { flex: none; }
-.mx-row-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-/* A worktree is told from a branch by its tree and its blue, on the row, the pane's header and under the message box. */
-.mx-row-branch.is-worktree svg { flex: none; }
-.mx-row-word { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
-/* How many helpers the session's agent started; amber, like any needs-you, while one of them waits on you. */
-.mx-row-helpers { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); }
-.mx-row-helpers.is-needs { color: var(--needs); }
-/* Whose helper a row is: it gives way before the place does, so the branch stays readable. */
-.mx-row-starter { display: inline-flex; align-items: center; gap: 4px; flex: 0 2 auto; min-width: 4ch; }
-.mx-row-starter-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-hover-row .is-needs { color: var(--needs); }
-.mx-row-when { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--muted); transition: opacity var(--t-fast) var(--ease); }
-
-
-/* The Terminals section: pinned over the foot, with a share of the height at most, past which it scrolls on its own. */
-.mx-terminals { flex: none; display: flex; flex-direction: column; max-height: 33%; min-height: 0; padding: 4px 8px 6px; border-top: 1px solid var(--pane-line); }
-.mx-terminals-head { flex: none; display: flex; align-items: center; gap: 4px; }
-.mx-terminals-head .mx-section-head { flex: 1; min-width: 0; }
-.mx-terminals > .mx-collapse-grid { flex: 1 1 auto; min-height: 0; }
-.mx-terminals > .mx-collapse-grid > .mx-collapse-inner { overflow-y: auto; overflow-x: hidden; }
-/* The rail's one terminal glyph: the count sits at its corner, in the space the 30px tile already has. */
-.mx-rail-terminals { flex: none; position: relative; width: 100%; padding: 4px 0; border-top: 1px solid var(--line); color: var(--muted); }
-.mx-rail-terminals .mx-rail-session { position: relative; }
-.mx-rail-terminals.is-selected .mx-rail-session { background: var(--m-sel); color: var(--fg); }
-.mx-rail-count { position: absolute; right: 6px; bottom: 2px; font-size: 9.5px; line-height: 12px; font-variant-numeric: tabular-nums; color: var(--dim); }
-.mx-sidebar-foot { flex: none; padding: 10px 12px 12px; display: flex; align-items: center; gap: 8px; border-top: 1px solid var(--pane-line); }
 
 /* The rail of a narrow window: the starters, then a tile per session. */
 .mx-rail-session { width: 100%; height: 30px; display: flex; align-items: center; justify-content: center; transition: background-color var(--t-fast) var(--ease); }
@@ -173,55 +166,9 @@
 /* An idle session has no mark, and the rail's button holds nothing else: a dim dot keeps the button findable. */
 .mx-rail-session:empty::before { content: ''; width: 5px; height: 5px; border-radius: 50%; background: var(--dim); }
 
-/* A chat that is still a draft: a session row's twin, named "New chat" in italics with a "draft" tag at its right. */
-.mx-draft { pointer-events: none; align-items: center; }
-.mx-draft .mx-row-text { flex-direction: row; align-items: center; justify-content: space-between; gap: 6px; }
-.mx-draft-name { font-style: italic; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-draft-tag { flex: none; font: 400 11px/15px var(--mono, ui-monospace, monospace); color: var(--dim); }
-
-/* While a machine updates: its percentage replaces the Update button, and a 2px line runs under the header. */
-.mx-machine-pct { flex: none; padding: 0 4px; font-size: 11px; color: var(--dim); }
-.mx-machine-progress { display: block; margin: -1px 10px 3px 26px; height: 2px; border-radius: var(--r-badge); background: rgba(var(--hl), calc(.06 * var(--hk))); overflow: hidden; }
-.mx-machine-progress > span { display: block; height: 100%; background: var(--accent); transition: width var(--t-slow) var(--ease); }
-
 /* A folded section: the row track shrinks to nothing and the content fades; `inert` in Collapse.tsx keeps it out of reach. */
 .mx-collapse-grid { contain: layout style; display: grid; grid-template-rows: 1fr; transition: grid-template-rows var(--t-base) var(--ease); }
 .mx-collapse-grid[data-open="false"] { grid-template-rows: 0fr; }
 .mx-collapse-inner { min-height: 0; overflow: hidden; transition: opacity var(--t-fast) var(--ease); }
 .mx-collapse-grid[data-open="false"] > .mx-collapse-inner { opacity: 0; }
 @media (prefers-reduced-motion: reduce) { .mx-collapse-grid, .mx-collapse-inner { transition: none; } }
-.mx-section-key { flex: none; font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--dim); }
-.mx-row.is-offline { opacity: .5; }
-
-
-/* The ≡ menu (`SidebarFilterMenu`): 264px, grows from the button's bottom-left corner. A project search heads it, then
-   the projects (six rows, then it scrolls), and Reset while a project is picked. */
-.mx-pop.mx-grp-menu { width: 264px; padding: 0; display: flex; flex-direction: column; }
-.mx-grp-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; box-shadow: inset 0 -1px 0 var(--line); color: var(--dim); }
-.mx-grp-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 12.5px; color: var(--fg); }
-.mx-grp-projects { max-height: 188px; overflow-y: auto; padding: 4px; }
-.mx-grp-project { width: 100%; height: 28px; display: flex; align-items: center; gap: 8px; padding: 0 8px; font-size: 12.5px; text-align: left; color: var(--fg2); }
-.mx-grp-project:hover { background: var(--m-hover); color: var(--fg); }
-.mx-grp-project.is-on { background: var(--m-sel); color: var(--fg); }
-.mx-grp-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-grp-count { font: 400 11px var(--mono); color: var(--dim); }
-.mx-grp-none { padding: 10px 8px; font-size: 12px; color: var(--dim); }
-.mx-grp-foot { display: flex; justify-content: flex-end; padding: 4px 6px; border-top: 1px solid var(--line); }
-.mx-grp-reset { height: 24px; padding: 0 8px; font-size: 12px; color: var(--fg2); }
-.mx-grp-reset:hover { background: var(--m-hover); color: var(--fg); }
-
-/* The line under a machine's heading: Connecting…, or for a machine that is not up a red dot, the host's sentence and its buttons. */
-.mx-machine-why { display: flex; align-items: center; gap: 6px; margin: 0 8px 4px 26px; font-size: 11.5px; color: var(--muted); }
-.mx-machine-why.is-down { align-items: flex-start; }
-/* Centred on the sentence's first line (16px), not on the whole block. */
-.mx-machine-why.is-down .mx-machine-why-dot { margin-top: 5px; }
-.mx-machine-why-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--err); flex: none; }
-.mx-machine-why-word { flex: 1; min-width: 0; }
-.mx-machine-why-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-/* The sentence wraps rather than truncates: a command in it has to be read whole. */
-.mx-machine-why-words { line-height: 16px; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-machine-why-actions { display: flex; flex-wrap: wrap; gap: 4px; }
-.mx-machine-empty { margin: 0 8px 4px 26px; font-size: 11.5px; color: var(--muted); }
-.mx-machine-fix { flex: none; height: 20px; padding: 0 8px; border-radius: var(--r-control); font-size: 11.5px; font-weight: 500; color: var(--fg); background: var(--m-hover); }
-.mx-machine-fix:hover { background: var(--m-sel); }
-/* A visible way to start a session on a machine; before it was only in the machine's right-click menu. */

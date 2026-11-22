@@ -1,13 +1,14 @@
-/* Right-click and ⋯ menus (the design's `.cm`): 190px at least, 4px of room, rows of 30px, keys at the right, no heading. */
+/* Right-click and button menus (the design's `.cm`): 224px at least, 4px of room, rows of 30px, keys at the right. */
 .mx-ctx {
-  position: fixed; z-index: 91; min-width: 190px; padding: 4px; display: flex; flex-direction: column; border-radius: var(--r-panel);
+  position: fixed; z-index: 91; min-width: 224px; padding: 4px; display: flex; flex-direction: column; border-radius: var(--r-panel);
   color: var(--fg); font-family: var(--ui);
   animation: mx-pop .14s ease-out;
 }
 /* The menu itself holds focus while it is open; the rows show where you are, so the menu draws no focus underline of its own. */
 .mx-ctx:focus, .mx-ctx:focus-visible, .mx-ctx [role="menu"]:focus-visible { outline: none; box-shadow: none; }
 @keyframes mx-pop { from { opacity: 0; transform: translateY(-4px) scale(.97); } to { opacity: 1; transform: none; } }
-.mx-ctx-heading { padding: 6px 10px 3px; font-size: 10.5px; font-weight: 600; letter-spacing: .04em; text-transform: uppercase; color: var(--dim); }
+/* What the menu is about, or what a group of rows is: one dim line, wrapping when it is a sentence (a machine's failure). */
+.mx-ctx-heading { max-width: 300px; padding: 6px 10px 4px; font-size: 11.5px; font-weight: 400; line-height: 1.4; color: var(--dim); overflow-wrap: anywhere; }
 .mx-ctx-sep { height: 1px; margin: 4px 6px; background: var(--line); }
 .mx-ctx-item { height: 30px; display: flex; align-items: center; gap: 16px; padding: 0 10px; border-radius: var(--r-control); font-size: 13px; text-align: left; color: var(--fg2); outline: none; }
 .mx-ctx-item:focus-visible { outline: none; box-shadow: none; }
@@ -25,3 +26,12 @@
 .mx-ctx-label { flex: 1; white-space: nowrap; }
 .mx-ctx-hint { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 
+.mx-ctx-icon { flex: none; width: 18px; display: inline-flex; align-items: center; justify-content: center; }
+/* A project's + menu (the design's `.pmn`): 300px, a line saying where it acts, then roomier rows with a mark before each. */
+.mx-ctx.has-context { width: 300px; padding: 6px; }
+.mx-ctx-context { display: flex; align-items: center; gap: 7px; margin-bottom: 2px; padding: 6px 8px 8px; border-bottom: 1px solid rgba(var(--ink), .05); font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; }
+.mx-ctx-context svg { flex: none; }
+.mx-ctx-context span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-ctx.has-context .mx-ctx-heading { padding: 8px 8px 4px; }
+.mx-ctx.has-context .mx-ctx-item { height: 32px; gap: 10px; padding: 0 8px; font-size: 13.5px; color: var(--fg); }
+.mx-ctx.has-context .mx-ctx-hint { font-size: 11.5px; }

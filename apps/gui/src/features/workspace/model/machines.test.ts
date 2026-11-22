@@ -3,7 +3,7 @@ import { conversationsFromSnapshot } from '@/api/daemon'
 import { forgetMachines, parseSessionId, registerMachine, type MachineKind, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import type { Layout } from './layout'
-import { idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
+import { downSentence, LOCAL_HEAD, machineDrops, idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
 import { folderNameOf, toSessionView } from './session'
 
 afterEach(() => { forgetMachines() })
@@ -282,5 +282,29 @@ describe('machine nicknames', () => {
     expect(machineTitle(heads[1] as MachineHead)).toBe('Builder')
     expect(heads[1]).toMatchObject({ name: 'Build-Box' })
     expect(machineTitle(machineHeads(new Map([[1, { state, conversations: [], heard: true, listedAt: 0 }]]))[1] as MachineHead)).toBe('Build-Box')
+  })
+})
+
+describe('saying that a machine is not connected', () => {
+  const devbox: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
+  const down: MachineHead = { ...devbox, down: true }
+
+  it('says each drop once, at launch too, and says when the machine is back or gone', () => {
+    const first = machineDrops(null, [LOCAL_HEAD, down])
+    expect(first.dropped.map((head) => head.name)).toEqual(['devbox'])
+    const still = machineDrops(first.seen, [LOCAL_HEAD, down])
+    expect([still.dropped, still.back]).toEqual([[], []])
+    expect(machineDrops(still.seen, [LOCAL_HEAD, devbox]).back).toEqual(['devbox'])
+    expect(machineDrops(still.seen, [LOCAL_HEAD]).back).toEqual(['devbox'])
+  })
+
+  it('never says it of this computer', () => {
+    expect(machineDrops(null, [{ ...LOCAL_HEAD, down: true }]).dropped).toEqual([])
+  })
+
+  it('uses the host\'s own sentence when it gave one, and always says something', () => {
+    expect(downSentence({ ...down, why: 'devbox refused the key.' })).toBe('devbox refused the key.')
+    expect(downSentence(down)).not.toBe('')
+    expect(downSentence({ ...down, updateAction: 'install' })).not.toBe(downSentence(down))
   })
 })

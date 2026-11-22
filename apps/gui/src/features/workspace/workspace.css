@@ -76,8 +76,8 @@
   button, a, summary, label, input, select, textarea, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
   [role="option"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"],
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
-  .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
-  .mx-grp-project, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
+  .mx-chip, .mx-chip-row, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
+  .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
   .mx-rm-row, .mx-rm-host, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
   .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-mm-model, .mx-dialog-close
 ) {
@@ -156,7 +156,6 @@
 @keyframes mx-wspin-bar { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
 @keyframes mx-wspin-ping { from { transform: scale(.35); opacity: 1; } to { transform: scale(1); opacity: 0; } }
 
-.mx-empty-note { padding: 6px 10px; font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
 
 /* Rail: the collapsed sidebar (Sidebar.tsx, Rail), the design's 52px strip: three 32px buttons, then a 30px row per chat holding only
    its status icon, in the full list's order, a 20px divider between groups, update and Settings at the foot. */

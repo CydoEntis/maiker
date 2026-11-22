@@ -3,6 +3,7 @@ import { Panel } from '@/components/ui/panel'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { projectOfSession } from '../model/startProject'
 import { projectName } from '../model/sidebarTree'
+import { useInstalledAgents } from '../model/newChatHost'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
@@ -13,9 +14,10 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, newTerminal, chatView, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, showChangesOf, markDone, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
+  const installedAgents = useInstalledAgents()
   // A session's own New worktree can move its chat into the new worktree, which only this computer's can; another
   // machine's session lends its repository, as it does to its project's heading.
   const newWorktreeFrom = (id: string) => {
@@ -45,7 +47,7 @@ export function WorkspaceSidebars() {
       side={preferences.sidebarSide}
       projects={openedProjects.machines}
       selectedProject={openedProjects.selected}
-      statusHeadings={preferences.sidebarStatusHeadings}
+      installedAgents={installedAgents}
       onSearch={() => { afterPick(); setPaletteOpen(true) }}
       width={sidebarWidth}
       onResize={setLiveSidebarWidth}
@@ -54,7 +56,6 @@ export function WorkspaceSidebars() {
         setLiveSidebarWidth(null)
       }}
       onHoverSession={warmChat}
-      onNewShell={chatView ? undefined : (machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
       onOpenProject={(machine) => { afterPick(); setOpenProject(machine === null ? PROJECT_FROM_SOURCES : projectRequestFor(machine)) }}
       projectActions={projectActionsFor(afterPick)}
@@ -68,18 +69,13 @@ export function WorkspaceSidebars() {
       onRenameSession={setRenameId}
       onSplitSession={(id, direction) => { afterPick(); openInSplit(id, direction) }}
       onCopyPath={copyPathOf}
-      onCopyText={copyText}
       onShowChanges={(id) => { afterPick(); showChangesOf(id) }}
       onMarkDone={markDone}
-      onBringBack={bringBack}
-      onUnsnooze={unsnooze}
       onGetFile={setGetFileId}
-      onSpecialists={setSpecialistsId}
       onNewWorktree={(id) => { afterPick(); newWorktreeFrom(id) }}
       onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}
       onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
-      onRecentSessions={() => { afterPick(); setRecentOpen(true) }}
       updateProgress={updateProgress}
     />
   )

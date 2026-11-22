@@ -3,6 +3,7 @@ import type { OpenWorktreeDialog } from './components/OpenWorktreeDialog'
 import type { ProjectActions } from './components/projectMenu'
 import { sameProject, type OpenedProject } from './model/openedProjects'
 import { worktreeSourceOf } from './model/projectActions'
+import type { ChatAgent } from './model/chatView'
 import type { SessionView } from './model/session'
 import { confirmAsk } from '@/features/confirm/confirm'
 import { useWorkspace } from './workspaceContext'
@@ -23,41 +24,46 @@ export function useOpenWorktreeState() {
   return useState<OpenWorktreeFor | null>(null)
 }
 
+/** What a draft opened from a project starts with, beyond its folder. */
+type DraftStart = { worktree?: boolean; agent?: ChatAgent }
+
 /** Opens the new-chat draft on `machine` with `folder` filled in, as every start from a project heading does. */
 function useDraftIn() {
   const { setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen } = useWorkspace()
-  return useCallback((machine: number, folder: string, worktree = false) => {
+  return useCallback((machine: number, folder: string, { worktree = false, agent }: DraftStart = {}) => {
     setSettingsSection(null)
     setNewChatMachine(machine)
-    setNewChatSeed(worktree ? { folder, message: '', worktree } : { folder, message: '' })
+    setNewChatSeed({ folder, message: '', ...(worktree ? { worktree } : {}), ...(agent === undefined ? {} : { agent }) })
     setNewChatOpen(true)
   }, [setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen])
 }
 
 /**
- * What a project heading's buttons and menu do in this window, for `Sidebar`'s `projectActions`. `afterPick` runs first,
- * so the overlay sidebar of a narrow window gets out of the way.
+ * What a project heading's menus do in this window, for `Sidebar`'s `projectActions`. `afterPick` runs first, so the
+ * overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm, copyText, showFilesOf } = useWorkspace()
   const draftIn = useDraftIn()
   const { close, closable } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
-    onNewSession: (machine, project) => { afterPick(); draftIn(machine, project.folder) },
+    onNewSession: (machine, project, agent) => { afterPick(); draftIn(machine, project.folder, agent === undefined ? {} : { agent }) },
     onNewWorktree: (machine, project, from) => {
       afterPick()
-      if (from === null) draftIn(machine, project.folder, true)
+      if (from === null) draftIn(machine, project.folder, { worktree: true })
       else setProjectWorktreeFrom(from)
     },
     onNewTerminal: chatView ? undefined : (machine, project) => { afterPick(); newTerminal(machine, project.folder) },
     onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
+    onCopyPath: (project) => { copyText(project.folder, 'Path') },
+    onShowFiles: (sessionId) => { afterPick(); showFilesOf(sessionId) },
     // A refusal is said at once; only a removal that would go through is asked about.
     onClose: (project, name) => {
       const answer = closable(project)
       if (answer.ok) confirm(confirmAsk('remove-project', name), () => { close(project) })
       return answer
     },
-  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closable, confirm, chatView, newTerminal])
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closable, confirm, chatView, newTerminal, copyText, showFilesOf])
 }
 
 /**
@@ -79,7 +85,7 @@ export function useOpenWorktreeDialog(): ComponentProps<typeof OpenWorktreeDialo
     sessions,
     onNewWorktree: () => {
       done()
-      if (from === null) draftIn(machine, project.folder, true)
+      if (from === null) draftIn(machine, project.folder, { worktree: true })
       else setProjectWorktreeFrom(from)
     },
     onStart: (folder) => { done(); draftIn(machine, folder) },

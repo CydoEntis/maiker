@@ -173,8 +173,8 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
-    fireEvent.contextMenu(screen.getByRole('button', { name: 'a', expanded: true }))
-    await user.click(await screen.findByRole('menuitem', { name: 'New terminal' }))
+    await user.click(screen.getByRole('button', { name: 'a' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Terminal' }))
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })
@@ -256,7 +256,7 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code`) })
   })
 
-  it('lists every session under its project, in the order the projects were opened, what needs you first within each, each named by its folder', async () => {
+  it('lists the projects with something going on by urgency, then the idle sessions by project, each session named by its folder', async () => {
     daemon.loadConversations.mockResolvedValue([
       term(9, `${HOME}/Downloads`),
       inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker/crates/maitty-core`, { agent: 'codex', status: 'working' }),
@@ -268,8 +268,8 @@ describe('desktop terminal multiplexer', () => {
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     await within(sidebar).findByRole('button', { name: 'maiker, shell, idle' })
     const rows = within(sidebar).getAllByRole('button', { name: /, (shell|codex), / }).map((row) => row.getAttribute('aria-label'))
-    expect(rows).toEqual(['maiker, codex, working', 'maiker, shell, idle', 'docs, shell, needs you', 'Downloads, shell, idle'])
-    expect(within(sidebar).getAllByRole('button', { name: /^(maiker|docs|Downloads)$/, expanded: true }).map((head) => head.textContent)).toEqual(['maiker', 'docs', 'Downloads'])
+    expect(rows).toEqual(['docs, shell, needs you', 'maiker, codex, working', 'Downloads, shell, idle', 'maiker, shell, idle'])
+    expect(within(sidebar).getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['docs', 'maiker', 'Idle in Downloads', 'Idle in maiker'])
     expect(sidebar).not.toHaveTextContent(`${DAEMON_NAME} ·`)
   })
 
@@ -1099,7 +1099,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('button', { name: 'a', expanded: true })
+    await screen.findByRole('button', { name: 'a' })
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 

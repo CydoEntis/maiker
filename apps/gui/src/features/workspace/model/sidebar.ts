@@ -1,13 +1,13 @@
 import { isChatSession } from './chatSession'
 import { markOf, type StatusMarkKind } from '@/lib/statusMark'
-import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, untilWord, type SessionView, STATUS_WORD } from './session'
+import { displayName, folderNameOf, inCreationOrder, limitedWord, SHELL_PROCESS, type SessionView, STATUS_WORD } from './session'
 
 /**
  * The most urgent first, by the state each is shown as (`markOf`): what needs you, what is working, what finished, then
  * what is idle, which is where a stopped, limited or unreachable session is. Within a rank the sessions keep their
  * creation order, so a row only moves when its state changes.
  */
-const URGENCY: Record<StatusMarkKind, number> = { needs: 0, working: 1, done: 2, idle: 3 }
+export const URGENCY: Record<StatusMarkKind, number> = { needs: 0, working: 1, done: 2, idle: 3 }
 
 export function byUrgency(sessions: readonly SessionView[]): SessionView[] {
   return inCreationOrder(sessions).sort((a, b) => URGENCY[markOf(a.status)] - URGENCY[markOf(b.status)])
@@ -93,20 +93,6 @@ export function rowTitle(session: SessionView): string {
 }
 
 /**
- * The words at the right of a row: what happened to a session that is shown as idle though the daemon says more (a stopped
- * agent, an exited shell, one held by its plan limit, one out of reach). Activity text, never a state of its own.
- */
-export function rowWord(session: SessionView, now: number = Date.now()): string {
-  if (session.snoozedUntil !== null) return untilWord(session.snoozedUntil, now)
-  if (session.status === 'limited') return limitedWord(session.resumeAt, now)
-  // Its machine or the daemon is out of reach, or the list just missed it: the last status is not known to be true.
-  if (session.status === 'unknown') return STATUS_WORD.unknown
-  if (session.status !== 'error') return ''
-  // A shell that ended did not stop on a failure, so it says it exited.
-  return isShell(session) ? 'exited' : STATUS_WORD.error
-}
-
-/**
  * What happened to a session that is shown as idle though the daemon says more, as the one line its hover card reads:
  * `limited until 14:05`, `stopped (exit code 1)`, `exited`, `offline`. Empty when its status is one of the four states.
  */
@@ -127,84 +113,7 @@ export function byLatestChange(sessions: readonly SessionView[]): SessionView[] 
   return inCreationOrder(sessions).reverse().sort((a, b) => (b.statusSince ?? 0) - (a.statusSince ?? 0))
 }
 
-/**
- * A terminal: a session with no agent in it (a shell, or a program running in one, such as `pnpm dev`). One that needs
- * you counts as an agent here, because what needs you is never folded out of sight.
- */
-export function isTerminal(session: Pick<SessionView, 'conversation' | 'status'>): boolean {
-  return !session.conversation.agent && session.status !== 'needs'
-}
-
-export type StatusSectionKey = StatusMarkKind
-
-/** The status sections in the order they are listed, each with the few words that say what it means. */
-const STATUS_SECTIONS: ReadonlyArray<{ key: StatusSectionKey; name: string; hint: string }> = [
-  { key: 'needs', name: 'Needs you', hint: 'waiting on you' },
-  { key: 'working', name: 'Working', hint: 'running now' },
-  { key: 'done', name: 'Done', hint: 'ready to review' },
-  { key: 'idle', name: 'Idle', hint: 'nothing to do' },
-]
-
-/** The section a session is listed in: the state it is shown as (`markOf`), so only a question the person can answer is under Needs you. */
-export function sectionOf(session: Pick<SessionView, 'status'>): StatusSectionKey {
+/** The state a session is listed and counted as (`markOf`), so only a question the person can answer is under needs you. */
+export function sectionOf(session: Pick<SessionView, 'status'>): StatusMarkKind {
   return markOf(session.status)
-}
-
-export type StatusSection = { key: StatusSectionKey; name: string; hint: string; sessions: SessionView[] }
-
-/** A session kept in the section it was in when it was picked, whatever its status says since. */
-export type HeldRow = { readonly id: string; readonly section: StatusSectionKey }
-
-/** The two sections a row moves between when the person looks at it: a finished agent turns idle. */
-const stays = (section: StatusSectionKey): boolean => section === 'done' || section === 'idle'
-
-/**
- * The sessions under the status each has, the latest change first within a section (`byLatestChange`); a section with nothing in it is left out. The `held` row stays where it was picked: looking at a finished agent makes it
- * idle, and a row that jumps away from under the pointer the moment it is clicked reads as the app fighting you. Its
- * mark still shows its status. Only that shift between finished and idle is held: a row that starts working, or asks, goes
- * to its own section at once, or an agent at work would be listed as idle until the person looked away.
- */
-export function statusSections(sessions: readonly SessionView[], held: HeldRow | null = null): StatusSection[] {
-  const ordered = byLatestChange(sessions)
-  const placed = (session: SessionView): StatusSectionKey => {
-    const actual = sectionOf(session)
-    return session.id === held?.id && stays(held.section) && stays(actual) ? held.section : actual
-  }
-  return STATUS_SECTIONS
-    .map((section) => ({ ...section, sessions: ordered.filter((session) => placed(session) === section.key) }))
-    .filter((section) => section.sessions.length > 0)
-}
-
-/**
- * Put away (`TermInfo.archived`) and listed only under Put away. It keeps running, and while Needs you would list it
- * (an agent or a terminal that asks) it is listed there instead, so
- * nothing that waits on you is folded out of sight. The daemon's flag stays set: once it no longer needs you it goes
- * back under Put away, where the person left it. Only Bring back clears it.
- */
-function isPutAway(session: SessionView): boolean {
-  return (session.archived || session.snoozedUntil !== null) && (isTerminal(session) || sectionOf(session) !== 'needs')
-}
-
-/** The sessions the sections list, and the ones put away (as created), which only the Put away section lists. */
-export function splitPutAway(sessions: readonly SessionView[]): { listed: SessionView[]; putAway: SessionView[] } {
-  return {
-    listed: sessions.filter((session) => !isPutAway(session)),
-    putAway: inCreationOrder(sessions.filter(isPutAway)),
-  }
-}
-
-export type ProjectChoice = { name: string; color: string; count: number }
-
-/** Every project that has a session, the busiest first, for the list that narrows the sidebar to one of them. */
-export function projectChoices(sessions: readonly SessionView[]): ProjectChoice[] {
-  const counts = new Map<string, number>()
-  for (const session of sessions) counts.set(projectOf(session), (counts.get(projectOf(session)) ?? 0) + 1)
-  return [...counts.entries()]
-    .map(([name, count]) => ({ name, color: projectColor(name), count }))
-    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name))
-}
-
-/** The sessions of one project, or all of them when none is picked. */
-export function inProject(sessions: readonly SessionView[], project: string | null): SessionView[] {
-  return project === null ? [...sessions] : sessions.filter((session) => projectOf(session) === project)
 }

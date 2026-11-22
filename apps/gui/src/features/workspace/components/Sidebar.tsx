@@ -1,52 +1,50 @@
-import { Fragment, useEffect, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
-import { machineTitle, UPDATE_WORDS, type MachineHead, type UpdateAction } from '../model/machines'
-import { STATUS_WORD, type SessionView } from '../model/session'
-import { inProject, isShell, projectChoices, projectOf, rowTitle, sectionOf, splitPutAway, statusSections, type HeldRow } from '../model/sidebar'
-import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
-import { machineFoldCounts, machineFoldKey, projectFoldCounts, projectFoldKey, showsMachineHeadings, showsStatusHeadings, sidebarTree, treePlacement, waitingSessions, withSessionsOnly, type MachineNode, type ProjectNode, type WaitingSession } from '../model/sidebarTree'
-import { readSidebarFolds, writeSidebarFolds } from '@/data/sidebarFolds'
-import { useTipWithKeys, useShortcutText } from '@/features/shortcuts/platform'
-import { SidebarResizer } from './SidebarResizer'
-import { AppIcon, FolderMark, Icon, MachineIcon } from './glyphs'
+import { Fragment, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { FolderPlus } from 'lucide-react'
 import { IconButton } from '@/components/ui/icon-button'
-import { StatusIcon } from '@/components/ui/status-icon'
-import { Collapse } from './Collapse'
-import { useReducedMotion } from './motion'
-import { useFlip } from './useFlip'
-import { MenuPopup, type MenuEntry } from './MenuPopup'
-import { SessionRow } from './SessionRow'
+import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
 import { helperLinks } from '../model/helpers'
-import { SidebarFilterMenu } from './SidebarFilterMenu'
-import { NeedsYouStrip } from './NeedsYouStrip'
-import { FoldBadges } from './FoldBadges'
+import { machineTitle, type MachineHead, type UpdateAction } from '../model/machines'
+import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
+import type { SessionView } from '../model/session'
+import { rowTitle, sectionOf } from '../model/sidebar'
+import { filterChoices, IDLE_FOLD_KEY, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type HeldRow, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
+import { Collapse } from './Collapse'
+import { Icon } from './glyphs'
+import { machineMenuEntries, type MachineActions } from './machineMenu'
+import { MachineTag } from './MachineTag'
+import { MenuPopup, type MenuEntry } from './MenuPopup'
+import { useReducedMotion } from './motion'
+import { ProjectBadge } from './ProjectBadge'
+import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
 import { RowHoverHost } from './RowHoverHost'
+import { sessionMenuEntries } from './sessionMenu'
+import { SessionRow } from './SessionRow'
+import { SidebarFilterMenu } from './SidebarFilterMenu'
+import { SidebarRail } from './SidebarRail'
+import { SidebarResizer } from './SidebarResizer'
+import { useFlip } from './useFlip'
 import { useHoverController } from './useHoverController'
-import { flipKey } from './flipKey'
-import { menuPoint } from './menuPoint'
-import { ProjectHeadActions } from './ProjectHeadActions'
-import { projectCommands, projectMenuEntries, type ProjectActions } from './projectMenu'
-
+import { useSidebarFolds } from './useSidebarFolds'
 
 export type SidebarProps = {
-  /** Every session of every machine. Each machine lists its own, in `order`. */
+  /** Every session of every machine. */
   sessions: readonly SessionView[]
   /** The daemon has sent its first list; until then an empty list means "not known yet", not "none". */
   listed: boolean
-  /** The machine groups: this computer first, then the others. */
+  /** The configured machines: this computer first, then the others. */
   machines: readonly MachineHead[]
-  /** Each machine's opened projects with their sessions (`useOpenedProjects().machines`): what the tree draws. */
+  /** Each machine's opened projects with their sessions (`useOpenedProjects().machines`): what the sidebar lists. */
   projects: readonly MachineProjects[]
-  /** The project to show and mark (`useOpenedProjects().selected`): its machine and itself are unfolded when it changes. */
+  /** The project last opened or picked (`useOpenedProjects().selected`): it is unfolded when it changes. */
   selectedProject: OpenedProject | null
-  /** A project of `STATUS_HEADINGS_FROM` sessions or more heads each status that has sessions (Settings › Show status headings). */
-  statusHeadings: boolean
+  /** The agent programs on this computer, for a project's `+` menu; null while that is unknown. */
+  installedAgents: readonly string[] | null
   /** Opens the search over every session, project and action. */
   onSearch: () => void
   focusedId: string | null
   mode: 'docked' | 'rail'
   online: boolean
   canStart: boolean
-  /** The session whose name is being typed in its row; the window starts it from a menu, F2 or a double-click. */
   /** Where portalled menus mount, so they read the theme's colours. */
   portalContainer: HTMLElement | null
   /** Collapses the docked sidebar to the rail, or expands the rail (over the window when it is narrow). */
@@ -56,19 +54,13 @@ export type SidebarProps = {
   width: number
   onResize: (width: number) => void
   onResizeEnd: (width: number) => void
-  /** Starts a plain terminal in a machine's home folder; absent in the Chat view, which makes none. */
-  onNewShell?: ((machine: number) => void) | undefined
   onAddMachine: () => void
-  /**
-   * Opens a folder of a machine as a project, starting nothing. Every + that is not a project's own does this: a session
-   * is started from an opened project, never on its own.
-   */
-  /** Shows Open a project: browsing a machine's folders, or every source when no machine is named (null). */
+  /** Shows Open a project, starting nothing: a machine's folders, or every source when no machine is named (null). */
   onOpenProject: (machine: number | null) => void
-  /** What a project heading's buttons and right-click menu do; without it a heading only folds. */
+  /** What a project heading's menus do; without it a heading only folds. */
   projectActions?: ProjectActions | undefined
   onMachineSettings: () => void
-  /** Dials a machine that is not up again (by its real name): its Retry under the heading. */
+  /** Dials a machine that is not up again (by its real name). */
   onRetryMachine: (name: string) => void
   /** Opens ssh to a machine in a terminal, for a login that needs a password or a second code. */
   onSignInMachine: (machine: number, name: string) => void
@@ -82,66 +74,32 @@ export type SidebarProps = {
   onRenameSession: (id: string | null) => void
   /** Shows a session beside the pane that has focus. */
   onSplitSession: (id: string, direction: 'right' | 'down') => void
-  /** Opens a shell in an agent's folder, beside it. */
   onCopyPath: (id: string) => void
-  onCopyText: (text: string, what: string) => void
   onShowChanges: (id: string) => void
   onMarkDone: (id: string) => void
-  onBringBack: (id: string) => void
-  onUnsnooze: (id: string) => void
   /** Asks for a file to pull from the machine of session `id`. */
   onGetFile: (id: string) => void
   /** The pointer or keyboard is on this session's row (`null`: it left), so its chat can be read ahead of a click. */
   onHoverSession?: ((id: string | null) => void) | undefined
-  /** Lists the specialist agent files a session of this computer can see. */
   /** Makes a worktree off this session's repository, with a session open in it. */
   onNewWorktree?: (id: string) => void
   /** Lists the worktrees of this session's project, to start a session in one. */
   onOpenWorktree?: (id: string) => void
-  onSpecialists?: (id: string) => void
   onEndSession: (id: string) => void
   onOpenSettings: () => void
-  /** Opens the list of agent sessions closed on this computer. */
-  onRecentSessions: () => void
   /** How far an install or update of each remote machine has got, by machine name, 0 to 100; absent when none runs. */
   updateProgress?: Readonly<Record<string, number>> | undefined
-  /** A chat that is being written but has no first message yet: listed on its machine so it is not lost. */
-  draft?: DraftChat | null | undefined
 }
 
-/** The New session dialog's chat while it is unsent: where it will start, and the agent picked for it. */
-export type DraftChat = { machine: number; process: string; /** Opens the draft again, for one that is set aside with text in it; absent while it is open. */ onOpen?: (() => void) | undefined }
+type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[]; context?: ReactNode }
 
-type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[] }
+/** The gap between a heading or a tag and the menu that opens under it. */
+const MENU_GAP_PX = 4
 
-/**
- * A session's right-click menu, the same in the full list and in the rail. The design's four come first (Rename, Open in a new
- * pane, Copy folder path, and after a divider Close session); the rest of what a session can do follows a second divider.
- */
-function sessionMenuEntries(props: SidebarProps, session: SessionView, closeHint: string): MenuEntry[] {
-  const agent = !isShell(session)
-  const other = session.id !== props.focusedId
-  return [
-    { label: 'Rename', hint: 'F2', run: () => { props.onRenameSession(session.id) } },
-    { label: 'Open in a new pane', disabled: !other, run: () => { props.onSplitSession(session.id, 'right') } },
-    { label: 'Copy folder path', run: () => { props.onCopyPath(session.id) } },
-    'separator',
-    // Closing an agent stops it; a plain shell has nothing running to lose.
-    { label: agent ? 'Close session' : 'Close shell', hint: closeHint, danger: true, disabled: !props.online, run: () => { props.onEndSession(session.id) } },
-    'separator',
-    { label: 'Open', run: () => { props.onShowSession(session.id) } },
-    ...(other ? [{ label: 'Open in split down', run: () => { props.onSplitSession(session.id, 'down') } }] : []),
-    ...(agent ? [{ label: 'Show changes', run: () => { props.onShowChanges(session.id) } }] : []),
-    // A worktree is made from a repository, so a session that has not gone into one yet cannot start it or list them.
-    ...(props.onNewWorktree === undefined ? [] : [{ label: 'New worktree…', disabled: !props.online || session.repoRoot === null, run: () => { props.onNewWorktree?.(session.id) } }]),
-    ...(props.onOpenWorktree === undefined ? [] : [{ label: 'Open worktree…', disabled: !props.online || session.repoRoot === null, run: () => { props.onOpenWorktree?.(session.id) } }]),
-    ...(session.machineName === null ? [] : [{ label: 'Rename machine…', run: () => { props.onRenameMachine(session.machineName ?? '') } }]),
-    ...(session.machineName === null ? [] : [{ label: 'Get a file…', disabled: !props.online, run: () => { props.onGetFile(session.id) } }]),
-    // A finished agent waits under Done until you look; this files it under Idle without opening it.
-    ...(session.status === 'done' ? [{ label: 'Mark as done', disabled: !props.online, run: () => { props.onMarkDone(session.id) } }] : []),
-    ...(session.snoozedUntil !== null ? [{ label: 'Unsnooze', disabled: !props.online, run: () => { props.onUnsnooze(session.id) } }] : []),
-    ...(session.archived ? [{ label: 'Bring back', disabled: !props.online, run: () => { props.onBringBack(session.id) } }] : []),
-  ]
+/** Where a menu opens under what was pressed: its left edge, just below it. */
+function under(element: Element): { x: number; y: number } {
+  const box = element.getBoundingClientRect()
+  return { x: box.left, y: box.bottom + MENU_GAP_PX }
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -149,499 +107,232 @@ export function Sidebar(props: SidebarProps) {
   const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}`
   return (
     <nav aria-label="Sessions" className={className}>
-      {props.mode === 'rail' ? <Rail {...props} /> : <Expanded {...props} />}
+      {props.mode === 'rail' ? <SidebarRail {...props} /> : <Expanded {...props} />}
       {props.mode === 'docked' && <SidebarResizer side={props.side} width={props.width} onResize={props.onResize} onResizeEnd={props.onResizeEnd} onDragging={setResizing} />}
     </nav>
   )
 }
 
-const PUT_AWAY_SECTION = 'put-away'
-
-/** `folded` with `project` and its machine unfolded; the same set when neither was folded, so nothing is stored again. */
-function unfolding(folded: ReadonlySet<string>, project: OpenedProject): ReadonlySet<string> {
-  const shown = [machineFoldKey(project.machineName), projectFoldKey(project)]
-  return shown.some((key) => folded.has(key)) ? new Set([...folded].filter((key) => !shown.includes(key))) : folded
-}
-
-/**
- * Which machine and project headings are folded, by their fold keys; kept in this window's storage, so a fold survives a
- * restart. A newly `selected` project is unfolded, with its machine, so the project just opened is never out of sight.
- * `listed` is the tree's own entry for it: the fold keys are spelled as the tree spells the folder, and so must a project
- * given to `reveal` be.
- */
-function useFolds(selected: OpenedProject | null, listed: OpenedProject | null) {
-  const [folded, setFolded] = useState<ReadonlySet<string>>(() => new Set(readSidebarFolds()))
-  const [revealed, setRevealed] = useState<OpenedProject | null>(null)
-  // Adjusted while rendering, as it follows from the selection: the fold opens in the same frame the project is marked.
-  if (selected !== revealed) {
-    setRevealed(selected)
-    const next = listed === null ? folded : unfolding(folded, listed)
-    if (next !== folded) setFolded(next)
-  }
-  const kept = useRef(folded)
-  useEffect(() => {
-    if (folded === kept.current) return
-    kept.current = folded
-    writeSidebarFolds([...folded])
-  }, [folded])
+/** The filter as it can still apply: a project or a machine that is no longer listed narrows nothing. */
+function validFilter(filter: SidebarFilter, choices: ReturnType<typeof filterChoices>): SidebarFilter {
   return {
-    /** Which headings are folded: what `flipKey` reads. */
-    signature: [...folded].join(','),
-    isOpen: (key: string) => !folded.has(key),
-    /** Unfolds a project of the tree and its machine. */
-    reveal: (project: OpenedProject) => { setFolded((current) => unfolding(current, project)) },
-    toggle: (key: string) => {
-      const next = new Set(folded)
-      if (!next.delete(key)) next.add(key)
-      setFolded(next)
-    },
+    project: choices.projects.some((choice) => choice.name === filter.project) ? filter.project : null,
+    machine: choices.machines.some((choice) => choice.key === filter.machine) ? filter.machine : null,
   }
 }
 
 function Expanded(props: SidebarProps) {
   const tip = useTipWithKeys()
   const shortcutText = useShortcutText()
-  const list = useRef<HTMLDivElement>(null)
+  const body = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   // The card beside a row the pointer rests on. It follows a controller outside React state, so a hover never draws the rows.
   const hover = useHoverController()
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
-  const selected = props.selectedProject
-  const views = useFolds(selected, selected === null ? null : props.projects.flatMap((machine) => machine.projects).find((entry) => sameProject(entry.project, selected))?.project ?? null)
-  // Folded until opened, unlike the other headings: what is put away is out of the way.
-  const [putAwayOpen, setPutAwayOpen] = useState(false)
   const reduced = useReducedMotion()
-  const [pickedProject, setPickedProject] = useState<string | null>(null)
-  const projects = projectChoices(props.sessions)
-  // A project whose last session closed is no longer a choice, so the list goes back to all of them.
-  const project = projects.some((choice) => choice.name === pickedProject) ? pickedProject : null
-  const { putAway } = splitPutAway(inProject(props.sessions, project))
-  // The session on screen keeps the status section it was picked in until another is picked (`statusSections`).
+  const choices = filterChoices(props.machines, props.projects)
+  const [picked, setPicked] = useState<SidebarFilter>(NO_FILTER)
+  // The session on screen keeps the place it was picked in until another is picked (`sidebarOrder`'s `held`).
   const [hold, setHold] = useState<{ for: string | null; row: HeldRow | null }>({ for: null, row: null })
   if (hold.for !== props.focusedId) {
     const focused = props.focusedId === null ? undefined : props.sessions.find((session) => session.id === props.focusedId)
-    setHold({ for: props.focusedId, row: focused === undefined ? null : { id: focused.id, section: sectionOf(focused) } })
+    setHold({ for: props.focusedId, row: focused === undefined ? null : { id: focused.id, mark: sectionOf(focused) } })
   }
-  const held = hold.row
-  const draft = props.draft ?? null
-  const awayIds = new Set(putAway.map((session) => session.id))
-  // Every session is under one project, put-away ones included (`useOpenedProjects`); only the listed ones are drawn there.
-  const shown = (session: SessionView) => !awayIds.has(session.id) && (project === null || projectOf(session) === project)
-  const whole = sidebarTree(props.machines, props.projects, shown, held, draft !== null)
-  // Narrowed to one project, the tree drops what has nothing of it, as the list did before it was a tree.
-  const tree = project === null ? whole : withSessionsOnly(whole, (head) => draft?.machine === head.machine)
-  // With this computer alone its projects are the top of the tree; the header's + opens one from any source.
-  const headed = showsMachineHeadings(props.machines)
-  // Every machine and project, whatever the filter: what waits on you is never narrowed out of sight.
-  const waiting = waitingSessions(props.machines, props.projects)
-  const openWaiting = ({ session, project: place }: WaitingSession) => {
-    // A filter on another project would keep the session's project out of the tree it is unfolded in.
-    if (project !== null && projectOf(session) !== project) setPickedProject(null)
-    views.reveal(place.project)
-    props.onShowSession(session.id)
+  // The project just opened or picked is shown whatever the filter said: opening a project and not seeing it reads as a failure.
+  const selected = props.selectedProject
+  const [filteredFor, setFilteredFor] = useState(selected)
+  const everything = sidebarOrder(props.machines, props.projects)
+  const listedSelected = selected === null ? null : [...everything.active, ...everything.idle].find((group) => sameProject(group.project, selected)) ?? null
+  const valid = validFilter(picked, choices)
+  const hidesSelected = selected !== filteredFor && listedSelected !== null && !passesFilter(valid, listedSelected)
+  if (selected !== filteredFor) {
+    setFilteredFor(selected)
+    if (hidesSelected) setPicked(NO_FILTER)
   }
-  // Where each row sits, so a row that changes section because focus moved (`held`) still animates, while a focus change that moves nothing leaves the key alone and `useFlip` reads no layout.
-  useFlip(list, reduced, flipKey(props.sessions, putAwayOpen, views.signature, draft !== null, treePlacement(tree, props.statusHeadings)))
-  const openMenu = (event: MouseEvent, title: string, items: MenuEntry[], at = { x: event.clientX, y: event.clientY }) => {
+  const filter = hidesSelected ? NO_FILTER : valid
+  const order = sidebarOrder(props.machines, props.projects, filter, hold.row)
+  // Unfolded with the fold keys the list spells: its own project, and the Idle section when that is where it sits.
+  const revealKeys = listedSelected === null ? [] : [listedSelected.key, ...(everything.active.some((group) => group.key === listedSelected.key) ? [] : [IDLE_FOLD_KEY])]
+  const folds = useSidebarFolds(selected, revealKeys)
+  const idleOpen = folds.isOpen(IDLE_FOLD_KEY)
+  // Measured to slide only when a row or heading can have moved: its place, its name, or a fold.
+  useFlip(body, reduced, `${orderPlacement(order)}#${folds.signature}#${props.sessions.map((session) => `${session.id}:${rowTitle(session)}`).join('|')}`)
+
+  const openMenu = (event: MouseEvent, next: OpenMenu) => {
     event.preventDefault()
     event.stopPropagation()
     endHover()
-    setMenu({ title, at, items })
+    setMenu(next)
   }
-
   const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session, shortcutText('close'))
+  const machineActions: MachineActions = { onRetry: props.onRetryMachine, onSignIn: props.onSignInMachine, onCopyCommand: props.onCopyCommand, onRename: props.onRenameMachine, onUpdate: props.onUpdateMachine, onSettings: props.onMachineSettings, onOpenProject: props.canStart ? props.onOpenProject : undefined }
 
-  const machineMenu = (head: MachineHead): MenuEntry[] => {
-    const open = views.isOpen(machineFoldKey(head.name))
-    const name = head.name
-    const action = head.updateAction
-    return [
-      ...(name !== null && action !== null ? [{ label: `${UPDATE_WORDS[action].verb} Maiker`, run: () => { props.onUpdateMachine(name, action) } }, 'separator' as const] : []),
-      { label: 'Open a project…', disabled: !props.canStart || head.down, run: () => { props.onOpenProject(head.machine) } },
-      ...(props.onNewShell === undefined ? [] : [{ label: 'New terminal here', disabled: !props.canStart || head.down, run: () => { props.onNewShell?.(head.machine) } }]),
-      ...(head.down ? [{ label: `Not reachable: ${head.why ?? head.chip?.word ?? 'not reachable'}`, disabled: true, run: () => undefined }] : []),
-      'separator',
-      { label: open ? 'Collapse' : 'Expand', run: () => { views.toggle(machineFoldKey(head.name)) } },
-      'separator',
-      ...(name === null ? [] : [{ label: 'Rename…', run: () => { props.onRenameMachine(name) } }]),
-      { label: 'Machine settings…', run: props.onMachineSettings },
-    ]
-  }
-
-  // A heading's buttons and menu, from every session placed in the project (put-away ones too), not only the rows drawn.
-  const projectHead = (head: MachineHead, node: ProjectNode): ProjectHeadProps | null => {
+  const targetOf = (group: ProjectGroup): ProjectTarget => ({
+    machine: group.head.machine,
+    machineLabel: machineTitle(group.head),
+    remote: group.head.name !== null,
+    project: group.project,
+    name: group.name,
+    sessions: group.sessions,
+    canStart: props.canStart && !group.head.down,
+    online: props.online,
+    installed: props.installedAgents,
+  })
+  /** A heading's parts that open a menu: its `+`, its right-click and its machine tag. Null where the window gave no actions. */
+  const headOf = (group: ProjectGroup): HeadMenus => {
     const actions = props.projectActions
-    if (actions === undefined) return null
-    const placed = props.projects.flatMap((machine) => machine.projects).find((entry) => sameProject(entry.project, node.project))
-    const commands = projectCommands(actions, { machine: head.machine, project: node.project, name: node.name, sessions: placed?.sessions ?? [], canStart: props.canStart && !head.down, online: props.online })
-    const items = projectMenuEntries(commands)
+    const name = group.head.name
     return {
-      onContextMenu: (event) => { openMenu(event, node.name, items) },
-      actions: <ProjectHeadActions name={node.name} commands={commands} onMore={(event) => { openMenu(event, node.name, items, menuPoint(event, true)) }} />,
+      onPlus: actions === undefined ? null : (event) => {
+        const plus = projectPlusMenu(actions, targetOf(group), shortcutText)
+        const row = event.currentTarget.closest('[data-project]') ?? event.currentTarget
+        openMenu(event, { title: `New in ${group.name}`, at: under(row), items: plus.items, context: <><Icon name={name === null ? 'monitor' : 'server'} size={12} /><span>{plus.context}</span></> })
+      },
+      onContextMenu: actions === undefined ? undefined : (event) => { openMenu(event, { title: group.name, at: { x: event.clientX, y: event.clientY }, items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
+      tag: name === null ? null : (
+        <MachineTag head={group.head} progress={props.updateProgress?.[name]} onMenu={(event) => { openMenu(event, { title: machineTitle(group.head), at: under(event.currentTarget), items: machineMenuEntries(group.head, name, machineActions) }) }} />
+      ),
     }
   }
 
   const links = helperLinks(props.sessions)
-  const renderRow = (session: SessionView, showProject: boolean, showMachine = true, nested = false) => {
-    const selected = session.id === props.focusedId
-    return (
-      <div key={session.id} className={`mx-row-wrap${nested ? ' is-nested' : ''}`} role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
-        <SessionRow
-          session={session}
-          selected={selected}
-          showProject={showProject}
-          machine={showMachine ? session.machineName : null}
-          starter={links.starterOf.get(session.id) ?? null}
-          nested={nested}
-          helpers={links.helpersOf.get(session.id) ?? null}
-          onShow={() => { props.onShowSession(session.id) }}
-          onRename={() => { props.onRenameSession(session.id) }}
-          onContextMenu={(event) => { openMenu(event, rowTitle(session), sessionMenu(session)) }}
-        />
-        {/* A sibling of the row, not inside it (a button cannot hold a button): it shows on hover and focus. */}
-      </div>
-    )
-  }
-
-  const projectSections = (node: MachineNode) => node.projects.map((project) => (
-    <ProjectSection
-      key={project.key}
-      node={project}
-      open={views.isOpen(project.key)}
-      onToggle={() => { views.toggle(project.key) }}
-      headings={showsStatusHeadings(project.top, props.statusHeadings)}
-      selected={props.selectedProject !== null && sameProject(project.project, props.selectedProject)}
-      head={projectHead(node.head, project)}
-      renderRow={(session) => renderRow(session, true, false, project.nested.has(session.id))}
-    />
-  ))
-  const machineDraft = (node: MachineNode) => (draft?.machine === node.head.machine ? draft : null)
-  const machineSection = (node: MachineNode) => (
-    <MachineSection
-      key={node.key}
-      node={node}
-      open={views.isOpen(node.key) || draft?.machine === node.head.machine}
-      draft={machineDraft(node)}
-      progress={node.head.name === null ? undefined : props.updateProgress?.[node.head.name]}
-      onToggle={() => { views.toggle(node.key) }}
-      onUpdate={props.onUpdateMachine}
-      onContextMenu={(event) => { openMenu(event, machineTitle(node.head), machineMenu(node.head)) }}
-      canStart={props.canStart}
-      onOpenProject={props.onOpenProject}
-      fixes={{ onRetry: props.onRetryMachine, onSignIn: props.onSignInMachine, onCopyCommand: props.onCopyCommand }}
-    >
-      {projectSections(node)}
-    </MachineSection>
-  )
-  // No heading and no fold: the machine's own counts and menu have nothing to sit on, and its body is always shown.
-  const topProjects = (node: MachineNode) => (
-    <div key={node.key}>
-      <MachineBody node={node} label="Projects" draft={machineDraft(node)}>{projectSections(node)}</MachineBody>
+  const renderRow = (session: SessionView, nested: boolean) => (
+    <div key={session.id} className={`mx-sb-item${nested ? ' is-nested' : ''}`} role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
+      <SessionRow
+        session={session}
+        selected={session.id === props.focusedId}
+        starter={links.starterOf.get(session.id) ?? null}
+        helpers={links.helpersOf.get(session.id) ?? null}
+        onShow={() => { props.onShowSession(session.id) }}
+        onRename={() => { props.onRenameSession(session.id) }}
+        onContextMenu={(event) => { openMenu(event, { title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenu(session) }) }}
+      />
     </div>
   )
+  const renderRows = (rows: readonly SessionNode[]) => rows.map((node) => (
+    <Fragment key={node.session.id}>
+      {renderRow(node.session, false)}
+      {node.helpers.map((helper) => renderRow(helper, true))}
+    </Fragment>
+  ))
+
+  const nothingListed = order.active.length === 0 && order.idle.length === 0
   return (
     <div className="mx-sidebar-expanded">
-      <div className="mx-sidebar-top">
+      <div className="mx-sb-top">
         <IconButton label="Hide sidebar" tip={tip('Hide sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="panelLeft" /></IconButton>
-        <span className="mx-sidebar-title">Chats</span>
+        <span className="mx-sb-title">Chats</span>
         <span className="mx-spacer" />
         <IconButton label="Search" tip={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" /></IconButton>
-        <SidebarFilterMenu projects={projects} project={project} onProject={setPickedProject} />
-        <IconButton label="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><Icon name="plus" /></IconButton>
+        <SidebarFilterMenu projects={choices.projects} machines={choices.machines} filter={filter} onFilter={setPicked} />
+        <IconButton label="Open a project" tip={tip('Open a project', 'open-folder')} disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><FolderPlus strokeWidth={1.9} aria-hidden="true" /></IconButton>
       </div>
-      {/* Outside the scrolling list, so it stays in view while the tree scrolls. */}
-      <NeedsYouStrip waiting={waiting} namesMachine={headed} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
-      <div ref={list} className="mx-sidebar-list" onScroll={endHover}>
-        <section aria-label="Agents" className="mx-machines">
-          {tree.map(headed ? machineSection : topProjects)}
-          {props.sessions.length === 0 && draft === null && <div className="mx-empty-note">{props.listed ? 'Open a project, then start a session in it. Sessions appear here, sorted by what needs you.' : 'Looking for your sessions…'}</div>}
-        </section>
-        {putAway.length > 0 && (
-          <section aria-label="Put away sessions" className="mx-sections">
-            <ListSection id={PUT_AWAY_SECTION} name="Put away" count={putAway.length} label="Put away" open={putAwayOpen} onToggle={() => { setPutAwayOpen(!putAwayOpen) }}>
-              {putAway.map((session) => renderRow(session, true))}
-            </ListSection>
+      <div ref={body} className="mx-sb-body">
+        <div className="mx-sb-list" onScroll={endHover}>
+          {!props.listed && props.sessions.length === 0 && <p className="mx-sb-note">Looking for your sessions…</p>}
+          {props.listed && props.sessions.length === 0 && (
+            <div className="mx-sb-empty">
+              <b>No sessions yet</b>
+              <span>{nothingListed ? 'Open a project, then start a session in it. It shows here, with the ones that need you on top.' : 'Start one from the main screen. It shows here, with the ones that need you on top.'}</span>
+            </div>
+          )}
+          {order.active.map((group) => (
+            <ActiveProject key={group.key} group={group} open={folds.isOpen(group.key)} onToggle={() => { folds.toggle(group.key) }} menus={headOf(group)}>
+              {renderRows(group.rows)}
+            </ActiveProject>
+          ))}
+        </div>
+        {order.idle.length > 0 && (
+          <section className="mx-sb-idle" aria-label={order.idleCount > 0 ? 'Idle' : 'Projects'}>
+            <button type="button" className="mx-sb-idle-head" data-flip="head:idle" aria-expanded={idleOpen} onClick={() => { folds.toggle(IDLE_FOLD_KEY) }}>
+              <span>{order.idleCount > 0 ? 'Idle' : 'Projects'}</span>
+              {order.idleCount > 0 && <span className="mx-sb-count">{order.idleCount}</span>}
+              <span className="mx-spacer" />
+              <span className={`mx-sb-caret${idleOpen ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
+            </button>
+            <Collapse open={idleOpen}>
+              <div className="mx-sb-idle-list" onScroll={endHover}>
+                {order.idle.map((group) => (
+                  <IdleProject key={group.key} group={group} menus={headOf(group)}>{renderRows(group.rows)}</IdleProject>
+                ))}
+              </div>
+            </Collapse>
           </section>
         )}
       </div>
-      <div className="mx-sidebar-foot">
+      <div className="mx-sb-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
-        <button type="button" className="mx-head-button mx-add-machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={14} />Remote machine</button>
+        <IconButton label="Add a remote machine" onClick={props.onAddMachine}><Icon name="serverPlus" /></IconButton>
         <span className="mx-spacer" />
         <IconButton label="Settings" tip={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></IconButton>
       </div>
-      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={headed} portalContainer={props.portalContainer} />
-      {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
+      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={props.machines.some((head) => head.name !== null)} portalContainer={props.portalContainer} />
+      {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} context={menu.context} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
 }
 
-type ListSectionProps = {
-  id: string
-  name: string
-  /** What the list is called for a screen reader. */
-  label: string
-  count: number
-  open: boolean
-  onToggle: () => void
-  children: ReactNode
+/** What opens a menu from a project heading. `onPlus` is null and `onContextMenu` absent where the window gave no actions. */
+type HeadMenus = {
+  onPlus: ((event: MouseEvent<HTMLElement>) => void) | null
+  onContextMenu: ((event: MouseEvent) => void) | undefined
+  /** The machine tag of a project on another machine. */
+  tag: ReactNode
 }
 
-/** The Put away heading, with the rows under it; the heading folds them away. */
-function ListSection({ id, name, label, count, open, onToggle, children }: ListSectionProps) {
-  return (
-    <div className="mx-section" data-section={id}>
-      <button type="button" className="mx-section-head" data-flip={`head:${id}`} aria-expanded={open} onClick={onToggle}>
-        <span className="mx-section-name">{name}</span>
-        <span className="mx-section-count mono">{count}</span>
-      </button>
-      <Collapse open={open}>
-        <div className="mx-rows" role="list" aria-label={label}>{children}</div>
-      </Collapse>
-    </div>
-  )
-}
-
-/** A project heading's right-click menu and its buttons (`ProjectHeadActions`). */
-type ProjectHeadProps = { onContextMenu: (event: MouseEvent) => void; actions: ReactNode }
-
-type ProjectSectionProps = {
-  node: ProjectNode
-  open: boolean
-  onToggle: () => void
-  /** Each status that has sessions under its own heading; otherwise one list in the same order. */
-  headings: boolean
-  /** The project last opened or picked (`useOpenedProjects().selected`), marked on its heading. */
-  selected: boolean
-  /** Null: the heading only folds. */
-  head: ProjectHeadProps | null
-  renderRow: (session: SessionView) => ReactNode
-}
+const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)
 
 /**
- * One opened project under its machine: a heading that folds it (its folder in the tooltip), then its sessions by status,
- * Needs you, Working, Done and Idle, the latest change first in each. A heading names a status only when `headings` is on.
+ * A project with something going on: its heading (badge, name, machine tag, how many sessions) folds its rows, `+` opens
+ * what can start in it, and a right-click its menu. Folded, it keeps an amber dot while a row under it needs you.
  */
-function ProjectSection({ node, open, onToggle, headings, selected, head, renderRow }: ProjectSectionProps) {
+function ActiveProject({ group, open, onToggle, menus, children }: { group: ProjectGroup; open: boolean; onToggle: () => void; menus: HeadMenus; children: ReactNode }) {
+  const { onPlus } = menus
   return (
-    <div className="mx-project" data-project={node.key}>
-      {/* A row holding the folding button and the action buttons beside it, as a machine heading does: a button cannot hold a button. */}
-      <div className={`mx-project-head${selected ? ' is-selected' : ''}`} data-flip={`head:${node.key}`} onContextMenu={head?.onContextMenu}>
-        <button type="button" className="mx-project-toggle" aria-expanded={open} aria-current={selected ? 'true' : undefined} title={node.project.folder} onClick={onToggle}>
-          <span className={`mx-caret-wrap${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
-          <FolderMark size={14} />
-          <span className="mx-project-name">{node.name}</span>
-          <FoldBadges counts={projectFoldCounts(node)} folded={!open} />
+    <div className="mx-sb-group">
+      {/* A row holding the folding button and the buttons beside it: a button cannot hold a button. */}
+      <div className="mx-sb-head" data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu}>
+        <button type="button" className="mx-sb-head-main" aria-expanded={open} title={group.project.folder} onClick={onToggle}>
+          <ProjectBadge name={group.name} />
+          <span className="mx-sb-head-name">{group.name}</span>
+          <span className="sr-only">{`, ${sessionsWord(group.rows.length)}`}</span>
         </button>
-        {head?.actions}
+        {menus.tag}
+        <span className="mx-sb-count" aria-hidden="true">{group.rows.length}</span>
+        {!open && needsYou(group) && <span className="mx-sb-alert" role="img" aria-label="Something here needs you" title="Something here needs you" />}
+        <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
+        {onPlus !== null && <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} aria-haspopup="menu" onClick={onPlus}><Icon name="plus" /></IconButton>}
       </div>
       <Collapse open={open}>
-        {node.count === 0 && <div className="mx-project-empty">No sessions</div>}
-        {headings
-          ? node.sections.map((section) => (
-            <div key={section.key} className="mx-status">
-              <div className={`mx-status-head is-${section.key}`} data-tone={section.key} data-flip={`head:${node.key}:${section.key}`} aria-hidden="true">
-                <span className="mx-section-name">{section.name}</span>
-                <span className="mx-section-count mono" data-tone={section.key}>{section.sessions.filter((session) => !node.nested.has(session.id)).length}</span>
-              </div>
-              <div className="mx-rows" role="list" aria-label={`${section.name} in ${node.name}`}>{section.sessions.map(renderRow)}</div>
-            </div>
-          ))
-          : node.count > 0 && <div className="mx-rows" role="list" aria-label={node.name}>{node.sections.flatMap((section) => section.sessions).map(renderRow)}</div>}
+        <div className="mx-sb-rows" role="list" aria-label={group.name}>{children}</div>
       </Collapse>
     </div>
   )
 }
 
-/** What a down machine's own buttons do, passed through to the line under its heading. */
-type MachineFixes = {
-  onRetry: (name: string) => void
-  onSignIn: (machine: number, name: string) => void
-  onCopyCommand: (command: string) => void
-}
-
-/** What a down machine says when the host gave no sentence, which a host that answered always does. */
-function fallbackWords(update: UpdateAction | null): string {
-  if (update === null) return 'Offline'
-  return update === 'install' ? 'Maiker not installed' : 'Needs update'
-}
-
 /**
- * A remote machine that is not up: a red dot, the host's one sentence (the same words Settings and the terminal app show),
- * whole and wrapping, so a command it names is never cut off, and the fix right under it: **Retry**, **Copy** when the
- * sentence names a command, and **Sign in in a terminal** only for a login that needs a password or a second code. A machine
- * that is down because its Maiker is old or missing has one thing to press instead, its Install or Update, which asks first.
+ * A project in the Idle section: its heading opens what can start in it (there is nothing to fold away from an idle
+ * project), then its idle rows, or "No sessions" on the heading when it has none at all.
  */
-function MachineWhy({ head, name, onUpdate, fixes }: { head: MachineHead; name: string; onUpdate: (name: string, action: UpdateAction) => void; fixes: MachineFixes }) {
-  const update = head.updateAction
-  const command = head.fixCommand
+function IdleProject({ group, menus, children }: { group: ProjectGroup; menus: HeadMenus; children: ReactNode }) {
+  const { onPlus } = menus
+  const empty = group.rows.length === 0
   return (
-    <div className="mx-machine-why is-down" role="group" aria-label={`Why ${head.label} is not connected`}>
-      <span className="mx-machine-why-dot" aria-hidden="true" />
-      <div className="mx-machine-why-body">
-        <span className="mx-machine-why-words">{head.why ?? fallbackWords(update)}</span>
-        <span className="mx-machine-why-actions">
-          {update === null
-            ? (
-              <>
-                <button type="button" className="mx-machine-fix" aria-label={`Retry ${head.label}`} onClick={() => { fixes.onRetry(name) }}>Retry</button>
-                {command !== null && <button type="button" className="mx-machine-fix" aria-label="Copy the command" title={command} onClick={() => { fixes.onCopyCommand(command) }}>Copy</button>}
-                {head.failure === 'needs-person' && <button type="button" className="mx-machine-fix" onClick={() => { fixes.onSignIn(head.machine, name) }}>Sign in in a terminal</button>}
-              </>
-            )
-            : <button type="button" className="mx-machine-fix" aria-label={`${UPDATE_WORDS[update].verb} Maiker on ${head.label}`} onClick={() => { onUpdate(name, update) }}>{UPDATE_WORDS[update].verb}</button>}
-        </span>
-      </div>
-    </div>
-  )
-}
-
-type SectionProps = {
-  canStart: boolean
-  /** Wraps a machine's + in its + menu. */
-  onOpenProject: (machine: number) => void
-  fixes: MachineFixes
-  /** The draft chat, listed last on this machine; null when it is not on this machine. */
-  draft: DraftChat | null
-  /** How far this machine's update has got, while one runs. */
-  progress: number | undefined
-  node: MachineNode
-  open: boolean
-  onToggle: () => void
-  onUpdate: (name: string, action: UpdateAction) => void
-  onContextMenu: (event: MouseEvent) => void
-  /** The machine's projects (`ProjectSection`). */
-  children: ReactNode
-}
-
-/** One machine: its heading (name, count, update, its line's dot) and its opened projects, each with its sessions. */
-function MachineSection({ draft, progress, node, open, onToggle, onUpdate, onContextMenu, children, canStart, onOpenProject, fixes }: SectionProps) {
-  const { head } = node
-  const title = machineTitle(head)
-  return (
-    <div className={`mx-machine${head.down ? ' is-away' : ''}`}>
-      <div className="mx-machine-head" data-flip={`machine:${head.key}`}>
-        <button type="button" className="mx-machine-toggle" aria-expanded={open} onClick={onToggle} onContextMenu={onContextMenu}>
-          <span className={`mx-caret-wrap${open ? ' is-open' : ''}`}><Icon name="caret" /></span>
-          <span className="mx-machine-icon" aria-hidden="true"><MachineIcon remote={head.name !== null} /></span>
-          <span className="mx-machine-name">{title}</span>
-          <span className="mx-machine-count">{node.count}</span>
-          <FoldBadges counts={machineFoldCounts(node)} folded={!open} />
+    <div className="mx-sb-group is-idle">
+      <div className="mx-sb-head is-idle" data-project={group.key} data-flip={`idle-head:${group.key}`} onContextMenu={menus.onContextMenu}>
+        <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
+          <ProjectBadge name={group.name} />
+          <span className="mx-sb-head-name">{group.name}</span>
+          {empty && <span className="sr-only">, no sessions</span>}
         </button>
-        {progress !== undefined
-          ? <span className="mx-machine-pct mono">{String(progress)}%</span>
-          : head.name !== null && !head.down && head.updateAction !== null && <UpdateButton name={head.name} action={head.updateAction} onUpdate={onUpdate} />}
-        <button type="button" className="mx-head-button is-small mx-machine-add" aria-label={`Open a project on ${title}`} title={`Open a project on ${title}`} disabled={!canStart || head.down} onClick={() => { onOpenProject(head.machine) }}><Icon name="plus" size={13} /></button>
-        <span className={`mx-machine-dot${head.updateAction !== null ? ' is-warn' : head.down ? ' is-offline' : ''}`} role="img" aria-label={head.down ? `${title} is ${head.chip?.word ?? 'not reachable'}` : `${title} is connected`} title={head.why ?? (head.down ? head.chip?.word ?? 'not reachable' : `${title} is connected`)} />
+        {menus.tag}
+        <span className="mx-spacer" />
+        {empty && <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>}
+        {/* The heading already opens this menu from the keyboard; the + is the pointer's second way in, as on a busy project. */}
+        {onPlus !== null && <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} tabIndex={-1} aria-hidden="true" onClick={onPlus}><Icon name="plus" /></IconButton>}
       </div>
-      {progress !== undefined && head.name !== null && (
-        <span className="mx-machine-progress" role="progressbar" aria-label={`Updating ${head.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress}><span style={{ width: `${String(progress)}%` }} /></span>
-      )}
-      {head.down && head.name !== null && progress === undefined && <MachineWhy head={head} name={head.name} onUpdate={onUpdate} fixes={fixes} />}
-      {!head.down && head.name !== null && head.chip?.tone === 'quiet' && <span className="mx-machine-why"><span className="mx-machine-why-word">Connecting…</span></span>}
-      <Collapse open={open}>
-        <MachineBody node={node} label={`Projects on ${title}`} draft={draft}>{children}</MachineBody>
-      </Collapse>
-    </div>
-  )
-}
-
-/** What a machine holds, under its heading or at the top of the tree: its projects, else "No sessions yet", then the draft. */
-function MachineBody({ node, label, draft, children }: { node: MachineNode; label: string; draft: DraftChat | null; children: ReactNode }) {
-  return (
-    <>
-      <div className="mx-projects" role="group" aria-label={label}>{children}</div>
-      {node.projects.length === 0 && draft === null && <div className="mx-machine-empty">No sessions yet</div>}
-      {/* Last, under the projects, so the projects above it never move while it is written. */}
-      {draft !== null && <DraftRow process={draft.process} onOpen={draft.onOpen} />}
-    </>
-  )
-}
-
-/**
- * The session that has not been sent yet (layout 2h): a row named "New session" in italics with a "draft" tag and the picked
- * agent's mark, drawn as a session row draws it, first in the list. The real row takes this place when the chat starts.
- */
-function DraftRow({ process, onOpen }: { process: string; onOpen: (() => void) | undefined }) {
-  return (
-    <div className="mx-row-wrap mx-draft-wrap" {...(onOpen === undefined ? { role: 'status', 'aria-label': 'New session, waiting for the first message' } : {})} data-flip="draft">
-      <div className={`mx-row mx-draft${onOpen === undefined ? '' : ' is-parked'}`} {...(onOpen === undefined ? {} : { role: 'button', tabIndex: 0, 'aria-label': 'New session draft, with text kept. Open it.', onClick: onOpen, onKeyDown: (event: KeyboardEvent<HTMLDivElement>) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onOpen() } } })}>
-        <span className="mx-row-icon"><AppIcon process={process} size={16} dimmed /></span>
-        <span className="mx-row-text">
-          <span className="mx-draft-name">New session</span>
-          <span className="mx-draft-tag">draft</span>
-        </span>
-      </div>
-    </div>
-  )
-}
-
-/** What a machine without the app, or with another version of it, needs: an amber text button in its header, no row of its own. */
-function UpdateButton({ name, action, onUpdate }: { name: string; action: UpdateAction; onUpdate: (name: string, action: UpdateAction) => void }) {
-  const words = UPDATE_WORDS[action]
-  return (
-    <button type="button" className="mx-machine-update" aria-label={`${words.verb} Maiker on ${name}`} title={words.need(name)} onClick={() => { onUpdate(name, action) }}>
-      <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 19V5" /><path d="m5 12 7-7 7 7" /></svg>
-      {words.verb}
-    </button>
-  )
-}
-
-/**
- * The slim strip of a narrow window, in the design's language: the sidebar toggle, search and new session, then one flat
- * status icon per session under its status, every machine and project together (a hairline between the statuses), the
- * Remote machine and Settings at the foot. A session's hover card is the expanded row's. There is no agent tile and no
- * connection dot: the service's state shows in the title bar alone.
- */
-function Rail(props: SidebarProps) {
-  const tip = useTipWithKeys()
-  const shortcutText = useShortcutText()
-  const hover = useHoverController()
-  const endHover = () => { hover.leave() }
-  const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
-  const [menu, setMenu] = useState<OpenMenu | null>(null)
-  const sections = statusSections(splitPutAway(props.sessions).listed)
-  return (
-    <div className="mx-rail">
-      <div className="mx-rail-top">
-        <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="Open a project" title="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><Icon name="plus" size={15} /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
-      </div>
-      <div className="mx-rail-rule" aria-hidden="true" />
-      <div className="mx-rail-list mx-no-scrollbar" role="list" aria-label="Sessions">
-        {sections.map((section, index) => (
-          <Fragment key={section.key}>
-            {index > 0 && <div role="separator" aria-label={`${section.name} · ${String(section.sessions.length)}`} className="mx-rail-sep" />}
-            {section.sessions.map((session) => (
-              <div key={session.id} role="listitem" className={`mx-rail-item${session.id === props.focusedId ? ' is-selected' : ''}${sectionOf(session) === 'idle' ? ' is-idle' : ''}`}>
-                <span className="mx-rail-bar" aria-hidden="true" />
-                <button
-                  type="button"
-                  className="mx-rail-session"
-                  aria-label={`${rowTitle(session)} · ${STATUS_WORD[session.status]}`}
-                  aria-current={session.id === props.focusedId ? 'page' : undefined}
-                  onClick={() => { endHover(); props.onShowSession(session.id) }}
-                  onContextMenu={(event) => { event.preventDefault(); endHover(); setMenu({ title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenuEntries(props, session, shortcutText('close')) }) }}
-                  onPointerEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }}
-                  onPointerLeave={() => { endHover(); props.onHoverSession?.(null) }}
-                  onFocus={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }}
-                  onBlur={() => { endHover(); props.onHoverSession?.(null) }}
-                >
-                  <StatusIcon status={session.status} />
-                </button>
-              </div>
-            ))}
-          </Fragment>
-        ))}
-      </div>
-      <div className="mx-rail-bottom">
-        <button type="button" className="mx-head-button is-rail" aria-label="Remote machine" title="Add a remote machine" onClick={props.onAddMachine}><Icon name="plus" size={15} /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="Settings" title={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></button>
-      </div>
-      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={showsMachineHeadings(props.machines)} portalContainer={props.portalContainer} />
-      {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
+      {!empty && <div className="mx-sb-rows" role="list" aria-label={`Idle in ${group.name}`}>{children}</div>}
     </div>
   )
 }

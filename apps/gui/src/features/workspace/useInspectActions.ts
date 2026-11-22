@@ -67,6 +67,18 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
   }, [openChanges, setLayout])
   // A session menu's Show changes: the session may be out of sight, so it is brought to the front.
   const showChangesOf = useCallback((sessionId: string) => { openChanges(sessionId, () => { showSessionById(sessionId) }) }, [openChanges, showSessionById])
+  // A project's Show files: one of its sessions comes to the front, since the files are read through a session.
+  const showFilesOf = useCallback((sessionId: string) => {
+    const refusal = panelRefusal(sessionMap.get(sessionId))
+    if (refusal !== null) {
+      toast.info(refusal)
+      return
+    }
+    showSessionById(sessionId)
+    setTurnDiff(null)
+    setInspectView('files')
+    setInspectOpen(true)
+  }, [sessionMap, showSessionById, setTurnDiff, setInspectView, setInspectOpen])
   // The pane takes the focus and the panel shows `view` for it. A chat command such as /diff only ever opens it:
   // typing it twice must not hide what it asked for.
   const openPanel = useCallback((paneId: string, sessionId: string, view: InspectView) => {
@@ -90,5 +102,5 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
     setInspectView(view)
     setInspectOpen(true)
   }, [inspectRefusal, setTurnDiff, setInspectView, setInspectOpen])
-  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, openPanel, showPanelView }
+  return { toggleInspect, inspectRefusal, showChangesOf, showFilesOf, showChanges, openPanel, showPanelView }
 }

@@ -193,6 +193,33 @@ function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): 
   return nickname === undefined ? {} : { nickname }
 }
 
+/**
+ * What a machine that is not up says: the host's one sentence for what failed and what to do (ADR 0017), else the plain
+ * state when the host gave none.
+ */
+export function downSentence(head: MachineHead): string {
+  if (head.why !== null) return head.why
+  if (head.updateAction !== null) return UPDATE_WORDS[head.updateAction].need(machineTitle(head))
+  return 'Maiker keeps trying to reconnect. Its sessions keep running there.'
+}
+
+/** The machines that were down when last looked at, by name. */
+export type MachinesDown = ReadonlySet<string>
+
+/**
+ * What changed since `seen`: the machines that went down (`dropped`, said once each) and the names that are up again or
+ * gone (`back`). With no `seen` yet, a machine that is already down has dropped: the window says so at launch too.
+ */
+export function machineDrops(seen: MachinesDown | null, heads: readonly MachineHead[]): { seen: MachinesDown; dropped: MachineHead[]; back: string[] } {
+  const down = heads.filter((head) => head.name !== null && head.down)
+  const now = new Set(down.map((head) => head.name ?? ''))
+  return {
+    seen: now,
+    dropped: down.filter((head) => seen?.has(head.name ?? '') !== true),
+    back: [...(seen ?? [])].filter((name) => !now.has(name)),
+  }
+}
+
 /** The name a machine heading shows. */
 export function machineTitle(head: MachineHead): string {
   return head.nickname ?? head.name ?? 'This computer'

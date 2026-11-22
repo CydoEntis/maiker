@@ -38,7 +38,7 @@ describe('what a refused Close project says', () => {
   const refusal = (...titles: string[]) => ({ code: 'sessions-running' as const, running: titles.map((title, index) => session(index + 1, title)) })
 
   it('names one session, two, and counts past three', () => {
-    expect(closeRefusalWords('shop', refusal('Fix tests'))).toEqual({ title: 'Could not close shop', description: 'Still running in it: Fix tests. Close it first.' })
+    expect(closeRefusalWords('shop', refusal('Fix tests'))).toEqual({ title: 'Could not remove shop', description: 'Still running in it: Fix tests. Close it first.' })
     expect(closeRefusalWords('shop', refusal('A', 'B')).description).toBe('Still running in it: A and B. Close them first.')
     expect(closeRefusalWords('shop', refusal('A', 'B', 'C', 'D', 'E')).description).toBe('Still running in it: A, B, C and 2 more. Close them first.')
   })

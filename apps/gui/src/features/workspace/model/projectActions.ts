@@ -16,14 +16,14 @@ export function worktreeSourceOf(sessions: readonly SessionView[]): SessionView 
   return inRepository.find((session) => !session.worktree) ?? inRepository[0] ?? null
 }
 
-/** What a refused Close project tells the person: which sessions still run in the project, by the names their rows show. */
+/** What a refused Remove from sidebar tells the person: which sessions still run in the project, by the names their rows show. */
 export function closeRefusalWords(project: string, refusal: CloseRefusal): { title: string; description: string } {
   const names = refusal.running.map(rowTitle)
   const named = names.slice(0, NAMED_RUNNING)
   const rest = names.length - named.length
   const listed = rest > 0 ? `${named.join(', ')} and ${String(rest)} more` : joinWithAnd(named)
   const them = names.length === 1 ? 'it' : 'them'
-  return { title: `Could not close ${project}`, description: `Still running in it: ${listed}. Close ${them} first.` }
+  return { title: `Could not remove ${project}`, description: `Still running in it: ${listed}. Close ${them} first.` }
 }
 
 function joinWithAnd(names: readonly string[]): string {
