@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SettingsPreferences } from '../preferences'
+import { bindingFor, reservedReason } from '@/features/workspace/model/shortcuts'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
 const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
@@ -413,20 +414,22 @@ describe('the hotkeys page', () => {
     await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
     const field = screen.getByRole('button', { name: /^Press the new keys for Command palette/ })
     expect(field).toHaveFocus()
-    await user.keyboard('{Control>}{Alt>}p{/Alt}{/Control}')
+    await user.keyboard('{Control>}{Shift>}h{/Shift}{/Control}')
 
-    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } }))
+    expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ keyOverrides: { palette: { mods: ['ctrl', 'shift'], key: 'H' } } }))
   })
 
-  it('refuses a key the shell owns, or one another action has, saying why, and keeps listening', async () => {
+  it('refuses a reserved key, or one another action has, saying why, and keeps listening', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('keys')
 
     await user.click(screen.getByRole('button', { name: 'Change the keys for Command palette' }))
     await user.keyboard('{Control>}c{/Control}')
-    expect(screen.getByRole('alert')).toHaveTextContent("Ctrl+C is the shell's own key. Add Shift or Alt.")
+    expect(screen.getByRole('alert')).toHaveTextContent(reservedReason({ mods: ['ctrl'], key: 'C' }, 'linux') ?? 'no reason')
+    await user.keyboard('{Control>}{Shift>}v{/Shift}{/Control}')
+    expect(screen.getByRole('alert')).toHaveTextContent(reservedReason({ mods: ['ctrl', 'shift'], key: 'V' }, 'linux') ?? 'no reason')
     await user.keyboard('{Control>}{Shift>}f{/Shift}{/Control}')
-    expect(screen.getByRole('alert')).toHaveTextContent('Ctrl+Shift+F is already Find in the pane or every session.')
+    expect(screen.getByRole('alert')).toHaveTextContent(bindingFor('find').label)
 
     expect(screen.getByRole('button', { name: /^Press the new keys for Command palette/ })).toHaveFocus()
     expect(onChange).not.toHaveBeenCalled()
@@ -447,9 +450,9 @@ describe('the hotkeys page', () => {
 
   it('shows a chosen key with Reset, which goes back to the action\'s own, and lists the terminal\'s keys without Change', async () => {
     const user = userEvent.setup()
-    const { onChange } = renderSettings('keys', { preferences: { ...PREFS, keyOverrides: { palette: { mods: ['ctrl', 'alt'], key: 'P' } } } })
+    const { onChange } = renderSettings('keys', { preferences: { ...PREFS, keyOverrides: { palette: { mods: ['ctrl', 'shift'], key: 'H' } } } })
 
-    expect(screen.getByRole('group', { name: 'Ctrl Alt P' })).toBeInTheDocument()
+    expect(screen.getByRole('group', { name: 'Ctrl Shift H' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Change the keys for Interrupt' })).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Reset Command palette' }))
 

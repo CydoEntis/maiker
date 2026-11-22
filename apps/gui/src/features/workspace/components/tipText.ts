@@ -10,13 +10,15 @@ const MAC_CHORD = new RegExp(`^([${MAC_MODIFIERS}]+)(\\S+)$`)
 const MODIFIER_WORDS: ReadonlySet<string> = new Set(['Ctrl', 'Shift', 'Alt', 'Cmd', 'Meta', 'Option'])
 /** Keys that are a shortcut on their own, such as "Close (Esc)". */
 const LONE_KEYS: ReadonlySet<string> = new Set(['Esc', 'Enter', 'Tab', 'Space', 'Backspace', 'Delete'])
+/** A function key is a window shortcut with no modifier, such as "Next pane (F6)". */
+const FUNCTION_KEY = /^F([1-9]|1[0-2])$/
 
 /** The keys inside a trailing "(…)", or null when the text is something else, such as "(3)" or "(read only)". */
 function chordOf(inner: string): Chord | null {
   const text = inner.trim()
   const mac = MAC_CHORD.exec(text)
   if (mac?.[1] !== undefined && mac[2] !== undefined) return [...Array.from(mac[1]), mac[2]]
-  if (LONE_KEYS.has(text)) return [text]
+  if (LONE_KEYS.has(text) || FUNCTION_KEY.test(text)) return [text]
   // A "+" that ends the text is the key itself ("Ctrl++"), not a separator.
   const parts = text.split(/\+(?=.)/)
   const hasModifier = parts.length > 1 && parts.slice(0, -1).every((part) => MODIFIER_WORDS.has(part))

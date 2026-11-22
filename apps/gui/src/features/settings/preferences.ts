@@ -2,7 +2,7 @@ import { isSpinnerStyle, type SpinnerStyle } from '@/lib/spinner-clock'
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeight, type TerminalFontWeight } from '@/lib/terminalFont'
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
-import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
+import { detectPlatform, NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
 import { skippedConfirmsOf, type SkippedConfirms } from '@/features/confirm/confirm'
 
@@ -274,7 +274,8 @@ export function readSettingsPreferences(): SettingsPreferences {
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
       restartServiceWhenIdle: bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
-      keyOverrides: readKeyOverrides(preferences.keyOverrides),
+      // The keys were pressed on this computer, so they are checked against this platform's table.
+      keyOverrides: readKeyOverrides(preferences.keyOverrides, detectPlatform(navigator.userAgent)),
     }
   } catch {
     console.warn('Ignoring invalid Maiker settings')

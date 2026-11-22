@@ -31,4 +31,11 @@ describe('parsing a tooltip', () => {
     expect(parseTip('Inbox · Needs you, failed, finished (⌘⇧J)')).toEqual({ name: 'Inbox', keys: ['⌘', '⇧', 'J'], hint: 'Needs you, failed, finished' })
     expect(parseTip('Inbox (⌘⇧J) · Needs you, failed, finished')).toEqual({ name: 'Inbox', keys: ['⌘', '⇧', 'J'], hint: 'Needs you, failed, finished' })
   })
+
+  it('reads the shapes the key table writes: a function key alone, Alt with an arrow, a symbol', () => {
+    expect(parseTip('Next pane (F6)')).toEqual({ name: 'Next pane', keys: ['F6'], hint: null })
+    expect(parseTip('Next session (Alt+↓)')).toEqual({ name: 'Next session', keys: ['Alt', '↓'], hint: null })
+    expect(parseTip('Split right (Alt+Shift+=)')).toEqual({ name: 'Split right', keys: ['Alt', 'Shift', '='], hint: null })
+    expect(parseTip('Hide sidebar (Ctrl+Shift+\\)')).toEqual({ name: 'Hide sidebar', keys: ['Ctrl', 'Shift', '\\'], hint: null })
+  })
 })

@@ -17,7 +17,6 @@ button.mx-place-chip:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-place-head-main { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; font-weight: 600; color: var(--fg); }
 .mx-place-head-main.is-mono { font: 500 12.5px var(--mono); }
 .mx-place-head-sub { font-size: 12px; color: var(--dim); }
-.mx-place-key { flex: none; font: 400 11px var(--mono); color: var(--dim); }
 @media (prefers-reduced-motion: reduce) { .mx-place-icon.is-spinning { animation: none; } }
 :root[data-reduced-motion="true"] .mx-place-icon.is-spinning { animation: none; }
 /* A draft's chips: the machine chip is its icon alone on this computer; a branch that cannot be picked says why, quietly. */

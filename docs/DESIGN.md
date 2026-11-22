@@ -575,7 +575,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **segmented** control sits on `--c-track-*` with its chosen segment on `--m-raise`.
 - **Keyboard shortcuts** (⌘/ or Ctrl+/, also in the palette). An 860px dialog over a dimmed scrim: "Keyboard
   shortcuts", "Change them in Settings › Hotkeys" and a close ×, then an auto-fit grid (240px minimum) of the groups
-  (Sessions, Panes, Find & jump, Window, and In chat: Enter, Shift+Enter, Y, A, N, Esc), each row 32px with its keys as
+  (Go to, Sessions, Side panel, Terminal panes, App, and In chat: Enter, Shift+Enter, Y, A, N, Esc), each row 32px with its keys as
   small 22px keycaps. The window's rows come from the same table Settings › Hotkeys reads (`hotkeyRows`), so the two
   never differ. Other shortcuts are ignored while it is open; ⌘/ and Esc close it.
 - **Menus** (`components/MenuPopup.tsx`, `menu.css`). One look for every right-click and ⋯ menu: 228px or wider,
@@ -692,7 +692,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
   **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings) and **Settings** at the right.
-  Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
+  Hidden (the sidebar key, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
   `SidebarRail.tsx`) is 56px, padded 9px above and 10px below with 4px between its parts: the expand button on top,
   then each project with something going on, in the sidebar's own order and 10px apart, as its 18px badge over one
@@ -1018,24 +1018,39 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   between alternatives. Windows and Linux show Ctrl, Shift and Alt as words.
 - **Hotkeys can be changed.** Each window row ends in **Change** (small `mx-text-button`s, one width so the keycaps
   line up); it turns the keycaps into an accent-ringed "Press the new keys…" field that takes the next combination,
-  and Esc cancels it without closing Settings (`KEY_CAPTURE_ATTRIBUTE`, `data-owns-escape`). A key the terminal owns
-  (no Ctrl, a plain Ctrl+letter on Windows and Linux, no ⌘ on macOS) or one another action already has is refused in
-  `--needs` under the row, naming that action. A changed row adds **Reset**, the card's foot **Reset all**; the
-  terminal's own rows (Interrupt, Clear screen) say "Terminal" instead. The choice replaces the action's own keys,
-  is saved with the window's settings (`keyOverrides`) and reaches every reader through `KeyOverridesContext`.
+  and Esc cancels it without closing Settings (`KEY_CAPTURE_ATTRIBUTE`, `data-owns-escape`). A reserved key
+  (`reservedReason`: see *One key table*) is refused in `--needs` under the row with the reason, and so is a key
+  another action already has, naming that action. A changed row adds **Reset**, the card's foot **Reset all**; the
+  terminal's own rows (Interrupt, Clear screen) say "Terminal" instead, and the digit key (Session 1 to 9) says
+  "Fixed". The choice replaces the action's own keys, is saved with the window's settings (`keyOverrides`) and
+  reaches every reader through `KeyOverridesContext`. A saved key that is reserved, or that another action has, is
+  dropped when the settings are read (`readKeyOverrides`), and its action goes back to its own key.
 - **One key table.** `features/workspace/model/shortcuts.ts` holds every window shortcut once
   (`BINDINGS`); the key handler, tooltips, menu hints, palette, keycaps, Settings › Hotkeys and the
   overlay all read it through `formatShortcut(binding, platform, overrides)`, with the keys chosen in Settings in place. The glyphs are never rewritten in
-  the DOM. On macOS the window uses ⌘ and leaves Ctrl to the terminal. On Windows and Linux a plain
-  Ctrl+letter always goes to the terminal, so the window uses Ctrl+Shift (T, W, D, F, K, I, B, N,
-  J ...); where two actions want the same Ctrl+Shift letter the second takes Ctrl+Alt+Shift (split
-  down, broadcast). Ctrl with a non-letter (`,` `.` `/` `[` `]` `=` `1`-`9` Tab) is the window's
-  too. A binding with `available: false` is registered but its key does nothing and the overlay
-  hides it until the feature lands; none is off now.
-  Jump to the next session that needs you is ⌘J on macOS and Ctrl+Shift+J elsewhere: a bare Ctrl+J is a terminal key.
-- **One key set for both views.** An action has the same keys in the Chat view and the Terminal view. On Windows and
-  Linux no plain Ctrl+letter is ever taken, so a chat box keeps Ctrl+A, C, V, X, Z and Backspace and a terminal gets
-  every Ctrl key; macOS uses ⌘. A key chosen in Settings replaces the action's keys.
+  the DOM. The keys themselves are listed in [shortcuts.md](shortcuts.md#the-desktop-app). On macOS the window uses
+  ⌘ and leaves Ctrl to the terminal (⌃\` and ⌃Tab apart, which no program reads). On Windows and Linux the window
+  takes only Ctrl+Shift+letter, Alt with an arrow or a digit (and Alt+Shift with `=` or `-` for the splits), F6, and
+  Ctrl with one of `,` `.` `/` `=` `-` `` ` `` Tab, which a terminal has no code for. An action with no key (Fetch,
+  Broadcast) is in the command palette and is left out of the sheet and of Hotkeys until a key is chosen for it.
+- **Reserved keys.** `reservedReason` is the list of keys the window never takes and Settings never accepts, each with
+  its reason: on Windows and Linux a plain Ctrl+letter, an Alt+letter, any Ctrl+Alt key, a key with Shift alone or no
+  modifier (function keys apart), Ctrl+Shift+C, V, Z, R, Q and I, Ctrl+Shift with an arrow or an editing key, F2,
+  F5, F11, F12 and Shift+F10; on macOS a key without ⌘, ⌃⌘, and ⌘C, V, X, A, Z, Q, H and ⌘⇧Z. A model test holds the
+  default table to it and to having no key twice.
+- **Keys are read by position.** A symbol or a digit is matched by where its key sits (`KeyboardEvent.code`), so
+  `` ` `` `\` `=` `-` `/` `,` `.` and 1 to 9 are the same physical keys on every layout and a numpad digit never
+  counts; the keycap shows the US character. A letter is matched by the character the layout types.
+- **One key set for both views.** An action has the same keys in the Chat view and the Terminal view, and they work
+  with the keyboard in a chat box or in a terminal. No plain Ctrl+letter is ever taken, so a chat box keeps Ctrl+A,
+  C, V, X, Z and Backspace and a terminal gets every Ctrl key. The window's keys stand down during onboarding, under
+  a confirm dialog, in the Open a project palette, in Settings and while Hotkeys takes down a key; with the command
+  palette or the shortcut sheet open only that one's own key works; the New session draft keeps the keys that go
+  somewhere else (`NEW_CHAT_PAGE_ACTIONS`).
+- **The web view's own keys are off.** Reload (F5, Ctrl+R), print (Ctrl+P), the web view's find bar (Ctrl+F, Ctrl+G,
+  F3), its downloads list (Ctrl+J), caret browsing (F7) and back and forward (Alt+← and Alt+→; ⌘ in place of Ctrl on
+  macOS) have their page default cancelled (`features/shortcuts/pageKeys.ts`). The key is not stopped, so a terminal
+  or a text box with the keyboard still gets it.
 - **One app-wide view.** The pane header has no Chat | Terminal toggle: the whole app is in the chat view or the terminal
   view, picked in Settings › Appearance › **Open sessions in**. Changing it asks once in the confirm
   dialog: new sessions use the new view, and open ones stay as they are. In the chat view the chat covers the pane body while the terminal stays
@@ -1046,7 +1061,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   Every session on this computer, agent or shell, has terminals of its own in its folder. Each is a **Terminal tab
   of the side panel** (below) until it is **pinned to the bottom**, which moves it to the **terminal drawer**
   (`components/TerminalDock.tsx`): one card under the main pane, for the focused session's pinned terminals. The
-  Terminal key (⌃\`; Ctrl+Shift+\` on Windows and Linux, where a plain Ctrl key is the shell's), the palette and the
+  Terminal key (⌃\`, and Ctrl+\` on Windows and Linux, which a terminal has no code for), the palette and the
   drawer's Hide are one `toggleTerminal`: with terminals pinned it shows and hides the drawer; with none it opens the
   side panel on the session's terminal tab, starting the first terminal when there is none. Whether the drawer is
   open is the window's, so switching chats keeps it open on that chat's pinned terminals. It docks at the **bottom** (`clamp(120px, 100vh − 480px,
@@ -1163,7 +1178,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **New session draft on another machine.** The same draft, with the machine in its Machine chip: its projects, a pasted path, **Open folder…** (the Open a project palette's folder browser on that machine, choosing a folder), a Branch chip that reads `not read here` with the Own worktree switch (made on that machine on a new two-word branch), no attach or warm-agent controls, and the picker with the fixed models (Default, Fable, Opus, Sonnet, Haiku for Claude) and the effort.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
-- **Broadcast (⌘⇧B).** Per layout. While on, every pane of the layout has a violet outline and a
+- **Broadcast** (the command palette; it has no key). Per layout. While on, every pane of the layout has a violet outline and a
   "Broadcast" pill, and what is typed in one pane is also typed into the layout's **idle** panes.
   A pane running something is skipped, so it never types into a busy agent.
 - **Pane resize.** The gap between two columns drags (180px minimum, snaps to an even split,
@@ -1178,7 +1193,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **A pasted image.** The same toast, titled `Sending the image to <machine>` (a progress bar named
   `Sending image`, **Cancel**), ending as `Sent the image to <machine>`. For a pane of this computer there is
   no progress: a short `Saving the image…` toast becomes `Pasted the image`.
-- **Side panel** (⌘I, the title bar's button, a session's Show changes, a project's Show files;
+- **Side panel** (⌘B or Ctrl+Shift+B, the title bar's button, a session's Show changes, a project's Show files;
   `features/inspect/SidePanel.tsx`, `WorkspaceSidePanel.tsx`). It is docked beside the main pane, which narrows to
   make room; there is no scrim. A card of the frame, 340px at first and at most 58% of the window; its inner edge
   drags (300 to 640px, `panelWidth.ts`) and the width is remembered (a double-click goes back to 340). **While a file

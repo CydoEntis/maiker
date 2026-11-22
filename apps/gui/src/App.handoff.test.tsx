@@ -150,7 +150,7 @@ describe('desktop terminal multiplexer', () => {
     await screen.findByRole('heading', { name: 'Nothing running' })
     daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
-    await user.keyboard('{Control>}{Alt>}{Shift>}t{/Shift}{/Alt}{/Control}')
+    await user.keyboard('{Control>}{Shift>}`{/Shift}{/Control}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(HOME) })
     expect(daemon.startAcpChat).not.toHaveBeenCalled()
@@ -257,7 +257,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'Nothing running' })
 
-    await user.keyboard('{Control>}{Alt>}{Shift>}t{/Shift}{/Alt}{/Control}')
+    await user.keyboard('{Control>}{Shift>}`{/Shift}{/Control}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code`) })
   })
@@ -326,16 +326,16 @@ describe('desktop terminal multiplexer', () => {
     await screen.findByRole('region', { name: 'Shell in ~/code/maiker/apps' })
     daemon.loadConversations.mockResolvedValue([owner, inRepo(7, `${HOME}/code/maiker`, `${HOME}/code/maiker/apps`)])
 
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    await user.keyboard('{Alt>}{Shift>}={/Shift}{/Alt}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code/maiker/apps`) })
     const split = await screen.findByRole('region', { name: 'Split 1: ~/code/maiker/apps, focused' })
     for (const name of ['Split right', 'Split down', 'Close split']) expect(within(split).getByRole('button', { name })).toBeInTheDocument()
     expect(screen.getByRole('separator', { name: 'Resize panes' })).toBeInTheDocument()
     expect(within(screen.getByRole('navigation', { name: 'Sessions' })).getAllByRole('button', { name: /, shell, idle$/ })).toHaveLength(1)
-    await user.keyboard('{Control>}[[{/Control}')
+    await user.keyboard('{Shift>}{F6}{/Shift}')
     expect(screen.getByRole('region', { name: 'Terminal 1: ~/code/maiker/apps, focused' })).toBeInTheDocument()
-    await user.keyboard('{Control>}]{/Control}')
+    await user.keyboard('{F6}')
     expect(screen.getByRole('region', { name: 'Split 1: ~/code/maiker/apps, focused' })).toBeInTheDocument()
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
@@ -398,7 +398,7 @@ describe('desktop terminal multiplexer', () => {
     await user.click(screen.getByRole('button', { name: 'Close terminal' }))
     const question = await screen.findByRole('alertdialog')
     expect(daemon.closeSession).not.toHaveBeenCalled()
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    await user.keyboard('{Alt>}{Shift>}={/Shift}{/Alt}')
     expect(daemon.startShellSession).not.toHaveBeenCalled()
 
     await user.click(within(question).getByRole('button', { name: 'Close terminal' }))
@@ -414,7 +414,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     daemon.loadConversations.mockResolvedValue([a, b])
-    await user.keyboard('{Control>}{Shift>}d{/Shift}{/Control}')
+    await user.keyboard('{Alt>}{Shift>}={/Shift}{/Alt}')
     await screen.findByRole('region', { name: 'Split 1: ~/a, focused' })
 
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
@@ -469,7 +469,7 @@ describe('desktop terminal multiplexer', () => {
     expect(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close session' })).toBeInTheDocument()
     await user.click(within(screen.getByRole('alertdialog')).getByRole('button', { name: 'Cancel' }))
     expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument()
-    await user.keyboard('{Control>}[[{/Control}')
+    await user.keyboard('{Shift>}{F6}{/Shift}')
     await user.keyboard('{Control>}{Shift>}w{/Shift}{/Control}')
     expect(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Close session' })).toBeInTheDocument()
 
@@ -837,13 +837,36 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
     expect(fireEvent.keyDown(terminal, { key: 'l', ctrlKey: true })).toBe(true)
     expect(fireEvent.keyDown(terminal, { key: 'c', ctrlKey: true })).toBe(true)
-    // The window's sidebar key is Ctrl+Shift+B; a plain Ctrl+B belongs to the shell.
-    expect(fireEvent.keyDown(terminal, { key: 'b', ctrlKey: true })).toBe(true)
-    expect(fireEvent.keyDown(terminal, { key: 'B', ctrlKey: true, shiftKey: true })).toBe(false)
+    // Ctrl+\ quits the program in the pane; the window's sidebar key adds Shift. Copy and paste stay the terminal's.
+    expect(fireEvent.keyDown(terminal, { key: '\\', code: 'Backslash', ctrlKey: true })).toBe(true)
+    for (const key of ['C', 'V']) expect(fireEvent.keyDown(terminal, { key, ctrlKey: true, shiftKey: true })).toBe(true)
+    expect(fireEvent.keyDown(terminal, { key: 'Tab', shiftKey: true })).toBe(true)
+    expect(fireEvent.keyDown(terminal, { key: '|', code: 'Backslash', ctrlKey: true, shiftKey: true })).toBe(false)
 
     // Hidden, the sidebar leaves no rail; the first pane's header offers it back.
     expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeInTheDocument()
+  })
+
+  it('goes to the next session with Alt+Down, but answers no window key while Settings is open', async () => {
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(3, `${HOME}/b`)])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+
+    await user.keyboard('{Control>},{/Control}')
+    await screen.findByRole('dialog', { name: 'Settings' })
+    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Shell in ~/b' })).not.toBeInTheDocument()
+
+    await user.keyboard('{Escape}')
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument() })
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    expect(await screen.findByRole('region', { name: 'Shell in ~/b' })).toBeInTheDocument()
+    await user.keyboard('{Alt>}1{/Alt}')
+    expect(await screen.findByRole('region', { name: 'Shell in ~/a' })).toBeInTheDocument()
   })
 
   it('gives every button in the window a name, so an icon-only one still has a tooltip', async () => {
@@ -882,7 +905,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     await user.click(within(dialog).getByRole('button', { name: 'Terminal' }))
     expect(within(dialog).getByRole('heading', { name: 'Terminal' })).toBeInTheDocument()
     await user.click(within(dialog).getByRole('button', { name: 'Hotkeys' }))
-    expect(within(dialog).getByRole('group', { name: 'Ctrl Alt Shift D' }).querySelectorAll('kbd')).toHaveLength(4)
+    expect(within(dialog).getByRole('group', { name: 'Alt Shift −' }).querySelectorAll('kbd')).toHaveLength(3)
 
     within(dialog).getByRole('button', { name: 'Close settings' }).focus()
     const focusables = dialog.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled])')
@@ -1101,10 +1124,17 @@ describe('desktop overlays and pane tools', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: /^Terminal 2:/ })
 
-    await user.keyboard('{Control>}{Alt>}{Shift>}b{/Shift}{/Alt}{/Control}')
+    // Broadcast has no key: it is one of the command palette's actions.
+    const fromPalette = async () => {
+      await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+      const dialog = await screen.findByRole('dialog', { name: 'Command palette' })
+      await user.type(within(dialog).getByRole('combobox'), 'broadcast')
+      await user.click(within(dialog).getByRole('option', { name: /broadcast/i }))
+    }
+    await fromPalette()
 
     expect(await screen.findAllByText('◉ Broadcast')).toHaveLength(2)
-    await user.keyboard('{Control>}{Alt>}{Shift>}b{/Shift}{/Alt}{/Control}')
+    await fromPalette()
     await waitFor(() => { expect(screen.queryByText('◉ Broadcast')).not.toBeInTheDocument() })
   })
 })
@@ -1123,6 +1153,25 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     daemon.loadConversations.mockResolvedValue([])
     daemon.suggestProjectFolders.mockResolvedValue([])
     daemon.daemonSaidRemoved.mockImplementation(() => false)
+  })
+
+  it('leaves a plain Ctrl+letter to the chat box and takes the window\'s own keys from it', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('button', { name: 'a' })
+    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+    const box = within(await screen.findByRole('region', { name: 'New session' })).getByRole('textbox', { name: /^Message / })
+    await user.click(box)
+
+    for (const letter of ['k', 'o', 'w', 'f']) await user.keyboard(`{Control>}${letter}{/Control}`)
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'New session' })).toBeInTheDocument()
+    expect(box).toHaveFocus()
+
+    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
   })
 
   it('opens the draft in the project of the session in front from New session, and starts nothing until the first message is sent', async () => {

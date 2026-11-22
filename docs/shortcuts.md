@@ -1,7 +1,8 @@
 # Shortcuts
 
-Every default shortcut, then the keys each screen has of its own. You can change any of them
-in Settings › Keys or under `[keys.prefix]` in your config.
+Every default shortcut of the terminal app, then the keys each screen has of its own. You can change any of them
+in Settings › Keys or under `[keys.prefix]` in your config. The desktop app's keys are in
+[The desktop app](#the-desktop-app).
 
 ## Default shortcuts
 
@@ -99,6 +100,86 @@ Press the prefix for key mode, then the key. Only `?`, `S` and `_` need Shift, a
 **Search only** (`Ctrl+K`, then type): new tab, Updates, find in the pane, previous / next
 command in history, send the prefix itself to the program, Status log, Recent
 sessions…, Reset pane widths.
+
+## The desktop app
+
+The desktop app has one set of window keys, the same in the Chat view and the Terminal view, and they work with the
+keyboard in a chat box or in a terminal pane. On Windows and Linux it takes only Ctrl+Shift with a letter, Alt with an
+arrow or a digit, Alt+Shift with `=` or `-`, F6, and Ctrl with `,` `.` `/` `=` `-` `` ` `` or Tab. It never takes a plain
+Ctrl+letter, an Alt+letter, a Ctrl+Alt key or a key with Shift alone, so every key a shell or an agent reads reaches
+it. On macOS the window uses ⌘. The table is `BINDINGS` in `apps/gui/src/features/workspace/model/shortcuts.ts`; the
+shortcut sheet (`Ctrl+/`) and Settings › Hotkeys show it as it is on your computer.
+
+| Action | Windows and Linux | macOS |
+| --- | --- | --- |
+| **Go to** | | |
+| Open a project | `Ctrl+Shift+O` | `⌘O` |
+| Command palette | `Ctrl+Shift+K` | `⌘K` |
+| Next session | `Alt+↓` | `⌘⌥↓` |
+| Previous session | `Alt+↑` | `⌘⌥↑` |
+| Session 1 to 9 | `Alt+1` … `Alt+9` | `⌘1` … `⌘9` |
+| Next session that needs you | `Ctrl+Shift+J` | `⌘J` |
+| Focus the chat box | `Ctrl+Shift+L` | `⌘L` |
+| Focus the sidebar | `Ctrl+Shift+S` | `⌘⇧S` |
+| Find in the pane or every session | `Ctrl+Shift+F` | `⌘F` |
+| **Sessions** | | |
+| New session | `Ctrl+Shift+T` | `⌘T` |
+| New worktree | `Ctrl+Shift+N` | `⌘⇧N` |
+| New terminal | ``Ctrl+Shift+` `` | `⌘⇧T` |
+| Close the session, or the focused split | `Ctrl+Shift+W` | `⌘W` |
+| Switch between Chat and Terminal view | `Ctrl+Shift+Y` | `⌘⇧Y` |
+| Agent and model picker | `Ctrl+Shift+A` | `⌘⇧A` |
+| **Side panel** | | |
+| Show or hide the side panel | `Ctrl+Shift+B` | `⌘B` |
+| Show or hide the sidebar | `Ctrl+Shift+\` | `⌘\` |
+| Show or hide the terminal | `` Ctrl+` `` | `` ⌃` `` |
+| Files | `Ctrl+Shift+E` | `⌘⇧E` |
+| Changes | `Ctrl+Shift+G` | `⌘⇧G` |
+| Next side panel tab | `Ctrl+Tab` | `⌃Tab` |
+| Previous side panel tab | `Ctrl+Shift+Tab` | `⌃⇧Tab` |
+| **Terminal panes** | | |
+| Split right | `Alt+Shift+=` | `⌘D` |
+| Split down | `Alt+Shift+-` | `⌘⇧D` |
+| Next pane | `F6` | `⌘]` |
+| Previous pane | `Shift+F6` | `⌘[` |
+| **App** | | |
+| Settings | `Ctrl+,` | `⌘,` |
+| Keyboard shortcuts | `Ctrl+/` | `⌘/` |
+| Add a remote machine | `Ctrl+Shift+M` | `⌘⇧M` |
+| Usage and cost | `Ctrl+Shift+U` | `⌘⇧U` |
+| Focus mode | `Ctrl+.` | `⌘.` |
+| Larger text | `Ctrl+=` | `⌘=` |
+| Smaller text | `Ctrl+-` | `⌘-` |
+
+Fetch the repository and Broadcast have no key; they are in the command palette.
+
+The session keys follow the sidebar's rows in the order they are drawn. A symbol or a digit is read by where its key
+sits, so on a layout that is not US the key to press is the one in the US position (the key left of `1` for `` ` ``),
+and a numpad digit does not count. A letter is the letter your layout types.
+
+**Where the keys stand down.** During onboarding, under a confirm dialog, in the Open a project palette and in
+Settings no window key works (in Settings the Find key goes to its search). With the command palette or the shortcut
+sheet open only that one's own key works. The New session draft keeps the keys that go somewhere else.
+
+**Keys that belong to one place** are not in the table and cannot be changed: `Esc` closes the topmost layer (and
+stops the agent from the chat box); `Enter`, `Shift+Enter` and `Ctrl+Enter` in a chat box; `F2` (rename) and
+`Shift+F10` (menu) on a focused sidebar row; `Y`, `A`, `N` and the digits to answer a card; the digits on the empty
+state to start an agent.
+
+In the desktop app's New session draft, `Enter` starts the chat and opens it (so does `Ctrl+Enter`, `⌘Enter` on macOS), `Shift+Enter` is a new line, `Esc` discards the draft; `Ctrl+Shift+Enter` (`⇧⌘Enter`) starts it in the background, empties the message box and keeps the draft open for the next one.
+
+**Changing a key.** Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). **Reset** puts one
+back, and **Reset all** puts them all back. A key another action already has is refused, and so is a reserved key, with
+the reason:
+
+- on Windows and Linux: a plain Ctrl+letter, an Alt+letter, any Ctrl+Alt key, a key with Shift alone or with no
+  modifier (function keys apart), `Ctrl+Shift+C` and `V` (copy and paste in a terminal), `Ctrl+Shift+Z` (redo),
+  `Ctrl+Shift+R`, `Q` and `I`, Ctrl+Shift with an arrow or an editing key, `F2`, `F5`, `F11`, `F12`, `Shift+F10`,
+  and a numpad key;
+- on macOS: a key without ⌘ (`` ⌃` `` and `⌃Tab` apart), a ⌃⌘ key, and `⌘C`, `V`, `X`, `A`, `Z`, `Q`, `H`, `⌘⇧Z`.
+
+A key saved earlier that is reserved now, or that another action has, is dropped when the app starts, and its action
+goes back to the key in the table.
 
 ## Status log
 
@@ -294,10 +375,7 @@ Search commands' **Specialist agents…**, or the pane's right-click Project… 
 
 There is no dialog. Leader `n`, leader `t`, `Alt+N`, `Ctrl+T`, the ` n new session ` chip of an empty workspace and a machine's ` + ` chip all start a shell at once where you are (a machine's chip on that machine). Start an agent by typing `claude` (or any other) in the shell.
 
-In the desktop app's New session draft, `Enter` starts the chat and opens it (so does `Ctrl+Enter`, `⌘Enter` on macOS), `Shift+Enter` is a new line, `Esc` discards the draft; `Ctrl+Shift+Enter` (`⇧⌘Enter`)
-starts it in the background, empties the message box and keeps the draft open for the next one.
-
-The desktop app's window keys are changed in its Settings › Hotkeys: **Change** on a row, then press the new keys (Esc cancels). It refuses a key the terminal uses, such as a plain Ctrl+letter on Windows and Linux (the keys are the same in the chat view and the terminal view) or any key without ⌘ on macOS, and a key another action already has. **Reset** puts one back, and **Reset all** puts them all back.
+The desktop app's draft has its own keys: see [The desktop app](#the-desktop-app).
 
 ## A session wants to start helpers
 

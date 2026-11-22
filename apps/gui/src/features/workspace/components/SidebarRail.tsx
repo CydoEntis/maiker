@@ -4,6 +4,7 @@ import { IconButton } from '@/components/ui/icon-button'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { markOf } from '@/lib/statusMark'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
+import { SESSION_ROW_ATTRIBUTE } from '../keyTargets'
 import { helperSummary, summarySpoken } from '../model/helpers'
 import { STATUS_WORD, type SessionView } from '../model/session'
 import { rowTitle } from '../model/sidebar'
@@ -59,6 +60,7 @@ export function SidebarRail(props: SidebarProps) {
         <button
           type="button"
           className="mx-rail-session"
+          {...{ [SESSION_ROW_ATTRIBUTE]: session.id }}
           aria-label={[rowTitle(session), STATUS_WORD[session.status], ...(summary.count > 0 ? [summarySpoken(summary)] : [])].join(' · ')}
           aria-current={selected ? 'page' : undefined}
           onClick={() => { endHover(); props.onShowSession(session.id) }}

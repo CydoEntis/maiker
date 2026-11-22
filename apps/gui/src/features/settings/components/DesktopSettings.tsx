@@ -16,7 +16,7 @@ import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
-import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, matchShortcut, takenBy, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
+import { captureCombo, comboChord, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, matchShortcut, takenBy, withoutAction, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
 import { asksFirst, confirmAsk, withSkipped } from '@/features/confirm/confirm'
 import { ConfirmHost } from '@/features/confirm/ConfirmDialog'
@@ -215,7 +215,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
   // The window's Find key searches the settings while they are open; the window's own keys are off under a dialog.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
-    if (matchShortcut(event, props.platform, preferences.keyOverrides, preferences.openSessionsIn)?.action !== 'find') return
+    if (matchShortcut(event, props.platform, preferences.keyOverrides)?.action !== 'find') return
     event.preventDefault()
     searchField.current?.focus()
   }
@@ -743,17 +743,11 @@ function SidebarSection({ preferences, update }: { preferences: SettingsPreferen
   )
 }
 
-/** Without the one action's chosen keys, so it goes back to its own. */
-function withoutOverride(overrides: KeyOverrides, action: ShortcutAction): KeyOverrides {
-  return Object.fromEntries(Object.entries(overrides).filter(([chosen]) => chosen !== action))
-}
-
 /** Each window key, with Change to press a new one for it and Reset to go back to its own. The terminal's keys are listed, not changed. */
 function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platform; overrides: KeyOverrides; onOverrides: (next: KeyOverrides) => void }) {
   const [capturing, setCapturing] = useState<ShortcutAction | null>(null)
   const [refusal, setRefusal] = useState<{ action: ShortcutAction; reason: string } | null>(null)
-  // The terminal view's keys, with the chat view's beside them where they differ (Windows and Linux).
-  const rows = hotkeyRows(platform, overrides, 'terminal')
+  const rows = hotkeyRows(platform, overrides)
   const anyChanged = rows.some((row) => row.changed)
 
   const startCapture = (action: ShortcutAction) => { setRefusal(null); setCapturing(action) }
@@ -769,13 +763,13 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
     if (other) { setRefusal({ action, reason: `${keys} is already ${other.label}. Change that one first.` }); return }
     setRefusal(null)
     setCapturing(null)
-    onOverrides(isOwnKey(captured.combo, action, platform) ? withoutOverride(overrides, action) : { ...overrides, [action]: captured.combo })
+    onOverrides(isOwnKey(captured.combo, action, platform) ? withoutAction(overrides, action) : { ...overrides, [action]: captured.combo })
   }
 
   return (
     <Card
       title="Hotkeys"
-      meta={<span className="mx-scard-meta">{platform === 'mac' ? '⌘ here, Ctrl+Shift on Windows and Linux' : 'Chat view: Ctrl+key. Terminal view: Ctrl+Shift+key. ⌘ on macOS.'}</span>}
+      meta={<span className="mx-scard-meta">{platform === 'mac' ? 'The same keys in Chat and Terminal view. ⌘ here, Ctrl+Shift on Windows and Linux.' : 'The same keys in Chat and Terminal view. ⌘ on macOS.'}</span>}
       foot={<>
         <span>In a focused pane, every other key goes straight to the shell.</span>
         {anyChanged && <button type="button" className="mx-text-button" onClick={() => { setRefusal(null); onOverrides({}) }}>Reset all</button>}
@@ -802,15 +796,7 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
                 >Press the new keys…</button>
               ) : (
                 <span className="mx-keys">
-                  {row.otherView.length > 0 && <span className="mx-or">Terminal view</span>}
                   {row.chords.map((chord, index) => (
-                    <Fragment key={chord.join('+')}>
-                      {index > 0 && <span className="mx-or">or</span>}
-                      <Keycaps chord={chord} className="mx-chord" labelled />
-                    </Fragment>
-                  ))}
-                  {row.otherView.length > 0 && <span className="mx-or">Chat view</span>}
-                  {row.otherView.map((chord, index) => (
                     <Fragment key={chord.join('+')}>
                       {index > 0 && <span className="mx-or">or</span>}
                       <Keycaps chord={chord} className="mx-chord" labelled />
@@ -818,10 +804,10 @@ function HotkeysSection({ platform, overrides, onOverrides }: { platform: Platfo
                   ))}
                 </span>
               )}
-              {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">Terminal</span></span> : (
+              {action === null ? <span className="mx-hotkey-actions"><span className="mx-hotkey-fixed">{row.fixed}</span></span> : (
                 <span className="mx-hotkey-actions">
                   {!listening && <button type="button" className="mx-text-button" aria-label={`Change the keys for ${row.action}`} onClick={() => { startCapture(action) }}>Change</button>}
-                  {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutOverride(overrides, action)) }}>Reset</button>}
+                  {row.changed && !listening && <button type="button" className="mx-text-button" aria-label={`Reset ${row.action}`} onClick={() => { setRefusal(null); onOverrides(withoutAction(overrides, action)) }}>Reset</button>}
                 </span>
               )}
               {refusal?.action === action && <p className="mx-hotkey-refusal" role="alert">{refusal.reason}</p>}

@@ -1,5 +1,6 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } from 'react'
-import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction, type ShortcutView } from './model/shortcuts'
+import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction } from './model/shortcuts'
+import { isPageKey } from '@/features/shortcuts/pageKeys'
 import { toast } from '@/lib/toast'
 import { isAlertDialogOpen } from '@/components/ui/alert-dialog'
 import { isOpenPaletteUp } from '@/features/open-project/paletteOpen'
@@ -15,15 +16,23 @@ import { type EscLayer, topmostOpen } from './model/escLadder'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { syncRemote } from '@/features/inspect/api'
 import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you/model/needsYou'
+import { type PanelTabs, type RepoSurfaceKind, showTab } from '@/features/inspect/panelTabs'
+import { confirmAsk } from '@/features/confirm/confirm'
+import type { Confirm } from '@/features/confirm/useConfirm'
+import { focusChatBox, focusSidebar, openModelPicker, sidebarRowOrder } from './keyTargets'
+
+/** Said when the chat box's key is pressed where no chat box is: a terminal pane, or nothing open. */
+const NO_CHAT_BOX = 'No chat box here.'
+
+/** Runs an action of the table. `digit` is which of 1 to 9 was pressed, for the key that stands for all nine. */
+export type RunShortcut = (action: ShortcutAction, digit?: number) => void
 
 /** What the Open folder key calls; the Open a project palette sits behind it. */
 export type OpenProject = (kind: 'folder') => void
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
-export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
-  /** The view the focused session shows: in the chat view plain Ctrl+key forms are taken, in the terminal view never. */
-  view: ShortcutView
-  runShortcut: (action: ShortcutAction) => void
+export function useShortcutKeys({ runShortcut, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides }: {
+  runShortcut: RunShortcut
   dialogOpen: boolean
   onNewChatPage: boolean
   overlayOpen: boolean
@@ -40,8 +49,8 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, 
   platform: Platform
   keyOverrides: KeyOverrides
 }) {
-  const shortcutState = useRef({ view, runShortcut, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
-  useEffect(() => { shortcutState.current = { view, runShortcut, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
+  const shortcutState = useRef({ runShortcut, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides })
+  useEffect(() => { shortcutState.current = { runShortcut, settingsOpen: dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, keyOverrides } })
   useEffect(() => {
     // How each layer of the Esc ladder closes. A new dialog adds its closer here and its id to ESC_LADDER.
     const closers: Partial<Record<EscLayer, () => void>> = {
@@ -53,6 +62,8 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, 
     }
     const onKeyDown = (event: KeyboardEvent) => {
       const state = shortcutState.current
+      // Not stopped: the terminal or field with the focus still gets the key, only the page's own answer to it is off.
+      if (isPageKey(event, platform)) event.preventDefault()
       if (state.welcomeOpen) return
       // A question is on screen: every key, Esc too, is its own until it is answered.
       if (isAlertDialogOpen()) return
@@ -60,7 +71,7 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, 
       if (isOpenPaletteUp()) return
       // Settings › Hotkeys is taking down a new key: every key, Esc too, is the field's.
       if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
-      const match = matchShortcut(event, platform, state.keyOverrides, state.view)
+      const match = matchShortcut(event, platform, state.keyOverrides)
       if (state.shortcutsOpen) {
         // Only its own key closes it; Esc is the dialog's.
         if (match?.action === 'shortcuts') {
@@ -93,21 +104,31 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, onNewChatPage, 
       if (!match) return
       event.preventDefault()
       event.stopPropagation()
-      state.runShortcut(match.action)
+      state.runShortcut(match.action, match.digit)
     }
     window.addEventListener('keydown', onKeyDown, true)
     return () => { window.removeEventListener('keydown', onKeyDown, true) }
   }, [platform, setDrawerOpen, setFocusMode, setNewChatOpen, setPaletteOpen, setSettingsSection])
 }
 
+/** `panel` with the tab `step` on from the one in front, going round at either end. */
+function stepTab(panel: PanelTabs, step: 1 | -1): PanelTabs {
+  const shown = panel.tabs.findIndex((tab) => tab.id === panel.active)
+  const next = panel.tabs[(Math.max(shown, 0) + step + panel.tabs.length) % panel.tabs.length]
+  return next === undefined ? panel : showTab(panel, next.id)
+}
+
 /** What each shortcut does. The palette and the keyboard both go through it. */
-export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, split, stepPaneFocus, closeFocusedSplit, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal }: {
+export function useShortcutRunner({ openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences, setPreferences, confirm, split, stepPaneFocus, closeFocusedSplit, setLayout, layout, askToClose, endSessions, toggleSidebar, sidebarHidden, setPaletteOpen, sessions, sessionOrder, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, inspectOpen, showPanelView, changePanel, setFindOpen, online, setWorktreeFrom, toggleTerminal, addMachine, root }: {
   openProject: OpenProject
   newSession: (machine?: number) => void
   focusedMachineNumber: number
   newTerminal: (machine?: number) => void
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
   preferences: SettingsPreferences
+  setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
+  /** The window's one question, asked before the view changes. */
+  confirm: Confirm
   split: (paneId: string | null, direction: SplitDir) => void
   /** Moves the focus one pane on or back, through a session's splits and on to the next session. */
   stepPaneFocus: (step: 1 | -1) => void
@@ -118,8 +139,12 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
   askToClose: (ids: string[], close: () => void) => void
   endSessions: (ids: string[]) => void
   toggleSidebar: () => void
+  /** The sidebar is put away whole, so the key that goes to it shows it first. */
+  sidebarHidden: boolean
   setPaletteOpen: Dispatch<SetStateAction<boolean>>
   sessions: SessionView[]
+  /** The sessions the sidebar lists, for the session keys while the sidebar itself is not drawn. */
+  sessionOrder: readonly SessionView[]
   focusedSession: SessionView | undefined
   flash: (text: string) => void
   showSessionById: (sessionId: string) => void
@@ -127,13 +152,68 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
   setTextSize: (size: number) => void
   toggleInspect: () => void
+  inspectOpen: boolean
+  /** Opens the focused session's side panel on Files or Changes. */
+  showPanelView: (view: RepoSurfaceKind) => void
+  changePanel: (sessionId: string, change: (panel: PanelTabs) => PanelTabs) => void
   setFindOpen: Dispatch<SetStateAction<boolean>>
   online: boolean
   setWorktreeFrom: Dispatch<SetStateAction<SessionView | null>>
   toggleTerminal: () => void
+  /** Opens the Open a project palette on its New machine level. */
+  addMachine: () => void
+  /** The window's root, where the go-to keys find the chat box and the sidebar (`keyTargets`). */
+  root: HTMLElement | null
 }) {
-  const runShortcut = useCallback((action: ShortcutAction) => {
+  // The session `step` rows on from the one in front, in the order the sidebar draws them, going round at either end.
+  const stepSession = useCallback((step: 1 | -1) => {
+    const order = sidebarRowOrder(root) ?? sessionOrder.map((session) => session.id)
+    const at = focusedSession === undefined ? -1 : order.indexOf(focusedSession.id)
+    const next = order[at === -1 ? 0 : (at + step + order.length) % order.length]
+    if (next !== undefined) showSessionById(next)
+  }, [root, sessionOrder, focusedSession, showSessionById])
+  const runShortcut = useCallback<RunShortcut>((action, digit) => {
     switch (action) {
+      case 'session-next':
+        stepSession(1)
+        return
+      case 'session-previous':
+        stepSession(-1)
+        return
+      case 'go-to-session': {
+        const target = digit === undefined ? undefined : (sidebarRowOrder(root) ?? sessionOrder.map((session) => session.id))[digit - 1]
+        if (target !== undefined) showSessionById(target)
+        return
+      }
+      case 'focus-chat':
+        if (!focusChatBox(root)) flash(NO_CHAT_BOX)
+        return
+      case 'model-picker':
+        if (!openModelPicker(root)) flash(NO_CHAT_BOX)
+        return
+      case 'focus-sidebar':
+        if (sidebarHidden) toggleSidebar()
+        // After the frame that draws a sidebar this key has just shown.
+        window.requestAnimationFrame(() => { focusSidebar(root) })
+        return
+      case 'files':
+        showPanelView('files')
+        return
+      case 'changes':
+        showPanelView('changes')
+        return
+      case 'panel-tab-next':
+      case 'panel-tab-previous':
+        if (inspectOpen && focusedSession !== undefined) changePanel(focusedSession.id, (panel) => stepTab(panel, action === 'panel-tab-next' ? 1 : -1))
+        return
+      case 'add-machine':
+        addMachine()
+        return
+      case 'switch-view': {
+        const next = preferences.openSessionsIn === 'chat' ? 'terminal' : 'chat'
+        confirm(confirmAsk('switch-view', next), () => { setPreferences((current) => ({ ...current, openSessionsIn: next })) })
+        return
+      }
       case 'new-session':
         newSession(focusedMachineNumber)
         return
@@ -236,6 +316,6 @@ export function useShortcutRunner({ openProject, newSession, focusedMachineNumbe
         }
         return
     }
-  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, split, stepPaneFocus, closeFocusedSplit, setLayout, toggleSidebar, setPaletteOpen, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, layout, askToClose, endSessions, sessions, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal])
+  }, [openProject, newSession, focusedMachineNumber, newTerminal, setSettingsSection, preferences.terminalFontSize, preferences.openSessionsIn, setPreferences, confirm, split, stepPaneFocus, closeFocusedSplit, setLayout, toggleSidebar, sidebarHidden, setPaletteOpen, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, inspectOpen, showPanelView, changePanel, setFindOpen, layout, askToClose, endSessions, sessions, sessionOrder, stepSession, focusedSession, flash, showSessionById, online, setWorktreeFrom, toggleTerminal, addMachine, root])
   return { runShortcut }
 }

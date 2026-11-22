@@ -3,7 +3,6 @@ import { ChipMenu, type ChipItem } from '@/features/workspace/components/NewChat
 import { nowSeconds } from '@/features/workspace/model/newChatHost'
 import { ago } from '@/features/inspect/format'
 import type { SyncAction } from '@/features/inspect/api'
-import { useShortcutText } from '@/features/shortcuts/platform'
 import { PlaceHead } from './PlaceHead'
 import { syncFace, syncMenu } from './syncMenu'
 import type { SessionSync } from './useSessionSync'
@@ -17,16 +16,13 @@ const ICON: Readonly<Record<SyncAction, 'refresh' | 'arrowDown' | 'arrowUp'>> = 
  */
 export function SyncChip({ state, branch }: { state: SessionSync; branch: string }) {
   const { sync, running, run } = state
-  const keys = useShortcutText()
   const standing = { branch, upstream: sync?.upstream ?? null, counts: sync === null ? null : { ahead: sync.ahead, behind: sync.behind }, fetched: state.fetchedAt === null ? null : ago(state.fetchedAt, nowSeconds()), running }
   const face = syncFace(standing)
   const menu = syncMenu(standing)
-  const fetchKeys = keys('fetch')
   const items: ChipItem[] = menu.items.map((item) => ({
     key: item.key,
     label: item.label,
     icon: <Icon name={ICON[item.key]} size={13} />,
-    ...(item.key === 'fetch' && fetchKeys !== '' ? { right: <kbd className="mx-place-key">{fetchKeys}</kbd> } : {}),
     checked: false,
     disabled: item.disabled,
     onPick: () => { run(item.key) },

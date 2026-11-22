@@ -1,4 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { SESSION_ROW_ATTRIBUTE } from '../keyTargets'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { diffSpoken, diffText, helpersSpoken, type HelperCount, type HelperDiff } from '../model/helpers'
 import { limitedWord, MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
@@ -63,7 +64,7 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
     // A session nothing was sent to has no name yet: its field starts empty over "New session".
     const shown = fresh ? '' : title
     return (
-      <div className={`${className} is-renaming`}>
+      <div className={`${className} is-renaming`} {...{ [SESSION_ROW_ATTRIBUTE]: session.id }}>
         <InlineName
           value={shown}
           placeholder={title}
@@ -84,6 +85,7 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
       ref={row}
       type="button"
       className={className}
+      {...{ [SESSION_ROW_ATTRIBUTE]: session.id }}
       onPointerDown={(event) => { beginPointerDrag(event, { kind: 'session', id: session.id, label: title }) }}
       aria-label={`${title}, ${spokenState(session, starter, helpers, diff)}`}
       aria-current={selected ? 'page' : undefined}
