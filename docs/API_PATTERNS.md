@@ -148,6 +148,22 @@ wait on a chat that never starts, so `COMPATIBLE_SINCE` moved to 122 (test:
 `ApprovalRequest.choice_labels` (defaulted; a test reads the shape from before it) holds a provider's own names for
 `choices`, in the same order; they pair only while the two are as long as each other.
 
+Protocol 123 added `Query::DiscardFile { term, path, tag }`: discard the uncommitted changes of the one file `path`
+(relative to the top of the repository, with `/`) in the checkout pane `term` is in. Human clients only, with the
+pane checks and the write grant of `Query::Git`. The answer is the existing `Reply::GitDone` with the same `tag`: one
+line saying what was done, or one line saying why nothing was. The daemon asks git what kind of change the path is
+and undoes that kind; the client never names it. The rules, the kinds and the typed refusals are
+`maitty_shared::discard` (`discard_file`, `DiscardError`; SECURITY, *Discarding a file's changes*), which takes its
+git and its disk as a `Checkout` so the crate does no I/O itself; `daemon/discard.rs` runs it for the daemon, and
+the desktop host runs the same function with its own git for a checkout on this computer. It is a new message with its
+own arm in `ClientMsg::introduced_in` (`DISCARD_FILE_SINCE`), so `COMPATIBLE_SINCE` stays 122: a daemon on 122 is
+never asked, and the desktop client refuses in words instead (`refuse_unless_daemon_reads`; tests:
+`a_discard_is_asked_only_of_a_daemon_that_reads_it_and_older_shapes_still_decode`,
+`a_peer_from_before_a_message_cannot_read_it`). It is never sent on a kept connection (`safe_to_ask_twice`): asked
+twice, the second would report a failure for a discard that landed. The desktop command is
+`git_discard_file(machine, folder, path, term)`: this computer's checkout is named by `folder`, another machine's by
+the pane `term`, whose answer passes `remote_repo::vet_discard_reply`.
+
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
 batch of events the daemon compares a stamp of what a `ConversationRead` would answer (history

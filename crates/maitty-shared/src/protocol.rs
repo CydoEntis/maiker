@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 122;
+pub const PROTOCOL_VERSION: u32 = 123;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -1395,6 +1395,16 @@ pub enum Query {
         request: GitRequest,
         tag: u64,
     },
+    /// Discard the uncommitted changes of the one file `path` in the checkout pane `term` is in
+    /// (human clients only). `path` is relative to the top of the repository, with `/` between
+    /// its parts. The daemon asks git what kind of change it is and undoes that
+    /// (`crate::discard::discard_file`): a file that is new is removed for good. The answer is
+    /// `Reply::GitDone` with the same `tag`. Read since `DISCARD_FILE_SINCE`.
+    DiscardFile {
+        term: u32,
+        path: String,
+        tag: u64,
+    },
     /// The conversations `agent` (`claude`, `codex`) saved for `folder` on this daemon's computer,
     /// newest first (human clients only). `folder` is absolute or starts with `~`. The answer
     /// echoes `tag`.
@@ -1704,8 +1714,8 @@ pub enum Reply {
         tag: u64,
         answer: Result<crate::extensions::ExtReply, crate::extensions::ExtError>,
     },
-    /// How a `Query::Git` ended: one line saying what happened ("Pulled", "Pushed main"), or one
-    /// line saying why nothing did.
+    /// How a `Query::Git` or a `Query::DiscardFile` ended: one line saying what happened
+    /// ("Pulled", "Pushed main"), or one line saying why nothing did.
     GitDone {
         tag: u64,
         outcome: Result<String, String>,
@@ -2673,9 +2683,16 @@ impl ClientMsg {
     /// a request to an older daemon, which would otherwise never answer it. A message added
     /// while `COMPATIBLE_SINCE` stays behind gets its own arm here.
     pub fn introduced_in(&self) -> u32 {
-        COMPATIBLE_SINCE
+        match self {
+            ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
+            _ => COMPATIBLE_SINCE,
+        }
     }
 }
+
+/// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
+/// request over and never answers, so a client refuses in words instead of asking it.
+pub const DISCARD_FILE_SINCE: u32 = 123;
 
 pub fn encode<T: Serialize>(msg: &T) -> anyhow::Result<bytes::Bytes> {
     Ok(rmp_serde::to_vec_named(msg)?.into())
@@ -2866,6 +2883,7 @@ mod tests {
                 folder: PathBuf::from("/code/app-worktrees/task"),
             }),
             ClientMsg::Query(Query::MachineFacts { tag: 1 }),
+            ClientMsg::Query(Query::DiscardFile { term: 3, path: "src/a file.rs".into(), tag: 5 }),
             ClientMsg::Query(Query::CloneRepo {
                 address: "https://h/o/r.git".into(),
                 parent: "~".into(),
@@ -3278,12 +3296,17 @@ mod tests {
         }
     }
 
-    /// Since 122 moved the window, no message is newer than it: a client asks any daemon it
-    /// talks to, and a daemon answers any client it talks to.
+    /// 122 moved the window, so a message is as old as it unless it was added since and has an
+    /// arm of its own: a client asks a daemon only what that daemon reads, and a daemon sends a
+    /// client only what that client reads.
     #[test]
-    fn every_message_is_as_old_as_the_window() {
+    fn every_message_is_as_old_as_the_window_or_says_when_it_was_added() {
         for m in every_client_message() {
-            assert_eq!(m.introduced_in(), COMPATIBLE_SINCE, "{m:?}");
+            let since = match m {
+                ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
+                _ => COMPATIBLE_SINCE,
+            };
+            assert_eq!(m.introduced_in(), since, "{m:?}");
         }
         for m in every_server_message() {
             assert_eq!(m.introduced_in(), COMPATIBLE_SINCE, "{m:?}");
@@ -3340,6 +3363,8 @@ mod tests {
             pub enum QueryBeforeFolders { ListFolders { path: String, tag: u64 } }
             #[derive(Deserialize)]
             pub enum QueryBeforeClosed { List }
+            #[derive(Deserialize)]
+            pub enum QueryBeforeDiscard { Git { term: u32, request: super::super::GitRequest, tag: u64 } }
             #[derive(Deserialize)]
             pub enum ReplyBefore { Ok }
             #[derive(Deserialize)]
@@ -3428,6 +3453,7 @@ mod tests {
         ] {
             unreadable_before::<old::QueryBeforeClosed, _>(&query);
         }
+        unreadable_before::<old::QueryBeforeDiscard, _>(&Query::DiscardFile { term: 3, path: "a.txt".into(), tag: 5 });
 
         let standing = WorktreeStanding {
             dirty: 0,
@@ -3455,6 +3481,33 @@ mod tests {
         ] {
             unreadable_before::<old::ServerBefore, _>(&news);
         }
+    }
+
+    /// `Query::DiscardFile` is new in 123 and nothing else moved, so `COMPATIBLE_SINCE` stays: a
+    /// daemon on 122 still talks, is never asked to discard, and what it and its clients send
+    /// today decodes as before. The answer is the `GitDone` it already had.
+    #[test]
+    fn a_discard_is_asked_only_of_a_daemon_that_reads_it_and_older_shapes_still_decode() {
+        const { assert!(COMPATIBLE_SINCE < DISCARD_FILE_SINCE && DISCARD_FILE_SINCE <= PROTOCOL_VERSION) };
+        let discard = ClientMsg::Query(Query::DiscardFile { term: 3, path: "src/a file.rs".into(), tag: 5 });
+        assert_eq!(discard.introduced_in(), DISCARD_FILE_SINCE);
+        assert!(speaks_with(DISCARD_FILE_SINCE - 1, 0), "a daemon from before it is still talked to");
+        round_trips(&discard);
+
+        // What a peer on 122 writes, in its own declarations.
+        #[derive(Serialize)]
+        enum OldQuery {
+            Git { term: u32, request: GitRequest, tag: u64 },
+        }
+        #[derive(Serialize)]
+        enum OldReply {
+            GitDone { tag: u64, outcome: Result<String, String> },
+        }
+        let asked: Query = decode(&encode(&OldQuery::Git { term: 3, request: GitRequest::Push, tag: 5 }).unwrap()).unwrap();
+        assert!(matches!(asked, Query::Git { term: 3, request: GitRequest::Push, tag: 5 }), "{asked:?}");
+        let answered: Reply = decode(&encode(&OldReply::GitDone { tag: 5, outcome: Err("no".into()) }).unwrap()).unwrap();
+        assert!(matches!(&answered, Reply::GitDone { tag: 5, outcome: Err(why) } if why == "no"), "{answered:?}");
+        assert_eq!(ServerMsg::Reply(answered).introduced_in(), COMPATIBLE_SINCE, "an older client reads the answer");
     }
 
     /// Pinned encodings of answers a peer on the same version reads: a reorder or a rename of
@@ -4629,7 +4682,7 @@ mod tests {
 
         assert!(decode::<OldStartTarget>(&start).is_err());
         assert_eq!(decode::<StartTarget>(&start).unwrap(), target);
-        assert_eq!((PROTOCOL_VERSION, COMPATIBLE_SINCE), (122, 122));
+        assert_eq!(COMPATIBLE_SINCE, 122);
         assert!(!speaks_with(121, 121), "a peer from before the daemon-found start");
         assert!(speaks_with(122, 122));
     }

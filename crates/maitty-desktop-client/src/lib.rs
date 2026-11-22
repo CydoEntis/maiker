@@ -1195,6 +1195,37 @@ pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest
     }
 }
 
+/// Have the daemon that owns pane `term` discard the uncommitted changes of the one file `path`
+/// in the checkout the pane is in. The line saying what it did, or an error whose text is the
+/// daemon's one line saying why not. This computer's daemon may be older than the app and would
+/// never answer, so it is refused in words; another machine's is on this version or not used.
+pub async fn discard_file(term: u32, path: String, daemon: impl Into<Daemon>) -> Result<String> {
+    let limit = Duration::from_secs(maitty_shared::discard::DISCARD_LIMIT_SECS + DISCARD_SLACK_SECS);
+    let asked = ClientMsg::Query(Query::DiscardFile { term, path, tag: 0 });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => {
+            answered_within(limit, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("Could not reach the Maiker service")?;
+                refuse_unless_daemon_reads(&asked, version)?;
+                ask(&mut connection, &asked).await
+            })
+            .await?
+        }
+        remote => request_within(asked, remote, limit).await?,
+    };
+    match reply {
+        Reply::GitDone { outcome: Ok(line), .. } => Ok(line),
+        Reply::GitDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (discard). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+/// How much longer than the daemon gives a discard its answer is waited for, so the daemon's own
+/// "stopped after" line is what arrives.
+const DISCARD_SLACK_SECS: u64 = 15;
+
 /// `git worktree add` for `branch` next to the repository `term` is in (new from `base`, or the
 /// repo's HEAD); the daemon opens it as a new session. `branch` names an existing branch to
 /// check it out instead. `daemon` is the one that owns the pane: this computer's, or another
@@ -2685,6 +2716,7 @@ pub fn forget_remote(key: RemoteKey) {
 fn safe_to_ask_twice(query: &Query) -> bool {
     match query {
         Query::Git { .. }
+        | Query::DiscardFile { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
         | Query::FolderGit { .. }
@@ -3377,6 +3409,18 @@ mod agent_command_tests {
         assert!(daemon_reads(&drop, PROTOCOL_VERSION));
     }
 
+    #[test]
+    fn a_discard_is_refused_in_words_for_a_daemon_from_before_it_and_never_asked_twice() {
+        use super::{ClientMsg, Query, refuse_unless_daemon_reads, safe_to_ask_twice};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, DISCARD_FILE_SINCE, PROTOCOL_VERSION};
+        let query = Query::DiscardFile { term: 3, path: "a.txt".into(), tag: 0 };
+        assert!(!safe_to_ask_twice(&query), "a discard asked again after the first landed would report a failure");
+        let discard = ClientMsg::Query(query);
+        let refused = refuse_unless_daemon_reads(&discard, COMPATIBLE_SINCE).expect_err("a daemon at the window's start cannot read it");
+        assert!(refused.to_string().contains("older than this app"), "{refused}");
+        assert!(refuse_unless_daemon_reads(&discard, DISCARD_FILE_SINCE).is_ok());
+        assert!(refuse_unless_daemon_reads(&discard, PROTOCOL_VERSION).is_ok());
+    }
 
     #[test]
     fn a_terminal_send_carries_its_operation_only_to_a_daemon_that_honours_it() {

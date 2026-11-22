@@ -1817,6 +1817,7 @@ pub fn run() {
             new_chat::git_pull,
             new_chat::open_agent_docs,
             changes::git_commit_all,
+            changes::git_discard_file,
             changes::git_create_pull_request,
             changes::git_sync,
             worktrees::worktree_standing,

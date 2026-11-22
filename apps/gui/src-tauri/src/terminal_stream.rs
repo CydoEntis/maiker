@@ -356,6 +356,13 @@ impl Wire {
         self.daemon_vetting(machine, not_here, move |reply| maitty_machines::remote_repo::vet_git_reply(&asked, reply))
     }
 
+    /// Where discarding one file's changes in a pane's checkout on another machine is asked: that
+    /// machine's daemon, whose answer is one cleaned line. This computer runs its own git instead.
+    pub fn discard_daemon(&self, machine: Option<u16>) -> Result<maitty_desktop_client::Daemon, String> {
+        let not_here = || Err("This computer's checkouts are not asked of its daemon".to_string());
+        self.daemon_vetting(machine, not_here, maitty_machines::remote_repo::vet_discard_reply)
+    }
+
     /// Where "who commits on this machine" is asked: this computer's daemon, or another machine's,
     /// whose answer is that report and nothing else, cleaned.
     pub fn identities_daemon(

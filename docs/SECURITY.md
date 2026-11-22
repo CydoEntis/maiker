@@ -594,6 +594,10 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   pull request's must be exactly `https://github.com/<owner>/<repo>/pull/<number>`
   (`maitty_shared::github::is_pull_request_address`), so a machine cannot hand the window any other
   address to show. Any other answer is dropped.
+- **Discard a file's changes on a machine** takes a pane number and one path from the window; that machine's daemon
+  checks the path and decides what a discard means there (*Discarding a file's changes*, below). The one-line
+  answer passes `remote_repo::vet_discard_reply`: cleaned, one line, at most 512 characters; any other answer is
+  dropped. The window shows its own words on success and the line only as a failure's reason.
 - **Install and restart only on a click or a step the person chose.** The owner approved installing the
   helper from the app: adding a machine whose app is missing runs the same `maiker machine update <name>
   --install` as the Fix flow, as a step of the add flow (`install_helper`), with the fixed install script
@@ -638,6 +642,30 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   git runs with `GIT_TERMINAL_PROMPT=0` and `gh` with its prompts off, so neither can ask for a
   credential, and each request is stopped at its limit. Nothing merges, rebases, forces or amends. A
   pull request answers only a `https://github.com/<owner>/<repo>/pull/<number>` address.
+- **Discarding a file's changes** (`Query::DiscardFile`; `maitty_shared::discard`, run by `daemon/discard.rs` and
+  by the desktop host's `changes.rs` for a checkout on this computer, so both hold to the same rules). It destroys
+  work, so it is the model for any git operation that removes or overwrites a file a client names:
+  - **Who:** only a person's client, with the pane checks and the write grant of `Query::Git`.
+  - **The path, before anything runs** (`checked_path`, text only, the same on every system): relative to the top
+    of the repository with `/`; not empty, at most 4,096 bytes, no control character, no leading `-`; no empty, `.`
+    or `..` part (so no leading, trailing or doubled `/`); no `\` and no `:` (a Windows folder, drive letter or
+    second stream of a file; a file with one in its name is discarded with git in a terminal); no part that is
+    `.git` in any letter case, with the trailing dots and spaces Windows drops, or the short name Windows gives it
+    (`git~1`).
+  - **The disk** (`symlink_metadata`, which does not follow a link): no folder on the way to the file is a link,
+    so nothing outside the checkout is reached; a folder is refused, so one request never removes more than one
+    file. A link as the file itself is removed as a link; what it points at is never touched.
+  - **The kind is git's answer, never the client's** (`git status --porcelain=v2 -z` for that one path, without
+    renames): a changed or deleted tracked file is put back from HEAD; a staged new file is unstaged and removed;
+    an untracked file is removed, that one file, never `git clean` and never recursively; a staged rename is
+    undone as one (the old name must be free, and passes the same path rules). A submodule, a conflicted file, an
+    ignored or unchanged one and anything else is refused with a typed `DiscardError`, whose one sentence is all
+    that is said back, with the path cleaned and cut.
+  - **git** gets arguments only, never a shell line, with `--literal-pathspecs` and the path after `--`, so a name
+    is never a pattern or an option; `GIT_TERMINAL_PROMPT=0`; the whole discard is stopped after 15 seconds.
+  - **Not covered:** the checks and git's steps are not one atomic step, so something that swaps a folder for a
+    link between them is not caught (git itself replaces such a link rather than writing through it). No lock is
+    held against an agent writing the same file. Nothing is kept of what was discarded.
 - **Who is signed in to GitHub** (`Query::GitHubAccounts`, `daemon/github.rs`) runs the machine's own
   `gh auth status --json hosts` with fixed arguments and nothing from the client in them. Only the
   logins and which one is active leave the daemon; a token is never asked for (`--show-token` is never

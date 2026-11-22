@@ -19,6 +19,7 @@ mod commit;
 mod commands;
 mod contain;
 mod conversation;
+mod discard;
 mod extensions;
 mod folder_git;
 mod folders;
@@ -3516,6 +3517,38 @@ impl Daemon {
                         let tx = self.tx.clone();
                         tokio::task::spawn_blocking(move || {
                             let outcome = sync::answer(&folder, &request);
+                            let reply = Reply::GitDone { tag, outcome };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::DiscardFile { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can discard a file's changes".into())
+                    }
+                    Query::DiscardFile { term, path, tag } => {
+                        let folder = self
+                            .may_use_terminal(client, term)
+                            .and_then(|()| self.may(client, Grant::Write, Some(term)))
+                            .and_then(|()| {
+                                self.terms
+                                    .get(&term)
+                                    .map(|t| t.cwd.clone())
+                                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))
+                            });
+                        let folder = match folder {
+                            Ok(folder) => folder,
+                            Err(error) => {
+                                self.send(client, ServerMsg::Error(format!("{error:#}")));
+                                return;
+                            }
+                        };
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let outcome = discard::answer(&folder, &path);
                             let reply = Reply::GitDone { tag, outcome };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });

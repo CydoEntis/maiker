@@ -159,6 +159,16 @@ pub fn vet_git_reply(request: &GitRequest, reply: Reply) -> Result<Reply, String
     Ok(Reply::GitDone { tag, outcome })
 }
 
+/// The answer to a discard of one file made safe, or why it is refused: only how it ended
+/// passes, as one clean line either way.
+pub fn vet_discard_reply(reply: Reply) -> Result<Reply, String> {
+    let Reply::GitDone { tag, outcome } = reply else {
+        return Err("it is not an answer about a checkout".into());
+    };
+    let line = |text: String| one_line(text).chars().take(LINE_MAX_CHARS).collect::<String>();
+    Ok(Reply::GitDone { tag, outcome: outcome.map(line).map_err(line) })
+}
+
 /// Whether `line` opens with a commit's short id: hexadecimal digits, then a space or the end.
 fn starts_with_commit_id(line: &str) -> bool {
     let id = line.split(' ').next().unwrap_or("");
@@ -244,6 +254,20 @@ mod tests {
         }
         assert!(vet_git_reply(&GitRequest::Push, Reply::Ok).is_err());
         assert!(vet_git_reply(&GitRequest::Push, Reply::Repo { tag: 1, reply: RepoReply::Written }).is_err());
+    }
+
+    #[test]
+    fn how_a_discard_ended_is_one_clean_line_and_nothing_else_passes() {
+        let long = format!("`a\u{1b}[31m.txt` is a folder\nand more {}", "x".repeat(2000));
+        for outcome in [Ok("Deleted new\u{7}.txt".to_string()), Err(long)] {
+            let Ok(Reply::GitDone { tag: 3, outcome }) = vet_discard_reply(Reply::GitDone { tag: 3, outcome }) else {
+                panic!("how it ended is an answer that was asked for");
+            };
+            let line = outcome.unwrap_or_else(|why| why);
+            assert!(!line.contains(['\u{1b}', '\u{7}', '\n']) && line.chars().count() <= LINE_MAX_CHARS, "{line:?}");
+        }
+        assert!(vet_discard_reply(Reply::Ok).is_err());
+        assert!(vet_discard_reply(Reply::Repo { tag: 1, reply: RepoReply::Written }).is_err());
     }
 
     #[test]

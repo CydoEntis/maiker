@@ -1,5 +1,6 @@
 //! What a person's client may have done to the checkout a pane is in (`Query::Git`): fetch, pull,
-//! push, commit (`commit.rs`) and open a pull request (`pull_request.rs`). Nothing here merges, rebases or forces: a pull only
+//! push, commit (`commit.rs`) and open a pull request (`pull_request.rs`); discarding one file's
+//! changes is a question of its own (`discard.rs`). Nothing here merges, rebases or forces: a pull only
 //! fast-forwards. git is given no way to ask a question, so it fails when it would need a
 //! password, and the whole request is stopped at its deadline. Each function blocks, so it runs
 //! off the event loop.
@@ -87,6 +88,11 @@ impl<'a> Git<'a> {
 
     pub(super) fn folder(&self) -> &Path {
         self.folder
+    }
+
+    /// git in another folder, until the same deadline.
+    pub(super) fn in_folder<'b>(&self, folder: &'b Path) -> Git<'b> {
+        Git { folder, deadline: self.deadline, limit: self.limit }
     }
 
     /// How long is left before the deadline, for a program that is not git.

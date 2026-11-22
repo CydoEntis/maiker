@@ -366,6 +366,13 @@ async fn only_a_person_can_clone_or_ask_about_github_and_an_oversized_clone_is_a
         let open = Query::Git { term: from.0, request: crate::protocol::GitRequest::PullRequest, tag: 9 };
         let refused = exchange(&mut session, 453, crate::protocol::ClientMsg::Query(open), Some(from)).await;
         assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+        let from = authenticated_pane(&mut session);
+        let discard = Query::DiscardFile { term: from.0, path: "a.txt".into(), tag: 9 };
+        let refused = exchange(&mut session, 454, crate::protocol::ClientMsg::Query(discard), Some(from)).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("Only a human")), "{refused:?}");
+        let nowhere = Query::DiscardFile { term: u32::MAX, path: "a.txt".into(), tag: 9 };
+        let refused = exchange(&mut session, 455, crate::protocol::ClientMsg::Query(nowhere), None).await;
+        assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("no pane")), "{refused:?}");
         let nowhere = Query::Git { term: u32::MAX, request: crate::protocol::GitRequest::Fetch, tag: 9 };
         let refused = exchange(&mut session, 451, crate::protocol::ClientMsg::Query(nowhere), None).await;
         assert!(matches!(refused, ServerMsg::Error(ref message) if message.contains("no pane")), "{refused:?}");

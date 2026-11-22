@@ -2,6 +2,7 @@
 pub mod brand;
 pub mod clock;
 pub mod conversation;
+pub mod discard;
 pub mod extensions;
 pub mod folder_name;
 pub mod github;
