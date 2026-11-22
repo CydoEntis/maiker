@@ -200,6 +200,9 @@ async fn saved_claude_session(session: &mut TestSession) -> (crate::conversation
     let folder = cwd.clone();
     let (executable, config_root) = tokio::task::spawn_blocking(move || {
         let config_root = std::fs::canonicalize(&root).unwrap();
+        // The daemon names the folder from the real path it runs the agent in. A temporary folder's
+        // plain path can differ from it: Windows hands out a short name (`RUNNER~1`).
+        let folder = crate::daemon::clean_path(std::fs::canonicalize(&folder).unwrap());
         let transcripts = config_root.join("projects").join(super::saved::claude_folder_name(&folder));
         std::fs::create_dir_all(&transcripts).unwrap();
         std::fs::write(
