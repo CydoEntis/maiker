@@ -1009,40 +1009,29 @@ describe('desktop overlays and pane tools', () => {
     expect(daemon.markSeenOnDaemon).not.toHaveBeenCalled()
   })
 
-  it('greets a first launch, saves the choices, starts in the folder, and never greets again', async () => {
+  it('greets a first launch, saves the choices, ends in the Open a project palette with the side-panel tip, and never greets again', async () => {
     const user = userEvent.setup()
     window.localStorage.removeItem('maiker.gui.settings.v1')
+    window.localStorage.removeItem('maiker.gui.sidePanelTip.v1')
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.agentsInstalled.mockResolvedValue(['claude'])
     const app = renderDesktopApp({ firstRun: true })
 
     const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
-    // The mark draws first; Enter skips to the window.
+    // The mark draws first; any key skips to the window.
     await user.keyboard('{Enter}')
     expect(await within(dialog).findByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
-    expect(dialog).toHaveTextContent('Maiker runs your coding agents side by side')
     // Global shortcuts are ignored while it is open.
     await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
 
-    await user.clear(within(dialog).getByRole('textbox', { name: 'Home directory' }))
-    await user.type(within(dialog).getByRole('textbox', { name: 'Home directory' }), '/definitely/not/here')
     await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent('That folder was not found.')
-
-    daemon.suggestProjectFolders.mockResolvedValue(['/home/casey/code/api/'])
-    await user.clear(within(dialog).getByRole('textbox', { name: 'Home directory' }))
-    await user.type(within(dialog).getByRole('textbox', { name: 'Home directory' }), '/home/casey/code/api')
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Skip questions' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
-    await user.click(within(dialog).getByRole('button', { name: 'Get started' }))
+    await user.click(await within(dialog).findByRole('radio', { name: /Terminal/ }))
+    await user.click(within(dialog).getByRole('button', { name: /first project/ }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
-    await screen.findByRole('heading', { name: 'Nothing running' })
-    // Finishing the setup opens nothing after it.
-    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
-    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ startFolder: '/home/casey/code/api', openSessionsIn: 'chat' })
+    expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
+    expect(screen.getByRole('status', { name: 'Side panel tip', hidden: true })).toBeInTheDocument()
+    expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ openSessionsIn: 'terminal' })
 
     app.unmount()
     renderDesktopApp({ firstRun: true })
@@ -1050,19 +1039,18 @@ describe('desktop overlays and pane tools', () => {
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
   })
 
-  it('skips the setup, steps back with Escape, and does not greet a window that already has settings', async () => {
+  it('skips the setup with Escape, opening nothing, and does not greet a window that already has settings', async () => {
     const user = userEvent.setup()
     window.localStorage.removeItem('maiker.gui.settings.v1')
     renderDesktopApp({ firstRun: true })
     const dialog = await screen.findByRole('dialog', { name: 'Set up Maiker' })
 
+    // The first Escape is the drawing's; the second is Skip.
     await user.keyboard('{Escape}')
     await within(dialog).findByRole('heading', { name: 'Welcome to Maiker' })
-    await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
     await user.keyboard('{Escape}')
-    expect(within(dialog).getByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
-    await user.click(within(dialog).getByRole('button', { name: 'Skip setup' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
 
     window.localStorage.removeItem('maiker.gui.welcomed.v1')
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ spinner: 'bars' }))

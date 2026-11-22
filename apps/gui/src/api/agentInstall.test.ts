@@ -4,7 +4,7 @@ const tauri = vi.hoisted(() => ({
   invoke: vi.fn(),
   listen: vi.fn(),
 }))
-vi.mock('@tauri-apps/api/core', () => ({ invoke: tauri.invoke }))
+vi.mock('@tauri-apps/api/core', () => ({ invoke: tauri.invoke, isTauri: () => true }))
 vi.mock('@tauri-apps/api/event', () => ({ listen: tauri.listen }))
 
 import { agentInstallCommand, installAgent, listenInstallProgress } from './agentInstall'
@@ -12,10 +12,10 @@ import { agentInstallCommand, installAgent, listenInstallProgress } from './agen
 describe('agent install calls', () => {
   beforeEach(() => { tauri.invoke.mockReset(); tauri.listen.mockReset() })
 
-  it('asks the shell for the command of one agent', async () => {
-    tauri.invoke.mockResolvedValue('npm i -g @openai/codex')
-    await expect(agentInstallCommand('codex')).resolves.toBe('npm i -g @openai/codex')
-    expect(tauri.invoke).toHaveBeenCalledWith('agent_install_command', { agent: 'codex' })
+  it('sends the shell an agent’s name and nothing else', async () => {
+    tauri.invoke.mockResolvedValue('npm install -g @google/gemini-cli')
+    await expect(agentInstallCommand('gemini')).resolves.toBe('npm install -g @google/gemini-cli')
+    expect(tauri.invoke).toHaveBeenCalledWith('agent_install_command', { agent: 'gemini' })
   })
 
   it('resolves with the installed version, or null when it could not be read', async () => {
@@ -30,7 +30,6 @@ describe('agent install calls', () => {
     tauri.listen.mockImplementation((_name: string, handler: typeof deliver) => { deliver = handler; return Promise.resolve(() => undefined) })
     const seen: unknown[] = []
     await listenInstallProgress((progress) => { seen.push(progress) })
-    expect(tauri.listen).toHaveBeenCalledWith('install-progress', expect.any(Function))
     deliver({ payload: { agent: 'codex', percent: 40, line: 'Downloading' } })
     deliver({ payload: { agent: 'codex', percent: null, line: 'Unpacking' } })
     deliver({ payload: { nonsense: true } })

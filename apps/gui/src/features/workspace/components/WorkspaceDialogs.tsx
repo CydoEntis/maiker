@@ -6,6 +6,8 @@ import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
 import { Onboarding } from '@/features/welcome/Onboarding'
 import { markWelcomed } from '@/features/welcome/welcomed'
+import { offerCoachMark } from '@/features/welcome/coachMark'
+import { activeThemeName } from '../theme/themes'
 import { UpdatedNotice } from '@/features/updates/UpdatedNotice'
 import { indexRemoteFiles, listRemoteFolder } from '@/api/fileGets'
 import { updaterSummary } from '@/features/updates/useUpdater'
@@ -29,9 +31,8 @@ import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
 import type { SessionView } from '../model/session'
 import { sessionTask } from '../model/worktreeName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
-import { folderExists } from '../model/startFolder'
 import { OpenProjectPalette } from '@/features/open-project/OpenProjectPalette'
-import { ADD_MACHINE } from '../useOpenProject'
+import { ADD_MACHINE, projectRequestFor } from '../useOpenProject'
 import { osOfPlatform, paletteMachinesOf } from '@/features/open-project/paletteMachines'
 import { projectOfFolder } from '../projectOfFolder'
 import { OpenWorktreeDialog } from './OpenWorktreeDialog'
@@ -49,6 +50,8 @@ export function WorkspaceDialogs() {
   const askedSecret = openAsk?.kind === 'secret' ? asker?.secretAsk.find((ask) => ask.id === openAsk.askId) : undefined
   const serviceFinishing = useServiceFinishing()
   const openWorktree = useOpenWorktreeDialog()
+  // However the first run ends it is not shown again, and the side-panel tip is offered once.
+  const endWelcome = () => { markWelcomed(); setWelcomeOpen(false); offerCoachMark() }
   // One set of host calls for Settings › Remote machines and the palette's New machine level.
   const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, onProgress: listenMachineUpdateProgress, open: () => { setOpenProject(ADD_MACHINE) } } }
   return (
@@ -63,10 +66,17 @@ export function WorkspaceDialogs() {
                 portalContainer={root}
                 home={home}
                 startFolder={preferences.startFolder}
-                validateFolder={folderExists}
                 onChooseFolder={chooseStartFolder}
-                onApply={({ startFolder, openSessionsIn }) => { setPreferences((current) => ({ ...current, startFolder, openSessionsIn })) }}
-                onClose={() => { markWelcomed(); setWelcomeOpen(false) }}
+                theme={activeThemeName(preferences, systemDark)}
+                onPreviewTheme={setPreviewTheme}
+                // Nothing is open yet on a first run, so the view is set without the switch's confirm (Settings › Appearance).
+                onFinish={(settings, folder) => {
+                  setPreferences((current) => ({ ...current, ...settings }))
+                  endWelcome()
+                  // With the home folder still unknown the palette starts where browsing does.
+                  setOpenProject(projectRequestFor(LOCAL_MACHINE, folder === '' ? undefined : folder))
+                }}
+                onSkip={endWelcome}
               />
             )}
             {paletteOpen && <CommandPalette items={paletteItems} outputItem={paletteOutputItem} onClose={() => { setPaletteOpen(false) }} />}

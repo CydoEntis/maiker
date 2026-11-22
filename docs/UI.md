@@ -1911,39 +1911,48 @@ Host terminal tab: the client writes the focused session's state mark (the worki
 
 A line starting with `!` in a Claude or Gemini chat that follows a terminal is typed into that terminal, not pasted: the `!` first, then the command and Enter after a short gap (`typeMessage`, `isBangLine`), so the agent switches to its own shell mode, runs it and keeps the output in its context. The box says it runs in the terminal, where anything it asks (a login code) is answered. A chat with no terminal, and Codex, send it as an ordinary message. A row whose status is unknown (its machine is out of reach, or a list just missed it) fades to half and says `offline` in place of the time.
 
-## Project-specific: first-run setup (desktop)
+## Project-specific: first run (desktop)
 
-`features/welcome/Onboarding.tsx` is the first-run flow (look: the First-run setup entry in [DESIGN](DESIGN.md)). It owns no
-state outside itself and no host calls except through its hooks: `WorkspaceDialogs` hands it the home folder, the saved start
-folder, the folder picker and check, and `onApply`, which saves what **Get started** chose (`startFolder`, `openSessionsIn`).
-Skipping applies nothing.
+`features/welcome/Onboarding.tsx` is the first run (look: the First run entry in [DESIGN](DESIGN.md)): the mark
+drawing, then one window of two screens, `SetupScreen` and `StyleScreen`. It saves nothing itself. `WorkspaceDialogs`
+hands it the home folder, the saved projects folder, the folder picker, the theme in use and the theme preview, and
+takes `onFinish(settings, folder)` or `onSkip()`.
 
-- Five steps, one file each: `WelcomeStep` (with the home directory field), `AgentsStep`, `StyleStep`, `ViewStep`,
-  `ReviewStep`. The step bar is `StepBar`, the question and view cards are `ChoiceCards`, the install bar is `Progress`, a
-  failed install is a `Card tone="needs"` (all `components/ui`). The rules live in `setup.ts`: `recommendView` (the view two
-  or more answers point to, Chat otherwise), `recommendationReason` (quotes the person's own answers), `viewNote`,
-  `nextLabel` ("Skip questions" until all three are answered, then "See my recommendation").
-- The home directory is the existing `startFolder` preference, so every session start already opens there. Suggestions
-  (`useHomeSuggestions`) are the home folder, the saved folder, and a fixed shortlist under home (`code`, `projects`, `dev`,
-  `src`, `work`) listed one level deep with `listFolders`, each with a 2 s timeout; never a walk of the home folder.
-- Installing an agent (`agentInstall.ts`, `useAgentInstalls.ts`): Install fetches the exact command (`agent_install_command`)
-  and shows it; nothing runs until **Run it**. `install_agent` runs it and the `install-progress` event drives `Progress`
-  (indeterminate while the percent is null). A failure is shown in plain words as a needs-you card with Try again. Install
-  all N shows every command first, then **Run all N**.
-- Opening: the mark draws itself (`OnboardingMark`, the logo paths from `maiker-mark.tsx`; stroke in `--fg`, fill by
-  `fill-opacity`), then rises away as the window rises in, about 2.3 s. Enter, Esc or Space skips it; under reduced motion it
-  is not drawn at all.
-- Keys: arrows move inside a card group, Enter continues (and picks a focused card without continuing), Esc goes back a step;
-  the finished steps in the step bar are buttons.
-- Each step moves focus to its heading and announces "Step n of 5" in a polite live region.
-- Get started applies the choices (the view it chose is `openSessionsIn`, which `chatOf` reads at once) and closes the setup.
-  It opens nothing after it.
-- The veil is its own childless layer (`.mx-onb-veil`) under the content layer (`.mx-onb`); a backdrop filter on a parent that
-  holds animating children blurred only in bands. `StepBar` keeps **Skip setup** in its own slot at the right and, below 640px
-  of bar, keeps only the current step's name (the others stay numbers, their names read by assistive technology).
-- The home field is a `mx-field` with a folder icon, **Browse…**, and the suggestions as a `CardList` of folder rows
-  (the same rounded card as the agent list). The agent list is a `CardList` too and scrolls with the step. An agent the shell
-  cannot install (`installable: false` in `setup.ts`, today Cursor) shows "Not installable here" and no Install.
+- **The rules are pure functions in `setup.ts`**: which stage follows which (`continueFrom`, `backFrom`, `skipFrom`),
+  what a key does (`keyStep`), the folder offered (`detectProjectsFolder`), the agent groups (`agentGroups`) and what
+  the last button saves (`settingsFromSetup`). Change behaviour there, with its test.
+- **Seen once.** `welcomed.ts`: a first run is no `maiker.gui.welcomed.v1` flag and no saved settings. The flag is the
+  one every earlier first run wrote, so nobody who saw one is greeted again. Finish and Skip both set it.
+- **The drawing** (`IntroMark`, the logo paths from `maiker-mark.tsx`): stroke by `stroke-dashoffset`, fill by
+  `fill-opacity` (never an animated `fill`: a `color-mix` there crashed Chromium), each animation run once. One timer
+  moves on to the window after 1.5 s and is cleared when the stage changes; any key or a click moves on at once. Under
+  reduced motion the whole mark is held for 0.6 s and nothing draws.
+- **Scans start with the drawing**, because their hooks are mounted with it, and all go through existing background
+  calls: installed agents from `agents_installed` (`useInstalledAgents`), git projects from the daemon's
+  `list_folders` (`useProjectsFolder`: a fixed shortlist under home, `code`, `projects`, `dev`, `src`, `work`, one level
+  deep, each with a 2 s limit; never a walk of the home folder).
+- **Installs** (`useAgentInstalls`, `api/agentInstall.ts`): Install fetches the exact command and shows it; nothing
+  runs until **Run it** ([SECURITY](SECURITY.md#project-specific-installing-an-agent-from-the-desktop)). The desktop
+  shell runs one install at a time, so a second one waits its turn. An install that ends after the first run closed
+  says so in a toast. Versions are known only for agents installed from here: `agents_installed` gives names alone.
+- **Keys**: Enter continues from anywhere but a button or a field; Esc skips (Radix's `onEscapeKeyDown`, so a menu
+  open over the window closes first); on the style screen the left and right arrows slide the theme from anywhere but
+  a choice group, whose own arrows pick in it. Each screen moves focus to its heading and announces "Step n of 2" in a
+  polite live region.
+- **Accessible names**: the agents are two lists named by their group headings, Install buttons carry the agent's name
+  ("Install Gemini"), the view choice and the theme carousel are radio groups (`ChoiceCards`, `RadioGroup`), and each
+  theme card is named as its caption ("Midnight · Dark").
+- **The theme** is previewed on the whole window as it slides (`setPreviewTheme`) and saved only by the last button;
+  the preview is taken off when the first run unmounts, however it ends. The view is set straight into
+  `openSessionsIn`, without the confirm Settings uses, because nothing is open yet.
+- **The end**: the last button saves, marks the first run seen, and opens the Open a project palette in the projects
+  folder (`projectRequestFor`). Skip opens nothing.
+- **The side-panel tip** (`CoachMark`, `coachMark.ts`) is offered when the first run ends, once per computer
+  (`maiker.gui.sidePanelTip.v1`, stored when it first shows). It is drawn in the title bar under `SidePanelButton`,
+  is not a dialog, takes no focus and stops no key or click. Its keys come from the binding table (`inspect`).
+- The veil is its own childless layer (`.mx-onb-veil`) under the content layer (`.mx-onb`): a backdrop filter on a
+  parent that holds animating children blurred only in bands. The carousel's track moves by `transform` and its group
+  clips with `overflow: clip`, so focusing a card off to the side never scrolls it.
 
 ## Project-specific: the file pane and markdown documents
 

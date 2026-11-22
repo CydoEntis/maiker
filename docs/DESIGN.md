@@ -882,21 +882,37 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
   focused one has its edge in a brighter ink (`--pane-focus-line`). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
-- **First-run setup.** On the first launch (no saved settings and no earlier welcome) the app behind goes under a flat veil
-  (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first-run setup is on screen once over a still app) and the Maiker mark draws itself in the
-  text colour, fills in, and rises away (about 2.3 s; Enter, Esc or Space skips; not drawn under reduced motion). A 680px
-  window (`--main`, hairline, `--r-panel`) rises in: a header of the mark and the **step bar** (Welcome, Agents, Your style,
-  Your view, Review, then **Skip setup** in its own slot at the right; on a narrow bar only the current step keeps its name; finished steps go back when clicked), the step, and a footer of **Back**, the
-  Enter hint and the primary button. **Welcome**: what the app is, three points (Needs you, Many at once, Any machine) and
-  the **Home directory** field (a field with a folder icon, **Browse…**, and suggested folders as rounded card rows with folder icons). **Your agents**: every supported agent with
-  its description and **Installed** or **Install** (an agent the app cannot install says "Not installable here" instead); Install shows the exact command, then **Run it**, then a progress bar;
-  **Install all N** below. **How do you work?**: three questions as cards. **We'd start you in Terminal / Chat**: one
-  sentence quoting the person's answers, both preview cards (the suggested one preselected and tagged **Recommended for
-  you**), and a note on Settings and on Gemini opening in Terminal. **You're all set**: Home
-  directory, Agents and Sessions open in, each with **Change**; **Get started** applies them, view included, and closes the setup without opening anything. Skip and finishing both mark it welcomed; Esc steps back. Global shortcuts are ignored while it is open. A window
-  that already has settings is never greeted. Settings › General › **Show the welcome again** replays it. Remote machines
-  are not offered here; they are added from the sidebar's **+ Remote machine** or Settings. The "Bring your TUI setup" step comes with the shared
-  config.
+- **First run.** On the first launch (no saved settings and no earlier first run) the app behind goes under a flat veil
+  (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first run is on screen once over a
+  still app) and the Maiker mark draws itself in the text colour and fills in (about 1.5 s; any key or a click skips it;
+  under reduced motion the whole mark is held still for a moment instead). The agent and project scans start while it
+  draws. Then one window rises in, the float card (`--float-bg`, hairline, `--r-dialog`, the float shadow), 680px wide
+  and 680px tall on both screens so its header and foot never move: a header of the mark, **two dots** (the screen in
+  view is a short bar) and **Skip**; the screen; a foot of **Back** (second screen only), the Enter keycap and the
+  `solid` primary. Enter continues, Esc skips.
+  - **Welcome to Maiker** (setup). **Projects folder**: a card with the folder (the saved one, else the folder under
+    home that holds the most git projects, else home), "Found N git projects" with the first five names as tags and a
+    `+N`, and **Change**, a menu of the other folders that hold code and **Choose another folder…**. **Agents**: one
+    card, **Installed** first with the version where the button would be (when the installer reported one, else
+    "Installed"), then **Not installed**, each with **Install**. Install shows the exact command under the row with
+    **Run it** and **Cancel**; a running install shows its percent and a thin bar under the row, a second one waits as
+    "Queued", and an installed agent moves up. Installs never hold up **Continue**. An agent the app cannot install
+    says "Not installable here". While the scan runs the card says "Looking for agents…".
+  - **Make it yours** (style). **Sessions open as**: Terminal and Chat as two cards, each a small still picture over a
+    radio dot and its name; Chat is picked and tagged **Recommended**; the picked card has a 1.5px ring in the text
+    colour. **Theme**: a carousel of every theme, each card a tiny Maiker in that theme's own colours (title bar,
+    sidebar with its status dots, chat, chat box); the picked card is in the middle at full size, its neighbours
+    smaller and faded out at the sides; ‹ › and the left and right arrows slide it, going round; under it the theme's
+    name ("Midnight · Dark") and a dot per theme, or "3 of 60" when there are too many for dots. The app behind
+    recolours as it slides. The primary is **Open your first project**: it saves the folder, the view and the theme
+    slid to (in the mode that shows it), closes, and opens the Open a project palette in the projects folder.
+  - Skip and Esc save nothing: the view stays Chat and the theme goes back to what it was. Either way the first run
+    is not shown again. Global shortcuts are ignored while it is open. A window that already has settings is never
+    greeted. Settings › General › **Show the welcome again** replays it. Remote machines are not offered here.
+- **Side-panel tip.** Once, after the first run ends, a small float card hangs under the title bar's side-panel button
+  with an arrow up at it: "**Files, changes, terminals and pull requests** open in the side panel. Press (the keys) any
+  time." and **Got it**. It takes no focus and blocks nothing; Got it, Esc (with no dialog open) and showing the side
+  panel close it.
 - **Sidebar width.** The docked sidebar's right edge is a
   drag handle (`role=separator`, 208–440 px, default 264): the width follows the pointer and is saved
   on release; arrow keys step 16 px, Home or a double-click resets. The collapsed rail is fixed at 56px.
@@ -1488,7 +1504,7 @@ text `--dim`; it is one flat box (no box inside a box), the same size in both st
 - **Chat box.** Placeholder `Reply…`. One row: the agent's mark and `Sonnet 5.5 · Medium` as one plain muted line (no chevron, no strength bars), the shield (its mode's name only off the default), the context bar with its figure from the start (0% on a new chat) for an agent that reports its context; the paperclip and send are at the right. Folder, branch and sync (`Synced` when level) sit under the box only until the session has run something.
 ## Dialog corner, solid buttons and the setup (audit of the handoff screens)
 
-- **`--r-dialog`** is the corner of the big windows (the Open a project palette, the first-run setup): 14px.
+- **`--r-dialog`** is the corner of the big windows (the Open a project palette, the first-run window): 14px.
 - **Button** has a `solid` variant (the text colour as fill, the ground colour as text: the primary of the setup) and an `outline` variant (a `--line2` ring); sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
-- **Setup window**: 680px wide, header 52px (mark, numbered `StepBar` with 18px circles, Skip setup), body padded 26/28 with an 18px gap, title 22px with a 14px `--muted` lead, a foot with Back, the Enter hint and the `solid` `xl` primary. Question cards carry a small mark, a 13px title and an 11.5px detail; the picked card is the accent on an 8% wash. A card marked `recommended` carries a "Recommended for you" tag.
+- **First-run window**: 680 by 680px, header 52px (mark, two dots, Skip), body padded 26/28 with a 12px gap (14px on the style screen), title 22px with a 14px `--muted` lead, section labels 13.5px semibold with a 12.5px `--dim` line, a foot with Back, the Enter keycap and the `solid` `xl` primary. `ChoiceCards` are the view cards: a picture, a radio dot, a 14px title; the picked card is a 1.5px ring in the text colour; a card marked `recommended` carries a "Recommended" tag.
 - **Settings › Appearance › Session view** holds **Open sessions in** (an icon-less Chat | Terminal switch). A connected machine on an older Maiker shows the green dot with an Update button. The machine marks are drawn dots (round, hollow for connecting) so they match in every font.

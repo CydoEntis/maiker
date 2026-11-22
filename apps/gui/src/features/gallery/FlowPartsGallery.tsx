@@ -1,12 +1,8 @@
 import { useState } from 'react'
 import { ChoiceCards } from '@/components/ui/choice-cards'
 import { Progress } from '@/components/ui/progress'
-import { StepBar } from '@/components/ui/step-bar'
 
 /** The parts the first-run setup is built from, in the states it reaches. */
-
-const SAMPLE_STEP = 2
-const ONBOARDING_STEPS = ['Welcome', 'Agents', 'Your style', 'Your view', 'Review']
 
 const VIEWS = [
   { value: 'chat', title: 'Chat', detail: 'Readable replies and diffs.', recommended: true },
@@ -23,7 +19,6 @@ function Titled({ label, children }: { label: string; children: React.ReactNode 
 }
 
 export function FlowPartsGallery() {
-  const [step, setStep] = useState(SAMPLE_STEP)
   const [view, setView] = useState<string | null>('chat')
   return (
     <div className="grid grid-cols-[repeat(auto-fill,minmax(340px,1fr))] gap-6">
@@ -32,9 +27,6 @@ export function FlowPartsGallery() {
         <Progress label="Unknown length" />
       </Titled>
       <div className="col-span-full flex flex-col gap-6">
-        <Titled label="StepBar · click a finished step to go back">
-          <StepBar steps={ONBOARDING_STEPS} current={step} onSelect={setStep} skip={{ label: 'Skip setup', onSkip: () => { setStep(0) } }} />
-        </Titled>
         <Titled label="ChoiceCards · Recommended tag">
           <ChoiceCards label="Your view" cards={VIEWS} value={view} onValueChange={setView} />
         </Titled>

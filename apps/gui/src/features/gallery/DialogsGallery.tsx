@@ -151,26 +151,21 @@ function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) 
   return children
 }
 
-const STYLE_STEP = 3
-const FIRST_STEP_MS = 2600
-const STEP_GAP_MS = 400
-const ONBOARDING_ANSWERS = ['In an editor', 'Get a clear summary', 'Readable diffs']
+/** How long the mark draws before the window is up, with room to spare. */
+const WINDOW_UP_MS = 1900
+const STYLE_SCREEN = 2
 
-/** The first-run setup at a step (0 is the opening mark, 1 to 5 the steps): clicks through as a person would, answering the questions on the way. */
+/** The first run at a stage (0 is the mark drawing, 1 the setup screen, 2 the style screen): continues as a person would. */
 function OnboardingShown({ step }: { step: number }) {
   const [root] = useState(() => document.querySelector<HTMLElement>('.mx-app'))
   useEffect(() => {
-    const press = (text: string) => { Array.from(document.querySelectorAll<HTMLElement>('button, [role="radio"]')).find((node) => node.textContent.includes(text))?.click() }
-    const timers: number[] = []
-    for (let at = 1; at < step; at += 1) {
-      timers.push(window.setTimeout(() => {
-        if (at === STYLE_STEP) for (const answer of ONBOARDING_ANSWERS) press(answer)
-        press(at === STYLE_STEP ? 'See my recommendation' : 'Continue')
-      }, FIRST_STEP_MS + at * STEP_GAP_MS))
-    }
-    return () => { for (const timer of timers) window.clearTimeout(timer) }
+    if (step < STYLE_SCREEN) return undefined
+    const timer = window.setTimeout(() => {
+      Array.from(document.querySelectorAll<HTMLElement>('button')).find((node) => node.textContent.includes('Continue'))?.click()
+    }, WINDOW_UP_MS)
+    return () => { window.clearTimeout(timer) }
   }, [step])
-  return <Onboarding home="C:\Users\cstin\code" startFolder="" validateFolder={() => Promise.resolve(true)} onChooseFolder={() => Promise.resolve(null)} onApply={SAME} reducedMotion={false} portalContainer={root} onClose={SAME} />
+  return <Onboarding home="C:\Users\cstin" startFolder="" onChooseFolder={() => Promise.resolve(null)} theme="Maiker Dark" onPreviewTheme={SAME} reducedMotion={false} portalContainer={root} onFinish={SAME} onSkip={SAME} />
 }
 
 const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'

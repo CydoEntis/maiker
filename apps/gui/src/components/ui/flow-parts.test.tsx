@@ -4,31 +4,6 @@ import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import { ChoiceCards } from './choice-cards'
 import { Progress } from './progress'
-import { StepBar } from './step-bar'
-
-describe('StepBar', () => {
-  const NAMES = ['Welcome', 'Agents', 'Your view']
-
-  it('lets a person go back to a finished step, and not forward to one they have not reached', async () => {
-    const user = userEvent.setup()
-    const select = vi.fn()
-    render(<StepBar steps={NAMES} current={1} onSelect={select} />)
-    expect(screen.getByText('Agents').closest('[aria-current="step"]')).not.toBeNull()
-    expect(screen.queryByRole('button', { name: /Your view/ })).toBeNull()
-    await user.click(screen.getByRole('button', { name: /Welcome/ }))
-    expect(select).toHaveBeenCalledWith(0)
-  })
-
-  it('shows the skip action only when given one, and runs it', async () => {
-    const user = userEvent.setup()
-    const skip = vi.fn()
-    const { rerender } = render(<StepBar steps={NAMES} current={0} onSelect={vi.fn()} />)
-    expect(screen.queryByRole('button', { name: 'Skip setup' })).toBeNull()
-    rerender(<StepBar steps={NAMES} current={0} onSelect={vi.fn()} skip={{ label: 'Skip setup', onSkip: skip }} />)
-    await user.click(screen.getByRole('button', { name: 'Skip setup' }))
-    expect(skip).toHaveBeenCalledOnce()
-  })
-})
 
 describe('Progress', () => {
 
