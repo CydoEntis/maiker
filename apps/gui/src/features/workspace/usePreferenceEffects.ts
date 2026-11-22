@@ -3,7 +3,6 @@ import { toast } from '@/lib/toast'
 import { type SettingsPreferences, writeSettingsPreferences } from '@/features/settings/preferences'
 import { markGpu } from '@/lib/gpu'
 import { isWindowShown, subscribeWindowActivity } from '@/lib/window-activity'
-import { setSpinnerStyle } from '@/lib/spinner-clock'
 
 /** Saves the settings and marks them on the page, where the stylesheet reads them. */
 export function usePreferenceEffects({ preferences, reducedMotion }: {
@@ -16,7 +15,6 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     } catch (error) {
       toast.failed('Could not save settings', error)
     }
-    setSpinnerStyle(preferences.spinner)
   }, [preferences])
 
   useEffect(() => {

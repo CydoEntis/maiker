@@ -3,7 +3,7 @@ import { toast } from '@/lib/toast'
 import {
   listenSharedSettings, requestSharedSettings, setSharedSetting, type SharedSettingKey, type SharedSettings,
 } from '@/api/sharedSettings'
-import { framesOfTuiSpinner, isWebSpinner, tuiSpinnerOfFrames } from '@/lib/spinner-clock'
+import { framesOfTuiSpinner, isWebSpinner, tuiSpinnerOfFrames } from '@/lib/spinner-styles'
 import { themeIdOf, themeNameOf } from '@/features/workspace/theme/themes'
 import { bypassOffOf, type SettingsPreferences } from './preferences'
 

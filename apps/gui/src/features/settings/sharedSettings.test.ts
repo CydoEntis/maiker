@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SharedSettings } from '@/api/sharedSettings'
-import { framesOfTuiSpinner } from '@/lib/spinner-clock'
+import { framesOfTuiSpinner } from '@/lib/spinner-styles'
 import { readSettingsPreferences } from './preferences'
 import { applyShared, changesToSend, sharedFrom } from './sharedSettings'
 
