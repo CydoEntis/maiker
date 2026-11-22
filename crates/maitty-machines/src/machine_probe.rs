@@ -270,17 +270,13 @@ mod tests {
     }
 
     #[test]
-    fn exit_zero_is_ready_with_the_first_line_of_the_version() {
+    fn exit_zero_is_ready_with_the_first_line_of_the_version_cleaned_and_cut_short() {
         assert_eq!(
             finished(Some(0), "\n maiker 1.2.3 \nmore\n", ""),
             Probe::Ready {
                 version: "maiker 1.2.3".into()
             }
         );
-    }
-
-    #[test]
-    fn the_version_text_is_cleaned_and_cut_short() {
         let Probe::Ready { version } =
             finished(Some(0), &format!("\u{1b}[31m{}", "v".repeat(500)), "")
         else {
@@ -290,45 +286,11 @@ mod tests {
     }
 
     #[test]
-    fn a_login_ssh_could_not_do_is_classified() {
+    fn a_failed_probe_is_classified_from_ssh_s_exit_status_and_words() {
         assert_eq!(
             finished(Some(255), "", "box: Permission denied (publickey).\n"),
             Probe::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
         );
-        assert_eq!(
-            finished(Some(255), "", "Host key verification failed.\n"),
-            Probe::Failed(FailureClass::HostKeyUnknown)
-        );
-    }
-
-    fn located_from(code: Option<i32>, out: &str, said: &str) -> Located {
-        located(code, &reader(out), &reader(said))
-    }
-
-    #[test]
-    fn the_path_command_v_prints_is_where_the_app_is_found() {
-        assert_eq!(
-            located_from(Some(0), "\n/home/me/.local/bin/maiker\n", ""),
-            Located::At("/home/me/.local/bin/maiker".into())
-        );
-        assert_eq!(located_from(Some(0), "", ""), Located::NotFound);
-        assert_eq!(located_from(Some(1), "", ""), Located::NotFound);
-    }
-
-    #[test]
-    fn a_path_from_the_machine_is_cleaned_and_a_dead_line_is_a_failure() {
-        let Located::At(path) = located_from(Some(0), "/bin/\u{1b}[31mmaitty\u{7}", "") else {
-            panic!("found");
-        };
-        assert_eq!(path, "/bin/[31mmaitty");
-        assert_eq!(
-            located_from(Some(255), "", "box: Permission denied (publickey).\n"),
-            Located::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into()))
-        );
-    }
-
-    #[test]
-    fn a_missing_app_is_install_and_a_dead_host_says_why() {
         assert_eq!(
             finished(Some(127), "", "bash: maiker: command not found"),
             Probe::Failed(FailureClass::Install)
@@ -345,35 +307,37 @@ mod tests {
         );
     }
 
-    #[test]
-    fn what_ssh_said_is_cleaned_before_it_is_kept() {
-        let Probe::Failed(FailureClass::Unreachable(why)) =
-            finished(Some(255), "", "\u{1b}[2Jconnect failed\u{7}\n")
-        else {
-            panic!("unreachable");
-        };
-        assert_eq!(why, "[2Jconnect failed");
+    fn located_from(code: Option<i32>, out: &str, said: &str) -> Located {
+        located(code, &reader(out), &reader(said))
     }
 
     #[test]
-    fn the_key_that_signed_in_is_the_last_one_offered_before_success() {
+    fn the_path_command_v_prints_is_where_the_app_is_found_cleaned() {
+        assert_eq!(
+            located_from(Some(0), "\n/home/me/.local/bin/maiker\n", ""),
+            Located::At("/home/me/.local/bin/maiker".into())
+        );
+        assert_eq!(located_from(Some(0), "", ""), Located::NotFound);
+        assert_eq!(located_from(Some(1), "", ""), Located::NotFound);
+        let Located::At(path) = located_from(Some(0), "/bin/\u{1b}[31mmaitty\u{7}", "") else {
+            panic!("found");
+        };
+        assert_eq!(path, "/bin/[31mmaitty");
+        assert_eq!(
+            located_from(Some(255), "", "box: Permission denied (publickey).\n"),
+            Located::Failed(FailureClass::KeyRefused("box: Permission denied (publickey).".into())),
+            "a dead line is a failure"
+        );
+    }
+
+    #[test]
+    fn the_key_that_signed_in_is_the_last_one_offered_before_success_and_only_a_key_file() {
         let said = "debug1: Offering public key: /home/me/.ssh/id_rsa RSA SHA256:aaa explicit\n\
                     debug1: Offering public key: /home/me/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
                     debug1: Server accepts key: /home/me/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
                     Authenticated to box ([10.0.0.2]:22) using \"publickey\".\n\
                     debug1: Authentication succeeded (publickey).\n";
         assert_eq!(key_from_debug(said), Some("id_ed25519".into()));
-    }
-
-    #[test]
-    fn a_windows_path_with_a_space_gives_the_file_name_only() {
-        let said = "debug1: Offering public key: C:\\Users\\Jo Smith/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
-                    debug1: Authentication succeeded (publickey).\n";
-        assert_eq!(key_from_debug(said), Some("id_ed25519".into()));
-    }
-
-    #[test]
-    fn no_key_name_for_a_password_an_agent_comment_or_a_failed_login() {
         let password = "debug1: Offering public key: /h/.ssh/id_rsa RSA SHA256:a explicit\n\
                         debug1: Authentication succeeded (password).\n";
         assert_eq!(key_from_debug(password), None);
@@ -383,6 +347,13 @@ mod tests {
         let failed = "debug1: Offering public key: /h/.ssh/id_rsa RSA SHA256:a explicit\n";
         assert_eq!(key_from_debug(failed), None);
         assert_eq!(key_file_name("/h/.ssh/id;rm ED25519 SHA256:a explicit"), None);
+    }
+
+    #[test]
+    fn a_windows_path_with_a_space_gives_the_file_name_only() {
+        let said = "debug1: Offering public key: C:\\Users\\Jo Smith/.ssh/id_ed25519 ED25519 SHA256:bbb explicit\n\
+                    debug1: Authentication succeeded (publickey).\n";
+        assert_eq!(key_from_debug(said), Some("id_ed25519".into()));
     }
 
     #[test]

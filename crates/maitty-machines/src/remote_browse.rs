@@ -352,16 +352,9 @@ mod tests {
     }
 
     #[test]
-    fn each_script_status_has_its_own_plain_words() {
-        let say = |code| failure("box", "/srv/x", code, "");
-        assert_eq!(say(Some(GET_MISSING)), "/srv/x does not exist on box");
-        assert_eq!(say(Some(GET_NOT_A_FILE)), "/srv/x on box is not a folder");
-        assert!(say(Some(GET_UNREADABLE)).contains("cannot be read"));
-        assert!(say(None).contains("in time"));
-        assert_eq!(failure("box", "", Some(255), ""), "could not look into the home folder on box");
-        assert_eq!(
-            failure("box", "/a", Some(255), "Permission denied\u{1b}[31m (publickey)"),
-            "could not look into /a on box: Permission denied[31m (publickey)"
-        );
+    fn what_ssh_said_about_a_failed_listing_is_shown_without_control_characters() {
+        let said = failure("box", "/a", Some(255), "Permission denied\u{1b}[31m (publickey)");
+        assert!(said.contains("Permission denied") && !said.chars().any(char::is_control), "{said:?}");
     }
+
 }

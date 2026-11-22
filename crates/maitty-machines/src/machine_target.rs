@@ -94,13 +94,17 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_port_is_read_back_from_the_ssh_arguments_either_way_it_is_written() {
+    fn a_port_becomes_ssh_arguments_and_is_read_back_either_way_it_is_written() {
         let args = |words: &[&str]| words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
         assert_eq!(port_in(&args(&["-p", "2222"])), Some(2222));
         assert_eq!(port_in(&args(&["-i", "key", "-p2200"])), Some(2200));
         assert_eq!(port_in(&args(&["-p", "1", "-p", "2"])), Some(1));
         assert_eq!(port_in(&args(&["-i", "key"])), None);
         assert_eq!(port_in(&port_args(Some(2222)).unwrap()), Some(2222));
+        assert_eq!(port_args(None).unwrap(), Vec::<String>::new());
+        assert_eq!(port_args(Some(22)).unwrap(), Vec::<String>::new(), "the default adds none");
+        assert_eq!(port_args(Some(2222)).unwrap(), ["-p", "2222"]);
+        assert!(port_args(Some(0)).is_err());
     }
 
     #[test]
@@ -134,11 +138,4 @@ mod tests {
         assert_eq!(build_target("CORP\\me", "box").unwrap(), "CORP\\me@box");
     }
 
-    #[test]
-    fn a_port_becomes_ssh_arguments_and_the_default_adds_none() {
-        assert_eq!(port_args(None).unwrap(), Vec::<String>::new());
-        assert_eq!(port_args(Some(22)).unwrap(), Vec::<String>::new());
-        assert_eq!(port_args(Some(2222)).unwrap(), ["-p", "2222"]);
-        assert!(port_args(Some(0)).is_err());
-    }
 }

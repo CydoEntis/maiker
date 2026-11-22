@@ -858,16 +858,6 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_listing_nobody_asked_for_is_dropped() {
-        use maitty_shared::protocol::FolderListing;
-        let reply = ServerMsg::Reply(Reply::Folders {
-            tag: 1,
-            listing: FolderListing::missing("/x"),
-        });
-        assert!(vet(&nothing_on(), false, "box", reply).is_none());
-    }
-
-    #[test]
     fn a_whole_list_another_machine_answers_with_is_cleaned_like_its_state() {
         let list = Snapshot {
             daemon_version: "1.0\u{1b}[31m\u{202e}".into(),

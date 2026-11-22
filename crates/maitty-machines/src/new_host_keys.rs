@@ -109,7 +109,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn openssh_from_7_6_knows_accept_new_on_every_platform() {
+    fn only_openssh_from_7_6_knows_accept_new_on_every_platform() {
         for said in [
             "OpenSSH_9.6p1 Ubuntu-3ubuntu13.5, OpenSSL 3.0.13 30 Jan 2024",
             "OpenSSH_for_Windows_9.5p1, LibreSSL 3.8.2",
@@ -119,10 +119,7 @@ mod tests {
         ] {
             assert!(version_knows_accept_new(said), "{said}");
         }
-    }
-
-    #[test]
-    fn an_older_or_unknown_client_keeps_ssh_s_own_behaviour() {
+        // An older or unknown client keeps ssh's own behaviour.
         for said in [
             "OpenSSH_7.4p1, OpenSSL 1.0.2k-fips  26 Jan 2017",
             "OpenSSH_for_Windows_7.5p1",

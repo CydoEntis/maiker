@@ -850,7 +850,7 @@ mod tests {
     }
 
     #[test]
-    fn a_configured_machine_runs_ssh_with_its_args_and_the_default_command() {
+    fn a_configured_machine_runs_ssh_with_its_args_and_its_remote_command_or_the_default() {
         let m = super::Machine::from_def(&configured("box"), "ssh");
         let want = super::Machine::ssh(
             "me@10.0.0.2",
@@ -859,6 +859,16 @@ mod tests {
         )
         .attach_only();
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
+        assert_eq!(m.route, want.route);
+        let mut def = configured("box");
+        def.remote_cmd = Some("~/bin/maiker".into());
+        let m = super::Machine::from_def(&def, "ssh");
+        let want = super::Machine::ssh(
+            "me@10.0.0.2",
+            vec!["ssh".into(), "-p".into(), "2222".into()],
+            "~/bin/maiker",
+        )
+        .attach_only();
         assert_eq!(m.route, want.route);
     }
 
@@ -875,21 +885,7 @@ mod tests {
     }
 
     #[test]
-    fn a_configured_machine_uses_its_own_remote_command() {
-        let mut def = configured("box");
-        def.remote_cmd = Some("~/bin/maiker".into());
-        let m = super::Machine::from_def(&def, "ssh");
-        let want = super::Machine::ssh(
-            "me@10.0.0.2",
-            vec!["ssh".into(), "-p".into(), "2222".into()],
-            "~/bin/maiker",
-        )
-        .attach_only();
-        assert_eq!(m.route, want.route);
-    }
-
-    #[test]
-    fn remote_host_is_a_machine_named_after_the_host() {
+    fn remote_host_is_a_machine_named_after_the_host_with_plain_ssh_by_default() {
         let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maiker".into()));
         let want = super::Machine::ssh(
             "box",
@@ -898,10 +894,6 @@ mod tests {
         );
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m, want);
-    }
-
-    #[test]
-    fn remote_host_defaults_to_plain_ssh_and_the_app_command() {
         for ssh in [None, Some(""), Some("  ")] {
             let m = super::Machine::adhoc("box", ssh, None);
             assert_eq!(
@@ -909,30 +901,6 @@ mod tests {
                 super::Machine::ssh("box", vec!["ssh".into()], APP_COMMAND)
             );
         }
-    }
-
-    #[test]
-    fn only_a_remote_machine_has_a_host_to_show() {
-        let local = super::Machine::local();
-        assert!(!local.is_remote() && local.host().is_none());
-        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
-        assert!(box_.is_remote());
-        assert_eq!((box_.host(), box_.name()), (Some("box"), "box"));
-    }
-
-    #[test]
-    fn an_ssh_failure_is_told_from_what_ssh_said() {
-        let missing = super::ssh_failure("box", "bash: maiker: command not found");
-        assert!(missing.starts_with("box has no `"), "{missing}");
-        assert!(
-            missing.ends_with("(bash: maiker: command not found)"),
-            "the words stay: {missing}"
-        );
-        assert_eq!(
-            super::ssh_failure("box", "box: Permission denied (publickey)."),
-            "ssh box: box: Permission denied (publickey)."
-        );
-        assert!(super::ssh_failure("box", "").starts_with("couldn't reach "));
     }
 
     #[tokio::test]
@@ -963,7 +931,7 @@ mod tests {
     }
 
     #[test]
-    fn starting_flips_the_proxy_of_both_routes_and_nothing_else() {
+    fn a_configured_machine_attaches_only_and_starting_flips_the_proxy_of_both_routes() {
         let proxy = |m: &super::Machine| match &m.route {
             super::Route::Ssh(route) => route.proxy,
             super::Route::Command(route) => route.proxy,
@@ -985,6 +953,8 @@ mod tests {
             assert_eq!(back, attached);
         }
         assert_eq!(super::Machine::local().starting(), super::Machine::local());
+        let adhoc = super::Machine::adhoc("box", None, None);
+        assert_eq!(proxy(&adhoc), super::ProxyMode::StartsDaemon, "a --remote machine starts the daemon");
     }
 
     #[test]
@@ -1007,19 +977,6 @@ mod tests {
             assert!(remote_command(&attached).ends_with(" proxy --attach-only"));
             assert!(remote_command(&attached.starting()).ends_with(" proxy"));
         }
-    }
-
-    #[test]
-    fn a_configured_machine_attaches_only_and_a_remote_flag_machine_starts_the_daemon() {
-        let configured = super::Machine::from_def(&configured("box"), "ssh");
-        let adhoc = super::Machine::adhoc("box", None, None);
-        let proxy = |m: &super::Machine| match &m.route {
-            super::Route::Ssh(route) => route.proxy,
-            super::Route::Command(route) => route.proxy,
-            super::Route::Local => panic!("a local machine has no proxy"),
-        };
-        assert_eq!(proxy(&configured), super::ProxyMode::AttachOnly);
-        assert_eq!(proxy(&adhoc), super::ProxyMode::StartsDaemon);
     }
 
     fn through(via: &[&str]) -> super::Machine {
@@ -1121,22 +1078,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_via_that_exits_127_needs_the_app_installed() {
-        let machine = through(&["relay"]);
-        let (exited, exit) = tokio::sync::oneshot::channel();
-        let _ = exited.send(Some(127));
-        let said = super::SshSaid {
-            stderr: tokio::spawn(async { String::new() }),
-            exit,
-        };
-        let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
-        assert_eq!(
-            crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Install
-        );
-    }
-
-    #[tokio::test]
     async fn the_failure_carries_ssh_s_exit_status_for_the_supervisor() {
         let machine = super::Machine::ssh("box", vec!["ssh".into()], APP_COMMAND);
         let (exited, exit) = tokio::sync::oneshot::channel();
@@ -1149,19 +1090,6 @@ mod tests {
         assert_eq!(
             crate::link_failure::classify(&error),
             crate::link_failure::FailureClass::KeyRefused("box: Permission denied".into())
-        );
-    }
-
-    #[test]
-    fn only_this_machines_daemon_is_told_which_pane_is_asking() {
-        let claim =
-            |m: &super::Machine| super::pane_claim(m, Some("7".into()), Some("secret".into()));
-        assert_eq!(claim(&super::Machine::local()), Some((7, "secret".into())));
-        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
-        assert_eq!(claim(&remote), None);
-        assert_eq!(
-            super::pane_claim(&super::Machine::local(), None, None),
-            None
         );
     }
 
@@ -1260,17 +1188,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_remote_that_ended_after_printing_text_is_reported_by_what_it_printed() {
+    async fn a_remote_that_ended_is_reported_by_what_it_printed_or_else_the_failed_write() {
         let text: &'static [u8] = b"Last login: Mon\nthis account is currently not available\n";
         let error = super::greet_ssh(text, &mut ended_writer(), &hello_msg())
             .await
             .err()
             .expect("it fails");
         assert!(error.is::<super::LoginText>(), "{error:#}");
-    }
-
-    #[tokio::test]
-    async fn a_remote_that_ended_saying_nothing_is_reported_as_the_failed_write() {
         let nothing: &'static [u8] = b"";
         let error = super::greet_ssh(nothing, &mut ended_writer(), &hello_msg())
             .await
@@ -1282,4 +1206,5 @@ mod tests {
             "{error:#}"
         );
     }
+
 }

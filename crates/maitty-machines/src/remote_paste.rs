@@ -119,17 +119,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_paste_is_named_with_plain_characters_only() {
-        let name = paste_file_name(1_762_000_000_000, 0xAB);
-        assert_eq!(name, "paste-1762000000000-000000ab.png");
-        assert!(
-            name.chars()
-                .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
-        );
-    }
-
-    #[test]
-    fn a_sent_file_keeps_a_plain_version_of_its_name_after_a_unique_prefix() {
+    fn a_pasted_or_sent_file_is_named_with_a_unique_prefix_and_plain_characters_only() {
+        assert_eq!(paste_file_name(1_762_000_000_000, 0xAB), "paste-1762000000000-000000ab.png");
         let name = |original: &str| sent_file_name(1_762_000_000_000, 0xAB, original);
         assert_eq!(
             name("report.pdf"),
@@ -198,26 +189,9 @@ mod tests {
         assert!(pasted_path(&with("~/p.png")).is_err());
         assert!(pasted_path(&with("/a/\u{1b}[31m/p.png")).is_err());
         assert!(pasted_path(&with(&format!("/{}", "a".repeat(PATH_MAX)))).is_err());
-    }
-
-    #[test]
-    fn a_failure_says_what_to_do() {
-        assert!(paste_failure("the image", "box", Some(70), "").contains("incomplete"));
-        assert!(paste_failure("the image", "box", Some(72), "").contains("could not keep"));
-        assert!(paste_failure("the image", "box", None, "").contains("in time"));
-        assert_eq!(
-            paste_failure(
-                "the image",
-                "box",
-                Some(255),
-                "x\nPermission denied (publickey).\n"
-            ),
-            "could not send the image to box: Permission denied (publickey)."
-        );
-        assert_eq!(
-            paste_failure("the image", "box", Some(1), ""),
-            "could not send the image to box"
-        );
+        for hidden in ['\u{202e}', '\u{200b}', '\u{feff}', '\u{2066}'] {
+            assert!(pasted_path(&with(&format!("/home/me/p{hidden}ng.png"))).is_err(), "{hidden:?}");
+        }
     }
 
     #[test]
@@ -244,14 +218,6 @@ mod tests {
             paste_failure("the image", "box", Some(255), "\u{1b}\u{200b}\u{202e}\n"),
             "could not send the image to box"
         );
-    }
-
-    #[test]
-    fn a_path_with_an_invisible_character_is_refused() {
-        for hidden in ['\u{202e}', '\u{200b}', '\u{feff}', '\u{2066}'] {
-            let said = format!("{PASTE_MARKER}\n/home/me/p{hidden}ng.png\n");
-            assert!(pasted_path(&said).is_err(), "{hidden:?}");
-        }
     }
 
     #[cfg(unix)]

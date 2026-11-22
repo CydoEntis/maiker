@@ -473,25 +473,66 @@ mod tests {
     }
 
     #[test]
-    fn a_key_the_machine_will_not_take_is_key_refused() {
-        for said in [
-            "box: Permission denied (publickey).",
-            "dev@box: Permission denied (publickey,password,keyboard-interactive).",
-            "Received disconnect: Too many authentication failures",
-        ] {
-            assert!(matches!(class(Some(255), said), FailureClass::KeyRefused(_)), "{said}");
+    fn ssh_s_exit_status_and_login_tokens_pick_the_class_and_keep_ssh_s_last_line() {
+        let key = |said: &str| FailureClass::KeyRefused(said.into());
+        let person = |said: &str| FailureClass::NeedsPerson(said.into());
+        let cases = [
+            (Some(255), "box: Permission denied (publickey).", key("box: Permission denied (publickey).")),
+            (
+                Some(255),
+                "dev@box: Permission denied (publickey,password,keyboard-interactive).",
+                key("dev@box: Permission denied (publickey,password,keyboard-interactive)."),
+            ),
+            (
+                Some(255),
+                "Received disconnect: Too many authentication failures",
+                key("Received disconnect: Too many authentication failures"),
+            ),
+            (
+                Some(255),
+                "Warning: Permanently added '10.0.0.5' (ED25519) to the list of known hosts.\ndev@10.0.0.5: Permission denied (publickey).\n",
+                key("dev@10.0.0.5: Permission denied (publickey)."),
+            ),
+            (Some(255), "dev@box: Permission denied (password).", person("dev@box: Permission denied (password).")),
+            (
+                Some(255),
+                "dev@box: Permission denied (keyboard-interactive).",
+                person("dev@box: Permission denied (keyboard-interactive)."),
+            ),
+            (
+                Some(255),
+                "Authenticated using \"publickey\" with partial success.\ndev@box: Permission denied (keyboard-interactive).",
+                person("dev@box: Permission denied (keyboard-interactive)."),
+            ),
+            // Exit 127 means not installed, whatever the words and their language.
+            (Some(127), "bash: maiker: command not found", FailureClass::Install),
+            (Some(127), "auf Deutsch: Befehl nicht gefunden", FailureClass::Install),
+            (Some(NO_DAEMON_EXIT), "", FailureClass::NoDaemon),
+            (
+                Some(255),
+                "warning: something\nssh: connect to host box port 22: Connection refused\n",
+                FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into()),
+            ),
+            // With nothing on stderr the failure's own message is the reason.
+            (Some(255), "", FailureClass::Unreachable("ssh box:".into())),
+        ];
+        for (code, said, expected) in cases {
+            assert_eq!(class(code, said), expected, "{code:?} {said}");
         }
+        let not_ssh = anyhow::anyhow!("running ssh (is OpenSSH installed?)");
+        assert_eq!(
+            classify(&not_ssh),
+            FailureClass::Unreachable("running ssh (is OpenSSH installed?)".into())
+        );
     }
 
     #[test]
-    fn a_password_or_a_second_code_needs_a_person() {
-        for said in [
-            "dev@box: Permission denied (password).",
-            "dev@box: Permission denied (keyboard-interactive).",
-            "Authenticated using \"publickey\" with partial success.\ndev@box: Permission denied (keyboard-interactive).",
-        ] {
-            assert!(matches!(class(Some(255), said), FailureClass::NeedsPerson(_)), "{said}");
-        }
+    fn the_far_side_s_version_picks_which_side_to_update() {
+        let older = anyhow::Error::from(OtherVersion { daemon: 3 });
+        assert_eq!(classify(&older), FailureClass::Update);
+        let newer = maitty_shared::protocol::PROTOCOL_VERSION + 1;
+        let newer = anyhow::Error::from(OtherVersion { daemon: newer });
+        assert_eq!(classify(&newer), FailureClass::UpdateHere);
     }
 
     #[test]
@@ -527,15 +568,6 @@ mod tests {
     fn a_host_name_from_ssh_that_is_not_plain_is_not_put_in_a_command() {
         let said = "REMOTE HOST IDENTIFICATION HAS CHANGED\n  ssh-keygen -R 'box; rm -rf ~'\nHost key verification failed.";
         assert_eq!(class(Some(255), said), FailureClass::HostKeyChanged { known_as: None });
-    }
-
-    #[test]
-    fn a_login_failure_keeps_ssh_s_last_line_so_the_screen_can_show_it() {
-        let said = "Warning: Permanently added '10.0.0.5' (ED25519) to the list of known hosts.\ndev@10.0.0.5: Permission denied (publickey).\n";
-        assert_eq!(
-            class(Some(255), said),
-            FailureClass::KeyRefused("dev@10.0.0.5: Permission denied (publickey).".into())
-        );
     }
 
     #[test]
@@ -575,45 +607,6 @@ mod tests {
         assert_eq!(
             classify(&end(Some(NO_DAEMON_EXIT), "")),
             FailureClass::NoDaemon
-        );
-    }
-
-    #[test]
-    fn another_version_needs_an_update() {
-        let error = anyhow::Error::from(OtherVersion { daemon: 3 });
-        assert_eq!(classify(&error), FailureClass::Update);
-    }
-
-    #[test]
-    fn a_newer_version_there_means_updating_this_computer() {
-        let newer = maitty_shared::protocol::PROTOCOL_VERSION + 1;
-        let error = anyhow::Error::from(OtherVersion { daemon: newer });
-        assert_eq!(classify(&error), FailureClass::UpdateHere);
-    }
-
-    #[test]
-    fn exit_127_means_the_app_is_not_installed_whatever_was_said() {
-        assert_eq!(
-            class(Some(127), "bash: maiker: command not found"),
-            FailureClass::Install
-        );
-        assert_eq!(
-            class(Some(127), "auf Deutsch: Befehl nicht gefunden"),
-            FailureClass::Install
-        );
-    }
-
-    #[test]
-    fn the_proxy_s_exit_code_means_no_daemon_is_running() {
-        assert_eq!(class(Some(NO_DAEMON_EXIT), ""), FailureClass::NoDaemon);
-    }
-
-    #[test]
-    fn anything_else_is_unreachable_with_ssh_s_last_line() {
-        let said = "warning: something\nssh: connect to host box port 22: Connection refused\n";
-        assert_eq!(
-            class(Some(255), said),
-            FailureClass::Unreachable("ssh: connect to host box port 22: Connection refused".into())
         );
     }
 
@@ -678,196 +671,115 @@ mod tests {
         };
         assert_eq!(why.chars().count(), MOST_WHY_CHARS);
     }
-
-    #[test]
-    fn with_nothing_on_stderr_the_failure_says_so_itself() {
-        let error = anyhow::anyhow!("closed").context(SshEnd {
-            code: Some(255),
-            said: String::new(),
-            streamed: false,
-            message: "couldn't reach maiker on box over ssh".into(),
-            custom: false,
-        });
-        assert_eq!(
-            classify(&error),
-            FailureClass::Unreachable("couldn't reach maiker on box over ssh".into())
-        );
-    }
-
-    #[test]
-    fn an_error_that_is_not_from_ssh_is_unreachable_with_its_words() {
-        let error = anyhow::anyhow!("running ssh (is OpenSSH installed?)");
-        assert_eq!(
-            classify(&error),
-            FailureClass::Unreachable("running ssh (is OpenSSH installed?)".into())
-        );
-    }
 }
 
-/// One test per failure: the exact sentence each one reads as.
+/// Each failure's class and the command it offers; the prose is free to change.
 #[cfg(test)]
 mod sentences {
     use super::*;
 
     const BOX: Subject<'static> = Subject { name: "box", target: Some("dev@10.0.0.5"), port: None };
+    const OSES: [ClientOs; 2] = [ClientOs::Unix, ClientOs::Windows];
 
     fn unix(failure: &FailureClass) -> String {
         sentence(failure, &BOX, ClientOs::Unix)
     }
 
     #[test]
-    fn unreachable_says_to_check_the_address_and_the_power() {
-        assert_eq!(
-            unix(&FailureClass::Unreachable("ssh: connect to host 10.0.0.5 port 22: Connection timed out".into())),
-            "Can't reach box: check the name or address, and that the machine is on (ssh: connect to host 10.0.0.5 port 22: Connection timed out)."
+    fn every_failure_names_the_machine_its_reason_and_the_command_it_offers() {
+        let windows_key = format!(
+            "Get-Content {WINDOWS_PUBLIC_KEY} | ssh dev@10.0.0.5 \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\""
         );
-        assert_eq!(
-            unix(&FailureClass::Unreachable(String::new())),
-            "Can't reach box: check the name or address, and that the machine is on."
-        );
+        let update = format!("{APP_COMMAND} machine update box");
+        let install = format!("{APP_COMMAND} machine update box --install");
+        // ssh runs as it is in PowerShell, so only the refused key needs its own Windows line.
+        let cases: [(FailureClass, &str, Option<&str>, Option<&str>); 12] = [
+            (FailureClass::Unreachable("no route".into()), "unreachable", None, None),
+            (FailureClass::RefusingConnections, "refusing-connections", None, None),
+            (
+                FailureClass::KeyRefused("denied".into()),
+                "key-refused",
+                Some("ssh-copy-id dev@10.0.0.5"),
+                Some(windows_key.as_str()),
+            ),
+            (FailureClass::NeedsPerson("denied".into()), "needs-person", None, None),
+            (
+                FailureClass::HostKeyChanged { known_as: None },
+                "host-key-changed",
+                Some("ssh-keygen -R '10.0.0.5'"),
+                Some("ssh-keygen -R '10.0.0.5'"),
+            ),
+            (
+                FailureClass::HostKeyUnknown,
+                "host-key-unknown",
+                Some("ssh -o StrictHostKeyChecking=ask dev@10.0.0.5"),
+                Some("ssh -o StrictHostKeyChecking=ask dev@10.0.0.5"),
+            ),
+            (FailureClass::Update, "update", Some(update.as_str()), Some(update.as_str())),
+            (FailureClass::UpdateHere, "update-here", None, None),
+            (FailureClass::Install, "install", Some(install.as_str()), Some(install.as_str())),
+            (FailureClass::InstallFailed("no build".into()), "install-failed", None, None),
+            (FailureClass::NoDaemon, "not-running", None, None),
+            (FailureClass::Refused("another machine".into()), "refused", None, None),
+        ];
+        for (failure, kind, on_unix, on_windows) in &cases {
+            assert_eq!(failure.kind(), *kind);
+            for (os, expected) in [(ClientOs::Unix, on_unix), (ClientOs::Windows, on_windows)] {
+                let command = fix_command(failure, &BOX, os);
+                assert_eq!(command.as_deref(), *expected, "{failure:?} {os:?}");
+                let said = sentence(failure, &BOX, os);
+                if let Some(command) = command {
+                    assert!(said.contains(&format!("`{command}`")), "{said}");
+                }
+                if let FailureClass::Unreachable(why) | FailureClass::InstallFailed(why) | FailureClass::Refused(why) = failure {
+                    assert!(said.contains(why.as_str()), "the reason is kept: {said}");
+                }
+                assert!(said.contains("box"), "the machine is named: {said}");
+                let lower = said.to_lowercase();
+                for word in ["helper", "probe", "daemon", "<name>"] {
+                    assert!(!lower.contains(word), "{word} in {said}");
+                }
+            }
+        }
     }
 
     #[test]
-    fn a_machine_refusing_connections_says_to_wait_and_where_to_look_if_it_lasts() {
-        let refusing = FailureClass::RefusingConnections;
-        let said = unix(&refusing);
-        assert_eq!(
-            said,
-            "box may be refusing new connections for a while, after failed sign-ins or too many at once: wait a few minutes and try again, and if it keeps happening, check its sshd and fail2ban settings."
-        );
-        assert_eq!(sentence(&refusing, &BOX, ClientOs::Windows), said);
-        assert_eq!(fix_command(&refusing, &BOX, ClientOs::Unix), None);
-        assert_eq!(refusing.kind(), "refusing-connections");
-        assert!(!unix(&FailureClass::Unreachable(String::new())).contains("refusing"));
-    }
-
-    #[test]
-    fn a_refused_key_gives_ssh_copy_id_with_the_port() {
-        let refused = FailureClass::KeyRefused("dev@10.0.0.5: Permission denied (publickey).".into());
-        assert_eq!(
-            unix(&refused),
-            "box refused your key: run `ssh-copy-id dev@10.0.0.5` in a terminal, then try again."
-        );
+    fn a_fix_command_carries_the_port_and_needs_an_ssh_target() {
         let on_2222 = Subject { port: Some(2222), ..BOX };
+        let refused = FailureClass::KeyRefused(String::new());
+        let changed = FailureClass::HostKeyChanged { known_as: None };
+        let unknown = FailureClass::HostKeyUnknown;
         assert_eq!(
             fix_command(&refused, &on_2222, ClientOs::Unix).as_deref(),
             Some("ssh-copy-id -p 2222 dev@10.0.0.5")
         );
-    }
-
-    #[test]
-    fn a_refused_key_on_windows_gives_the_powershell_line_that_does_what_ssh_copy_id_does() {
-        let refused = FailureClass::KeyRefused(String::new());
         assert_eq!(
-            sentence(&refused, &BOX, ClientOs::Windows),
-            format!("box refused your key: run `Get-Content {WINDOWS_PUBLIC_KEY} | ssh dev@10.0.0.5 \"mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys\"` in PowerShell, then try again.")
+            fix_command(&changed, &on_2222, ClientOs::Unix).as_deref(),
+            Some("ssh-keygen -R '[10.0.0.5]:2222'")
         );
-    }
-
-    #[test]
-    fn a_refused_key_with_no_ssh_target_gives_no_command() {
-        let via = Subject { target: None, ..BOX };
-        let refused = FailureClass::KeyRefused(String::new());
-        assert_eq!(fix_command(&refused, &via, ClientOs::Unix), None);
-        assert_eq!(
-            sentence(&refused, &via, ClientOs::Unix),
-            "box refused your key: add your public key to ~/.ssh/authorized_keys there, then try again."
-        );
-    }
-
-    #[test]
-    fn a_password_or_second_code_says_maiker_cannot_answer_it() {
-        assert_eq!(
-            unix(&FailureClass::NeedsPerson("dev@10.0.0.5: Permission denied (keyboard-interactive).".into())),
-            format!("box asks for a password or a second code, which {APP_NAME} can't answer: set up a key, or sign in in a terminal.")
-        );
-    }
-
-    #[test]
-    fn a_changed_host_key_says_how_to_remove_it_and_never_to_accept_it() {
-        let changed = FailureClass::HostKeyChanged { known_as: None };
-        let said = unix(&changed);
-        assert_eq!(
-            said,
-            format!("box's host key has changed, so {APP_NAME} won't connect: confirm with whoever runs it that the change is expected, then run `ssh-keygen -R '10.0.0.5'` in a terminal and try again.")
-        );
-        assert!(!said.to_lowercase().contains("accept") && !said.to_lowercase().contains("trust"), "{said}");
         let named = FailureClass::HostKeyChanged { known_as: Some("[10.0.0.5]:2222".into()) };
         assert_eq!(fix_command(&named, &BOX, ClientOs::Unix).as_deref(), Some("ssh-keygen -R '[10.0.0.5]:2222'"));
-        let on_2222 = Subject { port: Some(2222), ..BOX };
-        assert_eq!(fix_command(&changed, &on_2222, ClientOs::Unix).as_deref(), Some("ssh-keygen -R '[10.0.0.5]:2222'"));
-    }
-
-    #[test]
-    fn a_new_host_key_says_to_accept_it_once_with_ssh_and_never_to_remove_a_key() {
-        let unknown = FailureClass::HostKeyUnknown;
-        let said = unix(&unknown);
-        assert_eq!(
-            said,
-            "box's host key isn't known yet and your ssh settings won't record a new one on their own: run `ssh -o StrictHostKeyChecking=ask dev@10.0.0.5` once in a terminal, check the fingerprint it shows and answer yes, then try again."
-        );
-        assert!(!said.contains("changed") && !said.contains("ssh-keygen"), "{said}");
-        assert_eq!(sentence(&unknown, &BOX, ClientOs::Windows), said, "ssh runs as it is in PowerShell");
-        let on_2222 = Subject { port: Some(2222), ..BOX };
         assert_eq!(
             fix_command(&unknown, &on_2222, ClientOs::Unix).as_deref(),
             Some("ssh -o StrictHostKeyChecking=ask -p 2222 dev@10.0.0.5")
         );
         let via = Subject { target: None, ..BOX };
-        assert_eq!(fix_command(&unknown, &via, ClientOs::Unix), None);
-        assert_eq!(
-            sentence(&unknown, &via, ClientOs::Unix),
-            "box's host key isn't known yet and your ssh settings won't record a new one on their own: connect to it once with ssh in a terminal, check the fingerprint it shows and answer yes, then try again."
-        );
+        for failure in [&refused, &unknown] {
+            for os in OSES {
+                assert_eq!(fix_command(failure, &via, os), None, "{failure:?}");
+                assert!(!sentence(failure, &via, os).contains('`'), "no command is offered");
+            }
+        }
     }
 
     #[test]
-    fn an_older_app_there_gives_the_update_command() {
-        assert_eq!(
-            unix(&FailureClass::Update),
-            format!("box runs an older {APP_NAME}: run `{APP_COMMAND} machine update box`, then try again.")
-        );
-    }
-
-    #[test]
-    fn a_newer_app_there_says_to_update_this_computer() {
-        assert_eq!(
-            unix(&FailureClass::UpdateHere),
-            format!("box runs a newer {APP_NAME} than this computer: update {APP_NAME} here (`{APP_COMMAND} update`, or the desktop app's own update), then try again.")
-        );
-        assert_eq!(fix_command(&FailureClass::UpdateHere, &BOX, ClientOs::Unix), None);
-    }
-
-    #[test]
-    fn no_app_there_gives_the_install_command_and_the_systems_it_runs_on() {
-        assert_eq!(
-            unix(&FailureClass::Install),
-            format!("{APP_NAME} isn't installed on box: run `{APP_COMMAND} machine update box --install` (Linux and macOS machines only), then try again.")
-        );
-    }
-
-    #[test]
-    fn a_failed_install_gives_the_reason_and_the_systems_it_runs_on() {
-        assert_eq!(
-            unix(&FailureClass::InstallFailed("no build for this system: windows-x86_64".into())),
-            format!("{APP_NAME} could not be installed or started on box (no build for this system: windows-x86_64); only Linux and macOS machines are supported.")
-        );
-    }
-
-    #[test]
-    fn not_running_says_try_again_starts_it() {
-        assert_eq!(
-            unix(&FailureClass::NoDaemon),
-            format!("{APP_NAME} is not running on box: try again to start it there.")
-        );
-    }
-
-    #[test]
-    fn a_refusal_keeps_its_own_reason() {
-        assert_eq!(
-            unix(&FailureClass::Refused("a different machine answers at box.".into())),
-            "box was turned away: a different machine answers at box."
-        );
+    fn a_host_key_sentence_never_offers_to_accept_a_changed_key_or_remove_an_unknown_one() {
+        for os in OSES {
+            let changed = sentence(&FailureClass::HostKeyChanged { known_as: None }, &BOX, os).to_lowercase();
+            assert!(!changed.contains("accept") && !changed.contains("trust"), "{changed}");
+            let unknown = sentence(&FailureClass::HostKeyUnknown, &BOX, os);
+            assert!(!unknown.contains("changed") && !unknown.contains("ssh-keygen"), "{unknown}");
+        }
     }
 
     #[test]
@@ -885,32 +797,5 @@ mod sentences {
         }
         assert!(!is_failure_sentence("no session box/9", "box"));
         assert!(!is_failure_sentence("box sent a list that could not be made safe", "box"));
-    }
-
-    #[test]
-    fn no_sentence_names_an_internal_part_of_the_app() {
-        let all = [
-            FailureClass::Unreachable("x".into()),
-            FailureClass::RefusingConnections,
-            FailureClass::KeyRefused("x".into()),
-            FailureClass::NeedsPerson("x".into()),
-            FailureClass::HostKeyChanged { known_as: None },
-            FailureClass::HostKeyUnknown,
-            FailureClass::Update,
-            FailureClass::UpdateHere,
-            FailureClass::Install,
-            FailureClass::InstallFailed("x".into()),
-            FailureClass::NoDaemon,
-            FailureClass::Refused("x".into()),
-        ];
-        for os in [ClientOs::Unix, ClientOs::Windows] {
-            for failure in &all {
-                let said = sentence(failure, &BOX, os).to_lowercase();
-                for word in ["helper", "probe", "daemon", "<name>"] {
-                    assert!(!said.contains(word), "{word} in {said}");
-                }
-                assert!(said.contains("box"), "the machine is named: {said}");
-            }
-        }
     }
 }

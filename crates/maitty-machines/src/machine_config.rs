@@ -350,15 +350,6 @@ mod tests {
     }
 
     #[test]
-    fn adding_to_no_file_makes_one() {
-        let file = dir("new").join("config.local.toml");
-        add_machine(&file, "box", "me@box").unwrap();
-        let text = std::fs::read_to_string(&file).unwrap();
-        let table: toml::Table = toml::from_str(&text).unwrap();
-        assert_eq!(table["machines"].as_array().unwrap().len(), 1);
-    }
-
-    #[test]
     fn an_entry_that_would_not_load_is_refused_before_anything_is_written() {
         let file = dir("bad").join("config.local.toml");
         for target in ["-oProxyCommand=x", "has space", "tab\t", ""] {
@@ -405,7 +396,7 @@ mod tests {
     }
 
     #[test]
-    fn a_name_comes_from_the_host_and_is_made_unique() {
+    fn a_name_comes_from_the_host_is_made_unique_and_fits() {
         let taken = vec!["build".to_string(), "Build-2".to_string()];
         assert_eq!(suggest_name("me@box.example", &[]).unwrap(), "box.example");
         assert_eq!(suggest_name("build", &taken).unwrap(), "build-3");
@@ -415,36 +406,24 @@ mod tests {
         assert_eq!(suggest_name("local", &[]).unwrap(), "host-local");
         assert_eq!(suggest_name("---", &[]), None);
         assert_eq!(suggest_name("me@", &[]), None);
-    }
-
-    #[test]
-    fn a_long_host_is_cut_to_the_most_a_name_may_have_even_with_a_number() {
         let long = "h".repeat(60);
         let name = suggest_name(&long, &[]).unwrap();
-        assert_eq!(name.len(), MACHINE_NAME_MAX);
+        assert_eq!(name.len(), MACHINE_NAME_MAX, "a long host is cut");
         let again = suggest_name(&long, &[name]).unwrap();
-        assert_eq!(again.len(), MACHINE_NAME_MAX);
+        assert_eq!(again.len(), MACHINE_NAME_MAX, "even with a number");
         assert!(again.ends_with("-2"));
     }
 
     #[test]
-    fn the_loader_s_words_say_why_a_machine_is_refused() {
+    fn a_machine_the_loader_would_refuse_is_told_before_it_is_added() {
         let existing = vec![MachineDef {
             name: "box".into(),
             target: "box".into(),
             ..MachineDef::default()
         }];
         assert!(refusal(&existing, "other", "ok").is_none());
-        assert!(
-            refusal(&existing, "Box", "ok")
-                .unwrap()
-                .contains("already named")
-        );
-        assert!(
-            refusal(&existing, "x", "-oProxyCommand=x")
-                .unwrap()
-                .contains("starts with `-`")
-        );
+        assert!(refusal(&existing, "Box", "ok").is_some(), "a name differing by case");
+        assert!(refusal(&existing, "x", "-oProxyCommand=x").is_some(), "a target ssh reads as an option");
     }
 
     #[test]

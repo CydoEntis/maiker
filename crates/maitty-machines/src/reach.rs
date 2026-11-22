@@ -89,18 +89,11 @@ mod tests {
     }
 
     #[test]
-    fn a_listening_port_answers_with_a_time() {
+    fn a_listening_port_answers_with_a_time_and_a_closed_one_gives_none() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let port = listener.local_addr().unwrap().port();
         assert!(connect_ms("127.0.0.1", port, Duration::from_secs(2)).is_some());
-    }
-
-    #[test]
-    fn a_port_nothing_listens_on_gives_no_time() {
-        let port = {
-            let listener = TcpListener::bind("127.0.0.1:0").unwrap();
-            listener.local_addr().unwrap().port()
-        };
+        drop(listener);
         assert_eq!(connect_ms("127.0.0.1", port, Duration::from_secs(2)), None);
     }
 

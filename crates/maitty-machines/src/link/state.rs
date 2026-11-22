@@ -218,22 +218,17 @@ mod tests {
     }
 
     #[test]
-    fn a_line_that_drops_is_reconnecting_whatever_dropped_it() {
+    fn a_line_that_drops_is_reconnecting_whatever_dropped_it_until_a_dial_succeeds() {
         for event in [Event::LineDropped, Event::WatchdogFired] {
             assert_eq!(
-                run(Connected, &[(event, 7)]),
+                run(Connected, &[(event.clone(), 7)]),
                 Reconnecting {
                     attempt: 1,
                     since: at(7)
                 }
             );
+            assert_eq!(run(Connected, &[(event, 7), (Event::ConnectOk, 8)]), Connected);
         }
-    }
-
-    #[test]
-    fn reconnecting_returns_to_connected_on_success() {
-        let state = run(Connected, &[(Event::LineDropped, 1), (Event::ConnectOk, 2)]);
-        assert_eq!(state, Connected);
     }
 
     #[test]
@@ -447,13 +442,6 @@ mod tests {
             ]
         );
         assert_eq!(Backoff::DEFAULT.delay(u32::MAX).as_millis(), 30000);
-    }
-
-    #[test]
-    fn a_line_that_was_up_is_redialled_at_once_and_success_resets_the_wait() {
-        // The supervisor starts every outage at zero failures and zeroes it on success.
-        assert_eq!(Backoff::DEFAULT.delay(0), Duration::ZERO);
-        assert_eq!(Backoff::DEFAULT.delay(1), Backoff::DEFAULT.first);
     }
 
     #[test]

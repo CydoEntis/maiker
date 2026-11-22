@@ -211,147 +211,10 @@ mod tests {
         }
     }
 
-    fn refusal(machines: &[MachineDef]) -> String {
-        validate_machines(machines).unwrap_err().to_string()
-    }
-
-    #[test]
-    fn a_machine_reads_with_its_defaults_clipboard_on_and_the_other_opt_ins_off() {
-        let m: MachineDef = toml::from_str("name = 'box'\ntarget = 'me@box'").unwrap();
-        assert_eq!(m, machine("box", "me@box"));
-        assert!(m.clipboard, "a copy made there reaches the paste here");
-        assert!(!(m.notices || m.sounds) && m.ssh_args.is_empty());
-        let off: MachineDef =
-            toml::from_str("name = 'box'\ntarget = 'me@box'\nclipboard = false").unwrap();
-        assert!(!off.clipboard, "and an entry can turn it off");
-        validate_machines(&[m]).unwrap();
-    }
-
-    #[test]
-    fn an_agent_may_reach_a_machine_only_when_it_says_mcp() {
-        let plain: MachineDef = toml::from_str("name = 'box'\ntarget = 'me@box'").unwrap();
-        assert!(!plain.mcp);
-        let opted: MachineDef =
-            toml::from_str("name = 'box'\ntarget = 'me@box'\nmcp = true").unwrap();
-        assert!(opted.mcp);
-        validate_machines(&[opted]).unwrap();
-    }
-
-    #[test]
-    fn a_machine_keeps_ssh_args_as_a_list() {
-        let m: MachineDef =
-            toml::from_str("name = 'b'\ntarget = 'h'\nssh_args = ['-p', '2222', '-i', 'my key']")
-                .unwrap();
-        assert_eq!(m.ssh_args, ["-p", "2222", "-i", "my key"]);
-        validate_machines(&[m]).unwrap();
-    }
-
-    #[test]
-    fn an_entry_written_before_key_files_still_loads_and_adds_no_ssh_arguments() {
-        let old: MachineDef =
-            toml::from_str("name = 'box'\ntarget = 'me@box'\nssh_args = ['-p', '2222']").unwrap();
-        assert_eq!(old.identity_file, None);
-        assert_eq!(old.ssh_arguments(), ["-p", "2222"]);
-    }
-
-    #[test]
-    fn a_key_file_becomes_one_dash_i_pair_after_the_other_arguments() {
-        let m: MachineDef = toml::from_str(
-            "name = 'b'\ntarget = 'h'\nssh_args = ['-p', '2222']\nidentity_file = 'C:\\Users\\me\\my key'",
-        )
-        .unwrap();
-        assert_eq!(m.ssh_arguments(), ["-p", "2222", "-i", "C:\\Users\\me\\my key"]);
-        validate_machines(&[m]).unwrap();
-    }
-
-    #[test]
-    fn a_key_file_that_ssh_could_read_as_an_option_or_with_via_is_refused() {
-        for bad in ["", "  ", "-oProxyCommand=x", "a\nb"] {
-            let mut m = machine("box", "h");
-            m.identity_file = Some(bad.into());
-            assert!(validate_machines(&[m]).is_err(), "{bad:?}");
-        }
+    fn with(edit: impl FnOnce(&mut MachineDef)) -> MachineDef {
         let mut m = machine("box", "h");
-        m.identity_file = Some("/k".into());
-        m.via = Some(vec!["fly".into()]);
-        assert!(validate_machines_on(&[m], false).is_err());
-    }
-
-    #[test]
-    fn two_machines_may_not_share_a_name_in_any_case() {
-        let err = refusal(&[machine("box", "a"), machine("BOX", "b")]);
-        assert!(err.contains("#2") && err.contains("`BOX`"), "{err}");
-    }
-
-    #[test]
-    fn local_is_reserved_in_any_case() {
-        for name in ["local", "LOCAL", "Local"] {
-            let err = refusal(&[machine(name, "h")]);
-            assert!(err.contains("reserved"), "{err}");
-        }
-    }
-
-    #[test]
-    fn a_name_needs_the_pattern() {
-        let too_long = "a".repeat(33);
-        for name in [
-            "", "-box", ".box", "my box", "bo/x", "bo:x", "\u{e9}", &too_long,
-        ] {
-            assert!(
-                validate_machines(&[machine(name, "h")]).is_err(),
-                "{name:?}"
-            );
-        }
-        let longest = "a".repeat(32);
-        for name in ["a", "box-1", "web_2.prod", &longest] {
-            validate_machines(&[machine(name, "h")]).unwrap();
-        }
-    }
-
-    #[test]
-    fn a_name_that_looks_like_a_pane_id_is_refused() {
-        let err = refusal(&[machine("12", "h")]);
-        assert!(err.contains("`12`") && err.contains("pane id"), "{err}");
-        validate_machines(&[machine("12b", "h")]).unwrap();
-    }
-
-    #[test]
-    fn a_target_is_required() {
-        let err = refusal(&[machine("box", "")]);
-        assert!(err.contains("`box`") && err.contains("`target`"), "{err}");
-    }
-
-    #[test]
-    fn a_target_starting_with_a_dash_is_refused() {
-        for target in ["-oProxyCommand=x", "-p", "--"] {
-            let err = refusal(&[machine("box", target)]);
-            assert!(err.contains("starts with `-`"), "{err}");
-        }
-    }
-
-    #[test]
-    fn a_target_with_whitespace_or_a_control_character_is_refused() {
-        for target in ["a b", "a\tb", "host\n", "a\u{7}b", "a\u{0}b", "a\u{a0}b"] {
-            let err = refusal(&[machine("box", target)]);
-            assert!(
-                err.contains("whitespace or a control character"),
-                "{target:?}: {err}"
-            );
-        }
-    }
-
-    #[test]
-    fn an_empty_ssh_arg_is_refused() {
-        let mut m = machine("box", "h");
-        m.ssh_args = vec!["-p".into(), String::new()];
-        assert!(refusal(&[m]).contains("`ssh_args`"));
-    }
-
-    #[test]
-    fn an_ssh_arg_with_a_control_character_is_refused() {
-        let mut m = machine("box", "h");
-        m.ssh_args = vec!["-o\nProxyCommand=x".into()];
-        assert!(refusal(&[m]).contains("`ssh_args`"));
+        edit(&mut m);
+        m
     }
 
     fn via_machine(via: &[&str]) -> MachineDef {
@@ -360,94 +223,127 @@ mod tests {
         m
     }
 
-    fn via_refusal(via: &[&str]) -> String {
-        validate_machines_on(&[via_machine(via)], false)
-            .unwrap_err()
-            .to_string()
+    fn read(toml_text: &str) -> MachineDef {
+        toml::from_str(toml_text).unwrap()
     }
 
     #[test]
-    fn a_via_is_a_list_of_arguments_and_off_unless_set() {
-        let m: MachineDef = toml::from_str(
-            "name = 'box'\ntarget = 'box'\nvia = ['fly', 'ssh', 'console', '-C', '{command}']",
-        )
-        .unwrap();
+    fn a_machine_reads_with_clipboard_on_and_the_other_opt_ins_and_lists_off_unless_set() {
+        let m = read("name = 'box'\ntarget = 'me@box'");
+        assert_eq!(m, machine("box", "me@box"));
+        assert!(m.clipboard, "a copy made there reaches the paste here");
+        assert!(!(m.notices || m.sounds || m.mcp), "an agent reaches it only when it says mcp");
+        assert!(m.ssh_args.is_empty() && m.via.is_none());
+        validate_machines(&[m]).unwrap();
+        assert!(!read("name = 'box'\ntarget = 'me@box'\nclipboard = false").clipboard);
+        assert!(read("name = 'box'\ntarget = 'me@box'\nmcp = true").mcp);
+        let m = read("name = 'b'\ntarget = 'h'\nssh_args = ['-p', '2222', '-i', 'my key']");
+        assert_eq!(m.ssh_args, ["-p", "2222", "-i", "my key"]);
+        let m = read("name = 'box'\ntarget = 'box'\nvia = ['fly', 'ssh', 'console', '-C', '{command}']");
         assert_eq!(
             m.via.as_deref(),
             Some(&["fly", "ssh", "console", "-C", "{command}"].map(String::from)[..])
         );
-        validate_machines_on(&[m], false).unwrap();
-        let plain: MachineDef = toml::from_str("name = 'box'\ntarget = 'box'").unwrap();
-        assert_eq!(plain.via, None);
     }
 
     #[test]
-    fn a_via_with_a_program_and_one_placeholder_or_none_is_accepted() {
-        for via in [
-            &["relay"][..],
-            &["relay", "--to", "box", "{command}"],
-            &["relay", "{command}", "-x"],
-        ] {
-            validate_machines_on(&[via_machine(via)], false).unwrap();
+    fn an_entry_written_before_key_files_still_loads_and_adds_no_ssh_arguments() {
+        let old = read("name = 'box'\ntarget = 'me@box'\nssh_args = ['-p', '2222']");
+        assert_eq!(old.identity_file, None);
+        assert_eq!(old.ssh_arguments(), ["-p", "2222"]);
+    }
+
+    #[test]
+    fn a_key_file_becomes_one_dash_i_pair_after_the_other_arguments() {
+        let m = read(
+            "name = 'b'\ntarget = 'h'\nssh_args = ['-p', '2222']\nidentity_file = 'C:\\Users\\me\\my key'",
+        );
+        assert_eq!(m.ssh_arguments(), ["-p", "2222", "-i", "C:\\Users\\me\\my key"]);
+        validate_machines(&[m]).unwrap();
+    }
+
+    /// Each entry ssh could misread, or that clashes with another, is refused, naming what is wrong.
+    #[test]
+    fn an_entry_ssh_could_misread_or_that_clashes_is_refused() {
+        let named = |name: &str| machine(name, "h");
+        let key_file = |file: &str| with(|m| m.identity_file = Some(file.into()));
+        let remote_cmd = |cmd: &str| with(|m| m.remote_cmd = Some(cmd.into()));
+        let mut cases: Vec<(Vec<MachineDef>, bool, &str)> = vec![
+            (vec![machine("box", "a"), machine("BOX", "b")], false, "`BOX`"),
+            (vec![named("local")], false, "reserved"),
+            (vec![named("LOCAL")], false, "reserved"),
+            (vec![named("Local")], false, "reserved"),
+            (vec![named("12")], false, "pane id"),
+            (vec![machine("box", "")], false, "`target`"),
+            (vec![with(|m| m.ssh_args = vec!["-p".into(), String::new()])], false, "`ssh_args`"),
+            (vec![with(|m| m.ssh_args = vec!["-o\nProxyCommand=x".into()])], false, "`ssh_args`"),
+            (vec![remote_cmd("")], false, "`remote_cmd`"),
+            (vec![remote_cmd("  ")], false, "`remote_cmd`"),
+            (vec![remote_cmd("maiker\nrm -rf ~")], false, "`remote_cmd`"),
+            (vec![via_machine(&[])], false, "`via` is empty"),
+            (vec![via_machine(&[""])], false, "program"),
+            (vec![via_machine(&["-oProxyCommand=x"])], false, "program"),
+            (vec![via_machine(&["relay", "{command}", "{command}"])], false, "more than one"),
+            (vec![via_machine(&["relay", "x{command}"])], false, "entry of its own"),
+            (vec![via_machine(&["relay", "--cmd={command}"])], false, "entry of its own"),
+            (
+                vec![{
+                    let mut m = via_machine(&["relay"]);
+                    m.ssh_args = vec!["-p".into(), "22".into()];
+                    m
+                }],
+                false,
+                "`ssh_args`",
+            ),
+            (
+                vec![{
+                    let mut m = key_file("/k");
+                    m.via = Some(vec!["fly".into()]);
+                    m
+                }],
+                false,
+                "",
+            ),
+            (vec![via_machine(&["relay", "{command}"])], true, "not supported on Windows"),
+        ];
+        for target in ["-oProxyCommand=x", "-p", "--"] {
+            cases.push((vec![machine("box", target)], false, "starts with `-`"));
         }
-    }
-
-    #[test]
-    fn a_via_that_is_empty_or_has_no_program_is_refused() {
-        assert!(via_refusal(&[]).contains("`via` is empty"));
-        assert!(via_refusal(&[""]).contains("program"));
-        assert!(via_refusal(&["-oProxyCommand=x"]).contains("program"));
-    }
-
-    #[test]
-    fn a_via_entry_with_a_control_character_is_refused() {
+        for target in ["a b", "a\tb", "host\n", "a\u{7}b", "a\u{0}b", "a\u{a0}b"] {
+            cases.push((vec![machine("box", target)], false, "whitespace or a control character"));
+        }
         for via in [&["relay\n"][..], &["relay", "a\u{7}b"], &["relay", "x\ty"]] {
-            assert!(via_refusal(via).contains("control characters"), "{via:?}");
+            cases.push((vec![via_machine(via)], false, "control characters"));
+        }
+        for file in ["", "  ", "-oProxyCommand=x", "a\nb"] {
+            cases.push((vec![key_file(file)], false, ""));
+        }
+        let too_long = "a".repeat(33);
+        for name in ["", "-box", ".box", "my box", "bo/x", "bo:x", "\u{e9}", &too_long] {
+            cases.push((vec![named(name)], false, ""));
+        }
+        for (machines, windows, names) in cases {
+            let err = validate_machines_on(&machines, windows)
+                .expect_err(&format!("{machines:?}"))
+                .to_string();
+            assert!(err.contains(names), "{names:?} not in {err}");
         }
     }
 
     #[test]
-    fn the_placeholder_is_one_entry_of_its_own_and_at_most_once() {
-        assert!(via_refusal(&["relay", "{command}", "{command}"]).contains("more than one"));
-        for via in [&["relay", "x{command}"][..], &["relay", "--cmd={command}"]] {
-            assert!(via_refusal(via).contains("entry of its own"), "{via:?}");
-        }
-    }
-
-    #[test]
-    fn ssh_args_beside_a_via_are_refused_not_ignored() {
-        let mut m = via_machine(&["relay"]);
-        m.ssh_args = vec!["-p".into(), "22".into()];
-        let err = validate_machines_on(&[m], false).unwrap_err().to_string();
-        assert!(
-            err.contains("`ssh_args`") && err.contains("remove one"),
-            "{err}"
+    fn a_plain_entry_with_a_name_a_via_or_a_remote_cmd_that_fits_is_accepted() {
+        let longest = "a".repeat(32);
+        let mut machines: Vec<MachineDef> =
+            ["a", "box-1", "web_2.prod", "12b", &longest].iter().map(|name| machine(name, "h")).collect();
+        machines.extend(
+            [&["relay"][..], &["relay", "--to", "box", "{command}"], &["relay", "{command}", "-x"]]
+                .into_iter()
+                .map(via_machine),
         );
-    }
-
-    #[test]
-    fn a_via_is_refused_on_windows_whatever_it_says() {
-        let err = validate_machines_on(&[via_machine(&["relay", "{command}"])], true)
-            .unwrap_err()
-            .to_string();
-        assert!(
-            err.contains("`box`")
-                && err.contains("not supported on Windows in v1")
-                && err.contains("use ssh"),
-            "{err}"
-        );
-        validate_machines_on(&[machine("box", "box")], true).unwrap();
-    }
-
-    #[test]
-    fn a_remote_cmd_must_be_text_without_control_characters() {
-        for cmd in ["", "  ", "maiker\nrm -rf ~"] {
-            let mut m = machine("box", "h");
-            m.remote_cmd = Some(cmd.into());
-            assert!(refusal(&[m]).contains("`remote_cmd`"), "{cmd:?}");
+        machines.push(with(|m| m.remote_cmd = Some("~/.cargo/bin/maiker".into())));
+        for m in machines {
+            validate_machines_on(std::slice::from_ref(&m), false).unwrap_or_else(|e| panic!("{m:?}: {e}"));
         }
-        let mut ok = machine("box", "h");
-        ok.remote_cmd = Some("~/.cargo/bin/maiker".into());
-        validate_machines(&[ok]).unwrap();
+        validate_machines_on(&[machine("box", "box")], true).expect("ssh is fine on Windows");
     }
 }

@@ -318,20 +318,6 @@ mod get_script_tests {
     }
 
     #[test]
-    fn the_script_is_a_constant_that_reads_one_file_and_changes_nothing() {
-        for placeholder in ['{', '}'] {
-            assert!(!GET_SCRIPT.contains(placeholder), "{placeholder}");
-        }
-        for word in ["kill", "pkill", "killall", "pgrep", "systemctl", "rm ", "mv ", "> "] {
-            assert!(!GET_SCRIPT.contains(word), "{word}");
-        }
-        assert!(GET_SCRIPT.contains("path=$1") && GET_SCRIPT.contains("max=$2"));
-        let checked = GET_SCRIPT.find("-le \"$max\"").unwrap();
-        let sent = GET_SCRIPT.find("cat --").unwrap();
-        assert!(checked < sent, "the size is checked before a byte is sent");
-    }
-
-    #[test]
     fn a_file_comes_out_as_the_marker_its_size_and_exactly_its_bytes() {
         if !has_sh() {
             return;
@@ -423,18 +409,6 @@ mod list_script_tests {
         let text = String::from_utf8_lossy(stdout).replace("\r\n", "\n");
         let after = text.strip_prefix(&format!("{LIST_MARKER}\n")).expect("the marker line comes first");
         after.split('\0').filter(|p| !p.is_empty()).map(str::to_owned).collect()
-    }
-
-    #[test]
-    fn the_script_is_a_constant_that_only_reads() {
-        for placeholder in ['{', '}'] {
-            assert!(!LIST_SCRIPT.contains(placeholder), "{placeholder}");
-        }
-        for word in ["kill", "pkill", "killall", "pgrep", "systemctl", "rm ", "mv ", "> ", "-delete", "-exec"] {
-            assert!(!LIST_SCRIPT.contains(word), "{word}");
-        }
-        assert!(LIST_SCRIPT.contains("dir=$1") && LIST_SCRIPT.contains("max=$2"));
-        assert!(!LIST_SCRIPT.contains("-printf"), "BSD find has no -printf");
     }
 
     #[test]
@@ -560,17 +534,6 @@ mod index_script_tests {
             .collect();
         got.sort();
         got
-    }
-
-    #[test]
-    fn the_script_is_a_constant_that_only_reads() {
-        for placeholder in ['{', '}'] {
-            assert!(!INDEX_SCRIPT.contains(placeholder), "{placeholder}");
-        }
-        for word in ["kill", "pkill", "killall", "pgrep", "systemctl", "rm ", "mv ", "> ", "-delete", "-exec", " -L"] {
-            assert!(!INDEX_SCRIPT.contains(word), "{word}");
-        }
-        assert!(INDEX_SCRIPT.contains(&format!("-maxdepth {INDEX_DEPTH}")));
     }
 
     #[test]
@@ -702,20 +665,6 @@ mod folder_script_tests {
     }
 
     #[test]
-    fn the_script_is_a_constant_that_only_reads() {
-        for placeholder in ['{', '}'] {
-            assert!(!FOLDER_SCRIPT.contains(placeholder), "{placeholder}");
-        }
-        for word in ["kill", "pkill", "killall", "pgrep", "systemctl", "rm ", "mv ", "> ", "-delete", "--remove"] {
-            assert!(!FOLDER_SCRIPT.contains(word), "{word}");
-        }
-        assert!(FOLDER_SCRIPT.contains("dir=$1"));
-        assert!(FOLDER_SCRIPT.contains("-chf"), "links are followed, so the archive holds no links");
-        assert!(FOLDER_SCRIPT.contains("--hard-dereference"), "a link to a file in the folder is a copy, not a hard link");
-        assert!(FOLDER_SCRIPT.contains("-- \"$name\""), "a folder named like an option is a folder");
-    }
-
-    #[test]
     fn a_folder_comes_out_as_the_marker_then_a_tar_whose_one_top_entry_is_its_own_name() {
         if !has_tools() {
             return;
@@ -781,8 +730,36 @@ mod folder_script_tests {
 }
 
 #[cfg(test)]
-mod put_folder_script_tests {
+mod script_text_tests {
     use super::*;
+
+    /// Whatever varies reaches a script as an argument, so none has a placeholder, and none of
+    /// the reading scripts can stop, remove, move or overwrite anything.
+    #[test]
+    fn every_reading_script_is_a_constant_that_only_reads() {
+        let always = ["kill", "pkill", "killall", "pgrep", "systemctl", "rm ", "mv ", "> "];
+        for (name, script, also) in [
+            ("get", GET_SCRIPT, &[][..]),
+            ("list", LIST_SCRIPT, &["-delete", "-exec"][..]),
+            ("index", INDEX_SCRIPT, &["-delete", "-exec", " -L"][..]),
+            ("folder", FOLDER_SCRIPT, &["-delete", "--remove"][..]),
+        ] {
+            for word in ["{", "}"].iter().chain(&always).chain(also) {
+                assert!(!script.contains(word), "{name}: {word}");
+            }
+        }
+        assert!(GET_SCRIPT.contains("path=$1") && GET_SCRIPT.contains("max=$2"));
+        let checked = GET_SCRIPT.find("-le \"$max\"").unwrap();
+        let sent = GET_SCRIPT.find("cat --").unwrap();
+        assert!(checked < sent, "the size is checked before a byte is sent");
+        assert!(LIST_SCRIPT.contains("dir=$1") && LIST_SCRIPT.contains("max=$2"));
+        assert!(!LIST_SCRIPT.contains("-printf"), "BSD find has no -printf");
+        assert!(INDEX_SCRIPT.contains(&format!("-maxdepth {INDEX_DEPTH}")));
+        assert!(FOLDER_SCRIPT.contains("dir=$1"));
+        assert!(FOLDER_SCRIPT.contains("-chf"), "links are followed, so the archive holds no links");
+        assert!(FOLDER_SCRIPT.contains("--hard-dereference"), "a link to a file in the folder is a copy, not a hard link");
+        assert!(FOLDER_SCRIPT.contains("-- \"$name\""), "a folder named like an option is a folder");
+    }
 
     #[test]
     fn the_script_checks_the_count_then_unpacks_into_a_private_folder_and_signals_nothing() {

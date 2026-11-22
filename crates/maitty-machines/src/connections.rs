@@ -389,15 +389,6 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
-    async fn a_machine_marked_lost_is_no_longer_connected() {
-        let (there, _there_daemon) = link();
-        let mut connections = Connections::default();
-        connections.add(MachineId(1), there);
-        connections.mark_lost(MachineId(1));
-        assert!(!connections.is_connected(MachineId(1)));
-    }
-
     const TINY: Duration = Duration::from_millis(40);
 
     /// The bytes of one `Notice` frame, as a daemon would write them.

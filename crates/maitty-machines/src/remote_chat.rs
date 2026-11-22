@@ -156,7 +156,7 @@ mod tests {
     }
 
     #[test]
-    fn a_side_answer_from_another_machine_is_cleaned_and_cut() {
+    fn only_a_side_answer_answers_a_side_question_and_it_is_cleaned_and_cut() {
         let long = format!("hi\x1b[2J\u{202e}\n{}", "é".repeat(SIDE_ANSWER_MAX_BYTES));
         let Ok(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text } }) =
             vet_side_answer(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text: long } })
@@ -167,6 +167,11 @@ mod tests {
         assert!(text.starts_with("hi"));
         assert!(text.contains('\n'));
         assert!(!text.chars().any(|c| c == '\x1b' || c == '\u{202e}'));
+        assert!(vet_side_answer(Reply::Ok).is_err(), "only a side answer answers a side question");
+        assert!(matches!(
+            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
+            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
+        ));
     }
 
     #[test]
@@ -193,35 +198,18 @@ mod tests {
     }
 
     #[test]
-    fn only_a_side_answer_answers_a_side_question() {
-        assert!(vet_side_answer(Reply::Ok).is_err());
-        assert!(matches!(
-            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
-            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
-        ));
-    }
-
-    #[test]
     fn chat_text_keeps_lines_and_tabs_and_loses_escapes_and_hidden_characters() {
         let said = "fn main() {\n\tprintln!(\"hi\");\x1b[31m\x07\u{202e}\n}\r\n";
         assert_eq!(clean_text(said), "fn main() {\n\tprintln!(\"hi\");[31m\n} \n");
-    }
-
-    #[test]
-    fn a_string_past_the_limit_is_cut() {
         let long = "a".repeat(CHAT_TEXT_MAX + 10);
-        assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX);
+        assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX, "a string past the limit is cut");
     }
 
     #[test]
-    fn the_names_in_an_answer_are_cleaned_too() {
+    fn every_string_and_name_in_an_answer_is_cleaned_wherever_it_sits() {
         let mut value = serde_json::json!({ "input": { "pa\u{202e}th\x1b": "x" } });
         clean(&mut value, &mut 0).unwrap();
         assert_eq!(value, serde_json::json!({ "input": { "path": "x" } }));
-    }
-
-    #[test]
-    fn every_string_in_an_answer_is_cleaned_wherever_it_sits() {
         let mut value = serde_json::json!({ "a": ["x\x1b[2Jy", { "b": "p\x07q" }], "n": 3 });
         clean(&mut value, &mut 0).unwrap();
         assert_eq!(value, serde_json::json!({ "a": ["x[2Jy", { "b": "pq" }], "n": 3 }));

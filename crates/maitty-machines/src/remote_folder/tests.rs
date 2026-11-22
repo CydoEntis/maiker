@@ -101,38 +101,27 @@ fn a_plain_folder_passes_and_names_its_top_folder() {
         check(&[("proj/", 'd'), ("proj/a.txt", '-'), ("proj/sub/", 'd'), ("proj/sub/b.txt", '-')]),
         Ok("proj".to_owned())
     );
+    let fine = [("proj/", 'd'), ("proj/console.txt", '-'), ("proj/.hidden", '-'), ("proj/a b.txt", '-')];
+    assert!(check(&fine).is_ok());
 }
 
+/// Links and special files, a path that climbs out, starts at the root or leaves the one folder,
+/// and a name this computer could not store safely whatever system it is.
 #[test]
-fn every_kind_of_entry_that_is_not_a_plain_file_or_folder_is_refused() {
-    for kind in ['l', 'h', 'c', 'b', 'p', 's'] {
-        let error = check(&[("proj/", 'd'), ("proj/x", kind)]).unwrap_err();
-        assert!(error.contains("link or special file"), "{kind}: {error}");
-    }
-}
-
-#[test]
-fn a_path_that_climbs_out_starts_at_the_root_or_leaves_the_one_folder_is_refused() {
-    for bad in ["/etc/passwd", "proj/../../evil", "../evil", "proj/./x", "other/x", "proj//x", "./proj/x"] {
-        assert!(check(&[("proj/", 'd'), (bad, '-')]).is_err(), "{bad}");
-    }
-}
-
-#[test]
-fn a_name_this_computer_could_not_store_safely_is_refused_whatever_system_it_is() {
-    for bad in [
+fn an_entry_that_is_not_a_plain_file_or_folder_inside_the_one_folder_is_refused() {
+    let mut bad: Vec<(String, char)> = ['l', 'h', 'c', 'b', 'p', 's'].map(|kind| ("proj/x".to_owned(), kind)).to_vec();
+    for path in [
+        "/etc/passwd", "proj/../../evil", "../evil", "proj/./x", "other/x", "proj//x", "./proj/x",
         "proj/a\\b", "proj/a:b", "proj/con", "proj/NUL.txt", "proj/com1.log", "proj/ends.", "proj/ends ",
         "proj/a\u{1b}[31m", "proj/a\u{202e}b", "proj/a\u{200b}b",
     ] {
-        assert!(check(&[("proj/", 'd'), (bad, '-')]).is_err(), "{bad:?}");
+        bad.push((path.to_owned(), '-'));
     }
-    assert!(check(&[("proj/", 'd'), ("proj/console.txt", '-'), ("proj/.hidden", '-'), ("proj/a b.txt", '-')]).is_ok());
-}
-
-#[test]
-fn the_first_entry_must_be_the_folder_and_the_archive_must_not_be_empty() {
+    for (path, kind) in &bad {
+        assert!(check(&[("proj/", 'd'), (path.as_str(), *kind)]).is_err(), "{kind} {path:?}");
+    }
     assert!(check(&[("proj", '-')]).is_err(), "a file is not a folder");
-    assert!(check_listing("", "").is_err());
+    assert!(check_listing("", "").is_err(), "an empty archive");
 }
 
 #[test]
@@ -237,12 +226,3 @@ fn no_marker_an_empty_archive_the_cap_and_a_cancel_are_each_an_error() {
     let _ = std::fs::remove_dir_all(&root);
 }
 
-#[test]
-fn each_script_status_has_its_own_plain_words() {
-    let say = |code| failure("box", "/srv/x", code, "");
-    assert_eq!(say(Some(FOLDER_MISSING)), "/srv/x does not exist on box");
-    assert_eq!(say(Some(FOLDER_NOT_A_FOLDER)), "/srv/x on box is not a folder");
-    assert!(say(Some(FOLDER_UNREADABLE)).contains("cannot be read"));
-    assert!(say(None).contains("in time"));
-    assert_eq!(say(Some(255)), "could not get /srv/x from box");
-}

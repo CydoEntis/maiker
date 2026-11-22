@@ -280,25 +280,27 @@ mod tests {
     }
 
     #[test]
-    fn a_folder_or_a_missing_path_is_refused_before_ssh_is_started() {
-        let folder = send_file(
-            &box_machine(),
-            "box",
-            &std::env::temp_dir(),
-            &Watch::default(),
-        );
+    fn the_wrong_kind_of_path_or_a_missing_one_is_refused_before_ssh_is_started() {
+        let machine = box_machine();
+        let folder = send_file(&machine, "box", &std::env::temp_dir(), &Watch::default());
         assert!(folder.unwrap_err().contains("is not a file"));
+        let file = std::env::temp_dir().join(format!("remote-send-folder-file-{}", std::process::id()));
+        std::fs::write(&file, b"x").unwrap();
+        let error = send_folder(&machine, "box", &file, &Watch::default()).unwrap_err();
+        let _ = std::fs::remove_file(&file);
+        assert!(error.contains("is not a folder"), "{error}");
         let nope = std::env::temp_dir().join("remote-send-no-such-file");
-        let missing = send_file(&box_machine(), "box", &nope, &Watch::default());
-        assert!(
-            missing
-                .unwrap_err()
-                .starts_with("could not read remote-send-no-such-file")
-        );
+        for missing in [
+            send_file(&machine, "box", &nope, &Watch::default()),
+            send_folder(&machine, "box", &nope, &Watch::default()),
+        ] {
+            let error = missing.unwrap_err();
+            assert!(error.starts_with("could not read"), "{error}");
+        }
     }
 
     #[test]
-    fn a_file_over_the_cap_is_refused_and_never_truncated() {
+    fn a_file_or_an_image_over_its_cap_is_refused_and_never_truncated() {
         let big = std::env::temp_dir().join(format!("remote-send-big-{}", std::process::id()));
         std::fs::File::create(&big)
             .unwrap()
@@ -306,25 +308,15 @@ mod tests {
             .unwrap();
         let error = send_file(&box_machine(), "box", &big, &Watch::default()).unwrap_err();
         let _ = std::fs::remove_file(&big);
-        assert!(
-            error.contains("more than the 100 MB that can be sent to box"),
-            "{error}"
-        );
-    }
-
-    #[test]
-    fn an_image_over_its_cap_is_refused_though_a_file_that_size_may_go() {
-        let big = std::env::temp_dir().join(format!("remote-send-image-{}", std::process::id()));
-        std::fs::File::create(&big)
+        assert!(error.contains("100 MB"), "{error}");
+        let image = std::env::temp_dir().join(format!("remote-send-image-{}", std::process::id()));
+        std::fs::File::create(&image)
             .unwrap()
             .set_len(MAX_PASTE_BYTES + 1)
             .unwrap();
-        let error = send_image(&box_machine(), "box", &big, "png", &Watch::default()).unwrap_err();
-        let _ = std::fs::remove_file(&big);
-        assert!(
-            error.contains("more than the 25 MB that can be sent to box"),
-            "{error}"
-        );
+        let error = send_image(&box_machine(), "box", &image, "png", &Watch::default()).unwrap_err();
+        let _ = std::fs::remove_file(&image);
+        assert!(error.contains("25 MB"), "an image has its own, smaller cap: {error}");
     }
 
     #[test]
@@ -344,18 +336,6 @@ mod tests {
             error.starts_with("sending the file to fly needs ssh"),
             "{error}"
         );
-    }
-
-    #[test]
-    fn a_file_or_a_missing_path_is_not_a_folder_and_nothing_is_run() {
-        let file = std::env::temp_dir().join(format!("remote-send-folder-file-{}", std::process::id()));
-        std::fs::write(&file, b"x").unwrap();
-        let machine = box_machine();
-        let error = send_folder(&machine, "box", &file, &Watch::default()).unwrap_err();
-        let _ = std::fs::remove_file(&file);
-        assert!(error.contains("is not a folder"), "{error}");
-        let nope = std::env::temp_dir().join("remote-send-folder-no-such");
-        assert!(send_folder(&machine, "box", &nope, &Watch::default()).unwrap_err().starts_with("could not read"));
     }
 
     #[test]
