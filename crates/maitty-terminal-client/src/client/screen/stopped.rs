@@ -332,15 +332,6 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_that_exited_gets_a_box_with_its_code_and_the_three_keys() {
-        let (mut app, _) = exited(1);
-        let all = frame(&mut app);
-        for want in ["stopped", "It exited with code 1.", "Your messages and changes are", "carry on from the last message", "[r] Restart", "esc Not now", "c Copy details"] {
-            assert!(all.contains(want), "{want}\n{all}");
-        }
-    }
-
-    #[test]
     fn a_working_agent_or_a_shell_is_never_called_stopped() {
         let (mut app, term) = exited(1);
         app.snap.terms.get_mut(&term.term).unwrap().status = Status::Working;

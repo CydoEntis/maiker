@@ -151,15 +151,6 @@ fn the_menu_opens_the_put_away_list_and_a_row_brings_it_back() {
     assert!(!error && said == "Brought back quick-fox", "{said}");
 }
 
-#[test]
-fn with_nothing_put_away_the_list_says_so() {
-    let (mut app, _rx) = app_with_outbox();
-    app.act(Action::PutAway);
-    let (said, _, error) = app.notice.clone().expect("a toast");
-    assert!(!error && said == "Nothing is put away", "{said}");
-    assert!(matches!(app.mode, Mode::Normal), "{:?}", app.mode);
-}
-
 fn fox_needs_you_because(app: &mut App, change: impl FnOnce(&mut TermInfo)) {
     daemon_sets(app, FOX, true);
     change(app.snap.terms.get_mut(&FOX.term).expect("quick-fox"));

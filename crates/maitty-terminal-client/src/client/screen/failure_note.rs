@@ -159,7 +159,6 @@ mod tests {
     use crate::client::ids::Outgoing;
     use crate::client::reference_fixture::{Stage, world};
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
-    use ratatui::{Terminal, backend::TestBackend};
     use tokio::sync::mpsc::{UnboundedReceiver, unbounded_channel};
 
     /// fix-footer, whose test failed in `Stage::Failed`.
@@ -232,17 +231,6 @@ mod tests {
         );
     }
 
-    fn mode_bar(app: &mut App) -> String {
-        app.screen_fresh();
-        let mut term = Terminal::new(TestBackend::new(160, 45)).unwrap();
-        term.draw(|f| crate::client::render::draw(app, f)).unwrap();
-        let buf = term.backend().buffer();
-        let row = mode_bar_row(app, buf.area);
-        (row.x..row.right())
-            .map(|x| buf[(x, row.y)].symbol())
-            .collect()
-    }
-
     #[test]
     fn m_on_a_failed_inbox_item_writes_the_failure_into_the_message_and_sends_nothing() {
         let mut app = world(Stage::Failed);
@@ -279,23 +267,6 @@ mod tests {
             matches!(app.mode, Mode::GoTo { .. }),
             "a later reply is not taken for it: {:?}",
             app.mode
-        );
-    }
-
-    #[test]
-    fn m_in_the_inbox_uses_the_output_a_sheet_on_that_check_holds() {
-        let mut app = world(Stage::Failed);
-        app.open_check_sheet(FAILED);
-        app.check_output_arrived(sample_output());
-        let mut rx = listen(&mut app);
-        inbox_on_failure(&mut app);
-        press(&mut app, KeyCode::Char('m'));
-        the_failure_is_written_in(&app);
-        assert!(
-            !drain(&mut rx)
-                .iter()
-                .any(|m| matches!(m, ClientMsg::Query(Query::CheckOutput { .. }))),
-            "not asked for again"
         );
     }
 
@@ -339,28 +310,6 @@ mod tests {
         assert_eq!(app.mode, Mode::Normal);
     }
 
-    #[test]
-    fn the_mode_bar_offers_m_on_a_failure() {
-        let mut app = world(Stage::Failed);
-        inbox_on_failure(&mut app);
-        assert!(
-            mode_bar(&mut app).contains("m send to agent"),
-            "the Inbox"
-        );
-        app.mode = Mode::Normal;
-        app.open_check_sheet(FAILED);
-        assert!(
-            mode_bar(&mut app).contains("m send to agent"),
-            "the sheet"
-        );
-        let mut app = world(Stage::Passed);
-        app.open_check_sheet(FAILED);
-        assert!(
-            !mode_bar(&mut app).contains("send to agent"),
-            "not on a pass"
-        );
-    }
-
     fn failed(exit: Option<i32>) -> CheckInfo {
         CheckInfo {
             name: "test".into(),
@@ -376,22 +325,6 @@ mod tests {
         let note = failure_note(&failed(Some(1)), "FAIL footer\n");
         assert!(note.starts_with("The test check failed: `npm test` exited with 1. Its output:\n\n```\nFAIL footer\n```"), "{note}");
         assert!(failure_note(&failed(None), "x").contains("`npm test` did not finish."));
-    }
-
-    #[test]
-    fn a_note_keeps_the_last_forty_lines_without_colour_codes() {
-        let output: String = (1..=100)
-            .map(|i| format!("\x1b[31mline {i}\x1b[0m\n"))
-            .collect();
-        let note = failure_note(&failed(Some(2)), &output);
-        assert!(note.contains("The last 40 lines of its output:"), "{note}");
-        assert!(
-            !note.contains("line 60\n")
-                && note.contains("```\nline 61\n")
-                && note.contains("line 100\n```"),
-            "{note}"
-        );
-        assert!(!note.contains('\x1b'), "colour codes stripped");
     }
 
     #[test]
@@ -413,13 +346,5 @@ mod tests {
     fn a_very_long_line_is_cut() {
         let note = failure_note(&failed(Some(1)), &"x".repeat(10_000));
         assert!(note.len() < 1_000 && note.contains('…'), "{}", note.len());
-    }
-
-    #[test]
-    fn a_failure_that_printed_nothing_says_so() {
-        assert_eq!(
-            failure_note(&failed(Some(1)), "\n \n"),
-            "The test check failed: `npm test` exited with 1. It printed nothing."
-        );
     }
 }

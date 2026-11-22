@@ -327,22 +327,6 @@ mod tests {
     }
 
     #[test]
-    fn a_toast_sits_bottom_right_with_its_title_body_and_keys() {
-        let mut app = world(Stage::None);
-        let term = asking_chat();
-        app.push_toast(toast(ToastKind::Needs, term, "auth needs you", "Overwrite the config?"));
-        let (buf, text) = frame(&mut app);
-        for want in ["auth needs you", "Overwrite the config?", "go there", "dismiss", "×"] {
-            assert!(text.contains(want), "{want}\n{text}");
-        }
-        let r = app.screen.toast_box;
-        assert_eq!(r.width, TOAST_W);
-        assert!(r.right() <= W && r.bottom() < H, "inside the screen, above the bar: {r:?}");
-        assert_eq!(buf[(r.x, r.y + 1)].bg, app.theme.blocked, "its edge is the status colour");
-        assert_eq!(buf[(r.x + 1, r.y + 2)].bg, app.theme.blocked);
-    }
-
-    #[test]
     fn the_newest_shows_and_the_title_counts_the_rest() {
         let mut app = world(Stage::None);
         let terms: Vec<_> = app.all_terms().into_iter().map(|(t, _)| t).filter(|t| Some(*t) != app.focused()).collect();

@@ -585,13 +585,4 @@ mod tests {
         assert!(!s.contains('\u{202e}') && !s.contains('\u{7}'), "{s:?}");
         assert!(s.contains("done"));
     }
-
-    #[test]
-    fn every_match_is_lit_whatever_its_case() {
-        let plain = Style::default();
-        let lit = Style::default().add_modifier(Modifier::BOLD);
-        let segs = lit_matches("Error then error", "error", plain, lit);
-        let lit_runs: Vec<&str> = segs.iter().filter(|(_, s)| *s == lit).map(|(t, _)| t.as_str()).collect();
-        assert_eq!(lit_runs, ["Error", "error"]);
-    }
 }

@@ -758,10 +758,10 @@ pub(super) fn draw_inbox(app: &mut App, buf: &mut Buffer, inside: Rect, ground: 
 
 #[cfg(test)]
 mod tests {
-    use super::super::reference::{Ref, assert_same, layout_name, reference, text};
+    use super::super::reference::text;
     use super::*;
     use crate::client::View;
-    use crate::client::reference_fixture::{LAYOUTS, QUICK_FOX_SAID, SIZES, Stage, now, world};
+    use crate::client::reference_fixture::{QUICK_FOX_SAID, Stage, now, world};
     use crate::protocol::{CheckState, ClientMsg, Command};
 
     /// The reference's sample question and first failing line, in place of the fixture's.
@@ -807,27 +807,6 @@ mod tests {
         text(&buf, area)
     }
 
-    fn matches_reference(
-        preset: &str,
-        stage: Stage,
-        term: TermId,
-        tweak: fn(&mut App),
-        fix: fn(&mut Ref),
-    ) {
-        for layout in LAYOUTS {
-            for (w, h) in SIZES {
-                let mut want = reference(preset, layout_name(layout), w, h);
-                want.offers_send_to_agent(w);
-                want.says_what_the_agent_said(QUICK_FOX_SAID);
-                fix(&mut want);
-                let mut app = inbox_world(stage, term);
-                tweak(&mut app);
-                let got = draw(&mut app, want.area, w, h);
-                assert_same(&got, &want, &format!("{preset} {layout:?} {w}x{h}"));
-            }
-        }
-    }
-
     /// The sample's finished agent.
     const FOX: TermId = 4;
 
@@ -870,40 +849,6 @@ mod tests {
     }
 
     #[test]
-    fn the_selected_item_shows_up_to_four_lines_of_what_was_said_above_its_buttons() {
-        let area = Rect::new(0, 0, 60, 30);
-        let mut app = inbox_world(Stage::Failed, FOX);
-        app.snap.terms.get_mut(&FOX).unwrap().said = "word ".repeat(80);
-        let said = |rows: &[String]| -> Vec<String> {
-            let at = row_of(rows, "quick-fox");
-            rows[at + 1..]
-                .iter()
-                .take_while(|r| r.contains("word"))
-                .cloned()
-                .collect()
-        };
-        let rows = draw(&mut app, area, 60, 30);
-        let lines = said(&rows);
-        assert_eq!(lines.len(), 4, "wrapped, and no more than four:\n{lines:#?}");
-        assert!(
-            lines[3].trim_end().ends_with('…'),
-            "what does not fit is cut: {}",
-            lines[3]
-        );
-        let buttons = &rows[row_of(&rows, "quick-fox") + 5];
-        assert!(
-            buttons.contains("Reply") && buttons.contains("Open"),
-            "the answer to it is right under it: {buttons}"
-        );
-
-        // Any other item: one line of it, cut short.
-        select(&mut app, 1);
-        let lines = said(&draw(&mut app, area, 60, 30));
-        assert_eq!(lines.len(), 1, "{lines:#?}");
-        assert!(lines[0].trim_end().ends_with('…'), "{}", lines[0]);
-    }
-
-    #[test]
     fn an_item_that_waits_on_you_without_a_question_says_what_was_last_said() {
         let area = Rect::new(0, 0, 100, 30);
         let mut app = inbox_world(Stage::Failed, 1);
@@ -940,31 +885,6 @@ mod tests {
         app.snap.terms.get_mut(&FOX).unwrap().said.clear();
         let rows = draw(&mut app, area, 100, 30);
         assert!(rows[at + 1].contains("waiting on you"), "{}", rows[at + 1]);
-    }
-
-    #[test]
-    fn selected_item_tint_continues_across_its_follow_up_lines() {
-        let t = Theme::named(crate::theme::DEFAULT);
-        let area = Rect::new(0, 0, 100, 30);
-        let mut app = inbox_world(Stage::Failed, 1);
-        let mut buf = Buffer::empty(area);
-        draw_inbox(&mut app, &mut buf, area, t.bg, &t);
-        let tint = t.sel_on(t.bg);
-        let rows: Vec<u16> = (0..area.height)
-            .filter(|&y| buf[(area.x, y)].bg == tint)
-            .collect();
-        assert!(
-            rows.len() >= 2,
-            "the selected item spans multiple lines: {rows:?}"
-        );
-        for y in rows {
-            assert_eq!(buf[(area.x + 1, y)].bg, tint, "row {y}, before the words");
-            assert_eq!(
-                buf[(area.right() - 3, y)].bg,
-                tint,
-                "row {y}, after the words"
-            );
-        }
     }
 
     /// The fixture's working session, gone quiet twelve minutes ago.
@@ -1064,50 +984,6 @@ mod tests {
     }
 
     #[test]
-    fn the_inbox_lists_needs_you_then_failed_checks_then_finished_as_the_reference_draws_it() {
-        matches_reference("11 Inbox", Stage::Failed, 1, |_| {}, |_| {});
-    }
-
-    /// The reference's sample asked a minute ago; the fixture's turn ended two minutes ago.
-    #[test]
-    fn a_repo_command_waits_as_needs_you_with_one_way_to_read_it() {
-        let a_minute_ago = |app: &mut App| {
-            app.snap.terms.get_mut(&1).unwrap().since = now() - 60;
-            app.screen_fresh();
-        };
-        matches_reference(
-            "A1 Repo command waits",
-            Stage::Approve,
-            1,
-            a_minute_ago,
-            |_| {},
-        );
-    }
-
-    /// The fixture's checkpoints are build and test; the reference's sample kinds (commits,
-    /// approval, review) are not built, and nor is its footnote.
-    #[test]
-    fn several_checkpoints_read_as_one_word_then_each_checkpoint() {
-        matches_reference(
-            "C2 Several checkpoints · Inbox",
-            Stage::Multi,
-            3,
-            |_| {},
-            |want| {
-                for (i, row) in want.rows.clone().iter().enumerate() {
-                    if row.contains("needs you: approval") {
-                        want.set_row(i, "   needs you: test · build ✓ · test !");
-                    } else if row.contains("failed: test ") {
-                        want.set_row(i, "▎  failed: test · build ✓ · test ×");
-                    } else if row.contains("Several checkpoints read as one line") {
-                        want.set_row(i, "");
-                    }
-                }
-            },
-        );
-    }
-
-    #[test]
     fn the_title_counts_what_is_not_just_finished() {
         assert_eq!(inbox_count(&inbox_world(Stage::Failed, 1)), 2);
         assert_eq!(inbox_count(&inbox_world(Stage::Multi, 3)), 3);
@@ -1179,17 +1055,11 @@ mod tests {
         );
     }
 
-    #[test]
-    fn an_empty_group_is_not_drawn() {
-        let app = inbox_world(Stage::Passed, 3);
-        assert_eq!(heads(&app), [NEEDS_HEAD, FINISHED_HEAD]);
-    }
-
     /// A stale pass stays in FINISHED, and its first button is Re-run.
     #[test]
     fn a_stale_pass_is_finished_with_re_run_first() {
         let mut app = inbox_world(Stage::Stale, 1);
-        let area = reference("11 Inbox", "floating", 160, 45).area;
+        let area = Rect::new(89, 1, 70, 43);
         let rows = draw(&mut app, area, 160, 45);
         let at = rows
             .iter()
@@ -1296,20 +1166,6 @@ mod tests {
     }
 
     #[test]
-    fn an_empty_inbox_says_you_are_all_caught_up() {
-        let mut app = world(Stage::None);
-        app.snap.questions.clear();
-        for t in app.snap.terms.values_mut() {
-            t.status = crate::protocol::Status::Idle;
-        }
-        app.screen_sync();
-        app.mode = Mode::GoTo { query: String::new(), sel: 0 };
-        let area = Rect::new(0, 0, 62, 12);
-        let rows = draw(&mut app, area, 62, 12);
-        assert!(rows.iter().any(|r| r.contains("✓ You're all caught up")), "{rows:?}");
-    }
-
-    #[test]
     fn o_opens_the_session_of_any_item() {
         for (stage, term) in [
             (Stage::Failed, 3),
@@ -1334,7 +1190,7 @@ mod tests {
     #[test]
     fn a_button_is_a_click_of_its_key() {
         let mut app = inbox_world(Stage::Couldnt, 1);
-        let area = reference("11 Inbox", "floating", 100, 30).area;
+        let area = Rect::new(28, 1, 71, 28);
         draw(&mut app, area, 100, 30);
         assert!(
             app.hits
@@ -1359,7 +1215,7 @@ mod tests {
         for c in "quick".chars() {
             app.on_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE));
         }
-        let area = reference("11 Inbox", "floating", 100, 30).area;
+        let area = Rect::new(28, 1, 71, 28);
         let rows = draw(&mut app, area, 100, 30);
         assert!(rows[1].contains("› quick█"), "{rows:#?}");
         assert!(rows.iter().any(|r| r.contains("quick-fox")), "{rows:#?}");

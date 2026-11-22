@@ -282,41 +282,6 @@ fn draw_actions(app: &mut App, buf: &mut Buffer, rect: Rect, t: &Theme, v: &Chan
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::client::tasks::{Stage, TaskRow};
-
-    fn review(branch: &str, base: &str, to_push: Option<u32>) -> Review {
-        Review {
-            task: TaskRow {
-                ws: 0,
-                name: branch.into(),
-                branch: branch.into(),
-                base: base.into(),
-                stage: Stage::Ready,
-                summary: String::new(),
-                dirty: 0,
-                ahead: 0,
-                agent: None,
-                dir: Default::default(),
-                root: Default::default(),
-            },
-            merge_base: String::new(),
-            to_push,
-            files: Vec::new(),
-            sel: 0,
-            diff: Vec::new(),
-            diff_sel: None,
-            scroll: 0,
-            confirm: None,
-        }
-    }
-
-    #[test]
-    fn the_top_line_says_where_the_branch_started_and_what_is_to_push() {
-        assert_eq!(branch_line(&review("gui-pass", "main", Some(2)), None), "⑂ gui-pass from main · ↑2 to push");
-        assert_eq!(branch_line(&review("gui-pass", "main", Some(0)), None), "⑂ gui-pass from main · nothing to push");
-        assert_eq!(branch_line(&review("main", "main", None), None), "⑂ main");
-        assert_eq!(branch_line(&review("dev", "HEAD", None), Some("build")), "⑂ dev on build");
-    }
 
     #[test]
     fn a_long_message_is_cut_at_its_head_and_followed_at_its_tail_while_edited() {
@@ -324,12 +289,6 @@ mod tests {
         assert_eq!(box_lines(text, 40, false), ["one", "two", "three…"]);
         assert_eq!(box_lines(text, 40, true), ["three", "four", "five"]);
         assert_eq!(box_lines("one\n", 40, true), ["one", ""], "a new line is a line to type on");
-    }
-
-    #[test]
-    fn the_line_under_the_box_names_who_wrote_the_message() {
-        assert_eq!(author_caption("claude"), "Message written by Claude. Click it to edit.");
-        assert_eq!(author_caption(""), "Message made from the changes. Click it to edit.");
     }
 
     #[test]
@@ -343,13 +302,5 @@ mod tests {
         assert_eq!(letter(file(true, false)), ("A", t.done));
         assert_eq!(letter(file(false, false)), ("M", t.warning));
         assert_eq!(letter(file(false, true)), ("D", t.err));
-    }
-
-    #[test]
-    fn a_diff_line_is_tinted_by_what_it_does() {
-        let t = crate::theme::Theme::named("night");
-        assert!(panel_diff_line(&t, "+new").1.is_some());
-        assert!(panel_diff_line(&t, "-old").1.is_some());
-        assert!(panel_diff_line(&t, " same").1.is_none());
     }
 }

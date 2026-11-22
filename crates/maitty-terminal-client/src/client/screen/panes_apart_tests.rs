@@ -118,49 +118,44 @@ fn bare_title_cell(app: &App, term: ClientTerm) -> (u16, u16) {
 }
 
 #[test]
-fn a_click_on_a_pane_s_title_row_takes_the_keys_from_the_sidebar_in_every_look() {
+fn a_click_on_a_pane_s_title_row_takes_the_keys_from_the_sidebar_or_a_side_panel_in_every_look() {
+    type Hold = fn(&mut App);
+    let holders: [(&str, Hold, bool); 2] = [
+        (
+            "the sidebar",
+            |app| app.screen_side_set(SideItem::Sess(ClientSession::local(SessionKey::Pane(1)))),
+            false,
+        ),
+        (
+            "a side panel",
+            |app| {
+                app.act(Action::Jump);
+                assert!(sheet_has_keys(app), "the Inbox has the keys");
+            },
+            true,
+        ),
+    ];
     for look in LOOKS {
-        let mut app = split_world(look, 2);
-        let other = app.screen.tabs[0].leaves()[1];
-        app.screen_side_set(SideItem::Sess(ClientSession::local(SessionKey::Pane(1))));
-        let (w, h) = wide(look);
-        draw(&mut app, w, h);
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        app.out = tx;
-        let (x, y) = bare_title_cell(&app, other);
-        click(&mut app, x, y);
-        assert_eq!(app.mode, Mode::Normal, "{look}: the sidebar lets go");
-        assert_eq!(
-            focused_by(&mut rx),
-            vec![other.term],
-            "{look}: the pane clicked is focused"
-        );
-    }
-}
-
-#[test]
-fn a_click_on_a_pane_s_title_row_takes_the_keys_from_a_side_panel_in_every_look() {
-    for look in LOOKS {
-        let mut app = split_world(look, 2);
-        let other = app.screen.tabs[0].leaves()[1];
-        app.act(Action::Jump);
-        assert!(sheet_has_keys(&app), "{look}: the Inbox has the keys");
-        let (w, h) = wide(look);
-        draw(&mut app, w, h);
-        let (tx, mut rx) = mpsc::unbounded_channel();
-        app.out = tx;
-        let (x, y) = bare_title_cell(&app, other);
-        click(&mut app, x, y);
-        assert!(
-            !sheet_has_keys(&app) && app.mode == Mode::Normal,
-            "{look}: the panel lets go: {:?}",
-            app.mode
-        );
-        assert_eq!(
-            focused_by(&mut rx),
-            vec![other.term],
-            "{look}: the pane clicked is focused"
-        );
+        for (what, hold, panel) in holders {
+            let mut app = split_world(look, 2);
+            let other = app.screen.tabs[0].leaves()[1];
+            hold(&mut app);
+            let (w, h) = wide(look);
+            draw(&mut app, w, h);
+            let (tx, mut rx) = mpsc::unbounded_channel();
+            app.out = tx;
+            let (x, y) = bare_title_cell(&app, other);
+            click(&mut app, x, y);
+            assert_eq!(app.mode, Mode::Normal, "{look}, {what}: lets go of the keys");
+            if panel {
+                assert!(!sheet_has_keys(&app), "{look}, {what}: the panel lets go");
+            }
+            assert_eq!(
+                focused_by(&mut rx),
+                vec![other.term],
+                "{look}, {what}: the pane clicked is focused"
+            );
+        }
     }
 }
 
@@ -203,88 +198,6 @@ fn closing_a_pane_hides_it_and_offers_undo_in_every_look() {
 }
 
 
-#[test]
-fn a_lone_session_asks_and_then_closes_and_the_banner_names_it() {
-    let mut app = split_world("floating", 1);
-    let focus = app.focused().expect("a focused pane");
-    draw(&mut app, 160, 45);
-    app.menu_act(crate::client::menu::Act::End(vec![focus]));
-    assert!(matches!(app.mode, Mode::Confirm(_)), "closing asks first");
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    let banner = app.closing_banner().expect("the undo offer");
-    assert!(
-        banner.text.starts_with("Closed fix-footer"),
-        "the banner names the session: {}",
-        banner.text
-    );
-}
-
-/// The cell that carries a pane's focus: its frame's top left corner.
-fn focus_cell(_look: &str, r: Rect) -> (u16, u16) {
-    (r.x, r.y)
-}
-
-#[test]
-fn the_focused_pane_stays_lit_under_a_menu_popover_or_confirm_in_every_look() {
-    type Open = fn(&mut App, ClientTerm, ClientTerm);
-    let overlays: [(&str, Open, bool); 3] = [
-        (
-            "the pane's menu",
-            |app, focus, _| app.menu_for_pane(focus, (60, 5)),
-            false,
-        ),
-        (
-            "the Menu",
-            |app, _, _| app.mode = Mode::Actions { sel: 0 },
-            true,
-        ),
-        ("the Updates box", |app, _, _| app.mode = Mode::Updates, true),
-    ];
-    for look in LOOKS {
-        for (what, open, dims) in overlays {
-            let mut app = split_world(look, 2);
-            let (w, h) = wide(look);
-            let before = draw(&mut app, w, h);
-            let [focus, other] = [0, 1].map(|i| app.screen.tabs[0].leaves()[i]);
-            let r = app
-                .screen
-                .leaf_rects
-                .iter()
-                .find(|(id, _)| *id == focus)
-                .map(|(_, r)| *r)
-                .expect("the pane is on screen");
-            let at = focus_cell(look, r);
-            let lit = before[at].fg;
-            open(&mut app, focus, other);
-            let buf = draw(&mut app, w, h);
-            let label = format!("{look}, {what}: {:?}", app.mode);
-            if dims {
-                let mut behind = before.clone();
-                let (area, t) = (behind.area, app.theme.clone());
-                dim_all(&mut app, &mut behind, area, &t);
-                assert_eq!(
-                    buf[at].fg, behind[at].fg,
-                    "{label}: the focus colour, dimmed with the rest"
-                );
-            } else {
-                assert_eq!(buf[at].fg, lit, "{label}: the focus colour as it was");
-            }
-            let o = app
-                .screen
-                .leaf_rects
-                .iter()
-                .find(|(id, _)| *id == other)
-                .map(|(_, r)| *r)
-                .expect("the other pane");
-            assert_ne!(
-                buf[at].fg,
-                buf[focus_cell(look, o)].fg,
-                "{label}: the focused pane still stands apart"
-            );
-        }
-    }
-}
-
 /// The pane menu of the focused pane in a split of two, drawn: the app and each item's row.
 fn pane_menu(app: &mut App) -> Vec<String> {
     draw(app, 160, 45);
@@ -325,25 +238,6 @@ fn key_of(app: &App, label: &str) -> String {
 
 fn press(app: &mut App, code: KeyCode, mods: KeyModifiers) {
     app.on_key(KeyEvent::new(code, mods));
-}
-
-#[test]
-fn the_pane_menu_shows_the_real_bound_keys() {
-    let mut app = split_world("floating", 2);
-    let rows = pane_menu(&mut app);
-    assert_eq!(key_of(&app, "Split right"), "s");
-    assert_eq!(key_of(&app, "Split down"), "S");
-    assert_eq!(key_of(&app, "Close pane"), "x");
-    let split = rows
-        .iter()
-        .find(|r| r.contains("Split right"))
-        .expect("drawn");
-    assert!(!split.contains(" h "), "the key isn't drawn: {split}");
-    let rename = key_of(&app, "Rename");
-    assert!(
-        rename.len() == 1 && !["-", "|", "x"].contains(&rename.as_str()),
-        "no binding: a letter of its own, clear of the bound keys: {rename}"
-    );
 }
 
 #[test]
@@ -414,14 +308,4 @@ fn a_bound_key_the_menu_moves_with_gives_way_to_a_letter() {
         "the letter runs it: {:?}",
         app.mode
     );
-}
-
-#[test]
-fn pressing_a_shown_key_runs_its_item() {
-    let mut app = split_world("floating", 2);
-    pane_menu(&mut app);
-    press(&mut app, KeyCode::Char('x'), KeyModifiers::NONE);
-    assert!(matches!(app.mode, Mode::Confirm(_)), "x asks to close this pane: {:?}", app.mode);
-    press(&mut app, KeyCode::Enter, KeyModifiers::NONE);
-    assert!(app.closing_banner().is_some(), "accepted, it closes with an undo: {:?}", app.mode);
 }

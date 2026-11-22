@@ -110,10 +110,10 @@ pixls, maiker) with fix-footer's check at one of its stages, on a pinned clock
 
 `client/screen/flat_tests.rs` holds the flat sidebar, the collapsed column, the status glyphs and the
 workspace frames to the v26 TUI design: it draws the sample world at 140×36, 100×30 or 200×40 with a
-`TestBackend` and asserts on rows, glyphs, colours and hit rects (`AGENT_SHOW=1 cargo test <name> --
---nocapture` prints a frame). The sheets' and popovers' insides are held to
-`client/screen/reference.txt` and `client/screen/check_modals_frames.txt`, fixed fixtures; update them by
-hand, in the same change, only when the design itself changes; never to make a failing test pass.
+`TestBackend` and asserts on what a person relies on: the right row, status mark or state, a click
+target, nothing cut or overlapping at small sizes (`AGENT_SHOW=1 cargo test <name> -- --nocapture`
+prints a frame). No test compares a layout with a saved frame; a new test asserts the behaviour, not
+the look (see *what earns a test*).
 
 The website's screenshots are real frames: `client/site_frames.rs` draws made-up app states
 (hero, grid, changes, files, inbox, the four looks, shortcut mode, the splash) in `night` and

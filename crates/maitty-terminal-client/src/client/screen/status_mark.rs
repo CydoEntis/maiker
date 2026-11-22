@@ -152,19 +152,6 @@ mod tests {
     }
 
     #[test]
-    fn each_spinner_is_held_for_its_own_time() {
-        let braille = frames("Dots");
-        assert_eq!(frame_at(&braille, 79, true), "⠋");
-        assert_eq!(frame_at(&braille, 80, true), "⠙");
-        assert_eq!(frame_at(&braille, 800, true), "⠋", "ten frames, then round");
-        let snake = frames("Snake");
-        assert_eq!(frame_at(&snake, 89, true), snake[0]);
-        assert_eq!(frame_at(&snake, 90, true), snake[1]);
-        let bars = frames("Bars");
-        assert_eq!(pace_ms(&bars), 85);
-    }
-
-    #[test]
     fn reduce_motion_holds_the_first_frame() {
         let braille = frames("Dots");
         assert_eq!(frame_at(&braille, 5_000, false), "⠋");

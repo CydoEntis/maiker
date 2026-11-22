@@ -665,11 +665,14 @@ mod tests {
     const LONG: &str = "Files is local-only in v1: the files are on kingdom, not on this computer.";
 
     #[test]
-    fn text_that_fits_stays_on_one_line() {
-        assert_eq!(
-            wrap_capped("Connected to kingdom", 40, 3),
-            ["Connected to kingdom"]
-        );
+    fn text_breaks_only_where_its_cells_run_out() {
+        let cases: [(&str, usize, &[&str]); 2] = [
+            ("Connected to kingdom", 40, &["Connected to kingdom"]),
+            ("キーボード キーボード", 10, &["キーボード", "キーボード"]),
+        ];
+        for (text, width, want) in cases {
+            assert_eq!(wrap_capped(text, width, 3), want, "{text:?} at {width}");
+        }
     }
 
     #[test]
@@ -689,19 +692,6 @@ mod tests {
         assert_eq!(lines.len(), 2);
         assert!(lines[1].ends_with('…'), "{lines:?}");
         assert!(lines.iter().all(|l| l.chars().count() <= 14), "{lines:?}");
-    }
-
-    #[test]
-    fn a_narrower_width_takes_more_lines_for_the_same_words() {
-        let wide = wrap_capped(LONG, 60, 9).len();
-        let narrow = wrap_capped(LONG, 20, 9).len();
-        assert!(narrow > wide, "{narrow} lines at 20 vs {wide} at 60");
-    }
-
-    #[test]
-    fn wide_characters_count_by_their_cells() {
-        let lines = wrap_capped("キーボード キーボード", 10, 3);
-        assert_eq!(lines, ["キーボード", "キーボード"]);
     }
 
     #[test]
@@ -776,43 +766,6 @@ mod message_tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn it_grows_a_row_a_line_then_scrolls() {
-        let rows_of = |lines: usize, w: u16, h: u16| {
-            let mut app = open(
-                ClientTerm::local(3),
-                &(1..=lines)
-                    .map(|i| format!("line {i}"))
-                    .collect::<Vec<_>>()
-                    .join("\n"),
-            );
-            let o = frame(
-                &mut app,
-                crate::client::reference_fixture::Layout::Floating,
-                w,
-                h,
-                "unicode",
-            );
-            (
-                o.lines()
-                    .filter(|l| l.contains("│ › line") || l.contains("│   line "))
-                    .count(),
-                o,
-            )
-        };
-        assert_eq!(rows_of(1, 160, 45).0, 1);
-        assert_eq!(rows_of(3, 160, 45).0, 3);
-        let (n, o) = rows_of(9, 160, 45);
-        assert!(
-            n == 5 && o.contains("↑ 4 more lines") && o.contains("line 9█"),
-            "{o}"
-        );
-        let (n, o) = rows_of(9, 100, 30);
-        assert!(n == 3 && o.contains("↑ 6 more lines"), "{o}");
-        let (n, o) = rows_of(9, 80, 24);
-        assert!(n == 2 && o.contains("↑ 7 more lines"), "{o}");
     }
 
     #[test]

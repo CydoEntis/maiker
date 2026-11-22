@@ -19,15 +19,16 @@ mod tests {
     use super::fuzzy_indices;
 
     #[test]
-    fn letters_match_in_order_and_ignoring_case() {
-        assert_eq!(fuzzy_indices("spld", "Split down"), Some(vec![0, 1, 2, 6]));
-        assert_eq!(fuzzy_indices("SD", "split down"), Some(vec![0, 6]));
-        assert_eq!(fuzzy_indices("", "anything"), Some(vec![]));
-    }
-
-    #[test]
-    fn a_letter_out_of_order_or_missing_does_not_match() {
-        assert_eq!(fuzzy_indices("ds", "split down"), None);
-        assert_eq!(fuzzy_indices("xyz", "split down"), None);
+    fn letters_match_only_in_order_and_ignoring_case() {
+        let cases: [(&str, &str, Option<Vec<usize>>); 5] = [
+            ("spld", "Split down", Some(vec![0, 1, 2, 6])),
+            ("SD", "split down", Some(vec![0, 6])),
+            ("", "anything", Some(vec![])),
+            ("ds", "split down", None),
+            ("xyz", "split down", None),
+        ];
+        for (query, text, want) in cases {
+            assert_eq!(fuzzy_indices(query, text), want, "{query:?} in {text:?}");
+        }
     }
 }

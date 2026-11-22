@@ -90,47 +90,29 @@ mod tests {
     }
 
     #[test]
-    fn m_and_f_open_the_sidebar_menus_and_stay_off_the_pane() {
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::Char('m'), KeyModifiers::NONE);
-        assert!(matches!(&app.mode, Mode::ScreenMenu(m) if m.title == "menu"));
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::Char('f'), KeyModifiers::NONE);
-        assert!(matches!(&app.mode, Mode::ScreenMenu(m) if m.title == "sidebar"));
-    }
-
-    #[test]
-    fn question_mark_opens_the_keys_and_n_starts_a_chat() {
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::Char('?'), KeyModifiers::SHIFT);
-        assert!(!matches!(app.mode, Mode::Side), "the keys list took over");
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::Char('n'), KeyModifiers::NONE);
-        assert!(!matches!(app.mode, Mode::Side), "the new-chat picker took over");
-    }
-
-    #[test]
-    fn del_asks_before_closing_the_row() {
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::Delete, KeyModifiers::NONE);
-        assert!(matches!(&app.mode, Mode::Confirm(c) if matches!(c.act, Act::End(_))));
-    }
-
-    #[test]
-    fn shift_f10_opens_the_chat_menu_of_the_row() {
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::F(10), KeyModifiers::SHIFT);
-        let Mode::ScreenMenu(m) = &app.mode else {
-            panic!("a menu, got {:?}", app.mode);
-        };
-        let labels: Vec<&str> = m.items.iter().map(|(l, _)| l.as_str()).collect();
-        assert!(labels.contains(&"Rename…") && labels.contains(&"Close chat"), "{labels:?}");
-    }
-
-    #[test]
-    fn f2_renames_the_row_in_place() {
-        let mut app = on_a_row();
-        press(&mut app, KeyCode::F(2), KeyModifiers::NONE);
-        assert!(matches!(app.mode, Mode::Prompt { .. }));
+    fn each_sidebar_key_opens_what_it_names_and_del_asks_before_closing() {
+        type Opened = fn(&Mode) -> bool;
+        let cases: [(KeyCode, KeyModifiers, Opened, &str); 7] = [
+            (KeyCode::Char('m'), KeyModifiers::NONE, |m| matches!(m, Mode::ScreenMenu(s) if s.title == "menu"), "m: the menu"),
+            (KeyCode::Char('f'), KeyModifiers::NONE, |m| matches!(m, Mode::ScreenMenu(s) if s.title == "sidebar"), "f: the sidebar menu"),
+            (KeyCode::Char('?'), KeyModifiers::SHIFT, |m| !matches!(m, Mode::Side), "?: the keys list takes over"),
+            (KeyCode::Char('n'), KeyModifiers::NONE, |m| !matches!(m, Mode::Side), "n: the new-chat picker takes over"),
+            (KeyCode::Delete, KeyModifiers::NONE, |m| matches!(m, Mode::Confirm(c) if matches!(c.act, Act::End(_))), "del: asks before closing the row"),
+            (
+                KeyCode::F(10),
+                KeyModifiers::SHIFT,
+                |m| {
+                    matches!(m, Mode::ScreenMenu(s)
+                        if s.items.iter().any(|(l, _)| l == "Rename…") && s.items.iter().any(|(l, _)| l == "Close chat"))
+                },
+                "shift+F10: the row's chat menu",
+            ),
+            (KeyCode::F(2), KeyModifiers::NONE, |m| matches!(m, Mode::Prompt { .. }), "F2: renames the row in place"),
+        ];
+        for (code, mods, opened, what) in cases {
+            let mut app = on_a_row();
+            press(&mut app, code, mods);
+            assert!(opened(&app.mode), "{what}: {:?}", app.mode);
+        }
     }
 }

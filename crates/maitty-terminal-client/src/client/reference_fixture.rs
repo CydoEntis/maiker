@@ -557,68 +557,6 @@ pub(super) fn raw_text(app: &mut App, layout: Layout, w: u16, h: u16, glyphs: &s
         .collect()
 }
 
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_world_holds_the_reference_s_sessions_and_fix_footer_s_check() {
-        let app = world(Stage::Failed);
-        let names: Vec<&str> = app.snap.terms.values().map(|t| t.label.as_str()).collect();
-        assert_eq!(
-            names,
-            [
-                "fix-footer",
-                "add-payments",
-                "warm-finch",
-                "quick-fox",
-                "old-moth"
-            ]
-        );
-        let footer = &app.snap.terms[&1];
-        let check = footer.check().expect("a check");
-        assert_eq!(
-            (
-                check.name.as_str(),
-                check.command.as_str(),
-                check.state,
-                check.exit_code
-            ),
-            ("test", "npm test", CheckState::Failed, Some(1))
-        );
-        assert_eq!(
-            (
-                crate::clock::local_hms(check.started_at),
-                crate::clock::local_hm(now())
-            ),
-            ("14:22:05".to_string(), "14:24".to_string())
-        );
-        assert_eq!(super::super::screen::age(footer.since), "2m");
-        let multi = world(Stage::Multi);
-        let names = |id: TermId| {
-            multi.snap.terms[&id]
-                .checks
-                .iter()
-                .map(|c| (c.name.clone(), c.state))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            names(1),
-            [
-                ("build".to_string(), CheckState::Passed),
-                ("test".to_string(), CheckState::Failed)
-            ]
-        );
-        assert_eq!(
-            names(2),
-            [
-                ("build".to_string(), CheckState::Passed),
-                ("test".to_string(), CheckState::NeedsApproval)
-            ]
-        );
-        assert!(world(Stage::None).snap.terms[&1].checks.is_empty());
-    }
-}
-
 /// `app` drawn in `layout` at `w`×`h` with the `glyphs` set (`unicode`, `ascii`, `nerd`), as
 /// text: one line per row, trailing spaces trimmed, a wide character as its first cell.
 /// `<APP>_SHOW=1` prints it under a heading.

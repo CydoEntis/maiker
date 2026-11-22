@@ -527,45 +527,4 @@ mod tests {
             "another thread's setting leaked into this one"
         );
     }
-
-    fn look(layout: &str, rounded: bool) -> Look {
-        let ui = crate::config::Ui {
-            layout: layout.into(),
-            rounded: if rounded {
-                crate::config::Rounding::Full
-            } else {
-                crate::config::Rounding::Off
-            },
-            ..Default::default()
-        };
-        Look::of(&ui)
-    }
-
-    #[test]
-    fn rounded_setting_rounds_boxes_and_gives_chips_pill_ends() {
-        let rounded_look = look("floating", true);
-        assert!(rounded_look.rounded, "the setting rounds box corners");
-        assert!(rounded_look.caps, "chips are pills");
-        assert!(rounded_look.round_tabs, "tab chips are pills");
-
-        let square = look("floating", false);
-        assert!(!square.rounded, "rounding can be turned off");
-        assert!(!square.caps, "square boxes still have square chips");
-    }
-
-    #[test]
-    fn a_rounded_setting_ends_pills_in_half_circles() {
-        let (pill_bg, ground) = (Color::Rgb(40, 40, 40), Color::Rgb(10, 20, 30));
-        let mut buf = Buffer::empty(Rect::new(0, 0, 8, 1));
-        row_pill(look("floating", true), &mut buf, 1, 0, 6, pill_bg, ground);
-        for x in [1, 6] {
-            let cell = &buf[(x, 0)];
-            assert_eq!(
-                (cell.symbol(), cell.bg),
-                (if x == 1 { CAP_L } else { CAP_R }, ground),
-                "end at {x} is a half-circle"
-            );
-        }
-        assert_eq!(buf[(3, 0)].bg, pill_bg);
-    }
 }

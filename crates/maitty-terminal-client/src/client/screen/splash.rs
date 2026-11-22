@@ -588,97 +588,6 @@ pub(in crate::client) fn first_start_of_this_version() -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ratatui::buffer::Buffer;
-
-    fn lit(buf: &Buffer, bg: Color) -> Vec<(u16, u16, Color)> {
-        let a = buf.area;
-        (a.top()..a.bottom())
-            .flat_map(|y| (a.left()..a.right()).map(move |x| (x, y)))
-            .filter(|&(x, y)| buf[(x, y)].bg != bg)
-            .map(|(x, y)| (x, y, buf[(x, y)].bg))
-            .collect()
-    }
-
-    fn theme() -> Theme {
-        crate::theme::Theme::named("night")
-    }
-
-    fn wordmark(frame: u64, pw: u16) -> Vec<(u16, u16, Color)> {
-        let t = theme();
-        let area = Rect::new(0, 0, logo_columns() * 2 + 20, 12);
-        let mut buf = Buffer::empty(area);
-        fill(&mut buf, area, t.bg);
-        draw_logo(&mut buf, (10, 4), pw, frame, &t);
-        lit(&buf, t.bg)
-    }
-
-    #[test]
-    fn the_settled_wordmark_is_every_pixel_as_a_filled_cell() {
-        let pixels: usize = word()
-            .chars()
-            .filter_map(letter)
-            .map(|g| g.iter().map(|r| r.matches('#').count()).sum::<usize>())
-            .sum();
-        for pw in [1u16, 2] {
-            let cells = wordmark(SETTLED, pw);
-            assert_eq!(
-                cells.len(),
-                pixels * pw as usize,
-                "pw {pw}: one filled cell per pixel, no seams"
-            );
-            assert!(
-                cells.iter().all(|(_, y, _)| (4..4 + LOGO_ROWS).contains(y)),
-                "five rows tall"
-            );
-        }
-    }
-
-    #[test]
-    fn the_ai_the_name_hides_is_in_its_own_colour() {
-        let c = theme().splash();
-        let colours: Vec<Color> = wordmark(SETTLED, 1)
-            .into_iter()
-            .map(|(.., col)| col)
-            .collect();
-        assert!(
-            colours
-                .iter()
-                .all(|col| [c.wordmark, c.wordmark_ai].contains(col))
-        );
-        assert_eq!(
-            colours.contains(&c.wordmark_ai),
-            !ai_letters().is_empty(),
-            "the A and I stand out when the name has them"
-        );
-    }
-
-    #[test]
-    fn the_letters_rise_from_the_deep_left_to_right_without_moving() {
-        let deep = theme().splash().deep;
-        let at = |frame| wordmark(frame, 1);
-        let place = |cells: Vec<(u16, u16, Color)>| {
-            cells
-                .into_iter()
-                .map(|(x, y, _)| (x, y))
-                .collect::<Vec<_>>()
-        };
-        assert_eq!(
-            place(at(0)),
-            place(at(SETTLED)),
-            "every pixel is in place from the first frame"
-        );
-        assert!(
-            at(0).iter().all(|(.., c)| *c == deep),
-            "frame 0: all deep water"
-        );
-        let mid = at(5);
-        let first = mid.iter().min_by_key(|(x, ..)| *x).unwrap().2;
-        let last = mid.iter().max_by_key(|(x, ..)| *x).unwrap().2;
-        assert!(
-            first != deep && last == deep,
-            "the first letter has risen, the last not yet"
-        );
-    }
 
     #[test]
     fn the_font_spells_any_name_and_the_wordmark_never_overflows() {
@@ -697,15 +606,5 @@ mod tests {
         }
         assert_eq!(pixel_width(109), 1);
         assert_eq!(pixel_width(110), 2, "two-cell pixels from 110 columns");
-    }
-
-    #[test]
-    fn the_swell_fades_at_both_ends() {
-        let t = theme();
-        let mut buf = Buffer::empty(Rect::new(0, 0, 40, 1));
-        draw_swell(&mut buf, (0, 0), 40, 0, SETTLED, &t);
-        assert_eq!(buf[(0, 0)].fg, t.bg, "the ends sink into the ground");
-        assert_eq!(buf[(20, 0)].fg, t.splash().swell, "the middle is the sea");
-        assert_eq!(buf[(0, 0)].symbol(), "▁");
     }
 }

@@ -71,8 +71,13 @@ fn an_inactive_worktree_comes_ticked_and_says_for_how_long() {
 }
 
 #[test]
-fn an_inactive_worktree_with_uncommitted_changes_is_not_ticked() {
-    assert!(!row("old-edit", standing(2, false, Some(30))).ticked);
+fn an_inactive_worktree_whose_work_would_be_lost_never_comes_ticked() {
+    for (name, s) in [
+        ("old-edit", standing(2, false, Some(30))),
+        ("old-detached", detached(standing(0, false, Some(30)))),
+    ] {
+        assert!(!row(name, s).ticked, "{name}");
+    }
 }
 
 #[test]
@@ -116,11 +121,6 @@ fn detached(standing: Standing) -> Standing {
         branch: None,
         ..standing
     }
-}
-
-#[test]
-fn an_inactive_detached_worktree_with_unmerged_commits_is_not_ticked() {
-    assert!(!row("old-detached", detached(standing(0, false, Some(30)))).ticked);
 }
 
 #[test]

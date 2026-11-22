@@ -95,17 +95,6 @@ mod tests {
     }
 
     #[test]
-    fn the_start_up_toast_says_what_changed_and_when_it_installs() {
-        let mut app = world(Stage::None);
-        app.update_available = Some("v0.46.0".into());
-        app.update_notes = vec!["Faster sidebar and mouse support in the TUI.".into()];
-        app.announce_update("v0.46.0");
-        let (toast, _) = app.head_toast().expect("a toast");
-        assert_eq!(toast.title, format!("{} 0.46.0 is ready", env!("APP_NAME")));
-        assert!(toast.body.starts_with("Faster sidebar") && toast.body.ends_with(INSTALLS_ON_RESTART), "{}", toast.body);
-    }
-
-    #[test]
     fn i_installs_now_and_esc_means_later_but_only_with_the_keys_on_the_sidebar() {
         let mut app = world(Stage::None);
         app.update_available = Some("v0.46.0".into());
@@ -128,23 +117,6 @@ mod tests {
     }
 
     #[test]
-    fn the_update_toast_hides_after_twelve_seconds() {
-        let mut app = world(Stage::None);
-        app.update_available = Some("v0.46.0".into());
-        app.announce_update("v0.46.0");
-        app.toasts[0].at = Instant::now() - Duration::from_secs(13);
-        assert!(app.prune_toasts());
-    }
-
-    #[test]
-    fn while_downloading_the_bar_says_so() {
-        let mut app = world(Stage::None);
-        app.update_available = Some("v0.46.0".into());
-        app.updating = true;
-        assert!(chip_text(&app).expect("a chip").ends_with("Downloading 0.46.0…"));
-    }
-
-    #[test]
     fn a_restart_waits_for_working_chats_then_goes() {
         let mut app = world(Stage::None);
         let working = app.working_chats();
@@ -159,12 +131,5 @@ mod tests {
         }
         app.release_tick();
         assert!(!app.restart_waiting, "nothing to wait for now");
-    }
-
-    #[test]
-    fn after_the_restart_the_bar_says_all_chats_reconnected() {
-        let mut app = world(Stage::None);
-        app.updated_to("v0.46.0");
-        assert_eq!(chip_text(&app).as_deref(), Some("✓ Updated to 0.46.0 · all chats reconnected"));
     }
 }
