@@ -217,17 +217,13 @@ mod tests {
     }
 
     #[test]
-    fn a_checkout_on_no_branch_is_neither_pulled_nor_pushed() {
+    fn a_checkout_on_no_branch_or_with_no_upstream_is_neither_pulled_nor_pushed() {
         let dir = crate::daemon::persist::scratch_dir();
         let (mine, _other) = shared(dir.path());
         git(&mine, &["checkout", "-q", "--detach"]);
         assert_eq!(sync(&mine, &GitRequest::Pull, LIMIT), Err("this checkout is on no branch, so there is nothing to pull".into()));
         assert_eq!(sync(&mine, &GitRequest::Push, LIMIT), Err("this checkout is on no branch, so there is nothing to push".into()));
-    }
 
-    #[test]
-    fn a_branch_with_no_upstream_says_so() {
-        let dir = crate::daemon::persist::scratch_dir();
         let alone = repository(dir.path(), "alone");
         assert_eq!(sync(&alone, &GitRequest::Pull, LIMIT), Err("main has no upstream to pull from".into()));
         assert_eq!(

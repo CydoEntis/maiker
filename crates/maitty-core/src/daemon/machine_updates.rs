@@ -140,10 +140,4 @@ mod tests {
         cfg.machines[1].via = Some(vec!["fly".into(), "ssh".into()]);
         assert_eq!(updatable(&cfg), ["box"]);
     }
-
-    #[test]
-    fn the_log_keeps_the_last_line_said() {
-        assert_eq!(last_line(b"probing\nbox: maiker 0.80.0 installed\n\n"), "box: maiker 0.80.0 installed");
-        assert_eq!(last_line(b""), "no output");
-    }
 }

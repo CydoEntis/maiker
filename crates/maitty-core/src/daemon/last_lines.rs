@@ -81,19 +81,11 @@ Want me to open the pull request?
     }
 
     #[test]
-    fn a_screen_with_no_input_line_gives_its_last_lines() {
+    fn a_screen_with_no_input_line_gives_its_last_lines_cut_and_an_empty_or_frame_only_one_nothing() {
         assert_eq!(of_screen("one\n\ntwo\nthree\n\nfour\n"), "two\nthree\nfour");
-    }
-
-    #[test]
-    fn an_empty_or_frame_only_screen_says_nothing() {
         assert_eq!(of_screen(""), "");
         assert_eq!(of_screen("╭────╮\n│    │\n╰────╯\n"), "");
-    }
-
-    #[test]
-    fn a_line_without_end_is_cut() {
         let long = "x".repeat(MOST_CHARS * 2);
-        assert_eq!(of_screen(&long).chars().count(), MOST_CHARS);
+        assert_eq!(of_screen(&long).chars().count(), MOST_CHARS, "a line without end is cut");
     }
 }

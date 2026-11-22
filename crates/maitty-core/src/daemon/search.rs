@@ -104,13 +104,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn escape_codes_and_title_sequences_are_not_part_of_the_text() {
+    fn escape_codes_are_not_part_of_the_text_and_a_carriage_return_starts_the_line_over() {
         let output = b"\x1b[1;32mgreen\x1b[0m word\r\n\x1b]0;a title\x07second line\n";
         assert_eq!(plain_lines(output), ["green word", "second line", ""]);
-    }
-
-    #[test]
-    fn a_carriage_return_starts_the_line_over_like_a_progress_bar() {
+        // Like a progress bar.
         assert_eq!(plain_lines(b"10%\r50%\r100% done\n")[0], "100% done");
     }
 

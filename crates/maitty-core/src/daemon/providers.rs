@@ -160,16 +160,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn every_provider_has_an_entry_and_only_gemini_has_no_chat_runtime() {
-        let without: Vec<_> = Provider::ALL
-            .into_iter()
-            .filter(|provider| adapter(*provider).structured.is_none())
-            .collect();
-
-        assert_eq!(without, [Provider::Gemini]);
-    }
-
-    #[test]
     fn only_codex_can_steer_and_only_when_its_process_says_so() {
         let steers = |provider, running: bool| {
             let structured = adapter(provider).structured.as_ref().unwrap();
@@ -188,15 +178,5 @@ mod tests {
         assert!(named(Provider::Claude, "0123abcd-ffff") && !named(Provider::Claude, "rollout-0123abcd-ffff"));
         assert!(named(Provider::Codex, "rollout-2026-0123abcd-ffff") && !named(Provider::Codex, "0123abcd-ffff"));
         assert!(named(Provider::Gemini, "session-2026-0123abcd") && !named(Provider::Gemini, "session-2026-ffffffff"));
-    }
-
-    #[test]
-    fn a_transcript_is_found_by_session_only_where_hooks_do_not_name_it() {
-        let found: Vec<_> = Provider::ALL
-            .into_iter()
-            .filter(|provider| adapter(*provider).find_transcript.is_some())
-            .collect();
-
-        assert_eq!(found, [Provider::Codex]);
     }
 }

@@ -842,18 +842,13 @@ mod tests {
     }
 
     #[test]
-    fn only_the_checks_that_failed_since_are_new() {
+    fn only_the_checks_that_failed_since_are_new_until_a_new_commit_makes_them_news_again() {
         let before = reading(|r| r.info.checks.failed = vec!["build".into()]);
         let after = reading(|r| r.info.checks.failed = vec!["build".into(), "lint".into()]);
         assert_eq!(
             diff(Some(&before), &after),
             [Change::ChecksFailed(vec!["lint".into()])]
         );
-    }
-
-    #[test]
-    fn a_new_commit_makes_a_still_failing_check_news_again() {
-        let before = reading(|r| r.info.checks.failed = vec!["build".into()]);
         let after = reading(|r| {
             r.head = "def".into();
             r.info.checks.failed = vec!["build".into()];

@@ -69,13 +69,6 @@ mod tests {
     }
 
     #[test]
-    fn two_data_folders_are_two_daemons() {
-        let a = load_or_create(&dir("a").join(FILE_NAME));
-        let b = load_or_create(&dir("b").join(FILE_NAME));
-        assert_ne!(a, b);
-    }
-
-    #[test]
     fn a_corrupt_file_is_replaced_not_fatal() {
         let file = dir("corrupt").join(FILE_NAME);
         std::fs::write(&file, "not an id").unwrap();

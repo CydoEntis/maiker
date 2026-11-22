@@ -293,7 +293,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_task_is_the_quoted_prompt_at_the_end_of_the_command() {
+    fn a_task_is_the_quoted_prompt_at_the_end_of_the_command_else_the_command_branch_or_a_shell() {
         assert_eq!(
             task_label(Some("claude 'fix the login bug'"), None),
             "fix the login bug"
@@ -316,10 +316,7 @@ mod tests {
             "a b c",
             "one line"
         );
-    }
-
-    #[test]
-    fn without_a_quoted_prompt_the_branch_then_the_command_then_a_shell() {
+        // Without a quoted prompt: the command, then the branch, then a shell.
         assert_eq!(task_label(Some("lazygit"), Some("feat-x")), "lazygit");
         assert_eq!(task_label(None, Some("feat-x")), "feat-x");
         assert_eq!(task_label(None, None), "a shell");

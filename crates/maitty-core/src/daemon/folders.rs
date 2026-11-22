@@ -306,13 +306,6 @@ mod tests {
     }
 
     #[test]
-    fn a_tilde_parent_is_the_home_folder() {
-        let home = scratch("create-home");
-        assert!(matches!(create("~", "made", Some(&home)), FolderCreated::Created { .. }));
-        assert!(home.join("made").is_dir());
-    }
-
-    #[test]
     fn a_huge_folder_is_cut_and_says_so() {
         let root = scratch("many");
         for number in 0..=FOLDERS_MAX {

@@ -79,23 +79,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn the_version_is_the_first_number_on_the_first_line() {
+    fn the_version_is_the_first_number_on_the_first_line_and_anything_else_is_none() {
         assert_eq!(version_in("2.1.0 (Claude Code)\n").as_deref(), Some("2.1.0"));
         assert_eq!(version_in("codex-cli 0.170.0\n").as_deref(), Some("0.170.0"));
         assert_eq!(version_in("\n\nv1.2.3\nsecond line 9.9.9").as_deref(), Some("1.2.3"));
         assert_eq!(version_in("opencode 0.1.0-beta.1").as_deref(), Some("0.1.0-beta.1"));
-    }
-
-    #[test]
-    fn a_line_without_a_version_number_gives_none() {
-        for none in ["", "   \n", "usage: agent [options]", "error: unknown flag"] {
+        // A line without a version number, or a version with markup, gives none.
+        for none in ["", "   \n", "usage: agent [options]", "error: unknown flag", "1.0.0<script>"] {
             assert_eq!(version_in(none), None, "{none:?}");
         }
-    }
-
-    #[test]
-    fn a_version_with_markup_is_not_shown() {
-        assert_eq!(version_in("1.0.0<script>"), None);
     }
 
     #[test]

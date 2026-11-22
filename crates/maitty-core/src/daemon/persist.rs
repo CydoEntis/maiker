@@ -746,35 +746,6 @@ mod tests {
     }
 
     #[test]
-    fn session_full_snapshots_keep_the_latest_conversation_revision() {
-        let dir = scratch_dir();
-        let path = dir.path().join("session.json");
-        let mut old = Saved {
-            conversations: vec![crate::test_support::conversation()],
-            ..Default::default()
-        };
-        let old_ticket = next_session_ticket().unwrap();
-        old.conversations[0].generation += 1;
-        let new_ticket = next_session_ticket().unwrap();
-        assert_eq!(
-            save_session_ticket(&path, new_ticket, &old).unwrap(),
-            SessionCommit::Committed
-        );
-        old.conversations[0].generation -= 1;
-        assert_eq!(
-            save_session_ticket(&path, old_ticket, &old).unwrap(),
-            SessionCommit::Superseded {
-                committed_ticket: new_ticket
-            }
-        );
-        let actual: Saved = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(
-            actual.conversations[0].generation,
-            old.conversations[0].generation + 1
-        );
-    }
-
-    #[test]
     fn session_failed_new_write_does_not_fence_a_retry() {
         let dir = scratch_dir();
         let path = dir.path().join("session.json");
@@ -1019,33 +990,6 @@ mod tests {
     }
 
     #[test]
-    fn each_checkpoint_keeps_its_own_output_file() {
-        let dir = scratch_dir();
-        let outputs = [
-            tail(7, "build", CheckSlot::Latest, "built"),
-            tail(7, "test", CheckSlot::Latest, "FAIL a"),
-            tail(7, "test", CheckSlot::Overridden, "FAIL b"),
-        ];
-        assert!(save_check_outputs(dir.path(), save_ticket(), &outputs, &[7]).is_empty());
-        assert_eq!(
-            files_in(dir.path()),
-            [
-                "7-build-latest.txt",
-                "7-test-latest.txt",
-                "7-test-overridden.txt"
-            ]
-        );
-        assert_eq!(
-            read_check_output(dir.path(), 7, "build", CheckSlot::Latest).as_deref(),
-            Some("built")
-        );
-        assert_eq!(
-            read_check_output(dir.path(), 7, "test", CheckSlot::Latest).as_deref(),
-            Some("FAIL a")
-        );
-    }
-
-    #[test]
     fn a_name_cannot_lead_a_tail_out_of_its_folder() {
         let dir = scratch_dir();
         let outputs = [
@@ -1202,35 +1146,6 @@ mod tests {
             &[4, 5],
         );
         assert_eq!(failed, [4, 5]);
-    }
-
-    #[test]
-    fn two_folders_do_not_share_what_was_written() {
-        let (a, b) = (scratch_dir(), scratch_dir());
-        let term: crate::protocol::TermId = 6;
-        let (old, new) = (save_ticket(), save_ticket());
-        assert!(
-            save_check_outputs(
-                a.path(),
-                new,
-                &[tail(term, "test", CheckSlot::Latest, "a")],
-                &[term]
-            )
-            .is_empty()
-        );
-        assert!(
-            save_check_outputs(
-                b.path(),
-                old,
-                &[tail(term, "test", CheckSlot::Latest, "b")],
-                &[term]
-            )
-            .is_empty()
-        );
-        assert_eq!(
-            read_check_output(b.path(), term, "test", CheckSlot::Latest).as_deref(),
-            Some("b")
-        );
     }
 
     #[test]

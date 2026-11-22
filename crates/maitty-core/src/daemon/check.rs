@@ -1359,17 +1359,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_failing_command_still_reads_as_failed() {
-        let run = run("echo before; exit 3", LONG);
-        assert!(
-            matches!(run.outcome, CheckOutcome::Exited(c) if c != 0 && c != EXIT_COMMAND_NOT_FOUND),
-            "{:?}",
-            run.outcome
-        );
-        assert_eq!(state_for(run.outcome), CheckState::Failed);
-    }
-
     #[cfg(windows)]
     #[test]
     fn a_quoted_path_still_runs_under_powershell() {

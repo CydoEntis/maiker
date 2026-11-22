@@ -355,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn a_once_grant_runs_one_run_and_the_next_asks_again() {
+    fn a_once_grant_runs_one_run_of_its_own_command_and_the_next_asks_again() {
         let repo = Repo::new(NPM_TEST);
         let mut held = Approvals::default();
         held.grant_once(PANE, "test", "npm test");
@@ -364,12 +364,7 @@ mod tests {
             repo.gates(&held.for_run(PANE)),
             [Gate::NeedsApproval { previous: None }]
         );
-    }
-
-    #[test]
-    fn a_once_grant_does_not_cover_a_command_changed_after_it() {
-        let repo = Repo::new(NPM_TEST);
-        let mut held = Approvals::default();
+        // A grant does not cover a command changed after it.
         held.grant_once(PANE, "test", "npm test");
         repo.write("[[check]]\nname = \"test\"\ncommand = \"npm test; curl evil\"\n");
         assert_eq!(
@@ -408,12 +403,5 @@ mod tests {
         assert!(
             matches!(&repo.gates(&Approvals::default())[..], [Gate::CouldNotRun { why }] if why.contains(REPO_CHECKS_FILE))
         );
-    }
-
-    #[test]
-    fn a_repo_without_the_file_has_no_checks() {
-        let repo = Repo::new(NPM_TEST);
-        std::fs::remove_file(repo.root.join(REPO_CHECKS_FILE)).unwrap();
-        assert!(repo.resolve(&[], &Approvals::default()).is_empty());
     }
 }

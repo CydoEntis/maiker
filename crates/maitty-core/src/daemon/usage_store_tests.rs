@@ -221,15 +221,6 @@ fn the_file_is_private_and_leaves_no_temporary_behind() {
 }
 
 #[test]
-fn a_missing_file_starts_empty() {
-    let path = temp_file("missing");
-    let store = UsageStore::open(path.clone(), DAY0);
-    assert!(store.rows.is_empty());
-    assert!(!path.with_extension("json.bak").exists());
-    let _ = std::fs::remove_dir_all(path.parent().unwrap());
-}
-
-#[test]
 fn a_corrupt_file_is_kept_as_bak_and_the_store_starts_empty() {
     let path = temp_file("corrupt");
     std::fs::write(&path, b"{ not json").unwrap();

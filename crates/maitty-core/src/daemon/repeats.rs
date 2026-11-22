@@ -70,45 +70,26 @@ mod tests {
     }
 
     #[test]
-    fn four_of_the_same_call_is_nothing_and_five_is_five() {
-        assert_eq!(run(&[7, 7, 7, 7]).repeats(), None);
-        assert_eq!(run(&[7, 7, 7, 7, 7]).repeats(), Some(5));
-    }
-
-    #[test]
-    fn it_grows_while_the_same_call_goes_on() {
-        assert_eq!(run(&[7; 6]).repeats(), Some(6));
-        assert_eq!(run(&[7; 12]).repeats(), Some(12));
-    }
-
-    #[test]
-    fn a_different_call_clears_it() {
-        assert_eq!(run(&[7, 7, 7, 7, 7, 8]).repeats(), None);
-    }
-
-    #[test]
-    fn five_of_one_call_after_others_counts_from_where_it_began() {
-        assert_eq!(run(&[1, 2, 3, 7, 7, 7, 7, 7]).repeats(), Some(5));
-    }
-
-    #[test]
-    fn two_calls_taking_turns_for_eight_calls_is_eight() {
+    fn one_call_over_and_over_or_two_taking_turns_repeats_past_its_threshold() {
         let turns = |n: usize| (0..n).map(|i| if i % 2 == 0 { 1 } else { 2 }).collect::<Vec<u64>>();
-        assert_eq!(run(&turns(7)).repeats(), None);
-        assert_eq!(run(&turns(8)).repeats(), Some(8));
-        assert_eq!(run(&turns(9)).repeats(), Some(9));
-    }
-
-    #[test]
-    fn taking_turns_breaks_when_a_third_call_comes() {
-        let mut calls: Vec<u64> = (0..8).map(|i| if i % 2 == 0 { 1 } else { 2 }).collect();
-        calls.push(3);
-        assert_eq!(run(&calls).repeats(), None);
-    }
-
-    #[test]
-    fn many_different_calls_are_never_a_repeat() {
-        assert_eq!(run(&(0..40).collect::<Vec<u64>>()).repeats(), None);
+        let mut third_breaks_turns = turns(8);
+        third_breaks_turns.push(3);
+        let cases: [(&str, Vec<u64>, Option<u32>); 11] = [
+            ("four of the same call is nothing", vec![7; 4], None),
+            ("five is five", vec![7; 5], Some(5)),
+            ("it grows while the same call goes on", vec![7; 6], Some(6)),
+            ("and on", vec![7; 12], Some(12)),
+            ("a different call clears it", vec![7, 7, 7, 7, 7, 8], None),
+            ("five after others counts from where it began", vec![1, 2, 3, 7, 7, 7, 7, 7], Some(5)),
+            ("seven taking turns is nothing", turns(7), None),
+            ("eight taking turns is eight", turns(8), Some(8)),
+            ("and grows", turns(9), Some(9)),
+            ("a third call breaks taking turns", third_breaks_turns, None),
+            ("many different calls are never a repeat", (0..40).collect(), None),
+        ];
+        for (what, calls, want) in cases {
+            assert_eq!(run(&calls).repeats(), want, "{what}");
+        }
     }
 
     #[test]

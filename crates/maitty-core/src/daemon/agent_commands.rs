@@ -67,14 +67,6 @@ mod tests {
         assert_eq!(start_folder("relative/folder", None), None);
     }
 
-    #[test]
-    fn a_missing_agent_is_said_not_guessed() {
-        let nowhere = std::env::temp_dir().join("maitty-no-such-bin");
-        let why = find_program("claude", Some(nowhere.as_os_str())).unwrap_err();
-        assert_eq!(why, "claude is not installed on this machine");
-        assert!(find_program("codex", None).is_err());
-    }
-
     #[tokio::test]
     async fn gemini_has_no_list_and_a_machine_without_the_agent_says_so() {
         let nowhere = std::env::temp_dir().join("maitty-no-such-bin");

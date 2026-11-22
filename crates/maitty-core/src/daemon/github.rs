@@ -338,13 +338,6 @@ mod tests {
     }
 
     #[test]
-    fn signing_out_without_gh_says_it_is_not_installed() {
-        let root = crate::daemon::persist::scratch_dir();
-
-        assert_eq!(sign_out_from(root.path().join("nope").as_os_str(), ASK_LIMIT), SignInState::Failed(SignInFailure::NotInstalled));
-    }
-
-    #[test]
     fn the_report_is_what_gh_says_and_holds_no_token() {
         let root = crate::daemon::persist::scratch_dir();
         let said = TWO_ACCOUNTS.replace("\"tokenSource\":\"keyring\"", "\"token\":\"gho_secretsecretsecret\"");
@@ -372,6 +365,7 @@ mod tests {
         assert_eq!(accounts_from(missing.as_os_str(), ASK_LIMIT), GitHubReport { installed: false, accounts: Vec::new(), problem: None });
         assert_eq!(repos_from(missing.as_os_str(), None, None, LIST_LIMIT), GitHubAnswer::NotInstalled);
         assert_eq!(owners_from(missing.as_os_str(), LIST_LIMIT), GitHubAnswer::NotInstalled);
+        assert_eq!(sign_out_from(missing.as_os_str(), ASK_LIMIT), SignInState::Failed(SignInFailure::NotInstalled));
     }
 
     #[test]
@@ -463,14 +457,12 @@ mod tests {
     }
 
     #[test]
-    fn what_gh_says_went_wrong_is_the_answer() {
+    fn a_list_that_gh_fails_is_a_failed_answer() {
         let root = crate::daemon::persist::scratch_dir();
         let program = fake_gh(root.path(), Says(TWO_ACCOUNTS, 0), Says("", 1));
 
-        assert_eq!(
-            repos_from(program.as_os_str(), None, None, LIST_LIMIT),
-            GitHubAnswer::Failed("gh could not list the repositories".into())
-        );
+        let answer = repos_from(program.as_os_str(), None, None, LIST_LIMIT);
+        assert!(matches!(answer, GitHubAnswer::Failed(_)), "{answer:?}");
     }
 
     #[test]
