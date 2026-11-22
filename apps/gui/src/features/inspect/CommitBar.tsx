@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { pullRequestOpened } from '@/data/pullRequestNews'
 import { commitAll, createPullRequest } from './api'
 import { commitTextFor } from './commitText'
 import { messageOf } from './useRepoQuery'
@@ -70,6 +71,7 @@ export function CommitBar({ folder, machine, term, suggested, files, chosen, eve
       const url = await createPullRequest(folder, machine, term)
       setPullRequest(url)
       onNotice('Pull request opened')
+      pullRequestOpened()
     })
   }
   const number = pullRequest === null ? null : pullNumber(pullRequest)

@@ -111,8 +111,10 @@
 .mx-sb-group.is-idle .mx-sb-helpers { margin-left: 40px; }
 .mx-sb-group.is-idle .mx-sb-item.is-nested .mx-sb-row { padding-left: 8px; }
 
-/* The foot: add a remote machine at the left, Settings at the right. */
+/* The foot: add a remote machine and pull requests at the left, Settings at the right. */
 .mx-sb-foot { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 10px; }
+/* How many pull requests need you, on the corner of the button. Quiet, not amber: it counts, the row in the surface says why. */
+.mx-sb-foot-count { position: absolute; top: 0; right: -3px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; font: 600 9px/13px var(--ui); text-align: center; color: var(--t1); background: var(--fg2); }
 
 /* The filter (`SidebarFilterMenu`): a project search, the projects (six rows, then they scroll), the machines, and Reset
    while anything is picked. */

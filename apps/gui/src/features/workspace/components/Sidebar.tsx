@@ -86,6 +86,8 @@ export type SidebarProps = {
   onOpenWorktree?: (id: string) => void
   onEndSession: (id: string) => void
   onOpenSettings: () => void
+  /** The foot's pull-request button: how many need the person across the opened projects, and what a press opens. */
+  pullRequests?: { needYou: number; onOpen: () => void } | undefined
   /** How far an install or update of each remote machine has got, by machine name, 0 to 100; absent when none runs. */
   updateProgress?: Readonly<Record<string, number>> | undefined
 }
@@ -290,12 +292,29 @@ function Expanded(props: SidebarProps) {
       <div className="mx-sb-foot">
         {/* The service's state is the title bar's chip, so the foot never says it a second time. */}
         <IconButton label="Add a remote machine" onClick={props.onAddMachine}><Icon name="serverPlus" /></IconButton>
+        {props.pullRequests && <PullRequestsButton {...props.pullRequests} />}
         <span className="mx-spacer" />
         <IconButton label="Settings" tip={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></IconButton>
       </div>
       <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={props.machines.some((head) => head.name !== null)} machines={props.machines} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} context={menu.context} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
+  )
+}
+
+/** `count` pull requests need the person, as the button's name and its badge's tooltip say it. */
+function needYouWords(count: number): string {
+  return count === 1 ? '1 pull request needs you' : `${String(count)} pull requests need you`
+}
+
+/** The foot's pull-request button. Its badge counts only the pull requests that need the person; with none it has no badge. */
+function PullRequestsButton({ needYou, onOpen }: { needYou: number; onOpen: () => void }) {
+  const waiting = needYou > 0
+  return (
+    <IconButton label={waiting ? `Pull requests, ${needYouWords(needYou)}` : 'Pull requests'} tip={waiting ? needYouWords(needYou) : 'Pull requests'} onClick={onOpen}>
+      <Icon name="pullRequest" />
+      {waiting && <span className="mx-sb-foot-count" aria-hidden="true">{needYou}</span>}
+    </IconButton>
   )
 }
 

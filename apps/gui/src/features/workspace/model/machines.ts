@@ -188,6 +188,15 @@ export const THIS_COMPUTER = 'this computer'
 /** This computer's header, which the sidebar shows even when there is no other machine. */
 export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, failure: null, fixCommand: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
 
+/**
+ * The number of the machine named `name` (null: this computer) when it can be asked something now, else null: a machine
+ * whose line is down, or one the window has not been told about.
+ */
+export function connectedMachine(heads: readonly MachineHead[], name: string | null): number | null {
+  if (name === null) return LOCAL_MACHINE
+  return heads.find((head) => head.name?.toLowerCase() === name.toLowerCase() && head.chip?.tone === 'ok')?.machine ?? null
+}
+
 function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): { nickname: string } | Record<string, never> {
   const nickname = nicknames[name.toLowerCase()]
   return nickname === undefined ? {} : { nickname }

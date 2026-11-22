@@ -63,6 +63,31 @@ const menuItems = () => screen.getAllByRole('menuitem').map((item) => {
   return spoken.textContent
 })
 
+describe('the foot\'s pull-request button', () => {
+  it('counts only the pull requests that need you, and opens the surface', async () => {
+    const onOpen = vi.fn()
+    show([session(1, 'Fix the cart total')], { pullRequests: { needYou: 2, onOpen } })
+
+    const button = screen.getByRole('button', { name: /^Pull requests, 2 pull requests need you$/ })
+    await userEvent.click(button)
+
+    expect(onOpen).toHaveBeenCalledOnce()
+  })
+
+  it('has no count when none needs you', () => {
+    show([session(1, 'Fix the cart total')], { pullRequests: { needYou: 0, onOpen: vi.fn() } })
+
+    expect(screen.getByRole('button', { name: 'Pull requests' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /need you|needs you$/ })).not.toBeInTheDocument()
+  })
+
+  it('is left off the rail, as the design draws it', () => {
+    show([session(1, 'Fix the cart total')], { mode: 'rail', pullRequests: { needYou: 1, onOpen: vi.fn() } })
+
+    expect(screen.queryByRole('button', { name: /^Pull requests/ })).not.toBeInTheDocument()
+  })
+})
+
 describe('the list', () => {
   it('lists the projects with something going on, the most urgent first, and each session with its status in its name', () => {
     show([session(1, 'Tidy up', { status: 'working', cwd: '/home/me/docs' }), session(2, 'Which key?', { status: 'needs-you' }), session(3, 'Shipped', { status: 'done' })])

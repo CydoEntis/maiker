@@ -47,7 +47,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
   inspectRefusal: string | null
   setInspectOpen: Dispatch<SetStateAction<boolean>>
   /** Opens the focused session's side panel on one surface. */
-  showPanelView: (view: 'changes' | 'files') => void
+  showPanelView: (view: 'changes' | 'files' | 'pulls') => void
   setFindOpen: Dispatch<SetStateAction<boolean>>
   setFocusMode: Dispatch<SetStateAction<boolean>>
   setShortcutsOpen: Dispatch<SetStateAction<boolean>>
@@ -107,6 +107,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       action('inspect', 'Show the side panel', () => { if (inspectRefusal !== null) toast.info(inspectRefusal); else setInspectOpen(true) }, keys('inspect')),
       action('show-changes', 'Show changes', () => { showPanelView('changes') }, keys('changes')),
       action('show-files', 'Show files', () => { showPanelView('files') }, keys('files')),
+      action('show-pull-requests', 'Show pull requests', () => { showPanelView('pulls') }),
       ...(focusedSession && !isChatSession(focusedSession.conversation) ? [action('new-worktree', 'New worktree', () => { runShortcut('new-worktree') }, keys('new-worktree'))] : []),
       action('find', 'Find in the pane or every session', () => { setFindOpen(true) }, keys('find')),
       action('fetch', 'Fetch the repository', () => { runShortcut('fetch') }, keys('fetch')),

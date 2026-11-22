@@ -561,7 +561,19 @@ The desktop window, unlike the terminal interface above, has one full-width foot
   entry in `SURFACES` (`surfaces.ts`: name, icon, letter, hint, whether it opens more than once) and its body in
   `WorkspaceSidePanel`'s switch. The strip is a `tablist` of `tab`s over one `tabpanel`; a tab's name is its
   accessible name even while only its icon shows. Anything outside the panel opens a surface through `openSurface`
-  (`useSidePanel.ts`), never by setting panel state itself. **A surface lists; it never shows a file.** Files and
+  (`useSidePanel.ts`), never by setting panel state itself. **Pull requests** (`features/pull-requests/`,
+  `components/ProjectPullRequests.tsx`): the window keeps one answer per opened project (`usePullRequestsState`, owned
+  by `useWorkspaceState`), read from the project's own machine (`api/pullRequests.ts`; a machine that is not connected
+  is left alone until it is back). **The window asks, and only while it is in front**: when it comes to the front,
+  every five minutes while it stays there, when a project is opened, when the surface comes up, on Try again, and
+  past the machine's kept list right after this window opens a pull request (`data/pullRequestNews.ts`). Behind
+  another window it asks nothing. Which pull requests need the person is the daemon's to say; the window only orders
+  (those first), counts and words them (`model.ts`), and a project that could not be listed counts as none, never a
+  guess. The sidebar foot's button carries that count in its accessible name ("Pull requests, 2 pull requests need
+  you") and opens the surface through `showPanelView('pulls')`; the palette's **Show pull requests** does the same.
+  A row is a button named by its title, number, branch, author and standing, and opens the address through
+  `followLink`. Each state that is not a list is a `status` with its one action, if it has one.
+  **A surface lists; it never shows a file.** Files and
   Changes open a file in the file pane through the `FileActions` the window hands them (`fileMenu.tsx`), which also
   carry the file's right-click menu, so a surface holds no viewer, no diff and no editor of its own. **Discarding a
   file's changes** is one of those actions (`onDiscard`), and all of it is `useDiscardFile.ts`: the question

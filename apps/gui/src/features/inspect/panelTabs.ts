@@ -5,12 +5,15 @@
  */
 
 /** Every kind of surface the panel can hold. A new kind is one name here and one entry in `surfaces.ts`. */
-export const SURFACE_KINDS = ['files', 'changes', 'terminal'] as const
+export const SURFACE_KINDS = ['files', 'changes', 'terminal', 'pulls'] as const
 
 export type SurfaceKind = (typeof SURFACE_KINDS)[number]
 
 /** The surfaces that read the session's repository, through one of its panes. */
 export type RepoSurfaceKind = 'files' | 'changes'
+
+/** The surfaces that open once for a session: anything outside the panel can open one and bring it forward. */
+export type SingleSurfaceKind = Exclude<SurfaceKind, 'terminal'>
 
 /** One tab. A surface that opens once has its kind as its id; a terminal's id is its session's. */
 export type PanelTab = { readonly kind: SurfaceKind; readonly id: string }

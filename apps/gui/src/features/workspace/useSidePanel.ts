@@ -1,7 +1,7 @@
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useState } from 'react'
 import { machineNameOf } from '@/api/machines'
 import type { AgentTerminals } from '@/data/agentTerminals'
-import { livePanel, openTab, tabOf, type PanelTabs, type RepoSurfaceKind } from '@/features/inspect/panelTabs'
+import { livePanel, openTab, tabOf, type PanelTabs, type SingleSurfaceKind } from '@/features/inspect/panelTabs'
 import { readPanelTabs, writePanelTabs, type SavedPanels } from '@/features/inspect/panelTabsStorage'
 import type { SessionView } from './model/session'
 
@@ -33,8 +33,8 @@ export function useSidePanel({ agentTerminals, sessionMap, setInspectOpen }: {
     setSaved((current) => withoutGone(current, sessionMap).set(sessionId, change(livePanel(current.get(sessionId), agentTerminals.get(sessionId) ?? []))))
   }, [sessionMap, agentTerminals])
 
-  /** Files or Changes for `sessionId`, in front, with the panel open: the one way anything outside the panel opens them. */
-  const openSurface = useCallback((sessionId: string, kind: RepoSurfaceKind) => {
+  /** Files, Changes or Pull requests for `sessionId`, in front, with the panel open: the one way anything outside the panel opens them. */
+  const openSurface = useCallback((sessionId: string, kind: SingleSurfaceKind) => {
     changePanel(sessionId, (panel) => openTab(panel, tabOf(kind)))
     setInspectOpen(true)
   }, [changePanel, setInspectOpen])

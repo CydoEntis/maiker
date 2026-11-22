@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import { toast } from '@/lib/toast'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
-import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
+import type { RepoSurfaceKind, SingleSurfaceKind } from '@/features/inspect/panelTabs'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { focusPane, type Layout } from './model/layout'
 import type { SessionView } from './model/session'
@@ -38,8 +38,8 @@ function panelRefusal(session: SessionView | undefined): string | null {
 export function useInspectActions({ focusedSession, setInspectOpen, openSurface, setTurnDiff, sessionMap, showSessionById, setLayout }: {
   focusedSession: SessionView | undefined
   setInspectOpen: Dispatch<SetStateAction<boolean>>
-  /** Opens the side panel on a session's Files or Changes. */
-  openSurface: (sessionId: string, kind: RepoSurfaceKind) => void
+  /** Opens the side panel on one of a session's surfaces. */
+  openSurface: (sessionId: string, kind: SingleSurfaceKind) => void
   setTurnDiff: Dispatch<SetStateAction<TurnDiff | null>>
   sessionMap: Map<string, SessionView>
   showSessionById: (sessionId: string) => void
@@ -91,7 +91,7 @@ export function useInspectActions({ focusedSession, setInspectOpen, openSurface,
     openSurface(sessionId, view)
   }, [sessionMap, setLayout, openSurface, setTurnDiff])
   // The focused session's panel on one surface, for the command palette: the title bar's button only shows and hides it.
-  const showPanelView = useCallback((view: RepoSurfaceKind) => {
+  const showPanelView = useCallback((view: SingleSurfaceKind) => {
     if (focusedSession === undefined) return
     if (inspectRefusal !== null) {
       toast.info(inspectRefusal)

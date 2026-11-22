@@ -18,6 +18,7 @@ import { terminalName } from '../model/terminalTabs'
 import { useDiscardFile } from '../useDiscardFile'
 import { useWorkspace } from '../workspaceContext'
 import { PanelTerminal } from './PanelTerminal'
+import { ProjectPullRequests } from './ProjectPullRequests'
 
 const loadTopFolder = (term: number) => repoTree(term, null)
 
@@ -94,6 +95,8 @@ export function WorkspaceSidePanel() {
     switch (tab.kind) {
       case 'terminal':
         return <PanelTerminal terminalId={tab.id} leaving={presence.leaving} />
+      case 'pulls':
+        return <ProjectPullRequests session={session} />
       case 'files':
       case 'changes':
         // With the service away nothing can be asked, and no terminal started either.

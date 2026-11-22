@@ -21,6 +21,7 @@ export const SURFACES: Readonly<Record<SurfaceKind, Surface>> = {
   files: { label: 'Files', icon: 'files', key: 'F', hint: 'Browse and open this project’s files', many: false },
   changes: { label: 'Changes', icon: 'gitChanges', key: 'D', hint: 'What this session changed, as diffs', many: false },
   terminal: { label: 'Terminal', icon: 'terminalBox', key: 'T', hint: 'A shell in this project, here in the panel', many: true },
+  pulls: { label: 'Pull requests', icon: 'pullRequest', key: 'P', hint: 'Open pull requests in this project', many: false },
 }
 
 /** The surface a typed letter opens among `offered`, or null. */

@@ -691,7 +691,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
   it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
   **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the palette's
-  New machine level, not Settings) and **Settings** at the right.
+  New machine level, not Settings), then **Pull requests**, and **Settings** at the right. The pull-request button
+  opens the side panel's Pull requests surface for the session in front. Its badge counts **only the pull requests
+  that need you**, across the opened projects: 13px tall on its top right corner, 9px 600, `--t1` on `--fg2` (quiet,
+  not amber: the row in the surface says why), and absent at zero or while nothing could be read. The rail has no
+  pull-request button.
   Hidden (the sidebar key, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
   `SidebarRail.tsx`) is 56px, padded 9px above and 10px below with 4px between its parts: the expand button on top,
@@ -1200,9 +1204,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   drags (300 to 640px, `panelWidth.ts`) and the width is remembered (a double-click goes back to 340). **While a file
   is open in the file pane it floats** instead (`model/filePane.ts`): over the right of the file pane, in the float
   material with the float's shadow, inside the frame's edges, so neither the file nor the chat is squeezed. Picking a
-  file does not hide it; the title bar's button does. It slides in and out over `--panel-in`/`--panel-out`. It holds **tabs of surfaces**, each session its own: **Files**, **Changes** and
-  **Terminal** (`surfaces.ts`; a further kind is one entry there, its name in `panelTabs.ts` and its body in
-  `WorkspaceSidePanel`). Files and Changes open once and come forward after that; every Terminal is a new shell in
+  file does not hide it; the title bar's button does. It slides in and out over `--panel-in`/`--panel-out`. It holds **tabs of surfaces**, each session its own: **Files**, **Changes**,
+  **Terminal** and **Pull requests** (`surfaces.ts`; a further kind is one entry there, its name in `panelTabs.ts` and its body in
+  `WorkspaceSidePanel`). Files, Changes and Pull requests open once and come forward after that; every Terminal is a new shell in
   the session's folder, named "Terminal", "Terminal 2". Its **34px header is the tab strip** (`tablist`, 2px apart,
   6px from the edge): the tab in front is its 14px icon, its name (12.5px 600) and a 16px ×, on `--t2`; the others
   are their icon alone in `--muted`, with the name as tooltip; each is 26px tall on `--r-control`. After the tabs
@@ -1212,12 +1216,23 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   terminal. Closing a terminal tab ends its shell, so it asks first (the confirm dialog's close-a-terminal kind);
   Close others asks once for all the terminals among them. **With no tab open** the panel shows the surface picker:
   "Open a surface" over one row per surface (icon, name 13px 500, a `--dim` 11.5px line saying what it is for, and
-  its letter in a 20px key cap), and the letters **F**, **D** and **T** open them while the picker or the + menu has
-  the keys (never with Ctrl, Alt or ⌘). A session of another machine is offered Files and Changes only. A chat with
+  its letter in a 20px key cap), and the letters **F**, **D**, **T** and **P** open them while the picker or the + menu has
+  the keys (never with Ctrl, Alt or ⌘). A session of another machine is offered every surface but Terminal. A chat with
   no terminal has no pane to read its folder through, so Files and Changes say so there and offer **Open a
   terminal**, which adds the tab behind them. Which tabs are open, which is in front and which terminals are pinned
   is remembered per session (`panelTabsStorage.ts`); whether the panel is open is the window's, and hiding it keeps
   the tabs and the shells.
+  **Pull requests** (`features/pull-requests/`, the design's `.prr`) lists the open pull requests of the session's
+  project, the ones that need you first: one row each on `--r-control`, padded 8px, a 16px status mark at the left
+  (needs you, working while checks run, done when it is ready; none otherwise), the title (13px 500, `--fg`), under it
+  `#number branch · author` in 11.5px mono `--dim` with the number in `--muted` ("You" for your own, "· draft" for a
+  draft), then where it stands in 12px `--muted` ("Review requested", "Checks running", "Ready to merge") with
+  "· needs you" in `--needs`. A row hovers on 4% ink and opens the pull request in the browser. Under the list, in
+  `--dim`: "Showing the first 50…" when there are more, and whose account it is read as. Every other state is one
+  centred note (the empty panel's `mx-sp-needs`): reading, none open, `gh` not installed (with where to get it), not
+  signed in (with **Sign in to GitHub**), not on GitHub, and a failure with its reason and **Try again**. When other
+  opened projects have pull requests that need you, they follow under a hairline and the heading "Needs you in other
+  projects", each row naming its project, so the count on the sidebar's button is always found here.
   Files reads the focused session's top folder before the panel opens; while the list is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
   opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them).

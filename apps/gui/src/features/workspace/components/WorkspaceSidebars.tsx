@@ -1,5 +1,6 @@
 import { useCallback } from 'react'
 import { Panel } from '@/components/ui/panel'
+import { toast } from '@/lib/toast'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { projectOfSession } from '../model/startProject'
 import { projectName } from '../model/sidebarTree'
@@ -14,7 +15,7 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject, pullRequests, showPanelView, focusedSession } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
   const installedAgents = useInstalledAgents()
@@ -73,6 +74,15 @@ export function WorkspaceSidebars() {
       onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}
       onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
+      pullRequests={{
+        needYou: pullRequests.needsYou,
+        onOpen: () => {
+          afterPick()
+          // The surface is a session's side panel, so with no session in front there is nowhere to show it.
+          if (focusedSession === undefined) toast.info('Open a session to see its project’s pull requests')
+          else showPanelView('pulls')
+        },
+      }}
       updateProgress={updateProgress}
     />
   )
