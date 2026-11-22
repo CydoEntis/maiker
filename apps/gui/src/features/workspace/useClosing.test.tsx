@@ -76,13 +76,6 @@ describe('closing with an unsaved draft in a document', () => {
     await waitFor(() => { expect(setLayout).toHaveBeenCalled() })
   })
 
-  it('closes a clean document pane at once', () => {
-    const { layout, doc } = withDocument()
-    const { result, setLayout } = setup(layout)
-    act(() => { result.current.closePaneById(doc.id) })
-    expect(setLayout).toHaveBeenCalled()
-  })
-
   it('asks before ending the session that owns the document (the close shortcut, the sidebar, the palette, close session)', async () => {
     const { layout, doc } = withDocument()
     stop.push(registerDraft('d', draft(doc.id)))

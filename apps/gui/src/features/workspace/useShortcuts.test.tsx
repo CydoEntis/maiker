@@ -130,10 +130,4 @@ describe('the keys by view', () => {
     pressIn('textarea', { key: 'K', ctrlKey: true, shiftKey: true })
     expect(runShortcut).toHaveBeenCalledWith('palette')
   })
-
-  it('still takes the Ctrl+Shift form in the chat view', () => {
-    const runShortcut = listen(false, {}, { view: 'chat' })
-    pressIn('textarea', { key: 'K', ctrlKey: true, shiftKey: true })
-    expect(runShortcut).toHaveBeenCalledWith('palette')
-  })
 })

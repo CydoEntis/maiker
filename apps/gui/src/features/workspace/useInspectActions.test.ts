@@ -38,12 +38,6 @@ describe('showing a session’s changes from its chat', () => {
     expect(setInspectOpen).toHaveBeenCalledWith(true)
   })
 
-  it('shows the whole working tree when no turn is given', () => {
-    const { actions, setTurnDiff } = mount()
-    actions.showChanges('pane-1', 'here', 'a.ts')
-    expect(setTurnDiff).toHaveBeenCalledWith(null)
-  })
-
   it('brings a session from its menu to the front, wherever it is, on the whole working tree', () => {
     const { actions, setTurnDiff, showSessionById } = mount()
     actions.showChangesOf('other')

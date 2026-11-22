@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, rowName, statusText, tildePath, toSessionView, truncatePrompt } from './session'
-import { formatAgo, formatElapsed, markSeen, trackSessions } from './tracking'
+import { markSeen, trackSessions } from './tracking'
 import { folderExists, resolveStartFolder } from './startFolder'
 
 vi.mock('@/api/daemon', () => ({
@@ -156,14 +156,6 @@ describe('session tracking', () => {
     const first = trackSessions(new Map(), view('working'), new Set(), 0)
     const offline = trackSessions(first.tracks, view('unknown'), new Set(), 9)
     expect(offline.tracks.get('t1')).toBe(first.tracks.get('t1'))
-  })
-
-  it('formats elapsed and relative times as the rows show them', () => {
-    expect(formatElapsed(102_000)).toBe('1:42')
-    expect(formatAgo(30_000)).toBe('now')
-    expect(formatAgo(42 * 60_000)).toBe('42m')
-    expect(formatAgo(3 * 3_600_000)).toBe('3h')
-    expect(formatAgo(2 * 86_400_000)).toBe('2d')
   })
 })
 

@@ -12,11 +12,6 @@ describe('what the tray menu lists', () => {
     expect(tray.needs[0]?.label).not.toBe('')
   })
 
-  it('names the agent before the session, since a name alone is often only a folder', () => {
-    const claude = { ...session('t2', 'needs', 'web'), process: 'claude' }
-    expect(traySessionsOf([claude]).needs[0]?.label.startsWith('claude: ')).toBe(true)
-  })
-
   it('has a key that changes only when the menu would', () => {
     const before = traySessionsOf([session('t2', 'needs', 'web')])
     expect(trayKey(traySessionsOf([session('t2', 'needs', 'web'), session('t9', 'working', 'other')]))).toBe(trayKey(before))

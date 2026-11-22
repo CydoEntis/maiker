@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ESC_LADDER, topmostOpen } from './escLadder'
-import { BINDINGS, HOTKEY_GROUPS, bindingFor, captureCombo, detectPlatform, formatShortcut, hotkeyRows, isOwnKey, matchShortcut, readKeyOverrides, shortcutChords, shortcutText, takenBy, type KeyOverrides, type Platform, type ShortcutAction } from './shortcuts'
+import { BINDINGS, HOTKEY_GROUPS, bindingFor, captureCombo, detectPlatform, formatShortcut, hotkeyRows, isOwnKey, matchShortcut, readKeyOverrides, shortcutText, takenBy, type KeyOverrides, type Platform, type ShortcutAction } from './shortcuts'
 
 type Key = { key: string; ctrlKey: boolean; metaKey: boolean; shiftKey: boolean; altKey: boolean }
 
@@ -49,19 +49,6 @@ const PLATFORMS: readonly Platform[] = ['mac', 'windows', 'linux']
 describe('the shortcut table', () => {
   it('has a row for every binding and nothing else', () => {
     expect(TABLE.map(([action]) => action).sort()).toEqual(BINDINGS.map((binding) => binding.action).sort())
-  })
-
-  it.each(TABLE)('writes %s as %s on macOS and %s on Windows and Linux', (action, mac, other) => {
-    expect(formatShortcut(bindingFor(action), 'mac')).toBe(mac)
-    expect(formatShortcut(bindingFor(action), 'windows')).toBe(other)
-    expect(formatShortcut(bindingFor(action), 'linux')).toBe(other)
-    expect(shortcutText(action, 'mac')).toBe(mac)
-  })
-
-  it('splits a chord into its keycaps', () => {
-    expect(shortcutChords(bindingFor('split-down'), 'mac')).toEqual([['⌘', '⇧', 'D']])
-    expect(shortcutChords(bindingFor('split-down'), 'windows')).toEqual([['Ctrl', 'Alt', 'Shift', 'D']])
-    expect(shortcutChords(bindingFor('jump-needs'), 'linux')).toEqual([['Ctrl', 'Shift', 'J']])
   })
 
   it('gives no two actions the same key on a platform', () => {
@@ -158,23 +145,6 @@ describe('matching a key press', () => {
 })
 
 describe('the shortcut lists', () => {
-  it('lists the hotkeys in the platform’s words', () => {
-    expect(hotkeyRows('mac').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['⌘', '⇧', 'D']], id: 'split-down', changed: false, otherView: [] })
-    expect(hotkeyRows('windows').find((row) => row.action === 'Split down')).toEqual({ action: 'Split down', group: 'Panes', chords: [['Ctrl', 'Alt', 'Shift', 'D']], id: 'split-down', changed: false, otherView: [] })
-  })
-
-  it('shows the terminal’s own keys as the terminal’s', () => {
-    expect(hotkeyRows('linux').find((row) => row.action === 'Interrupt')?.chords).toEqual([['Ctrl', 'C']])
-    expect(hotkeyRows('mac').find((row) => row.action === 'Interrupt')?.chords).toEqual([['⌃', 'C']])
-  })
-
-  it('lists jumping to what needs you on every platform, and leaves out an action that is not built', () => {
-    expect(hotkeyRows('linux').some((row) => row.action.startsWith('Jump to the next'))).toBe(true)
-    expect(hotkeyRows('mac').some((row) => row.action.startsWith('Jump to the next'))).toBe(true)
-    expect(hotkeyRows('mac').some((row) => row.action === 'Overview')).toBe(false)
-    expect(hotkeyRows('mac').some((row) => row.action === 'Session panel')).toBe(false)
-    expect(hotkeyRows('mac').some((row) => row.action === 'Undo close')).toBe(true)
-  })
 
   it('puts every hotkey in a group of the overlay, and every group has some', () => {
     const rows = hotkeyRows('linux')

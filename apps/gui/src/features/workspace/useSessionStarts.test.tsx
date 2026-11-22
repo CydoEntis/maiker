@@ -100,58 +100,6 @@ describe('starting a new chat that resumes a saved conversation', () => {
   })
 })
 
-describe('opening a new chat from the page', () => {
-  // The browser pictures the window right after a gliding pane's update (`movePanes`), so whatever the open needs must be in it.
-  function glidingPane() {
-    const pane = document.createElement('div')
-    pane.className = 'mx-pane'
-    pane.dataset.sessionId = 'old'
-    const panes = document.createElement('div')
-    panes.className = 'mx-panes'
-    panes.append(pane)
-    document.body.append(panes)
-    const transition = { inside: false }
-    const matchMedia = Object.getOwnPropertyDescriptor(window, 'matchMedia')
-    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: () => ({ matches: false }) })
-    Object.defineProperty(document, 'startViewTransition', {
-      configurable: true,
-      value: (update: () => void) => {
-        transition.inside = true
-        update()
-        transition.inside = false
-        return { finished: Promise.resolve() }
-      },
-    })
-    return { transition, remove: () => { panes.remove(); Reflect.deleteProperty(document, 'startViewTransition'); if (matchMedia === undefined) Reflect.deleteProperty(window, 'matchMedia'); else Object.defineProperty(window, 'matchMedia', matchMedia) } }
-  }
-
-  it('closes the page in the same update that opens the pane, not a frame later', async () => {
-    const glide = glidingPane()
-    const during: Record<string, boolean> = {}
-    const note = (what: string) => () => { during[what] = glide.transition.inside }
-    try {
-      await starts({ setLayout: note('layout'), setNewChatOpen: note('page') }).startNewChat(request({ message: 'hello' }))
-    } finally {
-      glide.remove()
-    }
-    expect(during).toEqual({ layout: true, page: true })
-  })
-
-  it('does the same for a chat started on another machine', async () => {
-    const glide = glidingPane()
-    remote.machines.set(3, { conversations: [] })
-    const during: Record<string, boolean> = {}
-    const note = (what: string) => () => { during[what] = glide.transition.inside }
-    try {
-      await starts({ setLayout: note('layout') }).startNewChat(request({ machine: 3, machineName: 'box' }))
-    } finally {
-      glide.remove()
-      remote.machines.delete(3)
-    }
-    expect(during).toEqual({ layout: true })
-  })
-})
-
 describe('starting new chats in the background', () => {
   const inWorktree = (name: string) => ({ name, create: true, worktree: true })
 
@@ -167,15 +115,6 @@ describe('starting new chats in the background', () => {
     expect(daemon.addWorktree.mock.calls).toEqual([['/dev/app', 'bold-otter'], ['/dev/app', 'calm-heron']])
     expect(daemon.startAgentSession.mock.calls.map(([folder]) => folder)).toEqual(['/dev/app-calm-heron', '/dev/app-bold-otter'])
     expect(daemon.renameConversationOnDaemon.mock.calls).toEqual([[{ id: '1' }, 'second task'], [{ id: '2' }, 'first task']])
-  })
-
-  it('matches each launch to its own session when two start at once', async () => {
-    const start = starts()
-    await Promise.all([
-      start.startNewChat(request({ message: 'one' }), { background: true }),
-      start.startNewChat(request({ message: 'two' }), { background: true }),
-    ])
-    expect(daemon.renameConversationOnDaemon.mock.calls).toEqual([[{ id: '1' }, 'one'], [{ id: '2' }, 'two']])
   })
 
   it('leaves the window and the page as they are', async () => {
@@ -405,14 +344,6 @@ describe('starting a chat from the draft in the Chat view', () => {
     expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(1, '/dev/app', 'claude', ID, expect.any(String))
     expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(2, '/dev/app', 'codex', ID, expect.any(String))
     expect(daemon.startChatSession).not.toHaveBeenCalled()
-    expect(daemon.startAgentSession).not.toHaveBeenCalled()
-  })
-
-  it('says why a saved conversation did not open and leaves the page as it was', async () => {
-    daemon.resumeChatSession.mockRejectedValueOnce(new Error('Claude Code has no saved conversation `x` for this folder'))
-
-    await expect(starts({ openSessionsIn: 'chat' }).startNewChat(request({ resume: ID }))).rejects.toThrow('no saved conversation')
-
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
   })
 

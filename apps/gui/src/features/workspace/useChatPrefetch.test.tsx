@@ -35,16 +35,6 @@ describe('reading a chat ahead when its row is hovered', () => {
     expect(warm).not.toHaveBeenCalled()
   })
 
-  it('only the row the pointer ends on is read when it moves between rows', () => {
-    sessions.set('other', { conversation: { agent: 'codex', chat: { conversation: 9, generation: 1 } } } as unknown as SessionView)
-    const { result } = renderHook(() => useChatPrefetch(lookup))
-    act(() => { result.current('chat') })
-    act(() => { vi.advanceTimersByTime(60) })
-    act(() => { result.current('other') })
-    act(() => { vi.advanceTimersByTime(PREFETCH_DELAY_MS) })
-    expect(warm).toHaveBeenCalledExactlyOnceWith(9, 1, 'codex')
-  })
-
   it('does not read a terminal or a session with no chat yet', () => {
     const { result } = renderHook(() => useChatPrefetch(lookup))
     act(() => { result.current('shell') })

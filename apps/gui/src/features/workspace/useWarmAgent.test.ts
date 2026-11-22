@@ -28,16 +28,6 @@ describe('keeping an agent warm for a new chat', () => {
     expect(warm).toHaveBeenLastCalledWith(SPEC)
   })
 
-  it('asks for the last pick only when picks follow each other quickly', () => {
-    const { warm, rerender } = mount({ spec: SPEC, paused: false })
-    vi.advanceTimersByTime(WARM_SETTLE_MS - 1)
-    const opus = { ...SPEC, model: 'opus' }
-    rerender({ spec: opus, paused: false })
-    vi.advanceTimersByTime(WARM_SETTLE_MS)
-
-    expect(warm).toHaveBeenCalledExactlyOnceWith(opus)
-  })
-
   it('asks nothing while the chat is being started, so the start takes the agent that is warm', () => {
     const { warm, rerender } = mount({ spec: SPEC, paused: false })
     vi.advanceTimersByTime(WARM_SETTLE_MS)

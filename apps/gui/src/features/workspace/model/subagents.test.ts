@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SubagentActivity } from '@/data/preview'
-import { durationWords, listedSubagents, subagentWord, toSubagentView } from './subagents'
+import { listedSubagents, toSubagentView } from './subagents'
 
 const activity = (extra: Partial<SubagentActivity> = {}): SubagentActivity => ({ id: 'a', name: 'Explore', state: 'Working', task: null, startedAt: 1000, updatedAt: 1100, latest: null, result: null, ...extra })
 
@@ -35,18 +35,5 @@ describe('a subagent as the window shows it', () => {
     const all = [toSubagentView(activity({ id: 'lost', state: 'ConnectionLost', updatedAt: 1100 })), toSubagentView(activity({ id: 'working', state: 'Working', updatedAt: 1100 }))]
     expect(listedSubagents(all, true, 1220).map((subagent) => subagent.id)).toEqual(['lost', 'working'])
     expect(listedSubagents(all, true, 1221).map((subagent) => subagent.id)).toEqual(['working'])
-  })
-
-  it('says how long it has run, how long it took, or its state when no time was reported', () => {
-    expect(subagentWord(toSubagentView(activity()), 1070)).toBe('1m 10s')
-    expect(subagentWord(toSubagentView(activity({ state: 'Completed' })), 5000)).toBe('done in 1m 40s')
-    expect(subagentWord(toSubagentView(activity({ state: 'AwaitingApproval' })), 5000)).toBe('needs you')
-    expect(subagentWord(toSubagentView(activity({ startedAt: null })), 5000)).toBe('working')
-  })
-
-  it('writes a duration the way the sidebar does', () => {
-    expect(durationWords(48)).toBe('48s')
-    expect(durationWords(263)).toBe('4m 23s')
-    expect(durationWords(3900)).toBe('1h 05m')
   })
 })

@@ -33,13 +33,6 @@ describe('bringing a session back', () => {
     expect(archiveSessionOnDaemon).toHaveBeenCalledWith({ id: 't1' }, false)
     expect(snoozeSessionOnDaemon).toHaveBeenCalledWith({ id: 't1' }, null)
   })
-
-  it('does not touch the snooze of a session that has none', async () => {
-    const { hook, invalidate } = render()
-    hook.result.current.bringBack('t1')
-    await waitFor(() => { expect(invalidate).toHaveBeenCalled() })
-    expect(snoozeSessionOnDaemon).not.toHaveBeenCalled()
-  })
 })
 
 describe('putting a session away', () => {

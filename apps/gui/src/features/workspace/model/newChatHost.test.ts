@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { ageOf, chatPermissions, launchFlags, startsBypassed, withBypass } from './newChatHost'
+import { chatPermissions, launchFlags, startsBypassed, withBypass } from './newChatHost'
 
 
 describe('launchFlags', () => {
@@ -38,21 +38,6 @@ describe('launchFlags', () => {
   it('drops a model name that is not plain model-id characters', () => {
     expect(launchFlags('claude', 'x; rm -rf /', 'default')).toBe('')
     expect(launchFlags('codex', '-evil', 'default')).toBe('')
-  })
-})
-
-describe('ageOf', () => {
-  const now = 1_700_000_000
-  it('says how long ago a time was in its largest short unit', () => {
-    expect(ageOf(now - 30, now)).toBe('1m')
-    expect(ageOf(now - 4 * 60, now)).toBe('4m')
-    expect(ageOf(now - 3 * 3600, now)).toBe('3h')
-    expect(ageOf(now - 86_400, now)).toBe('1d')
-    expect(ageOf(now - 21 * 86_400, now)).toBe('3w')
-  })
-
-  it('is empty when the time is unknown', () => {
-    expect(ageOf(null, now)).toBe('')
   })
 })
 

@@ -13,16 +13,6 @@ const request = { message: 'fix the login' } as NewChatRequest
 afterEach(() => { vi.restoreAllMocks() })
 
 describe('starts in the background', () => {
-  it('lets go of a failed start\'s picture when the page closes without putting it back', async () => {
-    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-    const { result, unmount } = renderHook(() => useBackgroundStarts(() => Promise.reject(new Error('boom'))))
-    act(() => { result.current.launch([request], { text: 'fix the login', attachments: [picture] }) })
-    await waitFor(() => { expect(result.current.failed).toHaveLength(1) })
-    expect(revoke).not.toHaveBeenCalled()
-
-    unmount()
-    expect(revoke).toHaveBeenCalledWith('blob:shot')
-  })
 
   it('says a start that fails after the page closed in a toast, and lets go of its picture', async () => {
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)

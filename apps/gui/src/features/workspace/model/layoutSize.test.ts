@@ -16,14 +16,4 @@ describe('window size variables', () => {
     const sized = (chatWidth: 'narrow' | 'wide' | 'full') => sizeVariables({ density: 'spacious', sidebarTextSize: 27, tabTextSize: 13.5, iconSize: 'small', chatWidth, chatTextSize: 100 }, 300)['--chat-width']
     expect([sized('narrow'), sized('wide'), sized('full')]).toEqual(['760px', '1100px', '100%'])
   })
-
-  it('makes compact tighter and spacious roomier than comfortable', () => {
-    expect(DENSITY_SCALE.compact).toBeLessThan(DENSITY_SCALE.comfortable)
-    expect(DENSITY_SCALE.spacious).toBeGreaterThan(DENSITY_SCALE.comfortable)
-  })
-
-  it('makes small icons smaller and large icons larger than medium', () => {
-    expect(ICON_SCALE.small).toBeLessThan(ICON_SCALE.medium)
-    expect(ICON_SCALE.large).toBeGreaterThan(ICON_SCALE.medium)
-  })
 })

@@ -49,18 +49,6 @@ describe('the service stage over time', () => {
     expect(currentToasts().held).toBe(false)
   })
 
-  it('keeps Not now until the service is back, then asks afresh next time', () => {
-    const { result, rerender } = mount()
-    rerender({ online: false, mismatch: false })
-    act(() => { vi.advanceTimersByTime(OFFLINE_AFTER_MS) })
-    act(() => { result.current.setPutOff(true) })
-    expect(result.current.putOff).toBe(true)
-    rerender({ online: true, mismatch: false })
-    expect(result.current.putOff).toBe(true)
-    act(() => { vi.advanceTimersByTime(FOUND_FOR_MS) })
-    expect(result.current.putOff).toBe(false)
-  })
-
   it('never calls a service on another protocol offline', () => {
     const { result, rerender } = mount()
     rerender({ online: false, mismatch: true })

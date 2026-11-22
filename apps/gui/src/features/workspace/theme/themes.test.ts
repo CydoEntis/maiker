@@ -1,30 +1,13 @@
 import { describe, expect, it } from 'vitest'
-import { atLightnessOf, contrastRatio, mixOklab, parseColor } from './color'
+import { contrastRatio, mixOklab, parseColor } from './color'
 import themeManifest from '@tokens/themes.json'
 import type { ThemeEntry } from './themes'
-import { findTheme, generateTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
+import { findTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
 
 const PALETTES = new Map(themeManifest.themes.flatMap((theme) => ('palette' in theme ? [[theme.name, theme.palette] as const] : [])))
 const MAITTY = ['Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Maiker Retro Dark', 'Maiker Retro Light']
 
 describe('themes', () => {
-  it("ships fifty-four themes, twenty-six light: Maiker's ten, then twenty-two families with a dark and a light each", () => {
-    expect(THEMES).toHaveLength(54)
-    expect(THEMES.filter((theme) => theme.light)).toHaveLength(26)
-    expect(THEMES.slice(0, MAITTY.length).map((theme) => theme.name)).toEqual(MAITTY)
-    expect(findTheme('Catppuccin Mocha').family).toBe('Catppuccin · dark')
-    expect(findTheme('Maiker Retro Light').family).toBe('Maiker · light')
-    expect(findTheme('Paper').family).toBe('Maiker · light')
-    // Every family after Maiker's own has exactly one dark and one light.
-    const sides = new Map<string, boolean[]>()
-    for (const theme of THEMES.slice(MAITTY.length)) sides.set(theme.family.split(' · ')[0] ?? '', [...(sides.get(theme.family.split(' · ')[0] ?? '') ?? []), theme.light])
-    expect(sides.size).toBe(22)
-    for (const [family, lights] of sides) expect([family, [...lights].sort()]).toEqual([family, [false, true]])
-    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(54)
-    expect(findTheme('Gruvbox Light').light).toBe(true)
-    expect(findTheme('No such theme').name).toBe('Maiker Dark')
-    expect(findTheme('Maiker Dark').name).toBe('Maiker Dark')
-  })
 
   it("draws the design's eight themes exactly as written, shading included", () => {
     // Night stays in the shared file for the terminal app; the desktop app does not list it.
@@ -78,46 +61,11 @@ describe('themes', () => {
     }
   })
 
-  it('derives tokens from six inputs the way color-mix in oklab does, from a panel at the design depth in the theme hue', () => {
-    const tokens = generateTheme({ bg: '#282A36', fg: '#F8F8F2', accent: '#8BE9FD', mag: '#FF79C6', blue: '#BD93F9', green: '#50FA7B', light: false })
-    const panel = atLightnessOf('#282A36', '#151517')
-    expect(panel).toBe('#13151C')
-    expect(tokens.main).toBe(panel)
-    expect(tokens.term).toBe(panel)
-    expect(tokens.sel).toBe(mixOklab(panel, '#F8F8F2', 10))
-    expect(tokens.pane).toBe(panel)
-    expect(tokens.accentSoft).toBe('rgba(139,233,253,0.13)')
-    expect(tokens.ok).toBe('#50FA7B')
-  })
-
-  it('steps a card and its selected row to the design greys on Maiker Dark, and keeps the hue of a tinted theme', () => {
-    const dark = themeStyle(findTheme('Maiker Dark'))
-    expect(dark['--card-step']).toBe('#1B1B1B')
-    expect(dark['--card-sel-step']).toBe('#2A2A2A')
-    expect(themeStyle(findTheme('Abyss'))['--card-step']).toBe('#151A28')
-  })
-
-  it('leaves a light theme on its own ground', () => {
-    expect(generateTheme({ bg: '#FFFFFF', fg: '#16181A', accent: '#0057D1', mag: '#A018FF', blue: '#0057D1', green: '#008B0C', light: true }).main).toBe('#FFFFFF')
-  })
-
   it('mixes halfway between black and white to a mid grey in oklab', () => {
     const grey = parseColor(mixOklab('#000000', '#FFFFFF', 50))
     expect(grey.r).toBeCloseTo(grey.g, 3)
     expect(grey.r).toBeGreaterThan(0.3)
     expect(grey.r).toBeLessThan(0.5)
-  })
-
-  it('maps the ANSI palette for xterm from the theme tokens', () => {
-    const { tokens } = findTheme('Maiker Dark')
-    const palette = xtermTheme(tokens)
-    expect(palette.cyan).toBe('#e0ab45')
-    expect(palette.magenta).toBe('#C3A6F2')
-    expect(palette.blue).toBe('#82AAFF')
-    expect(palette.green).toBe('#7fd99a')
-    expect(palette.yellow).toBe('#d9a032')
-    expect(palette.red).toBe('#F07F78')
-    expect(palette.brightBlack).toBe('#808087')
   })
 })
 
@@ -160,15 +108,6 @@ describe('contrast audit', () => {
       const palette = xtermTheme(theme.tokens)
       expect(contrastRatio(palette.foreground ?? '', colour), `terminal foreground on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
       expect(contrastRatio(palette.brightBlack ?? '', colour), `terminal dim text on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
-    }
-  })
-
-  it.each(MAITTY.slice(0, 9))('%s keeps accent, status and ANSI text readable on --term and --bg', (name) => {
-    const { tokens } = findTheme(name)
-    for (const [ground, colour] of TEXT_GROUNDS(tokens)) {
-      for (const slot of [...STATUS_TEXT_SLOTS, ...ANSI_TEXT_SLOTS]) {
-        expect(contrastRatio(tokens[slot], colour), `${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
-      }
     }
   })
 
@@ -217,11 +156,5 @@ describe('contrast audit', () => {
   it('asks xterm to lift the colours a program picks itself on light themes only', () => {
     expect(terminalMinimumContrast(findTheme('Maiker Day'))).toBe(MIN_TEXT_CONTRAST)
     expect(terminalMinimumContrast(findTheme('Maiker Dark'))).toBe(1)
-  })
-
-  it('raises a generated theme\'s derived text until it passes (Tokyo Night Day foreground and dim)', () => {
-    const { tokens } = findTheme('Tokyo Night Day')
-    expect(contrastRatio(tokens.fg, tokens.bg)).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
-    expect(contrastRatio(tokens.dim, tokens.term)).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
   })
 })

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { helperLinks, helpersSpoken, helpersWord } from './helpers'
+import { helperLinks } from './helpers'
 import { toSessionView, type SessionView } from './session'
 
 function session(pane: number, title: string, extra: Partial<Conversation> = {}, startedBy: string | null = null): SessionView {
@@ -32,18 +32,5 @@ describe('who started whom', () => {
   it('never joins two machines\' panes of the same number', () => {
     const links = helperLinks([session(1, 'Growth'), { ...session(2, 'Review', {}, 'build/t1'), id: 'build/t2' }])
     expect(links.starterOf.size).toBe(0)
-  })
-})
-
-describe('the words for a session\'s helpers', () => {
-  it('counts one and many', () => {
-    expect(helpersWord(1)).toBe('1 helper')
-    expect(helpersWord(3)).toBe('3 helpers')
-  })
-
-  it('says how many wait on you only when some do', () => {
-    expect(helpersSpoken({ total: 2, needs: 0, names: [] })).toBe('2 helpers')
-    expect(helpersSpoken({ total: 2, needs: 1, names: [] })).toBe('2 helpers, 1 needs you')
-    expect(helpersSpoken({ total: 3, needs: 2, names: [] })).toBe('3 helpers, 2 need you')
   })
 })

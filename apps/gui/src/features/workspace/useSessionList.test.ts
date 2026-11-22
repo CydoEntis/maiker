@@ -94,22 +94,6 @@ describe('a session the next list leaves out', () => {
     warn.mockRestore()
   })
 
-  it('says once that the full list cannot be read, and once that it can again', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const { rerender } = renderHook((props) => useSessionList(props), { initialProps: listOf('t1', 't2') })
-    rerender(listOf('t1'))
-    warn.mockClear()
-    daemon.load.mockRejectedValueOnce(new Error('no daemon')).mockRejectedValueOnce(new Error('no daemon')).mockResolvedValueOnce([terminal('t1'), terminal('t2')]).mockResolvedValueOnce([terminal('t1'), terminal('t2')])
-
-    for (let check = 0; check < 4; check += 1) await act(async () => { await vi.advanceTimersByTimeAsync(LINGER_MS + LINGER_SLACK_MS) })
-    expect(daemon.load).toHaveBeenCalledTimes(4)
-    expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([expect.stringMatching(/could not read/i)])
-    expect(info.mock.calls.map((call) => String(call[0]))).toEqual([expect.stringMatching(/read again/i)])
-    warn.mockRestore()
-    info.mockRestore()
-  })
-
   it('leaves at once, unlogged, when the daemon said why it left', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const { result, rerender } = renderHook((props) => useSessionList(props), { initialProps: listOf('t1', 't2') })

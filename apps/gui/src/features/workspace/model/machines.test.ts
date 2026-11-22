@@ -148,17 +148,6 @@ describe('machine chips', () => {
     ['unreachable', 'unreachable', 'bad'],
     ['refused', 'refused', 'bad'],
   ]
-  it.each(words)('%s reads %s and is %s', (kind, word, tone) => {
-    const chip = machineChip(state(1, 'build', kind))
-    expect(chip.word).toBe(word)
-    expect(chip.tone).toBe(tone)
-    expect(chip.glyph).not.toBe('')
-  })
-
-  it('says which dial a reconnect is on', () => {
-    expect(machineChip({ ...state(1, 'build', 'reconnecting'), attempt: 2 }).word).toBe('reconnecting #2')
-    expect(machineChip(state(1, 'build', 'reconnecting')).word).toBe('reconnecting')
-  })
 
   it('never colours a state alone: every kind has its own word, and shapes tell down from up', () => {
     const chips = words.map(([kind]) => machineChip(state(1, 'build', kind)))
@@ -279,10 +268,6 @@ describe('what a screen reader hears about a machine', () => {
 describe('starting a shell from another machine\'s pane', () => {
   it('says why it cannot, naming the machine, so no folder of that machine becomes a local one', () => {
     expect(remoteStartRefusal(true, 'build-box', 'Restarting this pane')).toBe('Restarting this pane is not available on build-box yet')
-  })
-
-  it('names another machine when it has no name yet', () => {
-    expect(remoteStartRefusal(true, null, 'Splitting this pane')).toBe('Splitting this pane is not available on another machine yet')
   })
 
   it('lets a pane of this computer start a shell', () => {

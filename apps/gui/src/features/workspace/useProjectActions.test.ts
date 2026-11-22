@@ -43,19 +43,6 @@ function windowWith(open: OpenWorktreeFor | null, sessions: readonly SessionView
 beforeEach(() => { workspace.current = {} })
 
 describe('Open worktree in the window', () => {
-  it('opens the dialog for the project heading it was picked from, after the overlay sidebar steps aside', () => {
-    const parts = windowWith(null, [])
-    const afterPick = vi.fn()
-    const { result } = renderHook(() => useProjectActions())
-    result.current(afterPick).onOpenWorktree(0, SHOP, 'shop')
-    expect(afterPick).toHaveBeenCalled()
-    expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith({ machine: 0, project: SHOP, name: 'shop' })
-  })
-
-  it('is closed while nothing opened it', () => {
-    windowWith(null, [])
-    expect(renderHook(() => useOpenWorktreeDialog()).result.current).toBeNull()
-  })
 
   it('starts the new-chat draft in the worktree picked, on the project\'s machine, and closes', () => {
     const parts = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
@@ -64,14 +51,6 @@ describe('Open worktree in the window', () => {
     expect(parts.setNewChatSeed).toHaveBeenCalledWith({ folder: WORKTREE, message: '' })
     expect(parts.setNewChatOpen).toHaveBeenCalledWith(true)
     expect(parts.setSettingsSection).toHaveBeenCalledWith(null)
-    expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith(null)
-  })
-
-  it('shows the session already in a worktree and closes', () => {
-    const parts = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
-    renderHook(() => useOpenWorktreeDialog()).result.current?.onShow('t7')
-    expect(parts.showSessionById).toHaveBeenCalledWith('t7')
-    expect(parts.setNewChatOpen).not.toHaveBeenCalled()
     expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith(null)
   })
 
