@@ -7,13 +7,11 @@
  *   float  what opens over them (menus, popovers, toasts, dialogs, the palette, find)
  *   field  what you type into or press (the message box and its tray)
  * A component picks its role by being listed below, or by carrying `mx-pop` (a popover or menu
- * from a library) or `mx-field`. A new surface joins a list here; it does not set a background of
+ * from a library). A new surface joins a list here; it does not set a background of
  * its own. Terminal panes stay solid: the terminal draws its own ground.
  *
  * The desktop has one look, flat: solid fills, a hairline, no blur or gradient. Only a float casts a
- * shadow, and every float casts the same one. The one shape choice is the corners (`data-corners`,
- * the rule at the end of this file and the `--r-*` tokens in `tokens.css`). A component never asks
- * which is on; it reads the tokens.
+ * shadow, and every float casts the same one. Corners are the `--r-*` tokens in `tokens.css`.
  */
 
 /* ---- tokens ---- */
@@ -21,7 +19,7 @@
 :root { --ink: 255, 255, 255; --shk: 1; --hl: var(--ink); --hs: 255, 255, 255; --hk: 1; --sd: 0, 0, 0; --sk: var(--shk); }
 /* The theme's own solid colours, under the role names. Declared on the window root as well, because
    the theme colours are set inline there. */
-:root, .mx-app, .app-shell {
+:root, .mx-app {
   --m-well: var(--well);
   --m-raise: var(--raise);
   --m-sel: var(--sel);
@@ -56,18 +54,14 @@
      --c-sel-*    every "selected" state (a focused sidebar row, a settings nav item, a chosen segment)
      --c-field-*  dropdown buttons, pickers and inputs
      --c-track-*  the tray behind a segmented control
-     --c-sw-* / --c-knob-*  the toggle switch
      --c-tile-ring  agent and shell icon tiles
      --c-head-bg  sticky headers
-   The one look is flat: fields and tracks are the card inside its hairline, a selected thing is the card's selected row, and
-   the accent marks a switch that is on. */
+   The one look is flat: fields and tracks are the card inside its hairline, and a selected thing is the card's selected row. */
 .mx-app {
   --c-sel-bg: var(--m-card-sel); --c-sel-sh: none;
   --c-field-bg: var(--m-card); --c-field-sh: inset 0 0 0 1px var(--m-card-line);
   --c-tile-ring: inset 0 0 0 1px var(--line2); --c-head-bg: var(--main);
   --c-track-bg: var(--m-card); --c-track-sh: inset 0 0 0 1px var(--m-card-line);
-  --c-sw-on: var(--accent); --c-sw-off: var(--well); --c-sw-sh: inset 0 0 0 1px var(--line2);
-  --c-knob: var(--muted); --c-knob-on: var(--on-accent); --c-knob-sh: none;
 }
 
 /* ---- the window behind the cards: the theme's ground, which shows in the gaps between them ---- */
@@ -77,8 +71,7 @@
 .mx-app .mx-card,
 .mx-app .mx-main,
 .mx-app .mx-sidebar,
-.mx-app .mx-inspect,
-.mx-app .mx-activity {
+.mx-app .mx-inspect {
   background: var(--t1);
   border: 1px solid var(--panel-line);
   box-shadow: none;
@@ -95,7 +88,6 @@
 .mx-app .mx-rename,
 .mx-app .mx-toast,
 .mx-app .mx-alert,
-.mx-app .mx-menu,
 .mx-app .mx-picker-menu,
 .mx-app .mx-tip,
 .mx-app .mx-hover-card,
@@ -118,8 +110,7 @@
    blur to repaint (docs/PERFORMANCE.md). */
 .mx-app :is(.mx-tip, .mx-hover-card) { box-shadow: var(--pop-sh-flat); --float-bleed: 4px; }
 /* A field inside a float is sunk into it: the well, not the card a field on a pane is. */
-.mx-app :is(.mx-ctx, .mx-menu, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) { --c-field-bg: var(--m-well); }
-.mx-app :is(.mx-ctx, .mx-menu, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) .mx-field { background: var(--m-well); }
+.mx-app :is(.mx-ctx, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) { --c-field-bg: var(--m-well); }
 
 /* Popovers grow from the corner that touches their anchor: 160ms, from scale .9 (design rule 12). Radix publishes the
    anchor corner as `--radix-popper-transform-origin`. A dialog has no anchor, so it has no `data-side` and does not grow. */
@@ -133,14 +124,6 @@
 :root[data-gpu="software"] .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation-name: mx-grow-flat; }
 @media (prefers-reduced-motion: reduce) { .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; } }
 .mx-app[data-motion="reduced"] :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; }
-
-/* ---- field ---- */
-/* A field sits one step off the pane it is on, so a form field can be told from its ground. */
-.mx-field {
-  background: var(--raise);
-  border: 1px solid var(--line2);
-  box-shadow: none;
-}
 /* The chat box (the chat's and the new-session draft's, one component) is a field: the theme's field tone (`--t3`, read
    through its role `--m-raise`) inside a hairline of the ink, so it reads as the place to type on any pane. */
 .mx-app .mx-box {
@@ -169,10 +152,6 @@
 .mx-app .mx-settings-nav { background: var(--t1); }
 .mx-app .mx-settings-header { background: transparent; border-bottom-color: transparent; }
 .mx-app .mx-settings .mx-segmented { border-color: transparent; background: var(--c-track-bg); }
-
-/* ---- corners ----
-   What the tokens cannot say: Square squares every corner, Rounded keeps each component's own radius. */
-:root[data-corners="square"] .mx-app * { border-radius: 0 !important; }
 
 /* The New session draft sits over the panes, so it stays opaque. */
 .mx-app .mx-newchat { background: var(--main, var(--popover)); }

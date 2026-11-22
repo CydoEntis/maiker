@@ -10,8 +10,8 @@ export function FolderMark({ size = 14 }: { size?: number }) {
   return <Folder className="mx-folder-mark" size={size} strokeWidth={1.9} aria-hidden="true" />
 }
 
-/** The one working spinner: a ring with a lit arc running round it, round or square with the corners (more can be added later). */
-export function Spinner({ className = 'mx-spin' }: { className?: string; frozen?: boolean }) {
+/** The one working spinner beside text: the working status icon at text size. */
+export function Spinner({ className = 'mx-spin' }: { className?: string }) {
   return <StatusIcon status="working" size={SPINNER_PX} className={className} />
 }
 

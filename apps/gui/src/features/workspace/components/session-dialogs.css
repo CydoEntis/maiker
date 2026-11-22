@@ -1,26 +1,7 @@
-/* ---- The M loader: a wait that fills a view. The left leg, the fold and the right leg trace on their own beats, fill, fade and start over (2.4s). ---- */
-.mx-mloader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 12.5px; color: var(--muted); }
-.mx-mtrace path { --mk-fill: color-mix(in srgb, var(--fg) 14%, transparent); stroke: var(--fg2); stroke-width: 4; stroke-dasharray: 320; stroke-dashoffset: 320; fill: transparent; animation: mx-trace-m 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
-.mx-mtrace .mx-mk-a { animation-delay: 0s; }
-.mx-mtrace .mx-mk-c { animation-delay: .25s; }
-.mx-mtrace .mx-mk-b { animation-delay: .5s; }
-@keyframes mx-trace-m {
-  0% { stroke-dashoffset: 320; fill: transparent; }
-  45% { stroke-dashoffset: 0; fill: transparent; }
-  60% { fill: var(--mk-fill); }
-  85% { stroke-dashoffset: 0; fill: var(--mk-fill); opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
-}
-/* A hidden window does not draw the loader. */
-:root[data-window="inactive"] .mx-mtrace path { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) { .mx-mtrace path { animation: none; stroke-dashoffset: 0; } }
-:root[data-reduced-motion="true"] .mx-mtrace path { animation: none; stroke-dashoffset: 0; }
-
 /* ---- Dialogs in the new language: a scrim, a 14px float with the shared dialog shadow, the focus underline ---- */
 @keyframes mx-dialog-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 /* A list grows from the corner of the button that opened it: Radix names that corner, and it is the origin of the scale. */
 @keyframes mx-list-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
-.mx-nsd-grow { flex: 1; min-width: 6px; }
 .mx-nsd-dot { flex: none; width: 7px; height: 7px; background: var(--ok); }
 
 /* A branch name is the longest of the three and the one read last, so it gives up room first and the project keeps most of its name. Its width is its own and not its text's: the name changes with Own worktree, and nothing in the header may move for that. */
@@ -34,10 +15,6 @@
 .mx-rename .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-rename .mx-app-icon.size-20 { width: 16px; height: 16px; }
 .mx-rename .mx-app-icon svg { width: 100%; height: 100%; }
-.mx-nsd-start { height: 28px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: var(--nsd-start-w); padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
-.mx-nsd-start:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 90%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 90%, var(--bg)); }
-.mx-nsd-start:disabled { opacity: .45; }
-.mx-nsd-start-key { font: 400 11px var(--mono); opacity: .7; }
 
 /* A list opened from inside a dialog sits over the dialog's scrim (90) and the dialog (91), not under them. */
 :is(.mx-chip-menu, .mx-mp) { z-index: 95; }
@@ -72,7 +49,6 @@
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
 :is(.mx-op, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }
-.mx-nsd-start:focus-visible { box-shadow: var(--focus-underline); }
 @media (prefers-reduced-motion: reduce) {
   .mx-op, .mx-op-scrim, .mx-chip-menu.is-token, .mx-palette, .mx-rename { animation: none; }
 }
@@ -85,8 +61,6 @@
 .mx-nsd-sync > span { min-width: 0; }
 .mx-nsd-sync .mx-text-button { flex: none; margin-left: auto; }
 .mx-nsd-sync-name { font: 500 12px var(--mono); color: var(--fg2); }
-.mx-chip-menu.is-token .mx-nc-behind { font-size: 11.5px; color: var(--dim); }
-.mx-chip-menu.is-token .mx-chip-row .mx-nc-in-use + .mx-nc-behind::before { content: '\00b7'; margin-right: 6px; }
 /* The reason a typed name is refused, under the search box. */
 .mx-chip-refused { flex: none; display: flex; gap: 6px; margin: 0; padding: 4px 16px; font-size: 12px; line-height: 1.4; color: var(--danger); }
 .mx-nsd-foot-hint { margin: 0; padding: 4px 8px 2px; font-size: 11.5px; color: var(--dim); }

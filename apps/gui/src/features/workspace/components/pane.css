@@ -54,28 +54,11 @@
 .mx-pane-show-sidebar { margin-left: -4px; }
 /* The machine a remote session runs on: a small chip on the selected ground, in the mono face. */
 .mx-pane-head .mx-pane-machine { flex: none; height: auto; padding: 1px 6px; border-radius: var(--r-badge); font: 500 11.5px var(--mono); color: var(--fg); background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); }
-
-/* The branch after the path. Its name goes first as the pane narrows, leaving its mark. */
-.mx-crumbs { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; }
-.mx-crumb-folder { flex: none; display: inline-flex; color: var(--muted); }
-.mx-crumb-sep { flex: none; color: var(--line2); }
-.mx-crumb-project { flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; }
-.mx-crumb-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-crumb { flex: 0 2 auto; min-width: 0; height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; margin-left: -4px; border-radius: var(--r-control); white-space: nowrap; outline: none; color: var(--branch); }
 .mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); color: var(--fg); }
 .mx-crumb > svg:last-child { flex: none; color: var(--dim); }
-.mx-crumb-branch { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); color: inherit; }
-.mx-crumb-branch-icon { flex: none; display: inline-flex; color: inherit; }
-.mx-crumb-branch-icon svg { stroke: currentColor; }
-@container pane-head (max-width: 420px) { .mx-crumb-project, .mx-crumb-folder + .mx-crumb-project + .mx-crumb-sep { display: none; } }
-@container pane-head (max-width: 300px) { .mx-crumbs .mx-crumb-branch, .mx-crumbs .mx-crumb > svg:last-child { display: none; } }
-.mx-pane-controls { flex: none; display: flex; align-items: center; gap: 4px; margin-left: auto; height: 100%; }
-/* The Changes button's count of changed files. */
-.mx-pane-count { position: absolute; top: 1px; right: 0; min-width: 13px; height: 13px; padding: 0 3px; box-sizing: border-box; display: flex; align-items: center; justify-content: center; font: 700 9px/1 var(--mono); color: var(--bg); background: var(--fg2); }
 
 .mx-tdock-docks { margin: 0 2px; }
-.mx-view-count { font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-view-needs { width: 7px; height: 7px; border-radius: var(--r-badge); background: var(--needs); }
 
 .mx-pane-body { position: relative; flex: 1; min-height: 0; padding: 10px 12px; font-family: var(--mono); line-height: 1.6; cursor: text; display: flex; }
 .mx-pane-body > * { flex: 1; min-width: 0; min-height: 0; }
@@ -114,7 +97,7 @@
 .mx-pane-body .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
 .mx-pane-body .terminal-screen { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; padding: 0; }
 .mx-pane-body .terminal-screen:focus-within { border-color: transparent; box-shadow: none; }
-.mx-pane-body .terminal-input-error, .mx-pane-body .terminal-load-status { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-family: "Geist Variable", Geist, system-ui, sans-serif; font-size: 12.5px; color: var(--muted); }
+.mx-pane-body .terminal-input-error { flex: none; display: flex; align-items: center; gap: 8px; padding: 6px 0; font-family: "Geist Variable", Geist, system-ui, sans-serif; font-size: 12.5px; color: var(--muted); }
 .mx-pane-body .terminal-input-error p { margin: 0; color: var(--danger); }
 .mx-pane.is-broadcast { box-shadow: 0 0 0 1.5px color-mix(in srgb, var(--ansi-mag) 60%, transparent), 0 14px 34px rgba(0, 0, 0, .3); }
 
@@ -218,25 +201,4 @@
 /* Reduced motion (the OS or Settings): the dock and the glide between panes appear and go at once. */
 :root[data-motion="reduced"] .mx-tdock, .mx-app[data-motion="reduced"] .mx-tdock { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-tdock, .mx-tdock[data-leaving] { animation: none; } }
-
-
-/* The bar under an agent's terminal: where it runs at the left, usage, model and mode at the right, 38px on the terminal's own ground. */
-.mx-tbar { flex: none; display: flex; align-items: center; gap: 6px; height: 38px; padding: 0 14px 0 18px; border-top: 1px solid var(--line); background: var(--main); font-size: 12.5px; color: var(--muted); }
-.mx-tbar-where { flex: 0 3 auto; min-width: 0; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; overflow: hidden; }
-.mx-tbar-where > svg { flex: none; }
-.mx-tbar-machine { flex: none; margin-right: 6px; }
-.mx-tbar-project { flex: 0 0 auto; max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
-.mx-tbar-sep { flex: none; color: var(--line2); }
-.mx-tbar-branch { min-width: 0; display: inline-flex; align-items: center; gap: 5px; color: var(--branch); }
-.mx-tbar-branch.is-worktree { color: var(--link); }
-.mx-tbar-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; font: 400 12px var(--mono); }
-.mx-tbar-tag { flex: none; font-size: 11px; color: var(--dim); }
-.mx-tbar-spacer { flex: 1; min-width: 8px; }
-.mx-tbar-model { flex: none; display: inline-flex; align-items: center; height: 26px; padding: 0 6px; white-space: nowrap; }
-/* A plain shell has no session to describe, so it gets a dashed one-line hint of how to start one. */
-.mx-shint { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 18px; border-top: 1px dashed var(--line2); background: var(--main); font-size: 12.5px; color: var(--muted); }
-.mx-shint-agent { height: 24px; padding: 0 10px; font: 500 12px var(--mono); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-shint-agent:not(:disabled):hover { background: var(--m-hover); }
-.mx-shint-agent:disabled { opacity: .4; }
-.mx-shint-note { font-size: 12px; color: var(--dim); }
 

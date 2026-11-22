@@ -19,7 +19,6 @@
 .mx-chat-tag { padding: 0 6px; font-family: var(--mono); font-size: 10.5px; font-weight: 600; box-shadow: inset 0 0 0 1px var(--line2); }
 .mx-chat-tag.is-danger { color: var(--err); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--err) 45%, transparent); }
 .mx-chat-starting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
-.mx-chat-starting-title { display: inline-flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 600; color: var(--fg); }
 .mx-chat-starting p { margin: 0; }
 .mx-chat-empty { margin: 0; flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 24px; text-align: center; font-size: 13px; color: var(--dim); }
 
@@ -68,8 +67,6 @@
 /* The mark before "Sending…" and "starting…": the running light, 12px. */
 .mx-working { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: 13px; color: var(--muted); }
 .mx-working-mark { display: inline-flex; flex: none; width: 14px; height: 14px; align-items: center; justify-content: center; }
-.mx-working-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-working-time { flex: none; font-family: var(--mono); font-size: 11.5px; color: var(--dim); font-variant-numeric: tabular-nums; }
 /* A helper's report: ↳, its summary cut short, and the time that never shrinks. */
 .mx-report { margin: 0; display: flex; min-width: 0; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
 .mx-report-arrow { flex: none; font-family: var(--mono); color: var(--dim); }
@@ -216,7 +213,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-plan-mark.is-done { color: var(--done); box-shadow: inset 0 0 0 1px var(--done); }
 .mx-plan-mark.is-current { box-shadow: inset 0 0 0 1px var(--working); }
 .mx-plan-ring { width: 6px; height: 6px; background: var(--working); }
-
 
 /* A request that was answered, folded into one line. */
 .mx-answered { display: flex; min-width: 0; min-height: 32px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--line); font-size: 12.5px; color: var(--muted); }
@@ -397,7 +393,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 /* Under the shared field material (`.mx-app .mx-box`, material.css), so it is written one class heavier to win. */
 .mx-app .mx-box:focus-within { border-color: var(--focus); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--focus) 40%, transparent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
-/* Square, as the window's corners are: a head that counts the matches, the rows, and the keys at its foot. */
+/* A head that counts the matches, the rows, and the keys at its foot. */
 .mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 3px 10px rgba(var(--sd), calc(.35 * var(--sk))); animation: v7fade .12s var(--ease-out); }
 .mx-slash-head { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-slash-count { font-weight: 400; }
@@ -485,7 +481,6 @@ button.mx-row-button:not(.is-locked):hover, button.mx-row-button[data-state="ope
 
 /* The question tray's slot: no box of its own, so the tray lays out in the column as before; it is only there to find the tray's first control. */
 .mx-question-slot { display: contents; }
-
 
 /* An agent's mark in the chat is a flat glyph in its own colour: no tile, no gradient, no ring behind it (design: the mark
    is never set on a coloured square). It covers the model chip, the agent picker and any mark in the feed. */

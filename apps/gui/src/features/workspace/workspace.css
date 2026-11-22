@@ -131,31 +131,9 @@
 /* Header starters are plain icons: no resting chrome, a quiet fill on hover. */
 .mx-chevron { flex: none; transition: transform var(--t-base) var(--ease); }
 
-/* A fixed width and layout containment keep a frame change inside the glyph: the row is not laid out
-   again 6 times a second. The clock writes the frame straight into the element (lib/spinner-clock.ts). */
+/* A fixed width and layout containment keep the turning mark inside its own box, so the row around it
+   is not laid out again while it turns. */
 .mx-spin { display: inline-block; inline-size: 1ch; text-align: center; contain: layout style paint; will-change: transform; font-family: var(--mono); font-size: 12px; color: var(--accent-text); flex: none; }
-.mx-spin.is-wide { inline-size: 2ch; }
-/* Web spinners (components/WebSpinner.tsx): inline SVG in the text colour, 1em square, each in its own
-   paint-contained layer. Only transform and opacity move. They hold still under Reduce motion (the
-   rule near the end of this file) and while the window is hidden or in the background. */
-.mx-wspin { display: inline-block; inline-size: 1em; block-size: 1em; flex: none; contain: paint; will-change: transform; vertical-align: -.125em; }
-.mx-wspin svg { display: block; inline-size: 100%; block-size: 100%; }
-.mx-wspin[data-kind="circle"] svg { animation: mx-wspin-turn .8s linear infinite; }
-.mx-wspin[data-kind="spokes"] svg { animation: mx-wspin-turn .9s steps(8) infinite; }
-.mx-wspin-dot { transform-box: fill-box; transform-origin: center; animation: mx-wspin-dot 1s ease-in-out infinite; }
-.mx-wspin-dot:nth-child(2) { animation-delay: .16s; }
-.mx-wspin-dot:nth-child(3) { animation-delay: .32s; }
-.mx-wspin-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-wspin-bar .9s ease-in-out infinite; }
-.mx-wspin-bar:nth-child(2) { animation-delay: .15s; }
-.mx-wspin-bar:nth-child(3) { animation-delay: .3s; }
-.mx-wspin-ring { transform-box: fill-box; transform-origin: center; animation: mx-wspin-ping 1.3s ease-out infinite; }
-.mx-wspin.is-still svg, .mx-wspin.is-still svg * { animation: none; }
-:root[data-window="inactive"] .mx-wspin svg, :root[data-window="inactive"] .mx-wspin svg * { animation-play-state: paused; }
-@keyframes mx-wspin-turn { to { transform: rotate(360deg); } }
-@keyframes mx-wspin-dot { 0%, 100% { transform: scale(.5); opacity: .35; } 50% { transform: scale(1); opacity: 1; } }
-@keyframes mx-wspin-bar { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
-@keyframes mx-wspin-ping { from { transform: scale(.35); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-
 
 /* App icons and status badges */
 .mx-app-icon { display: flex; align-items: center; justify-content: center; flex: none; font-family: var(--mono); font-weight: 600; letter-spacing: -.04em; box-shadow: var(--c-tile-ring); transition: transform var(--t-base) var(--ease); }
@@ -208,7 +186,7 @@
 .mx-es-project .mx-sb-badge { margin: 0; }
 .mx-es-chevron { flex: none; width: 13px; height: 13px; color: var(--dim); }
 .mx-es-agents { width: 100%; display: flex; flex-direction: column; gap: 4px; margin: 22px 0 16px; }
-.mx-es-agent { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; column-gap: 10px; height: 44px; padding: 0 10px 0 12px; border-radius: var(--r-panel); text-align: left; background: rgba(var(--ink), .03); box-shadow: inset 0 0 0 1px rgba(var(--ink), .06); }
+.mx-es-agent { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; column-gap: 10px; height: 44px; padding: 0 10px 0 12px; border-radius: var(--r-panel); text-align: left; background: var(--m-card); box-shadow: inset 0 0 0 1px var(--m-card-line); }
 .mx-es-agent:not(:disabled):hover, .mx-es-agent:focus-visible { background: rgba(var(--ink), .06); box-shadow: inset 0 0 0 1px rgba(var(--ink), .1); }
 .mx-es-agent:disabled { opacity: .55; cursor: not-allowed; }
 .mx-es-agent .mx-app-icon { justify-self: center; }
@@ -227,7 +205,6 @@
 .mx-primary:disabled { opacity: .55; }
 .mx-quiet { height: 36px; padding: 0 12px; display: flex; align-items: center; border-radius: var(--r-control); font-size: 13px; color: var(--muted); white-space: nowrap; }
 .mx-quiet:hover { color: var(--fg); background: rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-empty-note-small { font-size: 12px; color: var(--dim); }
 
 /* xterm's own stylesheet paints the scroll viewport black. It is taller than the rows by the part of a
    row that does not fit, so on the opaque renderers that remainder showed as a black bar along the pane's bottom edge. */
@@ -342,7 +319,6 @@
 .mx-swatch i { height: 3px; border-radius: var(--r-badge); display: block; }
 .mx-theme-name { font-size: 12.5px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-theme-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-hotkey { font-family: var(--mono); font-size: 11.5px; color: var(--fg); padding: 3px 8px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); white-space: pre; }
 .mx-hotkey-row { padding: 10px 0; font-size: 13px; }
 .mx-hotkey-row > span:first-child { flex: 1; color: var(--fg); }
 /* The row wraps only to put a refusal under it; the actions keep one width so the keycaps line up. */
@@ -352,16 +328,6 @@
 .mx-hotkey-fixed { font-size: 11.5px; color: var(--dim); line-height: 24px; }
 .mx-key-capture { height: 26px; padding: 0 10px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--accent); color: var(--fg2); font-size: 12px; outline: none; }
 .mx-hotkey-refusal { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--needs); text-align: right; }
-
-/* Context menu for a session row, portalled into the app so it reads the theme. */
-.mx-menu { z-index: 50; min-width: 180px; padding: 4px; border-radius: var(--r-panel); background: var(--m-raise); border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0, 0, 0, .45); color: var(--fg); font-size: 12.5px; }
-.mx-menu-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: var(--r-control); outline: none; cursor: default; user-select: none; }
-.mx-menu-item[data-highlighted] { background: var(--m-sel); }
-.mx-menu-item.is-danger { color: var(--danger); }
-.mx-menu-item.is-armed { background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
-.mx-menu-item.is-armed:focus-visible { box-shadow: inset 0 0 0 1px var(--danger-line), var(--focus-underline); }
-.mx-menu-item[data-disabled] { opacity: .4; }
-.mx-menu-sep { height: 1px; margin: 4px 2px; background: var(--line2); }
 
 /* Reduce motion (the setting or the system's) stops slides, lifts and pulses; spinners
    show one frame. */
@@ -437,10 +403,6 @@
 .mx-keycap { min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: var(--m-raise); border: 1px solid var(--line2); border-bottom-width: 2px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); line-height: 1; }
 .mx-keycap.is-symbol {  font-size: 13px; font-weight: 400; }
 
-/* Resizing columns: the 10px gap between them is the handle. The negative margin cancels the two flex gaps
-   around it, so the handle takes the gap's width whatever --pg is (0 under Tiled). */
-.mx-app.is-narrow .mx-col-handle { display: none; }
-
 /* A Settings row whose control sits under its label */
 .mx-scard-row.is-stacked { flex-direction: column; align-items: stretch; gap: 8px; }
 
@@ -493,8 +455,6 @@
 .mx-scard-button { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-scard-input.is-invalid { box-shadow: inset 0 0 0 1px var(--danger-line); }
-.mx-font-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.mx-font-error { font-size: 11.5px; color: var(--danger); }
 .mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
 .mx-scard-button.is-danger { color: var(--danger); }
 /* Under a machine's row on the GitHub page: its accounts, who commits, and its folder rules. */
@@ -509,9 +469,6 @@
 .mx-scard-button:hover { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
 .mx-scard-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
 .mx-scard-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); color: var(--on-accent); }
-
-/* Keyboard shortcut overlay. */
-.mx-shortcuts-grid .mx-menu-caps { padding: 0 0 6px; }
 
 /* Hover tooltip for anything with a title. */
 .mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 5px 9px; border-radius: var(--r-control); background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
@@ -612,22 +569,8 @@
 .mx-app[data-side="right"] .mx-drawer { left: auto; right: 0; animation-name: mx-panel-from-right; }
 .mx-app[data-side="right"] .mx-sidebar-resizer { right: auto; left: 0; }
 .mx-app[data-side="right"] .mx-sidebar-resizer::after { right: auto; left: 0; }
-
-/* The session hover card. */
-.mx-pos-grid { display: grid; grid-template-columns: repeat(3, 26px); grid-template-rows: repeat(2, 18px); gap: 4px; padding: 4px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); }
-.mx-pos-cell { border-radius: var(--r-badge); background: rgba(var(--hl), calc(.07 * var(--hk))); cursor: pointer; transition: background-color var(--t-fast) var(--ease); }
-.mx-pos-cell:hover { background: rgba(var(--hl), calc(.16 * var(--hk))); }
-.mx-pos-cell.is-on { background: var(--accent); }
 .mx-folder-row { display: flex; align-items: center; gap: 8px; }
 .mx-folder-row .mx-folder-field { flex: 1; min-width: 0; }
-
-/* The activity bar (v19 §9): a 48px card on the side opposite the sessions sidebar. The window's row-reverse
-   for a right-hand sidebar puts it on the far left without a rule of its own. */
-.mx-activity { flex: none; align-self: stretch; width: 48px; margin: var(--sbm-activity, var(--pg) var(--pg) var(--pg) 0); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; border-radius: var(--r14); background: var(--card, var(--m-pane)); border: 1px solid var(--pane-line); box-shadow: var(--sh); }
-.mx-app[data-side="right"] .mx-activity { margin: var(--pg) 0 var(--pg) var(--pg); }
-
-/* What a stopped agent asks, above the message box: a question with its choices as rows, or a permission with its buttons. */
-@media (prefers-reduced-motion: reduce) { .mx-ask-choice { transition: none; } }
 
 /* Flat sidebar: one list of two-line rows, a filter field, and a 60px rail. Status is the badge and nothing else
    moves a row, so none of these animates. */
@@ -729,12 +672,9 @@
 .mx-rm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .mx-rm-actions .mx-rm-raw { flex-basis: 100%; }
 .mx-rm-raw { margin: 0; padding: 8px 10px; background: var(--bg); border-radius: var(--r-control); font-size: 11.5px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-
-.mx-rm-crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
-.mx-rm-crumbs button, .mx-rm-back { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; margin-left: -4px; font-size: 12.5px; color: var(--muted); border-radius: var(--r-control); }
-.mx-rm-crumbs button:hover, .mx-rm-back:hover { background: var(--m-hover); color: var(--fg); }
+.mx-rm-back { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; margin-left: -4px; font-size: 12.5px; color: var(--muted); border-radius: var(--r-control); }
+.mx-rm-back:hover { background: var(--m-hover); color: var(--fg); }
 .mx-rm-back { align-self: flex-start; }
-.mx-rm-here { font-weight: 600; color: var(--fg); }
 .mx-rename .mx-rm-error { margin: 0; font-size: 12.5px; color: var(--danger); }
 
 /* A machine's More fold: plain settings rows under its row, indented past the mark so they read as the machine's. */

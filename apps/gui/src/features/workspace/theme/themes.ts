@@ -85,7 +85,7 @@ export type ThemePalette = {
 export type ThemeInputs = { bg: string; fg: string; accent: string; mag: string; blue: string; green: string; light: boolean }
 
 /**
- * What the look (`corners.ts`) adds to a theme besides colours: the fonts, the highlight strength (`hk`) and the
+ * What the look (`look.ts`) adds to a theme besides colours: the fonts, the highlight strength (`hk`) and the
  * resting card sheen (`sh`). A field left out keeps the stylesheet's default.
  */
 export type StyleLook = { ui: string; mono: string; hk?: string; sh?: string }
@@ -93,7 +93,7 @@ export type StyleLook = { ui: string; mono: string; hk?: string; sh?: string }
 /**
  * `roles` is what the window draws; `tokens` is what they were read from and what the terminal palette is built from.
  * `cardRing` is the solid card colour that rings a status badge so it reads as cut out of the card. `look` is set by
- * `withLook` (`corners.ts`); `highlight` is a palette theme's own highlight strength, which wins over the look's.
+ * `withLook` (`look.ts`); `highlight` is a palette theme's own highlight strength, which wins over the look's.
  */
 export type ThemeEntry = { id: string; name: string; family: string; light: boolean; roles: DesignRoles; tokens: ThemeTokens; cardRing: string; look?: StyleLook; highlight?: string }
 

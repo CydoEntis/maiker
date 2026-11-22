@@ -55,7 +55,7 @@ describe('the window material', () => {
     expect(css).toMatch(/--float-line:\s*rgba\(var\(--ink\),/)
     expect(css).toMatch(/--float-sh:[^;]*var\(--shk\)/)
     const float = /\.mx-app \.mx-ctx,([^{]*)\{\s*background: var\(--float-bg\);\s*border: 1px solid var\(--float-line\);\s*box-shadow: var\(--float-sh\);/.exec(css)?.[1] ?? ''
-    for (const surface of ['.mx-menu', '.mx-picker-menu', '.mx-pop', '.mx-toast', '.mx-alert', '.mx-rename', '.mx-palette']) expect(float).toContain(surface)
+    for (const surface of ['.mx-picker-menu', '.mx-pop', '.mx-toast', '.mx-alert', '.mx-rename', '.mx-palette']) expect(float).toContain(surface)
     expect(css).toMatch(/\[role="menu"\][^{]*\[role="dialog"\][^{]*\[role="alertdialog"\][^{]*\{\s*background-color: var\(--float-bg\);\s*border-color: var\(--float-line\);/)
   })
 
