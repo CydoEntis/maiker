@@ -74,18 +74,18 @@
 
 /* Rich text in a reply. */
 .mx-md-rule { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
-/* A table (design: TableCard) has no box: a title row, then the table with a rule under its head and under each row. */
-.mx-md-tablecard { display: flex; min-width: 0; flex-direction: column; }
-.mx-md-tableacts { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
-.mx-md-tabletitle { font-size: 13px; font-weight: 600; color: var(--fg); }
+/* A table (design: TableCard) is a card like a code block: a 36px head row, then the table with a rule under its head and
+   between its rows. */
+.mx-md-tablecard { display: flex; min-width: 0; flex-direction: column; background: var(--m-card); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
+.mx-md-tableacts { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); }
+.mx-md-tabletitle { font: 600 11px var(--mono); color: var(--muted); }
 .mx-md-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 1.45; }
 /* The message breaks long words anywhere, which let a narrow column shrink to one letter a line. A cell keeps its words whole; a table too wide for the column scrolls in its own region. */
-.mx-md-table :is(th, td) { padding: 8px 12px 8px 0; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
-.mx-md-table th { padding-top: 7px; padding-bottom: 7px; font-size: 12px; font-weight: 500; color: var(--dim); border-bottom-color: var(--line2); }
+.mx-md-table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+.mx-md-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.mx-md-table tbody tr:last-child td { border-bottom: 0; }
 .mx-md-table td { color: var(--fg2); }
-.mx-md-table td:first-child { font-weight: 500; color: var(--fg); }
 .mx-md-table td.mx-md-num { font-family: var(--mono); font-size: 12.5px; font-variant-numeric: tabular-nums; }
-.mx-md-table :is(th, td):last-child { padding-right: 0; }
 /* A list: a dim bullet or number in a 12px slot, then the item; bold lead words are in the text colour. */
 .mx-md-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; font-size: 14.5px; line-height: 1.6; }
 .mx-md-list > li { display: flex; gap: 10px; }
@@ -105,6 +105,10 @@
 .mx-code-body { margin: 0; padding: 8px 0; overflow-x: auto; overflow-y: hidden; font-family: var(--mono); font-size: 12.5px; line-height: 1.7; white-space: pre; color: var(--fg); }
 .mx-code-body .code-line { display: flex; min-width: max-content; }
 .mx-code-num { flex: none; width: 34px; padding-right: 12px; text-align: right; color: var(--dim); user-select: none; }
+/* A ```diff fence: each line by its sign, tinted as the chat's own edit diffs are. */
+.mx-code-body .code-line.is-add { background: color-mix(in srgb, var(--done) 10%, transparent); color: var(--done); }
+.mx-code-body .code-line.is-del { background: color-mix(in srgb, var(--err) 10%, transparent); color: var(--err); }
+.mx-code-body .code-line.is-hunk { color: var(--link); }
 .mx-code-text { padding-right: 14px; white-space: pre; }
 .mx-chat .tok-keyword { color: var(--sy-kw); }
 .mx-chat .tok-string { color: var(--sy-str); }
@@ -156,7 +160,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-step-path { min-width: 0; flex: 1; font-family: var(--mono); font-size: 12px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* A block (`Block`): a command, a diff or a code block. A hairline box on the well; its 34px head opens it. */
-.mx-block { position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--m-well); border: 1px solid var(--line); border-radius: var(--r-panel); }
+.mx-block { position: relative; display: flex; flex-direction: column; min-width: 0; background: var(--m-card); border: 1px solid var(--line); border-radius: var(--r-panel); }
 .mx-block.is-waiting { border-color: var(--needs); }
 .mx-block-head { display: flex; min-width: 0; min-height: 34px; align-items: center; padding: 0 8px 0 0; font-size: 12.5px; color: var(--fg2); }
 .mx-block-head.is-open { border-bottom: 1px solid var(--line); }

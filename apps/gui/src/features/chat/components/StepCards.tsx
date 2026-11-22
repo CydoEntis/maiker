@@ -287,7 +287,7 @@ export function EditStep({ event, root, onOpen, alone = false, waiting = false, 
   const document = documentOf(event)
   if (document !== null && file !== null) return <DocumentCard path={file} document={document} />
 
-  const target = <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}<ChangePill change={event.change} /></>
+  const target = <>{file === null ? <span className="mx-step-plain">a file</span> : <FileBadge path={file} />}<ChangePill change={event.change} edited={verb === 'Edit'} /></>
   const metaTone = EDIT_TONE[event.status] ?? 'dim'
   if (alone) {
     return (

@@ -76,3 +76,26 @@ describe('a file name in a message', () => {
     expect(container.querySelector('[data-slot="file-badge"]')).toBeNull()
   })
 })
+
+describe('a code block in a message', () => {
+  const fence = (language: string, lines: readonly string[]) => `\`\`\`${language}\n${lines.join('\n')}\n\`\`\``
+  const numbered = (count: number) => Array.from({ length: count }, (_, index) => `line ${String(index + 1)}`)
+
+  it('colours a diff fence line by line, by its sign', () => {
+    const { container } = render(<Markdown text={fence('diff', ['@@ -1,2 +1,2 @@', ' keep', '-  return a', '+  return b'])} />)
+    const kinds = Array.from(container.querySelectorAll('.code-line')).map((line) => line.className.replace('code-line', '').trim())
+    expect(kinds).toEqual(['is-hunk', '', 'is-del', 'is-add'])
+  })
+
+  it('stays whole as it is written past the fold, and folds only when it arrives long', () => {
+    const watched = render(<Markdown text={fence('ts', numbered(5))} />)
+    watched.rerender(<Markdown text={fence('ts', numbered(60))} />)
+    expect(watched.container.querySelectorAll('.code-line')).toHaveLength(60)
+    expect(screen.queryByRole('button', { name: /more lines/ })).not.toBeInTheDocument()
+    watched.unmount()
+
+    const arrived = render(<Markdown text={fence('ts', numbered(61))} />)
+    expect(screen.getByRole('button', { name: /Show \d+ more lines/ })).toBeInTheDocument()
+    expect(arrived.container.querySelectorAll('.code-line').length).toBeLessThan(61)
+  })
+})

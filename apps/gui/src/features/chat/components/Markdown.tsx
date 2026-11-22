@@ -90,17 +90,32 @@ const CODE_FOLD_LINES = 24
 /** A block only a few lines past the fold is shown whole: a button that reveals three lines is noise. */
 const CODE_FOLD_SLACK = 6
 
+/** The fence languages that are a patch: each line is coloured by its sign, as the chat's own edit diffs are. */
+const DIFF_LANGUAGES: ReadonlySet<string> = new Set(['diff', 'patch', 'udiff'])
+
+/** How a patch line reads: added, removed, a hunk or file head, or context. */
+function diffLineKind(line: string): '' | ' is-add' | ' is-del' | ' is-hunk' {
+  if (line.startsWith('@@') || line.startsWith('+++') || line.startsWith('---')) return ' is-hunk'
+  if (line.startsWith('+')) return ' is-add'
+  if (line.startsWith('-')) return ' is-del'
+  return ''
+}
+
 /** One line of a code block with its number. A reply being typed changes only its last line, so the lines above are not coloured again. */
-const CodeLine = memo(function CodeLine({ line, number, hint }: { line: string; number: number; hint: string }) {
-  return <span className="code-line"><span className="mx-code-num" aria-hidden="true">{number}</span><span className="mx-code-text"><HighlightedLine line={line} path={hint} /></span>{'\n'}</span>
+const CodeLine = memo(function CodeLine({ line, number, hint, diff }: { line: string; number: number; hint: string; diff: boolean }) {
+  const kind = diff ? diffLineKind(line) : ''
+  return <span className={`code-line${kind}`}><span className="mx-code-num" aria-hidden="true">{number}</span><span className="mx-code-text">{diff ? line : <HighlightedLine line={line} path={hint} />}</span>{'\n'}</span>
 })
 
 /** A fenced code block (design: CodeBlock): a head with its type tag and language, Copy and Save, and numbered lines under it; folded past its first lines when it is long, and closable from its chevron. */
 function CodeBlock({ language, text }: { language: string; text: string }) {
-  const [all, setAll] = useState(false)
-  const [open, setOpen] = useState(true)
   const lines = text.split('\n')
   const folds = lines.length > CODE_FOLD_LINES + CODE_FOLD_SLACK
+  // A block that was short when it first showed was watched being written: it stays whole as it grows, instead of
+  // folding away under the reader the moment it passes the fold. Only one that arrives long starts folded.
+  const [all, setAll] = useState(() => !folds)
+  const [open, setOpen] = useState(true)
+  const diff = DIFF_LANGUAGES.has(language.toLowerCase())
   const shown = folds && !all ? lines.slice(0, CODE_FOLD_LINES) : lines
   const hint = `code.${extensionForLanguage(language)}`
   const tag = fileTag(hint)
@@ -122,7 +137,7 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
       {open && (
         <>
           <pre className="mx-code-body" aria-label={language === '' ? 'Code' : `Code, ${language}`}>
-            <code>{shown.map((line, index) => <CodeLine key={index} line={line} number={index + 1} hint={hint} />)}</code>
+            <code>{shown.map((line, index) => <CodeLine key={index} line={line} number={index + 1} hint={hint} diff={diff} />)}</code>
           </pre>
           {folds && <Fold open={all} onToggle={() => { setAll((current) => !current) }} more={`Show ${String(lines.length - CODE_FOLD_LINES)} more lines`} less="Show less" />}
         </>
@@ -134,8 +149,8 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
 type TableBlock = Extract<Block, { kind: 'table' }>
 
 /**
- * A table (design: TableCard): no box, a title row with how many rows it has, Copy and Save as, and the table under it with
- * a rule below its head and one under each row. A column of figures sits right, in mono. Cells never wrap; a table wider than
+ * A table (design: TableCard): a card like a code block's, its head row saying how many rows it has with Copy and Save
+ * as, and the table under it with a rule below its head and between its rows. A column of figures sits right, in mono. Cells never wrap; a table wider than
  * the column scrolls sideways inside its own region, which the keyboard can reach.
  */
 function TableCard({ block }: { block: TableBlock }) {

@@ -1422,11 +1422,15 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Chat blocks follow the Maiker Desktop prototype, not Chat Feed.dc.html** (the older spec). Your message is a plain bubble
   (no border, `--fg` 7% over `--main`, 14.5px/1.6, 10px 14px); the agent's reply is plain 14.5/1.65 text with its first
   paragraph in `--fg` and the rest `--fg2`, nothing bold unless written so. A command, a diff and a code block are one `Block`
-  (`--well`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns). A command head reads `$ command` and, at the
+  (the card tone `--m-card`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns), so it sits on the page
+  as a card, never as a black hole cut in it. A code block that was short when it first showed stays whole as it is written;
+  only one that arrives past the fold starts folded. A ```diff fence colours its lines by their sign as an edit's diff does
+  (added `--done`, removed `--err`, both on a 10% tint; hunk and file heads `--link`). A command head reads `$ command` and, at the
   right, "exit 1 · 2.9s" (red when it failed; a provider with no exit code shows only the time, and a screen reader hears "exit
   code not reported"); a failed block has no coloured edge (its words and meta are in `--err`, and a command's output marks passing lines `--done`, failing lines `--err` and colours the counts in its "2 failed | 9 passed" summary line); there is no check mark, chip or copy icon (Copy is a text button
-  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a 2px `--line2` edge with no box and a bold lead. A list uses dim bullets; a table has no box (title row, Copy, rules under the head and
-  rows). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
+  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a 2px `--line2` edge with no box and a bold lead. A list uses dim bullets; a table is a card like a code block (a 36px head with its row count
+  in 11px mono `--muted`, Copy and Save as; rules under the head and between rows; 7px 12px cells, the head 11.5px 600
+  `--muted`). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
   agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row has the run's own mark
   (✓ quiet, × red, ■ stopped) and says "failed" in red when a step failed; inside it, steps are ✓ (quiet) or × (red) rows.
 - **A run of steps is one quiet line** (`WorkCard`, no box): "✓ Read 6 files, ran 1 command · 6 steps ›" in `--muted`; opened
