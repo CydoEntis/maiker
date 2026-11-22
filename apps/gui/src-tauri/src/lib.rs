@@ -1884,6 +1884,7 @@ pub fn run() {
             terminal_stream::extensions,
             terminal_stream::get_shared_settings,
             terminal_stream::set_shared_setting,
+            terminal_stream::set_newer_shared_setting,
             output_socket::open_terminal_socket,
             terminal_screen,
             terminal_replay,

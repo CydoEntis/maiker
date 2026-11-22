@@ -324,7 +324,23 @@ pub struct Ui {
 pub const NEW_AGENTS: &[&str] = &["last used", "claude", "codex", "gemini"];
 pub const NEW_WHERE: &[&str] = &["new worktree", "this folder"];
 pub const HELPERS_MAY: &[&str] = &["ask", "always", "never"];
-pub const HELPERS_AT_ONCE: &[&str] = &["2", "3", "4"];
+pub const HELPERS_AT_ONCE: &[&str] = &["2", "4", "8"];
+/// The limit a config that sets none has: one of `HELPERS_AT_ONCE`.
+pub const HELPERS_AT_ONCE_DEFAULT: &str = "4";
+/// Limits that were offered once and are not any more, each with what it reads as now. A file
+/// that still says one must load: refusing it would refuse the whole config.
+const HELPERS_AT_ONCE_BEFORE: &[(&str, &str)] = &[("3", "4")];
+
+/// `[sessions] helpers_at_once` as it reads today. The file itself is not rewritten.
+fn helpers_at_once_now<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<String, D::Error> {
+    let stored = String::deserialize(deserializer)?;
+    Ok(HELPERS_AT_ONCE_BEFORE
+        .iter()
+        .find(|(before, _)| *before == stored)
+        .map_or(stored, |(_, now)| (*now).to_string()))
+}
 
 /// Settings > Sessions. `helpers` and `helpers_at_once` are read by the daemon when an agent
 /// starts a session (`Config::helpers_at_once`); the rest by the client's new-session flow.
@@ -340,6 +356,7 @@ pub struct Sessions {
     pub helpers: String,
     /// Helpers one session runs at a time: one of `HELPERS_AT_ONCE`. An old `[mcp]
     /// helpers_at_once` fills it in when this is not set (`fold_legacy_helpers`).
+    #[serde(deserialize_with = "helpers_at_once_now")]
     pub helpers_at_once: String,
     pub pr_wake: bool,
     /// Put away a finished or idle session once the PR watcher reads its pull request merged.
@@ -352,7 +369,7 @@ impl Default for Sessions {
             agent: "last used".into(),
             place: "new worktree".into(),
             helpers: "ask".into(),
-            helpers_at_once: "3".into(),
+            helpers_at_once: HELPERS_AT_ONCE_DEFAULT.into(),
             pr_wake: true,
             put_away_merged: false,
         }
@@ -1052,8 +1069,8 @@ impl Default for Ui {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentDef, HELPERS_AT_ONCE, HELPERS_MAY, Mcp, NEW_AGENTS, NEW_WHERE, Preset, Restore,
-        Rounding, Sessions, Ui, size_cells, validate_cursor, validate_sessions,
+        AgentDef, HELPERS_AT_ONCE, HELPERS_AT_ONCE_DEFAULT, HELPERS_MAY, Mcp, NEW_AGENTS, NEW_WHERE,
+        Preset, Restore, Rounding, Sessions, Ui, size_cells, validate_cursor, validate_sessions,
     };
 
     fn agents_problem(entry: &str) -> Option<String> {
@@ -1138,7 +1155,8 @@ mod tests {
         assert_eq!(defaults.agent, "last used");
         assert_eq!(defaults.place, "new worktree");
         assert_eq!(defaults.helpers, "ask");
-        assert_eq!(defaults.helpers_at_once, "3");
+        assert_eq!(defaults.helpers_at_once, "4");
+        assert!(HELPERS_AT_ONCE.contains(&HELPERS_AT_ONCE_DEFAULT));
         assert!(validate_sessions(&defaults).is_ok());
 
         for agent in NEW_AGENTS {
@@ -1161,6 +1179,23 @@ mod tests {
 
         let invalid: Sessions = toml::from_str("helpers = 'sometimes'").unwrap();
         assert!(validate_sessions(&invalid).is_err());
+    }
+
+    #[test]
+    fn the_limit_a_daemon_that_says_none_reads_as_is_the_default() {
+        assert_eq!(
+            HELPERS_AT_ONCE_DEFAULT,
+            maitty_shared::settings_view::HELPERS_AT_ONCE_UNSAID.to_string()
+        );
+    }
+
+    #[test]
+    fn a_limit_that_is_no_longer_offered_reads_as_the_one_that_replaced_it() {
+        let old: Sessions = toml::from_str("helpers_at_once = '3'").unwrap();
+        assert_eq!(old.helpers_at_once, "4");
+        assert!(validate_sessions(&old).is_ok(), "a file saved with 3 still loads");
+        let never_offered: Sessions = toml::from_str("helpers_at_once = '9'").unwrap();
+        assert!(validate_sessions(&never_offered).is_err());
     }
 
     #[test]

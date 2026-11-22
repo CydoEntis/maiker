@@ -345,6 +345,8 @@ only for these keys. Secrets, `[[machines]]` and `[keys]` are not reachable that
 | window style | `ui.window_style` | | `flat` (default), `glass` |
 | Bypass Permissions | `permissions.bypass.<agent>` | | the agents switched off (`claude`, `codex`, `gemini`); each is written as `true` or `false`, and an agent not listed is on |
 | update remote machines | `updates.machines` | | `true` (default) or `false`: after this computer updates, each machine is updated once its agents are idle |
+| when an agent wants helpers | `sessions.helpers` | | `ask` (default), `always`, `never` |
+| helpers working at once | `sessions.helpers_at_once` | `[mcp] helpers_at_once` (a number, read only while the `[sessions]` key is unset) | `"2"`, `"4"` (default), `"8"`; more wait for a free slot. A stored `"3"`, offered before, reads as `"4"` (the file is not rewritten); an old `[mcp]` number reads as the nearest choice (the smaller on a tie; `0`, once no limit, as `"8"`) |
 
 A change edits the one key in place (comments and other keys stay), swaps the file in
 atomically, reloads, and sends `ServerMsg::SettingsChanged` to attached windows. A write

@@ -2391,6 +2391,11 @@ pub struct TermInfo {
     /// Follow-ups waiting for its turn to end, next first.
     #[serde(default)]
     pub queued: Vec<String>,
+    /// A helper past its starter's limit (`sessions.helpers_at_once`): the daemon holds its start
+    /// until a slot frees, and reports it working meanwhile (ADR 0003). Absent from an older
+    /// daemon, which refuses such a start instead.
+    #[serde(default)]
+    pub waiting_for_slot: bool,
     /// The agent's own turn is over: it is at its prompt and takes a message, though helpers it
     /// started may keep the pane working. Absent from an older daemon, which reads as not over.
     #[serde(default)]
@@ -2768,9 +2773,14 @@ impl ClientMsg {
     /// a request to an older daemon, which would otherwise never answer it. A message added
     /// while `COMPATIBLE_SINCE` stays behind gets its own arm here.
     pub fn introduced_in(&self) -> u32 {
+        use crate::settings_view::SettingKey;
         match self {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+            ClientMsg::Command(Command::SetSetting {
+                key: SettingKey::Helpers | SettingKey::HelpersAtOnce,
+                ..
+            }) => HELPER_SETTINGS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2779,6 +2789,11 @@ impl ClientMsg {
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
 pub const DISCARD_FILE_SINCE: u32 = 123;
+
+/// The first version whose daemon reads `SettingKey::Helpers` and `SettingKey::HelpersAtOnce`.
+/// A daemon before it cannot decode either key and passes the change over without an answer, so
+/// a client refuses in words instead of sending it.
+pub const HELPER_SETTINGS_SINCE: u32 = 123;
 
 pub fn encode<T: Serialize>(msg: &T) -> anyhow::Result<bytes::Bytes> {
     Ok(rmp_serde::to_vec_named(msg)?.into())
@@ -3165,6 +3180,8 @@ mod tests {
             (SettingKey::BypassOff, SettingValue::List(vec!["gemini".into()])),
             (SettingKey::UpdateMachines, SettingValue::Bool(false)),
             (SettingKey::WindowStyle, SettingValue::WindowStyle(WindowStyle::Glass)),
+            (SettingKey::Helpers, SettingValue::Text("always".into())),
+            (SettingKey::HelpersAtOnce, SettingValue::Text("8".into())),
         ] {
             clients.push(ClientMsg::Command(Command::SetSetting { key, value }));
         }
@@ -3389,10 +3406,15 @@ mod tests {
     /// client only what that client reads.
     #[test]
     fn every_message_is_as_old_as_the_window_or_says_when_it_was_added() {
+        use crate::settings_view::SettingKey;
         for m in every_client_message() {
             let since = match m {
                 ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
                 ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+                ClientMsg::Command(Command::SetSetting {
+                    key: SettingKey::Helpers | SettingKey::HelpersAtOnce,
+                    ..
+                }) => HELPER_SETTINGS_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -4239,6 +4261,8 @@ mod tests {
             window_style: WindowStyle::Glass,
             bypass_off: vec!["codex".into()],
             update_machines: false,
+            helpers: HelpersMay::Never,
+            helpers_at_once: 8,
         }
     }
 
@@ -4274,7 +4298,16 @@ mod tests {
             window_style: now.window_style,
         };
         let read: SharedSettings = decode(&rmp_serde::to_vec_named(&old).unwrap()).unwrap();
-        assert_eq!(read, SharedSettings { bypass_off: Vec::new(), update_machines: true, ..now });
+        assert_eq!(
+            read,
+            SharedSettings {
+                bypass_off: Vec::new(),
+                update_machines: true,
+                helpers: HelpersMay::Ask,
+                helpers_at_once: HELPERS_AT_ONCE_UNSAID,
+                ..now
+            }
+        );
         let machines = ClientMsg::Command(Command::SetSetting {
             key: SettingKey::UpdateMachines,
             value: SettingValue::Bool(false),
@@ -4290,6 +4323,60 @@ mod tests {
             value: SettingValue::Bool(true),
         });
         assert_eq!(other.introduced_in(), COMPATIBLE_SINCE);
+    }
+
+    /// The helper settings are new in 123 and nothing else moved, so `COMPATIBLE_SINCE` stays: a
+    /// daemon on 122 cannot decode either key and passes over the request, and a client that
+    /// checks `introduced_in` never sends it one. Every key it did know still reaches it.
+    #[test]
+    fn a_daemon_from_before_the_helper_settings_is_never_sent_them_and_cannot_read_them() {
+        use crate::settings_view::*;
+        const { assert!(COMPATIBLE_SINCE < HELPER_SETTINGS_SINCE && HELPER_SETTINGS_SINCE <= PROTOCOL_VERSION) };
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum KeyBefore123 {
+            DefaultAgent,
+            NewSessionView,
+            SidebarSide,
+            ThemeDark,
+            ThemeLight,
+            Appearance,
+            Spinner,
+            StartDir,
+            ReduceMotion,
+            WindowStyle,
+            BypassOff,
+            UpdateMachines,
+        }
+        for (key, word) in [(SettingKey::Helpers, "never"), (SettingKey::HelpersAtOnce, "8")] {
+            assert!(decode::<KeyBefore123>(&encode(&key).unwrap()).is_err(), "{key:?}");
+            let set = ClientMsg::Command(Command::SetSetting {
+                key,
+                value: SettingValue::Text(word.into()),
+            });
+            assert_eq!(set.introduced_in(), HELPER_SETTINGS_SINCE);
+            round_trips(&set);
+        }
+        assert!(decode::<KeyBefore123>(&encode(&SettingKey::UpdateMachines).unwrap()).is_ok());
+        assert!(speaks_with(HELPER_SETTINGS_SINCE - 1, 0), "a daemon from before them is still talked to");
+    }
+
+    /// `TermInfo.waiting_for_slot` is a defaulted field (no bump of its own): a pane from a daemon
+    /// on 122, which never holds a start, reads as not waiting, and the flag is all an older
+    /// client goes without: it reads a waiting helper as the working pane its status says.
+    #[test]
+    fn a_pane_from_before_waiting_for_a_slot_reads_as_not_waiting_both_ways() {
+        let mut waiting = pane_from(serde_json::json!({ "status": "Working" }));
+        waiting.waiting_for_slot = true;
+        let mut wire = serde_json::to_value(&waiting).unwrap();
+        assert_eq!(wire["waiting_for_slot"], true);
+        // What a daemon on 122 writes: the same pane without the field.
+        wire.as_object_mut().unwrap().remove("waiting_for_slot");
+        let old: TermInfo = decode(&rmp_serde::to_vec_named(&wire).unwrap()).unwrap();
+        assert!(!old.waiting_for_slot);
+        assert_eq!(old.status, Status::Working);
+        let back: TermInfo = decode(&encode(&waiting).unwrap()).unwrap();
+        assert!(back.waiting_for_slot);
     }
 
     #[test]

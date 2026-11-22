@@ -3874,6 +3874,7 @@ impl Daemon {
                         helper_ask: t.helpers.asked.clone(),
                         pr: self.pr_of(t),
                         queued: t.queue.iter().cloned().collect(),
+                        waiting_for_slot: false,
                         own_turn_over: t.own_turn_over,
                         subagent_activity: t.subagent_activity.clone(),
                         session: t.session.clone(),

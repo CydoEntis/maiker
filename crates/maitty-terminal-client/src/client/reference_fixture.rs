@@ -131,6 +131,7 @@ pub(super) fn term(
         started_by_chat: None,
         pr: None,
         queued: Vec::new(),
+        waiting_for_slot: false,
         own_turn_over: false,
         root: None,
         top: None,

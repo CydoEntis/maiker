@@ -372,6 +372,7 @@ fn pane(i: u32) -> TermInfo {
         started_by_chat: None,
         pr: (status == Status::Done).then(|| pr_of(i)),
         queued: vec!["Then run the GUI tests too".into()],
+        waiting_for_slot: false,
         own_turn_over: false,
         root: Some(root_of(i)),
         top: Some(checkout_of(i)),

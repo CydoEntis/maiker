@@ -1033,6 +1033,8 @@ mod tests {
                 window_style: Default::default(),
                 bypass_off: Vec::new(),
                 update_machines: true,
+                helpers: Default::default(),
+                helpers_at_once: 4,
             }),
             ServerMsg::Raise,
             ServerMsg::ConversationChanged {

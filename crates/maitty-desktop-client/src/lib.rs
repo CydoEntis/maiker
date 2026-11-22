@@ -1003,6 +1003,20 @@ async fn ask_running_daemon_if_it_reads(message: &ClientMsg) -> Result<Reply> {
     .await
 }
 
+/// Change a shared setting whose key is newer than the oldest daemon this app talks to (the helper settings). An
+/// older daemon cannot read the key and would pass over it without a word, so it is refused in words; the running
+/// one answers that it took the change, or says why not.
+pub async fn set_newer_shared_setting(
+    key: maitty_shared::settings_view::SettingKey,
+    value: maitty_shared::settings_view::SettingValue,
+) -> Result<()> {
+    let message = ClientMsg::Command(Command::SetSetting { key, value });
+    match ask_running_daemon_if_it_reads(&message).await? {
+        Reply::Ok => Ok(()),
+        _ => bail!("The Maiker service gave an answer this app does not understand (a setting). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
 /// Whether a repository question is newer than the oldest daemon this app talks to, so the running daemon's
 /// version is checked before it is asked.
 fn repo_question_needs_version(message: &ClientMsg) -> bool {
@@ -3458,6 +3472,25 @@ mod agent_command_tests {
             let refused = refuse_unless_daemon_reads(&message, older).unwrap_err();
             assert!(format!("{refused:#}").contains("older than this app"), "{refused:#}");
         }
+    }
+
+    #[test]
+    fn a_helper_setting_is_refused_in_words_to_a_daemon_from_before_it() {
+        use super::{ClientMsg, Command, refuse_unless_daemon_reads};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, HELPER_SETTINGS_SINCE};
+        use maitty_shared::settings_view::{SettingKey, SettingValue};
+        let limit = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::HelpersAtOnce,
+            value: SettingValue::Text("8".into()),
+        });
+        let refused = refuse_unless_daemon_reads(&limit, HELPER_SETTINGS_SINCE - 1).unwrap_err();
+        assert!(refused.to_string().contains("older than this app"), "{refused:#}");
+        assert!(refuse_unless_daemon_reads(&limit, HELPER_SETTINGS_SINCE).is_ok());
+        let older_key = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::UpdateMachines,
+            value: SettingValue::Bool(true),
+        });
+        assert!(refuse_unless_daemon_reads(&older_key, COMPATIBLE_SINCE).is_ok());
     }
 
     #[test]

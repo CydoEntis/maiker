@@ -7,7 +7,8 @@ use crate::theme::{Theme, ThemeOverrides};
 use anyhow::{Context, Result};
 pub use maitty_settings::config::{
     AgentDef, BARS_FRAMES, BYPASS_FLAGS, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef,
-    DEFAULT_MODEL_FLAG, DIMS, Detection, HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LAYOUT_NAMES,
+    DEFAULT_MODEL_FLAG, DIMS, Detection, HELPERS_AT_ONCE, HELPERS_AT_ONCE_DEFAULT, HELPERS_MAY,
+    Icons, Keys, LAYOUT_NAMES,
     LayoutKind, MachineDef, Mcp, NEW_AGENTS, NEW_WHERE, Notify, PADDING_TOP, Permissions, Preset,
     Updates,
     Quick, QuickAgent, Recipe,
@@ -106,10 +107,11 @@ fn fold_legacy_helpers(value: &mut toml::Table) {
     let (false, Some(old)) = (sessions_set, old) else {
         return;
     };
+    // Between two choices the smaller one: each helper runs builds and tests of its own.
     let nearest = match old {
-        ..=2 if old > 0 => "2",
-        3 => "3",
-        _ => "4",
+        1..=2 => "2",
+        3..=6 => "4",
+        _ => "8",
     };
     let sessions = value
         .entry("sessions")
@@ -1018,7 +1020,11 @@ fn names_a_via(shared: &toml::Table) -> bool {
 impl Config {
     /// How many helpers one session may have working at once (`sessions.helpers_at_once`).
     pub fn helpers_at_once(&self) -> usize {
-        self.sessions.helpers_at_once.parse().unwrap_or(3)
+        let limit = |text: &str| text.parse::<usize>().ok();
+        // A loaded config holds one of `HELPERS_AT_ONCE`; one built in code may hold anything.
+        limit(&self.sessions.helpers_at_once)
+            .or_else(|| limit(HELPERS_AT_ONCE_DEFAULT))
+            .unwrap_or(1)
     }
 
     /// Load the config file; a missing file is the defaults, a broken one is an error.
@@ -1920,7 +1926,7 @@ mod tests {
                 d.helpers.as_str(),
                 d.helpers_at_once.as_str()
             ),
-            ("last used", "new worktree", "ask", "3")
+            ("last used", "new worktree", "ask", "4")
         );
         assert!(
             super::Ui::default().subagent_count,
@@ -1945,7 +1951,7 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("sessions.helpers_at_once") && err.contains("2, 3, 4"),
+            err.contains("sessions.helpers_at_once") && err.contains("2, 4, 8"),
             "{err}"
         );
     }
@@ -1994,8 +2000,13 @@ mod tests {
                 .unwrap()
                 .helpers_at_once()
         };
-        assert_eq!(read(""), 3, "the default");
+        assert_eq!(read(""), 4, "the default");
         assert_eq!(read("[sessions]\nhelpers_at_once = \"2\"\n"), 2);
+        assert_eq!(
+            read("[sessions]\nhelpers_at_once = \"3\"\n"),
+            4,
+            "a limit saved before the choices changed still loads"
+        );
         assert_eq!(
             read("[mcp]\nhelpers_at_once = 6\n"),
             4,
@@ -2003,15 +2014,16 @@ mod tests {
         );
         assert_eq!(
             read("[mcp]\nhelpers_at_once = 0\n"),
-            4,
+            8,
             "no limit is no longer offered"
         );
         assert_eq!(read("[mcp]\nhelpers_at_once = 1\n"), 2);
-        assert_eq!(read("[mcp]\nhelpers_at_once = 3\n"), 3);
+        assert_eq!(read("[mcp]\nhelpers_at_once = 3\n"), 4);
+        assert_eq!(read("[mcp]\nhelpers_at_once = 12\n"), 8);
         assert_eq!(
-            read("[mcp]\nhelpers_at_once = 6\n[sessions]\nhelpers_at_once = \"3\"\n"),
-            3,
-            "the new key wins, even at its default"
+            read("[mcp]\nhelpers_at_once = 6\n[sessions]\nhelpers_at_once = \"2\"\n"),
+            2,
+            "the new key wins"
         );
     }
 

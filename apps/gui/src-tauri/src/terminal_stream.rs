@@ -27,7 +27,7 @@ use maitty_shared::agent_commands::AgentCommand;
 use maitty_shared::repositories::RepositoryIndex;
 use maitty_shared::conversation::Provider;
 use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId};
+use maitty_shared::protocol::{COMPATIBLE_SINCE, ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId};
 use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -640,11 +640,14 @@ impl Wire {
 
     /// Ask this computer's daemon to change one shared setting. The daemon checks the value and
     /// tells every client; this window learns of it from the `shared-settings` event.
+    /// A key newer than the oldest daemon in the window is refused here: the line does not wait
+    /// for an answer, and an older daemon would pass over it in silence (`set_newer_shared_setting`).
     pub fn set_shared_setting(&self, key: SettingKey, value: SettingValue) -> Result<(), String> {
-        self.send(
-            MachineId::LOCAL,
-            ClientMsg::Command(Command::SetSetting { key, value }),
-        )
+        let message = ClientMsg::Command(Command::SetSetting { key, value });
+        if message.introduced_in() > COMPATIBLE_SINCE {
+            return Err("That setting is changed with set_newer_shared_setting".to_string());
+        }
+        self.send(MachineId::LOCAL, message)
     }
 
     /// Ask the daemon of `term`'s machine (this computer when none is named) to do `command`.
@@ -822,6 +825,18 @@ pub fn set_shared_setting(
     wire.set_shared_setting(key, value)
 }
 
+/// Changes a shared setting on this computer's daemon, which may be older than this app and not know the key
+/// (`helpers`, `helpers_at_once`). The running daemon's version is read first: one too old is refused in words, since
+/// it would pass over the request without answering. The new value arrives as a `shared-settings` event like any
+/// change.
+#[tauri::command]
+pub async fn set_newer_shared_setting(key: String, value: serde_json::Value) -> Result<(), String> {
+    let (key, value) = setting_from_wire(&key, value)?;
+    maitty_desktop_client::set_newer_shared_setting(key, value)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// The typed setting a name and a JSON value stand for.
 pub(crate) fn setting_from_wire(
     key: &str,
@@ -867,6 +882,12 @@ pub(crate) fn setting_from_wire(
         },
         "spinner" => (SettingKey::Spinner, SettingValue::List(word::<Vec<String>>(value)?)),
         "bypass_off" => (SettingKey::BypassOff, SettingValue::List(word::<Vec<String>>(value)?)),
+        // Both travel as the word config.toml holds; the daemon checks it against what Settings offers.
+        "helpers" => (SettingKey::Helpers, SettingValue::Text(text(value)?)),
+        "helpers_at_once" => match value.as_u64() {
+            Some(limit) => (SettingKey::HelpersAtOnce, SettingValue::Text(limit.to_string())),
+            None => return Err("This setting takes a whole number".to_string()),
+        },
         _ => return Err("That is not a shared setting".to_string()),
     })
 }
@@ -1694,6 +1715,16 @@ mod tests {
             setting_from_wire("bypass_off", json!(["codex"])).unwrap(),
             (SettingKey::BypassOff, SettingValue::List(vec!["codex".to_string()]))
         );
+        assert_eq!(
+            setting_from_wire("helpers", json!("never")).unwrap(),
+            (SettingKey::Helpers, SettingValue::Text("never".into()))
+        );
+        assert_eq!(
+            setting_from_wire("helpers_at_once", json!(8)).unwrap(),
+            (SettingKey::HelpersAtOnce, SettingValue::Text("8".into()))
+        );
+        assert!(setting_from_wire("helpers_at_once", json!("8")).is_err());
+        assert!(setting_from_wire("helpers_at_once", json!(2.5)).is_err());
         assert!(setting_from_wire("window_style", json!("tiled")).is_err(), "tiled is gone");
         assert!(setting_from_wire("reduce_motion", json!("yes")).is_err());
         assert!(setting_from_wire("start_dir", json!(3)).is_err());
@@ -1715,6 +1746,8 @@ mod tests {
             window_style: WindowStyle::Flat,
             bypass_off: vec![],
             update_machines: true,
+            helpers: maitty_shared::settings_view::HelpersMay::Ask,
+            helpers_at_once: 4,
         };
         let mut streams = Streams::default();
         let now = Instant::now();
