@@ -7,7 +7,7 @@ function unfolding(folded: ReadonlySet<string>, keys: readonly string[]): Readon
 }
 
 /**
- * Which headings of the sidebar are folded, by their fold keys (`projectFoldKey`, `IDLE_FOLD_KEY`, `helpersFoldKey`); kept in this window's
+ * Which headings of the sidebar are folded, by their fold keys (`projectFoldKey`, `IDLE_FOLD_KEY`, `idleProjectFoldKey`, `helpersFoldKey`); kept in this window's
  * storage, so a fold survives a restart. When `revealed` changes (the project just opened or picked), `revealKeys` are
  * unfolded, so that project is never out of sight.
  */

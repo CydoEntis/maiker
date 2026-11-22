@@ -395,7 +395,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    project's folder), **New worktree…** and **Open worktree…**. The right-click menu (`projectContextMenu`) offers
    **New session** (the draft with no agent picked), **New worktree…**, **Copy path**, **Show files** (shows a session
    of the project with the side panel's Files; off while the project has none, since files are read through a session)
-   and **Remove from sidebar…**. An Idle project's heading opens the `+` menu on a click. Nothing starts on a machine
+   and **Remove from sidebar…**. An Idle project's heading folds its rows like any project's (`aria-expanded`, its own fold key `idleProjectFoldKey`); one with no session has nothing to fold, so its heading opens the `+` menu on a click. Nothing starts on a machine
    that is not connected. New worktree opens the New worktree dialog off a live session in the
    project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
    from a session's terminal; a project with no live session opens the new-chat draft with **Own worktree** on instead

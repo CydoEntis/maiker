@@ -83,6 +83,14 @@ export function projectFoldKey(project: OpenedProject): string {
 /** The Idle section's own fold, kept with the projects' (`data/sidebarFolds.ts`). */
 export const IDLE_FOLD_KEY = 'section:idle'
 
+/**
+ * The fold of a project's heading in the Idle section (`projectKey` is its `projectFoldKey`), kept with the others. It is
+ * its own because a project with both kinds of session is listed in both places, and folding one must not hide the other.
+ */
+export function idleProjectFoldKey(projectKey: string): string {
+  return `idle:${projectKey}`
+}
+
 /** The fold of a lead's helpers, kept with the others; a lead is its session id for as long as it is listed. */
 export function helpersFoldKey(leadId: string): string {
   return `helpers:${leadId}`

@@ -652,12 +652,19 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   field over "New session". Enter and Esc give the row the keyboard back. The rail and a pane's menu, which show no
   name to type on, open the rename dialog instead, where an empty name clears it.
   **Idle** is one section fixed under the list (at most 45% of the height, with its own scroll): its heading (12px 600
-  `--muted`, the count, a caret) folds it. Under it each project is a dimmed heading (badge, name, machine tag) whose
-  click opens the project's `+` menu, with **No sessions** at its right when it has none, then its idle rows, set in
-  under the name at .55 opacity with no mark. A project with both kinds of session is in both places; the projects
-  with nothing going on come first. While the section lists only projects with no session it is headed **Projects**
-  and has no count. A session the daemon has put away or snoozed is listed like any other.
-  Which headings are folded, the Idle section's too, is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
+  `--muted`, the count, a caret) folds it. Under it each project is a heading (badge, name in 500, machine tag) that
+  folds its idle rows as a busy project's heading does (the same button, `aria-expanded`, quiet caret and `+`), then
+  its idle rows, set in under the name with no mark. A project with no session has nothing to fold: its heading's click
+  opens the project's `+` menu, with **No sessions** at its right. A project with both kinds of session is in both
+  places, and each place folds on its own; the projects with nothing going on come first. While the section lists only
+  projects with no session it is headed **Projects** and has no count. A session the daemon has put away or snoozed is
+  listed like any other.
+  **Everything in the Idle section is grey**: names, badge letters and fill, and machine tags in `--dim` (a badge on the
+  ink at 6%, no project colour), never a raw colour or a filter. The row the pointer is on, the heading or row that holds
+  keyboard focus (`:focus-visible`), and the selected session take their own colours back (a heading `--fg` with its
+  badge's colour, a row `--fg2`, the selected row `--fg`), fading over `--t-fast`; only colour changes, never the weight.
+  A machine tag that is not connected stays amber.
+  Which headings are folded, the Idle section's and its projects' too, is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
   by machine name and folder), so a fold survives a restart.
   A row whose status changes glides to its new place, and the headings and rows it passes glide with it (`useFlip`);
   Reduce motion turns it off. A row is never tinted or flashed when its status changes.

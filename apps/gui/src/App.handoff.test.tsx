@@ -201,7 +201,7 @@ describe('desktop terminal multiplexer', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
-    await user.click(screen.getByRole('button', { name: 'a' }))
+    await user.click(screen.getByRole('button', { name: 'New session or worktree in a' }))
     await user.click(await screen.findByRole('menuitem', { name: 'Terminal' }))
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
@@ -1156,7 +1156,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('button', { name: 'a' })
+    await screen.findByRole('button', { name: 'a, 1 idle session' })
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
     const box = within(await screen.findByRole('region', { name: 'New session' })).getByRole('textbox', { name: /^Message / })
     await user.click(box)
@@ -1175,7 +1175,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
     renderDesktopApp()
-    await screen.findByRole('button', { name: 'a' })
+    await screen.findByRole('button', { name: 'a, 1 idle session' })
 
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 

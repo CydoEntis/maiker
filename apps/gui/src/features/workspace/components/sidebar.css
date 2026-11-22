@@ -96,16 +96,19 @@
 .mx-sb-idle > .mx-collapse-grid { flex: 1 1 auto; min-height: 0; }
 .mx-sb-idle > .mx-collapse-grid > .mx-collapse-inner { overflow-x: hidden; overflow-y: auto; scrollbar-width: thin; }
 .mx-sb-idle-list { padding-top: 2px; }
+/* Everything in an Idle project is grey (`--dim`, the badge and a machine tag too) until the pointer or the keyboard is on
+   a row: that row alone, and the selected one, take their own colours back over `--t-fast`. Only colour changes, so the
+   text never re-sets; a machine that is not connected keeps its amber. */
 .mx-sb-head.is-idle { height: 26px; }
-.mx-sb-head.is-idle .mx-sb-head-main { opacity: .7; }
-.mx-sb-head.is-idle:hover .mx-sb-head-main, .mx-sb-head.is-idle .mx-sb-head-main:focus-visible { opacity: 1; }
-/* An idle project's badge keeps a trace of its colour, so it is still told from its neighbours. */
-.mx-sb-group.is-idle .mx-sb-badge { color: color-mix(in srgb, var(--badge) 40%, var(--muted)); background: color-mix(in srgb, var(--badge) 8%, rgba(var(--ink), .06)); }
+.mx-sb-head.is-idle .mx-sb-head-main { font-weight: 500; color: var(--dim); }
+.mx-sb-head.is-idle:is(:hover, :has(:focus-visible)) .mx-sb-head-main { color: var(--fg); }
+.mx-sb-group.is-idle .mx-sb-badge { transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
+.mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-badge { color: var(--dim); background: rgba(var(--ink), .06); }
+.mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-tag:not(.is-down) { color: var(--dim); }
 /* Idle rows line up under the project's name, past its badge. */
-.mx-sb-group.is-idle .mx-sb-row { padding-left: 34px; opacity: .55; }
-.mx-sb-group.is-idle .mx-sb-row:hover, .mx-sb-group.is-idle .mx-sb-row.is-selected, .mx-sb-group.is-idle .mx-sb-row:focus-visible { opacity: .9; }
-.mx-sb-group.is-idle .mx-sb-row.is-renaming { opacity: 1; }
-.mx-sb-group.is-idle .mx-sb-row-name { color: var(--muted); }
+.mx-sb-group.is-idle .mx-sb-row { padding-left: 34px; }
+.mx-sb-group.is-idle .mx-sb-row-name { color: var(--dim); transition: color var(--t-fast) var(--ease); }
+.mx-sb-group.is-idle .mx-sb-row:is(:hover, :focus-visible) .mx-sb-row-name { color: var(--fg2); }
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
 /* An idle lead's helpers start under its name, and their rows keep a helper's own inset. */
 .mx-sb-group.is-idle .mx-sb-helpers { margin-left: 40px; }

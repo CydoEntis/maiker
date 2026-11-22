@@ -196,6 +196,46 @@ describe('the Idle section', () => {
     expect(within(idleSection()).getByRole('button', { name: /^Idle/, expanded: false })).toBeTruthy()
   })
 
+  it('folds a project from its heading, on its own, and keeps the fold after a restart', async () => {
+    const user = userEvent.setup()
+    const sessions = [session(1, 'Busy', { status: 'working' }), session(2, 'Quiet'), session(3, 'Helper', startedBy('t2'))]
+    const first = render(<Sidebar {...propsOf(sessions)} />)
+    const idleHeading = () => within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' })
+    expect(idleHeading()).toHaveAttribute('aria-expanded', 'true')
+    act(() => { idleHeading().focus() })
+    await user.keyboard('{Enter}')
+    expect(idleHeading()).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('button', { name: /^Quiet,/ })).toBeNull()
+    expect(screen.queryByRole('button', { name: /^Helper,/ })).toBeNull()
+    // The same project above, with its busy row, keeps its own fold.
+    expect(heading('shop')).toHaveAttribute('aria-expanded', 'true')
+    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Busy'])
+    first.unmount()
+    render(<Sidebar {...propsOf(sessions)} />)
+    expect(idleHeading()).toHaveAttribute('aria-expanded', 'false')
+    await user.click(idleHeading())
+    expect(rowsIn(within(idleSection()).getByRole('list', { name: 'Idle in shop' }))).toEqual(['Quiet', 'Helper'])
+  })
+
+  it('unfolds an idle project just opened or picked', async () => {
+    const user = userEvent.setup()
+    const { again } = show([session(1, 'Quiet')])
+    await user.click(within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' }))
+    again({ selectedProject: { ...SHOP } })
+    expect(within(idleSection()).getByRole('button', { name: 'shop, 1 idle session' })).toHaveAttribute('aria-expanded', 'true')
+  })
+
+  it('draws its headings and rows, helpers too, as idle, and the busy ones above as they are', () => {
+    show([session(1, 'Busy', { status: 'working' }), session(2, 'Quiet'), session(3, 'Helper', startedBy('t2'))])
+    const idle = idleSection()
+    for (const row of [within(idle).getByRole('button', { name: 'shop, 1 idle session' }), within(idle).getByRole('button', { name: /^Quiet,/ }), within(idle).getByRole('button', { name: /^Helper,/ })]) {
+      expect(row.closest('.mx-sb-group')).toHaveClass('is-idle')
+    }
+    expect(within(idle).getByRole('button', { name: 'shop, 1 idle session' }).closest('.mx-sb-head')).toHaveClass('is-idle')
+    expect(heading('shop').closest('.mx-sb-group')).not.toHaveClass('is-idle')
+    expect(screen.getByRole('button', { name: /^Busy,/ }).closest('.mx-sb-group')).not.toHaveClass('is-idle')
+  })
+
   it('lists a session that stopped or whose machine is out of reach, so none goes missing', () => {
     show([session(1, 'Crashed', { status: 'recovery' }), session(2, 'Far away', { status: 'unknown' })])
     expect(within(idleSection()).getByRole('button', { name: 'Crashed, claude, stopped' })).toBeTruthy()

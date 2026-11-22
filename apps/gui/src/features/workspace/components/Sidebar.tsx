@@ -8,7 +8,7 @@ import { machineTitle, type MachineHead, type UpdateAction } from '../model/mach
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
 import type { SessionView } from '../model/session'
 import { rowTitle } from '../model/sidebar'
-import { filterChoices, helpersFoldKey, IDLE_FOLD_KEY, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
+import { filterChoices, helpersFoldKey, IDLE_FOLD_KEY, idleProjectFoldKey, needsYou, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter } from '../model/sidebarTree'
 import { Collapse } from './Collapse'
 import { Icon } from './glyphs'
 import { machineMenuEntries, type MachineActions } from './machineMenu'
@@ -155,8 +155,8 @@ function Expanded(props: SidebarProps) {
   }
   const filter = hidesSelected ? NO_FILTER : valid
   const order = sidebarOrder(props.machines, props.projects, filter, held)
-  // Unfolded with the fold keys the list spells: its own project, and the Idle section when that is where it sits.
-  const revealKeys = listedSelected === null ? [] : [listedSelected.key, ...(everything.active.some((group) => group.key === listedSelected.key) ? [] : [IDLE_FOLD_KEY])]
+  // Unfolded with the fold keys the list spells: its own project, or the Idle section and its heading there when that is where it sits.
+  const revealKeys = listedSelected === null ? [] : everything.active.some((group) => group.key === listedSelected.key) ? [listedSelected.key] : [IDLE_FOLD_KEY, idleProjectFoldKey(listedSelected.key)]
   const folds = useSidebarFolds(selected, revealKeys)
   const idleOpen = folds.isOpen(IDLE_FOLD_KEY)
   // Measured to slide only when a row or heading can have moved: its place, its name, or a fold.
@@ -282,7 +282,9 @@ function Expanded(props: SidebarProps) {
             <Collapse open={idleOpen}>
               <div className="mx-sb-idle-list" onScroll={endHover}>
                 {order.idle.map((group) => (
-                  <IdleProject key={group.key} group={group} menus={headOf(group)}>{renderRows(group.rows)}</IdleProject>
+                  <IdleProject key={group.key} group={group} open={folds.isOpen(idleProjectFoldKey(group.key))} onToggle={() => { folds.toggle(idleProjectFoldKey(group.key)) }} menus={headOf(group)}>
+                    {renderRows(group.rows)}
+                  </IdleProject>
                 ))}
               </div>
             </Collapse>
@@ -357,7 +359,8 @@ function HelperGroup({ lead, helpers, open, onToggle, children }: { lead: Sessio
   )
 }
 
-const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)
+/** `count` sessions as a heading's name says it, `kind` (such as "idle") before the noun. */
+const sessionsWord = (count: number, kind = ''): string => `${String(count)} ${kind === '' ? '' : `${kind} `}${count === 1 ? 'session' : 'sessions'}`
 
 /**
  * A project with something going on: its heading (badge, name, machine tag, how many sessions) folds its rows, `+` opens
@@ -388,27 +391,50 @@ function ActiveProject({ group, open, onToggle, menus, children }: { group: Proj
 }
 
 /**
- * A project in the Idle section: its heading opens what can start in it (there is nothing to fold away from an idle
- * project), then its idle rows, or "No sessions" on the heading when it has none at all.
+ * A project in the Idle section (drawn grey, `.is-idle`, until the pointer or the keyboard is on a row). Its heading folds
+ * its idle rows as a busy project's does, with its own fold (`idleProjectFoldKey`), and `+` opens what can start in it. A
+ * project with no session has nothing to fold: its heading opens that menu itself, with "No sessions" at its right.
  */
-function IdleProject({ group, menus, children }: { group: ProjectGroup; menus: HeadMenus; children: ReactNode }) {
+function IdleProject({ group, open, onToggle, menus, children }: { group: ProjectGroup; open: boolean; onToggle: () => void; menus: HeadMenus; children: ReactNode }) {
   const { onPlus } = menus
   const empty = group.rows.length === 0
+  const name = (
+    <>
+      <ProjectBadge name={group.name} />
+      <span className="mx-sb-head-name">{group.name}</span>
+    </>
+  )
   return (
     <div className="mx-sb-group is-idle">
       <div className="mx-sb-head is-idle" data-project={group.key} data-flip={`idle-head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
-        <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
-          <ProjectBadge name={group.name} />
-          <span className="mx-sb-head-name">{group.name}</span>
-          {empty && <span className="sr-only">, no sessions</span>}
-        </button>
+        {empty ? (
+          <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
+            {name}
+            <span className="sr-only">, no sessions</span>
+          </button>
+        ) : (
+          <button type="button" className="mx-sb-head-main" aria-expanded={open} title={group.project.folder} onClick={onToggle}>
+            {name}
+            <span className="sr-only">{`, ${sessionsWord(group.rows.length, 'idle')}`}</span>
+          </button>
+        )}
         {menus.tag}
         <span className="mx-spacer" />
-        {empty && <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>}
-        {/* The heading already opens this menu from the keyboard; the + is the pointer's second way in, as on a busy project. */}
-        {onPlus !== null && <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} tabIndex={-1} aria-hidden="true" onClick={onPlus}><Icon name="plus" /></IconButton>}
+        {empty
+          ? <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>
+          : <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>}
+        {/* With no session the heading itself opens this menu from the keyboard, so the + is only the pointer's second way in. */}
+        {onPlus !== null && (
+          <IconButton className="mx-sb-add" label={`New session or worktree in ${group.name}`} {...(empty ? { tabIndex: -1, 'aria-hidden': true } : { 'aria-haspopup': 'menu' as const })} onClick={onPlus}>
+            <Icon name="plus" />
+          </IconButton>
+        )}
       </div>
-      {!empty && <div className="mx-sb-rows" role="list" aria-label={`Idle in ${group.name}`}>{children}</div>}
+      {!empty && (
+        <Collapse open={open}>
+          <div className="mx-sb-rows" role="list" aria-label={`Idle in ${group.name}`}>{children}</div>
+        </Collapse>
+      )}
     </div>
   )
 }
