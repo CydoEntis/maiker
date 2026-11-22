@@ -1417,14 +1417,18 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
 - **Changing.** A plugin has a switch; every item has Remove. Remove asks first ("Remove X?", Cancel focused; a skill's
   words say its folder and the files in it are deleted). Both go through the agent's own command, so the list is read again
   afterwards; a refusal is a typed line, never the agent's raw words. "A change shows up in the next chat you start."
-- **Adding.** Three cards (marketplace, plugin, MCP server) only ask for a **Review**. The dialog then shows the agent,
-  where it applies, where it comes from, exactly what it will run, the host that hears the person's prompts, and **This
-  runs code on your computer with your access.** Cancel is focused and Enter does not confirm; only the confirm button
-  sends the token the review returned (`confirmAdd` is called from nowhere else). No "trust always". A server's keys and
-  headers are not taken here.
-- **Needs a terminal.** A card says so in plain words with the exact commands: `claude mcp login <name>` and
-  `codex mcp login <name>` for a server that signs in through a browser, and that a project's `.mcp.json` servers wait for
-  the person's approval inside Claude Code itself.
+- **Adding.** One **Add** card has a row per kind (Marketplace, Plugin, MCP server), each with a one-line description
+  and an **Add…** button (`aria-expanded`, named "Add a marketplace" and so on). The button opens that kind's form
+  under its row and closes any other, so at most one form is open; focus goes to its first field. **Cancel** or **Esc**
+  closes it (the form is `data-owns-escape`, so Settings stays open) and gives focus back to the button. A form only
+  asks for a **Review**; its refusal and its one note (a marketplace's risk, a server's keys) sit at its foot. The
+  dialog then shows the agent, where it applies, where it comes from, exactly what it will run, the host that hears the
+  person's prompts, and **This runs code on your computer with your access.** Cancel is focused and Enter does not
+  confirm; only the confirm button sends the token the review returned (`confirmAdd` is called from nowhere else). No
+  "trust always". A server's keys and headers are not taken here.
+- **Needs a terminal.** A card folded to one row with **Show** (`aria-expanded`). Opened, it says in plain words with
+  the exact commands: `claude mcp login <name>` and `codex mcp login <name>` for a server that signs in through a
+  browser, and that a project's `.mcp.json` servers wait for the person's approval inside Claude Code itself.
 - **Not seen on screen yet:** the page was written against the existing Settings cards and tests only.
 
 ## Project-specific: desktop chat view

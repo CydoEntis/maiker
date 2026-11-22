@@ -785,7 +785,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   weight, scroll speed, line height, screen reader support) that shows only its title until **Show**; a search looks
   inside it anyway. **Appearance**: **Theme** (System, Dark or Light and the dark and light theme pickers, each over
   every theme of its kind), Motion with Reduce motion, and the sidebar's position and width. **Notifications** has two
-  switches, Needs you and Done, and the test toast. A check that fails says why in plain words, never the raw text
+  switches, Needs you and Done, and the test toast. **Extensions** is the last page under Agents and stays short: Where
+  to look (the project picker), one card per agent listing what is installed, an **Add** card with one row per kind
+  (Marketplace, Plugin, MCP server) whose **Add…** opens that one form under it, and **Needs a terminal** folded to one
+  row with **Show** ([UI](UI.md#project-specific-extensions-page-desktop)). A check that fails says why in plain words, never the raw text
   of a tool or of an answer's shape check (`UNREADABLE_ANSWER`). No page offers corners, density, icon size or
   colour, an accent, interface text size or status headings.
 - **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
