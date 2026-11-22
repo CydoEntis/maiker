@@ -434,6 +434,11 @@ pub struct AllowedCommand {
 /// it cannot read a list of conversations that holds one. 122 added a start a daemon before it
 /// cannot read (`StartTarget::Agent`), so a client would wait on a chat that never starts.
 pub const COMPATIBLE_SINCE: u32 = 122;
+
+/// The first version with `Query::PullRequests` and its `Reply::PullRequests`. An older daemon is
+/// never asked for a project's pull requests, and an older client never asks.
+pub const PULL_REQUESTS_SINCE: u32 = 123;
+
 /// Whether this build and a peer talk. The older of the two cannot know what came after it, so
 /// the newer one decides: `peer_compatible_since` is what the peer said in the handshake (0 from
 /// a build that says nothing, which then talks only to its own version).
@@ -1350,6 +1355,16 @@ pub enum Query {
     GitHubOwners {
         tag: u64,
     },
+    /// The open pull requests of the repository `folder` is in, on this daemon's computer, as its
+    /// GitHub command line (`gh`) lists them (human clients only). `folder` is absolute or starts
+    /// with `~`; no pane is needed. The daemon keeps a folder's list for a minute: `fresh` asks
+    /// past that, for a client that knows the list changed (it has just opened a pull request).
+    /// The answer is `Reply::PullRequests` with the same `tag`.
+    PullRequests {
+        folder: String,
+        fresh: bool,
+        tag: u64,
+    },
     /// The slash commands and skills `agent` takes in `folder` on this daemon's computer (human
     /// clients only), asked of the agent's own program: its own, and the person's and the
     /// project's. The folder is used only when it is an absolute path to a folder that exists; the
@@ -1698,6 +1713,10 @@ pub enum Reply {
         tag: u64,
         answer: GitHubAnswer<Vec<String>>,
     },
+    PullRequests {
+        tag: u64,
+        answer: GitHubAnswer<ProjectPulls>,
+    },
     /// The commands a `Query::AgentCommands` found, or why the agent could not be asked (it is not
     /// installed there, it did not answer in time).
     AgentCommands {
@@ -1801,6 +1820,70 @@ pub struct GitHubAccount {
     pub login: String,
     /// The account `gh` and git use when nothing says otherwise.
     pub active: bool,
+}
+
+/// The most pull requests one list carries.
+pub const PULL_REQUESTS_MAX: usize = 50;
+/// The most characters of a pull request's title, author or branch that are passed on.
+pub const PULL_REQUEST_TEXT_MAX_CHARS: usize = 300;
+/// How long the daemon gives `gh` to list a project's pull requests.
+pub const PULL_REQUESTS_LIMIT_SECS: u64 = 30;
+
+/// What `Query::PullRequests` found once `gh` is there and signed in.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub enum ProjectPulls {
+    /// The folder is in no repository that GitHub hosts: it is no repository at all, or it has no
+    /// remote on github.com. Nothing is wrong, so it is not `GitHubAnswer::Failed`.
+    NotOnGitHub,
+    Open(PullRequestList),
+}
+
+/// A repository's open pull requests, in the order `gh` lists them (the newest first).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestList {
+    /// The login `gh` acts as on that computer: whose `mine` and `needs_you` these are.
+    pub login: String,
+    pub items: Vec<ProjectPr>,
+    /// True when there are more than `PULL_REQUESTS_MAX`.
+    pub more: bool,
+}
+
+/// One open pull request of a project.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ProjectPr {
+    pub number: u32,
+    /// `https://github.com/<owner>/<repo>/pull/<number>` and nothing more.
+    pub url: String,
+    pub title: String,
+    /// Who opened it; empty when `gh` did not say.
+    pub author: String,
+    /// The branch it comes from.
+    pub branch: String,
+    pub draft: bool,
+    pub checks: PrChecksState,
+    pub review: PrReview,
+    pub conflicting: bool,
+    /// The signed-in account opened it.
+    pub mine: bool,
+    /// A review is asked of the signed-in account itself (not of a team it is in).
+    pub review_requested: bool,
+    /// The signed-in account has something to do: a review is asked of it, or the pull request is
+    /// its own and a check failed or a reviewer asked for changes. The daemon decides this; a
+    /// client only shows and counts it.
+    pub needs_you: bool,
+    /// When it last changed, as GitHub writes a time; empty when unknown.
+    pub updated_at: String,
+}
+
+/// Where a pull request's checks stand, taken together.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum PrChecksState {
+    /// It has no checks.
+    #[default]
+    None,
+    Running,
+    Failed,
+    Passed,
 }
 
 /// The most folders one listing carries; a folder with more says so in `truncated`.
@@ -2671,10 +2754,12 @@ impl WorkspaceInfo {
 impl ServerMsg {
     /// The first version whose client reads this message. The daemon does not send a message to
     /// a client older than that. A message added while `COMPATIBLE_SINCE` stays behind gets its
-    /// own arm here; everything else is as old as the window. 122 moved the window, so every
-    /// message there is today is as old as it.
+    /// own arm here; everything else is as old as the window.
     pub fn introduced_in(&self) -> u32 {
-        COMPATIBLE_SINCE
+        match self {
+            ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+            _ => COMPATIBLE_SINCE,
+        }
     }
 }
 
@@ -2685,6 +2770,7 @@ impl ClientMsg {
     pub fn introduced_in(&self) -> u32 {
         match self {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
+            ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -3082,6 +3168,7 @@ mod tests {
         ] {
             clients.push(ClientMsg::Command(Command::SetSetting { key, value }));
         }
+        clients.push(ClientMsg::Query(Query::PullRequests { folder: "~/code/app".into(), fresh: true, tag: 6 }));
         clients
     }
 
@@ -3283,6 +3370,7 @@ mod tests {
         ] {
             servers.push(ServerMsg::Reply(Reply::Extensions { tag: 7, answer }));
         }
+        servers.push(ServerMsg::Reply(Reply::PullRequests { tag: 6, answer: GitHubAnswer::Listed(sample_pull_requests()) }));
         servers
     }
 
@@ -3304,13 +3392,88 @@ mod tests {
         for m in every_client_message() {
             let since = match m {
                 ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
+                ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
         }
         for m in every_server_message() {
-            assert_eq!(m.introduced_in(), COMPATIBLE_SINCE, "{m:?}");
+            let since = match m {
+                ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+                _ => COMPATIBLE_SINCE,
+            };
+            assert_eq!(m.introduced_in(), since, "{m:?}");
         }
+    }
+
+    fn sample_pull_requests() -> ProjectPulls {
+        ProjectPulls::Open(PullRequestList {
+            login: "me".into(),
+            items: vec![ProjectPr {
+                number: 139,
+                url: "https://github.com/o/r/pull/139".into(),
+                title: "Add a dark mode toggle".into(),
+                author: "someone".into(),
+                branch: "feat/dark-mode".into(),
+                draft: false,
+                checks: PrChecksState::Running,
+                review: PrReview::Required,
+                conflicting: false,
+                mine: false,
+                review_requested: true,
+                needs_you: true,
+                updated_at: "2026-01-02T03:04:05Z".into(),
+            }],
+            more: false,
+        })
+    }
+
+    /// 123 added a project's pull requests as a question and an answer of their own. A peer at
+    /// 122 still talks to this build (`COMPATIBLE_SINCE` stays), cannot read either message, and
+    /// is never sent one: each has its `introduced_in` arm. What that peer does send still reads.
+    #[test]
+    fn a_peer_from_before_pull_request_lists_still_talks_and_is_never_sent_one() {
+        // The GitHub questions and answers as a peer at 122 declares them.
+        #[derive(Serialize, Deserialize)]
+        enum Query122 {
+            MachineFacts { tag: u64 },
+            GitHubRepos { owner: Option<String>, search: Option<String>, tag: u64 },
+            GitHubOwners { tag: u64 },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply122 {
+            GitHubRepos { tag: u64, answer: GitHubAnswer<GitHubRepoList> },
+            GitHubOwners { tag: u64, answer: GitHubAnswer<Vec<String>> },
+        }
+        const { assert!(PULL_REQUESTS_SINCE > COMPATIBLE_SINCE && PULL_REQUESTS_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(PULL_REQUESTS_SINCE - 1, 0));
+
+        let ask = Query::PullRequests { folder: "~/code/app".into(), fresh: false, tag: 4 };
+        unreadable_before::<Query122, _>(&ask);
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), PULL_REQUESTS_SINCE);
+        for answer in [
+            GitHubAnswer::NotInstalled,
+            GitHubAnswer::NotSignedIn,
+            GitHubAnswer::Failed("no network".into()),
+            GitHubAnswer::Listed(ProjectPulls::NotOnGitHub),
+            GitHubAnswer::Listed(sample_pull_requests()),
+        ] {
+            let reply = Reply::PullRequests { tag: 4, answer };
+            unreadable_before::<Reply122, _>(&reply);
+            round_trips(&reply);
+            assert_eq!(ServerMsg::Reply(reply).introduced_in(), PULL_REQUESTS_SINCE);
+        }
+
+        let old = encode(&Query122::GitHubRepos { owner: Some("my-org".into()), search: None, tag: 2 }).unwrap();
+        assert!(matches!(decode::<Query>(&old).unwrap(), Query::GitHubRepos { owner: Some(owner), search: None, tag: 2 } if owner == "my-org"));
+        let old = encode(&Query122::GitHubOwners { tag: 3 }).unwrap();
+        assert!(matches!(decode::<Query>(&old).unwrap(), Query::GitHubOwners { tag: 3 }));
+        let old = encode(&Query122::MachineFacts { tag: 5 }).unwrap();
+        assert!(matches!(decode::<Query>(&old).unwrap(), Query::MachineFacts { tag: 5 }));
+        let old = encode(&Reply122::GitHubOwners { tag: 3, answer: GitHubAnswer::Listed(vec!["me".into()]) }).unwrap();
+        assert!(matches!(decode::<Reply>(&old).unwrap(), Reply::GitHubOwners { tag: 3, answer: GitHubAnswer::Listed(owners) } if owners == ["me"]));
+        let old = encode(&Reply122::GitHubRepos { tag: 2, answer: GitHubAnswer::NotSignedIn }).unwrap();
+        assert!(matches!(decode::<Reply>(&old).unwrap(), Reply::GitHubRepos { tag: 2, answer: GitHubAnswer::NotSignedIn }));
     }
 
     /// Every message added since some older peer was built, against that peer's own enum.

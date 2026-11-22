@@ -22,6 +22,7 @@ mod open_link;
 mod output_socket;
 mod performance;
 mod project_files;
+mod pull_requests;
 pub mod routing;
 pub mod streams;
 
@@ -1877,6 +1878,7 @@ pub fn run() {
             terminal_stream::github_accounts,
             terminal_stream::github_repos,
             terminal_stream::github_owners,
+            pull_requests::pull_requests,
             terminal_stream::agent_commands_on,
             terminal_stream::repositories,
             terminal_stream::extensions,

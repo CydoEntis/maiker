@@ -95,6 +95,7 @@ src/
     identity.rs  the daemon's random id, made on first start and kept in the data folder (daemon-id); sent in every snapshot
     secrets.rs   secrets agents ask you for: the pending requests, and what you typed, held in memory as single-use references (ADR 0006)
     pr.rs        each pane's pull request read through `gh`: the poll, the answer parsed, what changed between two readings, and the message queued for the agent
+    pr_list.rs   a project's open pull requests for a client that asks (`Query::PullRequests`): `gh pr list` in the folder, which of them need the signed-in account, each folder's list kept for a minute
     approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maiker's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
     term.rs      one pane: PTY, input thread, vt100 emulator
     scan.rs, git.rs, persist.rs

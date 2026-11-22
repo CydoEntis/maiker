@@ -38,6 +38,7 @@ mod pane_terminal;
 mod permission_ask;
 mod persist;
 mod pr;
+mod pr_list;
 #[cfg(unix)]
 mod provider_groups;
 mod providers;
@@ -279,6 +280,11 @@ pub enum Ev {
         tag: u64,
         report: crate::protocol::GitHubReport,
     },
+    /// `gh` listed (or could not list) the open pull requests of the repository `folder` is in.
+    PullRequestsListed {
+        folder: PathBuf,
+        answer: crate::protocol::GitHubAnswer<crate::protocol::ProjectPulls>,
+    },
     /// A GitHub list `gh` was asked for off the loop, as the reply to send.
     Answered {
         client: ClientId,
@@ -476,6 +482,8 @@ struct Daemon {
     /// The agents' sign-ins this daemon runs on a window's request.
     sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
+    /// Projects' open pull requests, as clients asked for them (`Query::PullRequests`).
+    pr_lists: pr_list::Lists,
     last_secret_files: Instant,
     git_busy: bool,
     /// Lines added and removed against HEAD, by checkout (`git::diff_counts`).
@@ -1336,6 +1344,7 @@ impl Daemon {
             secrets: secrets::Secrets::default(),
             sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
+            pr_lists: pr_list::Lists::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
             diff_counts: HashMap::new(),
@@ -2523,6 +2532,11 @@ impl Daemon {
                 tag,
                 report,
             } => self.send(client, ServerMsg::Reply(Reply::GitHubAccounts { tag, report })),
+            Ev::PullRequestsListed { folder, answer } => {
+                for (client, tag) in self.pr_lists.finished(&folder, &answer, Instant::now()) {
+                    self.send(client, ServerMsg::Reply(Reply::PullRequests { tag, answer: answer.clone() }));
+                }
+            }
             Ev::Answered { client, reply } => self.send(client, ServerMsg::Reply(reply)),
             Ev::SavedConversationsReady { client, tag, found } => {
                 self.send(client, ServerMsg::Reply(Reply::SavedConversations { tag, found }));
@@ -3237,7 +3251,7 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can ask about a folder's branches or the machine".into())
                     }
-                    Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
+                    Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. } | Query::PullRequests { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
                         }) =>
@@ -3330,6 +3344,26 @@ impl Daemon {
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
+                    }
+                    Query::PullRequests { folder, fresh, tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let resolved = (folder.len() <= folders::PATH_MAX_BYTES).then(|| folders::resolve(&folder, home.as_deref())).flatten();
+                        let asked = match &resolved {
+                            Some(folder) => self.pr_lists.ask(folder, fresh, (client, tag), Instant::now()),
+                            None => pr_list::Ask::Answer(crate::protocol::GitHubAnswer::Failed("Choose the folder by its full path".into())),
+                        };
+                        match (asked, resolved) {
+                            (pr_list::Ask::Answer(answer), _) => ServerMsg::Reply(Reply::PullRequests { tag, answer }),
+                            (pr_list::Ask::Run, Some(folder)) => {
+                                let tx = self.tx.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    let answer = pr_list::list(&folder);
+                                    let _ = tx.blocking_send(Ev::PullRequestsListed { folder, answer });
+                                });
+                                return;
+                            }
+                            (pr_list::Ask::Wait | pr_list::Ask::Run, _) => return,
+                        }
                     }
                     Query::GitHubOwners { tag } => {
                         let tx = self.tx.clone();
@@ -4358,10 +4392,15 @@ mod tests {
         assert!(client_reads(&msg, msg.introduced_in()));
         assert!(!client_reads(&msg, msg.introduced_in() - 1));
 
-        // The window opens at this version, so no message is newer than a client inside it.
+        // A message as old as the window goes to every client inside it.
         let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: crate::protocol::ClonePhase::Receiving, percent: 1 });
         assert!(client_reads(&progress, crate::protocol::COMPATIBLE_SINCE));
         assert!(client_reads(&progress, PROTOCOL_VERSION));
+        // One added since has its own arm: a client from before it is inside the window and is not sent it.
+        let pulls = ServerMsg::Reply(Reply::PullRequests { tag: 1, answer: crate::protocol::GitHubAnswer::NotInstalled });
+        assert!(client_reads(&pulls, crate::protocol::PULL_REQUESTS_SINCE));
+        assert!(!client_reads(&pulls, crate::protocol::PULL_REQUESTS_SINCE - 1));
+        assert!(crate::protocol::speaks_with(crate::protocol::PULL_REQUESTS_SINCE - 1, 0));
 
         let unreadable = crate::protocol::decode::<ClientMsg>(&[0xc1]).unwrap_err();
         assert!(skips_unreadable(PROTOCOL_VERSION + 1, &unreadable));

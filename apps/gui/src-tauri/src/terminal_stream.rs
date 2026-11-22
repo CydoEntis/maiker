@@ -383,6 +383,16 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_rule_reply)
     }
 
+    /// Where a question about a project's pull requests goes: `daemon`, taking only a cleaned list of
+    /// pull requests from another machine.
+    pub fn pull_requests_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_pull_requests_reply)
+    }
+
     /// `daemon`, with `vet` deciding what another machine's daemon may answer.
     fn daemon_vetting(
         &self,

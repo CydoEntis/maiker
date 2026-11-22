@@ -8,7 +8,7 @@
 //! doesn't announce what was already known.
 
 use super::{Daemon, Ev};
-use crate::protocol::{PrChecks, PrInfo, PrReview, PrState, Status, TermId};
+use crate::protocol::{PrChecks, PrChecksState, PrInfo, PrReview, PrState, Status, TermId};
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::{HashMap, HashSet};
@@ -18,8 +18,8 @@ use std::time::{Duration, Instant};
 
 const POLL_EVERY: Duration = Duration::from_secs(120);
 /// After a rate limit: wait this long, doubling each time up to the longest.
-const BACKOFF_FIRST: Duration = Duration::from_secs(600);
-const BACKOFF_LONGEST: Duration = Duration::from_secs(1800);
+pub(super) const BACKOFF_FIRST: Duration = Duration::from_secs(600);
+pub(super) const BACKOFF_LONGEST: Duration = Duration::from_secs(1800);
 /// Most branches asked about in one pass.
 const MOST_BRANCHES: usize = 12;
 /// Most times one pull request tells its agent something before a new commit: a bot that
@@ -132,7 +132,7 @@ struct RawPr {
 
 /// A check run (`name`, `status`, `conclusion`) or a commit status (`context`, `state`).
 #[derive(Deserialize)]
-struct RawCheck {
+pub(super) struct RawCheck {
     #[serde(default)]
     name: Option<String>,
     #[serde(default)]
@@ -188,6 +188,31 @@ fn outcome(c: &RawCheck) -> CheckOutcome {
     }
 }
 
+/// Where `checks` stand taken together: one that failed outweighs one still running, which
+/// outweighs those that passed.
+pub(super) fn standing(checks: &[RawCheck]) -> PrChecksState {
+    let mut standing = PrChecksState::None;
+    for check in checks {
+        match outcome(check) {
+            CheckOutcome::Failed => return PrChecksState::Failed,
+            CheckOutcome::Pending => standing = PrChecksState::Running,
+            CheckOutcome::Passed if standing == PrChecksState::None => standing = PrChecksState::Passed,
+            CheckOutcome::Passed => {}
+        }
+    }
+    standing
+}
+
+/// What GitHub's review decision for a pull request (`reviewDecision`) says.
+pub(super) fn review_of(decision: Option<&str>) -> PrReview {
+    match decision {
+        Some("APPROVED") => PrReview::Approved,
+        Some("CHANGES_REQUESTED") => PrReview::ChangesRequested,
+        Some("REVIEW_REQUIRED") => PrReview::Required,
+        _ => PrReview::None,
+    }
+}
+
 /// Read `gh pr view --json …` output.
 pub(super) fn parse(json: &str) -> Result<Reading> {
     let raw: RawPr = serde_json::from_str(json).context("reading the pull request from gh")?;
@@ -211,12 +236,7 @@ pub(super) fn parse(json: &str) -> Result<Reading> {
         "CLOSED" => PrState::Closed,
         _ => PrState::Open,
     };
-    let review = match raw.review_decision.as_deref() {
-        Some("APPROVED") => PrReview::Approved,
-        Some("CHANGES_REQUESTED") => PrReview::ChangesRequested,
-        Some("REVIEW_REQUIRED") => PrReview::Required,
-        _ => PrReview::None,
-    };
+    let review = review_of(raw.review_decision.as_deref());
     // A review says something when it has words, or asks for changes; an approval alone doesn't.
     let said = raw
         .reviews
@@ -432,7 +452,7 @@ fn fingerprint(json: &str) -> u64 {
     h.finish()
 }
 
-fn rate_limited(problem: &str) -> bool {
+pub(super) fn rate_limited(problem: &str) -> bool {
     let p = problem.to_ascii_lowercase();
     p.contains("rate limit") || p.contains("http 429") || p.contains("secondary rate")
 }

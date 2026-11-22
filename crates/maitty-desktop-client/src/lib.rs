@@ -1589,6 +1589,30 @@ pub async fn answer_helpers(
     }
 }
 
+/// The open pull requests of the repository `folder` is in, from the daemon of the machine the folder is on, where
+/// `gh` and its sign-in are; `fresh` asks past the list that daemon keeps for a minute. This computer's daemon may
+/// be older than the question and is then refused in words; another machine's is on this version or not used.
+/// The daemon gives `gh` less time than a request has, so the usual limit is enough.
+pub async fn pull_requests(
+    folder: String,
+    fresh: bool,
+    daemon: impl Into<Daemon>,
+) -> Result<maitty_shared::protocol::GitHubAnswer<maitty_shared::protocol::ProjectPulls>> {
+    let message = pull_requests_message(folder, fresh);
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        remote => request(message, remote).await?,
+    };
+    match reply {
+        Reply::PullRequests { answer, .. } => Ok(answer),
+        _ => bail!("The Maiker service gave an answer this app does not understand (pull requests). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+fn pull_requests_message(folder: String, fresh: bool) -> ClientMsg {
+    ClientMsg::Query(Query::PullRequests { folder, fresh, tag: 0 })
+}
+
 /// The person's answer to a chat that asked to start helpers (ADR 0016). A service too old to
 /// read the command is refused in words here.
 pub async fn answer_chat_helpers(
@@ -2742,6 +2766,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }
+        | Query::PullRequests { .. }
         | Query::AgentCommands { .. }
         | Query::Repositories { .. }
         | Query::GitIdentities { .. }
@@ -3420,6 +3445,19 @@ mod agent_command_tests {
         assert!(refused.to_string().contains("older than this app"), "{refused}");
         assert!(refuse_unless_daemon_reads(&discard, DISCARD_FILE_SINCE).is_ok());
         assert!(refuse_unless_daemon_reads(&discard, PROTOCOL_VERSION).is_ok());
+    }
+
+    #[test]
+    fn a_service_from_before_pull_request_lists_is_refused_in_words_and_never_asked() {
+        use super::{daemon_reads, pull_requests_message, refuse_unless_daemon_reads};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, PULL_REQUESTS_SINCE};
+        let message = pull_requests_message("~/code/app".into(), false);
+        assert!(daemon_reads(&message, PROTOCOL_VERSION));
+        assert!(refuse_unless_daemon_reads(&message, PULL_REQUESTS_SINCE).is_ok());
+        for older in COMPATIBLE_SINCE..PULL_REQUESTS_SINCE {
+            let refused = refuse_unless_daemon_reads(&message, older).unwrap_err();
+            assert!(format!("{refused:#}").contains("older than this app"), "{refused:#}");
+        }
     }
 
     #[test]

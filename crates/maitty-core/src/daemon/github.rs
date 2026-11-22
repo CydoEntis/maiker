@@ -1,6 +1,7 @@
 //! What this machine's GitHub command line (`gh`) says, for a client that wants to show it: who is
 //! signed in (`Query::GitHubAccounts`), the repositories that account can clone
-//! (`Query::GitHubRepos`) and whose they can be (`Query::GitHubOwners`). Only names are read. No
+//! (`Query::GitHubRepos`) and whose they can be (`Query::GitHubOwners`). A project's open pull
+//! requests are in `pr_list`. Only names are read. No
 //! token is asked for, kept or sent: signing in and the credentials stay `gh`'s own.
 
 use crate::proc::{Ran, RunError, run_within};
@@ -106,7 +107,7 @@ fn problem(why: String) -> GitHubReport {
     GitHubReport { installed: true, accounts: Vec::new(), problem: Some(why) }
 }
 
-fn first_line(text: &str) -> Option<&str> {
+pub(super) fn first_line(text: &str) -> Option<&str> {
     text.lines().map(str::trim).find(|line| !line.is_empty())
 }
 
@@ -135,7 +136,7 @@ fn parse_status(json: &str) -> Option<Vec<GitHubAccount>> {
 }
 
 /// The login `gh` acts as, or the answer that says why there is none.
-fn active_login<T>(program: &OsStr) -> Result<String, GitHubAnswer<T>> {
+pub(super) fn active_login<T>(program: &OsStr) -> Result<String, GitHubAnswer<T>> {
     let report = accounts_from(program, ASK_LIMIT);
     if !report.installed {
         return Err(GitHubAnswer::NotInstalled);

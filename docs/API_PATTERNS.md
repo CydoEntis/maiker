@@ -1268,6 +1268,31 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 123 adds `Query::PullRequests { folder, fresh, tag }` with `Reply::PullRequests { tag, answer }`
+(`PULL_REQUESTS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an
+older daemon is never asked and an older client never asks). `folder` is absolute or starts with `~`,
+like `Query::FolderGit`, and needs no pane. `answer` is a `GitHubAnswer<ProjectPulls>`: `NotInstalled`,
+`NotSignedIn`, `Failed(one line)`, or `Listed` of `ProjectPulls::NotOnGitHub` (the folder is in no
+repository, or in one with no remote on github.com: not a failure) or `ProjectPulls::Open(PullRequestList)`.
+A `PullRequestList` is the signed-in `login`, at most `PULL_REQUESTS_MAX` (50) `items` in `gh`'s order
+and `more`; each `ProjectPr` has `number`, `url`, `title`, `author`, `branch`, `draft`, `checks`
+(`PrChecksState`: `None`, `Running`, `Failed`, `Passed`), `review` (`PrReview`), `conflicting`, `mine`,
+`review_requested`, `needs_you` and `updated_at`. **The daemon decides `needs_you`**
+(`daemon/pr_list.rs`): a review is asked of the signed-in account itself, or the pull request is its
+own and a check failed or a reviewer asked for changes. A client shows and counts it and never works it
+out. Human clients only. The daemon runs `gh auth status`, then one `gh pr list --state open --limit 51
+--json …` in the folder, off the event loop, stopped after `PULL_REQUESTS_LIMIT_SECS` (30). It asks only
+when a client does, keeps each folder's list for 60 seconds (`fresh` asks past it, for a client that has
+just opened a pull request), answers every ask made while `gh` is listing a folder from that one call,
+keeps only lists (so a machine that has just signed in is asked again at once), and after a rate limit
+answers `Failed` without calling `gh` for 10 minutes, doubling up to 30. From another machine the
+answer is cleaned (`remote_policy::vet_pull_requests_reply`, and `vet` on the long line). The desktop
+host asks through `pull_requests(machine, folder, fresh)`, on a request line
+(`maitty_desktop_client::pull_requests`): this computer's daemon is refused in words when it is older
+than the question, and another machine's is on this version or not used. The window reads one flat
+answer (`state`: `listed`, `not-installed`, `not-signed-in`, `not-on-github` or `failed`; `why`;
+`listed`) in `apps/gui/src/api/pullRequests.ts`. When the window asks is in UI.md, *Pull requests*.
+
 Protocol 70 adds `Query::UsageReport { period }` (`day`, `week` or `month`; rolling windows
 ending today, UTC) and `Reply::UsageReport`, answered from the daemon's usage store
 ([ADR 0009](adr/0009-usage-is-provider-reported-never-estimated.md)): totals, one entry per

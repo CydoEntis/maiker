@@ -234,6 +234,10 @@ pub fn vet(opts: &MachineOpts, asked: bool, machine: &str, msg: ServerMsg) -> Op
                 owners
             }),
         }),
+        ServerMsg::Reply(Reply::PullRequests { tag, answer }) => ServerMsg::Reply(Reply::PullRequests {
+            tag,
+            answer: sanitize_answer(answer, sanitize_pulls),
+        }),
         ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent }) => {
             ServerMsg::Reply(Reply::CloneProgress { tag, phase, percent: percent.min(100) })
         }
@@ -391,6 +395,44 @@ fn sanitize_repos(mut list: GitHubRepoList) -> GitHubRepoList {
         true
     });
     list
+}
+
+/// The answer to "which pull requests are open in that project" made safe, or why it is refused:
+/// only that answer passes, cleaned as `vet` cleans it.
+pub fn vet_pull_requests_reply(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::PullRequests { tag, answer } => Ok(Reply::PullRequests { tag, answer: sanitize_answer(answer, sanitize_pulls) }),
+        _ => Err("it is not a list of pull requests".into()),
+    }
+}
+
+/// Pull requests from another machine: no more than a list carries, each kept only with an
+/// address that is a github.com pull request's and nothing more (a click opens it), and its
+/// title, author, branch and time what those can be. Whether one needs the person is that
+/// machine's to say: its `gh` and its sign-in are there.
+fn sanitize_pulls(pulls: maitty_shared::protocol::ProjectPulls) -> maitty_shared::protocol::ProjectPulls {
+    use maitty_shared::protocol::{PULL_REQUEST_TEXT_MAX_CHARS, PULL_REQUESTS_MAX, ProjectPulls};
+    let ProjectPulls::Open(mut list) = pulls else {
+        return ProjectPulls::NotOnGitHub;
+    };
+    let line = |text: &mut String| *text = sanitize(text, false).trim().chars().take(PULL_REQUEST_TEXT_MAX_CHARS).collect();
+    if !is_login(&list.login) {
+        list.login.clear();
+    }
+    list.items.truncate(PULL_REQUESTS_MAX);
+    list.items.retain_mut(|pull| {
+        if !maitty_shared::github::is_pull_request_address(&pull.url) {
+            return false;
+        }
+        line(&mut pull.title);
+        line(&mut pull.author);
+        line(&mut pull.branch);
+        if !is_time(&pull.updated_at) {
+            pull.updated_at.clear();
+        }
+        true
+    });
+    ProjectPulls::Open(list)
 }
 
 /// A folder listing from another machine: every name and branch one clean line, no more entries
@@ -855,6 +897,59 @@ mod tests {
             panic!("an answer that was asked for is kept");
         };
         assert_eq!(owners, ["me", "my-org"]);
+    }
+
+    #[test]
+    fn pull_requests_from_another_machine_keep_only_github_addresses_and_clean_text() {
+        use maitty_shared::protocol::{GitHubAnswer, PULL_REQUEST_TEXT_MAX_CHARS, PULL_REQUESTS_MAX, PrChecksState, PrReview, ProjectPr, ProjectPulls, PullRequestList};
+        let pull = |number: u32, url: &str| ProjectPr {
+            number,
+            url: url.into(),
+            title: format!("Fix\u{1b}[31m it\n{}", "t".repeat(400)),
+            author: "some\u{202e}one".into(),
+            branch: "fix/it\r\n".into(),
+            draft: false,
+            checks: PrChecksState::Failed,
+            review: PrReview::Required,
+            conflicting: false,
+            mine: true,
+            review_requested: false,
+            needs_you: true,
+            updated_at: "<script>".into(),
+        };
+        let mut items = vec![
+            pull(1, "https://github.com/o/r/pull/1"),
+            pull(2, "https://evil.example/o/r/pull/2"),
+            pull(3, "https://github.com/o/r/pull/3/../../settings"),
+            pull(4, "javascript:alert(1)"),
+        ];
+        items.extend((10..10 + PULL_REQUESTS_MAX as u32).map(|n| pull(n, &format!("https://github.com/o/r/pull/{n}"))));
+        let answer = GitHubAnswer::Listed(ProjectPulls::Open(PullRequestList { login: "<b>".into(), items, more: true }));
+
+        let Ok(Reply::PullRequests { tag: 8, answer: GitHubAnswer::Listed(ProjectPulls::Open(list)) }) = vet_pull_requests_reply(Reply::PullRequests { tag: 8, answer: answer.clone() }) else {
+            panic!("a list of pull requests is kept");
+        };
+        assert_eq!(list.login, "");
+        assert_eq!(list.items.len(), PULL_REQUESTS_MAX - 3, "the list is cut first, then the foreign addresses go");
+        assert!(list.items.iter().all(|pull| pull.url.starts_with("https://github.com/o/r/pull/") && pull.url["https://github.com/o/r/pull/".len()..].chars().all(|c| c.is_ascii_digit())));
+        let first = &list.items[0];
+        assert_eq!(first.title.chars().count(), PULL_REQUEST_TEXT_MAX_CHARS);
+        assert!(first.title.starts_with("Fix[31m it t"));
+        assert_eq!((first.author.as_str(), first.branch.as_str(), first.updated_at.as_str()), ("someone", "fix/it", ""));
+        assert!(first.needs_you, "whether it needs the person is that machine's to say");
+
+        // The long line cleans it the same way, and nothing else passes for a list.
+        let Some(ServerMsg::Reply(Reply::PullRequests { answer: GitHubAnswer::Listed(ProjectPulls::Open(same)), .. })) =
+            vet(&nothing_on(), true, "box", ServerMsg::Reply(Reply::PullRequests { tag: 8, answer }))
+        else {
+            panic!("an answer that was asked for is kept");
+        };
+        assert_eq!(same, list);
+        let failed = Reply::PullRequests { tag: 9, answer: GitHubAnswer::Failed("no\u{1b}[0m\nway".into()) };
+        assert!(matches!(vet_pull_requests_reply(failed), Ok(Reply::PullRequests { answer: GitHubAnswer::Failed(why), .. }) if why == "no[0m way"));
+        let other = Reply::PullRequests { tag: 9, answer: GitHubAnswer::Listed(ProjectPulls::NotOnGitHub) };
+        assert!(matches!(vet_pull_requests_reply(other), Ok(Reply::PullRequests { answer: GitHubAnswer::Listed(ProjectPulls::NotOnGitHub), .. })));
+        assert!(vet_pull_requests_reply(Reply::Text("https://evil.example".into())).is_err());
     }
 
     #[test]

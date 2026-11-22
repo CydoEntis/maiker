@@ -551,6 +551,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
 | `Reply::SideAnswer` | ignore on the attached line | a side answer is asked on a request line to the chat's machine and taken only there, through `remote_chat::vet_side_answer`: nothing but a side answer passes, every string is cleaned like a chat's and the text is cut at `SIDE_ANSWER_MAX_BYTES` |
+| `Reply::PullRequests` | answer, cleaned | a project's pull requests are asked on a request line to the project's machine and taken through `remote_policy::vet_pull_requests_reply`, where nothing but that answer passes; `vet` cleans one on the attached line the same way: at most 50, each kept only with an address that is exactly `https://github.com/<owner>/<repo>/pull/<number>` (a click opens it in the browser), its title, author and branch one clean line cut at 300 characters, its time one GitHub could print, the login a GitHub login or empty. Whether one needs the person is that machine's own claim about its own account and only changes a count and a row here |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names
@@ -681,6 +682,17 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
   is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
   address by itself. Only a person's client may ask.
+- **Listing a project's pull requests** (`Query::PullRequests`, `daemon/pr_list.rs`) takes one thing from
+  a client, a folder, and it never reaches `gh`'s command line: it must be an absolute path (or start
+  with `~`) of at most 4096 bytes naming a folder that exists, and it only becomes the folder `gh` runs
+  in. The arguments are fixed. No token is read, asked for or logged, and nothing `gh` prints is logged:
+  a failure passes on the first line of what it said, cleaned and cut to 300 characters. A pull request
+  is kept only when its address is `https://github.com/<owner>/<repo>/pull/<number>` and nothing more,
+  where the daemon reads it and again when it arrives from another machine
+  (`maitty_shared::github::is_pull_request_address`), because a click opens it in the browser; its
+  title, author and branch are one clean line each, and a list holds at most 50. `gh` lists one folder
+  once however many clients ask meanwhile, and at most 32 folders at a time. Only a person's client may
+  ask.
 - **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
   the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
   the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
