@@ -364,48 +364,12 @@ export function toSessionView(conversation: Conversation, home: string, now: num
   }
 }
 
-/** The words after the process on a sidebar row's second line. */
-export function statusText(session: SessionView, now: number = Date.now()): string {
-  switch (session.status) {
-    case 'working':
-      return 'working'
-    case 'needs':
-      return 'needs you'
-    case 'limited':
-      return limitedWord(session.resumeAt, now)
-    case 'done':
-      return 'done'
-    case 'error':
-      return 'exited with error'
-    case 'unknown':
-      return session.lastKnownStatus ? `last seen ${STATUS_WORD[session.lastKnownStatus]}` : 'unknown'
-    case 'idle':
-      return 'idle'
-  }
-}
-
-/**
- * Programs whose app icon already says what they are, so a row or tab need not write the name beside
- * it. Keep in step with the icons in `glyphs.tsx`; any other program gets a tinted letter, which does not.
- */
-const ICONED_PROGRAMS: ReadonlySet<string> = new Set(['claude', 'codex', 'deepseek', 'gemini', 'opencode', 'cargo', 'rustc', 'shell'])
-
-export function iconSaysProcess(process: string): boolean {
-  const program = process.split(/\s+/)[0] ?? ''
-  return program === '' || ICONED_PROGRAMS.has(program)
-}
-
 /**
  * The sessions in the sidebar's order: creation order, which is the daemon's pane number (it only
  * counts up). Status, pin and focus never move a row.
  */
 export function inCreationOrder(sessions: readonly SessionView[]): SessionView[] {
   return [...sessions].sort((a, b) => a.pane - b.pane || a.machine - b.machine)
-}
-
-/** What a row calls a session: the name you gave it, else the program running in it. */
-export function rowName(session: Pick<SessionView, 'name' | 'process'>): string {
-  return session.name ?? session.process
 }
 
 /** The folder a row's badge shows: its last segment. */

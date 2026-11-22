@@ -10,7 +10,6 @@ const daemon = vi.hoisted(() => ({
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   loadDaemonRestartStatus: vi.fn(),
-  suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
   loadMachines: vi.fn(() => Promise.resolve({ names: ['build'], error: null })),
 }))
 
@@ -98,7 +97,6 @@ describe('a pane of another machine and the features that need its files', () =>
     terminal.pasted.length = 0
     daemon.defaultSessionFolder.mockResolvedValue('/home/casey')
     daemon.loadConversations.mockResolvedValue([])
-    daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
   it('opens the side panel on the machine\'s changes and lists its files for markdown (ADR 0014)', async () => {

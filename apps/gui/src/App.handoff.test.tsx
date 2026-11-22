@@ -35,7 +35,6 @@ const daemon = vi.hoisted(() => ({
   loadDaemonRestartStatus: vi.fn(),
   restartMismatchedDaemon: vi.fn<(protocol: number) => Promise<void>>(),
   openDaemonLog: vi.fn<() => Promise<void>>(),
-  suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
   agentsInstalled: vi.fn<() => Promise<string[]>>(() => Promise.resolve([])),
   sendTerminalInput: vi.fn<(conversation: { id: string; generation: number }, input: string | Uint8Array) => Promise<void>>(),
   answerHelpers: vi.fn<(conversation: { id: string }, choice: 'allow' | 'always' | 'no') => Promise<void>>(),
@@ -140,7 +139,6 @@ describe('desktop terminal multiplexer', () => {
     daemon.closeSession.mockResolvedValue(undefined)
     daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
     daemon.markSeenOnDaemon.mockResolvedValue(undefined)
-    daemon.suggestProjectFolders.mockResolvedValue([])
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 2, activeTurnCount: 1 })
   })
 
@@ -931,7 +929,6 @@ describe('desktop overlays and pane tools', () => {
     daemon.startShellSession.mockResolvedValue(undefined)
     daemon.sendTerminalInput.mockResolvedValue(undefined)
     daemon.loadConversations.mockResolvedValue([])
-    daemon.suggestProjectFolders.mockResolvedValue([])
   })
 
   it('undoes and redoes typing in a text box of the desktop window, where the Linux web view has no undo of its own', async () => {
@@ -1151,7 +1148,6 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     daemon.sendTerminalInput.mockResolvedValue(undefined)
     daemon.agentsInstalled.mockResolvedValue(['claude', 'codex', 'opencode'])
     daemon.loadConversations.mockResolvedValue([])
-    daemon.suggestProjectFolders.mockResolvedValue([])
     daemon.daemonSaidRemoved.mockImplementation(() => false)
   })
 

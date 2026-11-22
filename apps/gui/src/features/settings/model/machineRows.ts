@@ -38,11 +38,6 @@ export function sessionWords(count: number): string {
   return count === 0 ? 'No sessions' : countWords(count)
 }
 
-/** Whether the machine stopped on its host key (changed, or new and not accepted yet) rather than on a key it was refused. */
-export function stoppedOnHostKey(head: MachineHead): boolean {
-  return head.failure === 'host-key-changed' || head.failure === 'host-key-unknown'
-}
-
 /** The row's few words for a machine that is down: one that hangs up before ssh can sign in may be refusing connections for a while, which waiting fixes. */
 function downWords(head: MachineHead, word: string | undefined): string {
   if (word === 'refused') return 'Refused the connection'

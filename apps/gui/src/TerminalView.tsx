@@ -109,8 +109,6 @@ export type TerminalLook = {
   lineHeight?: number
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
-  /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
-  plainDrawing?: boolean
   screenReader?: boolean
   theme?: ITheme
   /** What a program's bright black background is drawn as; absent, it is the palette's bright black. */
@@ -353,7 +351,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         await terminalFontReady(fontStackFor(lookRef.current.fontFamily ?? ''), fontSizeRef.current)
         if (!stillMounted()) return
 
-        const wantsWebgl = hasWebgl2() && !(lookRef.current.plainDrawing ?? false)
+        const wantsWebgl = hasWebgl2()
         emulator = new TerminalEmulator({
           cursorBlink: (lookRef.current.cursorBlink ?? false) && focusedRef.current && isWindowActive(),
           cursorStyle: lookRef.current.cursorStyle ?? 'block',

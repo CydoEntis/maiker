@@ -22,8 +22,6 @@ const FULL = 100
 const MID_FROM = 25
 const HIGH_FROM = 50
 const MAX_FROM = 75
-/** A meter shows by the message box from here: below half there is nothing to act on, and a 0% meter on a new chat is noise. */
-export const METER_SHOWN_FROM = HIGH_FROM
 const MINUTE = 60
 const HOUR = 3600
 const DAY = 86_400

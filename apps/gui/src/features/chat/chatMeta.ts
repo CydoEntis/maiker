@@ -1,5 +1,3 @@
-/** How the agent is set up, from its own file: the permission mode and the model answering. */
-export type ChatMeta = { readonly mode: string | null; readonly model: string | null }
 
 /** Claude's permission modes in plain words. A mode not listed is shown as it was written. */
 const MODE_WORDS: Readonly<Record<string, string>> = {

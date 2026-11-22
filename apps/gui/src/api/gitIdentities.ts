@@ -59,25 +59,3 @@ export async function changeGitRule(machine: number, change: GitRuleChange): Pro
   const where = machine === LOCAL_MACHINE ? {} : { machine }
   return z.array(WriteSchema).parse(await invoke<unknown>('git_identity_rule', { ...where, change: wire(change) }))
 }
-
-/** `path` with `/` between its parts and no closing slash. */
-function plain(path: string): string {
-  return path.replace(/\\/g, '/').replace(/\/+$/, '')
-}
-
-/**
- * The rule Maiker wrote that covers `folder`: the deepest one whose folder is it or holds it. A
- * Windows folder is matched without regard to case, as git matches it there. Null when none does.
- */
-export function ruleCovering(rules: readonly GitIdentityRule[], folder: string): GitIdentity | null {
-  const target = plain(folder)
-  const windows = /^[A-Za-z]:\//.test(target)
-  const same = (a: string, b: string) => (windows ? a.toLowerCase() === b.toLowerCase() : a === b)
-  const holds = (rule: GitIdentityRule) => {
-    const base = plain(rule.folder)
-    return same(target, base) || same(target.slice(0, base.length + 1), `${base}/`)
-  }
-  const covering = rules.filter((rule) => rule.identity !== null && holds(rule))
-  const deepest = covering.sort((a, b) => b.folder.length - a.folder.length)[0]
-  return deepest?.identity ?? null
-}

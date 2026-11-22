@@ -182,8 +182,8 @@ machine's New terminal here) starts a plain shell in the start folder with no di
 
 **Resume a saved chat…** (the palette's Actions; `ResumeSavedDialog`, `ResumeList`, `useSavedConversations`) lists the conversations Claude or Codex saved for a folder on this computer (`saved_conversations`, API_PATTERNS), with an agent switch and a folder menu of this computer's projects: each its first message and how long ago it was active, newest first. A pick starts the agent in that folder, as it is, with that conversation (`resumeWords`, through the new chat's resume start); a failed read and a service that does not answer the query each say so in one line.
 
-**Recent sessions** (`RecentSessionsDialog`, `model/recentSessions.ts`, `useRecentSessions`; the clock in the rail's
-foot and **Recent sessions…** in the command palette) lists the agent sessions that closed on this
+**Recent sessions** (`RecentSessionsDialog`, `model/recentSessions.ts`, `useRecentSessions`; **Recent sessions…** in
+the command palette, and `/resume` typed into a chat) lists the agent sessions that closed on this
 computer, newest first (`closed_sessions`, API_PATTERNS; read when the list opens, off the UI thread): each its title
 (else "Claude session"), the agent's mark and name, the folder, the branch and "closed 3h ago". Picking one closes the
 list and starts that agent in that folder with its conversation, through the new chat's resume start (`startNewChat`

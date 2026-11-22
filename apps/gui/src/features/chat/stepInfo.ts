@@ -21,13 +21,6 @@ export function elapsedMs(item: ItemFields, durationMs: number | null, nowMs: nu
 
 const MS_PER_SECOND = 1000
 const SECONDS_PER_MINUTE = 60
-const CLOCK_SECONDS_WIDTH = 2
-
-/** "m:ss", the form the running pill and the working line use. */
-export function clockText(ms: number): string {
-  const seconds = Math.floor(Math.max(0, ms) / MS_PER_SECOND)
-  return `${String(Math.floor(seconds / SECONDS_PER_MINUTE))}:${String(seconds % SECONDS_PER_MINUTE).padStart(CLOCK_SECONDS_WIDTH, '0')}`
-}
 
 /** "0.4s", "5m 30s": how long a finished step took. Sub-second times keep a decimal. */
 export function tookText(ms: number): string {
@@ -84,15 +77,6 @@ export function agentsSummary(agents: readonly SubagentEvent[]): string {
   const working = agents.filter((agent) => agent.status === 'running').length
   const noun = agents.length === 1 ? 'agent' : 'agents'
   return `${String(agents.length)} ${noun}, ${working === 0 ? 'all done' : `${String(working)} working`}`
-}
-
-/**
- * A finished command's few words on its row: how it ended when that is worth a look, and how long it took ("exit 2 ·
- * 4s", "4s"). Null when there is neither.
- */
-export function commandMeta(event: CommandEvent): string | null {
-  const said = [commandEnded(event), commandTook(event)].filter((part) => part !== null)
-  return said.length === 0 ? null : said.join(' · ')
 }
 
 /**

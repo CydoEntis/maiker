@@ -65,8 +65,6 @@ export function useInspectActions({ focusedSession, setInspectOpen, openSurface,
   const showChanges = useCallback((paneId: string, sessionId: string, _file?: string, turn?: TurnSpan | null) => {
     openChanges(sessionId, () => { setLayout((current) => focusPane(current, paneId)) }, turn)
   }, [openChanges, setLayout])
-  // A session menu's Show changes: the session may be out of sight, so it is brought to the front.
-  const showChangesOf = useCallback((sessionId: string) => { openChanges(sessionId, () => { showSessionById(sessionId) }) }, [openChanges, showSessionById])
   // A project's Show files: one of its sessions comes to the front, since the files are read through a session.
   const showFilesOf = useCallback((sessionId: string) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
@@ -100,5 +98,5 @@ export function useInspectActions({ focusedSession, setInspectOpen, openSurface,
     setTurnDiff(null)
     openSurface(focusedSession.id, view)
   }, [focusedSession, inspectRefusal, setTurnDiff, openSurface])
-  return { toggleInspect, inspectRefusal, showChangesOf, showFilesOf, showChanges, openPanel, showPanelView }
+  return { toggleInspect, inspectRefusal, showFilesOf, showChanges, openPanel, showPanelView }
 }

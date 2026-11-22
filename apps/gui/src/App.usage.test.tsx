@@ -20,7 +20,6 @@ const daemon = vi.hoisted(() => ({
   markSeenOnDaemon: vi.fn(),
   loadDaemonRestartStatus: vi.fn(),
   restartMismatchedDaemon: vi.fn(),
-  suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
   sendTerminalInput: vi.fn(),
   loadMachines: vi.fn(() => Promise.resolve({ names: [], error: null })),
 }))
@@ -97,7 +96,6 @@ describe('usage and cost in the desktop app', () => {
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([term(5)])
-    daemon.suggestProjectFolders.mockResolvedValue([])
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 1, activeTurnCount: 0 })
     usage.loadUsageReport.mockResolvedValue(report())
   })

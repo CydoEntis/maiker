@@ -32,9 +32,3 @@ export function portOf(port: string): number | null | undefined {
 export function targetOf(user: string, host: string): string {
   return user === '' ? host : `${user}@${host}`
 }
-
-/** The user of a stored destination, blank when it names none. */
-export function userOf(target: string): string {
-  const at = target.lastIndexOf('@')
-  return at < 0 ? '' : target.slice(0, at)
-}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { machineHeads, type MachineHead, type RemoteMachine } from '@/features/workspace/model/machines'
-import { matching, maikerLine, ordered, foldStatusOf, rowOf, stoppedOnHostKey, updatable } from './machineRows'
+import { matching, maikerLine, ordered, foldStatusOf, rowOf, updatable } from './machineRows'
 
 type State = RemoteMachine['state']
 
@@ -31,11 +31,8 @@ describe('a machine row', () => {
     const rejected = head('box', 'needs-login', REFUSED_KEY)
     expect(rowOf(rejected, 0)).toMatchObject({ glyph: '×', tone: 'bad', line: 'Key rejected', action: 'fix' })
     const changedHost = head('box', 'needs-login', { failure: 'host-key-changed', said: 'Host key verification failed.' })
-    expect(stoppedOnHostKey(changedHost)).toBe(true)
     expect(rowOf(changedHost, 0).line).toBe('Host key changed')
-    expect(stoppedOnHostKey(head('box', 'needs-login', { said: 'Host key verification failed.' }))).toBe(false)
     const newHost = head('box', 'needs-login', { failure: 'host-key-unknown', fix_command: 'ssh -o StrictHostKeyChecking=ask box' })
-    expect(stoppedOnHostKey(newHost)).toBe(true)
     expect(rowOf(newHost, 0)).toMatchObject({ line: 'Host key not accepted yet', action: 'fix' })
     expect(foldStatusOf(newHost, 0)).toMatchObject({ lead: 'Host key not accepted yet.', command: 'ssh -o StrictHostKeyChecking=ask box' })
     expect(rowOf(head('box', 'needs-login', { failure: 'needs-person' }), 0).line).toBe('Needs a sign-in')

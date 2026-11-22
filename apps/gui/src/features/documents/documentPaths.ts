@@ -7,11 +7,6 @@ export function isMarkdownPath(path: string): boolean {
   return MARKDOWN_EXTENSIONS.some((extension) => lower.endsWith(extension))
 }
 
-/** A project's own readme: `README`, `README.md`, `readme.markdown`, in any case. */
-export function isReadmeName(name: string): boolean {
-  return /^readme(\.(md|markdown|mdx))?$/i.test(name)
-}
-
 /** The first readme among a folder's file names, or null. A markdown one wins over a bare `README`. */
 export function readmeOf(names: readonly string[]): string | null {
   return names.find((name) => /^readme\.(md|markdown|mdx)$/i.test(name)) ?? null

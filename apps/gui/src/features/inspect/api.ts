@@ -25,14 +25,9 @@ const SnapshotSchema = z.object({ commit: z.string(), at: Count, why: z.string()
 const ReferenceSchema = z.object({ name: z.string(), kind: z.string(), bytes: Count, modified: Count })
 const FoundFilesSchema = z.object({ paths: z.array(z.string()), truncated: z.boolean() })
 
-export type RepoStatus = z.infer<typeof StatusSchema>
-export type RepoChangeKind = z.infer<typeof ChangeKindSchema>
-export type RepoEntry = z.infer<typeof EntrySchema>
 export type RepoDiff = z.infer<typeof DiffSchema>
-export type RepoBranch = z.infer<typeof BranchSchema>
 export type RepoWorktree = z.infer<typeof WorktreeSchema>
 export type RepoSnapshot = z.infer<typeof SnapshotSchema>
-export type RepoReference = z.infer<typeof ReferenceSchema>
 
 const HighlightSchema = z.array(z.array(z.object({ text: z.string(), kind: z.enum(['plain', 'comment', 'string', 'number', 'keyword', 'variable']) }))).nullable()
 export type HighlightedLines = z.infer<typeof HighlightSchema>
@@ -107,12 +102,6 @@ export async function commitAll(folder: string, message: string, machine: number
 export async function discardFile(folder: string, path: string, machine: number, term?: number): Promise<void> {
   if (!isTauri()) throw new Error('Discarding is only available in the desktop app')
   await invoke('git_discard_file', { machine, folder, path, ...paneArg(term) })
-}
-
-/** Saves the text of an existing file of the checkout `term` is in; the daemon refuses anything but a plain file inside it. */
-export async function writeProjectFile(term: number, machine: number, path: string, contents: string): Promise<void> {
-  if (!isTauri()) throw new Error('Editing is only available in the desktop app')
-  await invoke('write_project_file', { machine, term, path, contents })
 }
 
 const SavedSchema = z.union([z.literal('ChangedOnDisk'), z.object({ Saved: z.object({ version: z.string() }) })])

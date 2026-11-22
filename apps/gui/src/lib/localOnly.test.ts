@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { assertLocal, guardLocal, guardLocalSession, LOCAL_FEATURES, type LocalFeature } from './localOnly'
+import { assertLocal, guardLocal, LOCAL_FEATURES, type LocalFeature } from './localOnly'
 
 const FEATURES = Object.keys(LOCAL_FEATURES) as LocalFeature[]
 const remote = { machine: 2, machineName: 'build' }
@@ -14,8 +14,4 @@ describe('features that need a pane\'s files', () => {
     expect(() => { assertLocal(here, feature) }).not.toThrow()
   })
 
-  it('reads a session id: a name before the slash is another machine', () => {
-    expect(guardLocalSession('build/t12', 'path-links')).toContain('on build')
-    expect(guardLocalSession('t12', 'path-links')).toBeNull()
-  })
 })

@@ -584,11 +584,6 @@ export async function defaultSessionFolder(): Promise<string> {
   return invokeParsed('default_session_folder', z.string())
 }
 
-export async function suggestProjectFolders(typed: string): Promise<string[]> {
-  if (!isDesktop()) return []
-  return invokeParsed('suggest_project_folders', z.array(z.string()), { typed })
-}
-
 /**
  * What a host command needs to reach a chat session: its conversation's number on its machine, and the machine
  * when that is not this computer. The id is a session's (`12`, `build/c12`) or a chat key written as a number.

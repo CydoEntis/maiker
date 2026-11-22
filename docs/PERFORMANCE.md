@@ -118,7 +118,7 @@ that touches this area.
 Tier 1 (small changes, measured gain):
 
 1. [x] Status effects play once when a status appears and then rest: the working sweep is one pass, the needs-you glow breathes three times, the Inbox count and update dot pulse with a `transform` ring on a pseudo-element and rest, the idle dot is still. Nothing animates `box-shadow`. One thing loops, by the owner's decision: the needs-you badge's ring (11px, `transform` and `opacity` only, paused while the window is not in front). Re-measure on WebKitGTK before adding another. `workspace.css`, `App.css`, Settings › Motion copy.
-2. [x] Spinner outside React: `lib/spinner-clock.ts` writes each frame into the elements (`attachSpinner`) at 160 ms, and stops while the window is hidden or not focused (`lib/window-activity.ts`). `.mx-spin` has a fixed `inline-size` and `contain: layout`.
+2. [x] No text spinner: the working mark is the status icon (`components/ui/status-icon.tsx`), which CSS turns and which holds while the window is hidden or not focused. `.mx-spin` has a fixed `inline-size` and `contain: layout`.
 3. [x] Cursor blink only while the pane is focused and the window is in front (`TerminalView.tsx`, `useWindowActive`).
 
 Tier 2 (needs a real machine to verify):
@@ -133,7 +133,7 @@ Tier 3 (waste; not felt as lag with one session):
 
 Follow-ups done on the same day, after a second look:
 
-8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `Ago`, `ElapsedSince`), and a move highlight ends through `useRecent`, so a working session ticks a few small spans, not the window; the Settings spinner preview steps outside React; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
+8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `ElapsedSince`), so a working session ticks a few small spans, not the window; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
 9. [x] Resting shadows, card gradients and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK, are gone: the desktop has one flat finish. A web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) also draws a popup's shadow as a hairline (`--sh-pop`); colours, radii and layout stay.
 10. [x] State deltas: when only panes changed, the daemon sends `ServerMsg::TermsChanged` (compared as encoded bytes against what that surface's clients last got) and nothing at all when nothing visible changed; `PROTOCOL_VERSION` 69. The TUI and the desktop host merge deltas into the snapshot they hold.
 11. [x] Replays only for viewed panes: the desktop stream attaches with `Hello.replays: false` and asks `WantReplay` per pane when a view opens; a desktop replay is the last 1 MiB of the ring plus the screen; the host keeps no history for a pane until its replay arrived.

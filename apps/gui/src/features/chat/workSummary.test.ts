@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { CommandEvent, EditEvent, ItemStatus, ToolEvent } from './chatEvents'
-import { workDurationMs, workStatus, workSummary } from './workSummary'
+import { workStatus, workSummary } from './workSummary'
 
 const base = (id: string, status: ItemStatus = 'completed', startedAtMs: number | null = null, completedAtMs: number | null = null) => ({
   id, turnId: 't', status, observed: { firstSeenAtMs: 0, settledAtMs: 0 }, timing: { startedAtMs, completedAtMs },
@@ -25,8 +25,4 @@ describe('a run of steps in one line', () => {
     expect(workStatus([tool('1', 'Read', 'a')])).toBe('completed')
   })
 
-  it('times the run only from times the daemon gave', () => {
-    expect(workDurationMs([command('1', 1000, 2000), command('2', 3000, 9000)])).toBe(8000)
-    expect(workDurationMs([command('1'), command('2', 3000, 9000)])).toBeNull()
-  })
 })

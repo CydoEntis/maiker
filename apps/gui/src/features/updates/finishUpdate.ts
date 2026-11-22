@@ -8,9 +8,6 @@
  */
 export type ServiceStep = 'restart' | 'wait' | 'ask'
 
-/** How often a service waiting for its agents to finish is asked again whether they have. */
-export const WAIT_POLL_MS = 10_000
-
 export function serviceStep({ afterAppUpdate, restartWhenIdle, canRestart, activeTurnCount }: {
   afterAppUpdate: boolean
   restartWhenIdle: boolean

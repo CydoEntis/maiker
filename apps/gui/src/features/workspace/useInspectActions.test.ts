@@ -34,13 +34,6 @@ describe('showing a session’s changes from its chat', () => {
     expect(openSurface).toHaveBeenCalledWith('other', 'changes')
   })
 
-  it('brings a session from its menu to the front, wherever it is, on the whole working tree', () => {
-    const { actions, setTurnDiff, showSessionById } = mount()
-    actions.showChangesOf('other')
-    expect(showSessionById).toHaveBeenCalledWith('other')
-    expect(setTurnDiff).toHaveBeenCalledWith(null)
-  })
-
   it('refuses a session on another machine and keeps no turn', () => {
     const { actions, setTurnDiff, openSurface } = mount()
     actions.showChanges('pane-3', 'far', 'a.ts', TURN)

@@ -152,7 +152,8 @@ const MIX = {
 }
 
 /**
- * Maiker's own themes, built from `maitty-tokens.json`: Night and Day (sea-glass green) and Dark and Light (a standard black and white ground with the same accents) (the TUI reads the same file): sea-glass and brass. Teal means
+ * Maiker's own themes, built from `maitty-tokens.json` (the TUI reads the same file, and also builds Night from it): Day
+ * (sea-glass green) and Dark and Light (a standard black and white ground with the same accents), in sea-glass and brass. Teal means
  * only "working" (`working`), coral only "needs you" (`warn`), brass is the accent. Text uses the file's *Text colours
  * so every pair meets AA; fills (a button's brass) use the fill colours with their *On ink.
  */
