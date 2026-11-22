@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import type { UsagePeriod, UsageReport } from '@/api/usage'
-import App from './App'
+import { DesktopApp } from '@/features/workspace/DesktopApp'
 
 const daemon = vi.hoisted(() => ({
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
@@ -87,7 +87,7 @@ function report(): UsageReport {
 function renderDesktopApp() {
   window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><DesktopApp /></QueryClientProvider>)
 }
 
 describe('usage and cost in the desktop app', () => {

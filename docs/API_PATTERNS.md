@@ -1414,8 +1414,7 @@ chat in either puts it away in both. Closing a chat is not stopping it: an archi
 conversation keeps running in the daemon, and a client lists it only under its own
 "archived" view. A title is trimmed, stripped of control characters and capped at 80
 characters (`clean_title`); an empty one clears it, and each client then words the session
-itself. Clients keep no copy of either in browser or file storage, except the browser
-preview, which has no daemon.
+itself. Clients keep no copy of either in browser or file storage.
 It also adds terminal access keyed by the pane, for terminal sessions that have no
 conversation: the human-only `TerminalInput` and `TerminalResize` commands and the
 `TerminalScreen` and `TerminalReplay` queries. They follow the same limits as the

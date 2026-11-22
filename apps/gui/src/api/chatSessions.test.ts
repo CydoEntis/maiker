@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import type { Conversation } from '@/data/preview'
-import { answerHelpers, closeChatSession, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
+import { answerHelpers, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -112,15 +111,4 @@ describe('chat sessions', () => {
     expect(chat).toMatchObject({ folder: '/work/app-trees/agent-x', repo: null })
   })
 
-  it('closing a chat session stops its agent first, then puts it away; a failed stop puts nothing away', async () => {
-    const [chat] = conversationsFromSnapshot(snapshot([summary()]))
-    await closeChatSession(chat as Conversation)
-    expect(vi.mocked(invoke).mock.calls).toEqual([
-      ['end_conversation', { id: 44, generation: 1 }],
-      ['archive_conversation', { id: 44, archived: true }],
-    ])
-    vi.mocked(invoke).mockReset().mockRejectedValue('Conversation has a pending operation')
-    await expect(closeChatSession(chat as Conversation)).rejects.toThrow()
-    expect(vi.mocked(invoke).mock.calls.map((call) => call[0])).toEqual(['end_conversation'])
-  })
 })

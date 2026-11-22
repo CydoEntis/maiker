@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root, :root[data-theme="night"] {
+:root {
   color-scheme: dark;
   font-family: "Geist Variable", "Segoe UI", sans-serif;
   font-synthesis: none;
@@ -71,49 +71,6 @@
   --idle: #56616c;
   --branch: #A78BFA;
 }
-
-:root[data-theme="abyss"] {
-  --bg: #07111b;
-  --main: #0b1724;
-  --raise: #112131;
-  --hover: #0f1c29;
-  --sel: #162839;
-  --line: #14243a;
-  --line2: #1e3248;
-  --well: #06101a;
-  --term: #050d15;
-}
-
-:root[data-theme="day"] {
-  color-scheme: light;
-  --bg: #eef0ee;
-  --main: #ffffff;
-  --raise: #f5f6f4;
-  --hover: #f0f2f0;
-  --sel: #e7eae8;
-  --line: #e3e6e4;
-  --line2: #d2d7d4;
-  --well: #f2f4f2;
-  --term: #fafbfa;
-  --fg: #12171c;
-  --body: #262d33;
-  --fg2: #3b444c;
-  --muted-text: #58626c;
-  --dim: #646e78;
-  --primary: #0e8f7a;
-  --primary-foreground: #ffffff;
-  --accent-soft: rgb(14 143 122 / 11%);
-  --warn: #9a5b00;
-  --warn-soft: rgb(154 91 0 / 7%);
-  --warn-line: rgb(154 91 0 / 28%);
-  --on-warn: #ffffff;
-  --danger: #c0392f;
-  --danger-soft: rgb(192 57 47 / 7%);
-  --danger-line: rgb(192 57 47 / 30%);
-  --ok: #2f7a4b;
-  --idle: #8a949f;
-}
-
 
 /* Window-button colours are fixed by the platforms, so they are the same in every theme. */
 :root {

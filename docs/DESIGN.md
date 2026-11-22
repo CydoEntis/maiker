@@ -385,8 +385,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `--m-panel`, `--m-float`, `--m-field`, `--gk`, `--blur-pop`), selects on `data-finish` or blurs with
   `backdrop-filter`. It reads the stylesheets from disk, because Vitest hands a test every `.css` import
   as an empty string. Left on purpose: terminal grounds (`--term`, `--main` under a terminal), scrims, brand and status
-  colours, and the browser preview's `App.css` shell (`features/preview/`), which keeps its own fills and `data-theme`
-  tokens in `index.css`.
+  colours.
 - **Design tokens (`apps/gui/src/tokens.css`).** What is built on the theme's roles, so a component
   never reads a raw value: `--bubble` (a user message), `--on-needs` (the ink on a needs fill), `--err`,
   `--focus`/`--link` (the theme's blue), file-type tag tones (`--tag-ts`, `-tsx`, `-data`, `-toml`, `-sql`, `-env`, `-md`, `-rs`, `-py`, `-go`, `-css`, `-html`, `-sh`,
@@ -402,7 +401,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `CardBody` 10px 12px, `CardFoot` 40px with the answers; `tone` `needs` for an amber edge, `err` for a red one;
   `interactive` for a card that is itself a button, `--line2` edge on hover and the focus underline inside), **Button**
   (`button.tsx`: kinds `primary` (the theme's accent), `needs` (only the main answer to something waiting on you),
-  `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button, the browser preview); `keyHint` draws the key that also
+  `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button); `keyHint` draws the key that also
   presses it; hover brightens, press darkens toward `--bg`, focus is the one 2px accent underline (`--focus-underline`),
   disabled is 42% opacity), **IconButton** (`icon-button.tsx`, the one icon button; see *Icon buttons* below), **Tag** (`tag.tsx`: a
   mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
@@ -411,8 +410,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **TextLink**, **StatusIcon** (`status-icon.tsx`, the one status mark; see *Status marks* below), **Fold** (a 30px row: "Show 12 more lines" or "Hide"), **Progress** (a 4px bar on `--sel`),
   **Counter**, **Divider** and **ToastCard** (`toast-card.tsx`: one line on the card with the pop shadow). The
   chat's step marks, file badges and change tags (`cardParts.tsx`) and the workspace toast are built from them. The
-  gallery shows every primitive in every state, and the chat's cards at 760 and 360px, on any theme: open the app or the browser preview
-  with `#gallery` (`#gallery?theme=Paper`; `features/gallery/`).
+  gallery shows every primitive in every state, and the chat's cards at 760 and 360px, on any theme: open the app with `#gallery`
+  (`#gallery?theme=Paper`; `features/gallery/`), or `pnpm dev` in a browser, which shows the gallery outside the app.
 - **Design tokens are theme roles, never values.** A theme is the roles of [Design language](#design-language), and
   `themeStyle` (`features/workspace/theme/themes.ts`) is the one function that turns a theme into CSS variables, set
   on the window root and the page root. A new or rebuilt component reads the role; a hex is never written into a
@@ -464,8 +463,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   reduced the ring stands still and is lit all the way round. `markOf` is the one function that files a status under a
   mark (the table is `lib/statusMark.ts`), and nothing else decides it: it files `error`, `limited` and `unknown` under idle. Sections, counts, the rail, the tray, the title badge and the jump all read it (`sectionOf`). A mark is
   decoration beside words that say the status; `named` makes it an image named for its state (`markName`) where there
-  are no such words. There is no failed mark. The preview's `StatusMark` (`components/StatusMark.tsx`) only maps its own
-  names onto it.
+  are no such words. There is no failed mark.
 - **Icon buttons.** One component, `IconButton` (`components/ui/icon-button.tsx`): a 26px square with a 14px glyph in
   `--muted`, `--fg` on hover, the corner `--r-control`. Hover, a pressed toggle (`aria-pressed`), an open menu
   (`aria-expanded`) and `on` fill it with `--icon-button-fill` (the ink at 7%); there is no accent and no second size.
@@ -1495,7 +1493,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (blinking is Settings › Text › Blink, xterm's own option, off by default), and nothing animates `box-shadow`,
   `filter` or `backdrop-filter` ([PERFORMANCE](PERFORMANCE.md)). The working spinner steps every 160 ms and
   holds while the window is in the background.
-- **Working loader.** A wait of a second or more shows the **M loader** (`MLoader`): the three strokes of the M icon traced in turn over 2.4 s, in the text colour, with a word beside it ("Reading <machine>…"); a list shows it only after 160 ms. Reduce motion draws the M still. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
+- **Working loader.** A wait in a list or a row is the running light (`StatusIcon`) with a word beside it ("Listing <folder>"), shown only after 160 ms; a chat being read is skeleton lines on the same delay. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
 - **Desktop dialogs.** The Open a project palette, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, the panel radius, the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus (a field takes a full accent border). Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
 - **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber mark edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.

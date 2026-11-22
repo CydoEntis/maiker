@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { readThemePreference, writeThemePreference } from './themePreference'
+import { readThemePreference } from './themePreference'
 
 describe('theme preference', () => {
   beforeEach(() => {
@@ -7,7 +7,7 @@ describe('theme preference', () => {
   })
 
   it('restores the saved Paper theme', () => {
-    writeThemePreference('day')
+    localStorage.setItem('maiker.gui.theme.v1', 'day')
 
     expect(readThemePreference()).toBe('day')
   })

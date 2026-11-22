@@ -84,8 +84,8 @@ Tauri's `beforeDevCommand` rebuilds it (`pnpm bundle:daemon:dev`) on every start
 file as the shared `maiker` on first start and after each update (see
 [ADR 0004](adr/0004-client-split-and-desktop-host.md)).
 The packaged GUI uses that sidecar to start the separate daemon when needed;
-closing the GUI leaves the daemon and its sessions running. `pnpm dev` opens
-the browser preview with sample data and does not start or connect to a daemon.
+closing the GUI leaves the daemon and its sessions running. `pnpm dev` in a browser
+opens the primitives gallery (see [DESIGN](DESIGN.md)); it does not start or connect to a daemon.
 On Arch Linux, including Omarchy, install the packages listed in
 [`docs/stack/tauri.md`](stack/tauri.md#platform-prerequisites) before running
 `pnpm desktop:build`. Build on the target Linux host because the desktop shell

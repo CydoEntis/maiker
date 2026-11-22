@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import App from './App'
+import { DesktopApp } from '@/features/workspace/DesktopApp'
 
 const daemon = vi.hoisted(() => ({
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
@@ -80,7 +80,7 @@ async function openRemotePane() {
   // A plain shell is a session of its own only in the Terminal view.
   window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><DesktopApp /></QueryClientProvider>)
   const user = userEvent.setup()
   // The only session there is runs on build, so the first row of the list is its row.
   const item = (await within(await screen.findByRole('navigation', { name: 'Sessions' })).findAllByRole('listitem'))[0]

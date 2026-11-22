@@ -829,11 +829,10 @@ Why the browser is the app's own and not the system's: it lists folders on the m
 through that machine's daemon, SSH machines included; the system dialog can only browse this computer. The
 repository index (`Query::Repositories`) is not asked for by the window.
 
-The **M loader** (`MLoader`, `components/ui/m-loader.tsx`) is the one spinner for a wait that fills a view: the three
-strokes of the M icon drawn in turn over 2.4 s, with a word beside it. A wait inside a list or a row (the palette's
-"Listing …") is the running light (`StatusIcon`) instead, and shows only after 160 ms, so a quick answer never
-flashes it. Reduced motion draws the M still. There is no spinner choice in Settings: the preference is not shown,
-and the stored value is ignored.
+A wait inside a list or a row (the palette's "Listing …") is the running light (`StatusIcon`), and shows only after
+160 ms, so a quick answer never flashes it; a chat being read shows skeleton lines on the same delay (`ChatSkeleton`,
+`useAppearsAfter`). There is no spinner choice in Settings: the preference is not shown, and the desktop draws
+nothing from the stored value (it is kept for the terminal app, which shares it).
 
 ## Project-specific: sidebar check result
 

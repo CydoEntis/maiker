@@ -3,29 +3,12 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
 import type { Conversation } from '@/data/preview'
-import { closeChatSession, startTerminalSession, loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, archiveConversationOnDaemon, renameConversationOnDaemon, classifySubmissionFailure, loadConversationDiff, loadConversationFile, loadConversationFiles, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, daemonSaidEnded, localListRevision, markSeenOnDaemon, readConversationPage, submitMessage, cancelTurn, loadTargetDiff, archiveSessionOnDaemon, snoozeSessionOnDaemon, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, loadMessages, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
+import { loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, renameConversationOnDaemon, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, daemonSaidEnded, localListRevision, markSeenOnDaemon, closeSession, readConversationPage, submitMessage, cancelTurn, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
   isTauri: vi.fn(),
 }))
-
-const conversation = {
-  id: '42',
-  generation: 7,
-  title: 'Example conversation',
-  project: 'maiker',
-  folder: '/home/casey/maiker',
-  branch: 'main',
-  provider: 'Codex' as const,
-  status: 'idle' as const,
-  updated: null,
-  model: 'Codex default',
-  permission: 'Provider permissions',
-  context: null,
-  nativePane: 12,
-  hasDiff: false,
-}
 
 describe('workspace Git state', () => {
   it('marks a conversation folder without Git so Changes can explain why it is unavailable', async () => {
@@ -49,49 +32,6 @@ describe('workspace Git state', () => {
     await expect(loadConversations()).resolves.toMatchObject([
       { folder: 'C:\\dev\\autobattler', isGitRepository: false },
     ])
-  })
-})
-
-describe('read-only conversation file browser', () => {
-  beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset()
-  })
-
-  it('lists and reads files using the selected checkout identity', async () => {
-    vi.mocked(invoke).mockResolvedValueOnce([{ name: 'src', is_directory: true }])
-      .mockResolvedValueOnce('export const ready = true')
-
-    await expect(loadConversationFiles(conversation, 'src')).resolves.toEqual([
-      { name: 'src', is_directory: true },
-    ])
-    await expect(loadConversationFile(conversation, 'src/index.ts')).resolves.toContain('ready')
-    expect(invoke).toHaveBeenNthCalledWith(1, 'conversation_files', {
-      id: 42,
-      generation: 7,
-      path: 'src',
-    })
-    expect(invoke).toHaveBeenNthCalledWith(2, 'conversation_file', {
-      id: 42,
-      generation: 7,
-      path: 'src/index.ts',
-    })
-  })
-})
-
-describe('conversation changes query', () => {
-  it('sends only the selected conversation id and generation to the daemon', async () => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockResolvedValue({
-      files: [],
-      additions: 0,
-      deletions: 0,
-      total_files: 0,
-      truncated: false,
-    })
-
-    await expect(loadConversationDiff(conversation)).resolves.toMatchObject({ total_files: 0 })
-    expect(invoke).toHaveBeenCalledWith('conversation_diff', { id: 42, generation: 7 })
   })
 })
 
@@ -219,188 +159,7 @@ describe('the chat of a session on another machine', () => {
     expect(vi.mocked(invoke).mock.calls[0]).toEqual(['cancel_conversation', { id: 5, generation: 4 }])
   })
 
-  it('has no diff or files here, since they are on the other machine\'s disk', async () => {
-    await expect(loadTargetDiff({ conversation: key, generation: 4 })).rejects.toThrow('local-only in v1')
-    expect(invoke).not.toHaveBeenCalled()
-  })
 })
-
-describe('submission delivery', () => {
-  const uncertainHistory = {
-    generation: 7,
-    receipt: { conversation: 42, generation: 7, operation: 3, delivery: 'SubmissionUncertain' as const },
-  }
-
-  it('offers no retry when the daemon says delivery is uncertain', () => {
-    expect(classifySubmissionFailure(uncertainHistory, 7, 3)).toBe('unknown')
-  })
-
-  it('allows retry when there is no receipt for the failed operation', () => {
-    expect(classifySubmissionFailure({ generation: 7, receipt: null }, 7, 3)).toBe('not-delivered')
-    expect(classifySubmissionFailure(uncertainHistory, 7, 4)).toBe('not-delivered')
-  })
-
-  it('recognizes acknowledged delivery and rejects mismatched history', () => {
-    expect(classifySubmissionFailure({
-      generation: 7,
-      receipt: { conversation: 42, generation: 7, operation: 3, delivery: { Acknowledged: { turn_id: 'turn-1' } } },
-    }, 7, 3)).toBe('delivered')
-    expect(classifySubmissionFailure(uncertainHistory, 8, 3)).toBe('unknown')
-    expect(classifySubmissionFailure({ generation: 7, receipt: { ...uncertainHistory.receipt, generation: 8 } }, 7, 3)).toBe('unknown')
-  })
-})
-
-describe('conversation activity history', () => {
-  beforeEach(() => {
-    vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
-      entries: [
-        toolEntry('item-1', 'Running cargo test', 'Compiling…', 'Running'),
-        toolEntry('item-2', 'Failed cargo test', 'exit code 1', 'Failed'),
-        toolEntry('item-3', 'Interrupted command', '', 'Interrupted'),
-      ],
-    }))
-  })
-
-  it('preserves daemon tool states so running and failed work are not shown as completed', async () => {
-    const history = await loadMessages('42', 'Codex')
-
-    expect(history.messages.map(({ content, activityState }) => [content, activityState])).toEqual([
-      ['Running cargo test', 'Running'],
-      ['Failed cargo test', 'Failed'],
-      ['Interrupted command', 'Interrupted'],
-    ])
-  })
-
-  it('shows retained command labels and gives older history a readable fallback', async () => {
-    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
-      entries: [
-        {
-          ...toolEntry('item-1', 'commandExecution', 'GUI_CODEX_TOOL_OK', 'Completed'),
-          content: {
-            Tool: {
-              kind: 'commandExecution',
-              label: 'pwsh -NoProfile -Command Write-Output GUI_CODEX_TOOL_OK',
-              output: 'GUI_CODEX_TOOL_OK',
-            },
-          },
-        },
-        toolEntry('item-2', 'commandExecution', 'older output', 'Completed'),
-      ],
-    }))
-
-    const history = await loadMessages('42', 'Codex')
-
-    expect(history.messages.map(({ content, detail }) => [content, detail])).toEqual([
-      ['pwsh -NoProfile -Command Write-Output GUI_CODEX_TOOL_OK', 'GUI_CODEX_TOOL_OK'],
-      ['Run command', 'older output'],
-    ])
-  })
-
-  it('shows nothing for a reasoning item instead of calling it unsupported', async () => {
-    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
-      entries: [
-        { ...toolEntry('item-1', 'reasoning', '', 'Completed'), content: { Reasoning: { text: 'Weighing two fixes' } } },
-        toolEntry('item-2', 'cargo test', 'ok', 'Completed'),
-      ],
-    }))
-
-    const history = await loadMessages('42', 'Codex')
-
-    expect(history.messages.map(({ content }) => content)).toEqual(['cargo test'])
-  })
-
-  it('uses the conversation provider in approval labels', async () => {
-    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({
-      approvals: [{
-        request_id: 'request-1',
-        kind: 'Command',
-        command: 'npm test',
-        reason: null,
-        cwd: null,
-        changes: [],
-        questions: [],
-        choices: ['Accept', 'Decline'],
-      }],
-    }))
-
-    const history = await loadMessages('42', 'Claude')
-
-    expect(history.messages[0]?.content).toBe('Claude wants to run a command')
-  })
-
-  it('loads every history page before returning the conversation', async () => {
-    const cursor = { conversation: 42, generation: 7, revision: 3, next_position: 128 }
-    const firstPage = Array.from({ length: 128 }, (_, index) => toolEntry(`item-${String(index)}`, `Task ${String(index)}`, '', 'Completed'))
-    vi.mocked(invoke).mockReset()
-      .mockResolvedValueOnce(readResult({ entries: firstPage, next: cursor }))
-      .mockResolvedValueOnce(readResult({ entries: [toolEntry('item-128', 'Task 128', '', 'Completed')] }))
-
-    const history = await loadMessages('42', 'Codex')
-
-    expect(history.messages).toHaveLength(129)
-    expect(history.completeness).toBe('Complete')
-    expect(invoke).toHaveBeenNthCalledWith(2, 'read_conversation', { id: 42, cursor, limit: 128 })
-  })
-
-  it('keeps history incomplete when a page reports a missing section', async () => {
-    vi.mocked(invoke).mockReset().mockResolvedValue(readResult({ completeness: { Incomplete: 'MissingPages' } }))
-
-    const history = await loadMessages('42', 'Codex')
-
-    expect(history.completeness).toEqual({ Incomplete: 'MissingPages' })
-  })
-
-  it('rejects a cursor that repeats instead of looping forever', async () => {
-    const cursor = { conversation: 42, generation: 7, revision: 3, next_position: 128 }
-    vi.mocked(invoke).mockReset()
-      .mockResolvedValueOnce(readResult({ next: cursor }))
-      .mockResolvedValueOnce(readResult({ next: cursor }))
-
-    await expect(loadMessages('42', 'Codex')).rejects.toThrow('Conversation history cursor repeated')
-    expect(invoke).toHaveBeenCalledTimes(2)
-  })
-
-  it('rejects malformed daemon history at the boundary', async () => {
-    const validResult = readResult()
-    vi.mocked(invoke).mockReset().mockResolvedValue({
-      ...validResult,
-      history: { ...validResult.history, completeness: null },
-    })
-
-    await expect(loadMessages('42', 'Codex')).rejects.toThrow()
-  })
-})
-
-type HistoryCompleteness = 'Unknown' | 'Loading' | 'Complete' | { Incomplete: 'Disconnected' | 'UnsupportedItem' | 'InvalidEvent' | 'MissingPages' | 'RevisionExhausted' }
-type HistoryCursor = { conversation: number; generation: number; revision: number; next_position: number }
-
-function readResult({
-  entries = [],
-  next = null,
-  completeness = 'Complete',
-  approvals = [],
-}: { entries?: object[]; next?: HistoryCursor | null; completeness?: HistoryCompleteness; approvals?: object[] } = {}) {
-  return {
-    conversation: 42,
-    generation: 7,
-    status: 'Idle',
-    receipt: null,
-    error: null,
-    cancelling: false,
-    history: { entries, next, completeness },
-    checks: [],
-    approvals,
-  }
-}
-
-function toolEntry(item: string, kind: string, output: string, state: 'Running' | 'Completed' | 'Failed' | 'Interrupted') {
-  return {
-    source: { conversation: 42, turn: 'turn-1', item },
-    content: { Tool: { kind, output } },
-    state,
-  }
-}
 
 describe('names and closed sessions shared through the daemon', () => {
   beforeEach(() => {
@@ -440,30 +199,24 @@ describe('names and closed sessions shared through the daemon', () => {
     ])
   })
 
-  it('sends a rename and a close to the daemon rather than keeping them in the browser', async () => {
+  it('sends a rename to the daemon rather than keeping it in the browser', async () => {
     vi.mocked(invoke).mockResolvedValue(null)
 
     await renameConversationOnDaemon({ id: '42' }, 'Fix the login bug')
-    await archiveConversationOnDaemon({ id: '42' }, true)
 
-    expect(invoke).toHaveBeenNthCalledWith(1, 'rename_conversation', { id: 42, title: 'Fix the login bug' })
-    expect(invoke).toHaveBeenNthCalledWith(2, 'archive_conversation', { id: 42, archived: true })
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('rename_conversation', { id: 42, title: 'Fix the login bug' })
   })
 
-  it('names, ends and puts away a chat of another machine on that machine, and asks this computer nothing about its files', async () => {
+  it('names a chat of another machine on that machine', async () => {
     vi.mocked(isTauri).mockReturnValue(true)
     vi.mocked(invoke).mockResolvedValue(null)
     registerMachine('build', 3)
     const chat = { id: 'build/c12', generation: 2 } as Conversation
 
     await renameConversationOnDaemon(chat, 'Fix the login bug')
-    await closeChatSession(chat)
-    await expect(loadConversationDiff(chat)).rejects.toThrow('local-only')
 
     expect(vi.mocked(invoke).mock.calls).toEqual([
       ['rename_conversation', { id: 12, machine: 3, title: 'Fix the login bug' }],
-      ['end_conversation', { id: 12, machine: 3, generation: 2 }],
-      ['archive_conversation', { id: 12, machine: 3, archived: true }],
     ])
   })
 })
@@ -692,7 +445,7 @@ describe('terminal sessions shown beside chats', () => {
     expect(sessions.map((session) => session.id)).toEqual(['41', '42', 't5'])
   })
 
-  it('reads, types into, resizes, names and closes a terminal session by its pane number', async () => {
+  it('reads, types into, resizes and names a terminal session by its pane number', async () => {
     vi.mocked(invoke).mockResolvedValue(null)
     const target = { id: 't5', generation: 0 }
 
@@ -703,9 +456,6 @@ describe('terminal sessions shown beside chats', () => {
     await sendTerminalInput(target, 'ls\r')
     await resizeTerminal(target, 100, 30)
     await renameConversationOnDaemon({ id: 't5' }, 'Fix login')
-    await archiveConversationOnDaemon({ id: 't5' }, true)
-    await archiveConversationOnDaemon({ id: 't5' }, false)
-    await startTerminalSession('/home/casey/sample', 'Claude')
 
     expect(vi.mocked(invoke).mock.calls.map(([name, args]) => [name, args])).toEqual([
       ['pane_terminal_screen', { term: 5 }],
@@ -713,8 +463,6 @@ describe('terminal sessions shown beside chats', () => {
       ['terminal_input', { term: 5, data: [108, 115, 13] }],
       ['pane_terminal_resize', { term: 5, cols: 100, rows: 30 }],
       ['rename_terminal_session', { term: 5, name: 'Fix login' }],
-      ['close_terminal_session', { term: 5 }],
-      ['start_terminal_session', { cwd: '/home/casey/sample', provider: 'Claude' }],
     ])
   })
 })
@@ -756,18 +504,16 @@ describe('commands for a pane, on whichever machine it is', () => {
     await sendTerminalInput(pane, 'ls')
     await resizeTerminal(pane, 100, 30)
     await renameConversationOnDaemon(pane, 'api')
-    await archiveConversationOnDaemon(pane, true)
     await markSeenOnDaemon(pane)
-    await archiveSessionOnDaemon(pane, true)
     await reloadAgentOnDaemon(pane)
+    await closeSession(pane)
     expect(vi.mocked(invoke).mock.calls).toEqual([
       ['terminal_input', { term: 7, data: [108, 115] }],
       ['pane_terminal_resize', { term: 7, cols: 100, rows: 30 }],
       ['rename_terminal_session', { term: 7, name: 'api' }],
-      ['close_terminal_session', { term: 7 }],
       ['mark_terminal_seen', { term: 7 }],
-      ['archive_terminal_session', { term: 7, archived: true }],
       ['reload_terminal_session', { term: 7 }],
+      ['close_session_with_undo', { term: 7 }],
     ])
   })
 
@@ -775,27 +521,16 @@ describe('commands for a pane, on whichever machine it is', () => {
     await sendTerminalInput(there, 'ls')
     await resizeTerminal(there, 100, 30)
     await renameConversationOnDaemon(there, 'api')
-    await archiveConversationOnDaemon(there, true)
     await markSeenOnDaemon(there)
-    await archiveSessionOnDaemon(there, false)
     await reloadAgentOnDaemon(there)
+    await closeSession(there)
     expect(vi.mocked(invoke).mock.calls).toEqual([
       ['terminal_input', { term: 7, data: [108, 115], machine: 3 }],
       ['pane_terminal_resize', { term: 7, cols: 100, rows: 30, machine: 3 }],
       ['rename_terminal_session', { term: 7, name: 'api', machine: 3 }],
-      ['close_terminal_session', { term: 7, machine: 3 }],
       ['mark_terminal_seen', { term: 7, machine: 3 }],
-      ['archive_terminal_session', { term: 7, archived: false, machine: 3 }],
       ['reload_terminal_session', { term: 7, machine: 3 }],
-    ])
-  })
-
-  it('snoozes a pane until a time and wakes it, on this computer or another', async () => {
-    await snoozeSessionOnDaemon(pane, 1_800_000_000)
-    await snoozeSessionOnDaemon(there, null)
-    expect(vi.mocked(invoke).mock.calls).toEqual([
-      ['snooze_terminal_session', { term: 7, until: 1_800_000_000 }],
-      ['snooze_terminal_session', { term: 7, until: null, machine: 3 }],
+      ['close_session_with_undo', { term: 7, machine: 3 }],
     ])
   })
 

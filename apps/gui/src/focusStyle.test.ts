@@ -32,10 +32,7 @@ const FOCUS = /:focus(-visible|-within)?\b/
 const focusRules = RULES.filter((rule) => FOCUS.test(rule.selector))
 
 /** An `outline` or `outline-offset` that is not a drag or a pick, each with its reason. A focus rule has no entry here. */
-const OUTLINE_ALLOWED: ReadonlyArray<readonly [RegExp, string]> = [
-  [/\.terminal-pane\.is-drop-target/, 'where a dragged pane lands (App.css), not focus'],
-  [/\.toast-position-option\.is-selected/, 'the picked corner in Settings (App.css), not focus'],
-]
+const OUTLINE_ALLOWED: ReadonlyArray<readonly [RegExp, string]> = []
 /** The needs card's own answer field takes its underline in the needs colour, as the prototype's Needs Card draws it (`style-focus`). */
 const NEEDS_UNDERLINE = /^inset 0 -1px 0 var\(--needs\)$/
 /** The comma-separated layers of a box-shadow value, ignoring the commas inside `rgba(...)`, `var(...)` and `calc(...)`. */

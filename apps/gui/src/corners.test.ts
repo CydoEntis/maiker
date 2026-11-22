@@ -5,8 +5,7 @@ import { describe, expect, it } from 'vitest'
 
 const read = (path: string) => readFileSync(fileURLToPath(new URL(path, import.meta.url)), 'utf8')
 
-// The browser preview's own shell (`App.css`) is not the desktop window and keeps its own shapes.
-const SHEETS = Object.keys(import.meta.glob('./**/*.css')).filter((path) => path !== './App.css')
+const SHEETS = Object.keys(import.meta.glob('./**/*.css'))
 const COMPONENTS = Object.keys(import.meta.glob(['./**/*.tsx', '!./**/*.test.tsx']))
 
 // A full pill (`999px`) and a circle (`50%`) are shapes of their own, not corners.

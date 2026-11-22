@@ -1,3 +1,4 @@
+// Written by an older build only: the settings carry the theme now, and this is read so an old choice carries over.
 const STORAGE_KEY = 'maiker.gui.theme.v1'
 
 export type ThemePreference = 'night' | 'abyss' | 'day'
@@ -16,8 +17,4 @@ export function readThemePreference(): ThemePreference {
 
   console.warn('Ignoring unsupported Maiker theme preference')
   return DEFAULT_THEME
-}
-
-export function writeThemePreference(theme: ThemePreference): void {
-  localStorage.setItem(STORAGE_KEY, theme)
 }

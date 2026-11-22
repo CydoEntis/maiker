@@ -1,6 +1,5 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import { StatusMark, type StatusMarkState } from '../StatusMark'
 import { StatusIcon, markName, markOf, type StatusIconKind } from './status-icon'
 
 describe('the status-to-mark model', () => {
@@ -33,23 +32,5 @@ describe('StatusIcon', () => {
   it('is decoration unless asked for a name, so it adds nothing to the name of a row that already says its status', () => {
     render(<button type="button" aria-label="Fix the cart total, needs you"><StatusIcon status="needs" /></button>)
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
-  })
-})
-
-describe('the preview StatusMark', () => {
-  const nameOf = (status: StatusMarkState): string | null => {
-    const { unmount } = render(<StatusMark status={status} named />)
-    const name = screen.queryByRole('img')?.getAttribute('aria-label') ?? null
-    unmount()
-    return name
-  }
-
-  it('is the same mark: a stopped conversation and an unknown one are idle', () => {
-    expect(nameOf('recovery')).toBeNull()
-    expect(nameOf('needs-you')).toBe(markName('needs'))
-    expect(nameOf('working')).toBe(markName('working'))
-    expect(nameOf('done')).toBe(markName('done'))
-    expect(nameOf('idle')).toBeNull()
-    expect(nameOf('unknown')).toBeNull()
   })
 })
