@@ -145,7 +145,7 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, files: fileA
                   ticked={actions ? !skipped.has(file.path) : null}
                   onTick={() => { tick(file.path) }}
                   onPick={() => { fileActions.onOpen(file.path, 'changes', how) }}
-                  onMenu={(event) => { menu.open(event, { path: file.path, changed: true, deleted: changeKind(file.patch).letter === 'D', range: range ?? undefined }) }}
+                  onMenu={(event) => { menu.open(event, { path: file.path, changed: true, deleted: changeKind(file.patch).letter === 'D', added: changeKind(file.patch).letter === 'A', range: range ?? undefined }) }}
                 />
               </li>
             ))}

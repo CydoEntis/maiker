@@ -99,6 +99,16 @@ export async function commitAll(folder: string, message: string, machine: number
   return z.string().parse(await invoke<unknown>('git_commit_all', { machine, folder, message, paths: paths ?? null, ...paneArg(term) }))
 }
 
+/**
+ * Discards the uncommitted changes of one file, `path` from the top of the repository: a changed or deleted file goes
+ * back to the last commit, a new one is removed for good. On this computer the checkout is the one at `folder`; on
+ * another machine, the one pane `term` there is in. Rejects with one line saying why nothing was discarded.
+ */
+export async function discardFile(folder: string, path: string, machine: number, term?: number): Promise<void> {
+  if (!isTauri()) throw new Error('Discarding is only available in the desktop app')
+  await invoke('git_discard_file', { machine, folder, path, ...paneArg(term) })
+}
+
 /** Saves the text of an existing file of the checkout `term` is in; the daemon refuses anything but a plain file inside it. */
 export async function writeProjectFile(term: number, machine: number, path: string, contents: string): Promise<void> {
   if (!isTauri()) throw new Error('Editing is only available in the desktop app')

@@ -13,6 +13,11 @@ export function openFileOf(shown: Arrangement | undefined, sessionId: string | u
   return shown.max === null || shown.max === pane.id ? pane.doc.path : null
 }
 
+/** The id of the arrangement's file pane when it shows `path` of `sessionId`'s checkout, or null. */
+export function filePaneShowing(shown: Arrangement | undefined, sessionId: string, path: string): string | null {
+  return shown?.panes.find((pane) => pane.sessionId === sessionId && pane.doc?.path === path)?.id ?? null
+}
+
 /** Where the side panel sits: a card of its own beside the main pane, or a float over the pane beside it. */
 export type PanelPlacement = 'docked' | 'floating'
 

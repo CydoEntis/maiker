@@ -15,6 +15,7 @@ import { suggestedCommitMessage } from '../model/agentMessage'
 import { openFileOf, panelPlacement, PICKING_A_FILE_HIDES_THE_PANEL } from '../model/filePane'
 import type { SessionView } from '../model/session'
 import { terminalName } from '../model/terminalTabs'
+import { useDiscardFile } from '../useDiscardFile'
 import { useWorkspace } from '../workspaceContext'
 import { PanelTerminal } from './PanelTerminal'
 
@@ -44,6 +45,7 @@ function NeedsTerminal({ kind, session, canStart, onStart }: { kind: RepoSurface
 export function WorkspaceSidePanel() {
   const { inspectOpen, inspectRefusal, focusMode, inspectTerm, focusedSession, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument, copyText, tab: arrangement, narrow, panelOf, changePanel, pinTerminal, ownsTerminals, canStart, addAgentTerminal, closeAgentTerminals, agentTerminals, setPanelFocused, root } = useWorkspace()
   const presence = usePresence(inspectOpen, PANEL_EXIT_MS, useReducedMotion())
+  const discardFile = useDiscardFile()
   // Files reads this computer's checkouts, so nothing is read ahead for a session of another machine.
   usePreloadFiles(focusedSession?.machineName === null ? inspectTerm : null, loadTopFolder)
   if (!presence.shown || focusMode || !focusedSession || inspectRefusal !== null) return null
@@ -84,6 +86,8 @@ export function WorkspaceSidePanel() {
     onCopyRelativePath: (path) => { copyText(path, 'Relative path') },
     // The file manager is this computer's, so a file on another machine has nothing to show in it.
     onReveal: session.machineName === null ? (path) => { revealInExplorer(fullPathOf(checkout, path)).catch((error: unknown) => { toast.failed('Could not show the file', error) }) } : undefined,
+    // The checkout is named by the pane the repository is read through, so there is nothing to discard from without one.
+    onDiscard: inspectTerm === null ? undefined : (file) => { discardFile(session, inspectTerm, file) },
     menuRoot: root,
   }
   const body = (tab: PanelTab) => {

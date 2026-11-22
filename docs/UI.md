@@ -563,7 +563,14 @@ The desktop window, unlike the terminal interface above, has one full-width foot
   accessible name even while only its icon shows. Anything outside the panel opens a surface through `openSurface`
   (`useSidePanel.ts`), never by setting panel state itself. **A surface lists; it never shows a file.** Files and
   Changes open a file in the file pane through the `FileActions` the window hands them (`fileMenu.tsx`), which also
-  carry the file's right-click menu, so a surface holds no viewer, no diff and no editor of its own. Whether the panel
+  carry the file's right-click menu, so a surface holds no viewer, no diff and no editor of its own. **Discarding a
+  file's changes** is one of those actions (`onDiscard`), and all of it is `useDiscardFile.ts`: the question
+  (`discardAsk` in `features/confirm`, by how the file changed), then the draft guard for an unsaved Edit draft of
+  that file (Save, Discard or Keep editing; keeping it calls the discard off), then the host command off the UI
+  thread. On success every query of that pane's repository is invalidated, so Changes, Files and an open diff
+  re-read at once; the file pane of a file that no longer exists closes, and one showing a file whose change is
+  gone reads its text again (`DocumentView`, unless a draft is open). A failure is a toast with the reason and
+  changes nothing on screen. It has no shortcut key. Whether the panel
   is a card beside the main pane or a float over the file pane is `panelPlacement` (`model/filePane.ts`), never a
   component's own guess; its width and what a stored width becomes are `panelWidth.ts`. A terminal tab is a shell the daemon owns: the panel and
   the drawer only say where it shows, closing its tab ends it and so asks first, and hiding the panel or pinning,
@@ -1260,7 +1267,7 @@ on another machine and its Changes tab shows the same file list and diffs as for
 from that machine's daemon (`repoStatus` and `repoDiff` with the machine, `features/inspect/api.ts`)
 with the same commit bar under the files: the ticks, the message, **Commit N files**, the remote
 button (**Pull ↓N**, **Push ↑N** or **Fetch**, by the same rule as locally, `remoteAction.ts`) and
-**Create PR**. Each is run by that machine's daemon in the pane's checkout (`git_commit_all`,
+**Create PR**, and a file's **Discard changes…** (`git_discard_file`). Each is run by that machine's daemon in the pane's checkout (`git_commit_all`,
 `git_sync` and `git_create_pull_request` with the pane, `Query::Git`), with that machine's git
 identity and GitHub sign-in, and its answer or failure shows as it does locally. Files lists that machine's folders (ADR 0014, `FilesTab.tsx`); the file pane opens only its Markdown documents whole, shows any changed file's diff, and says "Only Markdown documents open from <machine>; its other files stay there." for the rest. References is not offered, and a file's menu has no Reveal there. Timeline is as for a local pane. A chat on another machine that has no terminal of its own has no pane to ask, so the panel
 does not open for it and the toast says Inspect is local-only.
@@ -2009,7 +2016,7 @@ Files) and **Open README beside the chat**. All of them go through `openDocument
 - **Any text file of this computer can be edited** the same way, saved with the version it was read at; the daemon
   refuses links, `.git`, new files and anything over 256 KiB.
 - Not offered: Edit against a service older than this app (Preview and File only); **Open in editor** (the app has no
-  action that starts an editor) and **Discard changes…** (no command discards a file's changes yet) in a file's menu.
+  action that starts an editor) in a file's menu.
 
 ## Chat and sidebar fidelity
 

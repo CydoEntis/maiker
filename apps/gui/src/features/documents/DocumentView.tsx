@@ -87,6 +87,15 @@ export function DocumentView({ term, machine, machineName = null, path, root, pr
   const editable = toEditable(doc.text)
   const dirty = editing && isDirty(draft, editable)
   useEffect(() => { dirtyRef.current = dirty })
+  // A change that is gone (committed, or discarded from the file's menu) may have left other text on disk than the
+  // one shown: read it again. An open draft is the person's to settle first, and the focus check tells them then.
+  const changed = change !== null
+  const wasChanged = useRef(changed)
+  const reread = doc.reload
+  useEffect(() => {
+    if (wasChanged.current && !changed && !dirtyRef.current) reread()
+    wasChanged.current = changed
+  }, [changed, reread])
   // Opened straight into Edit (a test, the gallery): the draft starts when the text is there to start from.
   if (doc.phase === 'ready' && doc.canEdit && chosen === 'edit' && draft === null) setDraft(editable)
   // The same file asked for again (picked in Changes while it shows as text): adjusted while rendering, not in an effect.

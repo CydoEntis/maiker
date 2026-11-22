@@ -220,6 +220,35 @@ describe('the file pane’s modes', () => {
     expect(await screen.findByLabelText('Diff')).toBeInTheDocument()
   })
 
+  it('reads the file again when its changes are gone, and keeps a draft that is open then', async () => {
+    const user = userEvent.setup()
+    const { io, agentEdits } = fakeDisk('edited\n')
+    const view = (changed: boolean) => <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={changed ? change : null} ask={{ mode: 'file', key: 1 }} />
+    const { rerender } = render(view(true))
+    expect(await screen.findByLabelText('Text of src/a.ts')).toHaveTextContent('edited')
+    // The changes were discarded: the disk holds the committed text again, and the diff has no entry for the file.
+    agentEdits('committed\n')
+    rerender(view(false))
+    await waitFor(() => { expect(screen.getByLabelText('Text of src/a.ts')).toHaveTextContent('committed') })
+
+    rerender(view(true))
+    await user.click(screen.getByRole('radio', { name: 'Edit' }))
+    const box = screen.getByRole('textbox', { name: 'Edit src/a.ts' })
+    await user.type(box, 'mine')
+    agentEdits('elsewhere\n')
+    rerender(view(false))
+    expect(box).toHaveValue('committed\nmine')
+  })
+
+  it('brings back the text of a deleted file once it is no longer deleted', async () => {
+    const { io } = fakeDisk('back\n')
+    const view = (deleted: boolean) => <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={deleted ? { ...change, deleted: true } : null} ask={undefined} />
+    const { rerender } = render(view(true))
+    expect(io.read).not.toHaveBeenCalled()
+    rerender(view(false))
+    expect(await screen.findByLabelText('Text of src/a.ts')).toHaveTextContent('back')
+  })
+
   it('shows only the diff of a deleted file, and reads nothing', () => {
     const { io } = fakeDisk('x\n')
     open(io, { path: 'src/a.ts', ask: undefined, change: { ...change, deleted: true } })

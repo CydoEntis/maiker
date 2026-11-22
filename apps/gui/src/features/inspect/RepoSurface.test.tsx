@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { FileActions } from './fileMenu'
+import { fileMenu, type FileActions } from './fileMenu'
 import type { RepoSurfaceKind } from './panelTabs'
 import { RepoSurface } from './RepoSurface'
 
@@ -119,6 +119,45 @@ describe('the side panel’s Files and Changes', () => {
     renderOnBuild('files')
     expect(await names(await screen.findByRole('button', { name: 'plain.ts' }))).toEqual(['Open', 'Copy path', 'Copy relative path'])
     cleanup()
+  })
+
+  it('offers to discard a changed file’s changes, saying how it changed, and not for an unchanged file or one turn’s changes', async () => {
+    const patchOf = (header: string) => `diff --git a/x b/x\n${header}@@ -1 +1 @@\n-old\n+new\n`
+    const diff = {
+      files: [
+        { path: 'src/edited.ts', additions: 1, deletions: 1, binary: false, patch: patchOf('') },
+        { path: 'src/gone.ts', additions: 0, deletions: 1, binary: false, patch: patchOf('deleted file mode 100644\n') },
+        { path: 'src/new.ts', additions: 1, deletions: 0, binary: false, patch: patchOf('new file mode 100644\n') },
+      ],
+      additions: 2, deletions: 2, total_files: 3, truncated: false,
+    }
+    daemonAnswers({ Diff: diff, Status: { branch: 'main', ahead: 0, behind: 0, files: [] }, Tree: [{ name: 'plain.ts', is_directory: false }] })
+    const onDiscard = vi.fn()
+    renderPanel('changes', fileActions({ onDiscard }))
+    const list = await screen.findByRole('list', { name: 'Changed files' })
+    for (const name of ['edited.ts', 'gone.ts', 'new.ts']) {
+      fireEvent.contextMenu(within(list).getByRole('button', { name: new RegExp(name.replace('.', '\\.')) }))
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Discard changes…' }))
+      await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
+    }
+    expect(onDiscard.mock.calls.map(([file]) => file as unknown)).toEqual([
+      { path: 'src/edited.ts', change: 'edited' },
+      { path: 'src/gone.ts', change: 'deleted' },
+      { path: 'src/new.ts', change: 'new' },
+    ])
+    cleanup()
+    renderPanel('files', fileActions({ onDiscard }))
+    fireEvent.contextMenu(await screen.findByRole('button', { name: 'plain.ts' }))
+    await screen.findByRole('menuitem', { name: 'Open' })
+    expect(screen.queryByRole('menuitem', { name: 'Discard changes…' })).toBeNull()
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
+    fireEvent.contextMenu(within(screen.getByRole('list', { name: 'Changed files' })).getByRole('button', { name: /new\.ts/ }))
+    expect(await screen.findByRole('menuitem', { name: 'Discard changes…' })).toBeInTheDocument()
+    cleanup()
+    // One turn's changes are a diff between two snapshots; a discard would act on the working tree instead.
+    const ofTurn = fileMenu({ path: 'src/edited.ts', changed: true, deleted: false, range: { from: 'before', to: 'after' } }, 'changes', fileActions({ onDiscard }))
+    expect(ofTurn.some((entry) => typeof entry === 'object' && 'label' in entry && entry.label === 'Discard changes…')).toBe(false)
   })
 
   it('reads the changes of a session on another machine from that machine', async () => {

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogTitle } from '@/components/ui/alert-dialog'
-import type { ConfirmCopy } from './confirm'
+import { canSkip, type ConfirmCopy } from './confirm'
 import type { PendingConfirm } from './useConfirm'
 import './confirm.css'
 
@@ -72,5 +72,5 @@ export function ConfirmHost({ pending }: { pending: PendingConfirm | null }) {
   if (pending === null) return null
   const { kind, ...copy } = pending.ask
   // Keyed by kind and title so a second question starts with its box unticked.
-  return <ConfirmDialog key={`${kind}:${copy.title}`} {...copy} offersDontAskAgain onConfirm={(dontAskAgain) => { pending.answer(true, dontAskAgain) }} onCancel={() => { pending.answer(false, false) }} />
+  return <ConfirmDialog key={`${kind}:${copy.title}`} {...copy} offersDontAskAgain={canSkip(kind)} onConfirm={(dontAskAgain) => { pending.answer(true, dontAskAgain) }} onCancel={() => { pending.answer(false, false) }} />
 }

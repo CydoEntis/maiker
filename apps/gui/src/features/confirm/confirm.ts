@@ -31,6 +31,22 @@ export type ClosingSessions = ClosingSession | { count: number }
 /** A plain shell, or the shells of one terminal tab, about to be closed. */
 export type ClosingTerminal = { name: string }
 
+/** A file whose uncommitted changes are about to be discarded. What is lost depends on how it changed. */
+export type DiscardingFile = {
+  /** The file's path in its project, with `/`. */
+  path: string
+  /** `new`: no commit has it, so discarding deletes it. `deleted`: discarding brings it back. */
+  change: 'edited' | 'deleted' | 'new'
+}
+
+const nameOf = (path: string): string => path.slice(path.lastIndexOf('/') + 1)
+
+function discardingCopy({ path, change }: DiscardingFile): ConfirmCopy {
+  const title = `Discard changes to “${nameOf(path)}”?`
+  if (change === 'deleted') return { title, body: `${path} was deleted. Discarding brings it back as it was at the last commit.`, confirmLabel: 'Discard changes', danger: true }
+  return { title, body: `${path} goes back to how it was at the last commit.`, note: 'Your changes to it since then are lost and cannot be brought back.', confirmLabel: 'Discard changes', danger: true }
+}
+
 type View = 'chat' | 'terminal'
 
 const VIEW_NAME: Readonly<Record<View, string>> = { chat: 'Chat', terminal: 'Terminal' }
@@ -68,6 +84,8 @@ const CONFIRMS = {
   }),
   // The action refuses while a session runs in the project, so by the time this asks there is none to close.
   'remove-project': (name: string): ConfirmCopy => ({ title: `Remove ${name} from the sidebar?`, body: 'No session is running in it. The folder and its git history stay on disk, and you can open it again any time.', confirmLabel: 'Remove', danger: true }),
+  'discard-file': discardingCopy,
+  'delete-new-file': (path: string): ConfirmCopy => ({ title: `Delete “${nameOf(path)}”?`, body: `${path} is a new file that was never committed, so discarding it deletes it for good.`, note: 'It cannot be brought back.', confirmLabel: 'Delete file', danger: true }),
 }
 
 export type ConfirmKind = keyof typeof CONFIRMS
@@ -78,6 +96,14 @@ const COPY: { readonly [K in ConfirmKind]: (subject: Subject[K]) => ConfirmCopy 
 
 export const CONFIRM_KINDS = Object.keys(CONFIRMS) as readonly ConfirmKind[]
 
+/** The kinds that ask every time: what they do cannot be brought back by any means, so no earlier answer stands in for this one. */
+const ALWAYS_ASKED: ReadonlySet<ConfirmKind> = new Set<ConfirmKind>(['delete-new-file'])
+
+/** Whether `kind` offers "Don't ask again". */
+export function canSkip(kind: ConfirmKind): boolean {
+  return !ALWAYS_ASKED.has(kind)
+}
+
 /** A question ready to ask: its kind and the words for this one thing. */
 export type ConfirmAsk = ConfirmCopy & { kind: ConfirmKind }
 
@@ -85,21 +111,26 @@ export function confirmAsk<K extends ConfirmKind>(kind: K, subject: Subject[K]):
   return { kind, ...COPY[kind](subject) }
 }
 
+/** The question before a file's changes are discarded. Discarding a new file deletes it, which is a question of its own that is asked every time. */
+export function discardAsk(file: DiscardingFile): ConfirmAsk {
+  return file.change === 'new' ? confirmAsk('delete-new-file', file.path) : confirmAsk('discard-file', file)
+}
+
 /** The kinds the person ticked "Don't ask again" for. Saved with the settings. */
 export type SkippedConfirms = readonly ConfirmKind[]
 
 /** Whether `kind` still asks before its action runs. */
 export function asksFirst(skipped: SkippedConfirms, kind: ConfirmKind): boolean {
-  return !skipped.includes(kind)
+  return !canSkip(kind) || !skipped.includes(kind)
 }
 
 /** `skipped` with `kind` added: from now on its action runs straight away. */
 export function withSkipped(skipped: SkippedConfirms, kind: ConfirmKind): SkippedConfirms {
-  return skipped.includes(kind) ? skipped : [...skipped, kind]
+  return skipped.includes(kind) || !canSkip(kind) ? skipped : [...skipped, kind]
 }
 
 /** The skipped kinds in a stored value, leaving out anything that is not a kind now; null when it is not a list. */
 export function skippedConfirmsOf(value: unknown): ConfirmKind[] | null {
   if (!Array.isArray(value)) return null
-  return CONFIRM_KINDS.filter((kind) => value.includes(kind))
+  return CONFIRM_KINDS.filter((kind) => canSkip(kind) && value.includes(kind))
 }

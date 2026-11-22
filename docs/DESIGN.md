@@ -324,7 +324,7 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   looks the same everywhere**, the sidebar's selected-row fill: no check marks and no accent outline for "selected".
 - **Confirm only what is destructive or surprising.** One confirm dialog, used for: close a session, close a terminal
   or split, switch the view, discard changes, remove a project, pull when the branch has diverged. Each has **Don't ask
-  again**, stored per kind. Nothing else confirms.
+  again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. Nothing else confirms.
 - **The window.** Title bar: the Maiker logo and name; at the right **one side-panel button** and the window controls.
   Under it: sidebar | main pane | optional file pane | optional side panel, all cards with gaps; when a file is open
   the side panel floats over the file pane and does not squeeze it. The **status bar**: version and `Update to …` at the
@@ -989,7 +989,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   an action that stops or removes something). Focus starts on the primary button; Enter presses the focused button and
   confirms from the checkbox; Esc or a click outside cancels; focus goes back where it was. A kind is one entry in
   `CONFIRMS` (`confirm.ts`) with its words: *close a session*, *close a terminal*, *switch the view*, *remove a
-  project*. A ticked Don't ask again counts only with a yes, is saved per kind with the settings (`confirmSkipped`) and
+  project*, *discard a file's changes* and *delete a new file*. The last one asks every time and draws no Don't ask
+  again (`canSkip`): a file no commit has cannot be brought back by any means. A ticked Don't ask again counts only with a yes, is saved per kind with the settings (`confirmSkipped`) and
   makes that kind's action run straight away from then on; Settings › General › **Ask again** turns every question back on. While any
   question is open (`isAlertDialogOpen`, `components/ui/alert-dialog.tsx`) the window's shortcut keys do nothing.
 - **An agent that ends by itself takes its pane with it.** A pane the desktop app started as an agent runs the agent
@@ -1248,8 +1249,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   selected row in both surfaces.
   **A right-click on a file** in Files or Changes (`fileMenu.tsx`, the shared menu): **Open**, **Open changes** (a
   changed file only), then **Copy path** (the full path on the file's machine), **Copy relative path** and **Reveal in
-  file manager** (this computer's files only). An entry that does not apply is left out, never disabled: a deleted
-  file has no Open and no Reveal.
+  file manager** (this computer's files only), then, under a separator and in the danger colour, **Discard changes…**
+  (a changed file only; not beside one turn's changes, which are not the working tree). An entry that does not apply
+  is left out, never disabled: a deleted file has no Open and no Reveal. Discard changes… opens the confirm dialog,
+  which names the file and says what is lost by how it changed: an edited file goes back to the last commit, a
+  deleted one comes back, and a new file (never committed) is **deleted for good**, which is said in those words
+  with "It cannot be brought back" under it and a **Delete file** button. Afterwards the file leaves Changes at
+  once and a toast says what was done; a refusal is an error toast with the reason.
 - **File pane** (`DocPane.tsx`, `features/documents/DocumentView.tsx`, `documents.css`; handoff 8, screenshots 09 and
   10). A file opens in a card of its own between the main pane and the side panel, one per session's arrangement: the
   next file takes its place. Its **34px header** is the pane header's: `project / file name` (the project `--muted`,

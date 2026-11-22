@@ -75,7 +75,7 @@ export function FilesTab({ term, machine = LOCAL_MACHINE, lookAt, files, onRefer
   const marked = foldersHolding([...changed.keys()])
   const readme = readmeOf((top.data ?? []).filter((entry) => !entry.is_directory).map((entry) => entry.name))
   const pick = (path: string) => { files.onOpen(path, 'files') }
-  const menuOf = (event: MouseEvent, path: string) => { menu.open(event, { path, changed: changed.has(path), deleted: changed.get(path)?.letter === 'D' }) }
+  const menuOf = (event: MouseEvent, path: string) => { menu.open(event, { path, changed: changed.has(path), deleted: changed.get(path)?.letter === 'D', added: changed.get(path)?.letter === 'A' }) }
   const toggle = (folder: string) => {
     setOpen((current) => {
       const next = new Set(current)
