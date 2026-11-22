@@ -731,14 +731,11 @@ function AgentsSection({ onSignIn }: { onSignIn: ((agent: AccountAgent) => void)
   )
 }
 
-/** Whether the sidebar heads each status, which side it sits on, and how large it is. */
+/** Which side the sidebar sits on, and how large it is. */
 function SidebarSection({ preferences, update }: { preferences: SettingsPreferences; update: Update }) {
   return (
     <>
       <Card title="Sidebar">
-        <Row label="Show status headings" detail="In a project of three sessions or more, a heading over Needs you, Working, Done and Idle. Off, the sessions keep the same order under no heading.">
-          <Switch aria-label="Show status headings" checked={preferences.sidebarStatusHeadings} onCheckedChange={(value) => { update('sidebarStatusHeadings', value) }} />
-        </Row>
         <Row label="Sidebar position" detail="Which side of the window the sidebar sits on. Inspect opens from the other side.">
           <SegmentedChoice label="Sidebar position" value={preferences.sidebarSide} options={SIDE_OPTIONS} onChange={(value) => { update('sidebarSide', value) }} />
         </Row>

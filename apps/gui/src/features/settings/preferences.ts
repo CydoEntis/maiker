@@ -85,8 +85,6 @@ export type SettingsPreferences = {
   /** The docked sidebar's width in px; dragged with the mouse. */
   sidebarWidth: number
   sidebarSide: SidebarSide
-  /** Inside a project of three sessions or more, a heading over each status that has sessions. The order is the same either way. */
-  sidebarStatusHeadings: boolean
   terminalDock: TerminalDock
   /** The keys chosen in Settings › Hotkeys, in place of the actions' own. */
   keyOverrides: KeyOverrides
@@ -176,7 +174,6 @@ function defaults(): SettingsPreferences {
     terminalScreenReader: false,
     sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     sidebarSide: 'left',
-    sidebarStatusHeadings: true,
     terminalDock: 'bottom',
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
@@ -271,7 +268,6 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalScreenReader: bool(preferences.terminalScreenReader, fallback.terminalScreenReader),
       sidebarWidth: clampNumber(preferences.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, fallback.sidebarWidth),
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
-      sidebarStatusHeadings: bool(preferences.sidebarStatusHeadings, fallback.sidebarStatusHeadings),
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,

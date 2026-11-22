@@ -27,7 +27,7 @@ const DEFAULTS: SettingsPreferences = {
   
   defaultAgent: 'claude',
   confirmSkipped: [],
-  sidebarWidth: 264, sidebarSide: 'left', sidebarStatusHeadings: true, terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -145,15 +145,6 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(true)
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ hideSuccessfulTools: 'yes' }))
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
-  })
-
-  it('shows status headings in the sidebar unless they were turned off, as settings saved before it read', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({}))
-    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(true)
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarStatusHeadings: false }))
-    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(false)
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarStatusHeadings: 'no' }))
-    expect(readSettingsPreferences().sidebarStatusHeadings).toBe(true)
   })
 
   it('loads settings saved with the removed sidebar grouping and order, keeps the rest, and drops them on the next save', () => {
