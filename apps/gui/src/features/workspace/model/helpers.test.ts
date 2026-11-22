@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { helperDiff, helperLinks, helperSummary } from './helpers'
+import { helperDiff, helperLinks, helperSummary, waitingOnHelpers } from './helpers'
 import { toSessionView, type SessionView } from './session'
 
 function session(pane: number, title: string, extra: Partial<Conversation> = {}, startedBy: string | null = null): SessionView {
@@ -14,7 +14,23 @@ describe('who started whom', () => {
   it('names a helper\'s starter and counts a starter\'s helpers, in list order', () => {
     const links = helperLinks([session(1, 'Growth'), session(2, 'Review', {}, 't1'), session(3, 'Tests', { status: 'needs-you' }, 't1'), session(4, 'Billing')])
     expect([...links.starterOf]).toEqual([['t2', 'Growth'], ['t3', 'Growth']])
-    expect([...links.helpersOf]).toEqual([['t1', { total: 2, needs: 1, names: ['Review', 'Tests'] }]])
+    expect([...links.helpersOf]).toEqual([['t1', { total: 2, needs: 1, working: 1, names: ['Review', 'Tests'] }]])
+  })
+
+  it('counts a helper waiting for a free slot as working, since that is what the daemon reports', () => {
+    const waiting = session(3, 'Tests', { details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, startedBy: 't1', waitingForSlot: true } })
+    expect(waiting.waitingForSlot).toBe(true)
+    const links = helperLinks([session(1, 'Growth'), session(2, 'Review', { status: 'done' }, 't1'), waiting])
+    expect(links.helpersOf.get('t1')).toMatchObject({ total: 2, working: 1 })
+    expect(helperSummary([session(2, 'Review', { status: 'done' }, 't1'), waiting])).toMatchObject({ count: 2, state: 'working' })
+  })
+
+  it('says a lead waits on its helpers only while it works and some of them do', () => {
+    expect(waitingOnHelpers({ status: 'working' }, { working: 3 })).toBe('Waiting on 3 helpers')
+    expect(waitingOnHelpers({ status: 'working' }, { working: 1 })).toBe('Waiting on 1 helper')
+    expect(waitingOnHelpers({ status: 'working' }, { working: 0 })).toBeNull()
+    expect(waitingOnHelpers({ status: 'working' }, null)).toBeNull()
+    expect(waitingOnHelpers({ status: 'done' }, { working: 2 })).toBeNull()
   })
 
   it('treats a session whose starter is no longer listed as nobody\'s helper', () => {

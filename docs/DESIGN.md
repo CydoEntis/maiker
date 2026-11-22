@@ -668,7 +668,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   once, with no wait and no fade; never a native `title`. Padding 12px 14px, 9px between its three parts, a hairline
   (the ink at 7%) over the second and third. First the name (13.5px 600, two lines at most) and one line with the 14px
   status mark, the state word (12px 600 in the state's colour: Needs you, Working, Done, Idle) and the activity in the
-  daemon's own words (`--muted`, one line, cut with an ellipsis). Then 12.5px rows, each a 13px `--dim` line icon and
+  daemon's own words (`--muted`, one line, cut with an ellipsis). A helper the daemon holds for a free slot
+  (`waitingForSlot`, the daemon's flag) says **Waiting for a free slot**; a working lead whose helpers work says
+  **Waiting on 3 helpers**, counting its helpers the daemon reports working, the waiting ones among them; the helpers'
+  summary line under a lead counts a waiting helper as working too. Then 12.5px rows, each a 13px `--dim` line icon and
   its text in `--fg2`, in this order, a row with nothing to say left out: **Started by “lead”** (a helper whose lead is
   listed), the **project**, with ` / worktree` when it has a checkout of its own (the folder icon in the project's
   colour; a shell shows its working directory in mono), the **branch** in mono, the **machine** (This computer, or the
@@ -1145,6 +1148,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   session, and an agent over ACP has its options in its own words, each on the key of what it decides. The highlighted
   row (the first, until the arrows move it) has the float's row fill and its cap inverted; the weight never changes.
   Settings → Permissions lists these under "Commands approved for a project" (`ApprovedCommands.tsx`), each with **Forget**.
+  Below them the page's **Helpers** card (`HelpersSection.tsx`, screenshot 38) has two rows, each a `Segmented`:
+  **When an agent wants helpers** (**Ask**, Always allow, Never) and **Helpers working at once** (2, **4**, 8). Both are
+  this computer's daemon's (`[sessions] helpers` and `helpers_at_once`), shown as the daemon last said them; until it
+  says, nothing is picked and both are disabled, and a change shows only once the daemon says it back. A refused change
+  or a service too old for them keeps the old choice and says why under the rows (`role="alert"`).
   A plan has Claude's own menu, each choice on its number, and **Keep planning** `n` (no `y`: the menu has no single yes); a form **Send answer(s)** `⏎`; a menu its keys, headed "<agent> is waiting in its own menu" when the hook named no question. The card nearest the box takes the keys when it comes up, unless a reply
   is being typed in the box: ↑ ↓ Home End move the highlight, Enter picks it, and y, a and n pick their rows from anywhere
   in the chat but a field. What is typed in the message box is always text, even in an empty box, so a reply that starts

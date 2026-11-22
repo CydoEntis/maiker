@@ -59,9 +59,18 @@ describe('what the hover card says', () => {
     expect(hoverCardText(view({ summary: '' }), FACTS).activity).toBeNull()
   })
 
+  it('says a helper the daemon holds waits for a free slot, and that a working lead waits on its working helpers', () => {
+    const held = view({ details: { ...DETAILS, waitingForSlot: true } })
+    expect(hoverCardText(held, FACTS)).toMatchObject({ state: 'working', activity: 'Waiting for a free slot' })
+    const helpers = { total: 3, needs: 0, working: 2, names: ['a', 'b', 'c'] }
+    expect(hoverCardText(view(), { ...FACTS, helpers }).activity).toBe('Waiting on 2 helpers')
+    expect(hoverCardText(view(), { ...FACTS, helpers: { ...helpers, working: 0 } }).activity).toBe('Upgrade React')
+    expect(hoverCardText(view({ status: 'done' }), { ...FACTS, helpers }).activity).not.toBe('Waiting on 2 helpers')
+  })
+
   it('lists who started it, where it works, its branch, machine, agent and model, when it last changed and its helpers, in that order', () => {
     const helper = view({ machine: 4, machineName: 'devbox', details: { ...DETAILS, agentModel: 'Sonnet 5', since: 1_700_000_000 } })
-    const text = hoverCardText(helper, { ...FACTS, starter: 'Add a toggle', helpers: { total: 2, needs: 1, names: ['a', 'b'] }, machine: DEVBOX })
+    const text = hoverCardText(helper, { ...FACTS, starter: 'Add a toggle', helpers: { total: 2, needs: 1, working: 0, names: ['a', 'b'] }, machine: DEVBOX })
     expect(kinds(text)).toEqual(['starter', 'place', 'branch', 'machine', 'agent', 'active', 'helpers'])
     expect(rowOf(text, 'starter')).toMatchObject({ text: 'Started by “Add a toggle”' })
     expect(rowOf(text, 'place')).toMatchObject({ text: 'app' })

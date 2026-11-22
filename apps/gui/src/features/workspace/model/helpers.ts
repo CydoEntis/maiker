@@ -7,6 +7,8 @@ export type HelperCount = {
   total: number
   /** How many of them wait on the person. */
   needs: number
+  /** How many of them the daemon reports working, the ones waiting for a free slot among them. */
+  working: number
   /** Their names as the sidebar calls them, in list order. */
   names: readonly string[]
 }
@@ -30,10 +32,11 @@ export function helperLinks(sessions: readonly SessionView[]): HelperLinks {
     const starter = session.startedBy === null ? undefined : byId.get(session.startedBy)
     if (starter === undefined) continue
     starterOf.set(session.id, rowTitle(starter))
-    const before = helpersOf.get(starter.id) ?? { total: 0, needs: 0, names: [] }
+    const before = helpersOf.get(starter.id) ?? { total: 0, needs: 0, working: 0, names: [] }
     helpersOf.set(starter.id, {
       total: before.total + 1,
       needs: before.needs + (session.status === 'needs' ? 1 : 0),
+      working: before.working + (session.status === 'working' ? 1 : 0),
       names: [...before.names, rowTitle(session)],
     })
   }
@@ -48,6 +51,19 @@ export function helpersWord(total: number): string {
 /** What a screen reader hears of a session's helpers: the count, and how many wait on the person when any do. */
 export function helpersSpoken(helpers: HelperCount): string {
   return helpers.needs === 0 ? helpersWord(helpers.total) : `${helpersWord(helpers.total)}, ${String(helpers.needs)} ${helpers.needs === 1 ? 'needs' : 'need'} you`
+}
+
+/** What a helper is doing while the daemon holds its start for a free slot (`SessionView.waitingForSlot`). */
+export const WAITING_FOR_SLOT = 'Waiting for a free slot'
+
+/**
+ * `Waiting on 3 helpers`, what a lead is doing while it works and helpers of its own do too, or null. The count is
+ * the lead's listed helpers whose status, as the daemon reports it, is working; the ones waiting for a free slot are
+ * among them. Nothing here is a status: both conditions are the daemon's.
+ */
+export function waitingOnHelpers(lead: Pick<SessionView, 'status'>, helpers: Pick<HelperCount, 'working'> | null): string | null {
+  if (lead.status !== 'working' || helpers === null || helpers.working === 0) return null
+  return `Waiting on ${helpersWord(helpers.working)}`
 }
 
 /** What the line under a lead says of its helpers. */

@@ -159,6 +159,8 @@ const TerminalSessionSchema = z.object({
   started_by: z.number().int().nullable().default(null),
   // The chat whose agent started this one (`TermInfo.started_by_chat`, ADR 0016); never set with `started_by`.
   started_by_chat: z.number().int().nonnegative().nullable().default(null),
+  // A helper past its starter's limit whose start the daemon holds (`TermInfo.waiting_for_slot`); it reports it working meanwhile. False from an older daemon.
+  waiting_for_slot: z.boolean().default(false),
   // The agent's subagents as its runtime reports them (`TermInfo.subagent_activity`); times are unix seconds.
   subagent_activity: z.array(SubagentActivitySchema).default([]),
 })
@@ -1532,6 +1534,8 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       usage: term.usage,
       queued: term.queued,
       ownTurnOver: term.own_turn_over,
+      // The one place the window reads the daemon's flag; every view takes it from `SessionView.waitingForSlot`.
+      waitingForSlot: term.waiting_for_slot,
       pr: term.pr,
       checks: term.checks,
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),

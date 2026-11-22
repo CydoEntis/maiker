@@ -85,6 +85,8 @@ export type SessionView = {
   helperAsk: readonly string[]
   /** The session whose agent started this one (`TermInfo.started_by`); null when a person did. It may no longer be listed. */
   startedBy: string | null
+  /** A helper past its starter's limit: the daemon holds its start for a free slot and reports it working (`TermInfo.waiting_for_slot`). */
+  waitingForSlot: boolean
   /** The agent's subagents, in the order its runtime reported them. */
   subagents: SubagentView[]
   /**
@@ -352,6 +354,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     queued: conversation.details?.queued ?? [],
     helperAsk: conversation.details?.helperAsk ?? [],
     startedBy: conversation.details?.startedBy ?? null,
+    waitingForSlot: conversation.details?.waitingForSlot ?? false,
     // Which helpers a row lists (`listedSubagents`): not one that finished, nor one that stopped once the turn is over.
     subagents: listedSubagents((conversation.details?.subagents ?? []).map(toSubagentView), status === 'working'),
     helpersOnly: helpersOnly(conversation, status),

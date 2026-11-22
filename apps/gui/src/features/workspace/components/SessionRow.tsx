@@ -1,7 +1,7 @@
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { SESSION_ROW_ATTRIBUTE } from '../keyTargets'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { diffSpoken, diffText, helpersSpoken, type HelperCount, type HelperDiff } from '../model/helpers'
+import { diffSpoken, diffText, helpersSpoken, WAITING_FOR_SLOT, type HelperCount, type HelperDiff } from '../model/helpers'
 import { limitedWord, MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
 import { isFreshSession, rowTitle, sectionOf } from '../model/sidebar'
 import { beginPointerDrag } from './dragSession'
@@ -38,7 +38,7 @@ type Props = {
  */
 function spokenState(session: SessionView, starter: string | null, helpers: HelperCount | null, diff: HelperDiff | null): string {
   const status = session.status === 'limited' ? limitedWord(session.resumeAt, Date.now()) : STATUS_WORD[session.status]
-  return [session.process, starter === null ? null : `helper of ${starter}`, helpers === null ? null : helpersSpoken(helpers), diff === null ? null : diffSpoken(diff), status].filter((part) => part !== null).join(', ')
+  return [session.process, starter === null ? null : `helper of ${starter}`, helpers === null ? null : helpersSpoken(helpers), diff === null ? null : diffSpoken(diff), status, session.waitingForSlot ? WAITING_FOR_SLOT.toLowerCase() : null].filter((part) => part !== null).join(', ')
 }
 
 /**

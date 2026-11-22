@@ -16,6 +16,8 @@ const SHARED: SharedSettings = {
   reduce_motion: true,
   bypass_off: ['gemini'],
   update_machines: false,
+  helpers: 'ask',
+  helpers_at_once: 4,
 }
 
 describe('the settings shared with the terminal app', () => {

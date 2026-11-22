@@ -53,6 +53,8 @@ export type TerminalDetails = {
   queued?: string[]
   /** The agent's own turn is over: it takes a message, though helpers it started may keep the pane working. */
   ownTurnOver?: boolean
+  /** The daemon holds this helper's start until its starter has a free slot, and reports it working meanwhile; absent from an older daemon. */
+  waitingForSlot?: boolean
   /** The helpers the session asked to start and waits on the person for, one task each; absent from an older daemon. */
   helperAsk?: string[]
   /** The session whose agent started this one, by its id in this window; null or absent when a person did. */

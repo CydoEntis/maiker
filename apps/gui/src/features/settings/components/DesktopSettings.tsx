@@ -1,4 +1,5 @@
 import { ApprovedCommands } from './ApprovedCommands'
+import { HelpersSection } from './HelpersSection'
 import { toast } from '@/lib/toast'
 import type { UpdaterState } from '@/features/updates/useUpdater'
 import type { Transfer } from '@/features/updates/downloadEta'
@@ -267,7 +268,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
     switch (id) {
       case 'general': return <GeneralSection preferences={preferences} update={update} onChooseFolder={props.onChooseFolder} onShowWelcome={props.onShowWelcome} />
       case 'chat': return <ChatSection preferences={preferences} update={update} />
-      case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /></>
+      case 'permissions': return <><BypassSection preferences={preferences} update={update} /><AgentsSection onSignIn={props.onSignInAgent} /><ApprovedCommands /><HelpersSection /></>
       case 'terminal': return <TerminalSection preferences={preferences} update={update} />
       case 'appearance': return <><AppearanceSection preferences={preferences} update={update} onSwitchView={switchView} systemDark={props.systemDark} onPreviewTheme={props.onPreviewTheme} /><SidebarSection preferences={preferences} update={update} /></>
       case 'usage': return <UsageSection usage={props.usage} />

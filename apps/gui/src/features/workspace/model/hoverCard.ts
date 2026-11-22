@@ -4,7 +4,7 @@ import type { StatusMarkKind } from '@/lib/statusMark'
 import type { MachineHead } from './machines'
 import { agentLabel, askWords, SHELL_PROCESS, STATUS_WORD, type SessionView } from './session'
 import { happenedLine, projectOf, sectionOf } from './sidebar'
-import { helpersWord, type HelperCount } from './helpers'
+import { helpersWord, WAITING_FOR_SLOT, waitingOnHelpers, type HelperCount } from './helpers'
 import { formatAgo } from './tracking'
 
 export const HOVER_CARD_DELAY_MS = 380
@@ -122,10 +122,20 @@ export function hoverCardText(session: SessionView, facts: HoverCardFacts): Hove
     title: facts.title,
     state: sectionOf(session),
     word: sentence(STATUS_WORD[sectionOf(session)]),
-    activity: happened !== '' ? sentence(happened) : shell || clipped(said) === '' ? null : clipped(said),
+    activity: activityOf(session, helpers, happened, shell ? '' : clipped(said)),
     rows: rows.filter((row) => row !== null),
     context: percent === null ? null : { percent, hot: percent >= CONTEXT_HOT_FROM },
   }
+}
+
+/**
+ * The card's activity line, first that applies: a helper the daemon holds for a free slot says so; what happened to a
+ * session that stopped; a lead that works while its helpers do says it waits on them; else what it asks or was told.
+ */
+function activityOf(session: SessionView, helpers: HelperCount | null, happened: string, said: string): string | null {
+  if (session.waitingForSlot) return WAITING_FOR_SLOT
+  if (happened !== '') return sentence(happened)
+  return waitingOnHelpers(session, helpers) ?? (said === '' ? null : said)
 }
 
 export type Box = { left: number; right: number; top: number; bottom: number }
