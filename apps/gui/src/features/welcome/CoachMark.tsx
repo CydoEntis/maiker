@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { useKeyOverrides, usePlatform } from '@/features/shortcuts/platform'
 import { bindingFor, shortcutChords } from '@/features/workspace/model/shortcuts'
-import { dismissCoachMark, useCoachMark } from './coachMark'
+import { dismissCoachMark, useCoachMark } from './coachMarkState'
 import './coach-mark.css'
 
 type Props = {

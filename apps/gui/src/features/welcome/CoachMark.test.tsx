@@ -2,7 +2,7 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { CoachMark } from './CoachMark'
-import { dismissCoachMark, offerCoachMark } from './coachMark'
+import { dismissCoachMark, offerCoachMark } from './coachMarkState'
 
 const tip = () => screen.queryByRole('status', { name: 'Side panel tip' })
 
