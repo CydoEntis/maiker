@@ -242,6 +242,15 @@ impl Machine {
         ssh_command::hardening_summary()
     }
 
+    /// The host-key option this machine's lines add, when they add one (`new_host_keys`): None
+    /// for this computer, a custom transport, and when the person's ssh setup decides. Blocks
+    /// briefly: off the UI thread.
+    pub fn host_key_option(&self) -> Option<&'static str> {
+        self.ssh_route()
+            .is_ok_and(|route| new_host_keys::applies(&route.ssh, &route.target))
+            .then_some(new_host_keys::ACCEPT_NEW)
+    }
+
     /// The line that runs the install script on this machine, the binary on its stdin.
     pub fn install_argv(&self, destination: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
@@ -853,6 +862,18 @@ mod tests {
         .attach_only();
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m.route, want.route);
+    }
+
+    #[test]
+    fn only_an_ssh_line_to_a_real_ssh_adds_a_host_key_option() {
+        assert_eq!(super::Machine::local().host_key_option(), None);
+        let via = MachineDef {
+            via: Some(vec!["relay".into(), "{command}".into()]),
+            ..configured("fly")
+        };
+        assert_eq!(super::Machine::from_def(&via, "ssh").host_key_option(), None);
+        let no_ssh = super::Machine::from_def(&configured("box"), "/no/such/ssh");
+        assert_eq!(no_ssh.host_key_option(), None, "a program that does not run is not OpenSSH");
     }
 
     #[test]

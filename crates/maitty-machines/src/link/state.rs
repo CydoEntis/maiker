@@ -61,9 +61,11 @@ pub fn next(state: &ConnectionState, event: Event, now: Instant) -> ConnectionSt
             attempt: 1,
             since: now,
         },
-        (Reconnecting { attempt, since }, Event::ConnectFailed(FailureClass::Unreachable(_)))
-            if *attempt < RECONNECT_DIALS =>
-        {
+        // A machine turning new connections away for a moment (too many at once) is a blip too.
+        (
+            Reconnecting { attempt, since },
+            Event::ConnectFailed(FailureClass::Unreachable(_) | FailureClass::RefusingConnections),
+        ) if *attempt < RECONNECT_DIALS => {
             Reconnecting {
                 attempt: attempt + 1,
                 since: *since,
@@ -258,6 +260,34 @@ mod tests {
                 failure: unreachable("no route")
             },
             "unreachable counts from when the line dropped"
+        );
+    }
+
+    #[test]
+    fn a_machine_refusing_connections_is_a_blip_then_unreachable_and_its_dials_carry_on() {
+        let refusing = || Event::ConnectFailed(FailureClass::RefusingConnections);
+        let mut events = vec![(Event::LineDropped, 10), (refusing(), 11)];
+        assert_eq!(
+            run(Connected, &events),
+            Reconnecting {
+                attempt: 2,
+                since: at(10)
+            }
+        );
+        events.extend((0..RECONNECT_DIALS).map(|i| (refusing(), 12 + u64::from(i))));
+        assert_eq!(
+            run(Connected, &events),
+            Unreachable {
+                since: at(10),
+                failure: FailureClass::RefusingConnections
+            }
+        );
+        assert_eq!(
+            run(Connecting, &[(refusing(), 4)]),
+            Unreachable {
+                since: at(4),
+                failure: FailureClass::RefusingConnections
+            }
         );
     }
 

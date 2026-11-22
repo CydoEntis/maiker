@@ -1,6 +1,7 @@
 //! The machines part of `<app> doctor`: for each `[[machines]]` entry, whether ssh gets in, what
-//! app version is there, whether its daemon speaks this one's protocol, where its login shell
-//! finds the app, and which ssh options are in use. One line per check.
+//! app version is there, whether the two can talk, where its login shell finds the app, and which
+//! ssh options are in use. One line per check; a failed one ends with the same sentence the window
+//! shows (`link_failure`).
 //!
 //! Every machine is checked at the same time and has one budget for all of its steps, so a
 //! machine that does not answer costs the budget and not more; the steps after an unreachable
@@ -16,6 +17,7 @@ use crate::machine_probe::{self, Located, Probe};
 use crate::protocol::PROTOCOL_VERSION;
 use crate::remote_install::{State, classify_version, state_of};
 use maitty_settings::config::MachineDef;
+use std::fmt::Display;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
 
@@ -149,7 +151,6 @@ fn check_machine(def: &MachineDef, ssh: &str, ours: &str, budget: Duration) -> V
     let deadline = Instant::now() + budget;
     let left = || deadline.saturating_duration_since(Instant::now());
     let cancel = AtomicBool::new(false);
-    let name = def.name.as_str();
     let subject = Subject::of(&machine);
     let (reach, next) = after_probe(&machine_probe::probe(&machine, left(), &cancel), &subject);
     let mut checks = vec![reach];
@@ -160,19 +161,29 @@ fn check_machine(def: &MachineDef, ssh: &str, ours: &str, budget: Duration) -> V
             checks.push(Check::skipped("maiker is not installed there"));
         }
         Next::Go(line) => {
-            checks.push(version(&line, ours, name));
+            checks.push(version(&line, ours, &subject));
             checks.push(protocol(&handshake(&machine, left()), &subject));
             let found = machine_probe::locate(&machine, left(), &cancel);
             checks.push(login_path(&found, def.remote_cmd.as_deref(), &subject));
         }
     }
-    checks.push(options(def));
+    checks.push(options(def, machine.host_key_option()));
     checks
 }
 
 /// A failure as the shared sentence, the same words the window shows.
 fn explain(class: &FailureClass, subject: &Subject<'_>) -> String {
     sentence_here(class, subject)
+}
+
+/// Two versions that differ, then the shared sentence: the numbers are what `doctor` adds.
+fn differs(
+    there: impl Display,
+    here: impl Display,
+    class: &FailureClass,
+    subject: &Subject<'_>,
+) -> String {
+    format!("{there} there, {here} here. {}", explain(class, subject))
 }
 
 fn after_probe(probe: &Probe, subject: &Subject<'_>) -> (Check, Next) {
@@ -194,21 +205,17 @@ fn not_installed(subject: &Subject<'_>) -> Check {
     Check::fail(VERSION, explain(&FailureClass::Install, subject))
 }
 
-fn version(line: &str, ours: &str, name: &str) -> Check {
+fn version(line: &str, ours: &str, subject: &Subject<'_>) -> Check {
     let installed = classify_version(Some(0), line);
     match state_of(&installed, ours) {
         Some(State::Matching) => Check::pass(VERSION, format!("{ours} (same as this computer)")),
         Some(State::TooOld { remote }) => Check::fail(
             VERSION,
-            format!(
-                "{remote} is older than this computer's {ours}; run `{APP_COMMAND} machine update {name}`"
-            ),
+            differs(remote, ours, &FailureClass::Update, subject),
         ),
         Some(State::Newer { remote }) => Check::fail(
             VERSION,
-            format!(
-                "{remote} is newer than this computer's {ours}; update this computer, or run `{APP_COMMAND} machine update {name} --force` to downgrade the machine"
-            ),
+            differs(remote, ours, &FailureClass::UpdateHere, subject),
         ),
         Some(State::Missing) | None => Check::fail(
             VERSION,
@@ -231,29 +238,21 @@ fn handshake(machine: &Machine, limit: Duration) -> Result<(), anyhow::Error> {
 }
 
 fn protocol(result: &Result<(), anyhow::Error>, subject: &Subject<'_>) -> Check {
-    let name = subject.name;
-    match result {
-        Ok(()) => Check::pass(
+    let Err(e) = result else {
+        return Check::pass(
             PROTOCOL,
             format!("protocol {PROTOCOL_VERSION}, the same as this computer"),
-        ),
-        Err(e) => match other_version(e) {
-            // A newer daemon there is never downgraded from here: the fix is on this side.
-            Some(theirs) if theirs > PROTOCOL_VERSION => Check::fail(
-                PROTOCOL,
-                format!(
-                    "its daemon speaks protocol {theirs}, newer than this computer's {PROTOCOL_VERSION}; update this computer (`{APP_COMMAND} update`)"
-                ),
-            ),
-            Some(theirs) => Check::fail(
-                PROTOCOL,
-                format!(
-                    "its daemon speaks protocol {theirs}, this computer {PROTOCOL_VERSION}; run `{APP_COMMAND} machine update {name}`"
-                ),
-            ),
-            None => Check::fail(PROTOCOL, explain(&classify(e), subject)),
+        );
+    };
+    // `classify` picks which side to update, so the fix is the one the window gives.
+    let class = classify(e);
+    Check::fail(
+        PROTOCOL,
+        match other_version(e) {
+            Some(theirs) => differs(format!("protocol {theirs}"), PROTOCOL_VERSION, &class, subject),
+            None => explain(&class, subject),
         },
-    }
+    )
 }
 
 /// Where the login shell finds the app, against the `remote_cmd` that is run. Only the program's
@@ -281,8 +280,13 @@ fn login_path(found: &Located, remote_cmd: Option<&str>, subject: &Subject<'_>) 
     }
 }
 
-fn options(def: &MachineDef) -> Check {
-    let hardening = Machine::hardening();
+/// `host_key` is the host-key option the lines add, when they add one; without it the person's
+/// own ssh setup decides how an unseen key is treated.
+fn options(def: &MachineDef, host_key: Option<&str>) -> Check {
+    let hardening = match host_key {
+        Some(option) => format!("{} {option}", Machine::hardening()),
+        None => Machine::hardening(),
+    };
     let detail = if def.ssh_args.is_empty() {
         hardening
     } else {
@@ -376,61 +380,64 @@ mod tests {
     }
 
     #[test]
-    fn the_version_is_compared_with_this_computer_s() {
-        let same = version("maiker 0.60.0", "0.60.0", "box");
+    fn a_version_that_differs_gives_both_numbers_then_the_shared_sentence() {
+        let same = version("maiker 0.60.0", "0.60.0", &BOX);
         assert_eq!(
             line(&same),
             "ok maiker version 0.60.0 (same as this computer)"
         );
-        let older = version("maiker 0.58.1", "0.60.0", "box");
+        let older = version("maiker 0.58.1", "0.60.0", &BOX);
         assert_eq!(older.ok, Some(false));
-        assert!(
-            older
-                .detail
-                .contains("0.58.1 is older than this computer's 0.60.0")
+        assert_eq!(
+            older.detail,
+            format!("0.58.1 there, 0.60.0 here. {}", sentence_here(&FailureClass::Update, &BOX))
         );
-        assert!(
-            older.detail.contains("`maiker machine update box`"),
-            "{older:?}"
-        );
-        let newer = version("maiker 0.62.0", "0.60.0", "box");
+        let newer = version("maiker 0.62.0", "0.60.0", &BOX);
         assert_eq!(newer.ok, Some(false));
-        assert!(newer.detail.contains("0.62.0 is newer"), "{newer:?}");
-        assert!(
-            newer.detail.contains("machine update box --force"),
-            "{newer:?}"
+        assert_eq!(
+            newer.detail,
+            format!("0.62.0 there, 0.60.0 here. {}", sentence_here(&FailureClass::UpdateHere, &BOX))
         );
-        let odd = version("hello there", "0.60.0", "box");
+        let odd = version("hello there", "0.60.0", &BOX);
         assert_eq!(odd.ok, Some(false));
     }
 
     #[test]
-    fn a_daemon_of_another_protocol_says_which_side_to_update() {
+    fn another_protocol_gives_both_numbers_then_the_shared_sentence() {
         let speaking = |daemon| {
             protocol(
                 &Err(anyhow::Error::from(ipc::OtherVersion { daemon })), &BOX)
         };
         let older = speaking(PROTOCOL_VERSION - 1);
         assert_eq!(older.ok, Some(false));
-        assert!(
-            older
-                .detail
-                .contains(&format!("protocol {}", PROTOCOL_VERSION - 1))
-        );
-        assert!(
-            older.detail.contains("`maiker machine update box`"),
-            "{older:?}"
+        assert_eq!(
+            older.detail,
+            format!(
+                "protocol {} there, {PROTOCOL_VERSION} here. {}",
+                PROTOCOL_VERSION - 1,
+                sentence_here(&FailureClass::Update, &BOX)
+            )
         );
         let newer = speaking(PROTOCOL_VERSION + 1);
         assert_eq!(newer.ok, Some(false));
-        assert!(
-            newer.detail.contains("update this computer (`maiker update`)"),
-            "{newer:?}"
+        assert_eq!(
+            newer.detail,
+            format!(
+                "protocol {} there, {PROTOCOL_VERSION} here. {}",
+                PROTOCOL_VERSION + 1,
+                sentence_here(&FailureClass::UpdateHere, &BOX)
+            )
         );
-        assert!(!newer.detail.contains("machine update"), "{newer:?}");
+        for check in [&older, &newer] {
+            assert!(!check.detail.contains("daemon"), "no internal part: {check:?}");
+        }
         assert_eq!(protocol(&Ok(()), &BOX).ok, Some(true));
         let down = protocol(&Err(anyhow::anyhow!("closed")), &BOX);
         assert_eq!(down.ok, Some(false));
+        assert_eq!(
+            down.detail,
+            sentence_here(&FailureClass::Unreachable("closed".into()), &BOX)
+        );
     }
 
     #[test]
@@ -478,10 +485,15 @@ mod tests {
             ssh_args: args.iter().map(|a| a.to_string()).collect(),
             ..MachineDef::default()
         };
-        let bare = options(&def(&[]));
+        let bare = options(&def(&[]), None);
         assert_eq!(
             bare.detail,
             "BatchMode=yes ForwardAgent=no -a -T ConnectTimeout=15 ServerAlive=15x3"
+        );
+        let new_keys = options(&def(&["-p", "2222"]), Some("StrictHostKeyChecking=accept-new"));
+        assert_eq!(
+            new_keys.detail,
+            "BatchMode=yes ForwardAgent=no -a -T ConnectTimeout=15 ServerAlive=15x3 StrictHostKeyChecking=accept-new + your ssh_args: -p 2222"
         );
         let with = options(&def(&[
             "-p",
@@ -490,7 +502,7 @@ mod tests {
             "/home/me/.ssh/box key",
             "-o",
             "ProxyCommand=ssh jump -W %h:%p",
-        ]));
+        ]), None);
         assert_eq!(with.ok, Some(true));
         assert!(
             with.detail.ends_with(
@@ -499,7 +511,7 @@ mod tests {
             "{}",
             with.detail
         );
-        let hostile = options(&def(&["-o", "Foo=\u{1b}[2Jbar"]));
+        let hostile = options(&def(&["-o", "Foo=\u{1b}[2Jbar"]), None);
         assert!(
             hostile.detail.ends_with("-o Foo=[2Jbar"),
             "{}",

@@ -127,9 +127,14 @@ describe('the field', () => {
     })
   })
 
-  it('says a machine that is already in Maiker is already there', async () => {
-    await connectTo(info({ list: [{ ...connectedHead('build'), target: 'me@build.example' }] }), 'build')
-    expect(await screen.findByRole('alert')).toHaveTextContent('build is already in Maiker.')
+  it('opens where machines are managed when a typed address is already a machine, and adds nothing', async () => {
+    const onOpenSettings = vi.fn()
+    const machines = info({ list: [{ ...connectedHead('build'), target: 'me@build.example' }] })
+    await connectTo(machines, 'me@build.example', { onOpenSettings })
+    expect(onOpenSettings).toHaveBeenCalled()
+    expect(machines.add.onAdd).not.toHaveBeenCalled()
+    expect(machines.onRetry).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /^(Retry|Remove) build$/ })).toBeNull()
   })
 })
 
@@ -317,9 +322,10 @@ describe('a failure', () => {
     const machines = info({}, { onAdd })
     const { user, view } = await connectTo(machines)
     await screen.findByText(REFUSED_KEY)
-    view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={vi.fn()} />)
+    const onOpenSettings = vi.fn()
+    view.rerender(<AddMachineDialog machines={{ ...machines, list: [savedHead] }} onClose={vi.fn()} onOpenSettings={onOpenSettings} />)
     await user.type(screen.getByRole('textbox', { name: 'Address' }), '{Enter}')
-    expect(screen.queryByText('dev@100.78.214.15 is already in Maiker.')).toBeNull()
+    expect(onOpenSettings).not.toHaveBeenCalled()
     await waitFor(() => { expect(onAdd).toHaveBeenCalledTimes(2) })
   })
 

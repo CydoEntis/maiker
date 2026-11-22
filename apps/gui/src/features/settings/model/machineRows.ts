@@ -43,6 +43,12 @@ export function stoppedOnHostKey(head: MachineHead): boolean {
   return head.failure === 'host-key-changed' || head.failure === 'host-key-unknown'
 }
 
+/** The row's few words for a machine that is down: one that hangs up before ssh can sign in may be refusing connections for a while, which waiting fixes. */
+function downWords(head: MachineHead, word: string | undefined): string {
+  if (word === 'refused') return 'Refused the connection'
+  return head.failure === 'refusing-connections' ? 'Refusing connections for now' : "Can't reach it"
+}
+
 /** The row's few words for a login ssh could not finish alone. The full sentence is the host's (`head.why`). */
 function loginWords(head: MachineHead): string {
   if (head.failure === 'host-key-changed') return 'Host key changed'
@@ -61,7 +67,7 @@ export function rowOf(head: MachineHead, sessions: number | null): MachineRow {
     return { glyph: '×', tone: 'bad', line: loginWords(head), showsSince: false, action: 'fix', rank: RANK_FAILED }
   }
   if (word === 'unreachable' || word === 'refused') {
-    return { glyph: '×', tone: 'bad', line: word === 'refused' ? 'Refused the connection' : "Can't reach it", showsSince: head.downSince !== null, action: 'retry', rank: RANK_FAILED }
+    return { glyph: '×', tone: 'bad', line: downWords(head, word), showsSince: head.downSince !== null, action: 'retry', rank: RANK_FAILED }
   }
   if (head.updateAction === 'install') {
     return { glyph: '!', tone: 'needs', line: 'Maiker not installed', showsSince: false, action: 'install', rank: RANK_UPDATE }
@@ -135,7 +141,7 @@ export function foldStatusOf(head: MachineHead, sessions: number | null): FoldSt
     return { glyph: '×', tone: 'bad', lead: `${loginWords(head)}.`, more: head.why, showsSince: false, command: head.fixCommand, action: 'retry' }
   }
   if (word === 'unreachable' || word === 'refused') {
-    const lead = word === 'refused' ? 'Refused the connection' : "Can't reach it"
+    const lead = downWords(head, word)
     const since = head.downSince !== null
     return { glyph: '×', tone: 'bad', lead: since ? lead : `${lead}.`, more: head.why, showsSince: since, command: null, action: 'retry' }
   }

@@ -823,8 +823,8 @@ Protocol 119 adds four things, none of which an older peer is ever sent, so `COM
   `createFolderBranch`, `checkoutRemoteBranch`). The older `git_branches` host command still reads this computer's
   local branches directly. Rules: [SECURITY](SECURITY.md#project-specific-a-folders-branches-and-what-a-machine-is).
 - `Query::MachineFacts { tag }` with `Reply::MachineFacts { tag, facts }` (`MACHINE_FACTS_SINCE`): host name, system,
-  architecture, cores and the agent programs installed with their versions. Safe to ask twice. The host raises a
-  `machine-facts` event `{machine, tag, answer}`; `apps/gui/src/api/machineFacts.ts` wraps it.
+  architecture, cores and the agent programs installed with their versions. Safe to ask twice. No client asks it
+  now (the desktop app's "Machine added" page that showed it is gone); the daemon still answers it.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 
@@ -1479,10 +1479,22 @@ PowerShell line that does the same on Windows). `HostKeyChanged` gives `ssh-keyg
 confirming the change; `HostKeyUnknown` gives `ssh -o StrictHostKeyChecking=ask [-p <port>] <target>`
 to run once in a terminal, check the fingerprint and answer yes (the same on Windows; on the command
 line the option comes before the person's config, so ssh asks where their config would refuse), and
-never names `ssh-keygen` or a changed key. `fix_command` is the one command a sentence names,
+never names `ssh-keygen` or a changed key. `RefusingConnections` is a machine that took the
+connection and hung up before ssh could sign in: ssh's last line is `Connection closed by <host> port
+<n>` or `Connection reset by <host> port <n>`, with nothing before it but ssh's
+`kex_exchange_identification:` line, which is how sshd's `MaxStartups` and `PerSourcePenalties`
+(OpenSSH 9.8+) read from the client. Its sentence says the machine may be refusing new connections for a
+while, after failed sign-ins or too many at once, to wait a few minutes and try again, and to check its
+sshd and fail2ban settings if it lasts. What can't be told apart stays `Unreachable`: a firewall ban (how
+fail2ban usually bans) refuses or drops the connection like a machine that is off; a hang-up named
+`UNKNOWN port 65535` is a proxy's or jump host's, which also hangs up when the machine behind it is down;
+and a hang-up after other lines (a host key added) got past the door. Its dials carry on like an
+unreachable machine's (a redial that meets it counts as a reconnect blip), and adding a machine that
+refuses adds nothing, like one that can't be reached. `fix_command` is the one command a sentence names,
 for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
 `doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
-`message`) show these sentences and write none of their own. `is_failure_sentence` tells such a
+`message`) show these sentences and write none of their own; `doctor` only puts the two numbers before
+the sentence for a version or protocol that differs (`0.58.1 there, 0.60.0 here. …`). `is_failure_sentence` tells such a
 sentence from a machine's other words, for MCP's `unreachable` error code.
 
 **Custom transport.** A machine with `via` is reached by running the user's program

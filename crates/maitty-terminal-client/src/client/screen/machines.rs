@@ -1,7 +1,8 @@
-//! The Add Machine dialog: one input typed like scp (`user@host`), the hosts of `~/.ssh/config`
-//! to complete it from, then a checklist of what connecting does. What it does with a choice
-//! (writing the config, probing, the first login) is in `machine_flow`; a machine is
-//! reconnected or removed from its line in the sidebar.
+//! The Add Machine dialog: one input typed like scp (`user@host`) and the hosts of
+//! `~/.ssh/config` to complete it from. Adding shows no steps (ADR 0017): one working line under
+//! the input, then the machine is chosen in your machines, or one sentence under the input says
+//! what failed. What it does with a choice (writing the config, probing, the first login) is in
+//! `machine_flow`; a machine is reconnected or removed from its line in the sidebar.
 
 use super::chips::{Chip, chip};
 use super::machine_group::AppFix;
@@ -44,31 +45,12 @@ pub enum MachineStep {
     AllowClipboard {
         name: String,
     },
-    /// ssh is being asked, without a prompt, whether the machine can be reached.
+    /// ssh is being asked, without a prompt, whether the machine can be reached: `target` stays
+    /// in the field and one working line names `name` under it.
     Checking {
-        target: String,
-    },
-    /// The machine is written and dialling: what the checklist shows now.
-    Added {
         name: String,
         target: String,
-        how: Outcome,
     },
-}
-
-/// How an added machine stands when the dialog says so.
-#[derive(Debug, Clone, PartialEq)]
-pub enum Outcome {
-    /// It answered; its daemon's version.
-    Ready(String),
-    /// ssh needs a person to log in: a popup is open for it.
-    Login,
-    /// ssh could not sign in (the machine refused the key): the sentence under the checklist
-    /// says what to run.
-    SignInFailed,
-    /// It was reached, but its daemon is missing, old or not running: the sentence under the
-    /// checklist says how to fix it.
-    Fix,
 }
 
 /// A line under the lists: what just happened, or why a choice was refused.
@@ -333,11 +315,6 @@ impl App {
                     self.machines_cancel_probe(&mut v);
                 }
             }
-            MachineStep::Added { .. } => {
-                if matches!(k.code, KeyCode::Esc | KeyCode::Enter) {
-                    self.mode = Mode::Normal;
-                }
-            }
         }
         if matches!(self.mode, Mode::Machines(_)) {
             self.mode = Mode::Machines(Box::new(v));
@@ -459,13 +436,16 @@ impl App {
                 v.host_sel = 0;
             }
             KeyCode::Enter => self.machines_add_chosen(v),
+            // Editing the input puts the parse line back where a failure's sentence stood.
             KeyCode::Backspace => {
                 v.query.pop();
                 (v.in_list, v.host_sel) = (false, 0);
+                v.notice = None;
             }
             KeyCode::Char('u') if k.modifiers.contains(KeyModifiers::CONTROL) => {
                 v.query.clear();
                 (v.in_list, v.host_sel) = (false, 0);
+                v.notice = None;
             }
             _ => {
                 if let Some(c) = typed(k) {
@@ -563,6 +543,14 @@ const HEIGHT: u16 = 26;
 const MOST_SUGGESTIONS: usize = 6;
 /// Your machines shown at once; the list follows the chosen one past them.
 const MOST_MACHINES: usize = 4;
+/// Columns before a machine row's icon, between its name, target and state, and after its last
+/// button.
+const ROW_LEAD: usize = 2;
+const ROW_GAP: usize = 2;
+const ROW_END: usize = 1;
+/// The target columns a machine row's buttons make room for: enough to tell `user@host` apart.
+/// A longer target is cut at what is left once every button has gone.
+const TARGET_ROOM: usize = 16;
 /// The most lines the chosen machine's fix takes before its end is cut.
 const DETAIL_LINES: usize = 2;
 /// Rows the dialog keeps for everything but the suggestions: the question, the input, the parse
@@ -571,29 +559,34 @@ const FIXED_ROWS: u16 = 6;
 /// What the Windows hint takes under the list: a gap and its lines.
 const WINDOWS_ROWS: u16 = 3;
 
-/// A step of the checklist.
-#[derive(Clone, Copy, PartialEq)]
-enum Mark {
-    Done,
-    Running,
-    Waiting,
-    Pending,
-    Failed,
+/// Whether the notice is about the input, and so is said right under it as the desktop app's
+/// status line is: the keys are in the input, not on your machines or another step.
+fn notice_under_input(v: &MachinesView) -> bool {
+    matches!(v.step, MachineStep::Browse) && v.machine_sel.is_none()
 }
 
-struct Step {
-    mark: Mark,
-    text: String,
-    /// Said right-aligned, faint.
-    aside: String,
-}
-
-fn step(mark: Mark, text: impl Into<String>, aside: impl Into<String>) -> Step {
-    Step {
-        mark,
-        text: text.into(),
-        aside: aside.into(),
+/// The notice, wrapped, from row `top`; returns the rows it took.
+fn draw_notice(buf: &mut Buffer, inner: Rect, top: u16, notice: &MachineNotice, t: &Theme) -> u16 {
+    let color = if notice.error { t.err } else { t.done };
+    let lines = popover::wrap(&sanitize(&notice.text, false), inner.width as usize);
+    let rows = lines.len() as u16;
+    for (i, line) in lines.into_iter().enumerate() {
+        let row = Rect {
+            x: inner.x,
+            y: top + i as u16,
+            width: inner.width,
+            height: 1,
+        };
+        fill(buf, row, t.card);
+        put(
+            buf,
+            inner.x,
+            row.y,
+            &[seg(line, Style::default().bg(t.card).fg(color))],
+            inner.right(),
+        );
     }
+    rows
 }
 
 pub(in crate::client) fn draw_machines(
@@ -606,7 +599,6 @@ pub(in crate::client) fn draw_machines(
     let buf = f.buffer_mut();
     dim_all(app, buf, area, t);
     let title = match v.step {
-        MachineStep::Added { .. } => "MACHINE ADDED",
         // Opened on one of your machines, it is about that machine, not about adding one.
         MachineStep::Browse if v.machine_sel.is_some() => "MACHINES",
         _ => "ADD MACHINE",
@@ -622,7 +614,7 @@ pub(in crate::client) fn draw_machines(
         popover::wrap(&sanitize(&n.text, false), inner.width as usize).len() as u16
     });
     match &v.step {
-        MachineStep::Browse => draw_input(app, buf, inner, v, t),
+        MachineStep::Browse | MachineStep::Checking { .. } => draw_input(app, buf, inner, v, t),
         MachineStep::Name {
             target,
             name,
@@ -644,37 +636,10 @@ pub(in crate::client) fn draw_machines(
         }
         MachineStep::Remove { name } => draw_remove(buf, inner, name, t),
         MachineStep::AllowClipboard { name } => draw_allow_clipboard(buf, inner, name, t),
-        MachineStep::Checking { target } => {
-            let who = parse_target(target).unwrap_or_default();
-            let steps = checklist(&who, None);
-            draw_checklist(buf, inner, (&who.host, target), &steps, t);
-        }
-        MachineStep::Added { name, target, how } => {
-            let who = parse_target(target).unwrap_or_default();
-            let steps = checklist(&who, Some(how));
-            draw_checklist(buf, inner, (name, target), &steps, t);
-        }
     }
-    if let Some(notice) = &v.notice {
-        let color = if notice.error { t.err } else { t.done };
-        let lines = popover::wrap(&sanitize(&notice.text, false), inner.width as usize);
-        let top = inner.bottom().saturating_sub(notice_rows);
-        for (i, line) in lines.into_iter().enumerate() {
-            let row = Rect {
-                x: inner.x,
-                y: top + i as u16,
-                width: inner.width,
-                height: 1,
-            };
-            fill(buf, row, t.card);
-            put(
-                buf,
-                inner.x,
-                row.y,
-                &[seg(line, Style::default().bg(t.card).fg(color))],
-                inner.right(),
-            );
-        }
+    // A notice about the input is drawn under it; any other sits at the foot.
+    if let Some(notice) = v.notice.as_ref().filter(|_| !notice_under_input(v)) {
+        draw_notice(buf, inner, inner.bottom().saturating_sub(notice_rows), notice, t);
     }
     let chosen_fix = v.machine_sel.and_then(|sel| {
         let rows = app.machine_rows(t);
@@ -723,15 +688,47 @@ fn draw_input(app: &mut App, buf: &mut Buffer, inner: Rect, v: &MachinesView, t:
         inner.right(),
     );
     y += 2;
+    let checking = match &v.step {
+        MachineStep::Checking { name, target } => Some((name.as_str(), target.as_str())),
+        _ => None,
+    };
+    // While it connects the field holds what is being added and takes no keys.
     draw_field(
         buf,
         inner,
         y,
-        &v.query,
-        !v.in_list && v.machine_sel.is_none(),
+        checking.map_or(v.query.as_str(), |(_, target)| target),
+        checking.is_none() && !v.in_list && v.machine_sel.is_none(),
         t,
     );
     y += 1;
+    let under = v.notice.as_ref().filter(|_| notice_under_input(v));
+    if let Some((name, _)) = checking {
+        let spinner = crate::client::render::status_icon(app, crate::protocol::Status::Working);
+        put(
+            buf,
+            inner.x,
+            y,
+            &[
+                seg("  ", c),
+                seg(format!("{spinner} "), c.fg(t.accent)),
+                seg(format!("Connecting to {}…", sanitize(name, false)), c.fg(t.text)),
+            ],
+            inner.right(),
+        );
+        y += 2;
+    } else if let Some(notice) = under {
+        y += draw_notice(buf, inner, y, notice, t) + 1;
+    } else {
+        draw_parse_line(buf, inner, y, v, t);
+        y += 2;
+    }
+    draw_hosts(app, buf, inner, y, v, room, t);
+}
+
+/// Under the input, what it reads as: `user` and `host`, each a faint label and a bold value.
+fn draw_parse_line(buf: &mut Buffer, inner: Rect, y: u16, v: &MachinesView, t: &Theme) {
+    let c = Style::default().bg(t.card);
     let hosts = v.hosts.as_deref().unwrap_or_default();
     let parsed = parse_target(&v.query);
     let known = parsed.as_ref().and_then(|p| known_host(p, hosts));
@@ -758,7 +755,22 @@ fn draw_input(app: &mut App, buf: &mut Buffer, inner: Rect, v: &MachinesView, t:
     line.extend(part("user", user, "—"));
     line.extend(part("host", host, "—"));
     put(buf, inner.x, y, &line, inner.right());
-    y += 2;
+}
+
+/// `FROM ~/.ssh/config` and its hosts from row `y`, at most `room` of them, then the Windows
+/// hint. While a machine is being added no host is marked: the keys are on nothing.
+fn draw_hosts(
+    app: &mut App,
+    buf: &mut Buffer,
+    inner: Rect,
+    mut y: u16,
+    v: &MachinesView,
+    room: usize,
+    t: &Theme,
+) {
+    let c = Style::default().bg(t.card);
+    let busy = matches!(v.step, MachineStep::Checking { .. });
+    let hosts = v.hosts.as_deref().unwrap_or_default();
     let list = suggestions(v, &app.cfg.machines);
     heading(buf, inner, y, "FROM ~/.ssh/config", t);
     y += 1;
@@ -794,7 +806,7 @@ fn draw_input(app: &mut App, buf: &mut Buffer, inner: Rect, v: &MachinesView, t:
             width: inner.width,
             height: 1,
         };
-        let on = v.in_list && n == sel;
+        let on = !busy && v.in_list && n == sel;
         let st = list_row(app, buf, rr, on, t);
         let rest_w = (inner.width as usize).saturating_sub(alias_w + 4 + 24);
         put(
@@ -882,46 +894,50 @@ fn draw_your_machines(
         let st = list_row(app, buf, rr, on, t);
         let state = format!("{} {}", row.glyph, row.word);
         let state_w = state.width();
-        // One button for each thing the keys do, at the row's right end.
+        // One button for each thing the keys do, at the row's right end. The install or update
+        // button is there only when the machine needs it, as the sidebar's chip is.
         let ground = st.bg.unwrap_or(t.card);
-        let buttons: Vec<(Vec<Seg>, char)> = [
-            (row.fix.map_or("update", AppFix::verb), 'u'),
-            ("reconnect", 'r'),
-            ("edit", 'e'),
-            ("remove", 'x'),
-        ]
-        .into_iter()
-        .map(|(label, key)| (chip(app, label, Chip::Action, ground, t), key))
-        .collect();
-        let buttons_w: usize = buttons.iter().map(|(b, _)| segs_width(b) as usize + 1).sum();
-        let target_w =
-            (inner.width as usize).saturating_sub(name_w + state_w + buttons_w + 13);
+        let mut buttons: Vec<(Vec<Seg>, char)> = row
+            .fix
+            .map(|fix| (fix.verb(), 'u'))
+            .into_iter()
+            .chain([("reconnect", 'r'), ("edit", 'e'), ("remove", 'x')])
+            .map(|(label, key)| (chip(app, label, Chip::Action, ground, t), key))
+            .collect();
+        let name = format!(
+            "{} {:<name_w$}",
+            machine_group::REMOTE_ICON,
+            truncate(&row.name, name_w)
+        );
+        let target_x = rr.x as usize + ROW_LEAD + name.width() + ROW_GAP;
+        let room = (rr.right() as usize)
+            .saturating_sub(target_x + ROW_GAP + state_w + ROW_GAP + ROW_END);
+        let widths: Vec<usize> = buttons.iter().map(|(b, _)| segs_width(b) as usize + 1).collect();
+        let (kept, target_w) = fit_buttons(room, row.target.width(), &widths);
+        buttons.truncate(kept);
+        let buttons_w: usize = widths[..kept].iter().sum();
         put(
             buf,
-            rr.x + 2,
+            rr.x + ROW_LEAD as u16,
             y,
             &[
                 seg(
-                    format!(
-                        "{} {:<name_w$}",
-                        machine_group::REMOTE_ICON,
-                        truncate(&row.name, name_w)
-                    ),
+                    name,
                     st.fg(if on { t.strong } else { t.text })
                         .add_modifier(Modifier::BOLD),
                 ),
                 seg(
-                    format!("  {}", truncate(&row.target, target_w)),
+                    format!("{:ROW_GAP$}{}", "", truncate(&row.target, target_w)),
                     st.fg(t.muted),
                 ),
             ],
             rr.right(),
         );
         hit(app, rr, ScreenHit::MachineRow(n));
-        let mut x = rr.right().saturating_sub(buttons_w as u16 + 1);
+        let mut x = rr.right().saturating_sub((buttons_w + ROW_END) as u16);
         put(
             buf,
-            x.saturating_sub(state_w as u16 + 2),
+            x.saturating_sub((state_w + ROW_GAP) as u16),
             y,
             &[seg(state, st.fg(row.color).add_modifier(Modifier::BOLD))],
             x,
@@ -969,6 +985,22 @@ fn draw_your_machines(
         }
     }
     y + 1 - inner.y
+}
+
+/// How many of a row's buttons (`widths`, each with the gap after it) stay, and the columns its
+/// target gets from `room`. Buttons go from the row's right end until the target has what it
+/// needs, up to `TARGET_ROOM`: their keys still work and the bar names them, while a target cut
+/// to a letter says nothing. The install or update button comes first, so it goes last.
+pub(in crate::client) fn fit_buttons(room: usize, target: usize, widths: &[usize]) -> (usize, usize) {
+    let want = target.min(TARGET_ROOM);
+    let mut kept = widths.len();
+    loop {
+        let left = room.saturating_sub(widths[..kept].iter().sum());
+        if left >= want || kept == 0 {
+            return (kept, left);
+        }
+        kept -= 1;
+    }
 }
 
 /// The input, its row tinted, with the cursor.
@@ -1054,112 +1086,6 @@ fn draw_allow_clipboard(buf: &mut Buffer, inner: Rect, name: &str, t: &Theme) {
     }
 }
 
-/// The steps connecting takes, in order. `how` is None while ssh is being asked. A new host key
-/// is no step: ssh records it on the way, and a changed one adds nothing (ADR 0017). Why a step
-/// failed is the shared sentence under the list, never words of its own.
-fn checklist(who: &Parsed, how: Option<&Outcome>) -> Vec<Step> {
-    let host = sanitize(&who.host, false);
-    let user = who.user.clone().unwrap_or_else(|| "you".to_string());
-    match how {
-        None => vec![
-            step(Mark::Running, format!("reach {host}"), ""),
-            step(Mark::Pending, format!("sign in as {user}"), ""),
-            step(Mark::Pending, "maitty-daemon", ""),
-        ],
-        Some(Outcome::Ready(version)) => vec![
-            step(Mark::Done, format!("reach {host}"), ""),
-            step(Mark::Done, format!("sign in as {user}"), ""),
-            step(Mark::Done, "maitty-daemon", version.clone()),
-        ],
-        Some(Outcome::Login) => vec![
-            step(Mark::Done, format!("reach {host}"), ""),
-            step(
-                Mark::Waiting,
-                format!("sign in as {user}"),
-                "log in in the popup",
-            ),
-            step(Mark::Pending, "maitty-daemon", ""),
-        ],
-        Some(Outcome::SignInFailed) => vec![
-            step(Mark::Done, format!("reach {host}"), ""),
-            step(Mark::Failed, format!("sign in as {user}"), ""),
-            step(Mark::Pending, "maitty-daemon", ""),
-        ],
-        Some(Outcome::Fix) => vec![
-            step(Mark::Done, format!("reach {host}"), ""),
-            step(Mark::Done, format!("sign in as {user}"), ""),
-            step(Mark::Failed, "maitty-daemon", ""),
-        ],
-    }
-}
-
-fn draw_checklist(
-    buf: &mut Buffer,
-    inner: Rect,
-    (name, target): (&str, &str),
-    steps: &[Step],
-    t: &Theme,
-) {
-    let c = Style::default().bg(t.card);
-    let mut y = inner.y;
-    put(
-        buf,
-        inner.x,
-        y,
-        &[
-            seg(
-                format!("{} {}", machine_group::REMOTE_ICON, sanitize(name, false)),
-                c.fg(t.strong).add_modifier(Modifier::BOLD),
-            ),
-            seg(format!("   {}", sanitize(target, false)), c.fg(t.muted)),
-        ],
-        inner.right(),
-    );
-    y += 2;
-    for s in steps {
-        let (glyph, colour, bold) = match s.mark {
-            Mark::Done => ("✓", t.done, false),
-            Mark::Running => ("◌", t.accent, true),
-            Mark::Waiting => ("●", t.blocked, true),
-            Mark::Pending => ("○", t.muted, false),
-            Mark::Failed => ("✕", t.err, true),
-        };
-        let text_style = c
-            .fg(match s.mark {
-                Mark::Waiting => t.blocked,
-                Mark::Failed => t.err,
-                Mark::Pending => t.muted,
-                _ => t.text,
-            })
-            .add_modifier(if bold {
-                Modifier::BOLD
-            } else {
-                Modifier::empty()
-            });
-        put(
-            buf,
-            inner.x + 2,
-            y,
-            &[
-                seg(format!("{glyph} "), c.fg(colour)),
-                seg(s.text.clone(), text_style),
-            ],
-            inner.right(),
-        );
-        if !s.aside.is_empty() {
-            let w = s.aside.width() as u16;
-            put(
-                buf,
-                inner.right().saturating_sub(w + 1),
-                y,
-                &[seg(s.aside.clone(), c.fg(t.muted))],
-                inner.right(),
-            );
-        }
-        y += 1;
-    }
-}
-
 /// The keys under the dialog. `fix`: what `u` does for the chosen machine, when it needs it.
 fn bar_keys(v: &MachinesView, fix: Option<AppFix>) -> Vec<(&'static str, &'static str)> {
     match &v.step {
@@ -1187,6 +1113,5 @@ fn bar_keys(v: &MachinesView, fix: Option<AppFix>) -> Vec<(&'static str, &'stati
         MachineStep::Remove { .. } => vec![("Enter", "remove"), ("Esc", "keep it")],
         MachineStep::AllowClipboard { .. } => vec![("Enter", "allow"), ("Esc", "keep it off")],
         MachineStep::Checking { .. } => vec![("Esc", "cancel")],
-        MachineStep::Added { .. } => vec![("Enter", "done"), ("Esc", "close")],
     }
 }

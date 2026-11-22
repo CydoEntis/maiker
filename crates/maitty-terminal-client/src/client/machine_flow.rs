@@ -1,13 +1,13 @@
 //! What the Machines dialog does with a choice. Adding looks at the machine first, with no
-//! prompt (a host that works with keys is added in that one step); a failure is said with the
-//! shared sentence, and only a login that needs a person (a password, a second code) opens ssh in
-//! a popup on this computer, where the machine connects when it closes (ADR 0017). Removing
+//! prompt and no steps (ADR 0017): a machine that is added is chosen in your machines, a failure
+//! is said with the shared sentence, and only a login that needs a person (a password, a second
+//! code) opens ssh in a popup on this computer, where the machine connects when it closes. Removing
 //! takes the machine out of the config, the sidebar and the window's records, and leaves the
 //! machine itself, its sessions and its saved layout alone.
 
 use super::screen::machine_group::AppFix;
 use super::screen::machines::{
-    MachineNotice, MachineStep, MachinesView, Outcome, connect_target, parse_target, removal_note,
+    MachineNotice, MachineStep, MachinesView, connect_target, parse_target, removal_note,
 };
 use super::*;
 use crate::client::link::ConnectionState;
@@ -179,6 +179,7 @@ impl App {
         }
         v.notice = None;
         v.step = MachineStep::Checking {
+            name: name.clone(),
             target: target.clone(),
         };
         self.machines_probe(MachineDef {
@@ -227,62 +228,57 @@ impl App {
         self.with_machines_view(|v| v.step = MachineStep::Browse);
         let notice = match result {
             Probe::Cancelled => return,
-            Probe::Ready { version } => {
-                self.machine_added(&def, Added::Connect(None), &version, Outcome::Ready(version.clone()))
-            }
-            // A host key ssh refused, changed or not yet known, adds nothing (ADR 0017).
+            Probe::Ready { version } => self.machine_added(&def, Added::Connect(None), &version),
+            // A host key ssh refused, changed or not yet known, adds nothing (ADR 0017), and nor
+            // does a machine that was never signed in to because it refuses connections for now.
+            // The field keeps the target, so Enter tries it again once the fix has run.
             Probe::Failed(
                 failure @ (FailureClass::Unreachable(_)
+                | FailureClass::RefusingConnections
                 | FailureClass::HostKeyChanged { .. }
                 | FailureClass::HostKeyUnknown),
-            ) => say(sentence_here(&failure, &Subject::of_def(&def)), true),
+            ) => {
+                self.with_machines_view(|v| {
+                    v.query = def.target.clone();
+                    (v.in_list, v.host_sel) = (false, 0);
+                });
+                say(sentence_here(&failure, &Subject::of_def(&def)), true)
+            }
             // The one login ssh cannot finish alone: a person answers it in the popup.
             Probe::Failed(failure @ FailureClass::NeedsPerson(_)) => {
-                self.machine_added(&def, Added::Login(failure), "", Outcome::Login)
+                self.machine_added(&def, Added::Login(failure), "")
             }
             // Nothing typed in a popup makes the machine take the key: the sentence gives the
             // command that does, and the machine is kept so `r` tries again once it has run.
             Probe::Failed(failure @ FailureClass::KeyRefused(_)) => {
-                self.machine_added(&def, Added::Connect(Some(failure)), "", Outcome::SignInFailed)
+                self.machine_added(&def, Added::Connect(Some(failure)), "")
             }
             // Reached, but the app is missing, old, or not running: said now, and the
             // connection's own state carries it on once it dials.
-            Probe::Failed(failure) => {
-                self.machine_added(&def, Added::Connect(Some(failure)), "", Outcome::Fix)
-            }
+            Probe::Failed(failure) => self.machine_added(&def, Added::Connect(Some(failure)), ""),
         };
         self.machines_say(notice);
     }
 
     /// Write the machine to the config and bring it up: dialled now, or after a login in a popup.
-    fn machine_added(
-        &mut self,
-        def: &MachineDef,
-        how: Added,
-        version: &str,
-        outcome: Outcome,
-    ) -> MachineNotice {
+    fn machine_added(&mut self, def: &MachineDef, how: Added, version: &str) -> MachineNotice {
         if let Err(e) =
             machine_config::add_machine(&self.machine_flow.local_config, &def.name, &def.target)
         {
             return say(format!("Could not add {}: {e:#}", def.name), true);
         }
         self.cfg.machines.push(def.clone());
-        self.machine_added_shows(def, outcome);
+        self.machine_chosen(def);
         let still = match how {
             Added::Login(failure) => match self.machine_first_login(def) {
                 Ok(()) => {
+                    let said = sentence_here(&failure, &Subject::of_def(def));
                     return say(
-                        format!(
-                            "Added {}. ssh needs you to log in: use the popup.",
-                            def.name
-                        ),
+                        format!("Added {}. Sign in in the popup. {said}", def.name),
                         false,
                     );
                 }
                 Err(e) => {
-                    // No popup to sign in with, so the checklist must not point at one.
-                    self.machine_added_shows(def, Outcome::SignInFailed);
                     self.machine_start(def);
                     let said = sentence_here(&failure, &Subject::of_def(def));
                     return say(format!("Added {}. {said} ({e:#})", def.name), true);
@@ -303,13 +299,15 @@ impl App {
         say(format!("Added {}.{there} Connecting.", def.name), false)
     }
 
-    fn machine_added_shows(&mut self, def: &MachineDef, outcome: Outcome) {
+    /// The dialog goes back to its list with the new machine chosen, where its state, its fix
+    /// and its keys (`r` to try again, `u` to install) are; the input is emptied for the next.
+    fn machine_chosen(&mut self, def: &MachineDef) {
+        let at = self.machine_listed_at(&def.name);
         self.with_machines_view(|v| {
-            v.step = MachineStep::Added {
-                name: def.name.clone(),
-                target: def.target.clone(),
-                how: outcome,
-            }
+            v.step = MachineStep::Browse;
+            v.query.clear();
+            (v.in_list, v.host_sel) = (false, 0);
+            v.machine_sel = at;
         });
     }
 

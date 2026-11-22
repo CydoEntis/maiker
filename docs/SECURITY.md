@@ -1160,16 +1160,16 @@ is what the panes show, so the rules are those of a credential:
 
 ## Project-specific: remote machine logins from the desktop
 
-The Settings > Remote machines screens (`apps/gui/src-tauri/src/machine_access.rs`, `add_machine.rs`;
-logic in `crates/maitty-machines/src/{machine_target,new_host_keys}.rs`) let a person add a machine
-and change the user it connects as without a terminal. Maiker takes no account password: a login
+The Settings > Remote machines screens (`apps/gui/src-tauri/src/add_machine.rs`; logic in
+`crates/maitty-machines/src/{machine_target,new_host_keys}.rs`) let a person add a machine without a
+terminal. Maiker takes no account password: a login
 that needs one goes through the terminal sign-in
 ([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md)). They run ssh tools on this
 computer on input from the window, so each is bounded as follows.
 
 | Command | What it takes | Rule |
 | --- | --- | --- |
-| `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
+| `add_machine` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
 | `add_machine` key file | a path | Optional `identity_file` on the entry, passed as `-i <path>` (one argv entry). It must be an absolute path (a leading `~/` is expanded), exist and be a file; a path that starts with `-`, has a control character or ends in `.pub` is refused. The file is never opened by Maiker (only ssh reads it) and a path with `via` is refused. Entries without it still load. |
 | `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
 

@@ -6,7 +6,7 @@ import { windowRoot } from './windowRoot'
 type Props = {
   machines: MachinesInfo
   onClose: () => void
-  /** Leaves for Settings › Remote machines, where a host clicked in the SSH config list that is already a machine is managed. */
+  /** Leaves for Settings › Remote machines, where a machine that is clicked in the SSH config list, or typed, and is already added is managed. */
   onOpenSettings?: () => void
 }
 

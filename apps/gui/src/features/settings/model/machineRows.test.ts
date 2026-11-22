@@ -17,6 +17,7 @@ function head(name: string, state: State['state'], extra: Partial<State> = {}): 
 const OLDER: Partial<State> = { why: 'box runs an older Maiker: run `maiker machine update box`, then try again.', failure: 'update', fix_command: 'maiker machine update box' }
 const MISSING: Partial<State> = { why: 'Maiker isn\'t installed on box: run `maiker machine update box --install` (Linux and macOS machines only), then try again.', failure: 'install', fix_command: 'maiker machine update box --install' }
 const NEWER: Partial<State> = { why: 'box runs a newer Maiker than this computer: update Maiker here (`maiker update`, or the desktop app\'s own update), then try again.', failure: 'update-here' }
+const REFUSING_WHY = 'box may be refusing new connections for a while, after failed sign-ins or too many at once: wait a few minutes and try again, and if it keeps happening, check its sshd and fail2ban settings.'
 const REFUSED_KEY: Partial<State> = { why: 'box refused your key: run `ssh-copy-id me@box.lan` in a terminal, then try again.', failure: 'key-refused', fix_command: 'ssh-copy-id me@box.lan', said: 'me@box: Permission denied (publickey).' }
 
 describe('a machine row', () => {
@@ -43,6 +44,13 @@ describe('a machine row', () => {
   it('offers Retry for a machine it cannot reach, and counts how long', () => {
     expect(rowOf(head('box', 'unreachable', { why: 'no answer' }), 0)).toMatchObject({ glyph: '×', line: "Can't reach it", showsSince: true, action: 'retry' })
     expect(rowOf(head('box', 'refused'), 0)).toMatchObject({ line: 'Refused the connection', action: 'retry' })
+  })
+
+  it('says a machine that hangs up before signing in may be refusing connections for now, and still offers Retry', () => {
+    const refusing = head('box', 'unreachable', { why: REFUSING_WHY, failure: 'refusing-connections' })
+    expect(rowOf(refusing, 0)).toMatchObject({ glyph: '×', tone: 'bad', line: 'Refusing connections for now', showsSince: true, action: 'retry' })
+    expect(foldStatusOf(refusing, 0)).toMatchObject({ lead: 'Refusing connections for now', more: REFUSING_WHY, showsSince: true, command: null, action: 'retry' })
+    expect(rowOf(head('box', 'unreachable', { why: 'no answer', failure: 'unreachable' }), 0).line).toBe("Can't reach it")
   })
 
   it('offers Update for an older Maiker and Install when there is none, in amber', () => {

@@ -495,7 +495,9 @@ Closing the window, or losing the connection, never stops anything over there.
 
 Leader `w` (or `Machines` in the command palette) lists the computers maiker reaches over ssh and
 adds more. Pick a host from your `~/.ssh/config` and press Enter: if ssh logs in on its own (a key, an
-agent) the machine is added and connecting in that one step. A machine ssh has not seen before has its host
+agent) the machine is added and connecting in that one step: one line says *Connecting to <name>…*, then the
+dialog lists the machine, chosen. When something fails, one sentence under the field says what and how to fix
+it (such as the `ssh-copy-id` to run), and Enter tries again. A machine ssh has not seen before has its host
 key recorded by ssh with no question; one whose key changed is refused and not added. If ssh needs you (a
 password, a code) it opens in a popup, you answer, and the machine connects when the popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
 the agent there.
@@ -778,7 +780,16 @@ check:
 ```
 
 A machine ssh cannot log in to gets one ✕ line with the fix, then `skipped: not reachable` and the ssh options.
-A version that differs says `maiker machine update <name>`; a daemon on another protocol says the same. The
+Every ✕ line ends with the same sentence the Machines list shows. A version or protocol that differs gives both
+numbers first, then the fix for the side that is behind:
+
+```
+ ✕ maiker version         0.58.1 there, 0.60.0 here. build runs an older Maiker: run `maiker machine update build`, then try again.
+```
+
+The ssh options line ends with `StrictHostKeyChecking=accept-new` when maiker adds it for that machine (a host key
+ssh has not seen is recorded on the first connection); when your own ssh setup says how to treat host keys, or
+your ssh is older than OpenSSH 7.6, it is left out and ssh does as it always has. The
 login PATH line shows where the machine's login shell finds maiker (the program, never the whole PATH) and
 notes when your `remote_cmd` is something else. Each machine has about 30 seconds in all, so one that never
 answers does not hold up the rest. The section is not printed when there are no machines.

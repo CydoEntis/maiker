@@ -153,9 +153,12 @@ pub fn prepare(
         }),
         // A host key ssh refused, changed or not yet known, means the machine would never connect:
         // nothing is added, and the sentence says how to clear the old key once the change is
-        // confirmed, or how to accept a new one in a terminal.
+        // confirmed, or how to accept a new one in a terminal. A machine refusing connections for
+        // now was never signed in to, so, like an unreachable one, nothing shows it is a machine to
+        // keep: the sentence says to wait and add it again.
         Probe::Failed(
             failure @ (FailureClass::Unreachable(_)
+            | FailureClass::RefusingConnections
             | FailureClass::HostKeyChanged { .. }
             | FailureClass::HostKeyUnknown),
         ) => Ok(Prepare::Refused { def, failure }),
@@ -552,6 +555,15 @@ mod tests {
         };
         assert!(message.starts_with("Can't reach build.example: check the name or address"), "{message}");
         assert_eq!((failure, fix_command), ("unreachable", None));
+    }
+
+    #[test]
+    fn a_machine_refusing_connections_adds_nothing_and_says_to_wait() {
+        let Outcome::Failed { message, failure, fix_command } = refusal(&look("refusing")) else {
+            panic!("a failure");
+        };
+        assert!(message.starts_with("build.example may be refusing new connections for a while"), "{message}");
+        assert_eq!((failure, fix_command), ("refusing-connections", None));
     }
 
     /// The ed25519 key the shim's machine offers, and another one on record for a changed key.

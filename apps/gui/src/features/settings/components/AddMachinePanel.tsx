@@ -22,7 +22,7 @@ type Props = {
   machines: MachinesInfo
   /** Cancel, the close button, or the machine is in: the dialog closes. */
   onClose: () => void
-  /** A host of the SSH config that is already a machine was clicked: the machine's own status is shown instead of adding it again. */
+  /** A host of the SSH config that is already a machine was clicked, or such an address was sent: the machine's own status is shown instead of adding it again. */
   onOpenAdded: (head: MachineHead) => void
 }
 
@@ -62,12 +62,16 @@ export function AddMachinePanel({ machines, onClose, onOpenAdded }: Props) {
     if (lower === '') return null
     return others.find((head) => head.name?.toLowerCase() === lower || head.target?.toLowerCase() === lower) ?? null
   }, [others, typed])
-  const problem = already !== null ? `${typed} is already in Maiker.` : address !== null && !address.ok ? address.message : null
-  const valid = address?.ok === true && already === null
+  const problem = address !== null && !address.ok ? address.message : null
+  const valid = address?.ok === true
   const keyFile = keyText.trim() === '' ? null : keyText.trim()
 
   const submit = () => {
     if (busy) return
+    if (already !== null) {
+      onOpenAdded(already)
+      return
+    }
     // A problem shows only for what was sent; an address that was sent has none to show until it is edited and sent again.
     setShown(!valid)
     if (!valid) return
@@ -109,12 +113,6 @@ export function AddMachinePanel({ machines, onClose, onOpenAdded }: Props) {
           {shown && problem !== null && <p className="mx-rm-error" role="alert">{problem}</p>}
           <AddressOptions port={portText} keyFile={keyText} onPort={(next) => { setPortText(next); setShown(false) }} onKeyFile={setKeyText} />
         </form>
-        {shown && already?.name != null && (
-          <p className="mx-rm-hint">
-            <Button onClick={() => { machines.onRetry(already.name ?? '') }}>Retry {already.name}</Button>
-            <Button variant="ghost" onClick={() => { void machines.onRemove(already.name ?? '') }}>Remove {already.name}</Button>
-          </p>
-        )}
         <AddStatus state={flow.state} machines={machines} onRetry={flow.retry} />
         <SshHosts hosts={hosts} choices={choices} list={list} busy={busy} onPick={pick} />
       </FrameBody>
