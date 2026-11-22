@@ -114,6 +114,7 @@
 .mx-chat .tok-comment { color: var(--sy-com); font-style: italic; }
 .mx-chat .tok-number { color: var(--sy-num); font-weight: 400; }
 .mx-chat .tok-variable { color: var(--sy-fn); font-weight: 400; }
+.mx-chat .tok-type { color: var(--sy-ty); }
 .mx-chat .tok-flag { color: var(--sy-prop); font-weight: 400; }
 
 /* One step the agent took: a 30px row that opens to its detail. */

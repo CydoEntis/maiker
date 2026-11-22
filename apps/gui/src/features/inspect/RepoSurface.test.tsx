@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { FileActions } from './fileMenu'
 import type { RepoSurfaceKind } from './panelTabs'
 import { RepoSurface } from './RepoSurface'
 
@@ -21,32 +22,38 @@ function daemonAnswers(replies: Record<string, unknown>) {
   })
 }
 
-function renderPanel(view: RepoSurfaceKind) {
+/** What the window does with a file, as spies; `onReveal` is left out for a file of another machine. */
+function fileActions(over: Partial<FileActions> = {}): FileActions {
+  return { openPath: null, onOpen: vi.fn(), onCopyPath: vi.fn(), onCopyRelativePath: vi.fn(), onReveal: vi.fn(), menuRoot: null, ...over }
+}
+
+function renderPanel(view: RepoSurfaceKind, files: FileActions = fileActions()) {
   const onNotice = vi.fn()
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <RepoSurface term={5} kind={view} lookAt={null} onNotice={onNotice} />
+      <RepoSurface term={5} kind={view} lookAt={null} files={files} onNotice={onNotice} />
     </QueryClientProvider>,
   )
-  return { onNotice }
+  return { onNotice, files }
 }
 
 /** The panel for pane 5 of the machine build. */
-function renderOnBuild(view: RepoSurfaceKind) {
+function renderOnBuild(view: RepoSurfaceKind, files: FileActions = fileActions({ onReveal: undefined })) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <RepoSurface term={5} machine={1} machineName="build" kind={view} lookAt={null} onNotice={vi.fn()} />
+      <RepoSurface term={5} machine={1} kind={view} lookAt={null} files={files} onNotice={vi.fn()} />
     </QueryClientProvider>,
   )
+  return { files }
 }
 
 beforeEach(() => { vi.mocked(isTauri).mockReturnValue(true) })
 
 describe('the side panel’s Files and Changes', () => {
 
-  it('lists the changed files and shows the picked file’s diff', async () => {
+  it('lists the changed files, and opens the one picked in the file pane as its diff, never inside the panel', async () => {
     daemonAnswers({
       Diff: {
         files: [
@@ -56,14 +63,62 @@ describe('the side panel’s Files and Changes', () => {
         additions: 4, deletions: 1, total_files: 2, truncated: false,
       },
     })
-    renderPanel('changes')
+    const { files } = renderPanel('changes')
 
-    const files = await screen.findByRole('list', { name: 'Changed files' })
-    expect(within(files).getByText('a.txt')).toBeTruthy()
-    expect(screen.getByLabelText('Diff').textContent).toContain('+new')
-    expect(screen.getByLabelText('Diff').textContent).not.toContain('diff --git')
-    fireEvent.click(within(files).getByRole('button', { name: /b\.txt/ }))
-    expect(screen.getByLabelText('Diff').textContent).toContain('+z')
+    const list = await screen.findByRole('list', { name: 'Changed files' })
+    expect(within(list).getByText('a.txt')).toBeTruthy()
+    expect(screen.queryByLabelText('Diff')).toBeNull()
+    fireEvent.click(within(list).getByRole('button', { name: /b\.txt/ }))
+    expect(files.onOpen).toHaveBeenCalledWith('b.txt', 'changes', {})
+  })
+
+  it('marks the row of the file the file pane shows', async () => {
+    daemonAnswers({ Diff: { files: [{ path: 'a.txt', additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' }, { path: 'b.txt', additions: 1, deletions: 0, binary: false, patch: '@@ -0,0 +1 @@\n+new\n' }], additions: 2, deletions: 0, total_files: 2, truncated: false } })
+    renderPanel('changes', fileActions({ openPath: 'b.txt' }))
+    const list = await screen.findByRole('list', { name: 'Changed files' })
+    expect(within(list).getByRole('button', { current: true })).toHaveAccessibleName(/b\.txt/)
+  })
+
+  it('offers a changed file’s menu on a right-click: open it, its changes, its paths, and where it is', async () => {
+    daemonAnswers({ Diff: { files: [{ path: 'src/a.ts', additions: 1, deletions: 0, binary: false, patch: '@@ -1 +1 @@\n-old\n+new\n' }], additions: 1, deletions: 1, total_files: 1, truncated: false } })
+    const { files } = renderPanel('changes')
+    const row = within(await screen.findByRole('list', { name: 'Changed files' })).getByRole('button', { name: /a\.ts/ })
+    const choose = async (name: string) => {
+      fireEvent.contextMenu(row)
+      fireEvent.click(await screen.findByRole('menuitem', { name }))
+    }
+    fireEvent.contextMenu(row)
+    expect((await screen.findAllByRole('menuitem')).map((item) => item.textContent)).toEqual(['Open', 'Open changes', 'Copy path', 'Copy relative path', 'Reveal in file manager'])
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+    await choose('Open changes')
+    expect(files.onOpen).toHaveBeenCalledWith('src/a.ts', 'changes', { asChanges: true })
+    await choose('Copy path')
+    expect(files.onCopyPath).toHaveBeenCalledWith('src/a.ts')
+    await choose('Copy relative path')
+    expect(files.onCopyRelativePath).toHaveBeenCalledWith('src/a.ts')
+    await choose('Reveal in file manager')
+    expect(files.onReveal).toHaveBeenCalledWith('src/a.ts')
+  })
+
+  it('leaves out of a file’s menu what does not apply: no changes for an unchanged file, nothing to open or reveal for a deleted one, no reveal on another machine', async () => {
+    const names = async (row: HTMLElement) => {
+      fireEvent.contextMenu(row)
+      const items = (await screen.findAllByRole('menuitem')).map((item) => item.textContent)
+      fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+      await waitFor(() => { expect(screen.queryByRole('menu')).toBeNull() })
+      return items
+    }
+    daemonAnswers({
+      Tree: [{ name: 'plain.ts', is_directory: false }],
+      Diff: { files: [{ path: 'gone.ts', additions: 0, deletions: 1, binary: false, patch: 'deleted file mode 100644\n@@ -1 +0,0 @@\n-old\n' }], additions: 0, deletions: 1, total_files: 1, truncated: false },
+    })
+    renderPanel('files')
+    expect(await names(await screen.findByRole('button', { name: 'plain.ts' }))).toEqual(['Open', 'Copy path', 'Copy relative path', 'Reveal in file manager'])
+    expect(await names(within(screen.getByRole('list', { name: 'Changed files' })).getByRole('button', { name: /gone\.ts/ }))).toEqual(['Open changes', 'Copy path', 'Copy relative path'])
+    cleanup()
+    renderOnBuild('files')
+    expect(await names(await screen.findByRole('button', { name: 'plain.ts' }))).toEqual(['Open', 'Copy path', 'Copy relative path'])
+    cleanup()
   })
 
   it('reads the changes of a session on another machine from that machine', async () => {
@@ -75,7 +130,6 @@ describe('the side panel’s Files and Changes', () => {
 
     const files = await screen.findByRole('list', { name: 'Changed files' })
     expect(within(files).getByText('a.txt')).toBeTruthy()
-    expect(screen.getByLabelText('Diff').textContent).toContain('+new')
     expect(vi.mocked(invoke)).toHaveBeenCalledWith('repo_query', { machine: 1, term: 5, question: { Diff: { path: null } } })
     expect(vi.mocked(invoke).mock.calls.every(([, args]) => (args as { machine?: number }).machine === 1), 'nothing is asked of this computer').toBe(true)
     cleanup()
@@ -96,7 +150,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Commit b.txt' }))
@@ -122,7 +176,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Pull 2' }))
@@ -141,7 +195,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} machineName="build" kind="changes" lookAt={null} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={vi.fn()} />
+        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Push 1' }))
@@ -149,7 +203,7 @@ describe('the side panel’s Files and Changes', () => {
     cleanup()
   })
 
-  it('lists the files of a session on another machine through that machine, and opens only its markdown documents', async () => {
+  it('lists the files of a session on another machine through that machine, and reads none of them itself', async () => {
     vi.mocked(invoke).mockReset().mockImplementation((command, args) => {
       const { question, machine } = args as { question: Question; machine?: number }
       const kind = typeof question === 'string' ? question : (Object.keys(question)[0] ?? '')
@@ -157,37 +211,11 @@ describe('the side panel’s Files and Changes', () => {
       expect(machine, `${kind} is asked of the machine`).toBe(1)
       if (kind === 'Tree') return Promise.resolve({ Tree: [{ name: 'README.md', is_directory: false }, { name: 'main.rs', is_directory: false }] })
       if (kind === 'Diff') return Promise.resolve({ Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false } })
-      if (kind === 'FileStamped') return Promise.resolve({ FileStamped: { text: '# Remote title\n', version: '9-ab' } })
       return Promise.reject(new Error(`unexpected ${kind}`))
     })
-    renderOnBuild('files')
-    expect(await screen.findByRole('heading', { name: 'Remote title' })).toBeTruthy()
-    fireEvent.click(screen.getByRole('button', { name: 'main.rs' }))
-    expect(await screen.findByText(/Only Markdown documents open from build/)).toBeTruthy()
-    expect(vi.mocked(invoke).mock.calls.some(([, args]) => JSON.stringify((args as { question: unknown }).question).includes('"File"'))).toBe(false)
-    cleanup()
-  })
-
-  it('opens a comment box on a clicked diff line, sends the comment to the agent and keeps it under the line', async () => {
-    daemonAnswers({
-      Diff: { files: [{ path: 'src/a.ts', additions: 1, deletions: 1, binary: false, patch: '@@ -3 +3 @@\n-old\n+new\n' }], additions: 1, deletions: 1, total_files: 1, truncated: false },
-    })
-    const onSend = vi.fn(() => Promise.resolve())
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <RepoSurface term={5} kind="changes" lookAt={null} comments={{ agent: 'Claude', onSend }} onNotice={vi.fn()} />
-      </QueryClientProvider>,
-    )
-    fireEvent.click(await screen.findByText(/\+new/))
-    const send = screen.getByRole('button', { name: 'Send to Claude' })
-    expect(send).toBeDisabled()
-    fireEvent.change(screen.getByLabelText('Comment on line 3'), { target: { value: 'call it fresh' } })
-    fireEvent.click(send)
-    await waitFor(() => { expect(onSend).toHaveBeenCalledWith('About src/a.ts, line 3:\n> new\n\ncall it fresh') })
-    expect(await screen.findByText(/sent to Claude/)).toBeTruthy()
-    expect(screen.getByText('1 comment')).toBeTruthy()
-    expect(screen.queryByRole('button', { name: 'Send to Claude' })).toBeNull()
+    const { files } = renderOnBuild('files')
+    fireEvent.click(await screen.findByRole('button', { name: 'main.rs' }))
+    expect(files.onOpen).toHaveBeenCalledWith('main.rs', 'files')
     cleanup()
   })
 
@@ -203,7 +231,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onNotice={onNotice} />
+        <RepoSurface term={5} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     expect(await screen.findByLabelText('Commit message')).toHaveValue('Add refunds')
@@ -226,7 +254,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onNotice={vi.fn()} />
+        <RepoSurface term={5} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Commit 1 file' }))
@@ -280,25 +308,23 @@ describe('the side panel’s Files and Changes', () => {
     },
   )
 
-  it('shows the file tree with a file beside it, opens folders in place and highlights the file', async () => {
+  it('shows the file tree, opens folders in place, and opens a picked file in the file pane', async () => {
     daemonAnswers({
-      Tree: [{ name: 'src', is_directory: true }, { name: 'README.md', is_directory: false }],
-      FileStamped: { text: 'The answer is 42\n', version: 'v1' },
+      Tree: [{ name: 'src', is_directory: true }, { name: 'notes.txt', is_directory: false }],
+      Diff: { files: [], additions: 0, deletions: 0, total_files: 0, truncated: false },
     })
-    renderPanel('files')
+    const { files } = renderPanel('files')
 
     const folder = await screen.findByRole('button', { name: 'src' })
     expect(folder).toHaveAttribute('aria-expanded', 'false')
     fireEvent.click(folder)
     expect(folder).toHaveAttribute('aria-expanded', 'true')
 
-    fireEvent.click(await screen.findByRole('button', { name: 'README.md' }))
-    // A markdown file opens as a document, drawn; its editor is a mode of its own, not on screen until asked for.
-    expect(await screen.findByLabelText('Document README.md')).toBeTruthy()
-    await waitFor(() => { expect(screen.getByLabelText('Document README.md').textContent).toContain('The answer is 42') })
-    // The tree stays on screen beside the file.
-    expect(screen.getByRole('navigation', { name: 'Files' })).toBeTruthy()
+    fireEvent.click(await screen.findByRole('button', { name: 'notes.txt' }))
+    expect(files.onOpen).toHaveBeenCalledWith('notes.txt', 'files')
+    // The panel is the tree alone: the file is drawn in its own pane.
     expect(screen.queryByRole('textbox')).toBeNull()
+    expect(vi.mocked(invoke).mock.calls.some(([, args]) => JSON.stringify((args as { question: unknown }).question).includes('File'))).toBe(false)
   })
 })
 
@@ -308,13 +334,14 @@ describe('the Changes surface', () => {
     type Turn = { startedAtMs: number; endedAtMs: number } | null
     const turnPanel = (turn: Turn, onAllChanges = vi.fn()) => {
       const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      const files = fileActions()
       const panel = (shown: Turn) => (
         <QueryClientProvider client={client}>
-          <RepoSurface term={5} kind="changes" lookAt={null} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onNotice={vi.fn()} />
+          <RepoSurface term={5} kind="changes" lookAt={null} files={files} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onNotice={vi.fn()} />
         </QueryClientProvider>
       )
       const { rerender } = render(panel(turn))
-      return { onAllChanges, showTurn: (next: Turn) => { rerender(panel(next)) } }
+      return { onAllChanges, files, showTurn: (next: Turn) => { rerender(panel(next)) } }
     }
 
     it('shows what the turn changed between its snapshots, with no commit, and goes back to all changes', async () => {
@@ -323,8 +350,11 @@ describe('the Changes surface', () => {
         DiffRange: diffOf('turn.ts'),
         Diff: diffOf('everything.ts'),
       })
-      const { onAllChanges } = turnPanel({ startedAtMs: NOW * 1000, endedAtMs: (NOW + 59) * 1000 })
+      const { onAllChanges, files } = turnPanel({ startedAtMs: NOW * 1000, endedAtMs: (NOW + 59) * 1000 })
       expect(within(await screen.findByRole('list', { name: 'Changed files' })).getByText('turn.ts')).toBeTruthy()
+      // The file opens as the turn's own diff, which is what its row counted.
+      fireEvent.click(within(screen.getByRole('list', { name: 'Changed files' })).getByRole('button', { name: /turn\.ts/ }))
+      expect(files.onOpen).toHaveBeenCalledWith('turn.ts', 'changes', { range: { from: 'before', to: 'after' } })
       expect(screen.getByText("This turn's changes")).toBeTruthy()
       expect(vi.mocked(invoke)).toHaveBeenCalledWith('repo_query', { term: 5, question: { DiffRange: { from: 'before', to: 'after', path: null } } })
       expect(screen.queryByRole('button', { name: /^Commit/ })).toBeNull()

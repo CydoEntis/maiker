@@ -555,7 +555,11 @@ The desktop window, unlike the terminal interface above, has one full-width foot
   entry in `SURFACES` (`surfaces.ts`: name, icon, letter, hint, whether it opens more than once) and its body in
   `WorkspaceSidePanel`'s switch. The strip is a `tablist` of `tab`s over one `tabpanel`; a tab's name is its
   accessible name even while only its icon shows. Anything outside the panel opens a surface through `openSurface`
-  (`useSidePanel.ts`), never by setting panel state itself. A terminal tab is a shell the daemon owns: the panel and
+  (`useSidePanel.ts`), never by setting panel state itself. **A surface lists; it never shows a file.** Files and
+  Changes open a file in the file pane through the `FileActions` the window hands them (`fileMenu.tsx`), which also
+  carry the file's right-click menu, so a surface holds no viewer, no diff and no editor of its own. Whether the panel
+  is a card beside the main pane or a float over the file pane is `panelPlacement` (`model/filePane.ts`), never a
+  component's own guess; its width and what a stored width becomes are `panelWidth.ts`. A terminal tab is a shell the daemon owns: the panel and
   the drawer only say where it shows, closing its tab ends it and so asks first, and hiding the panel or pinning,
   unpinning or switching tabs never ends it.
 - **Cards and gaps** (`frame.css`): the sidebar, the main area, a split pane, the terminal dock and the side panel
@@ -1217,7 +1221,7 @@ with the same commit bar under the files: the ticks, the message, **Commit N fil
 button (**Pull ↓N**, **Push ↑N** or **Fetch**, by the same rule as locally, `remoteAction.ts`) and
 **Create PR**. Each is run by that machine's daemon in the pane's checkout (`git_commit_all`,
 `git_sync` and `git_create_pull_request` with the pane, `Query::Git`), with that machine's git
-identity and GitHub sign-in, and its answer or failure shows as it does locally. Files lists that machine's folders and opens only its Markdown documents (ADR 0014, `FilesTab.tsx`), saying "Only Markdown documents open from <machine>; its other files stay there." for the rest, and References is not offered. Timeline is as for a local pane. A chat on another machine that has no terminal of its own has no pane to ask, so the panel
+identity and GitHub sign-in, and its answer or failure shows as it does locally. Files lists that machine's folders (ADR 0014, `FilesTab.tsx`); the file pane opens only its Markdown documents whole, shows any changed file's diff, and says "Only Markdown documents open from <machine>; its other files stay there." for the rest. References is not offered, and a file's menu has no Reveal there. Timeline is as for a local pane. A chat on another machine that has no terminal of its own has no pane to ask, so the panel
 does not open for it and the toast says Inspect is local-only.
 
 **The TUI's Changes is the same exception** (`client/changes_more.rs`). Leader `c` on a pane of
@@ -1879,21 +1883,30 @@ Skipping applies nothing.
   (the same rounded card as the agent list). The agent list is a `CardList` too and scrolls with the step. An agent the shell
   cannot install (`installable: false` in `setup.ts`, today Cursor) shows "Not installable here" and no Install.
 
-## Project-specific: markdown documents
+## Project-specific: the file pane and markdown documents
 
-A `.md`, `.markdown` or `.mdx` file of the Files tab opens as a document (`features/documents/DocumentView.tsx`) instead of
-the numbered text preview, with a **Segmented** switch **Drawn | Source | Edit** (Drawn is the default; the choice is
-remembered per file, never `Edit`). A changed file still opens as its diff first; Show the whole file opens the document.
-The Files tab's tree has a **README** entry above the list when the top folder has one; the palette has **Open README** (the
-Files tab on it) and **Open README beside the chat**.
+A file of a session's checkout opens in the **file pane** (`DocPane.tsx`, which draws `features/documents/DocumentView.tsx`):
+a pane of the layout (`PaneSlot.doc`, a path; `sessionId` is the session it belongs to) in a column to the right of that
+session's pane. There is one viewer for every file and every way of opening one: a click or the menu in Files or Changes,
+a link inside a document, a quick-look link in a pane's output, the palette's **Open README** (which also shows the file in
+Files) and **Open README beside the chat**. All of them go through `openDocument` (`useDocuments.ts`).
 
-- **Beside the chat.** The viewer's header has **Open beside the chat**. It adds a document pane (`PaneSlot.doc`, a path;
-  `sessionId` is the session it belongs to) in a new column to the right of that session's pane, by the same split rules as
-  Split right: at most `MAX_PANES`, and a full window says so in a toast. A second document in the same arrangement is
-  shown in the same pane. In a narrow window the panes stack, as every split does. The pane's Close takes only the pane out
-  (`closePaneById`): never the file, never the session. A document pane never trades places with a session pane.
+- **Modes** (`documentEdit.ts`, pure). `modesOffered` decides which of **Preview | Changes | File | Edit** a file has, from
+  four facts: its name says markdown (`.md`, `.markdown`, `.mdx`), it has a diff, its whole text can be read from here, and
+  it can be saved. A mode that does not apply is not drawn; with one mode there is no switch. `shownMode` decides the one
+  shown: what the opener asked for (`FileAsk`: Changes opens a file as its diff, a quick-look link as File at a line),
+  else the way of reading last chosen for that file (Preview or File, remembered per file; never Changes or Edit), else
+  Preview, File, Changes in that order. The switch is the one **Segmented**, a `radiogroup` named "How to show this file".
+- **The pane.** It is added by the same split rules as Split right: at most `MAX_PANES`, and a full window says so in a
+  toast. An arrangement holds one file pane: the next file is shown in the same pane. In a narrow window the panes stack,
+  as every split does. The pane's × takes only the pane out (`closePaneById`): never the file, never the session. A file
+  pane never trades places with a session pane.
+- **Changes** reads the same diff the Changes surface lists (one question, one answer for both), or, for a file opened
+  from one turn's changes, that turn's two snapshots. The foot says what the diff is against; it is the last commit, so
+  it never says a branch name the diff was not made against.
 - **Edit** is a plain monospace text box. **Save** (button or Ctrl/Cmd+S) is disabled until the text differs; a small dot
-  by the file name says it is unsaved. From 640px of viewer width the drawn page shows beside the text (Preview toggles it).
+  by the file name says it is unsaved. From 640px of viewer width a markdown file's drawn page shows beside the text
+  (**Side by side** toggles it).
   Undo is the text box's own. The file keeps its line endings (CRLF stays CRLF) and its final newline as left.
 - **Conflicts.** A save over a file that changed on disk is refused: an inline line says so with **Reload** and
   **Overwrite**. While a draft is open, a change found on disk when the window regains focus shows a quiet line with
@@ -1904,24 +1917,28 @@ Files tab on it) and **Open README beside the chat**.
   (a viewer registers while its text differs from the file, with its pane and its session). Every way a document can go
   asks through it: the viewer's Close, the pane's close and its ⋯ menu (`closePaneById`), the close shortcut, the palette,
   the sidebar's close and Stop (`endSessions`, which also covers its agent's terminals), a session that ended by itself
-  (`useAgentExits`), another file taking the pane's place (`openDocument`, a link in the document, **Open beside the
-  chat**), another file picked in the Files tab, and the viewer's own mode switch away from Edit. The question is one
+  (`useAgentExits`), another file taking the pane's place (`openDocument`: a file picked in Files or Changes, a link in
+  the document) and the viewer's own mode switch away from Edit. The same file asked for again while its draft is open
+  (its row clicked in Changes) leaves the editor as it is. The question is one
   dialog, **Discard changes to README.md?** (several documents: "Discard changes to 3 documents?"), with **Keep editing**
   (focused, and Esc), **Discard** and **Save**. Save writes every draft first and goes on only when each landed; a conflict
   or an error leaves the draft open and says so in the viewer. A second question while one is open is answered Keep
   editing. Not covered: quitting the app or closing its window (the app has no close-request handler yet, so a draft in a
-  window that is closed is lost), the Files panel being hidden while a draft is open (the panel stays mounted), and a
-  change of the whole layout (there is no reset or close-others command).
-- **Task lists.** `- [ ]` and `- [x]` entries draw as read-only checkboxes (the chat, a document's Drawn view and its
-  preview): a flat 14px box (`.mx-task-box`) in the bullet's place that is the same size ticked or not, `role="checkbox"`
+  window that is closed is lost) and a change of the whole layout (there is no reset or close-others command).
+- **Task lists.** `- [ ]` and `- [x]` entries draw as read-only checkboxes (the chat, a document's Preview and its
+  side-by-side page): a flat 14px box (`.mx-task-box`) in the bullet's place that is the same size ticked or not, `role="checkbox"`
   with `aria-checked`, `aria-readonly` and its text as the name; a done entry's text turns `--dim`. Nested entries (two or
   more columns in) indent 18px a level, at most three levels. `[ ]` anywhere else stays text.
 - **Other machines.** A session on another machine opens, edits and saves markdown documents through that machine's own
-  daemon (ADR 0014): the Files tab lists its folders and opens `.md` files, the README entry and **Open beside the chat**
-  work, and its other files say "Only Markdown documents open from <machine>; its other files stay there." A daemon too
-  old to save shows Drawn and Source with the line "This machine's service is older: restart it to edit."; a text that
-  had to be cleaned to be shown safely is read-only with a line that says so.
-- Not offered: Edit against a service older than this app (Drawn and Source only).
+  daemon (ADR 0014): the Files tab lists its folders, a `.md` file and the README entry open in the file pane, and its
+  other files offer their diff when changed and otherwise say "Only Markdown documents open from <machine>; its other
+  files stay there." (nothing is asked of that machine for them). A daemon too old to save shows Preview and File with
+  the line "This machine's service is older: restart it to edit."; a text that had to be cleaned to be shown safely is
+  read-only with a line that says so.
+- **Any text file of this computer can be edited** the same way, saved with the version it was read at; the daemon
+  refuses links, `.git`, new files and anything over 256 KiB.
+- Not offered: Edit against a service older than this app (Preview and File only); **Open in editor** (the app has no
+  action that starts an editor) and **Discard changes…** (no command discards a file's changes yet) in a file's menu.
 
 ## Chat and sidebar fidelity
 

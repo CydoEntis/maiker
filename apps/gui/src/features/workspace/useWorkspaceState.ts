@@ -278,7 +278,7 @@ export function useWorkspaceState() {
   }, [layout, paneSessions, runStart])
 
   const endSession = useCallback((sessionId: string) => { askToClose([sessionId], () => { endSessions([sessionId]) }) }, [askToClose, endSessions])
-  const { showSessionById, openPath, copyPathOf, showSubagent, saveName, copyText, usageInfo } = useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, openSurface })
+  const { showSessionById, copyPathOf, showSubagent, saveName, copyText, usageInfo } = useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection })
   const { runningVersion, skippedVersion, restartNow, setSkippedVersion, restarting } = useAppUpdate({ updater, serviceNewer, preferences, sessions, online })
 
   const chooseStartFolder = useCallback(async (current: string): Promise<string | null> => {
@@ -423,7 +423,7 @@ export function useWorkspaceState() {
     return sharedCheckoutRefusal(sessions, { machine: session.machine, checkout: restorer?.checkout ?? null }, new Set([session.id, ...terminals]))
   }, [sessions, sessionMap, agentTerminals])
   const inspectTerm = focusedSession ? repoPaneOf(focusedSession) : null
-  const { openDocument, openReadme } = useDocuments({ layout, setLayout, focusedSession, repoPaneOf, showSessionById, setLookAt, openSurface })
+  const { openDocument, openReadme, openPath } = useDocuments({ layout, setLayout, focusedSession, repoPaneOf, showSessionById, setLookAt, openSurface })
   // Looking at a pane acknowledges it: a finished agent's done goes back to idle, as when the terminal app
   // focuses it, and an error in it leaves the tray menu. Needs-you stays until the agent is answered.
   const viewedId = focusedSession?.id

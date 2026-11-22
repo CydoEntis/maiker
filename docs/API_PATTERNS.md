@@ -943,8 +943,8 @@ is the person's explicit Overwrite after that answer). The path rules, the 256 K
 checked again just before the rename, and the permissions of the old file are kept. A save that cannot be written is an
 error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
 older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
-115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
-Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `answers_keep_their_pinned_wire_shape`.
+115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Preview and
+File. The pinned bytes of `Saved` and `ChangedOnDisk` are in `answers_keep_their_pinned_wire_shape`.
 For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
 that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
 (`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`

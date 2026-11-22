@@ -1,13 +1,18 @@
+import { revealInExplorer } from '@/api/reveal'
+import { modeAskedBy } from '@/features/documents/documentEdit'
 import { repoTree } from '@/features/inspect/api'
+import type { FileActions } from '@/features/inspect/fileMenu'
+import { fullPathOf } from '@/features/inspect/format'
 import { closeOtherTabs, closeTab, openTab, showTab, SURFACE_KINDS, tabOf, type PanelTab, type RepoSurfaceKind, type SurfaceKind } from '@/features/inspect/panelTabs'
 import { RepoSurface } from '@/features/inspect/RepoSurface'
 import { SidePanel } from '@/features/inspect/SidePanel'
 import { SURFACES } from '@/features/inspect/surfaces'
 import { usePreloadFiles } from '@/features/inspect/useRepoQuery'
+import { toast } from '@/lib/toast'
 import { usePresence } from '@/lib/usePresence'
 import { useReducedMotion } from './motion'
-import { isShell } from '../model/sidebar'
-import { agentName, sendAgentMessage, suggestedCommitMessage } from '../model/agentMessage'
+import { suggestedCommitMessage } from '../model/agentMessage'
+import { openFileOf, panelPlacement, PICKING_A_FILE_HIDES_THE_PANEL } from '../model/filePane'
 import type { SessionView } from '../model/session'
 import { terminalName } from '../model/terminalTabs'
 import { useWorkspace } from '../workspaceContext'
@@ -32,9 +37,12 @@ function NeedsTerminal({ kind, session, canStart, onStart }: { kind: RepoSurface
   )
 }
 
-/** The side panel for the focused session, a card beside the main pane: the session's own tabs of surfaces. */
+/**
+ * The side panel for the focused session: the session's own tabs of surfaces. A card beside the main pane, or, while
+ * a file is open in the file pane, a float over that pane's right.
+ */
 export function WorkspaceSidePanel() {
-  const { inspectOpen, inspectRefusal, focusMode, inspectTerm, focusedSession, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument, panelOf, changePanel, pinTerminal, ownsTerminals, canStart, addAgentTerminal, closeAgentTerminals, agentTerminals, setPanelFocused, root } = useWorkspace()
+  const { inspectOpen, inspectRefusal, focusMode, inspectTerm, focusedSession, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument, copyText, tab: arrangement, narrow, panelOf, changePanel, pinTerminal, ownsTerminals, canStart, addAgentTerminal, closeAgentTerminals, agentTerminals, setPanelFocused, root } = useWorkspace()
   const presence = usePresence(inspectOpen, PANEL_EXIT_MS, useReducedMotion())
   // Files reads this computer's checkouts, so nothing is read ahead for a session of another machine.
   usePreloadFiles(focusedSession?.machineName === null ? inspectTerm : null, loadTopFolder)
@@ -64,6 +72,20 @@ export function WorkspaceSidePanel() {
     if (shells.length === 0) closeThem()
     else closeAgentTerminals(shells.map((tab) => tab.id), only ? nameOf(only) : `${String(shells.length)} terminals`, closeThem)
   }
+  // The checkout's folder on its own machine, which a project path is under.
+  const checkout = session.repoRoot ?? session.cwd
+  const files: FileActions = {
+    openPath: openFileOf(arrangement, session.id),
+    onOpen: (path, source, how) => {
+      openDocument(session.id, path, { mode: how?.asChanges === true ? 'changes' : modeAskedBy(source), ...(how?.range === undefined ? {} : { range: how.range }), key: Date.now() })
+      if (PICKING_A_FILE_HIDES_THE_PANEL) setInspectOpen(false)
+    },
+    onCopyPath: (path) => { copyText(fullPathOf(checkout, path), 'Path') },
+    onCopyRelativePath: (path) => { copyText(path, 'Relative path') },
+    // The file manager is this computer's, so a file on another machine has nothing to show in it.
+    onReveal: session.machineName === null ? (path) => { revealInExplorer(fullPathOf(checkout, path)).catch((error: unknown) => { toast.failed('Could not show the file', error) }) } : undefined,
+    menuRoot: root,
+  }
   const body = (tab: PanelTab) => {
     switch (tab.kind) {
       case 'terminal':
@@ -79,10 +101,8 @@ export function WorkspaceSidePanel() {
             term={inspectTerm}
             {...(session.branch ? { branch: session.branch } : {})}
             machine={session.machine}
-            machineName={session.machineName}
             lookAt={lookAt}
-            documents={{ root: `${session.machineName ?? ''}${session.repoRoot ?? session.cwd}`, sessionId: session.id, onOpenBeside: (path: string) => { openDocument(session.id, path) } }}
-            {...(isShell(session) ? {} : { comments: { agent: agentName(session.process), onSend: (message: string) => sendAgentMessage(session, message) } })}
+            files={files}
             {...(session.machineName === null && session.repoRoot !== null ? { changeActions: { folder: session.repoRoot, machine: session.machine, suggested: suggestedCommitMessage(session) } } : {})}
             {...(turnDiff?.sessionId === session.id ? { turnScope: { turn: turnDiff.turn, onAllChanges: () => { setTurnDiff(null) } } } : {})}
             {...(session.machineName !== null ? { changeActions: { folder: session.repoRoot ?? '', machine: session.machine, term: inspectTerm, suggested: suggestedCommitMessage(session) } } : {})}
@@ -100,6 +120,7 @@ export function WorkspaceSidePanel() {
       nameOf={nameOf}
       menuRoot={root}
       leaving={presence.leaving}
+      floating={panelPlacement(files.openPath !== null, narrow) === 'floating'}
       onOpen={open}
       onShow={(id, by) => {
         changePanel(session.id, (current) => showTab(current, id))

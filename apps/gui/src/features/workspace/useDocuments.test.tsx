@@ -7,7 +7,7 @@ import { activeArrangement, documentPaneReplaced, openArrangement, openDocumentB
 import { useDocuments } from './useDocuments'
 
 vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), info: vi.fn(), error: vi.fn() } }))
-vi.mock('@/features/inspect/api', () => ({ repoTree: vi.fn() }))
+vi.mock('@/features/inspect/api', () => ({ repoTree: vi.fn(), repoLocate: vi.fn() }))
 
 const ids = () => { let next = 0; return (prefix: string) => `${prefix}${String(next++)}` }
 const forgotten: (() => void)[] = []

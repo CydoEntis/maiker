@@ -53,3 +53,9 @@ export function commentMessage(path: string, line: PatchLine, comment: string): 
   const where = line.line === null ? path : `${path}, line ${String(line.line)}${line.kind === 'remove' ? ' (removed)' : ''}`
   return `About ${where}:\n> ${line.text.slice(1)}\n\n${comment.trim()}`
 }
+
+/** What the pane says about commenting: how to, or how many were sent. */
+export function commentHint(count: number): string {
+  if (count === 0) return 'Click a line to comment'
+  return count === 1 ? '1 comment' : `${String(count)} comments`
+}

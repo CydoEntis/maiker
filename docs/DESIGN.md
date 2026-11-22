@@ -512,8 +512,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
   (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
-  A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, a file
-  opened beside a chat and the terminal drawer are each a card of their own, the same 6px apart. Every gap between two
+  A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file
+  pane and the terminal drawer are each a card of their own, the same 6px apart. Every gap between two
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
   side; the sidebar's and the side panel's edges resize them). There is no tools bar, no middle column and no tab bar.
 - **Small windows.** The window is never narrower than 720px (`minWidth`). Under **1100px** the sidebar is the
@@ -1116,9 +1116,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   no progress: a short `Saving the image…` toast becomes `Pasted the image`.
 - **Side panel** (⌘I, the title bar's button, a session's Show changes, a project's Show files;
   `features/inspect/SidePanel.tsx`, `WorkspaceSidePanel.tsx`). It is docked beside the main pane, which narrows to
-  make room; there is no scrim. A card of the frame, 680px at first and at most 58% of the window; its inner edge
-  drags (360 to 1100px) and the width is remembered (a double-click goes back to 680). It slides in and out over
-  `--panel-in`/`--panel-out`. It holds **tabs of surfaces**, each session its own: **Files**, **Changes** and
+  make room; there is no scrim. A card of the frame, 340px at first and at most 58% of the window; its inner edge
+  drags (300 to 640px, `panelWidth.ts`) and the width is remembered (a double-click goes back to 340). **While a file
+  is open in the file pane it floats** instead (`model/filePane.ts`): over the right of the file pane, in the float
+  material with the float's shadow, inside the frame's edges, so neither the file nor the chat is squeezed. Picking a
+  file does not hide it; the title bar's button does. It slides in and out over `--panel-in`/`--panel-out`. It holds **tabs of surfaces**, each session its own: **Files**, **Changes** and
   **Terminal** (`surfaces.ts`; a further kind is one entry there, its name in `panelTabs.ts` and its body in
   `WorkspaceSidePanel`). Files and Changes open once and come forward after that; every Terminal is a new shell in
   the session's folder, named "Terminal", "Terminal 2". Its **34px header is the tab strip** (`tablist`, 2px apart,
@@ -1136,22 +1138,16 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   terminal**, which adds the tab behind them. Which tabs are open, which is in front and which terminals are pinned
   is remembered per session (`panelTabsStorage.ts`); whether the panel is open is the window's, and hiding it keeps
   the tabs and the shells.
-  Files reads the focused session's top folder before the panel opens; while a list or a file is still being read
+  Files reads the focused session's top folder before the panel opens; while the list is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
   opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them).
   **Changes** has a top bar: the branch (a menu of the others with a ✓ on the current one, for a checkout on this
   computer), `↑a ↓b` against its upstream, and the remote as a split button (below). Under it a select-all row ("N
-  changed", the totals), then two columns: the changed files (a tick, a letter for added, modified or deleted, the name
-  over its folder, the lines added and removed) and the picked file's path, what happened to it, and its diff with both
-  line numbers and without git's header lines. The commit area runs across the panel under both. With nothing changed
-  it says "No changes yet" and that the agent's edits show up there. A chat session has no pane to ask about its
-  repository, so the repository views appear for it once it has a terminal.
-  Changes lists the
-  changed files (`+N −N`) and the picked file's diff (added lines tinted with `--ok`, removed with `--danger`, hunk
-  headers in the accent), with line numbers drawn beside it. For an agent, a click on a code line opens a comment box
-  under it with **Send to Claude** (the agent's name; Ctrl/⌘+Enter sends, Esc closes the box); the comment goes to the
-  agent as a message naming the file, the line and its text (`model/agentMessage.ts`), and stays pinned under the line as an accent-tinted "You → Claude" box, also while other files are read; the file's header then counts the comments. The chat draws the comment at once, like a message typed in its box (`outsideSends.ts`). An
-  agent that is asking something is not sent one. Under the file list, for a checkout on this computer, is the commit
+  changed", the totals), then the changed files (a tick, a letter for added, modified or deleted, the name over its
+  folder, the lines added and removed `+N −N`), and the commit area under them. A click on a file opens it in the
+  **file pane** as its diff (below); the panel itself draws no diff. With nothing changed it says "No changes yet" and
+  that the agent's edits show up there. A chat session has no pane to ask about its repository, so the repository
+  views appear for it once it has a terminal. Under the file list, for a checkout on this computer, is the commit
   message (first the session's name, else the first line of its last prompt; "Summary on the first line, then details",
   Ctrl/⌘+Enter commits), **Commit N files** (every changed file has a tick, all ticked at first; only the ticked ones are
   committed, "Commit k of N files", "Tick files to commit" with none), **Create PR** (pushes the branch and runs
@@ -1165,17 +1161,39 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   makes it again on its branch at the same place. Each row's standing comes from the daemon (`worktree_standing`), and one
   idle past `worktree.inactive_days` leads with "inactive N days". The same list opens with a line when two checkouts changed one file ("orders and rate-limit both changed checkout.ts"; the comparison is `maitty_shared::overlap`, shared with the terminal client). A pane's menu has **Hand off to <agent>** for an agent's pane: a new
   session of the other agent in the same folder starts with the text brief `maiker handoff` writes (`maitty_shared::handoff`; the
-  desktop lists only uncommitted files and says so). The one other thing the panel
-  changes is a file: **Edit** in the Files tab (this computer only, never in a diff) replaces an existing file whole;
-  **Save** (Ctrl+S) first re-reads it and asks before overwriting a file that changed since the edit began. The daemon
-  refuses links, `.git`, new files and anything over 256 KiB (`WriteFile`). A tab that cannot load shows one calm
+  desktop lists only uncommitted files and says so). A tab that cannot load shows one calm
   screen with Try again. A folder that is not a git project says so.
   **Files** (`FilesTab.tsx`) lists the changed files first (**Changed**, each with its A, M or D mark), then the tree
   (**All files**): a file carries a type tag (`fileTag.ts`: TS, TSX, `{ }`, MD…) and its mark when changed, a folder a
-  dot when it holds a changed file. It opens on the first changed file, else the README. A changed file shows its diff
-  under a 44px bar with **Show the whole file**; a link to a line opens the whole file at that line.
+  dot when it holds a changed file. A click on a file opens it in the file pane; the row of the open file is the
+  selected row in both surfaces.
+  **A right-click on a file** in Files or Changes (`fileMenu.tsx`, the shared menu): **Open**, **Open changes** (a
+  changed file only), then **Copy path** (the full path on the file's machine), **Copy relative path** and **Reveal in
+  file manager** (this computer's files only). An entry that does not apply is left out, never disabled: a deleted
+  file has no Open and no Reveal.
+- **File pane** (`DocPane.tsx`, `features/documents/DocumentView.tsx`, `documents.css`; handoff 8, screenshots 09 and
+  10). A file opens in a card of its own between the main pane and the side panel, one per session's arrangement: the
+  next file takes its place. Its **34px header** is the pane header's: `project / file name` (the project `--muted`,
+  the name `--fg` 500), a `--needs` dot while a draft is unsaved, the modes as the one Segmented, **Save** while
+  editing, then × (the 26px icon button). **Modes**, only those that apply: **Preview** (a markdown file, drawn),
+  **Changes** (a changed file's diff), **File** (the text, read-only) and **Edit**. A file picked in Changes opens as
+  Changes; one picked in Files opens as Preview or File, changed or not, the way last chosen for that file
+  (`documentEdit.ts`). **File and Changes** are mono 12.5px at 1.75, one row a line and never wrapped: a 46px
+  right-aligned line number in `--dim`, then the text in `--fg2`. In a diff an 18px gutter holds `+` (`--ok`) or `−`
+  (`--danger`), an added row is tinted `color-mix(in srgb, var(--ok) 11%, transparent)` with its number in `--ok`, a
+  removed row the same in `--danger` with its text `--muted` and no number, and a gap between hunks is one dashed
+  line. **Syntax colours are the theme's seven `--sy-*` roles** in File, Changes and the code blocks of a Preview:
+  keywords `--sy-kw`, strings `--sy-str`, numbers `--sy-num`, comments `--sy-com` (italic), names `--sy-fn`, types
+  `--sy-ty`, flags and properties `--sy-prop`. For an agent's session a click on a diff line opens a comment box under
+  it with **Send to Claude** (the agent's name; Ctrl/⌘+Enter sends, Esc closes the box); the comment goes to the agent
+  as a message naming the file, the line and its text (`model/agentMessage.ts`), is drawn in the chat at once like a
+  message typed in its box (`outsideSends.ts`), and stays pinned under the line as an accent-tinted "You → Claude" box.
+  An agent that is asking something is not sent one. **Edit** is a plain mono text box on the pane's own ground. The **30px foot** is
+  one mono 11.5px `--dim` line over a `--panel-line` rule: the file's path; in Changes `branch · +N −N against the
+  last commit` (or `in this turn`, for a file opened from one turn's changes), and how many comments were sent; in
+  Edit `Saved` or `Unsaved` at the right.
 - **Quick-look links.** ⌘-click (Ctrl-click elsewhere) on a file name in a pane's output, with an
-  optional `:line`, opens it in Inspect › Files at that line. A name that is not a file in the
+  optional `:line`, opens it in the file pane as File, at that line. A name that is not a file in the
   pane's repository says so in a toast.
 - **Find (⌘F).** A bar over the top right of the panes. **Pane** looks in the focused pane's
   scrollback (Enter next, Shift+Enter previous), or, when the pane shows its chat, in the conversation:
@@ -1407,12 +1425,11 @@ A session that needs you or finished while you look elsewhere is a toast (`featu
 
 ## Documents
 
-The document viewer (Files tab and the pane beside the chat) is flat: a 44px head on `--pane-line` with the file path in mono, the
-one Segmented (Drawn, Source, Edit), then text buttons (Preview, Save, Open beside the chat, Close). The drawn page is the
-chat's own markdown on `--m-pane`, capped at 78ch and centred; the editor is mono 12.5px on `--m-well` with the underline
-focus style, and the drawn page sits beside it from 640px. Notes (changed on disk, a failed read or save) are one line under
-the head: `--danger` for an error, `--dim` for a notice; the room of the controls is kept, and hover and focus change colour
-only (measured: no box moves). A document pane takes the pane card and its focus ring. A task entry (`- [ ]`, `- [x]`) is a
+A markdown file in the file pane (see *File pane* under Screens) is flat. Its Preview is the chat's own markdown on the
+pane's ground, capped at 78ch and centred; its editor is mono 12.5px with the underline focus style, and the drawn page sits
+beside it from 640px (**Side by side** toggles it). Notes (changed on disk, a failed read or save) are one line under
+the header: `--danger` for an error, `--dim` for a notice; the room of the controls is kept, and hover and focus change colour
+only (measured: no box moves). The file pane takes the pane card and its focus ring. A task entry (`- [ ]`, `- [x]`) is a
 14px box with a 1.5px `--dim` edge and 4px corners in the bullet's slot, filled `--ok` with a tick when done and then its
 text `--dim`; it is one flat box (no box inside a box), the same size in both states, so ticking moves nothing.
 

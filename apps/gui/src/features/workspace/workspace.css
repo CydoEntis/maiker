@@ -302,7 +302,6 @@
 .mx-folder-field input, .mx-search-field input { all: unset; flex: 1; min-width: 0; color: var(--fg); }
 .mx-folder-field input { font-family: var(--mono); font-size: 13px; }
 /* The field draws the underline for the input inside it. */
-.mx-preview { padding: 12px 14px; border-radius: var(--r-panel); background: var(--term); box-shadow: inset 0 0 0 1px var(--pane-line); font-family: var(--mono); line-height: 1.6; }
 .mx-search-field { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
 .mx-search-field input { font-size: 12.5px; }
 .mx-picker { position: relative; flex: none; transition: opacity var(--t-fast) var(--ease); }
@@ -368,7 +367,6 @@
 .mx-text-button:disabled { opacity: .4; }
 
 /* Naming a session. */
-.mx-files-editor { width: 100%; min-height: 320px; box-sizing: border-box; resize: vertical; white-space: pre; overflow: auto; color: inherit; background: transparent; border: 0; outline: 0; }
 /* A terminal session's request, answered in a dialog outside its pane (`OutsideAskDialogs.tsx`) on the shared dialog float. */
 .mx-outside-ask-tasks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; font-size: 13px; color: var(--fg); }
 .mx-outside-ask-tasks li { padding: 6px 10px; border-radius: var(--r-control); background: var(--m-well); overflow-wrap: anywhere; }

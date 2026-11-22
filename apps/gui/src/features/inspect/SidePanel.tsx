@@ -4,28 +4,22 @@ import { IconButton } from '@/components/ui/icon-button'
 import { Icon } from '@/features/workspace/components/glyphs'
 import { MenuPopup, type MenuEntry } from '@/features/workspace/components/MenuPopup'
 import type { PanelTab, SurfaceKind } from './panelTabs'
+import { clampWidth, DEFAULT_WIDTH_PX, storedWidth } from './panelWidth'
 import { surfaceForKey, SURFACES } from './surfaces'
 import './inspect.css'
 
-/** The panel opens this wide; its edge drags between the two bounds, and the width is remembered. */
-const DEFAULT_WIDTH_PX = 680
-const MIN_WIDTH_PX = 360
-const MAX_WIDTH_PX = 1100
 const KEY_STEP_PX = 24
-// A new key since the panel docks beside the chat instead of over it, so a width kept from the overlay does not carry.
-const WIDTH_KEY = 'maiker.inspect.width.v4'
+// A new key since a file opens in its own pane and the panel holds lists only; the key before it is read until a width
+// is chosen again, to carry over one that still fits.
+const WIDTH_KEY = 'maiker.inspect.width.v5'
+const EARLIER_WIDTH_KEY = 'maiker.inspect.width.v4'
 
 const BODY_ID = 'mx-side-panel-body'
-
-function clampWidth(width: number): number {
-  return Math.round(Math.min(Math.max(width, MIN_WIDTH_PX), MAX_WIDTH_PX))
-}
 
 /** The width someone dragged it to, or null for the default. */
 function readWidth(): number | null {
   try {
-    const stored = Number(window.localStorage.getItem(WIDTH_KEY))
-    return Number.isFinite(stored) && stored >= MIN_WIDTH_PX ? clampWidth(stored) : null
+    return storedWidth(window.localStorage.getItem(WIDTH_KEY), window.localStorage.getItem(EARLIER_WIDTH_KEY))
   } catch {
     return null
   }
@@ -33,6 +27,8 @@ function readWidth(): number | null {
 
 function writeWidth(width: number | null): void {
   try {
+    // From the first drag or reset on, the current key alone says the width.
+    window.localStorage.removeItem(EARLIER_WIDTH_KEY)
     if (width === null) window.localStorage.removeItem(WIDTH_KEY)
     else window.localStorage.setItem(WIDTH_KEY, String(width))
   } catch {
@@ -57,6 +53,8 @@ type Props = {
   menuRoot: HTMLElement | null
   /** It is sliding out: drawn, but not clicked. */
   leaving?: boolean
+  /** It lies over the pane beside it (a file is open there) instead of taking room as a card of its own. */
+  floating?: boolean
   /** Opens a surface: the one already open comes forward, and a terminal is a new one each time. */
   onOpen: (kind: SurfaceKind) => void
   /** Brings a tab to the front; `by` says whether it was clicked or reached with the arrow keys. */
@@ -123,7 +121,7 @@ function SurfacePicker({ offered, onOpen }: { offered: readonly SurfaceKind[]; o
  * a close; the others their icon alone, so several fit. `+` opens another surface, a right-click on a tab closes it or
  * the others (and pins a terminal to the bottom), and with no tab open the panel offers the surfaces instead.
  */
-export function SidePanel({ tabs, active, offered, nameOf, menuRoot, leaving = false, onOpen, onShow, onClose, onCloseOthers, onPin, onClosePanel, children }: Props) {
+export function SidePanel({ tabs, active, offered, nameOf, menuRoot, leaving = false, floating = false, onOpen, onShow, onClose, onCloseOthers, onPin, onClosePanel, children }: Props) {
   const [dragged, setDragged] = useState(readWidth)
   const [menu, setMenu] = useState<{ tab: PanelTab; at: { x: number; y: number } } | null>(null)
   const width = dragged ?? DEFAULT_WIDTH_PX
@@ -172,7 +170,7 @@ export function SidePanel({ tabs, active, offered, nameOf, menuRoot, leaving = f
 
   return (
     <aside
-      className={`mx-inspect${leaving ? ' is-leaving' : ''}`}
+      className={`mx-inspect${leaving ? ' is-leaving' : ''}${floating ? ' is-floating' : ''}`}
       style={{ width: `min(${String(width)}px, var(--inspect-max))` }}
       aria-label="Side panel"
       inert={leaving}

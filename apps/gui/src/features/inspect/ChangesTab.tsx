@@ -1,11 +1,11 @@
-import { useState } from 'react'
+import { useState, type MouseEvent } from 'react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { repoDiff, repoDiffRange, repoSnapshots, repoStatus, type RepoDiff } from './api'
 import { changeKind } from './changeKind'
 import { ChangesBar } from './ChangesBar'
 import { CommitBar, type ChangeActions } from './CommitBar'
-import { PatchView, type PatchComments, type SentComment } from './PatchView'
+import { type FileActions, useFileMenu } from './fileMenu'
 import { RepoError } from './RepoError'
 import { turnRange, type MissingSnapshot, type SnapshotRange, type TurnSpan } from './turnRange'
 import { messageOf, useRepoQuery } from './useRepoQuery'
@@ -17,11 +17,6 @@ type ChangedFile = RepoDiff['files'][number]
 function splitPath(path: string): { folder: string; name: string } {
   const cut = path.lastIndexOf('/') + 1
   return { folder: path.slice(0, cut), name: path.slice(cut) }
-}
-
-function commentHint(count: number): string {
-  if (count === 0) return 'Click a line to comment'
-  return count === 1 ? '1 comment' : `${String(count)} comments`
 }
 
 /** A turn whose changes are asked for instead of the whole working tree; `turn` is null when its times are unknown. */
@@ -46,9 +41,9 @@ function useScopedDiff(term: number, scope: TurnScope | undefined, machine: numb
     range ? false : CHANGES_REFRESH_MS,
   )
   const waiting = turn !== null && (snapshots.isPending || snapshots.isFetching)
-  if (scope === undefined || waiting || range !== null) return { query, waiting, shown: range === null ? 'tree' as const : 'turn' as const, why: null }
+  if (scope === undefined || waiting || range !== null) return { query, waiting, range, shown: range === null ? 'tree' as const : 'turn' as const, why: null }
   const why = local ? fallbackReason(turn, snapshots.isError ? snapshots.error : null, picked) : "a turn's changes are only read on this computer"
-  return { query, waiting, shown: 'tree' as const, why }
+  return { query, waiting, range, shown: 'tree' as const, why }
 }
 
 /** Why a turn's changes row shows the whole working tree instead. */
@@ -74,7 +69,8 @@ type Props = {
   machine?: number
   /** The branch the checkout is on, shown above the files. */
   branch?: string
-  comments?: Omit<PatchComments, 'path' | 'sent' | 'onSent'>
+  /** Opens a changed file's diff in the file pane, and the file's right-click menu. */
+  files: FileActions
   /** The commit bar: Commit, the remote button and Create PR, run where the checkout is. */
   actions?: ChangeActions
   /** A turn's changes row opened the tab: show what that turn changed. */
@@ -82,13 +78,13 @@ type Props = {
   onNotice: (text: string) => void
 }
 
-function FileRow({ file, current, ticked, onTick, onPick }: { file: ChangedFile; current: boolean; ticked: boolean | null; onTick: () => void; onPick: () => void }) {
+function FileRow({ file, current, ticked, onTick, onPick, onMenu }: { file: ChangedFile; current: boolean; ticked: boolean | null; onTick: () => void; onPick: () => void; onMenu: (event: MouseEvent) => void }) {
   const kind = changeKind(file.patch)
   const { folder, name } = splitPath(file.path)
   return (
     <div className="mx-changes-line">
       {ticked !== null && <input type="checkbox" className="mx-changes-tick" aria-label={`Commit ${file.path}`} checked={ticked} onChange={onTick} />}
-    <button type="button" className={`mx-changes-row${current ? ' is-current' : ''}`} aria-current={current} title={file.path} onClick={onPick}>
+    <button type="button" className={`mx-changes-row${current ? ' is-current' : ''}`} aria-current={current ? 'true' : undefined} title={file.path} onClick={onPick} onContextMenu={onMenu}>
       <span className={`mx-changes-letter is-${kind.tone}`} title={kind.word}>{kind.letter}</span>
       <span className="mx-changes-name">
         <b>{name}</b>
@@ -103,29 +99,26 @@ function FileRow({ file, current, ticked, onTick, onPick }: { file: ChangedFile;
   )
 }
 
-/** The session's uncommitted changes: the files down the left with the commit under them, the picked file's diff beside. */
-export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, actions: treeActions, scope, onNotice }: Props) {
+/** The session's uncommitted changes: the changed files with the commit under them. A file's diff opens in the file pane. */
+export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, files: fileActions, actions: treeActions, scope, onNotice }: Props) {
   // Each machine numbers its own panes, so another machine's answers are kept under its number too.
   const elsewhere = machine === LOCAL_MACHINE ? [] : [machine]
-  const { query, waiting, shown, why } = useScopedDiff(term, scope, machine)
+  const { query, waiting, range, shown, why } = useScopedDiff(term, scope, machine)
+  const menu = useFileMenu('changes', fileActions)
   // A commit takes the working tree, so it is not offered beside one turn's changes.
   const actions = shown === 'turn' ? undefined : treeActions
   // How far the branch is from its upstream, for the remote button; without it (an error, no upstream) the branch reads as level.
   const status = useRepoQuery(term, ['status', ...elsewhere], () => repoStatus(term, machine), CHANGES_REFRESH_MS)
-  const [picked, setPicked] = useState<string | null>(null)
   // Files unticked, so left out of the commit; every changed file starts ticked.
   const [skipped, setSkipped] = useState<ReadonlySet<string>>(() => new Set())
-  // Comments sent in this look at the changes, by file: a comment stays pinned on its line while other files are read.
-  const [sent, setSent] = useState<ReadonlyMap<string, readonly SentComment[]>>(() => new Map())
   if (waiting || query.isPending) return <SkeletonLines label="Reading changes" lines={5} className="mx-inspect-note" />
   if (query.isError) return <RepoError error={query.error} tab="changes" onRetry={() => { void query.refetch() }} retrying={query.isFetching} />
   const { files } = query.data
   const chosen = files.filter((file) => !skipped.has(file.path))
   const everything = chosen.length === files.length
   const tick = (path: string) => { setSkipped((current) => { const next = new Set(current); if (!next.delete(path)) next.add(path); return next }) }
-  const selected = files.find((file) => file.path === picked) ?? files[0]
-  const kind = selected ? changeKind(selected.patch) : null
-  const where = selected ? splitPath(selected.path) : null
+  // A file of one turn's changes opens as that turn's diff, so the pane shows what the row counted.
+  const how = range === null ? {} : { range }
   const ticked = actions ? (everything ? 'all' : chosen.length === 0 ? 'none' : 'some') : null
   const tickAll = () => { setSkipped(everything ? new Set(files.map((file) => file.path)) : new Set()) }
   const reread = () => { void query.refetch(); void status.refetch() }
@@ -133,9 +126,8 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, ac
     <div className="mx-changes">
       <ChangesBar term={term} machine={machine} branch={status.data?.branch ?? branch} ahead={status.data?.ahead ?? 0} behind={status.data?.behind ?? 0} actions={treeActions} onChanged={reread} onNotice={onNotice} />
       {scope && <ScopeLine shown={shown} why={why} onAllChanges={scope.onAllChanges} />}
-      <div className="mx-changes-split">
-      <div className="mx-changes-side">
-        {files.length > 0 && (
+      {files.length > 0 ? (
+        <>
           <div className="mx-changes-all">
             {ticked !== null && <input type="checkbox" className="mx-changes-tick" aria-label="Commit every changed file" checked={ticked === 'all'} ref={(box) => { if (box) box.indeterminate = ticked === 'some' }} onChange={tickAll} />}
             <span className="mx-changes-all-count">{files.length} changed</span>
@@ -144,36 +136,29 @@ export function ChangesTab({ term, machine = LOCAL_MACHINE, branch, comments, ac
               {query.data.deletions > 0 && <span className="is-remove">−{query.data.deletions}</span>}
             </span>
           </div>
-        )}
-        <ul className="mx-changes-list" aria-label="Changed files">
-          {files.map((file) => (
-            <li key={file.path}><FileRow file={file} current={file.path === selected?.path} ticked={actions ? !skipped.has(file.path) : null} onTick={() => { tick(file.path) }} onPick={() => { setPicked(file.path) }} /></li>
-          ))}
-          {query.data.truncated && <li className="mx-inspect-note">Showing {files.length} of {query.data.total_files} files.</li>}
-        </ul>
-      </div>
-      <div className="mx-changes-main">
-        {selected && kind && where ? (
-          <>
-            <header className="mx-changes-file">
-              <span className="mx-changes-path" title={selected.path}>{where.folder}<b>{where.name}</b></span>
-              <span className={`mx-changes-chip is-${kind.tone}`}>{kind.word}</span>
-              <span className="mx-changes-count">
-                {selected.additions > 0 && <span className="is-add">+{selected.additions}</span>}
-                {selected.deletions > 0 && <span className="is-remove">−{selected.deletions}</span>}
-              </span>
-              {comments && !selected.binary && <span className="mx-changes-hint">{commentHint(sent.get(selected.path)?.length ?? 0)}</span>}
-            </header>
-            {selected.binary ? <p className="mx-inspect-note">Binary file; no diff to show.</p> : <PatchView key={selected.path} patch={selected.patch} {...(comments ? { comments: { ...comments, path: selected.path, sent: sent.get(selected.path) ?? [], onSent: (comment) => { setSent((current) => new Map(current).set(selected.path, [...(current.get(selected.path) ?? []), comment])) } } } : {})} />}
-          </>
-        ) : (
-          <div className="mx-changes-none">
-            <strong>{shown === 'turn' ? 'This turn left the files as they were' : 'No changes yet'}</strong>
-            <span>Files the agent edits show up here with their diffs. You can comment on any line.</span>
-          </div>
-        )}
-      </div>
-      </div>
+          <ul className="mx-changes-list" aria-label="Changed files">
+            {files.map((file) => (
+              <li key={file.path}>
+                <FileRow
+                  file={file}
+                  current={file.path === fileActions.openPath}
+                  ticked={actions ? !skipped.has(file.path) : null}
+                  onTick={() => { tick(file.path) }}
+                  onPick={() => { fileActions.onOpen(file.path, 'changes', how) }}
+                  onMenu={(event) => { menu.open(event, { path: file.path, changed: true, deleted: changeKind(file.patch).letter === 'D', range: range ?? undefined }) }}
+                />
+              </li>
+            ))}
+            {query.data.truncated && <li className="mx-inspect-note">Showing {files.length} of {query.data.total_files} files.</li>}
+          </ul>
+        </>
+      ) : (
+        <div className="mx-changes-none">
+          <strong>{shown === 'turn' ? 'This turn left the files as they were' : 'No changes yet'}</strong>
+          <span>Files the agent edits show up here. Pick one to read its diff beside the chat.</span>
+        </div>
+      )}
+      {menu.popup}
       {actions && <CommitBar {...actions} files={files.length} chosen={chosen} everything={everything} onChanged={reread} onNotice={onNotice} />}
     </div>
   )
