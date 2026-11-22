@@ -32,7 +32,7 @@ function renderPanel(view: RepoSurfaceKind, files: FileActions = fileActions()) 
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <RepoSurface term={5} kind={view} lookAt={null} files={files} onNotice={onNotice} />
+      <RepoSurface term={5} kind={view} files={files} onNotice={onNotice} />
     </QueryClientProvider>,
   )
   return { onNotice, files }
@@ -43,7 +43,7 @@ function renderOnBuild(view: RepoSurfaceKind, files: FileActions = fileActions({
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
-      <RepoSurface term={5} machine={1} kind={view} lookAt={null} files={files} onNotice={vi.fn()} />
+      <RepoSurface term={5} machine={1} kind={view} files={files} onNotice={vi.fn()} />
     </QueryClientProvider>,
   )
   return { files }
@@ -189,7 +189,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} kind="changes" files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('checkbox', { name: 'Commit b.txt' }))
@@ -215,7 +215,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={onNotice} />
+        <RepoSurface term={5} machine={1} kind="changes" files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Pull 2' }))
@@ -234,7 +234,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} machine={1} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={vi.fn()} />
+        <RepoSurface term={5} machine={1} kind="changes" files={fileActions()} changeActions={{ folder: '', machine: 1, term: 5, suggested: '' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Push 1' }))
@@ -270,7 +270,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onNotice={onNotice} />
+        <RepoSurface term={5} kind="changes" files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'Add refunds' }} onNotice={onNotice} />
       </QueryClientProvider>,
     )
     expect(await screen.findByLabelText('Commit message')).toHaveValue('Add refunds')
@@ -293,7 +293,7 @@ describe('the side panel’s Files and Changes', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={client}>
-        <RepoSurface term={5} kind="changes" lookAt={null} files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onNotice={vi.fn()} />
+        <RepoSurface term={5} kind="changes" files={fileActions()} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} onNotice={vi.fn()} />
       </QueryClientProvider>,
     )
     fireEvent.click(await screen.findByRole('button', { name: 'Commit 1 file' }))
@@ -376,7 +376,7 @@ describe('the Changes surface', () => {
       const files = fileActions()
       const panel = (shown: Turn) => (
         <QueryClientProvider client={client}>
-          <RepoSurface term={5} kind="changes" lookAt={null} files={files} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onNotice={vi.fn()} />
+          <RepoSurface term={5} kind="changes" files={files} changeActions={{ folder: '/home/me/app', machine: 0, suggested: 'x' }} turnScope={{ turn: shown, onAllChanges }} onNotice={vi.fn()} />
         </QueryClientProvider>
       )
       const { rerender } = render(panel(turn))

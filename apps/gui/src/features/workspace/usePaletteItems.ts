@@ -18,9 +18,7 @@ import { SETUP_AGENTS } from '@/features/welcome/setup'
 import { ADD_MACHINE, type OpenProjectRequest } from './useOpenProject'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
-export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
-  /** Opens the focused session's README, beside the chat or in the Files panel. */
-  openReadme: (place: 'beside' | 'files') => void
+export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
   /** Asks for a file to pull from the machine of a session. */
   setGetFileId: (id: string) => void
   paletteOpen: boolean
@@ -93,8 +91,9 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
       // Everything here acts where the palette was opened. A loose shell is a Terminal view door only, and opens in the
       // folder of the session in front; in Chat view a terminal belongs to the session, in its side panel.
+      // In the Chat view a session's terminal is its own, on the Terminal key and in the side panel, not a palette action.
       ...(chatView
-        ? (focusedSession ? [action('show-terminal', 'Show the terminal', () => { runShortcut('terminal') }, keys('terminal'))] : [])
+        ? []
         : [
             action('new-terminal', 'New terminal', () => { newTerminal(focusedMachineNumber, focusedSession?.cwd) }, keys('new-terminal')),
             ...(focusedSession && !isShell(focusedSession) ? [action('open-terminal', 'New terminal for this session', () => { addAgentTerminal(focusedSession.id) })] : []),
@@ -105,7 +104,6 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
       ]),
       ...(focusedSession && focusedSession.machineName !== null ? [action('get-file', `Get a file from ${machineLabel(focusedSession.machineName)}…`, () => { setGetFileId(focusedSession.id) })] : []),
       action('sidebar-side', preferences.sidebarSide === 'left' ? 'Move sidebar to the right' : 'Move sidebar to the left', () => { setPreferences((current) => ({ ...current, sidebarSide: current.sidebarSide === 'left' ? 'right' : 'left' })) }),
-      ...(focusedSession && focusedSession.machineName === null ? [action('open-readme', 'Open README', () => { openReadme('files') }), action('open-readme-beside', 'Open README beside the chat', () => { openReadme('beside') })] : []),
       // Splits are the Terminal view's, of the pane in front.
       ...(chatView || !focusedSession ? [] : [
         action('split-right', 'Split right', () => { split(null, 'right') }, keys('split-right')),
@@ -134,7 +132,7 @@ export function usePaletteItems({ openReadme, setGetFileId, paletteOpen, platfor
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [setGetFileId, paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject, openReadme])
+  }, [setGetFileId, paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)

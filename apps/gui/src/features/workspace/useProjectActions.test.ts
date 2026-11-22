@@ -30,10 +30,7 @@ function windowWith(open: OpenWorktreeFor | null, sessions: readonly SessionView
     openedProjects: { machines: groupByProject(sessions, [SHOP]).machines, close: vi.fn() },
     setOpenWorktreeFor: vi.fn(),
     setProjectWorktreeFrom: vi.fn(),
-    setSettingsSection: vi.fn(),
-    setNewChatMachine: vi.fn(),
-    setNewChatSeed: vi.fn(),
-    setNewChatOpen: vi.fn(),
+    openDraft: vi.fn(),
     showSessionById: vi.fn(),
   }
   workspace.current = parts
@@ -47,10 +44,7 @@ describe('Open worktree in the window', () => {
   it('starts the new-chat draft in the worktree picked, on the project\'s machine, and closes', () => {
     const parts = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
     renderHook(() => useOpenWorktreeDialog()).result.current?.onStart(WORKTREE)
-    expect(parts.setNewChatMachine).toHaveBeenCalledWith(0)
-    expect(parts.setNewChatSeed).toHaveBeenCalledWith({ folder: WORKTREE, message: '' })
-    expect(parts.setNewChatOpen).toHaveBeenCalledWith(true)
-    expect(parts.setSettingsSection).toHaveBeenCalledWith(null)
+    expect(parts.openDraft).toHaveBeenCalledWith(0, { folder: WORKTREE, message: '' })
     expect(parts.setOpenWorktreeFor).toHaveBeenCalledWith(null)
   })
 
@@ -63,7 +57,7 @@ describe('Open worktree in the window', () => {
     const empty = windowWith({ machine: 0, project: SHOP, name: 'shop' }, [])
     renderHook(() => useOpenWorktreeDialog()).result.current?.onNewWorktree?.()
     expect(empty.setProjectWorktreeFrom).not.toHaveBeenCalled()
-    expect(empty.setNewChatSeed).toHaveBeenCalledWith({ folder: SHOP.folder, message: '', worktree: true })
+    expect(empty.openDraft).toHaveBeenCalledWith(0, { folder: SHOP.folder, message: '', worktree: true })
     expect(empty.setOpenWorktreeFor).toHaveBeenCalledWith(null)
   })
 })
@@ -75,11 +69,9 @@ describe('a project heading\'s starts in the window', () => {
     const { result } = renderHook(() => useProjectActions())
     result.current(vi.fn()).onNewWorktree(0, SHOP, main)
     expect(parts.setProjectWorktreeFrom).toHaveBeenCalledWith(main)
-    expect(parts.setNewChatOpen).not.toHaveBeenCalled()
+    expect(parts.openDraft).not.toHaveBeenCalled()
     result.current(vi.fn()).onNewWorktree(0, SHOP, null)
-    expect(parts.setNewChatMachine).toHaveBeenCalledWith(0)
-    expect(parts.setNewChatSeed).toHaveBeenCalledWith({ folder: SHOP.folder, message: '', worktree: true })
-    expect(parts.setNewChatOpen).toHaveBeenCalledWith(true)
+    expect(parts.openDraft).toHaveBeenCalledWith(0, { folder: SHOP.folder, message: '', worktree: true })
   })
 
   it('starts a terminal in the project\'s folder in the Terminal view, and offers none in the Chat view', () => {

@@ -28,15 +28,15 @@ export function useOpenWorktreeState() {
 /** What a draft opened from a project starts with, beyond its folder. */
 type DraftStart = { worktree?: boolean; agent?: ChatAgent }
 
-/** Opens the new-chat draft on `machine` with `folder` filled in, as every start from a project heading does. */
+/**
+ * Starts a session on `machine` in `folder`, as every start from a project heading does: the new-chat draft in the Chat
+ * view, the agent's terminal at once in the Terminal view (`openDraft`).
+ */
 function useDraftIn() {
-  const { setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen } = useWorkspace()
+  const { openDraft } = useWorkspace()
   return useCallback((machine: number, folder: string, { worktree = false, agent }: DraftStart = {}) => {
-    setSettingsSection(null)
-    setNewChatMachine(machine)
-    setNewChatSeed({ folder, message: '', ...(worktree ? { worktree } : {}), ...(agent === undefined ? {} : { agent }) })
-    setNewChatOpen(true)
-  }, [setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen])
+    openDraft(machine, { folder, message: '', ...(worktree ? { worktree } : {}), ...(agent === undefined ? {} : { agent }) })
+  }, [openDraft])
 }
 
 /**

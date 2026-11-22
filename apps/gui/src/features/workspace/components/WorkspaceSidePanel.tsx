@@ -44,7 +44,7 @@ function NeedsTerminal({ kind, session, canStart, onStart }: { kind: RepoSurface
  * a file is open in the file pane, a float over that pane's right.
  */
 export function WorkspaceSidePanel() {
-  const { inspectOpen, inspectRefusal, focusMode, inspectTerm, focusedSession, lookAt, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument, copyText, tab: arrangement, narrow, panelOf, changePanel, pinTerminal, ownsTerminals, canStart, addAgentTerminal, closeAgentTerminals, agentTerminals, setPanelFocused, root } = useWorkspace()
+  const { inspectOpen, inspectRefusal, focusMode, inspectTerm, focusedSession, turnDiff, setTurnDiff, setInspectOpen, flash, openDocument, copyText, tab: arrangement, narrow, panelOf, changePanel, pinTerminal, ownsTerminals, canStart, addAgentTerminal, closeAgentTerminals, agentTerminals, setPanelFocused, root } = useWorkspace()
   const presence = usePresence(inspectOpen, PANEL_EXIT_MS, useReducedMotion())
   const discardFile = useDiscardFile()
   // Files reads this computer's checkouts, so nothing is read ahead for a session of another machine.
@@ -108,7 +108,6 @@ export function WorkspaceSidePanel() {
             term={inspectTerm}
             {...(session.branch ? { branch: session.branch } : {})}
             machine={session.machine}
-            lookAt={lookAt}
             files={files}
             {...(session.machineName === null && session.repoRoot !== null ? { changeActions: { folder: session.repoRoot, machine: session.machine, suggested: suggestedCommitMessage(session) } } : {})}
             {...(turnDiff?.sessionId === session.id ? { turnScope: { turn: turnDiff.turn, onAllChanges: () => { setTurnDiff(null) } } } : {})}

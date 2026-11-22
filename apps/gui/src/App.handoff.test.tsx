@@ -171,6 +171,7 @@ describe('desktop terminal multiplexer', () => {
   })
 
   it('opens the draft in the picked project with the agent a number key names, from the empty state', async () => {
+    setSettings({ openSessionsIn: 'chat' })
     window.localStorage.setItem('maiker.gui.opened-projects.v1', JSON.stringify({ 'this computer': [`${HOME}/shop`] }))
     daemon.agentsInstalled.mockResolvedValue(['claude', 'codex'])
     const user = userEvent.setup()
@@ -193,6 +194,21 @@ describe('desktop terminal multiplexer', () => {
     expect(within(draft).getByRole('textbox', { name: `Message ${picked}` })).toBeInTheDocument()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.startChatSession).not.toHaveBeenCalled()
+  })
+
+  it('starts the picked agent at once in the Terminal view, with no chat draft, from the empty state', async () => {
+    setSettings({ openSessionsIn: 'terminal' })
+    window.localStorage.setItem('maiker.gui.opened-projects.v1', JSON.stringify({ 'this computer': [`${HOME}/shop`] }))
+    daemon.agentsInstalled.mockResolvedValue(['claude', 'codex'])
+    const user = userEvent.setup()
+    renderDesktopApp()
+    const empty = await screen.findByRole('region', { name: 'Nothing running' })
+    await within(empty).findAllByRole('button', { name: /^Start .+ in shop$/ })
+
+    await user.keyboard('1')
+
+    await waitFor(() => { expect(daemon.startAgentSession).toHaveBeenCalled() })
+    expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
   })
 
   it('starts a terminal in a project\'s folder from the project\'s menu in the Terminal view', async () => {
@@ -1249,7 +1265,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(await screen.findByRole('dialog', { name: /Rename/ })).toBeInTheDocument()
   })
 
-  it('opens a terminal in the chat folder from the command palette, for an agent chat in the Chat view', async () => {
+  it('offers no terminal in the command palette in the Chat view, and opens the chat\'s own on the Terminal key', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([claude(2, `${HOME}/a`)])
@@ -1258,9 +1274,10 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
 
     await user.click(screen.getByRole('button', { name: /Commands/ }))
     const palette = await screen.findByRole('dialog', { name: 'Command palette' })
-    // A loose shell is the Terminal view's; in Chat view the palette offers only the session's own terminal.
-    expect(within(palette).queryByRole('option', { name: /^New terminal/ })).not.toBeInTheDocument()
-    await user.type(within(palette).getByRole('combobox'), 'Show the terminal{Enter}')
+    // A loose shell is the Terminal view's; in the Chat view a chat's terminal is its own, on its key.
+    expect(within(palette).queryByRole('option', { name: /terminal/i })).not.toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await user.keyboard('{Control>}`{/Control}')
 
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })

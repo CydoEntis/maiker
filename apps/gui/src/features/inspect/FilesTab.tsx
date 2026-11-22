@@ -12,9 +12,6 @@ import { joinPath } from './format'
 import { RepoError } from './RepoError'
 import { useRepoQuery } from './useRepoQuery'
 
-/** A file to show in the tree, with the folders above it opened; a new `key` asks again for the same file. */
-export type LookAt = { path: string; key: number }
-
 function baseName(path: string): string {
   return path.slice(path.lastIndexOf('/') + 1)
 }
@@ -45,27 +42,14 @@ function Bars({ label, count, className }: { label: string; count: number; class
   )
 }
 
-/** Each folder on the way to a path, so opening a file from a link shows where it is. */
-function ancestorsOf(path: string): string[] {
-  const parts = path.split('/').slice(0, -1)
-  return parts.map((_, index) => parts.slice(0, index + 1).join('/'))
-}
-
 /**
  * The repository's files: the changed ones listed first, then the tree (folders open in place, each read when first
  * opened). A click opens the file in the file pane; the panel itself shows no file.
  */
-export function FilesTab({ term, machine = LOCAL_MACHINE, lookAt, files, onReferences }: { term: number; /** The machine the session is on, whose daemon lists the folders. */ machine?: number; lookAt: LookAt | null; files: FileActions; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
+export function FilesTab({ term, machine = LOCAL_MACHINE, files, onReferences }: { term: number; /** The machine the session is on, whose daemon lists the folders. */ machine?: number; files: FileActions; /** Opens the project's references, the first entry of the tree. */ onReferences?: () => void }) {
   const machineKey = machine === LOCAL_MACHINE ? [] : [machine]
   const [open, setOpen] = useState<ReadonlySet<string>>(new Set())
-  const [seen, setSeen] = useState<number | null>(null)
   const menu = useFileMenu('files', files)
-
-  // A link clicked in the terminal shows where its file is: adjusting state while rendering, not in an effect.
-  if (lookAt && lookAt.key !== seen) {
-    setSeen(lookAt.key)
-    setOpen((current) => new Set([...current, ...ancestorsOf(lookAt.path)]))
-  }
 
   // The top folder is read by the tree too, under the same key, so this costs no second read.
   const top = useRepoQuery(term, ['tree', '', ...machineKey], () => repoTree(term, null, machine))

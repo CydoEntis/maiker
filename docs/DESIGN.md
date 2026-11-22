@@ -507,7 +507,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`aria-pressed`) while the panel is on screen, names its key in its tooltip (`inspect` in the binding table) and is
   disabled while no session is in focus. There are no Changes, Files or Terminal buttons: the surfaces are tabs of
   the side panel. **Show changes** and **Show files** are in the command palette, and a chat's terminal is on its key
-  (`terminal` in the binding table) and in the palette (**Show the terminal**).
+  (`terminal` in the binding table).
 - **The frame** (`frame.css`; the gaps are `--frame-edge` 8px, `--frame-top` 4px and `--frame-gap` 6px in
   `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
   (`--r-panel`) and the faintest ink edge (`--panel-line`, the ink at 5%; `material.css`), 8px from the window's sides
@@ -740,7 +740,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   quiet text buttons, **Open a project** with its key from the binding table and **Add a remote machine** (the palette's
   New machine level), and the fine print "Sessions keep running when you close this window." While sessions exist and
   none is open the same screen is headed **No session open**, never "Nothing running".
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
+- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`). Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
@@ -1203,8 +1203,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   run of the typed text ranks above letters that merely appear in order; ↑ ↓ move, ↵ runs, Esc closes. **An action is
   offered only where it can act**: the side-panel actions (Show the side panel, changes, files, pull requests) need a
   session in front; splits are the Terminal view's, with a pane in front; a loose **New terminal** (in the folder of the
-  session in front) is the Terminal view's, and in the Chat view the palette offers **Show the terminal**, the
-  session's own. The search is the card's header, with no ring of its own for the rounded frame to cut. Three or more
+  session in front) is the Terminal view's, and in the Chat view the palette offers no terminal: a session's own is
+  on the Terminal key and in the side panel. The search is the card's header, with no ring of its own for the rounded frame to cut. Three or more
   typed characters also search what this computer's sessions printed recently (`search_panes`, the same search as
   Find's *All sessions*; a session on another machine is not searched), 300 ms after typing pauses, one search at a
   time (a query typed while one runs waits, and only the newest is sent): up to 10 hits, one per session (its newest
