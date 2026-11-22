@@ -19,7 +19,6 @@ import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
 import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleProgress, sampleSessions } from './machinesSample'
-import { AddMachineDialog } from '@/features/workspace/components/AddMachineDialog'
 import { Onboarding } from '@/features/welcome/Onboarding'
 import { galleryParams } from './galleryParams'
 
@@ -128,18 +127,20 @@ function PaletteShown({ what }: { what: string }) {
   return <OpenProjectPalette mode={what === 'open-pick' ? 'pick' : 'open'} start={PALETTE_STARTS[what] ?? { kind: 'sources' }} machines={PALETTE_MACHINES} localOs="linux" home="/home/dev" opened={[{ machineName: null, folder: '/home/dev/acme-store' }]} onTake={() => NEVER()} onClose={SAME} services={services} />
 }
 
-/** For the Add a remote machine states: types an address or clicks a host of the SSH config once the dialog is up, as a person would. */
+/** For the palette's New machine states: types an address and presses Enter, or clicks a host of the SSH config, once the palette is up, as a person would. */
 function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
-    const click = (name: string) => { document.querySelector<HTMLButtonElement>(`button[aria-label="Add ${name}"]`)?.click() }
+    const click = (name: string) => { Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent.startsWith(name))?.click() }
     const type = (text: string) => {
-      const field = document.querySelector<HTMLInputElement>('input[aria-label="Address"]')
+      const field = document.querySelector<HTMLInputElement>('input[role="combobox"]')
       if (field === null) return
       typeInto(field, text)
-      field.form?.requestSubmit()
+      // Enter is read against what the field held when it was last drawn, so it waits for the text to land.
+      window.setTimeout(() => { field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) }, FIELD_OPEN_MS)
     }
     const timer = window.setTimeout(() => {
       if (what === 'add-error') type('dev@10.0.4')
+      if (what === 'add-done') type('ubuntu@40.160.103.45')
       if (what === 'add-no-answer') type('cydo@10.9.9.9')
       if (what === 'add-busy') click('homelab')
       if (what === 'add-key') click('server-15')
@@ -204,7 +205,7 @@ function Show({ what }: { what: string }): ReactNode {
   }
   if (what === 'open' || what.startsWith('open-')) return <PaletteShown what={what} />
   if (what === 'add' || what.startsWith('add-')) {
-    return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} /></ScriptedAdd>
+    return <ScriptedAdd what={what}><OpenProjectPalette mode="open" start={{ kind: 'machine' }} machines={PALETTE_MACHINES} localOs="linux" home="/home/dev" opened={[]} onTake={() => NEVER()} onClose={SAME} adding={SETTINGS_MACHINES} /></ScriptedAdd>
   }
   if (what.startsWith('onboarding')) return <OnboardingShown step={Number(what.split('-')[1] ?? 0)} />
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />

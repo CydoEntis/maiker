@@ -7,14 +7,14 @@ import { useInstalledAgents } from '../model/newChatHost'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
-import { PROJECT_FROM_SOURCES, projectRequestFor } from '../useOpenProject'
+import { ADD_MACHINE, PROJECT_FROM_SOURCES, projectRequestFor } from '../useOpenProject'
 import { useProjectActions } from '../useProjectActions'
 
 const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
   const installedAgents = useInstalledAgents()
@@ -56,7 +56,7 @@ export function WorkspaceSidebars() {
         setLiveSidebarWidth(null)
       }}
       onHoverSession={warmChat}
-      onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
+      onAddMachine={() => { afterPick(); setOpenProject(ADD_MACHINE) }}
       onOpenProject={(machine) => { afterPick(); setOpenProject(machine === null ? PROJECT_FROM_SOURCES : projectRequestFor(machine)) }}
       projectActions={projectActionsFor(afterPick)}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}

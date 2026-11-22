@@ -30,6 +30,7 @@ export type Level =
   | { kind: 'browse'; machine: number; path: string }
   | { kind: 'url' }
   | { kind: 'github' }
+  | { kind: 'machine' }
 
 /** `open` brings a project in and offers every source; `pick` only answers with a folder, so it only browses. */
 export type PaletteMode = 'open' | 'pick'
@@ -39,8 +40,9 @@ export type RowIcon = 'repo' | 'folder' | 'up' | 'monitor' | 'server' | 'link' |
 export type RowAction =
   | { do: 'open'; machine: number; folder: string }
   | { do: 'browse'; machine: number; path: string }
-  | { do: 'level'; level: 'url' | 'github' }
-  | { do: 'add-machine' }
+  | { do: 'level'; level: 'url' | 'github' | 'machine' }
+  /** Adds a remote machine: the host of the SSH config named, or what is typed when `alias` is null. */
+  | { do: 'add'; alias: string | null }
   | { do: 'clone'; label: string; address: string }
   | { do: 'create-folder'; name: string }
   | { do: 'sign-in' }
@@ -124,8 +126,11 @@ const matches = (query: string, ...words: readonly string[]): boolean => {
   return needle === '' || words.some((word) => word.toLowerCase().includes(needle))
 }
 
-/** The first level: recent projects, a browse row per machine, the two ways to clone, and adding a machine. Typing filters. */
-export function sourceRows({ mode, recent, machines, query }: { mode: PaletteMode; recent: readonly RecentProject[]; machines: readonly PaletteMachine[]; query: string }): Row[] {
+/**
+ * The first level: recent projects, a browse row per machine, the two ways to clone, and adding a machine (left out
+ * where the palette was given no way to add one). Typing filters.
+ */
+export function sourceRows({ mode, recent, machines, query, canAddMachine = true }: { mode: PaletteMode; recent: readonly RecentProject[]; machines: readonly PaletteMachine[]; query: string; canAddMachine?: boolean }): Row[] {
   const browse = machines.filter((machine) => matches(query, machine.label, 'browse folders')).map((machine) => row({
     id: `browse:${String(machine.machine)}`,
     group: 'Browse folders on',
@@ -148,7 +153,7 @@ export function sourceRows({ mode, recent, machines, query }: { mode: PaletteMod
     matches(query, 'Git URL', 'clone git url link') ? [row({ id: 'clone:url', group: 'Clone', title: 'Git URL', detail: 'Clone from a link', icon: 'link', action: { do: 'level', level: 'url' } })] : [],
     matches(query, 'GitHub repository', 'clone github repo') ? [row({ id: 'clone:github', group: 'Clone', title: 'GitHub repository', detail: 'Pick from your repositories', icon: 'github', action: { do: 'level', level: 'github' } })] : [],
   ].flat()
-  const add = matches(query, 'Add a remote machine') ? [row({ id: 'add-machine', title: 'Add a remote machine…', icon: 'plus', quiet: true, action: { do: 'add-machine' } })] : []
+  const add = canAddMachine && matches(query, 'Add a remote machine') ? [row({ id: 'add-machine', title: 'Add a remote machine…', icon: 'plus', quiet: true, action: { do: 'level', level: 'machine' } })] : []
   return [...recents, ...browse, ...clone, ...add]
 }
 
@@ -252,6 +257,9 @@ export function crumbOf(path: string, home: string | null): string {
 
 // ---- clone
 
+/** Makes a row of another level's model (New machine), with the same defaults as the rows here. */
+export const rowOf = row
+
 /** The row that clones the repository a pasted address names. */
 export function cloneRow(repo: GitUrl, target: string, machineLabel: string): Row {
   return row({ id: `clone:${repo.address}`, title: `Clone ${repo.owner}/${repo.name}`, detail: `into ${target} on ${machineLabel}`, icon: 'link', action: { do: 'clone', label: `${repo.owner}/${repo.name}`, address: repo.address } })
@@ -339,5 +347,7 @@ export function hintsOf(level: Level['kind'], mode: PaletteMode, highlighted: Pi
     case 'url':
     case 'github':
       return [move, { keys: 'Enter', does: enter ?? 'Clone' }, { keys: '⌫', does: 'Back' }, close]
+    case 'machine':
+      return [{ keys: 'Enter', does: enter ?? 'Connect' }, { keys: '⌫', does: 'Back' }, close]
   }
 }

@@ -3,8 +3,10 @@ import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { errorMessage } from '@/lib/error-message'
 import { windowRoot } from '@/features/workspace/components/windowRoot'
 import { baseName, joinPath, type PickedFolder } from '@/features/workspace/model/folderPick'
+import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 import { BrowseLevel } from './BrowseLevel'
 import { GitHubLevel, UrlLevel } from './CloneLevels'
+import { MachineLevel } from './MachineLevel'
 import type { Status } from './PaletteBody'
 import { SourcesLevel } from './SourcesLevel'
 import { HOME_FOLDER, ignoresCase, nextOf, recentProjects, sameFolder, type Level, type MachineOs, type PaletteMachine, type PaletteMode, type RecentProject, type RowAction } from './openPalette'
@@ -13,8 +15,8 @@ import { DESKTOP_SERVICES, PaletteShellContext, type PaletteServices, type Palet
 import { useCloneProject } from './useCloneProject'
 import './open-palette.css'
 
-/** Where the palette opens: the list of sources, a folder of a machine, or one of the two ways to clone. */
-export type PaletteStart = { kind: 'sources' } | { kind: 'folder'; machine: number; folder?: string | undefined } | { kind: 'url' } | { kind: 'github' }
+/** Where the palette opens: the list of sources, a folder of a machine, one of the two ways to clone, or adding a remote machine. */
+export type PaletteStart = { kind: 'sources' } | { kind: 'folder'; machine: number; folder?: string | undefined } | { kind: 'url' } | { kind: 'github' } | { kind: 'machine' }
 
 type Props = {
   /** `open` brings a project in; `pick` only answers with a folder, so it lists the machines' folders and nothing else. */
@@ -32,7 +34,8 @@ type Props = {
    * a rejection keeps it open and its reason is shown.
    */
   onTake: (picked: PickedFolder) => Promise<void>
-  onAddMachine?: (() => void) | undefined
+  /** The host's calls for adding a remote machine; without them the palette offers no New machine level. */
+  adding?: MachinesInfo | undefined
   onClose: () => void
   services?: PaletteServices | undefined
 }
@@ -47,10 +50,10 @@ const levelOf = (start: PaletteStart, machines: readonly PaletteMachine[]): Leve
 
 /**
  * Open a project: the one keyboard palette for bringing a folder in from any machine. It lists where a project can come
- * from, browses folders the same way on every machine, and clones from a link or from GitHub. The frame is one size at
+ * from, browses folders the same way on every machine, clones from a link or from GitHub, and adds a remote machine. The frame is one size at
  * every level. Enter does what the highlighted row says, Backspace on an empty field goes back or up, Esc closes.
  */
-export function OpenProjectPalette({ mode, start, machines, localOs, home, opened, onTake, onAddMachine, onClose, services = DESKTOP_SERVICES }: Props) {
+export function OpenProjectPalette({ mode, start, machines, localOs, home, opened, onTake, adding, onClose, services = DESKTOP_SERVICES }: Props) {
   const [level, setLevel] = useState<Level>(() => levelOf(start, machines))
   const [homes, setHomes] = useState<Readonly<Record<number, string>>>({})
   const [taking, setTaking] = useState<Taking>(null)
@@ -104,7 +107,6 @@ export function OpenProjectPalette({ mode, start, machines, localOs, home, opene
     if (action.do === 'open') take(action.machine, action.folder)
     else if (action.do === 'browse') go({ kind: 'browse', machine: action.machine, path: action.path })
     else if (action.do === 'level') go({ kind: action.level })
-    else if (action.do === 'add-machine') onAddMachine?.()
   }
   const takingStatus: Status | null = taking === null ? null
     : taking.state === 'taking' ? { tone: 'working', title: `${mode === 'open' ? 'Opening' : 'Choosing'} ${baseName(taking.folder)}`, detail: taking.folder }
@@ -112,6 +114,8 @@ export function OpenProjectPalette({ mode, start, machines, localOs, home, opene
 
   const shell: PaletteShell = {
     mode, machines, machineOf, osOf, homeOf, learnHome, openOn, recent, services, go, back, act, take, forget,
+    close: onClose,
+    canAddMachine: adding !== undefined,
     taking: takingStatus,
     onto,
     nextOnto: () => { setOntoNumber(nextOf(ready, onto).machine) },
@@ -136,6 +140,7 @@ export function OpenProjectPalette({ mode, start, machines, localOs, home, opene
           {level.kind === 'browse' && <BrowseLevel key={`${String(level.machine)}:${level.path}`} level={level} />}
           {level.kind === 'url' && <UrlLevel />}
           {level.kind === 'github' && <GitHubLevel />}
+          {level.kind === 'machine' && adding !== undefined && <MachineLevel adding={adding} />}
         </PaletteShellContext.Provider>
       </DialogContent>
     </Dialog>

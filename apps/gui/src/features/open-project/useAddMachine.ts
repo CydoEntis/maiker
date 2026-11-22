@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useReducer, useRef } from 'react'
 import { errorMessage } from '@/lib/error-message'
 import type { MachineHead } from '@/features/workspace/model/machines'
-import { addStep, IDLE, savedNameOf, type AddRequest, type AddState } from '../model/addFlow'
-import type { MachinesInfo } from './DesktopSettings'
+import { addStep, IDLE, savedNameOf, type AddRequest, type AddState } from '@/features/settings/model/addFlow'
+import type { MachinesInfo } from '@/features/settings/components/DesktopSettings'
 
 export type AddMachine = {
   state: AddState
@@ -14,6 +14,8 @@ export type AddMachine = {
   retry: () => void
   /** Ends the add that is running; the field is back as it was. */
   cancel: () => void
+  /** Leaves the machine the last try saved in the list when the level goes: its sign-in is being finished in a terminal. */
+  keep: () => void
 }
 
 function isConnected(list: readonly MachineHead[], name: string): boolean {
@@ -21,17 +23,18 @@ function isConnected(list: readonly MachineHead[], name: string): boolean {
 }
 
 /**
- * Runs Add a remote machine (`addStep` decides the screen): one call to the host, its install progress, and the clean up. The host
- * writes a machine before it logs in, so a machine saved by a try that did not connect is taken out when the dialog closes or the
- * add is cancelled; nothing unseen is left behind. `onAdded` is called once the machine is in.
+ * Runs Add a remote machine (`addStep` decides the stage): one call to the host, its install progress, and the clean up. The host
+ * writes a machine before it logs in, so a machine saved by a try that did not connect is taken out when the level goes or the
+ * add is cancelled; nothing unseen is left behind, unless `keep` said its sign-in goes on in a terminal.
  */
-export function useAddMachine(machines: MachinesInfo, onAdded: (name: string) => void): AddMachine {
+export function useAddMachine(machines: Pick<MachinesInfo, 'list' | 'onRemove' | 'add'>): AddMachine {
   const [state, dispatch] = useReducer(addStep, IDLE)
   const runs = useRef(0)
   // The parent builds `machines` again on every refresh of the list: the calls read the newest one without restarting anything.
   const latest = useRef({ state, machines })
   useEffect(() => { latest.current = { state, machines } })
   const removing = useRef(false)
+  const kept = useRef(false)
   const alive = useRef(true)
 
   const begin = useCallback((request: AddRequest) => {
@@ -40,7 +43,7 @@ export function useAddMachine(machines: MachinesInfo, onAdded: (name: string) =>
     latest.current.machines.add.onAdd(request.target, request.name, request.port ?? undefined, { keyFile: request.keyFile, installHelper: true }).then(
       (result) => {
         if (run === runs.current) { dispatch({ type: 'answered', run, result }); return }
-        // Nobody waits for this answer any more (cancelled, or the dialog closed), so a machine it saved goes again.
+        // Nobody waits for this answer any more (cancelled, or the level is gone), so a machine it saved goes again.
         const saved = savedNameOf(result)
         if (saved !== null) void latest.current.machines.onRemove(saved)
       },
@@ -87,10 +90,7 @@ export function useAddMachine(machines: MachinesInfo, onAdded: (name: string) =>
   const connectedName = saved !== null && isConnected(machines.list, saved) ? saved : null
   useEffect(() => { if (connectedName !== null) dispatch({ type: 'connected', name: connectedName }) }, [connectedName])
 
-  const addedName = state.kind === 'added' ? state.name : null
-  const done = useRef(onAdded)
-  useEffect(() => { done.current = onAdded })
-  useEffect(() => { if (addedName !== null) done.current(addedName) }, [addedName])
+  const keep = useCallback(() => { kept.current = true }, [])
 
   useEffect(() => {
     alive.current = true
@@ -99,9 +99,9 @@ export function useAddMachine(machines: MachinesInfo, onAdded: (name: string) =>
       runs.current += 1
       const { state: last, machines: current } = latest.current
       if (last.kind === 'busy') current.add.onCancel()
-      if (last.kind === 'failed' && last.failure.saved !== null && !isConnected(current.list, last.failure.saved)) void current.onRemove(last.failure.saved)
+      if (last.kind === 'failed' && last.failure.saved !== null && !kept.current && !isConnected(current.list, last.failure.saved)) void current.onRemove(last.failure.saved)
     }
   }, [])
 
-  return { state, saved, add, retry, cancel }
+  return { state, saved, add, retry, cancel, keep }
 }

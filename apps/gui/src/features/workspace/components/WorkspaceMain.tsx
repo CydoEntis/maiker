@@ -63,7 +63,7 @@ export function WorkspaceMain() {
                     otherAgents={chatView}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
-                    onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
+                    onAddMachine={openProject.addMachine}
                     onCancel={() => { discardDraft(); setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}

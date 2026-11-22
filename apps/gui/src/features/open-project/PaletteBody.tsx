@@ -3,7 +3,7 @@ import { Progress } from '@/components/ui/progress'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { Icon } from '@/features/workspace/components/glyphs'
-import { folderOfRow, hintsOf, keyAction, moveIndex, type Level, type PaletteMode, type Row, type RowAction, type RowIcon } from './openPalette'
+import { folderOfRow, hintsOf, keyAction, moveIndex, type Hint, type Level, type PaletteMode, type Row, type RowAction, type RowIcon } from './openPalette'
 
 /** The longest text the field takes: the host's limit for a path, which is the longest thing typed here. */
 const MOST_FIELD_CHARS = 4096
@@ -24,6 +24,9 @@ function RowGlyph({ icon }: { icon: RowIcon }) {
   if (path === undefined) return <Icon name={icon === 'monitor' ? 'monitor' : icon === 'server' ? 'server' : 'copy'} size={ROW_ICON_PX} />
   return <svg width={ROW_ICON_PX} height={ROW_ICON_PX} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={path} /></svg>
 }
+
+/** A field of the level that is not its one search field: an option's own input. */
+const isOtherField = (target: EventTarget): boolean => target instanceof HTMLInputElement && target.getAttribute('role') !== 'combobox'
 
 /**
  * What the list says in place of, or above, its rows: a wait, a note, a machine that is not there or a refusal. An
@@ -53,6 +56,8 @@ type Props = {
   crumb?: { machine: string; remote: boolean; path: string; full: string } | undefined
   /** A control after the field: the machine a clone goes onto, the owner of the repositories listed. */
   aside?: ReactNode
+  /** Fields between the field row and the list (a new machine's port and key). They take their room from the list, so the frame keeps its height. */
+  options?: ReactNode
   rows: readonly Row[]
   status: Status | null
   /** A line under the rows: that a long list was cut. */
@@ -70,7 +75,7 @@ type Props = {
   onOpenHere?: (() => void) | undefined
 }
 
-function StatusBlock({ status }: { status: Status }) {
+export function StatusBlock({ status }: { status: Status }) {
   const tone = status.tone === 'offline' ? ' is-offline' : status.tone === 'bad' ? ' is-bad' : ''
   return (
     <div className={`mx-op-status${tone}`} role={status.tone === 'bad' || status.tone === 'offline' ? 'alert' : 'status'}>
@@ -86,11 +91,27 @@ function StatusBlock({ status }: { status: Status }) {
   )
 }
 
+/** The mark that starts the field row after the first level: back to the sources. */
+export function BackButton({ disabled, onBack }: { disabled: boolean; onBack: () => void }) {
+  return <button type="button" className="mx-op-lead" aria-label="Back" title="Back (Backspace)" disabled={disabled} onClick={onBack}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg></button>
+}
+
+/** The palette's foot: what the keys do, then its buttons. */
+export function PaletteFoot({ hints, children }: { hints: readonly Hint[]; children?: ReactNode }) {
+  return (
+    <div className="mx-op-foot">
+      {hints.map((hint) => <span key={hint.keys} className="mx-op-hint"><kbd>{hint.keys}</kbd>{hint.does}</span>)}
+      <span className="mx-op-fill" />
+      {children}
+    </div>
+  )
+}
+
 /**
  * One level of the palette: the field row, the list and the foot. The focus stays in the field; the arrows move the
  * highlighted row and the keys do what `keyAction` says, so every level answers the same keys.
  */
-export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, crumb, aside, rows, status, more, actions, locked, onAct, onInto, onUp, onOpenHere }: Props) {
+export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, crumb, aside, options, rows, status, more, actions, locked, onAct, onInto, onUp, onOpenHere }: Props) {
   // The row highlighted, kept with the text it was chosen under: what is typed next starts at the first row again.
   const [picked, setPicked] = useState<{ under: string; id: string | null }>({ under: query, id: null })
   const index = picked.under === query ? Math.max(0, rows.findIndex((row) => row.id === picked.id)) : 0
@@ -113,6 +134,8 @@ export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, 
   const onKeyDown = (event: KeyboardEvent) => {
     // A button in the palette keeps its own Enter and Space; every other key is the field's.
     if (event.nativeEvent.isComposing || (event.target instanceof HTMLButtonElement && event.key !== 'Escape')) return
+    // A field of the options is typed in like any other; only Enter and Escape are still the palette's there.
+    if (isOtherField(event.target) && event.key !== 'Enter' && event.key !== 'Escape') return
     const caretAtEnd = field.current === null || field.current.selectionStart === field.current.value.length
     const action = keyAction({ key: event.key, ctrl: event.ctrlKey || event.metaKey, shift: event.shiftKey, alt: event.altKey }, { level, empty: query === '', caretAtEnd, row: current })
     if (action === null) return
@@ -166,11 +189,11 @@ export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, 
 
   return (
     // A press on a row or a button must not take the focus from the field, or the keys would stop answering.
-    <div className="mx-op-level" onKeyDown={onKeyDown} onMouseDown={(event) => { if (event.target !== field.current) event.preventDefault() }}>
+    <div className="mx-op-level" onKeyDown={onKeyDown} onMouseDown={(event) => { if (event.target !== field.current && !isOtherField(event.target)) event.preventDefault() }}>
       <div className="mx-op-head">
         {onBack === null
           ? <span className="mx-op-lead" aria-hidden="true"><Icon name="search" size={16} /></span>
-          : <button type="button" className="mx-op-lead" aria-label="Back" title="Back (Backspace)" disabled={locked} onClick={onBack}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M19 12H5M11 6l-6 6 6 6" /></svg></button>}
+          : <BackButton disabled={locked} onBack={onBack} />}
         {crumb !== undefined && (
           <span className="mx-op-crumb" title={crumb.full}>
             <span className="mx-op-machine"><Icon name={crumb.remote ? 'server' : 'monitor'} size={13} />{crumb.machine}</span>
@@ -195,6 +218,7 @@ export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, 
         />
         {aside}
       </div>
+      {options}
       <ResultsList ref={list} id={`${id}-list`} aria-label={placeholder} className="mx-op-list">
         {status !== null && <StatusBlock status={status} />}
         {groups.map((group) => (group.name === null
@@ -207,11 +231,7 @@ export function PaletteBody({ level, mode, placeholder, query, onQuery, onBack, 
           )))}
         {more != null && <p role="status" className="mx-op-more">{more}</p>}
       </ResultsList>
-      <div className="mx-op-foot">
-        {hints.map((hint) => <span key={hint.keys} className="mx-op-hint"><kbd>{hint.keys}</kbd>{hint.does}</span>)}
-        <span className="mx-op-fill" />
-        {actions}
-      </div>
+      <PaletteFoot hints={hints}>{actions}</PaletteFoot>
     </div>
   )
 }

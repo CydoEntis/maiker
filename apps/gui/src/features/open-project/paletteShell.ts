@@ -42,6 +42,10 @@ export type PaletteShell = {
   go: (level: Level) => void
   /** Back to the first level. */
   back: () => void
+  /** Closes the palette. */
+  close: () => void
+  /** Whether a remote machine can be added from here: the window gave the palette the way to. */
+  canAddMachine: boolean
   /** Does what a row says, for the actions every level shares; a level handles its own first. */
   act: (action: RowAction) => void
   /** Opens (or, when picking, answers with) a folder on a machine, then closes the palette. */

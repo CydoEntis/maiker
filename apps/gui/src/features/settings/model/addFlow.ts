@@ -23,7 +23,7 @@ export type AddFailure = {
   saved: string | null
 }
 
-/** Where the dialog is: the field, the spinner, the one sentence, or done (the dialog closes). */
+/** Where adding a machine is: the field, the spinner, the one sentence, or done. */
 export type AddState =
   | { kind: 'idle' }
   /** `installing` once the host reports it is putting Maiker on the machine. */
@@ -44,7 +44,7 @@ export type AddEvent =
 
 export const IDLE: AddState = { kind: 'idle' }
 
-/** The dialog's next state. Pure: the hook that runs the add does the asking and the cleaning up. */
+/** The next state. Pure: the hook that runs the add does the asking and the cleaning up. */
 export function addStep(state: AddState, event: AddEvent): AddState {
   switch (event.type) {
     case 'start': return { kind: 'busy', run: event.run, request: event.request, installing: false }
@@ -69,7 +69,7 @@ type AddedOutcome = Extract<Added, { outcome: 'added' }>
 
 /**
  * Whether a machine the host wrote is in. A Maiker of another version counts: the machine is listed, and its sidebar heading
- * offers the update, so the dialog does not ask about it.
+ * offers the update, so adding does not ask about it.
  */
 function isIn(result: AddedOutcome): boolean {
   if (result.reach === 'missing') return result.helper_install?.installed === true
@@ -91,7 +91,7 @@ function afterAnswer(request: AddRequest, result: Added): AddState {
   }
 }
 
-/** The machine an answer saved, which must go again when nobody is waiting for it (the add was cancelled or the dialog closed). */
+/** The machine an answer saved, which must go again when nobody is waiting for it (the add was cancelled or the palette closed). */
 export function savedNameOf(result: Added): string | null {
   return result.outcome === 'added' || result.outcome === 'login' ? result.name : null
 }

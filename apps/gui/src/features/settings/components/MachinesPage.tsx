@@ -28,7 +28,7 @@ type Props = {
   appVersion: string | null
 }
 
-/** Settings › Remote machines: the list (each machine one row, its settings folded under More) or this computer's details. Add machine opens the Add a remote machine dialog. */
+/** Settings › Remote machines: the list (each machine one row, its settings folded under More) or this computer's details. Add machine opens the palette's New machine level. */
 export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
   const [view, setView] = useState<View>('list')
   const search = useContext(SettingsSearch)

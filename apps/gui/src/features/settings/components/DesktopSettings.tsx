@@ -74,7 +74,7 @@ export type MachinesInfo = {
     onCancel: () => void
     /** Calls back as the host reports how far a machine's helper install has got; resolves with the call that stops it. */
     onProgress: (listener: (progress: UpdateProgress) => void) => Promise<() => void>
-    /** Opens the Add a remote machine dialog (the same one the sidebar opens). */
+    /** Opens the palette on its New machine level (the same one the sidebar opens). */
     open: () => void
   }
 }
@@ -185,7 +185,7 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
 
 const KEY_TO_SECTION: Record<string, DesktopSettingsSection> = { g: 'general', a: 'appearance', n: 'notifications', '?': 'keys', c: 'chat', e: 'permissions', t: 'terminal', x: 'extensions', m: 'machines' }
 
-/** Esc ends an open theme list, or a running add-machine, first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
+/** Esc ends an open theme list first; Settings stays. A part that handles Esc itself is marked `data-owns-escape`. */
 const keepForOpenList = (event: globalThis.KeyboardEvent) => {
   const inside = event.target instanceof Element && event.target.closest('[data-owns-escape]') !== null
   if (inside || document.querySelector('.mx-picker-list') !== null) event.preventDefault()

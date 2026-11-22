@@ -38,8 +38,9 @@ describe('the sources level', () => {
       { do: 'browse', machine: 4, path: '~' },
       { do: 'level', level: 'url' },
       { do: 'level', level: 'github' },
-      { do: 'add-machine' },
+      { do: 'level', level: 'machine' },
     ])
+    expect(actions(sourceRows({ mode: 'open', recent, machines: [LOCAL], query: 'remote', canAddMachine: false }))).toEqual([])
     expect(actions(sourceRows({ mode: 'open', recent, machines: [LOCAL, DEVBOX], query: 'devb' }))).toEqual([{ do: 'browse', machine: 4, path: '~' }])
     expect(actions(sourceRows({ mode: 'open', recent, machines: [LOCAL, DEVBOX], query: 'GITHUB' }))).toEqual([{ do: 'level', level: 'github' }])
     expect(sourceRows({ mode: 'open', recent, machines: [LOCAL, DEVBOX], query: 'zzz' })).toEqual([])
@@ -156,7 +157,7 @@ describe('typing a folder name and a separator', () => {
 describe('the keys', () => {
   const repo = { into: '/code/app', action: { do: 'open', machine: 0, folder: '/code/app' } } as const
   const folder = { into: null, action: { do: 'browse', machine: 0, path: '/code/notes' } } as const
-  const other = { into: null, action: { do: 'add-machine' } } as const
+  const other = { into: null, action: { do: 'level', level: 'machine' } } as const
 
   it('Enter does what the row says, and Ctrl+Enter takes the folder shown only in the folder browser', () => {
     expect(keyAction(press('Enter'), at({ row: repo }))).toBe('activate')
@@ -168,6 +169,7 @@ describe('the keys', () => {
     expect(keyAction(press('Backspace'), at({ level: 'browse' }))).toBe('up')
     expect(keyAction(press('Backspace'), at({ level: 'url' }))).toBe('back')
     expect(keyAction(press('Backspace'), at({ level: 'github' }))).toBe('back')
+    expect(keyAction(press('Backspace'), at({ level: 'machine' }))).toBe('back')
     expect(keyAction(press('Backspace'), at({ level: 'sources' }))).toBeNull()
     expect(keyAction(press('Backspace'), at({ level: 'browse', empty: false }))).toBeNull()
   })

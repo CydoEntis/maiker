@@ -7,7 +7,7 @@ import { usePaletteShell } from './paletteShell'
 export function SourcesLevel() {
   const shell = usePaletteShell()
   const [query, setQuery] = useState('')
-  const rows = sourceRows({ mode: shell.mode, recent: shell.recent, machines: shell.machines, query })
+  const rows = sourceRows({ mode: shell.mode, recent: shell.recent, machines: shell.machines, query, canAddMachine: shell.canAddMachine })
   const nothing = rows.length === 0
     ? { tone: 'plain' as const, title: `Nothing matches “${query.trim()}”`, detail: shell.mode === 'open' ? 'Try a machine name, Git URL or GitHub.' : 'Try a machine name.' }
     : null

@@ -45,9 +45,8 @@ type Shown = { mode?: PaletteMode; start?: PaletteStart; machines?: readonly Pal
 function show({ mode = 'open', start = { kind: 'sources' }, machines = [LOCAL, DEVBOX], using = services(), onTake = () => Promise.resolve() }: Shown = {}) {
   const took = vi.fn(onTake)
   const onClose = vi.fn()
-  const onAddMachine = vi.fn()
-  const { unmount } = render(<OpenProjectPalette mode={mode} start={start} machines={machines} localOs="linux" home="/home/me" opened={[{ machineName: null, folder: '/home/me/code/app' }]} onTake={took} onAddMachine={onAddMachine} onClose={onClose} services={using} />)
-  return { took, onClose, onAddMachine, using, unmount, user: userEvent.setup(), field: () => screen.getByRole('combobox') }
+  const { unmount } = render(<OpenProjectPalette mode={mode} start={start} machines={machines} localOs="linux" home="/home/me" opened={[{ machineName: null, folder: '/home/me/code/app' }]} onTake={took} onClose={onClose} services={using} />)
+  return { took, onClose, using, unmount, user: userEvent.setup(), field: () => screen.getByRole('combobox') }
 }
 
 const options = () => screen.getAllByRole('option').map((option) => option.textContent)
@@ -77,12 +76,6 @@ describe('the Open a project palette', () => {
     await user.type(field(), '{Enter}')
     expect(took).toHaveBeenCalledWith({ machine: 0, folder: '/home/me/code/old' })
     await waitFor(() => { expect(onClose).toHaveBeenCalled() })
-  })
-
-  it('hands Add a remote machine to the window', async () => {
-    const { user, field, onAddMachine } = show()
-    await user.type(field(), 'add a remote{Enter}')
-    expect(onAddMachine).toHaveBeenCalled()
   })
 
   it('browses with the keyboard alone: down and Enter go in, Backspace goes up and then back to the sources', async () => {
