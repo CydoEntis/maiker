@@ -17,9 +17,8 @@ export type GitHubAccountState =
 const LOADING: GitHubAccountState = { kind: 'loading' }
 
 /**
- * The GitHub account for the dialog's GitHub tab, and its two ways to change: `signIn` runs `gh auth login --web` through
- * the daemon (the tab shows `view`, the code and link it printed) and `signOut` ends the active account. `gh` keeps the
- * token; the window only learns the login name.
+ * The GitHub account for the palette's GitHub level: `signIn` runs `gh auth login --web` through the daemon and the
+ * level shows `view`, the code and link it printed. `gh` keeps the token; the window only learns the login name.
  */
 export function useGitHubAccount(): { account: GitHubAccountState; view: SignInView | null; signIn: () => void; cancelSignIn: () => void; closeSignIn: () => void; signOut: () => void } {
   const [account, setAccount] = useState<GitHubAccountState>(LOADING)

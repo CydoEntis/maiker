@@ -403,7 +403,7 @@ describe('the top of the sidebar', () => {
     const onOpenProject = vi.fn()
     show([], { onSearch, onOpenProject })
     await user.click(screen.getByRole('button', { name: 'Open a project' }))
-    expect(onOpenProject).toHaveBeenCalledWith(0)
+    expect(onOpenProject).toHaveBeenCalledWith(null)
     expect(screen.queryByRole('menu')).toBeNull()
     await user.click(screen.getByRole('button', { name: /^Search/ }))
     expect(onSearch).toHaveBeenCalledTimes(1)

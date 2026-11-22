@@ -1,0 +1,56 @@
+/* The Open a project palette: one float (its ground, hairline and shadow are material.css's), 600px wide, a 52px field row over a 340px list and a 48px foot. The frame is
+   the same height at every level; only what the list holds changes. Colours are the role tokens only. */
+.mx-op-scrim { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: center; align-items: flex-start; padding: 92px 24px 24px; background: rgba(var(--sd), calc(.5 * var(--sk))); animation: v7scrim .15s ease-out; }
+.mx-op { position: relative; width: min(600px, calc(100vw - 48px)); display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden; border-radius: var(--r-dialog); color: var(--fg); animation: mx-dialog-in .16s ease-out; }
+.mx-op:focus-visible { outline: none; }
+
+.mx-op-head { flex: none; display: flex; align-items: center; gap: 8px; height: 52px; padding: 0 12px 0 10px; }
+.mx-op-lead { flex: none; width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); }
+button.mx-op-lead { color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+button.mx-op-lead:hover { background: var(--m-hover); color: var(--fg); }
+.mx-op-crumb { flex: none; max-width: 300px; min-width: 0; display: inline-flex; align-items: center; gap: 6px; font: 400 13px var(--mono); color: var(--muted); white-space: nowrap; }
+.mx-op-machine { flex: none; height: 24px; display: inline-flex; align-items: center; gap: 5px; padding: 0 8px; border-radius: var(--r-control); font: 500 12px var(--ui); color: var(--fg2); background: rgba(var(--ink), .07); }
+.mx-op-machine > svg { color: var(--dim); }
+.mx-op-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.mx-app .mx-op-input { flex: 1; min-width: 60px; height: 100%; padding: 0; border: 0; outline: none; background: none; box-shadow: none; font: 400 15px var(--ui); color: var(--fg); }
+.mx-op-input::placeholder { color: var(--dim); }
+.mx-op-choice { flex: none; max-width: 220px; height: 26px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px 0 9px; border-radius: var(--r-control); font-size: 12px; color: var(--muted); white-space: nowrap; transition: background-color var(--t-fast) var(--ease); }
+.mx-op-choice:hover:not(:disabled) { background: var(--m-hover); }
+.mx-op-choice:disabled { opacity: .5; }
+.mx-op-choice b { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 500; color: var(--fg2); }
+
+.mx-app .mx-op-list { flex: none; height: 340px; box-sizing: border-box; display: flex; flex-direction: column; gap: 1px; overflow-y: auto; padding: 2px 8px 8px; border: 0; background: none; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.mx-op-group { display: flex; flex-direction: column; gap: 1px; }
+.mx-op-heading { padding: 12px 10px 5px; font-size: 11.5px; font-weight: 500; color: var(--dim); }
+.mx-op-row { flex: none; display: flex; align-items: center; gap: 11px; min-height: 44px; box-sizing: border-box; padding: 5px 10px; border-radius: var(--r-panel); cursor: default; }
+.mx-op-row[aria-selected="true"] { background: var(--t2); }
+.mx-op-icon { flex: none; width: 18px; height: 18px; display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.mx-op-row[aria-selected="true"] .mx-op-icon { color: var(--fg); }
+.mx-op-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.mx-op-name { font-size: 13.5px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-op-row.is-quiet .mx-op-name { font-weight: 400; color: var(--fg2); }
+.mx-op-detail { font-size: 12px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-op-tag { flex: none; font-size: 11.5px; color: var(--dim); }
+.mx-op-tag.is-offline { color: var(--needs); }
+.mx-op-more { flex: none; margin: 0; padding: 8px 10px; font-size: 11.5px; color: var(--dim); }
+
+.mx-op-status { flex: none; display: flex; align-items: center; gap: 12px; margin: 8px 2px; padding: 14px; border-radius: var(--r-panel); background: rgba(var(--ink), .03); }
+.mx-op-status-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.mx-op-status-text b { font-size: 13px; font-weight: 500; color: var(--fg); overflow-wrap: anywhere; }
+.mx-op-status-text span { font-size: 12px; color: var(--dim); overflow-wrap: anywhere; }
+.mx-op-status.is-offline b { color: var(--needs); }
+.mx-op-status.is-bad b { color: var(--danger); }
+.mx-op-status [data-slot="progress"] { margin-top: 6px; }
+.mx-op-code { align-self: flex-start; padding: 6px 12px; border-radius: var(--r-control); background: rgba(var(--ink), .07); font: 600 20px var(--mono); letter-spacing: .12em; color: var(--fg); }
+.mx-op-status-button { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: rgba(var(--ink), .08); transition: background-color var(--t-fast) var(--ease); }
+.mx-op-status-button:hover { background: rgba(var(--ink), .12); }
+
+.mx-op-foot { flex: none; display: flex; align-items: center; gap: 14px; min-height: 48px; padding: 0 10px 0 16px; background: rgba(var(--ink), .025); }
+.mx-op-hint { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); white-space: nowrap; }
+.mx-op-hint kbd { height: 20px; min-width: 20px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; border-radius: var(--r-control); font: 500 11px var(--ui); color: var(--fg2); background: rgba(var(--ink), .08); }
+.mx-op-fill { flex: 1; }
+.mx-op-system { flex: none; padding: 4px 6px; border-radius: var(--r-control); font-size: 12px; color: var(--dim); white-space: nowrap; transition: color var(--t-fast) var(--ease); }
+.mx-op-system:hover { color: var(--fg); }
+.mx-op-primary { flex: none; max-width: 200px; height: 30px; padding: 0 13px; overflow: hidden; text-overflow: ellipsis; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: var(--t1); background: var(--fg); white-space: nowrap; transition: background-color var(--t-fast) var(--ease); }
+.mx-op-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--fg) 85%, var(--t1)); }
+.mx-op-primary:disabled { opacity: .45; }

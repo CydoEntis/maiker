@@ -69,7 +69,7 @@ import { useAgentStarts } from './useAgentStarts'
 import { startProjectOn } from './model/startProject'
 import { useMountedTabs } from './useMountedTabs'
 import { useRecentSessions } from './useRecentSessions'
-import { projectRequestFor, useOpenProjectState } from './useOpenProject'
+import { projectRequestFor, sessionRequestFrom, useOpenProjectState } from './useOpenProject'
 import { useOpenWorktreeState, useProjectWorktreeState } from './useProjectActions'
 import { useOpenedProjectsState } from './useOpenedProjects'
 import { usePutAway } from './usePutAway'
@@ -360,8 +360,8 @@ export function useWorkspaceState() {
     setSettingsSection(null)
     const machineName = sidebarMachineHeads.find((head) => head.machine === machine)?.name ?? null
     const project = startProjectOn(machineName, openedProjects.machines, focusedId, openedProjects.selected)
-    // On this computer the dialog goes on to the draft in the folder it opens; another machine's picker opens the project alone.
-    if (project === null) setOpenProject(machine === LOCAL_MACHINE ? { kind: 'dialog', tab: 'folder', purpose: 'session' } : projectRequestFor(machine))
+    // On this computer the palette goes on to the draft in the folder it takes; on another machine it opens the project alone.
+    if (project === null) setOpenProject(machine === LOCAL_MACHINE ? sessionRequestFrom('folder') : projectRequestFor(machine))
     else openDraft(machine, { folder: project.folder, message: '' })
   }, [focusedMachineNumber, sidebarMachineHeads, openedProjects.machines, openedProjects.selected, focusedId, setOpenProject, openDraft])
   // New terminal: a shell pane in the Terminal view; in the Chat view the terminal docked under the chat, shown or hidden.
@@ -370,9 +370,9 @@ export function useWorkspaceState() {
     else if (canDock && focusedSession !== undefined && chatOf(focusedSession).view === 'chat') toggleTerminal()
     else flash(NO_CHAT_TO_DOCK)
   }, [chatView, newTerminal, canDock, focusedSession, chatOf, toggleTerminal, flash])
-  // The Open a project dialog is the one way in: the Open folder key and the palette land on its folder tab, Clone on the link tab.
-  const openFolder = useCallback(() => { setOpenProject({ kind: 'dialog', tab: 'folder', purpose: 'session' }) }, [setOpenProject])
-  const openProjectFromKey = useCallback<OpenProject>(() => { setOpenProject({ kind: 'dialog', tab: 'folder', purpose: 'session' }) }, [setOpenProject])
+  // The Open a project palette is the one way in: the Open folder key and command land in this computer's folders.
+  const openFolder = useCallback(() => { setOpenProject(sessionRequestFrom('folder')) }, [setOpenProject])
+  const openProjectFromKey = useCallback<OpenProject>(() => { setOpenProject(sessionRequestFrom('folder')) }, [setOpenProject])
   // The view the focused session shows, which decides whether the keys are the chat's (plain Ctrl) or the terminal's (Ctrl+Shift). The New session draft is a text box, so it reads as a chat; the terminal dock is a shell.
   const shortcutView: ShortcutView = newChatOpen ? 'chat' : dockFocused ? 'terminal' : focusedSession ? chatOf(focusedSession).view : preferences.openSessionsIn
   const { runShortcut } = useShortcutRunner({ openProject: openProjectFromKey, newSession, focusedMachineNumber, newTerminal: newTerminalHere, setSettingsSection, preferences, split, setLayout, layout, askToClose, endSessions, toggleSidebar, setPaletteOpen, sessions, focusedSession, flash, showSessionById, setFocusMode, setShortcutsOpen, setTextSize, toggleInspect, setFindOpen, online, setWorktreeFrom, toggleTerminal })

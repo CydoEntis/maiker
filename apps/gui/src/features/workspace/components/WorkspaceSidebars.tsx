@@ -6,7 +6,7 @@ import { projectName } from '../model/sidebarTree'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
-import { projectRequestFor } from '../useOpenProject'
+import { PROJECT_FROM_SOURCES, projectRequestFor } from '../useOpenProject'
 import { useProjectActions } from '../useProjectActions'
 
 const noop = () => undefined
@@ -56,7 +56,7 @@ export function WorkspaceSidebars() {
       onHoverSession={warmChat}
       onNewShell={chatView ? undefined : (machine) => { afterPick(); newTerminal(machine) }}
       onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
-      onOpenProject={(machine) => { afterPick(); setOpenProject(projectRequestFor(machine)) }}
+      onOpenProject={(machine) => { afterPick(); setOpenProject(machine === null ? PROJECT_FROM_SOURCES : projectRequestFor(machine)) }}
       projectActions={projectActionsFor(afterPick)}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
       onRetryMachine={retryNamed}

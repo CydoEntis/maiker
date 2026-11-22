@@ -2,6 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback, useEffect, useRef } fr
 import { KEY_CAPTURE_ATTRIBUTE, type KeyOverrides, matchShortcut, NEW_CHAT_PAGE_ACTIONS, type Platform, type ShortcutAction, type ShortcutView } from './model/shortcuts'
 import { toast } from '@/lib/toast'
 import { isAlertDialogOpen } from '@/components/ui/alert-dialog'
+import { isOpenPaletteUp } from '@/features/open-project/paletteOpen'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { guardLocal } from '@/lib/localOnly'
@@ -14,7 +15,7 @@ import { LOCAL_MACHINE } from '@/api/machines'
 import { syncRemote } from '@/features/inspect/api'
 import { jumpToast, nextNeedsYou, NOTHING_NEEDS_YOU } from '@/features/needs-you/model/needsYou'
 
-/** What the Open folder key calls; the Open a project dialog sits behind it. */
+/** What the Open folder key calls; the Open a project palette sits behind it. */
 export type OpenProject = (kind: 'folder') => void
 
 /** Listens for the keyboard: a shortcut runs its action, and Esc closes the topmost layer. */
@@ -58,6 +59,8 @@ export function useShortcutKeys({ view, runShortcut, dialogOpen, addMachineOpen,
       if (state.welcomeOpen) return
       // A question is on screen: every key, Esc too, is its own until it is answered.
       if (isAlertDialogOpen()) return
+      // The Open a project palette is a keyboard surface of its own: no window shortcut reaches past it, and Esc closes only it.
+      if (isOpenPaletteUp()) return
       // Settings › Hotkeys is taking down a new key: every key, Esc too, is the field's.
       if (event.target instanceof Element && event.target.closest(`[${KEY_CAPTURE_ATTRIBUTE}]`)) return
       const match = matchShortcut(event, platform, state.keyOverrides, state.view)

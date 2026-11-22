@@ -110,7 +110,7 @@ export const BINDINGS: readonly Binding[] = [
   // A chat with the default agent in the current fleet, without the New session modal.
   // Ctrl+Shift+N stays "new worktree" until brain dump (v18 C.6), which takes this key, is built.
   { action: 'new-worktree', label: 'New worktree', group: 'Sessions', mac: [cmd('N', 'shift')], other: [ctrlShift('N')], available: true },
-  // Opens the Open a project dialog on its folder tab. Plain Ctrl+O is the chat view's; the terminal's own Ctrl+O stays the terminal's.
+  // Opens the Open a project palette in this computer's folders. Plain Ctrl+O is the chat view's; the terminal's own Ctrl+O stays the terminal's.
   { action: 'open-folder', label: 'Open a folder', group: 'Sessions', mac: [cmd('O')], other: [ctrlShift('O')], chat: [ctrl('O'), ctrlShift('O')], available: true },
   // Fetches the focused session's repository. Ctrl+Shift+F is Find in the terminal view, so there fetch takes Ctrl+Alt+Shift+F.
   { action: 'fetch', label: 'Fetch the repository', group: 'Sessions', mac: [cmd('F', 'shift')], other: [ctrlShift('F', 'alt')], chat: [ctrlShift('F'), ctrlShift('F', 'alt')], available: true },

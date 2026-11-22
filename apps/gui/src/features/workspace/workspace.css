@@ -76,7 +76,7 @@
   button, a, summary, label, input, select, textarea, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
   [role="option"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"],
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
-  .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-fp-row, .mx-fp-machine-row,
+  .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
   .mx-grp-project, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
   .mx-rm-row, .mx-rm-host, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
   .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-mm-model, .mx-dialog-close
@@ -546,9 +546,9 @@
 :root[data-gpu="software"] { --float-bleed: 4px; }
 /* The float's shadow is declared beside the theme's roles (material.css), so the cheaper value is set at each of those roots. */
 :root[data-gpu="software"], :root[data-gpu="software"] :is(.mx-app, .app-shell) { --float-sh: 0 0 0 1px var(--line2); }
-:root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-fp-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-restarting) { animation: none; }
+:root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-op-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-restarting) { animation: none; }
 /* A dialog fades in without its scale (a scale repaints the whole dialog at every size), and the palette keeps its centring transform. */
-:root[data-gpu="software"] :is(.mx-fp, .mx-rename) { animation-name: v7scrim; }
+:root[data-gpu="software"] :is(.mx-op, .mx-rename) { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-palette { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --float-sh: 0 0 0 1px rgba(17, 22, 27, .14); }
 

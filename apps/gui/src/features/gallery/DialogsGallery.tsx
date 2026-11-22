@@ -10,7 +10,8 @@ import { DesktopSettings, type DesktopSettingsSection } from '@/features/setting
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { CommandPalette } from '@/features/workspace/components/CommandPalette'
 import { NewChatPage } from '@/features/workspace/components/NewChatPage'
-import { PickFolderDialog } from '@/features/workspace/components/PickFolderDialog'
+import { OpenProjectPalette, type PaletteStart } from '@/features/open-project/OpenProjectPalette'
+import type { PaletteMachine } from '@/features/open-project/openPalette'
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import type { PaletteItem } from '@/features/workspace/model/palette'
@@ -24,7 +25,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -95,8 +96,7 @@ function Settings({ section }: { section: DesktopSettingsSection }) {
   )
 }
 
-/** How long the scripted picker waits for the dialog to read its folder, and then for the field to open. */
-const PICKER_READ_MS = 400
+/** How long a scripted page waits for a field to open. */
 const FIELD_OPEN_MS = 150
 
 /** Sets the value of a React-controlled input the way typing does. */
@@ -105,24 +105,27 @@ function typeInto(input: HTMLInputElement, text: string) {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-/** For the new-folder states: opens the field, and types a bad name or a good one, once the page has read its folder. */
-function ScriptedPicker({ what, children }: { what: string; children: ReactNode }) {
-  useEffect(() => {
-    if (!what.startsWith('picker-new') && what !== 'picker-denied') return undefined
-    const timer = window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>('.mx-fp-new-button')?.click()
-      window.setTimeout(() => {
-        const field = document.querySelector<HTMLInputElement>('.mx-fp-new input')
-        if (field === null) return
-        if (what === 'picker-new-bad') { typeInto(field, 'my/folder'); field.form?.requestSubmit() }
-        if (what === 'picker-new-exists') { typeInto(field, 'NOTES'); field.form?.requestSubmit() }
-        if (what === 'picker-denied') { typeInto(field, 'fresh'); field.form?.requestSubmit() }
-        if (what === 'picker-new-typed') typeInto(field, 'my-new-project')
-      }, FIELD_OPEN_MS)
-    }, PICKER_READ_MS)
-    return () => { window.clearTimeout(timer) }
-  }, [what])
-  return children
+const PALETTE_MACHINES: readonly PaletteMachine[] = [
+  { machine: 0, name: null, label: 'This computer', address: null, ready: true, why: null, start: '/home/dev' },
+  { machine: 1, name: 'devbox', label: 'devbox', address: 'cydo@10.0.4.7', ready: true, why: null, start: '~' },
+  { machine: 2, name: 'build-01', label: 'build-01', address: 'ci@build-01', ready: false, why: 'build-01 did not answer on port 22.', start: '~' },
+]
+const PALETTE_STARTS: Readonly<Record<string, PaletteStart>> = {
+  'open-browse': { kind: 'folder', machine: 0 }, 'open-remote': { kind: 'folder', machine: 1 }, 'open-offline': { kind: 'folder', machine: 2 },
+  'open-loading': { kind: 'folder', machine: 1 }, 'open-empty': { kind: 'folder', machine: 0 }, 'open-url': { kind: 'url' }, 'open-pick': { kind: 'folder', machine: 1 },
+}
+const CLOSED = [{ agent: 'claude', session: 'a', cwd: '/home/dev/old-portfolio', branch: 'main', title: null, at: 0, folder_present: true, worktree: null, repo: null }]
+
+/** The Open a project palette on mock machines: `open` is its first level, `open-…` one of its other states. */
+function PaletteShown({ what }: { what: string }) {
+  const listing = what === 'open-empty' ? { ...LISTING, entries: [] } : LISTING
+  const services = {
+    list: what === 'open-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(listing),
+    create: () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' }),
+    closed: () => Promise.resolve(CLOSED),
+    chooseSystemFolder: () => Promise.resolve(null),
+  }
+  return <OpenProjectPalette mode={what === 'open-pick' ? 'pick' : 'open'} start={PALETTE_STARTS[what] ?? { kind: 'sources' }} machines={PALETTE_MACHINES} localOs="linux" home="/home/dev" opened={[{ machineName: null, folder: '/home/dev/acme-store' }]} onTake={() => NEVER()} onClose={SAME} services={services} />
 }
 
 /** For the Add a remote machine states: types an address or clicks a host of the SSH config once the dialog is up, as a person would. */
@@ -199,12 +202,7 @@ function Show({ what }: { what: string }): ReactNode {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
     return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} /></div></ScriptedNew>
   }
-  if (what.startsWith('picker')) {
-    const listing = what === 'picker-old' ? { ...LISTING, can_create: false } : what === 'picker-empty' ? { ...LISTING, entries: [] } : LISTING
-    const list = what === 'picker-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(listing)
-    const create = what === 'picker-denied' ? () => Promise.resolve({ kind: 'failed' as const, reason: 'You do not have permission to make a folder here.' }) : () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' })
-    return <ScriptedPicker what={what}><PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} create={create} onPick={() => undefined} onCancel={() => undefined} /></ScriptedPicker>
-  }
+  if (what === 'open' || what.startsWith('open-')) return <PaletteShown what={what} />
   if (what === 'add' || what.startsWith('add-')) {
     return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} /></ScriptedAdd>
   }

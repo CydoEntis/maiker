@@ -1,8 +1,7 @@
-import { baseName, joinPath, parentOf } from '@/features/workspace/model/folderPick'
 import { carriesCredentials } from '@/features/workspace/model/repoAddress'
 
 /**
- * Reading what a person types into "Clone from URL". Pure. The daemon's own check on the address stays as it is
+ * Reading what a person pastes into the palette's Git URL field. Pure. The daemon's own check on the address stays as it is
  * (https://, ssh://, git:// or `git@host:path`); this only turns the three forms people paste into one of the two it takes,
  * and builds the address again from checked parts, so a pasted user name, password or token is never carried on.
  */
@@ -66,24 +65,4 @@ export function readGitUrl(input: string): GitUrlReading {
     ? repoOf(short[1] ?? '', short[2] ?? '', true)
     : slash < 0 ? null : repoOf(bare.slice(0, slash), bare.slice(slash + 1), false)
   return repo === null ? { kind: 'not-a-url' } : { kind: 'repo', repo }
-}
-
-/** `owner/name`, as the dialog names a repository. */
-export function repoLabel(repo: Pick<GitUrl, 'owner' | 'name'>): string {
-  return `${repo.owner}/${repo.name}`
-}
-
-/** Where a clone lands unless the person edits it: the home folder and the repository's name. */
-export function defaultCloneFolder(home: string, name: string): string {
-  return joinPath(home === '' ? '~' : home, name)
-}
-
-/**
- * The folder git is asked to clone inside. The field shows the whole destination; the daemon makes the folder `name` inside
- * a parent, so a field ending in `name` gives its parent, and any other ending is taken as the parent itself.
- */
-export function cloneParentOf(folder: string, name: string): string {
-  const trimmed = folder.trim().replace(/[\\/]+$/, '')
-  if (trimmed === '') return folder.trim()
-  return baseName(trimmed) === name ? parentOf(trimmed) : trimmed
 }

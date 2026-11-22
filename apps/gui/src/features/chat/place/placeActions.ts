@@ -7,9 +7,9 @@ export type PlaceActions = {
   /** The projects the menu offers a new session in. */
   projects: readonly PlaceProject[]
   onNewSessionIn: (folder: string) => void
-  /** Opens the Open a project dialog on its folder tab. */
+  /** Opens the Open a project palette in this computer's folders. */
   onOpenFolder: () => void
-  /** Opens the Open a project dialog on Clone from URL. */
+  /** Opens the Open a project palette on its Git URL field. */
   onClone: () => void
 }
 

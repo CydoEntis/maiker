@@ -8,7 +8,9 @@ import { resolveStartFolder } from '../model/startFolder'
 import { useOpenProject } from '../useOpenProject'
 import { NewChatPage } from './NewChatPage'
 import { ShowSidebarButton } from './ShowSidebarButton'
-import { pickerMachinesOf, useFolderPick } from './useFolderPick'
+import { useFolderPick } from './useFolderPick'
+import { osOfPlatform, paletteMachinesOf } from '@/features/open-project/paletteMachines'
+import { usePlatform } from '@/features/shortcuts/platform'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { chatFindOf } from '@/features/chat/chatSearch'
@@ -36,7 +38,7 @@ export function WorkspaceMain() {
   if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
   const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
-  const folderPick = useFolderPick(pickerMachinesOf(sidebarMachineHeads))
+  const folderPick = useFolderPick(paletteMachinesOf(sidebarMachineHeads, resolveStartFolder(preferences.startFolder, home)), osOfPlatform(usePlatform()), home)
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   return (
     <div className="mx-main-wrap">

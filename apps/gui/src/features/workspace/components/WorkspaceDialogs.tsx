@@ -32,9 +32,9 @@ import type { SessionView } from '../model/session'
 import { sessionTask } from '../model/worktreeName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
 import { folderExists } from '../model/startFolder'
-import { OpenProjectDialog } from '@/features/open-project/OpenProjectDialog'
+import { OpenProjectPalette } from '@/features/open-project/OpenProjectPalette'
+import { osOfPlatform, paletteMachinesOf } from '@/features/open-project/paletteMachines'
 import { projectOfFolder } from '../projectOfFolder'
-import { ProjectFolderPicker } from './ProjectFolderPicker'
 import { OpenWorktreeDialog } from './OpenWorktreeDialog'
 import { useOpenWorktreeDialog } from '../useProjectActions'
 import { useWorkspace } from '../workspaceContext'
@@ -171,19 +171,28 @@ export function WorkspaceDialogs() {
             {renameId !== null && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}
-            {openProject?.kind === 'dialog' && (
-              <OpenProjectDialog
-                tab={openProject.tab}
+            {openProject !== null && (
+              <OpenProjectPalette
+                mode="open"
+                start={openProject.start}
+                machines={paletteMachinesOf(sidebarMachineHeads, resolveStartFolder(preferences.startFolder, home))}
+                localOs={osOfPlatform(platform)}
                 home={home}
-                chooseFolder={chooseStartFolder}
-                folderExists={folderExists}
-                purpose={openProject.purpose === 'session'
-                  ? { kind: 'session', onStartSession: (folder) => { setNewChatMachine(LOCAL_MACHINE); setNewChatSeed({ folder, message: '' }); setNewChatOpen(true) } }
-                  : { kind: 'project', onOpenProject: async (folder) => { openedProjects.open(await projectOfFolder(LOCAL_MACHINE, null, folder)) } }}
+                opened={openedProjects.opened}
+                onTake={async ({ machine, folder }) => {
+                  if (openProject.purpose === 'session') {
+                    setNewChatMachine(machine)
+                    setNewChatSeed({ folder, message: '' })
+                    setNewChatOpen(true)
+                    return
+                  }
+                  const head = sidebarMachineHeads.find((candidate) => candidate.machine === machine)
+                  openedProjects.open(await projectOfFolder(machine, head?.name ?? null, folder))
+                }}
+                onAddMachine={() => { setOpenProject(null); setAddMachineOpen(true) }}
                 onClose={() => { setOpenProject(null) }}
               />
             )}
-            {openProject?.kind === 'pick' && <ProjectFolderPicker heads={sidebarMachineHeads} machine={openProject.machine} onOpen={openedProjects.open} onClose={() => { setOpenProject(null) }} />}
             {addMachineOpen && <AddMachineDialog machines={machinesInfo} onOpenSettings={() => { setAddMachineOpen(false); setSettingsSection('machines') }} onClose={() => { setAddMachineOpen(false) }} />}
             {settingsSection && (
               <DesktopSettings

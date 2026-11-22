@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { cloneParentOf, defaultCloneFolder, readGitUrl } from './repoUrl'
+import { readGitUrl } from './repoUrl'
 
 const repoOf = (text: string) => {
   const reading = readGitUrl(text)
@@ -35,21 +35,5 @@ describe('reading a pasted repository URL', () => {
 
   it('reads nothing from empty text', () => {
     expect(readGitUrl('   ').kind).toBe('empty')
-  })
-})
-
-describe('where a clone goes', () => {
-  it('starts as the home folder and the name', () => {
-    expect(defaultCloneFolder('C:\\Users\\me', 'app')).toBe('C:\\Users\\me\\app')
-    expect(defaultCloneFolder('/home/me/', 'app')).toBe('/home/me/app')
-  })
-
-  it('asks git to clone inside the parent when the field ends in the name', () => {
-    expect(cloneParentOf('C:\\Users\\me\\app', 'app')).toBe('C:\\Users\\me')
-    expect(cloneParentOf('/home/me/code/app/', 'app')).toBe('/home/me/code')
-  })
-
-  it('takes any other ending as the parent itself', () => {
-    expect(cloneParentOf('/home/me/code', 'app')).toBe('/home/me/code')
   })
 })

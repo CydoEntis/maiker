@@ -8,7 +8,7 @@ import { useWorkspace } from '../workspaceContext'
 
 /**
  * Gives the row under every chat box what its folder menu needs from the window: the projects of the machine the
- * focused session runs on, a new session in one of them, and the Open a project dialog.
+ * focused session runs on, a new session in one of them, and the Open a project palette.
  */
 export function WorkspacePlaceActions({ children }: { children: ReactNode }) {
   const { sessions, focusedSession, preferences, home, setSettingsSection, setNewChatMachine, setNewChatSeed, setNewChatOpen } = useWorkspace()

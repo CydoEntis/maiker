@@ -5,6 +5,7 @@ import type { GitHubAccount } from '@/api/githubAccounts'
 import { changeGitRule, loadGitIdentities, type GitIdentity, type GitIdentityReport, type GitIdentityRule } from '@/api/gitIdentities'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
+import { HOME_FOLDER } from '@/features/open-project/openPalette'
 import { useFolderPick } from '@/features/workspace/components/useFolderPick'
 import { GitRuleDialog } from './GitRuleDialog'
 
@@ -102,7 +103,8 @@ export function GitHubDetails({ machine, label, accounts, asked, onAddAccount }:
   const [editing, setEditing] = useState<Editing>(null)
   const [removing, setRemoving] = useState<Removing>(null)
   const [failure, setFailure] = useState<string | null>(null)
-  const remotePick = useFolderPick(useMemo(() => [{ machine, label, ready: true, word: null }], [machine, label]))
+  // Only another machine is browsed here (this computer uses the system's dialog), so the one machine listed is remote.
+  const remotePick = useFolderPick(useMemo(() => [{ machine, name: label, label, address: null, ready: true, why: null, start: HOME_FOLDER }], [machine, label]))
   useEffect(() => {
     let current = true
     loadGitIdentities(machine).then(

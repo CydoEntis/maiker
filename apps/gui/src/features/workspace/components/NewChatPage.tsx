@@ -90,7 +90,7 @@ type Props = {
    * mode: Claude on Bypass permissions, Codex on Full access. The page shows it and More options changes it for one session.
    */
   bypassOff?: readonly ChatAgent[]
-  /** Opens the folder picker on that machine and answers with the folder chosen (and the machine it is on), or null when it is cancelled. Null when there is none. */
+  /** Opens the palette's folder browser on that machine and answers with the folder chosen (and the machine it is on), or null when it is cancelled. Null when there is none. */
   pickFolder: ((machine: number) => Promise<PickedFolder | null>) | null
   /** Brings a repository onto this machine. Without it the project list has no clone rows. */
   cloner?: RepoCloner | null

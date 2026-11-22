@@ -63,7 +63,8 @@ export type SidebarProps = {
    * Opens a folder of a machine as a project, starting nothing. Every + that is not a project's own does this: a session
    * is started from an opened project, never on its own.
    */
-  onOpenProject: (machine: number) => void
+  /** Shows Open a project: browsing a machine's folders, or every source when no machine is named (null). */
+  onOpenProject: (machine: number | null) => void
   /** What a project heading's buttons and right-click menu do; without it a heading only folds. */
   projectActions?: ProjectActions | undefined
   onMachineSettings: () => void
@@ -230,8 +231,7 @@ function Expanded(props: SidebarProps) {
   const whole = sidebarTree(props.machines, props.projects, shown, held, draft !== null)
   // Narrowed to one project, the tree drops what has nothing of it, as the list did before it was a tree.
   const tree = project === null ? whole : withSessionsOnly(whole, (head) => draft?.machine === head.machine)
-  const localMachine = props.machines[0]?.machine ?? 0
-  // With this computer alone its projects are the top of the tree; the header's + still opens one there.
+  // With this computer alone its projects are the top of the tree; the header's + opens one from any source.
   const headed = showsMachineHeadings(props.machines)
   // Every machine and project, whatever the filter: what waits on you is never narrowed out of sight.
   const waiting = waitingSessions(props.machines, props.projects)
@@ -348,7 +348,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <IconButton label="Search" tip={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" /></IconButton>
         <SidebarFilterMenu projects={projects} project={project} onProject={setPickedProject} />
-        <IconButton label="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(localMachine) }}><Icon name="plus" /></IconButton>
+        <IconButton label="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><Icon name="plus" /></IconButton>
       </div>
       {/* Outside the scrolling list, so it stays in view while the tree scrolls. */}
       <NeedsYouStrip waiting={waiting} namesMachine={headed} focusedId={props.focusedId} onOpen={openWaiting} onContextMenu={(event, { session }) => { openMenu(event, rowTitle(session), sessionMenu(session)) }} />
@@ -606,7 +606,7 @@ function Rail(props: SidebarProps) {
     <div className="mx-rail">
       <div className="mx-rail-top">
         <button type="button" className="mx-head-button is-rail" aria-label="Expand sidebar" title={tip('Expand sidebar', 'toggle-sidebar')} onClick={props.onToggleRail}><Icon name="expand" /></button>
-        <button type="button" className="mx-head-button is-rail" aria-label="Open a project" title="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(props.machines[0]?.machine ?? 0) }}><Icon name="plus" size={15} /></button>
+        <button type="button" className="mx-head-button is-rail" aria-label="Open a project" title="Open a project" disabled={!props.canStart} onClick={() => { props.onOpenProject(null) }}><Icon name="plus" size={15} /></button>
         <button type="button" className="mx-head-button is-rail" aria-label="Search" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" size={15} /></button>
       </div>
       <div className="mx-rail-rule" aria-hidden="true" />
