@@ -371,7 +371,7 @@ export function Card({ title, meta, children, foot, footRow = false }: { title: 
  * A card of settings most people never change: only its title until Show opens it. A search looks inside it anyway,
  * because the results draw each card's rows whatever the fold says.
  */
-function FoldedCard({ title, children }: { title: string; children: ReactNode }) {
+export function FoldedCard({ title, children }: { title: string; children: ReactNode }) {
   const [open, setOpen] = useState(false)
   const searching = useContext(SettingsSearch) !== null
   const bodyId = useId()

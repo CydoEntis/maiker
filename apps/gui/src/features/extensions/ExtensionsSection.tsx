@@ -1,8 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useId, useState } from 'react'
+import { useState } from 'react'
 import { AGENT_LABELS, confirmAdd, loadExtensions, removeExtension, setPluginEnabled, type AddPreview, type ExtensionFailure, type ExtensionResult, type ExtTarget, type Extension } from '@/api/extensions'
 import { Switch } from '@/components/ui/switch'
-import { Card, Row } from '@/features/settings/components/DesktopSettings'
+import { Card, FoldedCard, Row } from '@/features/settings/components/DesktopSettings'
 import { errorMessage } from '@/lib/error-message'
 import { AddCards, FailureLine } from './AddCards'
 import { AddDialog } from './AddDialog'
@@ -49,23 +49,14 @@ function ItemRow({ item, busy, onToggle, onRemove }: { item: Extension; busy: bo
   )
 }
 
-/** The two things only an agent's own terminal does, folded to one row so the page stays short. */
+/** The two things only an agent's own terminal does, folded to its title so the page stays short. */
 function TerminalCard() {
-  const [open, setOpen] = useState(false)
-  const id = useId()
   return (
-    <Card title="Needs a terminal">
-      <Row label="Two things only a terminal does" detail="Signing in to an MCP server, and approving a project's shared servers.">
-        <button type="button" className="mx-scard-button" aria-expanded={open} aria-controls={open ? id : undefined} onClick={() => { setOpen(!open) }}>{open ? 'Hide' : 'Show'}</button>
-      </Row>
-      {open && (
-        <div id={id}>
-          {TERMINAL_ONLY.map((each) => (
-            <Row key={each.title} label={each.title} detail={each.words}>{each.command !== null ? <code>{each.command}</code> : <span />}</Row>
-          ))}
-        </div>
-      )}
-    </Card>
+    <FoldedCard title="Needs a terminal">
+      {TERMINAL_ONLY.map((each) => (
+        <Row key={each.title} label={each.title} detail={each.words}>{each.command !== null ? <code>{each.command}</code> : <span />}</Row>
+      ))}
+    </FoldedCard>
   )
 }
 

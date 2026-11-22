@@ -1426,7 +1426,8 @@ needs a terminal ([spec](features/chat-extensions/spec.md)). The chat's `/plugin
   person's prompts, and **This runs code on your computer with your access.** Cancel is focused and Enter does not
   confirm; only the confirm button sends the token the review returned (`confirmAdd` is called from nowhere else). No
   "trust always". A server's keys and headers are not taken here.
-- **Needs a terminal.** A card folded to one row with **Show** (`aria-expanded`). Opened, it says in plain words with
+- **Needs a terminal.** A folded card (`FoldedCard`, as Terminal › Advanced): its title and **Show** (`aria-expanded`)
+  until opened, and a settings search looks inside it anyway. Opened, it says in plain words with
   the exact commands: `claude mcp login <name>` and `codex mcp login <name>` for a server that signs in through a
   browser, and that a project's `.mcp.json` servers wait for the person's approval inside Claude Code itself.
 - **Not seen on screen yet:** the page was written against the existing Settings cards and tests only.
