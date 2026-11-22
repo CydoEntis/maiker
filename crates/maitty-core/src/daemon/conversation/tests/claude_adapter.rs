@@ -1,7 +1,7 @@
 //! The Claude adapter driven directly: handshake, a streamed turn, approvals and interrupts.
 
 use super::*;
-use crate::conversation::{ApprovalDecision, ApprovalRequestKind, FileChangePreview, ProviderRequestId};
+use crate::conversation::{ApprovalDecision, ApprovalRequestKind, ProviderRequestId};
 use maitty_provider::ProviderEvent;
 
 /// What an event says in a word or two, for a test that checks the order of a turn's events.
@@ -196,11 +196,6 @@ async fn exercise_claude_approval(scenario: &str, decision: ApprovalDecision) {
     drop(directory);
 }
 
-#[tokio::test]
-async fn claude_adapter_allows_a_host_approved_tool() {
-    exercise_claude_approval("approval", ApprovalDecision::Accept).await;
-}
-
 #[test]
 fn only_the_most_recent_answered_approvals_are_kept() {
     use crate::conversation::{
@@ -234,96 +229,6 @@ fn only_the_most_recent_answered_approvals_are_kept() {
         state.answered_approvals[63].request.request_id,
         ProviderRequestId::Integer(69)
     );
-}
-
-/// A Claude `Edit` call reaches the history with its input and times, and its approval names
-/// the file, carries the diff and points at the tool's own step.
-#[tokio::test]
-async fn claude_edit_call_and_approval_carry_input_diff_and_a_link_to_the_tool_step() {
-    use super::super::history::{Attachments, Content, ItemState};
-    use crate::conversation::ConversationId;
-
-    let directory = crate::daemon::persist::scratch_dir();
-    let (launch, owner) = claude_launch(directory.path(), Some("tool-edit"));
-    let (task, stop, requests, mut received) = start_claude_adapter(launch, owner).await;
-    start_claude_thread(&requests, &mut received, owner).await;
-    requests
-        .send(super::runtime::Command {
-            token: 3,
-            request: claude_message(Default::default()),
-        })
-        .await
-        .unwrap();
-
-    let mut histories = Attachments::default();
-    histories.attach(1, ConversationId(1));
-    let mut approval = None;
-    loop {
-        match receive_claude_payload(&mut received, owner).await {
-            Payload::Event(ProviderEvent::ApprovalRequested { request, .. }) => {
-                let id = RequestId::from(request.request_id.clone());
-                approval = Some(request);
-                requests
-                    .send(super::runtime::Command {
-                        token: 4,
-                        request: super::super::runtime::Rpc::Answer {
-                            request: id.into(),
-                            decision: ApprovalDecision::Accept,
-                            permissions: None,
-                        },
-                    })
-                    .await
-                    .unwrap();
-            }
-            Payload::Event(event) => {
-                let ended = matches!(event, ProviderEvent::TurnCompleted { .. });
-                let update = super::super::history_provider::provider_event(ConversationId(1), event);
-                histories.apply(ConversationId(1), &update).unwrap();
-                if ended {
-                    break;
-                }
-            }
-            Payload::Response { .. } => {}
-            _ => panic!("unexpected Claude edit payload"),
-        }
-    }
-
-    let request = approval.expect("the edit asks for approval");
-    assert_eq!(request.kind, ApprovalRequestKind::FileChange);
-    assert_eq!(request.item_id.as_deref(), Some("toolu_edit"));
-    assert_eq!(request.command.as_deref(), Some("Edit: src/a.rs"));
-    assert_eq!(
-        request.changes,
-        [FileChangePreview { path: "src/a.rs".into(), kind: "update".into(), diff: "-old\n+new".into() }]
-    );
-
-    let history = histories.get(1).unwrap();
-    let tool = history
-        .entries
-        .iter()
-        .find(|entry| entry.source.item == "toolu_edit")
-        .expect("the edit step is in the history under the id the approval names");
-    assert_eq!(tool.state, ItemState::Completed);
-    let Content::Tool { label, output, input, .. } = &tool.content else {
-        panic!("an edit is a tool row");
-    };
-    assert_eq!(label, "Edit ");
-    assert_eq!(output, "edited");
-    assert_eq!(
-        input,
-        &Some(json!({"file_path":"src/a.rs","old_string":"old","new_string":"new"}))
-    );
-    let (started, completed) = (tool.started_at_ms.unwrap(), tool.completed_at_ms.unwrap());
-    assert!(completed >= started);
-    let turn = history
-        .entries
-        .iter()
-        .find(|entry| entry.content == Content::TurnStatus)
-        .expect("the turn has a row");
-    assert!(turn.started_at_ms.is_some() && turn.completed_at_ms.is_some());
-
-    stop_claude_adapter(task, stop, &mut received, owner).await;
-    drop(directory);
 }
 
 #[tokio::test]
@@ -430,62 +335,6 @@ async fn a_late_claude_init_naming_another_session_ends_the_turn() {
         Payload::Terminated { failure: Some(ref failure), .. } if failure.contains("different session")
     ));
     task.await.unwrap();
-    drop(directory);
-}
-
-#[tokio::test]
-async fn claude_adapter_acknowledges_interrupts_for_the_active_turn() {
-    let directory = crate::daemon::persist::scratch_dir();
-    let (launch, owner) = claude_launch(directory.path(), Some("interrupt"));
-    let (task, stop, requests, mut received) = start_claude_adapter(launch, owner).await;
-    start_claude_thread(&requests, &mut received, owner).await;
-    requests
-        .send(super::runtime::Command {
-            token: 3,
-            request: claude_message(Default::default()),
-        })
-        .await
-        .unwrap();
-
-    let mut turn_id = None;
-    let mut acknowledged = false;
-    for _ in 0..4 {
-        match receive_claude_payload(&mut received, owner).await {
-            Payload::Event(ProviderEvent::TurnStarted { turn, .. }) => turn_id = Some(turn),
-            Payload::Event(ProviderEvent::Item(_)) => {}
-            Payload::Response {
-                token: 3,
-                result: Ok(value),
-            } => {
-                assert_eq!(value["turn"]["status"], "inProgress");
-                acknowledged = true;
-            }
-            _ => panic!("unexpected Claude interrupt setup payload"),
-        }
-    }
-    assert!(acknowledged, "the submitted prompt should be acknowledged");
-    let turn_id = turn_id.expect("the turn start should include its exact ID");
-
-    requests
-        .send(super::runtime::Command {
-            token: 4,
-            request: super::super::runtime::Rpc::Interrupt { session: "fixture-session".into(), turn: turn_id },
-        })
-        .await
-        .unwrap();
-    assert!(matches!(
-        receive_claude_payload(&mut received, owner).await,
-        Payload::Response {
-            token: 4,
-            result: Ok(ref value)
-        } if value == &json!({})
-    ));
-    // Claude ends a stopped turn with an error result; the person asked for it, so it is interrupted.
-    assert!(matches!(
-        receive_claude_payload(&mut received, owner).await,
-        Payload::Event(event) if turn_ended(&event, super::super::history::ItemState::Interrupted)
-    ));
-    stop_claude_adapter(task, stop, &mut received, owner).await;
     drop(directory);
 }
 

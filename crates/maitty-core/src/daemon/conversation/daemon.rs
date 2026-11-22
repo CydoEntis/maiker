@@ -685,14 +685,9 @@ mod cache_write_tests {
     use crate::protocol::Status;
 
     #[test]
-    fn a_superseded_or_disabled_cache_write_is_not_reported_as_a_conversation_error() {
+    fn a_superseded_or_disabled_cache_write_is_no_error_but_an_io_error_is_reported() {
         assert!(cache_write_result(Ok(false)).is_ok());
-    }
-
-    #[test]
-    fn a_cache_io_error_is_still_reported() {
         let result = cache_write_result(Err(anyhow::anyhow!("disk failed")));
-
         assert_eq!(result.unwrap_err().to_string(), "disk failed");
     }
 

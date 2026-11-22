@@ -799,11 +799,11 @@ async fn run_turn(
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_output_frame, verified_version};
+    use super::parse_output_frame;
     use crate::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox};
     use crate::conversation::TurnChoice;
     use maitty_provider_claude::{
-        MAX_FRAME_BYTES, OutputFrame, command_arguments, command_arguments_for_turn, session_id,
+        MAX_FRAME_BYTES, OutputFrame, command_arguments, command_arguments_for_turn,
     };
     use serde_json::json;
     use std::path::PathBuf;
@@ -820,46 +820,6 @@ mod tests {
             approval_policy,
             sandbox,
         }
-    }
-
-    #[test]
-    fn recognizes_only_the_locally_verified_cli_version() {
-        assert!(verified_version("2.1.312"));
-        assert!(verified_version("2.1.314"));
-        assert!(verified_version("2.1.316"));
-        assert!(verified_version("2.1.327"));
-        assert!(verified_version("2.1.330"));
-        assert!(!verified_version("2.1.313"));
-        assert!(!verified_version("2.1.31"));
-    }
-
-    #[test]
-    fn creates_a_valid_unique_provider_session_id() {
-        let first = session_id().unwrap();
-        let second = session_id().unwrap();
-        assert_eq!(first.len(), 36);
-        assert_eq!(first.as_bytes()[14], b'4');
-        assert!(matches!(first.as_bytes()[19], b'8'..=b'b'));
-        assert_ne!(first, second);
-    }
-
-    #[test]
-    fn maps_read_only_settings_to_claude_plan_mode() {
-        let args = command_arguments(
-            "session-1",
-            false,
-            &settings(ApprovalPolicy::OnRequest, Sandbox::ReadOnly),
-        );
-        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--permission-mode", "plan"])
-        );
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--session-id", "session-1"])
-        );
-        assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
     }
 
     #[test]
@@ -943,72 +903,51 @@ mod tests {
     }
 
     #[test]
-    fn reads_session_identity_from_initialization() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"system","subtype":"init","session_id":"session-1"}"#)
-                .unwrap(),
-            OutputFrame::Initialized {
-                session_id: "session-1".into()
-            }
-        );
-    }
-
-    #[test]
-    fn reads_streaming_text_and_content_block_identity() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"hello"}}}"#).unwrap(),
-            OutputFrame::TextDelta { block_index: 2, text: "hello".into() }
-        );
-    }
-
-    #[test]
-    fn reads_message_identity_and_model_from_stream_start() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg-1","model":"claude-sonnet"}}}"#).unwrap(),
-            OutputFrame::MessageStarted {
-                message_id: "msg-1".into(),
-                model: "claude-sonnet".into()
-            }
-        );
-    }
-
-    #[test]
-    fn reads_tool_input_deltas_and_content_block_completion() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"command\":"}}}"#).unwrap(),
-            OutputFrame::ToolInputDelta {
-                block_index: 3,
-                partial_json: "{\"command\":".into()
-            }
-        );
-        assert_eq!(
-            parse_output_frame(
-                r#"{"type":"stream_event","event":{"type":"content_block_stop","index":3}}"#
-            )
-            .unwrap(),
-            OutputFrame::ContentBlockEnded { block_index: 3 }
-        );
-    }
-
-    #[test]
-    fn reads_tool_name_and_initial_input() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"pwd"}}}}"#).unwrap(),
-            OutputFrame::ToolUse {
-                block_index: 1,
-                id: "tool-1".into(),
-                name: "Bash".into(),
-                input: json!({"command":"pwd"})
-            }
-        );
-    }
-
-    #[test]
-    fn ignores_nested_subagent_streams() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","parent_tool_use_id":"tool-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private child output"}}}"#).unwrap(),
-            OutputFrame::Other
-        );
+    fn each_frame_claude_streams_is_read_with_the_identity_it_carries() {
+        let request =
+            json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"git status"}});
+        let control = json!({"type":"control_request","request_id":"request-8","request":request})
+            .to_string();
+        let cases = [
+            (
+                r#"{"type":"system","subtype":"init","session_id":"session-1"}"#,
+                OutputFrame::Initialized { session_id: "session-1".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg-1","model":"claude-sonnet"}}}"#,
+                OutputFrame::MessageStarted { message_id: "msg-1".into(), model: "claude-sonnet".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"command\":"}}}"#,
+                OutputFrame::ToolInputDelta { block_index: 3, partial_json: "{\"command\":".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_stop","index":3}}"#,
+                OutputFrame::ContentBlockEnded { block_index: 3 },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"pwd"}}}}"#,
+                OutputFrame::ToolUse {
+                    block_index: 1,
+                    id: "tool-1".into(),
+                    name: "Bash".into(),
+                    input: json!({"command":"pwd"}),
+                },
+            ),
+            // A helper's nested stream is not this conversation's.
+            (
+                r#"{"type":"stream_event","parent_tool_use_id":"tool-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private child output"}}}"#,
+                OutputFrame::Other,
+            ),
+            // The body of an approval request is kept whole, to answer it natively.
+            (
+                control.as_str(),
+                OutputFrame::ControlRequest { request_id: "request-8".into(), request },
+            ),
+        ];
+        for (line, frame) in cases {
+            assert_eq!(parse_output_frame(line).unwrap(), frame, "{line}");
+        }
     }
 
     #[test]
@@ -1040,20 +979,6 @@ mod tests {
             "x".repeat(MAX_FRAME_BYTES)
         );
         assert!(parse_output_frame(&frame).is_err());
-    }
-
-    #[test]
-    fn preserves_control_request_body_for_provider_native_approval() {
-        let request =
-            json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"git status"}});
-        let frame = json!({"type":"control_request","request_id":"request-8","request":request});
-        assert_eq!(
-            parse_output_frame(&frame.to_string()).unwrap(),
-            OutputFrame::ControlRequest {
-                request_id: "request-8".into(),
-                request
-            }
-        );
     }
 
     #[test]

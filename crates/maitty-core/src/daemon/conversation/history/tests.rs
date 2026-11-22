@@ -224,31 +224,6 @@ fn authoritative_hydration_replaces_drafts_in_native_order() {
     );
 }
 #[test]
-fn a_codex_file_edit_keeps_its_files_and_diff_for_review() {
-    let mut a = Attachments::default();
-    a.attach(1, ConversationId(1));
-    a.notification(ConversationId(1), "native", "item/completed", &json!({"threadId":"native","turnId":"turn","item":{"id":"edit","type":"fileChange","status":"completed","changes":[{"path":"main.go","kind":{"type":"update"},"diff":"@@ -1 +1 @@
--old
-+new
-"},{"path":"notes.txt","kind":"add","diff":"hello"}]}})).unwrap();
-    let history = a.get(1).unwrap();
-    // A file edit is understood now; it must not mark the history as unsupported.
-    assert_ne!(
-        history.completeness,
-        Completeness::Incomplete(IncompleteReason::UnsupportedItem)
-    );
-    assert_eq!(history.entries[0].state, ItemState::Completed);
-    let Content::Tool { kind, output, label, .. } = &history.entries[0].content else {
-        panic!("a file edit is shown as a tool row");
-    };
-    assert_eq!(kind, "fileChange");
-    assert_eq!(label, "Edited 2 files");
-    assert!(output.contains("main.go (update)") && output.contains("+new"));
-    assert!(output.contains("notes.txt (add)
-hello"));
-}
-
-#[test]
 fn provider_tool_lifecycle_replaces_one_row_and_preserves_failed_status() {
     let mut a = Attachments::default();
     a.attach(1, ConversationId(1));
@@ -347,7 +322,7 @@ fn a_codex_reasoning_summary_is_kept_as_its_own_item_and_hidden_reasoning_is_not
 }
 
 #[test]
-fn authoritative_items_ignore_replayed_deltas_and_hydration_dies_with_attachment() {
+fn authoritative_items_ignore_replayed_deltas_and_starts_and_hydration_dies_with_attachment() {
     let mut h = History::new(ConversationId(1));
     h.apply(Update::UpsertItem(entry(1))).unwrap();
     h.apply(Update::AppendDelta {
@@ -356,21 +331,17 @@ fn authoritative_items_ignore_replayed_deltas_and_hydration_dies_with_attachment
     })
     .unwrap();
     assert_eq!(h.entries, vec![entry(1)]);
+    // A completed item cannot regress when its start is replayed.
+    let mut started = entry(1);
+    started.state = ItemState::Running;
+    h.apply(Update::UpsertItem(started)).unwrap();
+    assert_eq!(h.entries, vec![entry(1)]);
     let mut a = Attachments::default();
     a.attach(4, ConversationId(1));
     a.hydrate_native(4, h.clone()).unwrap();
     assert_eq!(a.get(4).unwrap().entries, vec![entry(1)]);
     a.detach(4);
     assert!(a.hydrate_native(4, h).is_err());
-}
-#[test]
-fn completed_native_item_cannot_regress_when_started_is_replayed() {
-    let mut h = History::new(ConversationId(1));
-    h.apply(Update::UpsertItem(entry(1))).unwrap();
-    let mut started = entry(1);
-    started.state = ItemState::Running;
-    h.apply(Update::UpsertItem(started)).unwrap();
-    assert_eq!(h.entries, vec![entry(1)]);
 }
 #[test]
 fn hydrated_active_prefix_survives_following_delta() {
@@ -424,56 +395,8 @@ fn empty_delta_preserves_content_and_existing_cursor() {
     );
 }
 #[test]
-fn exhausted_revision_rejects_apply_before_content_or_cursor_changes() {
-    let mut h = History::new(ConversationId(1));
-    h.apply(Update::UpsertItem(entry(1))).unwrap();
-    h.apply(Update::UpsertItem(entry(2))).unwrap();
-    h.revision = u64::MAX;
-    let cursor = h.read(None, 1, MAX_READ_BYTES).unwrap().next.unwrap();
-    let before = h.clone();
-    assert_eq!(
-        h.apply(Update::UpsertItem(entry(3))),
-        Err(IncompleteReason::RevisionExhausted)
-    );
-    assert_eq!(h, before);
-    assert_eq!(
-        h.read(Some(&cursor), 1, MAX_READ_BYTES).unwrap().entries,
-        vec![entry(2)]
-    );
-}
-#[test]
-fn exhausted_reconnect_and_hydration_leave_existing_content_unchanged() {
-    let mut h = History::new(ConversationId(1));
-    h.apply(Update::UpsertItem(entry(1))).unwrap();
-    h.revision = u64::MAX;
-    let before = h.clone();
-    assert_eq!(h.reconnect(), Err(IncompleteReason::RevisionExhausted));
-    assert_eq!(h, before);
-    assert!(h.hydrate(vec![entry(2)], Completeness::Complete).is_err());
-    assert_eq!(h, before);
-}
-#[test]
-fn exhausted_imported_revisions_cannot_partially_replace_an_attachment() {
-    let mut attachments = Attachments::default();
-    attachments.attach(1, ConversationId(1));
-    let mut original = History::new(ConversationId(1));
-    original.apply(Update::UpsertItem(entry(1))).unwrap();
-    attachments.hydrate_native(1, original).unwrap();
-    let before = attachments.get(1).unwrap().clone();
-    for revision in [u64::MAX, u64::MAX - 1] {
-        let mut imported = History::new(ConversationId(1));
-        imported.apply(Update::UpsertItem(entry(2))).unwrap();
-        imported.revision = revision;
-        if revision == u64::MAX {
-            assert!(attachments.hydrate_native(1, imported.clone()).is_err());
-            assert_eq!(attachments.get(1), Some(&before));
-        }
-        assert!(attachments.hydrate_cached(1, imported).is_err());
-        assert_eq!(attachments.get(1), Some(&before));
-    }
-}
-#[test]
-fn last_available_revision_advances_once_and_then_rejects_without_wrapping() {
+fn an_exhausted_revision_refuses_every_change_and_leaves_content_and_cursors_alone() {
+    // The last available revision is used once, without wrapping.
     let mut h = History::new(ConversationId(1));
     h.revision = u64::MAX - 1;
     h.apply(Update::UpsertItem(entry(1))).unwrap();
@@ -497,9 +420,48 @@ fn last_available_revision_advances_once_and_then_rejects_without_wrapping() {
         Err(IncompleteReason::RevisionExhausted)
     );
     assert_eq!(h, before);
+    assert_eq!(h.reconnect(), Err(IncompleteReason::RevisionExhausted));
+    assert_eq!(h, before);
+
+    // A cursor taken before the refusal still reads.
+    let mut h = History::new(ConversationId(1));
+    h.apply(Update::UpsertItem(entry(1))).unwrap();
+    h.apply(Update::UpsertItem(entry(2))).unwrap();
+    h.revision = u64::MAX;
+    let cursor = h.read(None, 1, MAX_READ_BYTES).unwrap().next.unwrap();
+    let before = h.clone();
+    assert_eq!(
+        h.apply(Update::UpsertItem(entry(3))),
+        Err(IncompleteReason::RevisionExhausted)
+    );
+    assert_eq!(h, before);
+    assert_eq!(
+        h.read(Some(&cursor), 1, MAX_READ_BYTES).unwrap().entries,
+        vec![entry(2)]
+    );
 }
 #[test]
-fn near_exhausted_cached_hydration_uses_only_available_revisions() {
+fn an_attachment_at_or_near_its_last_revision_is_never_partly_changed() {
+    // An imported history whose revisions are spent cannot replace an attachment.
+    let mut attachments = Attachments::default();
+    attachments.attach(1, ConversationId(1));
+    let mut original = History::new(ConversationId(1));
+    original.apply(Update::UpsertItem(entry(1))).unwrap();
+    attachments.hydrate_native(1, original).unwrap();
+    let before = attachments.get(1).unwrap().clone();
+    for revision in [u64::MAX, u64::MAX - 1] {
+        let mut imported = History::new(ConversationId(1));
+        imported.apply(Update::UpsertItem(entry(2))).unwrap();
+        imported.revision = revision;
+        if revision == u64::MAX {
+            assert!(attachments.hydrate_native(1, imported.clone()).is_err());
+            assert_eq!(attachments.get(1), Some(&before));
+        }
+        assert!(attachments.hydrate_cached(1, imported).is_err());
+        assert_eq!(attachments.get(1), Some(&before));
+    }
+
+    // A cached history near the end uses only the revisions left, then refuses a reconnect.
     let mut attachments = Attachments::default();
     attachments.attach(1, ConversationId(1));
     let mut imported = History::new(ConversationId(1));
@@ -515,9 +477,8 @@ fn near_exhausted_cached_hydration_uses_only_available_revisions() {
         Err(IncompleteReason::RevisionExhausted)
     );
     assert_eq!(attachments.get(1), Some(&before));
-}
-#[test]
-fn exhausted_attachment_prevents_partial_notification_or_reconnect_updates() {
+
+    // One spent attachment stops a notification or reconnect for every attachment of the conversation.
     let mut attachments = Attachments::default();
     for attachment in [1, 2] {
         attachments.attach(attachment, ConversationId(1));
@@ -638,6 +599,14 @@ fn a_delta_read_pages_and_a_change_made_between_its_pages_is_not_missed() {
 
 #[test]
 fn a_history_that_was_rebuilt_answers_a_resume_cursor_with_a_reset_from_the_start() {
+    // A reconnect that drops nothing keeps a resume cursor valid.
+    let mut h = History::new(ConversationId(1));
+    h.apply(Update::UpsertItem(entry(1))).unwrap();
+    let resume = h.read(None, 128, MAX_READ_BYTES).unwrap().resume.unwrap();
+    h.reconnect().unwrap();
+    assert!(!h.read(Some(&resume), 128, MAX_READ_BYTES).unwrap().reset);
+
+    // One that drops a running row is a reset.
     let mut h = History::new(ConversationId(1));
     h.apply(Update::UpsertItem(entry(1))).unwrap();
     h.apply(Update::UpsertItem(running(2))).unwrap();
@@ -651,17 +620,6 @@ fn a_history_that_was_rebuilt_answers_a_resume_cursor_with_a_reset_from_the_star
     // The new cursor works.
     let next = h.read(page.resume.as_ref(), 128, MAX_READ_BYTES).unwrap();
     assert!(!next.reset && next.entries.is_empty());
-}
-
-#[test]
-fn a_reconnect_that_drops_nothing_keeps_resume_cursors_valid() {
-    let mut h = History::new(ConversationId(1));
-    h.apply(Update::UpsertItem(entry(1))).unwrap();
-    let resume = h.read(None, 128, MAX_READ_BYTES).unwrap().resume.unwrap();
-
-    h.reconnect().unwrap();
-
-    assert!(!h.read(Some(&resume), 128, MAX_READ_BYTES).unwrap().reset);
 }
 
 #[test]

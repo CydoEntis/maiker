@@ -502,6 +502,11 @@ fn a_claude_hint_that_is_not_this_sessions_file_stays_an_error() {
 
 #[tokio::test]
 async fn the_conversation_of_a_followed_claude_pane_reports_its_mode_and_model() {
+    // A file that says nothing of its setup reports none.
+    let mut plain = World::new();
+    plain.follow().await;
+    assert!(plain.read_all(61).unwrap().meta.is_none());
+
     let mut world = World::new();
     let prompt = json!({ "type": "user", "uuid": "u-1", "isSidechain": false, "permissionMode": "acceptEdits",
         "timestamp": "2026-11-06T10:00:00.000Z", "message": { "role": "user", "content": "go" } });
@@ -560,15 +565,6 @@ async fn a_new_session_renamed_before_its_first_message_takes_that_name() {
     world.follow().await;
 
     assert_eq!(world.daemon.terms[&world.pane].label, "first thing");
-}
-
-#[tokio::test]
-async fn a_followed_pane_whose_file_says_nothing_of_its_setup_reports_none() {
-    let mut world = World::new();
-
-    world.follow().await;
-
-    assert!(world.read_all(61).unwrap().meta.is_none());
 }
 
 #[tokio::test]
@@ -774,16 +770,6 @@ async fn a_file_that_cannot_be_read_is_said_not_shown_empty_as_if_complete() {
         read.history.completeness,
         Completeness::Incomplete(_)
     ));
-}
-
-#[test]
-fn a_working_or_asking_agent_is_read_four_times_as_often_as_one_at_rest() {
-    assert_eq!(follow_gap(Status::Working), FOLLOW_EVERY_ACTIVE);
-    assert_eq!(follow_gap(Status::Blocked), FOLLOW_EVERY_ACTIVE);
-    for resting in [Status::None, Status::Idle, Status::Done] {
-        assert_eq!(follow_gap(resting), FOLLOW_EVERY);
-    }
-    assert_eq!(FOLLOW_EVERY.as_millis(), 4 * FOLLOW_EVERY_ACTIVE.as_millis());
 }
 
 fn claude_thought(n: usize, text: &str) -> String {

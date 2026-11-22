@@ -404,7 +404,8 @@ mod native_resume_tests {
     }
 
     #[test]
-    fn missing_claude_cache_is_explicitly_incomplete() {
+    fn a_claude_cache_is_complete_only_while_live_and_keeps_its_saved_messages() {
+        // No cache at all is explicitly incomplete.
         let (history, is_complete) = cached_claude_history(ConversationId(9), None, false).unwrap();
         assert!(!is_complete);
         assert_eq!(history.conversation, ConversationId(9));
@@ -413,10 +414,7 @@ mod native_resume_tests {
             history.completeness,
             Completeness::Incomplete(history::IncompleteReason::Disconnected)
         );
-    }
 
-    #[test]
-    fn disconnected_claude_cache_keeps_saved_messages_visible_but_incomplete() {
         let id = ConversationId(10);
         let mut cached = History::new(id);
         cached.set_completeness(Completeness::Complete).unwrap();
@@ -435,21 +433,16 @@ mod native_resume_tests {
             completed_at_ms: None,
         });
 
+        // Disconnected: the saved messages stay visible, but the history is incomplete.
         let (history, is_complete) = cached_claude_history(id, Some(&cached), false).unwrap();
-
         assert!(!is_complete);
         assert_eq!(history.entries, cached.entries);
         assert_eq!(
             history.completeness,
             Completeness::Incomplete(history::IncompleteReason::Disconnected)
         );
-    }
 
-    #[test]
-    fn live_claude_history_stays_complete_without_rewriting_entries() {
-        let id = ConversationId(11);
-        let mut cached = History::new(id);
-        cached.set_completeness(Completeness::Complete).unwrap();
+        // Live: complete, with the entries as they were.
         let (history, is_complete) = cached_claude_history(id, Some(&cached), true).unwrap();
         assert!(is_complete);
         assert_eq!(history.completeness, Completeness::Complete);
