@@ -9,7 +9,7 @@ const command = (name: string, terminal?: true): SlashCommand => ({ name, descri
 describe('the commands the window answers itself', () => {
   it('opens the window\'s own screen for a command typed alone, by its name or another name for it', () => {
     expect(windowRouteOf('diff')).toEqual({ kind: 'panel', view: 'changes' })
-    expect(windowRouteOf('undo')).toEqual({ kind: 'panel', view: 'history' })
+    expect(windowRouteOf('undo')?.kind).toBe('note')
     expect(windowRouteOf('allowed-tools')).toEqual({ kind: 'settings', section: 'permissions' })
     expect(windowRouteOf('resume')).toEqual({ kind: 'recent' })
     expect(windowRouteOf('help')).toEqual({ kind: 'commands' })

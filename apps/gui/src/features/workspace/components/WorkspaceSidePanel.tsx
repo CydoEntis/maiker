@@ -26,9 +26,6 @@ export function WorkspaceSidePanel() {
       changedFiles={diffStat.data?.files ?? 0}
       {...(focusedSession.branch ? { branch: focusedSession.branch } : {})}
       view={inspectView}
-      agentWorking={focusedSession.status === 'working'}
-      timeline={focusedSession.timeline}
-      checks={focusedSession.checks}
       machine={focusedSession.machine}
       machineName={focusedSession.machineName}
       lookAt={lookAt}

@@ -77,7 +77,6 @@ const ICON_DRAWINGS = {
   repo: ({ size = 16 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></Svg>,
   files: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" /></Svg>,
   changes: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><path d="M8 9h8M12 7v4M8 16h8" /></Svg>,
-  history: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Svg>,
   references: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1Z" /></Svg>,
   laptop: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="4.5" y="5" width="15" height="10.5" rx="1.8" /><path d="M2.5 19h19" /></Svg>,
   /** This computer, in a sidebar row and a machine group. */

@@ -20,7 +20,6 @@
 .mx-inspect-head { flex: none; height: 40px; display: flex; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); color: var(--muted); }
 .mx-inspect-title { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
 .mx-inspect-count { font: 500 11px var(--mono); color: var(--dim); font-variant-numeric: tabular-nums; }
-.mx-inspect-count.is-bad { color: var(--danger); }
 .mx-inspect-close { width: 28px; height: 28px; display: grid; place-items: center; border-radius: var(--r-control); color: var(--muted); }
 .mx-inspect-close:hover { background: var(--m-hover); color: var(--fg); }
 .mx-inspect-close:focus-visible { box-shadow: var(--focus-underline); }
@@ -61,32 +60,21 @@
 .mx-changes-hint { flex: none; font-size: 11.5px; color: var(--dim); white-space: nowrap; }
 .mx-changes-main .mx-patch { flex: 1; min-height: 0; padding: 8px 0; font-size: 12.5px; line-height: 1.75; }
 .mx-changes-none { margin: auto; padding: 24px; font-size: 12.5px; color: var(--dim); text-align: center; }
-.mx-inspect-body, .mx-inspect-split { display: flex; flex-direction: column; gap: 10px; }
+.mx-inspect-body { display: flex; flex-direction: column; gap: 10px; }
 .mx-inspect-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-inspect-row { width: 100%; min-height: 28px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 4px 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); text-align: left; }
-button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
+button.mx-inspect-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk))); }
 .mx-inspect-row.is-current { background: rgba(var(--hl), calc(.08 * var(--hk))); color: var(--fg); }
-.mx-inspect-pick { flex: 1; display: flex; gap: 8px; align-items: center; text-align: left; color: inherit; }
 .mx-inspect-main { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .mx-inspect-meta { flex: none; font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .mx-inspect-note { margin: 0; padding: 4px 8px; font-size: 12.5px; color: var(--dim); }
 .mx-inspect-note.is-error { color: var(--danger); }
-.mx-inspect-empty { display: flex; flex-direction: column; gap: 6px; padding: 12px 8px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
-.mx-inspect-empty strong { font-weight: 600; color: var(--fg2); }
-.mx-inspect-empty code { font-family: var(--mono); color: var(--fg2); }
-.mx-inspect-summary { margin: 0; font-size: 13px; font-weight: 600; color: var(--fg); }
 .mx-inspect-file { margin: 0 0 6px; font-family: var(--mono); font-size: 12px; font-weight: 500; color: var(--fg2); }
 .mx-inspect-crumbs { display: flex; flex-wrap: wrap; gap: 2px; margin-bottom: 6px; font-family: var(--mono); font-size: 12px; }
 .mx-inspect-crumbs button { padding: 2px 6px; border-radius: var(--r-control); color: var(--muted); }
 .mx-inspect-crumbs button:hover { color: var(--fg); background: rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-inspect-toggle { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--fg2); }
 .mx-inspect-action { height: 24px; padding: 0 8px; border-radius: var(--r-control); font-size: 12px; color: var(--fg2); box-shadow: inset 0 0 0 1px var(--pane-line); }
 .mx-inspect-action:disabled { opacity: .4; }
-.mx-inspect-confirm { flex-basis: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; padding: 8px; border-radius: var(--r-control); background: var(--m-well); font-size: 12px; }
-.mx-inspect-confirm span { flex: 1; min-width: 180px; }
-.mx-inspect-confirm button { height: 26px; padding: 0 10px; border-radius: var(--r-control); background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg2); }
-.mx-inspect-confirm button.is-danger { background: var(--danger); color: var(--on-danger); }
-.mx-inspect-confirm button:disabled { opacity: .5; }
 .mx-patch, .mx-preview { margin: 0; padding: 8px 0; border-radius: 0; background: transparent; font-family: var(--mono); font-size: 11.5px; line-height: 1.5; overflow: auto; }
 .mx-patch-line, .mx-preview > span { display: block; padding: 0 10px; white-space: pre; }
 .mx-patch-line.is-add { background: color-mix(in oklab, var(--ok) 16%, transparent); }
@@ -229,16 +217,6 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-changes-tick { flex: none; width: 14px; height: 14px; accent-color: var(--accent); }
 /* A native checkbox paints no box-shadow, so its row takes the underline instead. */
 .mx-changes-line:has(.mx-changes-tick:focus-visible), .mx-changes-all:has(.mx-changes-tick:focus-visible) { box-shadow: var(--focus-underline); }
-/* History: Snapshots or the status log, picked above the list. */
-.mx-history { display: flex; flex-direction: column; gap: 10px; }
-.mx-history-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.mx-history-sub { font-size: 12px; color: var(--dim); }
 /* Files: References opens from the top of the tree. */
 .mx-files-refs { width: 100%; min-height: 28px; display: flex; align-items: center; gap: 6px; margin-bottom: 4px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); text-align: left; }
 .mx-files-refs:hover { background: var(--m-hover); color: var(--fg); }
-/* Checks: how often they run and how many, with Run all, above the list. */
-.mx-checks-view { display: flex; flex-direction: column; gap: 8px; }
-.mx-checks-bar { display: flex; align-items: center; gap: 8px; min-height: 32px; font-size: 12px; color: var(--fg2); }
-.mx-checks-run { height: 28px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: var(--m-raise); border: 1px solid var(--line2); }
-.mx-checks-run:hover:not(:disabled) { background: var(--m-hover); }
-.mx-checks-run:disabled { opacity: .55; cursor: default; }

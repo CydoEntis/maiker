@@ -20,7 +20,6 @@ const DiffSchema = z.object({
   truncated: z.boolean(),
 })
 const BranchSchema = z.object({ name: z.string(), current: z.boolean() })
-const CommitSchema = z.object({ hash: z.string(), subject: z.string(), author: z.string(), time: z.number().int() })
 const WorktreeSchema = z.object({ path: z.string(), branch: z.string(), main: z.boolean(), repo: z.string() })
 const SnapshotSchema = z.object({ commit: z.string(), at: Count, why: z.string() })
 const ReferenceSchema = z.object({ name: z.string(), kind: z.string(), bytes: Count, modified: Count })
@@ -31,7 +30,6 @@ export type RepoChangeKind = z.infer<typeof ChangeKindSchema>
 export type RepoEntry = z.infer<typeof EntrySchema>
 export type RepoDiff = z.infer<typeof DiffSchema>
 export type RepoBranch = z.infer<typeof BranchSchema>
-export type RepoCommit = z.infer<typeof CommitSchema>
 export type RepoWorktree = z.infer<typeof WorktreeSchema>
 export type RepoSnapshot = z.infer<typeof SnapshotSchema>
 export type RepoReference = z.infer<typeof ReferenceSchema>
@@ -43,8 +41,6 @@ export type HighlightedLines = z.infer<typeof HighlightSchema>
 export async function highlightFile(path: string, text: string): Promise<HighlightedLines> {
   return HighlightSchema.parse(await invoke('highlight_file', { path, text }))
 }
-
-const LOG_LIMIT = 60
 
 /**
  * Ask the daemon that owns pane `term` about the repository it is in: this computer's, or machine
@@ -73,7 +69,6 @@ export const repoDiffRange = (term: number, from: string, to: string, path: stri
   ask(term, { DiffRange: { from, to, path } }, 'Diff', DiffSchema)
 export const repoBranches = (term: number) => ask(term, 'Branches', 'Branches', z.array(BranchSchema))
 export const repoWorktrees = (term: number) => ask(term, 'Worktrees', 'Worktrees', z.array(WorktreeSchema))
-export const repoLog = (term: number) => ask(term, { Log: { limit: LOG_LIMIT } }, 'Log', z.array(CommitSchema))
 export const repoSnapshots = (term: number) => ask(term, 'Snapshots', 'Snapshots', z.array(SnapshotSchema))
 export const repoReferences = (term: number) => ask(term, 'References', 'References', z.array(ReferenceSchema))
 /** Files whose path holds `query`, best first, relative to the checkout's top; `truncated` when the daemon stopped looking early. */

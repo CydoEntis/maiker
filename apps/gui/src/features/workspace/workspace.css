@@ -368,15 +368,6 @@
 .mx-text-button:disabled { opacity: .4; }
 
 /* Naming a session. */
-.mx-check { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--pane-line); }
-.mx-check-head { display: flex; justify-content: space-between; gap: 10px; }
-.mx-check-head span, .mx-check small { color: var(--muted); font-size: 12px; }
-.mx-check.is-bad .mx-check-head span { color: var(--danger); }
-.mx-check.is-good .mx-check-head span { color: var(--ok); }
-.mx-check-command { font-family: var(--mono); font-size: 11.5px; color: var(--dim); overflow-wrap: anywhere; }
-.mx-check-actions, .mx-check-reason { display: flex; flex-wrap: wrap; gap: 6px; }
-.mx-check-reason input { flex: 1; min-width: 160px; }
-.mx-check-output { max-height: 240px; overflow: auto; margin: 0; padding: 8px; font-family: var(--mono); font-size: 11px; background: var(--m-well); border-radius: var(--r-control); white-space: pre-wrap; }
 .mx-files-editor { width: 100%; min-height: 320px; box-sizing: border-box; resize: vertical; white-space: pre; overflow: auto; color: inherit; background: transparent; border: 0; outline: 0; }
 /* A terminal session's request, answered in a dialog outside its pane (`OutsideAskDialogs.tsx`) on the shared dialog float. */
 .mx-outside-ask-tasks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; font-size: 13px; color: var(--fg); }

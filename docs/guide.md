@@ -874,7 +874,7 @@ pick the folder it goes inside, and the chat opens on the new folder. The side p
 works for a session on another machine too: it lists the changed files and their diffs, read from that
 machine. You can commit there too: tick the files, write the message, and **Commit**, **Pull** / **Push** /
 **Fetch** and **Create PR** all run on that machine, with its git name and its GitHub sign-in (a pull only
-fast-forwards; Create PR needs `gh` signed in there, see Settings › GitHub). The panel's Files, Branches, History and References tabs say they are
+fast-forwards; Create PR needs `gh` signed in there, see Settings › GitHub). The panel's Files lists that machine's folders and opens only its Markdown documents; References is
 local-only. If that machine is signed in to
 GitHub, the dialog also lists your repositories there: search, pick an owner, and click one to fill in its
 address. It works for this computer and for

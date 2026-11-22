@@ -753,8 +753,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and it is refused with a toast while the agent works. One typed out with what it takes goes the same way, since
   Claude Code draws its answer only in the terminal.
   Some of them the window answers itself, in a chat session too, and the picker tags each with where it goes instead
-  of `terminal` (`windowCommands.ts`): `/diff` opens the side panel's Changes, `/rewind` (`/checkpoint`, `/undo`) its
-  History, `/permissions` (`/allowed-tools`) Settings › Permissions with the approved commands, `/resume` Recent sessions,
+  of `terminal` (`windowCommands.ts`): `/diff` opens the side panel's Changes, `/rewind` (`/checkpoint`, `/undo`) is a
+  card that says going back is **Edit from here** on the message, `/permissions` (`/allowed-tools`) Settings › Permissions with the approved commands, `/resume` Recent sessions,
   and `/help` puts a lone `/` in the box so the list shows every command. Typed with something after the name they go
   to Claude Code as typed, which has a use for it. `/exit` (`/quit`), `/background` (`/bg`) and `/clear` are tagged
   `asks first`: the confirm dialog (`ConfirmDialog`, no Don't ask again) with Cancel focused says what happens, and only a yes sends the command as typed
