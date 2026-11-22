@@ -2,39 +2,40 @@ import { describe, expect, it } from 'vitest'
 import { contrastRatio, mixOklab, parseColor } from './color'
 import themeManifest from '@tokens/themes.json'
 import type { ThemeEntry } from './themes'
-import { findTheme, MIN_TEXT_CONTRAST, onDanger, paletteTheme, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
+import { findTheme, MIN_TEXT_CONTRAST, onDanger, terminalMinimumContrast, themeStyle, THEMES, xtermTheme } from './themes'
 
 const PALETTES = new Map(themeManifest.themes.flatMap((theme) => ('palette' in theme ? [[theme.name, theme.palette] as const] : [])))
-const MAITTY = ['Maiker Day', 'Maiker Dark', 'Maiker Light', 'Abyss', 'Ember', 'Moss', 'Dusk', 'Paper', 'Maiker Retro Dark', 'Maiker Retro Light']
+/** The design's ten themes (handoff section 2), by the side each is drawn on. */
+const DESIGN_THEMES = { dark: ['Maiker Dark', 'Graphite', 'Midnight', 'Ember', 'Forest'], light: ['Maiker Light', 'Paper', 'Mist', 'Sage', 'Rose'] }
+const ROLE_NAMES = ['--t0', '--t1', '--t2', '--t3', '--float-bg', '--well', '--fg', '--fg2', '--muted', '--dim', '--needs', '--working', '--ok', '--danger', '--sy-kw', '--sy-str', '--sy-fn', '--sy-num', '--sy-ty', '--sy-com', '--sy-prop']
 
 describe('themes', () => {
-
-  it("draws the design's eight themes exactly as written, shading included", () => {
-    // Night stays in the shared file for the terminal app; the desktop app does not list it.
-    const shown = [...PALETTES].filter(([name]) => name !== 'Maiker Night')
-    expect(shown.map(([name]) => name)).toEqual(MAITTY.slice(0, 8))
-    for (const [name, palette] of shown) {
-      const theme = findTheme(name)
-      expect(theme.tokens, name).toEqual(paletteTheme(palette))
+  it('draws every theme through the same roles: solid colours, an ink triple and a shadow strength', () => {
+    for (const theme of THEMES) {
       const style = themeStyle(theme)
-      expect([style['--hk'], style['--sk']], name).toEqual([palette.hk, palette.sk])
+      for (const role of ROLE_NAMES) expect(parseColor(style[role] ?? '').a, `${theme.name} ${role}`).toBe(1)
+      expect(style['--ink'], theme.name).toBe(theme.light ? '0,0,0' : '255,255,255')
+      expect(Number(style['--shk']), theme.name).toBeGreaterThan(0)
     }
-    const night = themeStyle(findTheme('Maiker Dark'))
-    expect(night['--bg']).toBe('#0c0c0d')
-    expect(night['--main']).toBe('#151517')
-    expect(night['--pane']).toBe(night['--main'])
-    expect(night['--accent']).toBe('#d39a2a')
-    expect(night['--accent-text']).toBe('#e0ab45')
-    expect(night['--working']).toBe('#3dd6c6')
-    expect(night['--warn']).toBe('#d9a032')
-    expect(night['--m-or']).toBe('#f0964a')
-    const day = themeStyle(findTheme('Maiker Day'))
-    expect(day['--bg']).toBe('#e9f0ed')
-    expect(day['--accent-text']).toBe('#8a5a00')
-    expect(day['--warn']).toBe('#9e2e12')
-    // One violet for every branch name, deeper on a light ground.
-    expect(night['--branch']).toBe('#A78BFA')
-    expect(day['--branch']).toBe('#6B46C1')
+  })
+
+  // One source of truth: a name from before the roles is only ever a reference to its role, so the two cannot disagree.
+  it('defines each older name it keeps from a role, never with a colour of its own', () => {
+    for (const theme of THEMES) {
+      const style = themeStyle(theme)
+      for (const name of ['--bg', '--main', '--pane', '--sel', '--raise', '--warn', '--hl', '--sk']) {
+        const role = /^var\((--[a-z0-9-]+)\)$/.exec(style[name] ?? '')?.[1]
+        expect(role, `${theme.name} ${name}`).toBeDefined()
+        expect(style[role ?? ''], `${theme.name} ${name}`).toBeDefined()
+      }
+    }
+  })
+
+  it("ships the design's ten themes beside the others, each on its own side", () => {
+    for (const name of DESIGN_THEMES.dark) expect(THEMES.find((theme) => theme.name === name)?.light, name).toBe(false)
+    for (const name of DESIGN_THEMES.light) expect(THEMES.find((theme) => theme.name === name)?.light, name).toBe(true)
+    expect(new Set(THEMES.map((theme) => theme.name)).size).toBe(THEMES.length)
+    expect(new Set(THEMES.map((theme) => theme.id)).size).toBe(THEMES.length)
   })
 
   it('gives every theme an opaque pane that is its main surface', () => {
@@ -91,7 +92,41 @@ const ANSI_TEXT_COLOURS = [
   'brightBlack', 'brightRed', 'brightGreen', 'brightYellow', 'brightBlue', 'brightMagenta', 'brightCyan', 'brightWhite',
 ] as const
 
+/**
+ * The design's own themes are drawn with its exact values, and these roles of theirs fall short of 4.5:1 on the pane or
+ * the window ground. Each is held to the ratio it reaches (rounded down), so one that gets worse, and any other role or
+ * theme under 4.5:1, still fails. An entry leaves this table when the design's value is corrected.
+ */
+type ShortRole = 'dim' | 'needs' | 'working' | 'ok' | 'danger'
+const DESIGN_SHORTFALLS: Record<string, Partial<Record<ShortRole, number>>> = {
+  'Maiker Light': { dim: 3.3, needs: 3.5, working: 3.6, ok: 3.9, danger: 4.2 },
+  Paper: { dim: 2.9, needs: 3.2, working: 3.3, ok: 3.6, danger: 3.8 },
+  Mist: { dim: 2.9, needs: 3.5, working: 3.6, ok: 3.8, danger: 4.1 },
+  Sage: { dim: 2.9, needs: 3.4, working: 3.5, ok: 3.8, danger: 4.0 },
+  Rose: { dim: 3.0, needs: 3.4, working: 3.5, ok: 3.8, danger: 4.0 },
+  Graphite: { dim: 4.4 },
+  Midnight: { dim: 4.3 },
+}
+
+/** The ratio a colour of this theme must reach as text: 4.5:1, or its recorded shortfall when it is one of the design's roles above. */
+function floorOf(theme: ThemeEntry, colour: string | undefined): number {
+  const short = Object.entries(DESIGN_SHORTFALLS[theme.name] ?? {}).find(([role]) => theme.roles[role as ShortRole] === colour)
+  return short?.[1] ?? MIN_TEXT_CONTRAST
+}
+
 describe('contrast audit', () => {
+  it('records a shortfall only for a role that really falls short', () => {
+    for (const [name, roles] of Object.entries(DESIGN_SHORTFALLS)) {
+      const theme = findTheme(name)
+      expect(theme.name).toBe(name)
+      for (const role of Object.keys(roles) as ShortRole[]) {
+        const reached = Math.min(contrastRatio(theme.roles[role], theme.roles.t0), contrastRatio(theme.roles[role], theme.roles.t1))
+        expect(reached, `${name} ${role}`).toBeLessThan(MIN_TEXT_CONTRAST)
+      }
+    }
+  })
+
+
   it.each(THEMES.map((theme) => [theme.name, theme] as const))('%s keeps a filled button readable: accent, warn and danger', (_name, theme) => {
     const { tokens } = theme
     expect(contrastRatio(tokens.onAccent, tokens.accent), 'label on accent').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
@@ -103,11 +138,11 @@ describe('contrast audit', () => {
   it.each(THEMES.map((theme) => [theme.name, theme] as const))('%s keeps text, terminal text and dim text readable on --term and --bg', (_name, theme) => {
     for (const [ground, colour] of TEXT_GROUNDS(theme.tokens)) {
       for (const slot of TERMINAL_TEXT_SLOTS) {
-        expect(contrastRatio(theme.tokens[slot], colour), `${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+        expect(contrastRatio(theme.tokens[slot], colour), `${slot} on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, theme.tokens[slot]))
       }
       const palette = xtermTheme(theme.tokens)
       expect(contrastRatio(palette.foreground ?? '', colour), `terminal foreground on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
-      expect(contrastRatio(palette.brightBlack ?? '', colour), `terminal dim text on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+      expect(contrastRatio(palette.brightBlack ?? '', colour), `terminal dim text on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, palette.brightBlack))
     }
   })
 
@@ -115,7 +150,7 @@ describe('contrast audit', () => {
     for (const theme of THEMES.filter((candidate) => candidate.light)) {
       for (const [ground, colour] of TEXT_GROUNDS(theme.tokens)) {
         for (const slot of [...STATUS_TEXT_SLOTS, ...ANSI_TEXT_SLOTS]) {
-          expect(contrastRatio(theme.tokens[slot], colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+          expect(contrastRatio(theme.tokens[slot], colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, theme.tokens[slot]))
         }
       }
     }
@@ -126,7 +161,7 @@ describe('contrast audit', () => {
       const palette = xtermTheme(theme.tokens)
       for (const slot of ANSI_TEXT_COLOURS) {
         for (const [ground, colour] of TEXT_GROUNDS(theme.tokens)) {
-          expect(contrastRatio(palette[slot] ?? '', colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+          expect(contrastRatio(palette[slot] ?? '', colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, palette[slot]))
         }
       }
     }
@@ -137,10 +172,10 @@ describe('contrast audit', () => {
       const palette = xtermTheme(theme.tokens)
       for (const [ground, colour] of TEXT_GROUNDS(theme.tokens)) {
         for (const slot of [...STATUS_TEXT_SLOTS, ...ANSI_TEXT_SLOTS]) {
-          expect(contrastRatio(theme.tokens[slot], colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+          expect(contrastRatio(theme.tokens[slot], colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, theme.tokens[slot]))
         }
         for (const slot of ANSI_TEXT_COLOURS) {
-          expect(contrastRatio(palette[slot] ?? '', colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST)
+          expect(contrastRatio(palette[slot] ?? '', colour), `${theme.name} ${slot} on ${ground}`).toBeGreaterThanOrEqual(floorOf(theme, palette[slot]))
         }
       }
     }

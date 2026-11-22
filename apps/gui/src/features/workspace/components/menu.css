@@ -3,7 +3,7 @@
   position: fixed; z-index: 91; min-width: 190px; padding: 4px; display: flex; flex-direction: column; border-radius: var(--r-panel);
   background: var(--main);
   border: 1px solid rgba(var(--hl), calc(.12 * var(--hk)));
-  color: var(--fg); font-family: "Geist Variable", Geist, system-ui, sans-serif;
+  color: var(--fg); font-family: var(--ui);
   animation: mx-pop .14s ease-out;
 }
 /* The menu itself holds focus while it is open; the rows show where you are, so the menu draws no focus underline of its own. */

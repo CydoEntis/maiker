@@ -109,11 +109,12 @@
 .mx-code-body .code-line { display: flex; min-width: max-content; }
 .mx-code-num { flex: none; width: 34px; padding-right: 12px; text-align: right; color: var(--dim); user-select: none; }
 .mx-code-text { padding-right: 14px; white-space: pre; }
-.mx-chat .tok-keyword { color: var(--code-kw); }
-.mx-chat .tok-string { color: var(--code-str); }
-.mx-chat .tok-comment { color: var(--code-com); font-style: italic; }
-.mx-chat .tok-number { color: var(--code-num); font-weight: 400; }
-.mx-chat .tok-variable, .mx-chat .tok-flag { color: var(--code-fn); font-weight: 400; }
+.mx-chat .tok-keyword { color: var(--sy-kw); }
+.mx-chat .tok-string { color: var(--sy-str); }
+.mx-chat .tok-comment { color: var(--sy-com); font-style: italic; }
+.mx-chat .tok-number { color: var(--sy-num); font-weight: 400; }
+.mx-chat .tok-variable { color: var(--sy-fn); font-weight: 400; }
+.mx-chat .tok-flag { color: var(--sy-prop); font-weight: 400; }
 
 /* One step the agent took: a 30px row that opens to its detail. */
 .mx-step { display: flex; flex-direction: column; min-width: 0; }

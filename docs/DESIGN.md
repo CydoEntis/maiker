@@ -346,9 +346,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Flat cards on the window ground** (the chat handoff, `design_handoff_maitty_chat`). The window is the theme's
   `--bg`, with two cards on it: the **sidebar** (264px, 12px from the window's edges) and the **workspace**, 12px
   beside it. Each is a solid `--main` with a 1px `--line` hairline, no highlight and no shadow. Only what opens over
-  them casts a shadow (`--sh-pop`); a waiting card rising from the message box casts `--sh-rise`. `--hl`/`--hk` (the
-  highlight colour and strength) and `--sd`/`--sk` (the shadow) are theme tokens; the design's nine themes set their
-  own strengths (`hk`/`sk` in their palette), and the rest take dark .7/.6 or light 1/.35 (`theme/corners.ts`).
+  them casts a shadow (`--sh-pop`); a waiting card rising from the message box casts `--sh-rise`. `--ink` and `--hk` (the
+  highlight colour and its strength) and `--sd`/`--shk` (the shadow colour and its strength) are theme tokens; a
+  palette theme sets its own strengths (`hk`/`sk` in its palette), and the rest take dark .7/.6 or light 1/.35.
   Nothing tints the window behind the cards. A terminal sits on the card's own ground: xterm's background and ANSI black are `--main`, so a
   program that paints with black leaves no box. On a web view without WebGL 2 (`data-gpu="software"`) the same rules
   use cheaper values: a 1px ring for the popover shadow ([PERFORMANCE](PERFORMANCE.md)). The window ground is opaque
@@ -372,10 +372,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   as an empty string. Left on purpose: terminal grounds (`--term`, `--main` under a terminal), scrims, brand and status
   colours, and the browser preview's `App.css` shell (`features/preview/`), which keeps its own fills and `data-theme`
   tokens in `index.css`.
-- **Design tokens (`apps/gui/src/tokens.css`).** The handoff's role names over the theme's colours, so a component
-  never reads a theme colour or a raw value: `--bubble` (a user message), `--needs`/`--on-needs` (the theme's `--warn`,
-  meaning needs you and nothing else), `--err`, `--focus`/`--link` (the theme's blue), code colours (`--code-kw`,
-  `-str`, `-fn`, `-num`, `-com`), file-type tag tones (`--tag-ts`, `-tsx`, `-data`, `-toml`, `-sql`, `-env`, `-md`, `-rs`, `-py`, `-go`, `-css`, `-html`, `-sh`,
+- **Design tokens (`apps/gui/src/tokens.css`).** What is built on the theme's roles, so a component
+  never reads a raw value: `--bubble` (a user message), `--on-needs` (the ink on a needs fill), `--err`,
+  `--focus`/`--link` (the theme's blue), file-type tag tones (`--tag-ts`, `-tsx`, `-data`, `-toml`, `-sql`, `-env`, `-md`, `-rs`, `-py`, `-go`, `-css`, `-html`, `-sh`,
   `-img`, and `-text` for any other type: each common type its own, never the
   needs colour), spacing `--s1`..`--s9` (2, 4, 6, 8, 12, 16, 20, 24, 32px), the type scale (`--text-h1` 22px down to
   `--text-tag` 10.5px mono, `--text-reply` 14.5/1.65, `--text-code` 12.5/1.65), the corner radii (`--r-control`,
@@ -399,21 +398,40 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   chat's step marks, file badges and change tags (`cardParts.tsx`) and the workspace toast are built from them. The
   gallery shows every primitive in every state, and the chat's cards at 760 and 360px, on any theme: open the app or the browser preview
   with `#gallery` (`#gallery?theme=Paper`; `features/gallery/`).
-- **Design tokens are theme roles, never values.** The design handoff names its colours by role; the app reads each from the
-  role of the same job, so every theme (about 20, `themes.json` shared with the terminal app) wears the design. A hex from the
-  handoff is never written into a stylesheet or a theme: a role that looks wrong is changed in the theme.
+- **Design tokens are theme roles, never values.** A theme is the roles of [Design language](#design-language), and
+  `themeStyle` (`features/workspace/theme/themes.ts`) is the one function that turns a theme into CSS variables, set
+  on the window root and the page root. A new or rebuilt component reads the role; a hex is never written into a
+  stylesheet or a component.
 
-  | Handoff | Role | Note |
+  | Handoff role | Code name | Note |
   | --- | --- | --- |
-  | `--bg` | `--bg` | the window ground |
-  | pane (+ 1px inset ring) | `--main` with `1px solid --line` | the card is flat; its ring is the hairline |
-  | `--fg`, `--fg2`, `--muted`, `--dim` | the same four roles | text, in that order of strength |
-  | `--acc` | `--accent` (`--accent-text` as text) | |
-  | needs | `--needs` (the theme's `--warn`) | needs you and nothing else |
-  | ok | `--ok` (read as `--done`) | |
-  | working | `--working` | |
-  | danger | `--danger` (read as `--err`) | a destructive action and an error toast; never a session's state |
-  | floating surface | `--main`, `1px solid --line` (a menu or popover: `--pop-bg` and `--pop-ring`, below), `--pop-sh-menu`, `--pop-sh` or `--pop-sh-dialog` | menus, popovers, toasts and dialogs only; the shadow scales with the theme's `--sk` and the radius is `--r-panel` |
+  | `--t0`, `--t1`, `--t2`, `--t3` | the same names | window ground; panes and sidebar; selected row and raised; chat box and inputs |
+  | `--float-bg` | `--float-bg` | menus, dialogs, toasts |
+  | `--well` | `--well` | code, and fields inside a float |
+  | `--fg`, `--fg2`, `--muted`, `--dim` | the same names | text, in that order of strength |
+  | `--ink` | `--ink` | an `r,g,b` triple: a hairline or hover fill is `rgba(var(--ink), .08)` |
+  | `--needs`, `--working`, `--ok`, `--danger` | the same names (`--ok` is also read as `--done`, `--danger` as `--err`) | a tint is `color-mix(in srgb, var(--needs) 14%, transparent)`; danger is a destructive action and an error toast, never a session's state |
+  | `--sy-kw`, `-str`, `-fn`, `-num`, `-ty`, `-com`, `-prop` | the same names | syntax: the `tok-keyword`, `-string`, `-variable`, `-number`, `-comment` and `-flag` (property) kinds of `crates/maitty-highlight` and `lib/highlight.ts` read them |
+  | `--shk` | `--shk` | the shadow strength every floating shadow is scaled by (`--pop-sh-menu`, `--pop-sh`, `--pop-sh-dialog`) |
+
+  **Older names are aliases of a role, defined in one place** (`COMPATIBILITY` in `themes.ts`), for the screens not
+  yet rebuilt: `--bg` is `--t0`, `--main` and `--pane` are `--t1`, `--sel` is `--t2`, `--raise` is `--t3`, `--warn`
+  is `--needs`, `--hl` is `--ink`, `--sk` is `--shk`. A rebuilt screen reads the role, and a name leaves the block when
+  nothing reads it. A theme also sets what the design does not name: `--hover`, `--line` and `--line2` as solid
+  colours, `--term`, the accent (`--accent`, `--accent-text`, `--on-accent`, `--accent-soft`, `--accent-line`), the
+  status inks and tints (`--on-warn`, `--warn-soft`, `--warn-line`, `--danger-soft`, `--danger-line`), the ANSI colours
+  (`--ansi-blue`, `-mag`, `-green`), `--pane-line` and the meters (`--m-ok`, `-mid`, `-or`, `-hi`).
+
+  **A theme that is not one of the design's ten is mapped onto the roles** (`designRoles`): its ground, pane, selected
+  row and raised fill are `--t0` to `--t3`, the float ground is the pane (a dark theme: one card step lighter), the ink
+  is white or black by its side, and the syntax colours are its own magenta (keyword), green (string), blue (name),
+  working colour (number), meter yellow (type), dim text (comment) and accent text (property).
+
+  A floating surface is `--main` with `1px solid --line` (a menu or popover: `--pop-bg` and `--pop-ring`, below) and one
+  of the three shadows, with the `--r-panel` radius: menus, popovers, toasts and dialogs only.
+
+  **Fonts.** Two, both bundled: **Inter** for the interface (`--ui`) and **JetBrains Mono** for paths, branches,
+  commands and numbers (`--mono`); `theme/corners.ts` sets them. The terminal's own font is the user's setting.
 
   Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
 - **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
@@ -1248,12 +1266,14 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber mark edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
 - **Theme depth (desktop app)**: every generated dark theme puts its panel at the design panel's lightness (`#151517`) in the theme's own hue, and the window ground, card, hairline and selected row step from there. A theme changes hue and accents, never the depth of the surfaces. Light themes keep their own ground.
-- **Themes**: fifty-four in the desktop app (the terminal app also ships Maiker Night), twenty-eight dark and twenty-six light (`crates/maitty-settings/themes.json` lists them; a TUI test holds its ground and text equal to it). Eleven are Maiker's own. Nine are the chat handoff's, each with a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`): **Maiker Night** and **Maiker Day** (sea-glass and brass, the defaults), **Maiker Dark** and **Maiker Light** (a standard black and white ground, same accents), and **Abyss**, **Ember**, **Moss**, **Dusk** (dark) and **Paper** (light), each with its own accent and its own needs-you colour (`--warn`). The TUI still builds Night, Day, Dark and Light from `crates/maitty-settings/maitty-tokens.json`, so those four differ slightly between the two apps until it reads the palettes too. **Maiker Retro Dark** and **Maiker Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maiker's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maiker Night saved by the terminal app, falls back to Maiker Dark or Maiker Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
+- **Themes**: sixty in the desktop app (the terminal app also ships Maiker Night), thirty-one dark and twenty-nine light (`crates/maitty-settings/themes.json` lists them; a TUI test holds a family's ground and text equal to it). Seventeen are Maiker's own. Fifteen have a `palette` that the desktop draws exactly as written (every surface, text, accent, status, meter and shading role; `paletteTheme` in `theme/themes.ts`). **Ten are the design's own themes**, with the handoff's values for every role it names, its float ground (`float`) and its seven syntax colours (`sy`): **Maiker Dark**, **Graphite**, **Midnight**, **Ember** and **Forest** (dark), **Maiker Light**, **Paper**, **Mist**, **Sage** and **Rose** (light). Each side shares its status and syntax colours, darker on the light side; the ink on a needs fill there is black. The other palette themes are **Maiker Night** and **Maiker Day** (sea-glass and brass), and **Abyss**, **Moss** and **Dusk** (dark), each with its own accent and its own needs-you colour. The terminal app hand-tunes its own palette for every Maiker theme, so those differ slightly between the two apps. **Maiker Retro Dark** and **Maiker Retro Light** (navy ground, mint text and a lime accent by night; white, ink and a darker green by day) are generated like the families below. In Maiker's first four, brass is the accent (`--accent` as a fill, `--accent-text` as text, darker by day), teal is only ever `--working`, coral is only ever needs-you (`--warn`). The other forty-four are twenty-two families, each with a dark and a light (GitHub, One, Catppuccin, Solarized, Gruvbox, Tokyo Night, Dracula, Nord, Ayu, Everforest, Rosé Pine, Kanagawa, Nightfox, Flexoki, Gruvbox Material, One Half, PaperColor, Tomorrow, Melange, Cyberdream, Doom One, Zenbones), generated from six inputs (`bg fg accent mag blue green` and a light flag) by Oklab mixing. A saved theme that is gone, or Maiker Night saved by the terminal app, falls back to Maiker Dark or Maiker Day (the TUI maps each removed id to its nearest survivor). The theme is stored as its id (`night`, `github-dark`, ...) in the shared settings. Every theme's `--pane` is its opaque
   `--main`. The foreground, terminal text (`--fg2`), muted and dim text keep 4.5:1 on both `--term` and the
   window `--bg`, and Maiker Night and Maiker Day also hold it for the accent text, working, needs-you, red, done and the ANSI blue,
   magenta and green; the theme tests check this. Every light theme holds it too, for accent, amber, red,
   green, blue, magenta and all 15 ANSI text colours but black (the generated ones darken a published hue in
-  place until it passes). Maiker Day uses the file's darker *Text colours so those hold on the light ground. A pane's
+  place until it passes). The design's ten themes are the exception: they keep the handoff's values, so dim
+  text (seven of them) and the light side's needs, working, done and danger colours sit under 4.5:1; the theme
+  tests record each shortfall and fail if one gets worse or another role joins them. Maiker Day uses the file's darker *Text colours so those hold on the light ground. A pane's
   xterm palette comes from the same tokens, and on a light theme xterm also lifts any 256-colour or truecolour
   foreground a program picks to 4.5:1 (`minimumContrastRatio`; dark themes leave them as asked). The
   scroll viewport behind the rows is painted `--term`, never xterm's black. **Settings › Appearance › Theme** has an Appearance switch (System, Dark or Light:
@@ -1290,7 +1310,7 @@ text `--dim`; it is one flat box (no box inside a box), the same size in both st
 
 ## Chat and sidebar fidelity (the current handoff)
 
-- **Colours.** Maiker Dark (`maiker-dark` in `themes.json`) is the handoff's palette, role for role: ground `#0c0c0d`, pane and card `#151517`, raised (the message box) `#202024`, hover `#1f1f22`, selected `#242428`, hairlines `#2a2a2e` and `#3a3a3f`, text `#ececea` / `#bdbdba` / `#9d9da3` / `#808087`, accent the Maiker brass `#d39a2a` (text `#e0ab45`), needs you `--warn` `#d9a032`, working `#3dd6c6`, done `--ok` `#7fd99a`, danger `#f07f78`. The TUI still builds Dark from `maitty-tokens.json`.
+- **Colours.** Maiker Dark (`maiker-dark` in `themes.json`) is the handoff's palette, role for role; the values are in `themes.json` and nowhere else. Its accent is the Maiker brass, which the handoff does not name.
 - **Chat pane.** An empty chat is blank (screen readers still hear "No messages yet."). In the chat the header holds only the status mark, machine tag, path and the more menu, because the branch is a chip under the box.
 - **Message box.** Placeholder `Reply…`. The controls row is the agent's mark and `Claude · Sonnet 5.5 · Medium` as one plain muted line (no chevron, no strength bars), then the permission as a shield and its name (no chevron); the paperclip and send are at the right; the box is a 68px-high raised surface. Under the box: folder, branch and sync (`Synced` when level) at the left, and at the right the context ring with its figure from the start (0% on a new chat) for an agent that reports its context; a plan limit joins it from 50%.
 ## Dialog corner, solid buttons and the setup (audit of the handoff screens)

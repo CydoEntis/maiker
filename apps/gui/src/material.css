@@ -17,14 +17,14 @@
  */
 
 /* ---- tokens ---- */
-/* Portalled content can sit outside the window root, so the light and shade have defaults here. */
-:root { --hl: 255, 255, 255; --hs: 255, 255, 255; --hk: 1; --sd: 0, 0, 0; --sk: 1; }
-/* The one shadow for everything that floats, scaled by the theme's shadow strength (`--sk`). Nothing hard-codes its own:
+/* Portalled content can sit outside the window root, so the ink, the light and the shade have defaults here. */
+:root { --ink: 255, 255, 255; --shk: 1; --hl: var(--ink); --hs: 255, 255, 255; --hk: 1; --sd: 0, 0, 0; --sk: var(--shk); }
+/* The one shadow for everything that floats, scaled by the theme's shadow strength (`--shk`). Nothing hard-codes its own:
    a floating card, a dialog and an anchored menu each read one of these three. */
 :root {
-  --pop-sh: 0 4px 14px rgba(0, 0, 0, calc(.2 * var(--sk)));
-  --pop-sh-dialog: 0 12px 32px rgba(0, 0, 0, calc(.45 * var(--sk)));
-  --pop-sh-menu: 0 3px 10px rgba(0, 0, 0, calc(.18 * var(--sk)));
+  --pop-sh: 0 4px 14px rgba(0, 0, 0, calc(.2 * var(--shk)));
+  --pop-sh-dialog: 0 12px 32px rgba(0, 0, 0, calc(.45 * var(--shk)));
+  --pop-sh-menu: 0 3px 10px rgba(0, 0, 0, calc(.18 * var(--shk)));
 }
 /* The theme's own solid colours, under the role names. Declared on the window root as well, because
    the theme colours are set inline there. */

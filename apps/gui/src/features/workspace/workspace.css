@@ -26,8 +26,8 @@
   --agent-opencode: #A78BFA;
   --agent-deepseek: #4D6BFE;
   /* The look (`theme/corners.ts`) sets --ui and --mono inline; these are the fallbacks. */
-  --ui: "Geist Variable", Geist, system-ui, sans-serif;
-  --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  --ui: "Inter Variable", Inter, system-ui, sans-serif;
+  --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
   position: fixed;
   inset: 0;
   display: flex;

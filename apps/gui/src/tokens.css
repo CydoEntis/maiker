@@ -1,15 +1,17 @@
 /*
- * The desktop design's tokens (MAITTY-374). Components read these role names, never a theme colour or a raw value:
- * the theme (`theme/themes.ts`) sets the colours underneath, and `data-corners` on the root sets the corners, so every
- * theme and both corner styles are a swap of tokens only. Like `material.css`, this file may read the theme's solid
- * surface colours; nothing else does (`material.test.ts`). The `--card`, `--done` and `--sh-pop` roles are set in
- * `index.css` and `workspace.css`.
+ * The tokens a component reads beside the theme's roles. The theme (`themeStyle` in `theme/themes.ts`) sets the design's
+ * roles inline on the root: `--t0` to `--t3`, `--float-bg`, `--well`, `--fg` `--fg2` `--muted` `--dim`, `--ink` (an
+ * `r,g,b` triple: a hairline or hover fill is `rgba(var(--ink), .08)`), `--needs` `--working` `--ok` `--danger` (a tint is
+ * `color-mix(in srgb, var(--needs) 14%, transparent)`), the seven `--sy-*` syntax colours and `--shk`, the shadow
+ * strength. This file names what is built on them, and `data-corners` on the root sets the corners, so every theme and
+ * both corner styles are a swap of tokens only. Like `material.css`, this file may read the theme's solid surface
+ * colours; nothing else does (`material.test.ts`). The `--card`, `--done` and `--sh-pop` roles are set in `index.css`
+ * and `workspace.css`.
  */
 .mx-app {
   /* Surfaces */
   --bubble: var(--sel);
-  /* Status: amber-family needs is each theme's own warn, and means needs you and nothing else. */
-  --needs: var(--warn);
+  /* Status: `--needs` (the theme's own) means needs you and nothing else. */
   --on-needs: var(--on-warn);
   --err: var(--danger);
   /* A warning that blocks nothing (context almost full, back online with chats interrupted): the meters' second-quarter
@@ -28,12 +30,6 @@
   --field-focus: var(--focus-line);
   --field-focus-edge: inset 0 0 0 1px var(--field-focus);
   --link: var(--ansi-blue);
-  /* Code */
-  --code-kw: var(--ansi-mag);
-  --code-str: var(--ok);
-  --code-fn: var(--ansi-blue);
-  --code-num: var(--working);
-  --code-com: var(--dim);
   /* File-type tags have their own tone, never the needs colour: each common type its own, so a list of files reads at a glance. */
   --tag-ts: var(--ansi-blue);
   --tag-tsx: var(--working);

@@ -288,8 +288,10 @@ pub const BUILTIN: &[&str] = &[
     "everforest-light",
     "flexoki-dark",
     "flexoki-light",
+    "maiker-forest",
     "github-dark",
     "github-light",
+    "maiker-graphite",
     "gruvbox",
     "gruvbox-light",
     "gruvbox-material-dark",
@@ -304,6 +306,8 @@ pub const BUILTIN: &[&str] = &[
     "maiker-retro-light",
     "melange-dark",
     "melange-light",
+    "maiker-midnight",
+    "maiker-mist",
     "maiker-moss",
     "nightfox",
     "nord",
@@ -315,8 +319,10 @@ pub const BUILTIN: &[&str] = &[
     "maiker-paper",
     "papercolor-dark",
     "papercolor-light",
+    "maiker-rose",
     "rose-pine",
     "rose-pine-dawn",
+    "maiker-sage",
     "solarized-dark",
     "solarized-light",
     "tokyo-night",
@@ -347,8 +353,10 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("everforest-light", "Everforest Light"),
     ("flexoki-dark", "Flexoki Dark"),
     ("flexoki-light", "Flexoki Light"),
+    ("maiker-forest", "Forest"),
     ("github-dark", "GitHub Dark"),
     ("github-light", "GitHub Light"),
+    ("maiker-graphite", "Graphite"),
     ("gruvbox", "Gruvbox Dark"),
     ("gruvbox-light", "Gruvbox Light"),
     ("gruvbox-material-dark", "Gruvbox Material Dark"),
@@ -363,6 +371,8 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("maiker-retro-light", "Maiker Retro Light"),
     ("melange-dark", "Melange Dark"),
     ("melange-light", "Melange Light"),
+    ("maiker-midnight", "Midnight"),
+    ("maiker-mist", "Mist"),
     ("maiker-moss", "Moss"),
     ("nightfox", "Nightfox"),
     ("nord", "Nord"),
@@ -374,8 +384,10 @@ pub const DESIGN: &[(&str, &str)] = &[
     ("maiker-paper", "Paper"),
     ("papercolor-dark", "PaperColor Dark"),
     ("papercolor-light", "PaperColor Light"),
+    ("maiker-rose", "Rose"),
     ("rose-pine", "Rosé Pine"),
     ("rose-pine-dawn", "Rosé Pine Dawn"),
+    ("maiker-sage", "Sage"),
     ("solarized-dark", "Solarized Dark"),
     ("solarized-light", "Solarized Light"),
     ("tokyo-night", "Tokyo Night"),
@@ -916,6 +928,44 @@ impl Theme {
                 ["#faf6ee", "#1f1b14", "#5c5446", "#b5552b"],
                 [
                     "#b3261e", "#2f6b3a", "#9a6b00", "#2b5aa8", "#7a3fa8", "#2c6e63", "#5c5446",
+                ],
+            ),
+            // The desktop design's themes the terminal app gained with it: the pane as the ground, its text and dim text, the
+            // design's blue accent, and the design's status colours as red, green and cyan.
+            "maiker-graphite" => Theme::palette(
+                ["#161a1f", "#e8ebef", "#78818e", "#5b8def"],
+                [
+                    "#f07f78", "#7fd99a", "#e8c25a", "#82aaff", "#c3a6f2", "#3dd6c6", "#78818e",
+                ],
+            ),
+            "maiker-midnight" => Theme::palette(
+                ["#11152a", "#e6e9f5", "#747b9a", "#5b8def"],
+                [
+                    "#f07f78", "#7fd99a", "#e8c25a", "#82aaff", "#c3a6f2", "#3dd6c6", "#747b9a",
+                ],
+            ),
+            "maiker-forest" => Theme::palette(
+                ["#121a16", "#e5ece8", "#77877f", "#5b8def"],
+                [
+                    "#f07f78", "#7fd99a", "#e8c25a", "#82aaff", "#c3a6f2", "#3dd6c6", "#77877f",
+                ],
+            ),
+            "maiker-mist" => Theme::palette(
+                ["#f8fafc", "#131a24", "#788496", "#2f63d0"],
+                [
+                    "#c23d35", "#23804a", "#9a6b00", "#2a58c4", "#7a40c2", "#0a8478", "#788496",
+                ],
+            ),
+            "maiker-sage" => Theme::palette(
+                ["#f8faf7", "#161d17", "#7a877b", "#2f63d0"],
+                [
+                    "#c23d35", "#23804a", "#9a6b00", "#2a58c4", "#7a40c2", "#0a8478", "#7a877b",
+                ],
+            ),
+            "maiker-rose" => Theme::palette(
+                ["#fdf9fa", "#221a1c", "#8c7b7f", "#2f63d0"],
+                [
+                    "#c23d35", "#23804a", "#9a6b00", "#2a58c4", "#7a40c2", "#0a8478", "#8c7b7f",
                 ],
             ),
             "dracula" => Theme::classic([
@@ -1504,8 +1554,8 @@ mod audit {
         assert!(near.is_empty(), "grounds near the line: {near:?}");
         assert!(!super::is_light("not-a-theme"));
         let light = super::BUILTIN.iter().filter(|n| super::is_light(n)).count();
-        assert_eq!(light, 26, "twenty-six light themes");
-        assert_eq!(super::BUILTIN.len() - light, 29, "and twenty-nine dark ones");
+        assert_eq!(light, 29, "twenty-nine light themes");
+        assert_eq!(super::BUILTIN.len() - light, 32, "and thirty-two dark ones");
     }
 
     /// Every theme gives each status its own colour, as the design's roles do: working,
@@ -1735,13 +1785,12 @@ mod manifest {
     }
 
     #[test]
-    fn the_built_in_themes_are_exactly_the_manifests_fifty_five() {
+    fn the_built_in_themes_are_exactly_the_manifests() {
         let manifest = themes();
         let mut ids: Vec<&str> = manifest.iter().map(|t| text(t, "id")).collect();
         let mut built: Vec<&str> = BUILTIN.to_vec();
         ids.sort_unstable();
         built.sort_unstable();
-        assert_eq!(ids.len(), 55);
         assert_eq!(built, ids, "BUILTIN and themes.json list the same themes");
     }
 

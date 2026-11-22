@@ -191,12 +191,12 @@ button.mx-inspect-row:hover, .mx-inspect-pick:hover { background: rgba(var(--hl)
 .mx-preview > span { padding: 0 14px 0 0; white-space: pre; min-inline-size: max-content; }
 .mx-preview-no { position: sticky; left: 0; z-index: 1; display: inline-block; box-sizing: content-box; width: 3ch; margin-right: 10px; padding: 0 8px 0 12px; text-align: right; font-style: normal; color: var(--dim); background: var(--m-pane); user-select: none; }
 .mx-preview > span.is-target .mx-preview-no { background: color-mix(in oklab, var(--warn) 22%, var(--m-pane)); }
-.mx-preview .tok-keyword { color: var(--accent-text); }
-.mx-preview .tok-string { color: var(--ok); }
-.mx-preview .tok-number { color: var(--ansi-blue); font-weight: 400; }
-.mx-preview .tok-comment { color: var(--dim); font-style: italic; }
-.mx-preview .tok-variable { color: var(--ansi-mag); }
-.mx-preview .tok-flag { color: var(--ansi-blue); }
+.mx-preview .tok-keyword { color: var(--sy-kw); }
+.mx-preview .tok-string { color: var(--sy-str); }
+.mx-preview .tok-number { color: var(--sy-num); font-weight: 400; }
+.mx-preview .tok-comment { color: var(--sy-com); font-style: italic; }
+.mx-preview .tok-variable { color: var(--sy-fn); }
+.mx-preview .tok-flag { color: var(--sy-prop); }
 
 .mx-changes-line { display: flex; align-items: center; gap: 4px; }
 .mx-changes-line .mx-changes-row { flex: 1; min-width: 0; }
