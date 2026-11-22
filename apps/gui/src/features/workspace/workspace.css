@@ -188,15 +188,39 @@
 
 .mx-text-button.is-armed { color: var(--warn); }
 
-/* Empty state */
+/* Before the first list: the one line saying the service is being asked. */
 .mx-empty { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 32px; }
 .mx-empty-column { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 18px; animation: v7fade .3s ease-out; }
 .mx-empty-tile { width: 40px; height: 40px; border-radius: var(--r-panel); background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
 .mx-empty-copy { display: flex; flex-direction: column; gap: 8px; }
 .mx-empty h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
 .mx-empty p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg2); text-wrap: pretty; }
-.mx-empty p .mono { font-size: 13px; color: var(--fg); }
-.mx-empty-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+/* The empty state: nothing in the main area. One centred column, no card of its own. */
+.mx-es { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; outline: none; }
+.mx-es-column { width: 100%; max-width: 460px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px; animation: v7fade .3s ease-out; }
+.mx-es-logo { display: flex; margin-bottom: 18px; color: var(--fg); opacity: .16; }
+.mx-es h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
+.mx-es p { margin: 0; }
+.mx-es-where { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.mx-es-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 28px; padding: 0 6px 0 5px; border-radius: var(--r-control); font-size: 13.5px; font-weight: 500; color: var(--fg); background: rgba(var(--ink), .06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-es-project:hover, .mx-es-project[aria-expanded="true"] { background: rgba(var(--ink), .1); }
+.mx-es-project .mx-sb-badge { margin: 0; }
+.mx-es-chevron { flex: none; width: 13px; height: 13px; color: var(--dim); }
+.mx-es-agents { width: 100%; display: flex; flex-direction: column; gap: 4px; margin: 22px 0 16px; }
+.mx-es-agent { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; column-gap: 10px; height: 44px; padding: 0 10px 0 12px; border-radius: var(--r-panel); text-align: left; background: rgba(var(--ink), .03); box-shadow: inset 0 0 0 1px rgba(var(--ink), .06); }
+.mx-es-agent:not(:disabled):hover, .mx-es-agent:focus-visible { background: rgba(var(--ink), .06); box-shadow: inset 0 0 0 1px rgba(var(--ink), .1); }
+.mx-es-agent:disabled { opacity: .55; cursor: not-allowed; }
+.mx-es-agent .mx-app-icon { justify-self: center; }
+.mx-es-agent-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.mx-es-key { min-width: 20px; height: 20px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; border-radius: var(--r-badge); font: 500 11px var(--ui); color: var(--fg2); background: rgba(var(--ink), .08); white-space: nowrap; }
+.mx-es-none { margin: 18px 0 12px; font-size: 12.5px; color: var(--muted); }
+.mx-es-agents + .mx-es-none { margin-top: 0; }
+.mx-es-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.mx-es-where + .mx-es-links { margin-top: 18px; }
+.mx-es-links button { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted); }
+.mx-es-links button:hover { color: var(--fg); background: rgba(var(--ink), .05); }
+.mx-es .mx-es-fine { margin-top: 26px; font-size: 12px; color: var(--dim); }
 .mx-primary { height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-radius: var(--r-control); background: var(--accent); color: var(--on-accent); font-size: 13.5px; font-weight: 500; white-space: nowrap; }
 .mx-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 90%, #fff); }
 .mx-primary:not(:disabled):active { background: color-mix(in srgb, var(--accent) 80%, var(--bg)); }

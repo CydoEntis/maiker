@@ -677,7 +677,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   the name you gave it, else the folder it was made in. Project
   colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
-  it shows a quiet card, **No sessions yet**.
+  it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
   **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings) and **Settings** at the right.
   Hidden (Ctrl+Shift+B, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
@@ -692,7 +692,21 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `--t2`. Hovering or focusing a mark shows the same hover card as the full list, a click opens the session, and a
   right-click, the menu key or Shift+F10 gives the same five-item menu. No agent logos, initials or connection dot
   (the service's state is the title-bar chip). The width eases on the drawers' timing.
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session, the palette's "New session…" and the empty state's **New session** open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
+- **The empty state** (`EmptyStart`; screenshot 18). What the main area shows whenever it has nothing in it: no tab and
+  no New session draft, once the service has listed its sessions (before that, "Looking for your sessions…"). One centred
+  column, 460px at most, with no card of its own: the Maiker mark (54×42, the text colour at 16%), the heading **Nothing
+  running**, then "Start an agent in" and the **project picker**, a quiet chip with the project's badge and name that
+  opens the one menu material listing every opened project (another machine's as `name · machine`) and **Open a
+  project…**. It shows the project picked here, else the one selected in the sidebar, else the one opened most recently;
+  with no project open the chip is **Open a project…** itself and no agent is listed. Under it is one 44px row per agent
+  installed on this computer (every agent for a project on another machine, where that is not read): the agent's mark,
+  its name and its number as a key hint, `1` first. A row, or its number key, starts that agent in the picked project the
+  way the project's `+` menu does: the New session draft with that agent picked. The rows are off while nothing can start
+  (the service is down, a start is under way, the project's machine is not reachable, which a line then says). Then two
+  quiet text buttons, **Open a project** with its key from the binding table and **Add a remote machine** (the palette's
+  New machine level), and the fine print "Sessions keep running when you close this window." While sessions exist and
+  none is open the same screen is headed **No session open**, never "Nothing running".
+- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few

@@ -141,10 +141,10 @@ export function passesFilter(filter: SidebarFilter, project: { readonly head: Ma
   return (filter.machine === null || machineKey(project.head.name) === filter.machine) && (filter.project === null || project.name === filter.project)
 }
 
-type Listed = { readonly head: MachineHead; readonly entry: ProjectSessions; readonly name: string }
+export type ListedProject = { readonly head: MachineHead; readonly entry: ProjectSessions; readonly name: string }
 
 /** Every opened project of every configured machine, this computer's first, each in the order it was opened. */
-function listedProjects(heads: readonly MachineHead[], machines: readonly MachineProjects[]): Listed[] {
+export function listedProjects(heads: readonly MachineHead[], machines: readonly MachineProjects[]): ListedProject[] {
   return heads.flatMap((head) => {
     const projects = machines.find((machine) => machineKey(machine.machineName) === machineKey(head.name))?.projects ?? []
     return projects.map((entry) => ({ head, entry, name: projectName(entry) }))

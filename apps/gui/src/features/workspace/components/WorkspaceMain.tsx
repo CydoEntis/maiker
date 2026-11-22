@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { useTipWithKeys } from '@/features/shortcuts/platform'
+import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
 import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { discardDraft } from '../model/newSessionDraft'
 import { rowTitle } from '../model/sidebar'
@@ -14,7 +14,13 @@ import { usePlatform } from '@/features/shortcuts/platform'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { chatFindOf } from '@/features/chat/chatSearch'
-import { EmptyState } from './states'
+import { LookingForSessions } from './states'
+import { EmptyStart } from './EmptyStart'
+import { pickedPlace, startPlaces } from '../model/emptyStart'
+import { useInstalledAgents } from '../model/newChatHost'
+import type { OpenedProject } from '../model/openedProjects'
+import { ADD_MACHINE, PROJECT_FROM_SOURCES } from '../useOpenProject'
+import { useProjectActions } from '../useProjectActions'
 import { useUpdateReadyToast } from './useUpdateReadyToast'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
@@ -25,9 +31,41 @@ import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
+const noop = () => undefined
+
+/**
+ * The main area with no tab and no draft in it: the empty state once the service has listed its sessions. An agent
+ * picked there starts the way a project heading's `+` menu starts it (`useProjectActions`), so the two never differ.
+ */
+function MainEmpty() {
+  const { sessionsListed, sessions, sidebarMachineHeads, openedProjects, canStart, modalOpen, welcomeOpen, shortcutsOpen, pendingConfirm, root, setOpenProject } = useWorkspace()
+  const installed = useInstalledAgents()
+  const shortcutText = useShortcutText()
+  const actions = useProjectActions()(noop)
+  const [picked, setPicked] = useState<OpenedProject | null>(null)
+  if (!sessionsListed) return <LookingForSessions />
+  const places = startPlaces(sidebarMachineHeads, openedProjects.machines)
+  return (
+    <EmptyStart
+      running={sessions.length > 0}
+      places={places}
+      place={pickedPlace(places, picked, openedProjects.selected, openedProjects.opened)}
+      installed={installed}
+      canStart={canStart}
+      covered={modalOpen || welcomeOpen || shortcutsOpen || pendingConfirm !== null}
+      openProjectKeys={shortcutText('open-folder')}
+      portalContainer={root}
+      onPick={(place) => { setPicked(place.project) }}
+      onStart={(place, agent) => { actions.onNewSession(place.machine, place.project, agent) }}
+      onOpenProject={() => { setOpenProject(PROJECT_FROM_SOURCES) }}
+      onAddMachine={() => { setOpenProject(ADD_MACHINE) }}
+    />
+  )
+}
+
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, canStart, newSession, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { newChatOpen, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
@@ -126,16 +164,7 @@ export function WorkspaceMain() {
                   )
                   })}
                   </div>
-                ) : (
-                  <EmptyState
-                    hasSessions={sessions.length > 0}
-                    chatView={chatView}
-                    listed={sessionsListed}
-                    canStart={canStart}
-                    onNewSession={() => { newSession() }}
-                    onChangeStartFolder={() => { setSettingsSection('general') }}
-                  />
-                )}
+                ) : !newChatOpen && <MainEmpty />}
               </main>
               {dock !== null && dockAgent !== undefined && <TerminalDock agent={dockAgent} leaving={terminal.leaving} />}
               </div>

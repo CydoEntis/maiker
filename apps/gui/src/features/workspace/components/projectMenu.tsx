@@ -1,5 +1,6 @@
 import { toast } from '@/lib/toast'
 import { CHAT_AGENTS, type ChatAgent } from '../model/chatView'
+import { agentIsOffered } from '../model/emptyStart'
 import type { CloseResult, OpenedProject } from '../model/openedProjects'
 import { closeRefusalWords, worktreeSourceOf } from '../model/projectActions'
 import { offersOpenWorktree } from '../model/projectWorktrees'
@@ -69,7 +70,7 @@ function agentRows(actions: ProjectActions, target: ProjectTarget): MenuItem[] {
   let number = 0
   return CHAT_AGENTS.map((agent): MenuItem => {
     const label = agentLabel(agent)
-    const here = target.remote || target.installed === null || target.installed.includes(agent)
+    const here = agentIsOffered(agent, target.installed, target.remote)
     if (!here) return { label, icon: <AppIcon process={agent} size={MARK_PX} dimmed />, hint: 'not installed', disabled: true, why: `${label} is not installed on this computer` }
     number += 1
     const key = String(number)
