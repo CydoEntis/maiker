@@ -24,6 +24,12 @@ const ask = async (user: ReturnType<typeof userEvent.setup>) => {
 }
 
 describe('the confirm dialog', () => {
+  it('is drawn inside the window root, where its theme, corners and float are set', async () => {
+    const user = userEvent.setup()
+    render(<Remover run={vi.fn()} />, { container: document.body.appendChild(Object.assign(document.createElement('div'), { className: 'mx-app' })) })
+    expect((await ask(user)).closest('.mx-app')).not.toBeNull()
+  })
+
   it('runs the action once on the primary button, which has focus, and closes', async () => {
     const user = userEvent.setup()
     const run = vi.fn()

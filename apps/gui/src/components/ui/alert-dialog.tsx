@@ -29,7 +29,9 @@ function AlertDialogContent({ className, container, onDismiss, ...props }: React
   const [opener] = React.useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null))
   React.useEffect(() => () => { if (opener?.isConnected === true) opener.focus() }, [opener])
   return (
-    <AlertDialogPrimitive.Portal container={container}>
+    // Inside the window's root, never the page's body: the theme's colours, corners and the dialog's float are set on
+    // `.mx-app`, and a question drawn outside it is bare text on the terminal.
+    <AlertDialogPrimitive.Portal container={container ?? document.querySelector<HTMLElement>('.mx-app')}>
       <AlertDialogPrimitive.Overlay data-slot="alert-dialog-overlay" className="mx-settings-scrim" onMouseDown={(event) => { if (event.target === event.currentTarget) onDismiss?.() }}>
         <AlertDialogPrimitive.Content data-slot="alert-dialog-content" className={cn("mx-rename", className)} {...props} />
       </AlertDialogPrimitive.Overlay>
