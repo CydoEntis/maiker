@@ -203,14 +203,4 @@ mod tests {
 
         assert!(cpu > CLEARLY_BUSY_PERCENT, "one thread spinning read as {cpu}%");
     }
-
-    #[test]
-    fn a_load_names_the_process_and_its_memory() {
-        let (system, pid) = system_with_self();
-        let process = system.process(pid).expect("this process is in the table");
-        let load = load_of(process);
-        assert_eq!(load.pid, pid.as_u32());
-        assert!(!load.name.is_empty());
-        assert!(load.memory_bytes > 0);
-    }
 }

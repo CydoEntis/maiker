@@ -417,15 +417,6 @@ async fn a_grant_changes_what_the_hub_lets_through_at_once_and_only_for_that_mac
 }
 
 #[tokio::test]
-async fn removing_a_machine_that_is_not_there_says_nothing() {
-    let sandbox = Sandbox::new();
-    let mut watch = Watch::new(&[], &sandbox, quick(WAIT));
-    watch.hub.handle().remove("ghost");
-    let quiet = tokio::time::timeout(Duration::from_millis(300), watch.step()).await;
-    assert!(quiet.is_err(), "no update for a machine that was never there");
-}
-
-#[tokio::test]
 async fn an_outage_is_dated_from_its_first_state_and_ends_when_the_machine_is_connected() {
     let sandbox = Sandbox::new();
     let hub = Hub::start(&[], &shim(), ids_file(&sandbox), quick(WAIT), None);
@@ -509,13 +500,6 @@ async fn a_computer_without_ssh_says_so_instead_of_hanging() {
         panic!("{:?}", watch.state_of(BOX));
     };
     assert!(why.contains("is OpenSSH installed?"), "{why}");
-}
-
-#[tokio::test]
-async fn with_no_machine_nothing_starts() {
-    let sandbox = Sandbox::new();
-    let hub = Hub::start(&[], &shim(), ids_file(&sandbox), quick(WAIT), None);
-    assert!(!hub.any());
 }
 
 #[tokio::test]

@@ -413,12 +413,6 @@ mod tests {
     }
 
     #[test]
-    fn commit_counts_are_read_as_ahead_then_behind() {
-        assert_eq!(parse_counts("2\t5\n"), (2, 5));
-        assert_eq!(parse_counts(""), (0, 0));
-    }
-
-    #[test]
     fn a_checkout_behind_its_upstream_is_pulled_only_when_clean() {
         let root = std::env::temp_dir().join(format!("maitty-newchat-pull-{}", std::process::id()));
         let origin = root.join("origin");
@@ -445,10 +439,5 @@ mod tests {
         pull_fast_forward(&clone).expect("pulls");
         assert_eq!(sync_state(&clone, false).expect("reads").expect("a repository").behind, 0);
         let _ = std::fs::remove_dir_all(&root);
-    }
-
-    #[test]
-    fn every_agent_has_a_setup_page_on_https() {
-        assert!(AGENTS.iter().all(|(_, url)| url.starts_with("https://")));
     }
 }

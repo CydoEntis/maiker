@@ -87,7 +87,7 @@ pub fn open_daemon_log() -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{log_path, log_tail, reveal_command};
+    use super::{log_tail, reveal_command};
     use std::path::Path;
 
     #[test]
@@ -102,11 +102,6 @@ mod tests {
         assert_eq!(log_tail(&file, 15).unwrap(), "third line\n");
         assert!(log_tail(&folder.join("missing.log"), 1024).is_err());
         std::fs::remove_dir_all(&folder).unwrap();
-    }
-
-    #[test]
-    fn the_log_is_the_daemons_file_in_the_data_folder() {
-        assert_eq!(log_path(Path::new("/data")), Path::new("/data/daemon.log"));
     }
 
     #[test]

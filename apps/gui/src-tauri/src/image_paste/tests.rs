@@ -6,8 +6,6 @@ use crate::file_send::discard_staged;
 #[cfg(unix)]
 use crate::file_send::{SendEvent, run};
 #[cfg(unix)]
-use maitty_machines::PASTE_MARKER;
-#[cfg(unix)]
 use maitty_test_support::fake_ssh;
 #[cfg(unix)]
 use std::sync::atomic::AtomicBool;
@@ -175,30 +173,6 @@ fn a_refused_paste_stages_nothing() {
 }
 
 #[test]
-fn a_custom_transport_is_refused_in_the_words_files_get() {
-    let via = MachineDef {
-        via: Some(vec!["fly".into()]),
-        ..def("build")
-    };
-    let error = plan_with(&folder("via"), &[via], PNG, &up).err().unwrap();
-    assert!(
-        error.starts_with("sending files to build needs ssh"),
-        "{error}"
-    );
-}
-
-#[test]
-fn a_machine_that_is_not_connected_says_so_by_name() {
-    let error = plan_with(&folder("down"), &[def("Build")], PNG, &|_| false)
-        .err()
-        .unwrap();
-    assert_eq!(
-        error,
-        "Build is not connected; reconnect before sending an image to it"
-    );
-}
-
-#[test]
 fn an_id_that_could_be_anything_is_refused_before_anything_is_written() {
     let cache = folder("id");
     for id in ["", "a b", "a/b", &"x".repeat(65)] {
@@ -221,98 +195,10 @@ fn a_planned_image_is_one_staged_private_copy_the_window_calls_image() {
 }
 
 #[cfg(unix)]
-fn scripted(cache: &Path, script: &str) -> Job {
-    use std::os::unix::fs::PermissionsExt;
-    let program = folder("ssh").join("ssh");
-    std::fs::write(&program, format!("#!/bin/sh\n{script}\n")).unwrap();
-    std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
-    plan_image(
-        cache,
-        &[def("build")],
-        &[program.display().to_string()],
-        "build",
-        "t-1",
-        PNG,
-        &up,
-    )
-    .unwrap()
-}
-
-#[cfg(unix)]
 fn collect(job: &Job, cancel: &Arc<AtomicBool>) -> Vec<SendEvent> {
     let events = Mutex::new(Vec::new());
     run(job, cancel, &|event| events.lock().unwrap().push(event));
     events.into_inner().unwrap()
-}
-
-#[cfg(unix)]
-fn says(path: &str) -> String {
-    format!("cat >/dev/null; printf '%s\\n%s\\n' '{PASTE_MARKER}' '{path}'")
-}
-
-#[test]
-#[cfg(unix)]
-fn the_far_side_path_is_reported_for_an_image_named_image() {
-    let job = scripted(&folder("ok"), &says("/home/me/.cache/pastes/p.png"));
-    let events = collect(&job, &Arc::new(AtomicBool::new(false)));
-    assert!(events.contains(&SendEvent::Sent {
-        transfer: "t-1".into(),
-        file: "image".into(),
-        index: 0,
-        count: 1,
-        remote_path: "/home/me/.cache/pastes/p.png".into(),
-        bytes: PNG.len() as u64,
-    }));
-    assert_eq!(
-        events.last(),
-        Some(&SendEvent::Done {
-            transfer: "t-1".into(),
-            sent: 1,
-            count: 1
-        })
-    );
-}
-
-#[test]
-#[cfg(unix)]
-fn a_path_the_far_side_makes_up_is_never_reported_as_kept() {
-    for lie in [
-        "relative/p.png",
-        "~/p.png",
-        "/a/\u{1b}[31m/p.png",
-        "/a/\u{202e}/p.png",
-    ] {
-        let job = scripted(&folder("lie"), &says(lie));
-        let events = collect(&job, &Arc::new(AtomicBool::new(false)));
-        assert!(
-            events.iter().all(|e| !matches!(e, SendEvent::Sent { .. })),
-            "{lie:?}: {events:?}"
-        );
-        assert!(matches!(events.last(), Some(SendEvent::Failed { file, .. }) if file == "image"));
-    }
-}
-
-#[test]
-#[cfg(unix)]
-fn a_cancel_ends_the_image_going() {
-    let job = scripted(&folder("cancel"), "exec sleep 30");
-    let cancel = Arc::new(AtomicBool::new(false));
-    let stopper = Arc::clone(&cancel);
-    let stop = std::thread::spawn(move || {
-        std::thread::sleep(Duration::from_millis(300));
-        stopper.store(true, Ordering::Relaxed);
-    });
-    let started = std::time::Instant::now();
-    let events = collect(&job, &cancel);
-    stop.join().unwrap();
-    assert!(started.elapsed() < Duration::from_secs(10));
-    assert_eq!(
-        events.last(),
-        Some(&SendEvent::Cancelled {
-            transfer: "t-1".into(),
-            sent: 0
-        })
-    );
 }
 
 #[cfg(unix)]

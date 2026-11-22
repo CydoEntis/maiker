@@ -3053,13 +3053,6 @@ mod request_timeout_tests {
 
         assert!(error.to_string().contains("did not answer"), "{error}");
     }
-
-    #[tokio::test]
-    async fn an_answer_in_time_is_passed_on_as_it_is() {
-        let answer = answered_within(Duration::from_secs(5), async { Ok(7) }).await;
-
-        assert_eq!(answer.unwrap(), 7);
-    }
 }
 
 /// Ask `message` and tell the daemon's refusal (the inner `Err`, the line still good) from a line

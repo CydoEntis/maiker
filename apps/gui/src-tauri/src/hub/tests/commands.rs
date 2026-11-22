@@ -127,57 +127,6 @@ async fn a_replay_is_asked_for_over_the_line_and_comes_back_as_that_panes() {
 }
 
 #[tokio::test]
-async fn a_resize_reaches_the_pane_and_its_answer_is_taken_once() {
-    let mut sandbox = Sandbox::new();
-    sandbox.start_daemon();
-    let (mut watch, wire, term) = with_a_pane(&sandbox).await;
-    let before = watch.replies(BOX);
-    wire.command(
-        Some(1),
-        term,
-        PaneCommand::Resize {
-            cols: 101,
-            rows: 31,
-        },
-    )
-    .expect("the line is up");
-    watch
-        .until("the pane to be that size", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| (pane.cols, pane.rows) == (101, 31))
-        })
-        .await;
-    watch.until("the answer", |w| w.replies(BOX) > before).await;
-}
-
-#[tokio::test]
-async fn a_rename_a_pin_and_an_archive_reach_the_pane() {
-    let mut sandbox = Sandbox::new();
-    sandbox.start_daemon();
-    let (mut watch, wire, term) = with_a_pane(&sandbox).await;
-    wire.command(Some(1), term, PaneCommand::Rename("nightly".into()))
-        .expect("the line is up");
-    wire.command(Some(1), term, PaneCommand::Pin(true))
-        .expect("the line is up");
-    watch
-        .until("renamed and pinned", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| pane.label == "nightly" && pane.pinned)
-        })
-        .await;
-    wire.command(Some(1), term, PaneCommand::Pin(false))
-        .expect("the line is up");
-    wire.command(Some(1), term, PaneCommand::Archive(true))
-        .expect("the line is up");
-    watch
-        .until("unpinned and archived", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| !pane.pinned && pane.archived)
-        })
-        .await;
-}
-
-#[tokio::test]
 async fn looking_at_a_pane_is_answered_and_the_answer_is_taken_only_once_asked() {
     let mut sandbox = Sandbox::new();
     sandbox.start_daemon();

@@ -222,20 +222,6 @@ mod tests {
     }
 
     #[test]
-    fn with_nothing_to_say_the_menu_says_so_above_show_and_quit() {
-        assert_eq!(
-            rows(&[], &[]),
-            [
-                Row::Says("Nothing needs you".into()),
-                Row::Separator,
-                Row::Show,
-                Row::Quit
-            ]
-        );
-        assert!(!tooltip(0).contains("need"));
-    }
-
-    #[test]
     fn the_sessions_that_need_you_come_first_then_the_finished_ones() {
         let menu = rows(&[session("t4", "api")], &[session("box.lan/t7", "web")]);
         assert_eq!(

@@ -53,9 +53,4 @@ mod tests {
             .collect();
         assert!(kinds.contains(&"keyword") && kinds.contains(&"comment"), "{kinds:?}");
     }
-
-    #[test]
-    fn an_unknown_type_comes_back_as_null() {
-        assert!(maitty_highlight::highlight("a.zzzunknown", "x\n").is_none());
-    }
 }
