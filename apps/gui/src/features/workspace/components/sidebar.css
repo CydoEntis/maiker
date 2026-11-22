@@ -69,8 +69,12 @@
 /* A session that has not been sent anything is a quiet, italic "New session". */
 .mx-sb-row.is-fresh .mx-sb-row-name { font-style: italic; color: var(--muted); }
 .mx-sb-row-mark { flex: none; }
+/* A name while it is typed (`InlineName` in the row): a raised field with an accent edge, pulled 2px over the row's
+   padding above and below, so the row keeps its height. */
+.mx-sb-row .mx-inline-name { height: 24px; margin: -2px 0; border-radius: var(--r-control); background: var(--t3); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 60%, transparent); font: 500 13.5px var(--ui); }
 .mx-sb-item.is-nested .mx-sb-row { padding: 5px 8px; }
 .mx-sb-item.is-nested .mx-sb-row-name { font-size: 12.5px; }
+.mx-sb-item.is-nested .mx-sb-row .mx-inline-name { font-size: 12.5px; }
 
 /* Idle: one section at the bottom, dimmed, at most 45% of the height, past which it scrolls on its own. */
 .mx-sb-idle { flex: none; display: flex; flex-direction: column; max-height: 45%; min-height: 0; padding: 4px 8px 0; }
@@ -88,6 +92,7 @@
 /* Idle rows line up under the project's name, past its badge. */
 .mx-sb-group.is-idle .mx-sb-row { padding-left: 34px; opacity: .55; }
 .mx-sb-group.is-idle .mx-sb-row:hover, .mx-sb-group.is-idle .mx-sb-row.is-selected, .mx-sb-group.is-idle .mx-sb-row:focus-visible { opacity: .9; }
+.mx-sb-group.is-idle .mx-sb-row.is-renaming { opacity: 1; }
 .mx-sb-group.is-idle .mx-sb-row-name { color: var(--muted); }
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
 
@@ -122,41 +127,40 @@
 .mx-head-button:disabled { opacity: .4; }
 .mx-head-button.is-rail { width: 32px; height: 32px; border-radius: var(--r-control); }
 
-/* The card beside a row the pointer rests on (`RowHoverCard`): 300px, one hairline ring (no blurred shadow: the card is
+/* The card beside a row the pointer rests on (`RowHoverCard`): 290px, one hairline ring (no blurred shadow: the card is
    drawn over the busiest part of the window and a software painter pays a blur again on each repaint), easing in by
    opacity alone. One card is kept mounted while it is warm (`HoverController`): it is hidden with `data-open="false"`
-   and moves to the next row with no fade. Its icons hang in the left margin, so the text lines up under the name. */
+   and moves to the next row with no fade. */
 .mx-hover-card {
-  position: fixed; z-index: 85; width: 300px; max-height: calc(100vh - 16px); display: flex; flex-direction: column; border-radius: var(--r-panel); pointer-events: none;
+  position: fixed; z-index: 85; width: 290px; max-height: calc(100vh - 16px); display: flex; flex-direction: column; gap: 9px; padding: 12px 14px; border-radius: var(--r-panel); pointer-events: none;
   color: var(--fg);
 }
 .mx-hover-card.is-cold { animation: mx-hover-in .12s ease-out; }
 .mx-hover-card[data-open="false"] { visibility: hidden; opacity: 0; }
 @keyframes mx-hover-in { from { opacity: 0; } to { opacity: 1; } }
-.mx-hover-head { display: flex; gap: 10px; padding: 12px 14px 10px; }
-.mx-hover-head .mx-hover-status { flex: none; margin-top: 2px; }
-.mx-hover-head-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.mx-hover-head b { font-size: 13.5px; line-height: 19px; font-weight: 600; color: var(--fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
-.mx-hover-activity { font-size: 12px; line-height: 17px; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-hover-activity.is-word { color: var(--dim); }
-.mx-hover-rows { display: flex; flex-direction: column; gap: 7px; padding: 0 14px 12px 38px; font-size: 12px; line-height: 16px; }
-.mx-hover-row { position: relative; display: flex; align-items: center; gap: 6px; min-width: 0; color: var(--fg2); }
-.mx-hover-row > span:not(.mx-hover-row-icon):not(.sr-only) { flex: 0 1 auto; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-hover-row:first-child { color: var(--fg); }
-.mx-hover-row-icon { position: absolute; left: -24px; top: 1.5px; display: inline-flex; color: var(--dim); }
-.mx-hover-row .is-mono { font-family: var(--mono); }
-.mx-hover-row .is-add { color: var(--ok); }
-.mx-hover-row .is-del { color: var(--danger); }
-.mx-hover-row .is-pr-bad { color: var(--danger); }
-.mx-hover-row .is-pr-waiting { color: var(--working); }
-.mx-hover-row .is-pr-good { color: var(--ok); }
-.mx-hover-tag { flex: none; height: 16px; display: inline-flex; align-items: center; padding: 0 5px; border: 1px solid var(--line2); font-size: 10.5px; color: var(--muted); }
-.mx-hover-foot { display: flex; align-items: center; gap: 6px; height: 30px; padding: 0 14px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--muted); }
-.mx-hover-who { white-space: nowrap; }
-.mx-hover-when { font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
+.mx-hover-title { font-size: 13.5px; line-height: 1.35; font-weight: 600; color: var(--fg); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.mx-hover-state { display: flex; align-items: center; gap: 7px; min-width: 0; font-size: 12px; }
+.mx-hover-status { flex: none; }
+.mx-hover-word { flex: none; font-weight: 600; color: var(--muted); }
+.mx-hover-state.is-needs .mx-hover-word { color: var(--needs); }
+.mx-hover-state.is-working .mx-hover-word { color: var(--working); }
+.mx-hover-state.is-done .mx-hover-word { color: var(--ok); }
+.mx-hover-activity { min-width: 0; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-hover-rows { display: flex; flex-direction: column; gap: 6px; padding-top: 9px; border-top: 1px solid rgba(var(--ink), .07); }
+.mx-hover-row { display: flex; align-items: center; gap: 9px; min-width: 0; font-size: 12.5px; }
+.mx-hover-row-icon { flex: none; width: 14px; display: inline-flex; justify-content: center; color: var(--dim); }
+.mx-hover-value { min-width: 0; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-hover-value.is-mono { font: 400 11.5px var(--mono); }
+.mx-hover-value.is-remote { font-weight: 600; color: var(--accent-text); }
+.mx-hover-value.is-needs { font-weight: 600; color: var(--needs); }
+.mx-hover-detail { flex: none; margin-left: auto; padding-left: 8px; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; }
+.mx-hover-context { display: flex; align-items: center; gap: 8px; padding-top: 9px; border-top: 1px solid rgba(var(--ink), .07); font-size: 11.5px; color: var(--dim); }
+.mx-hover-bar { flex: 1; position: relative; height: 4px; border-radius: var(--r-badge); background: rgba(var(--ink), .1); overflow: hidden; }
+.mx-hover-bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: var(--r-badge); background: var(--fg2); }
+.mx-hover-bar.is-hot i { background: var(--needs); }
+.mx-hover-percent { font: 400 11px var(--mono); color: var(--fg2); }
 @media (prefers-reduced-motion: reduce) { .mx-hover-card { animation: none; } }
 :root[data-reduced-motion="true"] .mx-hover-card { animation: none; }
-.mx-hover-row .is-needs { color: var(--needs); }
 
 /* The rail of a narrow window: the starters, then a tile per session. */
 .mx-rail-session { width: 100%; height: 30px; display: flex; align-items: center; justify-content: center; transition: background-color var(--t-fast) var(--ease); }

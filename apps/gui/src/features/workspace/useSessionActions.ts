@@ -1,4 +1,3 @@
-import { movePanes } from './components/paneTransition'
 import { type Dispatch, type SetStateAction, useCallback } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
@@ -11,18 +10,17 @@ import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import { repoLocate } from '@/features/inspect/api'
 import type { LookAt } from '@/features/inspect/FilesTab'
 import type { OpenSubagent } from './model/subagents'
-import { activeArrangement, type Layout, MAX_PANES, showSession, splitPane } from './model/layout'
+import { type Layout, showSession } from './model/layout'
 import { displayName, type SessionView } from './model/session'
 import { makeId } from './makeId'
 import { copyText as writeClipboard } from '@/lib/clipboard'
 
-/** What a session's row and menu do: show it, rename it, split it, copy its path, open one of its files. */
-export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, openSurface }: {
+/** What a session's row and menu do: show it, rename it, copy its path, open one of its files. */
+export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, openSurface }: {
   setRenameId: Dispatch<SetStateAction<string | null>>
   queryClient: QueryClient
   setOpenSubagent: Dispatch<SetStateAction<OpenSubagent | null>>
   setLayout: Dispatch<SetStateAction<Layout>>
-  layout: Layout
   flash: (text: string) => void
   sessionMap: Map<string, SessionView>
   sessions: SessionView[]
@@ -47,24 +45,6 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     setOpenSubagent(null)
     setLayout((current) => showSession(current, sessionId, makeId))
   }, [setLayout, setOpenSubagent])
-
-  // "Open in split": the session joins the layout beside the pane that has focus. One already in it just takes the focus.
-  const openInSplit = useCallback((sessionId: string, direction: 'right' | 'down') => {
-    const showing = activeArrangement(layout)
-    if (!showing) {
-      showSessionById(sessionId)
-      return
-    }
-    if (showing.panes.some((pane) => pane.sessionId === sessionId)) {
-      showSessionById(sessionId)
-      return
-    }
-    if (showing.panes.length >= MAX_PANES) {
-      toast.info(`A window holds ${String(MAX_PANES)} panes at most. Close one to open another beside it.`)
-      return
-    }
-    movePanes(() => { setLayout((current) => splitPane(current, null, direction, sessionId, makeId)) })
-  }, [layout, setLayout, showSessionById])
 
   const copyText = useCallback((text: string, what: string) => {
     writeClipboard(text).then(
@@ -113,5 +93,5 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
       })
       .catch((error: unknown) => { toast.failed('Could not open that file', error) })
   }, [openSurface, setLookAt, showSessionById])
-  return { showSessionById, openPath, copyPathOf, showSubagent, saveName, openInSplit, copyText, usageInfo }
+  return { showSessionById, openPath, copyPathOf, showSubagent, saveName, copyText, usageInfo }
 }

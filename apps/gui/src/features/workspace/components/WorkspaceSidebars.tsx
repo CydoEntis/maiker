@@ -14,7 +14,7 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, showChangesOf, markDone, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, setAddMachineOpen, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject } = useWorkspace()
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
   const installedAgents = useInstalledAgents()
@@ -67,11 +67,8 @@ export function WorkspaceSidebars() {
       onUpdateMachine={(name, action) => { afterPick(); setUpdateAsk({ name, action }) }}
       onShowSession={(id) => { afterPick(); showSessionById(id) }}
       onRenameSession={setRenameId}
-      onSplitSession={(id, direction) => { afterPick(); openInSplit(id, direction) }}
+      onSaveSessionName={saveName}
       onCopyPath={copyPathOf}
-      onShowChanges={(id) => { afterPick(); showChangesOf(id) }}
-      onMarkDone={markDone}
-      onGetFile={setGetFileId}
       onNewWorktree={(id) => { afterPick(); newWorktreeFrom(id) }}
       onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}

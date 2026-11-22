@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { FolderPlus } from 'lucide-react'
 import { IconButton } from '@/components/ui/icon-button'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
@@ -13,6 +13,7 @@ import { Icon } from './glyphs'
 import { machineMenuEntries, type MachineActions } from './machineMenu'
 import { MachineTag } from './MachineTag'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
+import { isMenuKey } from './menuPoint'
 import { useReducedMotion } from './motion'
 import { ProjectBadge } from './ProjectBadge'
 import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
@@ -72,13 +73,9 @@ export type SidebarProps = {
   onUpdateMachine: (name: string, action: UpdateAction) => void
   onShowSession: (id: string) => void
   onRenameSession: (id: string | null) => void
-  /** Shows a session beside the pane that has focus. */
-  onSplitSession: (id: string, direction: 'right' | 'down') => void
+  /** Gives a session the name typed in its row. Without it Rename asks the window (`onRenameSession`). */
+  onSaveSessionName?: ((id: string, name: string) => void) | undefined
   onCopyPath: (id: string) => void
-  onShowChanges: (id: string) => void
-  onMarkDone: (id: string) => void
-  /** Asks for a file to pull from the machine of session `id`. */
-  onGetFile: (id: string) => void
   /** The pointer or keyboard is on this session's row (`null`: it left), so its chat can be read ahead of a click. */
   onHoverSession?: ((id: string | null) => void) | undefined
   /** Makes a worktree off this session's repository, with a session open in it. */
@@ -91,7 +88,7 @@ export type SidebarProps = {
   updateProgress?: Readonly<Record<string, number>> | undefined
 }
 
-type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[]; context?: ReactNode }
+type OpenMenu = { title: string; at: { x: number; y: number }; items: MenuEntry[]; context?: ReactNode; /** The row or heading a right-click or the menu key opened it on. */ owner?: string }
 
 /** The gap between a heading or a tag and the menu that opens under it. */
 const MENU_GAP_PX = 4
@@ -100,6 +97,13 @@ const MENU_GAP_PX = 4
 function under(element: Element): { x: number; y: number } {
   const box = element.getBoundingClientRect()
   return { x: box.left, y: box.bottom + MENU_GAP_PX }
+}
+
+/** What a row's card is placed beside: the row's own height, across the whole sidebar, so every card keeps one edge. */
+function cardAnchor(row: HTMLElement): DOMRect {
+  const box = row.getBoundingClientRect()
+  const side = row.closest('.mx-sidebar')?.getBoundingClientRect() ?? box
+  return new DOMRect(side.left, box.top, side.width, box.height)
 }
 
 export function Sidebar(props: SidebarProps) {
@@ -129,7 +133,7 @@ function Expanded(props: SidebarProps) {
   // The card beside a row the pointer rests on. It follows a controller outside React state, so a hover never draws the rows.
   const hover = useHoverController()
   const endHover = () => { hover.leave() }
-  const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => element.getBoundingClientRect()) }
+  const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => cardAnchor(element)) }
   const reduced = useReducedMotion()
   const choices = filterChoices(props.machines, props.projects)
   const [picked, setPicked] = useState<SidebarFilter>(NO_FILTER)
@@ -159,13 +163,28 @@ function Expanded(props: SidebarProps) {
   // Measured to slide only when a row or heading can have moved: its place, its name, or a fold.
   useFlip(body, reduced, `${orderPlacement(order)}#${folds.signature}#${props.sessions.map((session) => `${session.id}:${rowTitle(session)}`).join('|')}`)
 
-  const openMenu = (event: MouseEvent, next: OpenMenu) => {
+  // The session whose name is being typed in its row.
+  const [renaming, setRenaming] = useState<string | null>(null)
+  const { onSaveSessionName, onRenameSession } = props
+  const rename = (id: string) => {
+    endHover()
+    if (onSaveSessionName === undefined) onRenameSession(id)
+    else setRenaming(id)
+  }
+  const openMenu = (event: MouseEvent | KeyboardEvent, next: OpenMenu) => {
     event.preventDefault()
     event.stopPropagation()
+    // Some web views also send a right-click for the menu key; the menu the key opened under the row stays where it is.
+    if (next.owner !== undefined && menu?.owner === next.owner) return
     endHover()
     setMenu(next)
   }
-  const sessionMenu = (session: SessionView): MenuEntry[] => sessionMenuEntries(props, session, shortcutText('close'))
+  const sessionMenu = (session: SessionView, at: { x: number; y: number }): OpenMenu => ({
+    owner: session.id,
+    title: rowTitle(session),
+    at,
+    items: sessionMenuEntries(props, session, shortcutText('close'), { onRename: () => { rename(session.id) }, worktreeHint: shortcutText('new-worktree') }),
+  })
   const machineActions: MachineActions = { onRetry: props.onRetryMachine, onSignIn: props.onSignInMachine, onCopyCommand: props.onCopyCommand, onRename: props.onRenameMachine, onUpdate: props.onUpdateMachine, onSettings: props.onMachineSettings, onOpenProject: props.canStart ? props.onOpenProject : undefined }
 
   const targetOf = (group: ProjectGroup): ProjectTarget => ({
@@ -189,7 +208,8 @@ function Expanded(props: SidebarProps) {
         const row = event.currentTarget.closest('[data-project]') ?? event.currentTarget
         openMenu(event, { title: `New in ${group.name}`, at: under(row), items: plus.items, context: <><Icon name={name === null ? 'monitor' : 'server'} size={12} /><span>{plus.context}</span></> })
       },
-      onContextMenu: actions === undefined ? undefined : (event) => { openMenu(event, { title: group.name, at: { x: event.clientX, y: event.clientY }, items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
+      onContextMenu: actions === undefined ? undefined : (event) => { openMenu(event, { owner: group.key, title: group.name, at: { x: event.clientX, y: event.clientY }, items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
+      onKeyDown: actions === undefined ? undefined : (event) => { if (isMenuKey(event)) openMenu(event, { owner: group.key, title: group.name, at: under(event.currentTarget), items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
       tag: name === null ? null : (
         <MachineTag head={group.head} progress={props.updateProgress?.[name]} onMenu={(event) => { openMenu(event, { title: machineTitle(group.head), at: under(event.currentTarget), items: machineMenuEntries(group.head, name, machineActions) }) }} />
       ),
@@ -204,9 +224,13 @@ function Expanded(props: SidebarProps) {
         selected={session.id === props.focusedId}
         starter={links.starterOf.get(session.id) ?? null}
         helpers={links.helpersOf.get(session.id) ?? null}
+        renaming={renaming === session.id}
         onShow={() => { props.onShowSession(session.id) }}
-        onRename={() => { props.onRenameSession(session.id) }}
-        onContextMenu={(event) => { openMenu(event, { title: rowTitle(session), at: { x: event.clientX, y: event.clientY }, items: sessionMenu(session) }) }}
+        onRename={() => { rename(session.id) }}
+        onRenameSave={(name) => { onSaveSessionName?.(session.id, name) }}
+        onRenameEnd={() => { setRenaming(null) }}
+        onContextMenu={(event) => { openMenu(event, sessionMenu(session, { x: event.clientX, y: event.clientY })) }}
+        onMenuKey={(event) => { openMenu(event, sessionMenu(session, under(event.currentTarget))) }}
       />
     </div>
   )
@@ -267,7 +291,7 @@ function Expanded(props: SidebarProps) {
         <span className="mx-spacer" />
         <IconButton label="Settings" tip={tip('Settings', 'settings')} onClick={props.onOpenSettings}><Icon name="gear" /></IconButton>
       </div>
-      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={props.machines.some((head) => head.name !== null)} portalContainer={props.portalContainer} />
+      <RowHoverHost controller={hover} sessions={props.sessions} namesMachine={props.machines.some((head) => head.name !== null)} machines={props.machines} portalContainer={props.portalContainer} />
       {menu && <MenuPopup key={`${String(menu.at.x)},${String(menu.at.y)}`} title={menu.title} at={menu.at} items={menu.items} context={menu.context} portalContainer={props.portalContainer} onClose={() => { setMenu(null) }} />}
     </div>
   )
@@ -277,6 +301,8 @@ function Expanded(props: SidebarProps) {
 type HeadMenus = {
   onPlus: ((event: MouseEvent<HTMLElement>) => void) | null
   onContextMenu: ((event: MouseEvent) => void) | undefined
+  /** The menu key on the heading opens the same menu under it. */
+  onKeyDown: ((event: KeyboardEvent<HTMLElement>) => void) | undefined
   /** The machine tag of a project on another machine. */
   tag: ReactNode
 }
@@ -292,7 +318,7 @@ function ActiveProject({ group, open, onToggle, menus, children }: { group: Proj
   return (
     <div className="mx-sb-group">
       {/* A row holding the folding button and the buttons beside it: a button cannot hold a button. */}
-      <div className="mx-sb-head" data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu}>
+      <div className="mx-sb-head" data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
         <button type="button" className="mx-sb-head-main" aria-expanded={open} title={group.project.folder} onClick={onToggle}>
           <ProjectBadge name={group.name} />
           <span className="mx-sb-head-name">{group.name}</span>
@@ -320,7 +346,7 @@ function IdleProject({ group, menus, children }: { group: ProjectGroup; menus: H
   const empty = group.rows.length === 0
   return (
     <div className="mx-sb-group is-idle">
-      <div className="mx-sb-head is-idle" data-project={group.key} data-flip={`idle-head:${group.key}`} onContextMenu={menus.onContextMenu}>
+      <div className="mx-sb-head is-idle" data-project={group.key} data-flip={`idle-head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
         <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
           <ProjectBadge name={group.name} />
           <span className="mx-sb-head-name">{group.name}</span>

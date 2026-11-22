@@ -82,6 +82,8 @@ const ICON_DRAWINGS = {
   /** This computer, in a sidebar row and a machine group. */
   monitor: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="11.5" rx="1.8" /><path d="M9 20h6M12 16v4" /></Svg>,
   server: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3.5" y="4" width="17" height="6.5" rx="1.8" /><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8" /><path d="M7 7.25h.01M7 16.75h.01" /></Svg>,
+  clock: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>,
+  helpers: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M7 4h10v6H7zM12 10v4M7 14h10v6H7z" /></Svg>,
   search: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Svg>,
   pin: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></Svg>,
   pencil: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>,

@@ -179,7 +179,7 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/a`) })
   })
 
-  it('renames a session in a dialog from its row menu, and the name shows on the row and the pane', async () => {
+  it('renames a session in its row from the row menu, and the name shows on the row', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
     renderDesktopApp()
@@ -187,11 +187,10 @@ describe('desktop terminal multiplexer', () => {
     fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /, shell, / }))
     await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
 
-    // The name is asked for in a dialog ; nothing on the row turns into a field.
-    const dialog = await screen.findByRole('dialog', { name: 'Rename session' })
-    const field = within(dialog).getByRole('textbox', { name: 'Session name' })
+    // The name is typed where it is shown; no dialog asks for it.
+    const field = await within(sidebar).findByRole('textbox', { name: 'Session name' })
     await waitFor(() => { expect(field).toHaveFocus() })
-    expect(within(sidebar).queryByRole('textbox')).not.toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument()
     // Once saved, the daemon reports the name, and every place that shows the session uses it.
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { named: true, title: 'Login fix' })])
     await user.keyboard('Login fix{Enter}')
@@ -200,12 +199,12 @@ describe('desktop terminal multiplexer', () => {
     await within(sidebar).findByRole('button', { name: /^Login fix, shell, / })
   })
 
-  it('cancels the rename dialog and sends nothing, and an empty name clears it', async () => {
+  it('cancels the rename dialog of a pane and sends nothing, and an empty name clears it', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { named: true, title: 'Login fix' })])
     renderDesktopApp()
-    const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
-    fireEvent.contextMenu(await within(sidebar).findByRole('button', { name: /^Login fix, shell, / }))
+    const pane = await screen.findByRole('region', { name: /^Terminal 1/ })
+    fireEvent.contextMenu(pane)
     await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
     const field = await within(await screen.findByRole('dialog', { name: 'Rename session' })).findByRole('textbox', { name: 'Session name' })
     expect(field).toHaveValue('Login fix')
@@ -215,34 +214,11 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Rename session' })).not.toBeInTheDocument() })
     expect(daemon.renameConversationOnDaemon).not.toHaveBeenCalled()
 
-    fireEvent.contextMenu(within(sidebar).getByRole('button', { name: /^Login fix, shell, / }))
+    fireEvent.contextMenu(pane)
     await user.click(await screen.findByRole('menuitem', { name: /^Rename/ }))
     await user.clear(await screen.findByRole('textbox', { name: 'Session name' }))
     await user.keyboard('{Enter}')
     await waitFor(() => { expect(daemon.renameConversationOnDaemon).toHaveBeenCalledWith({ id: 't2' }, '') })
-  })
-
-  it('moves through a session menu with the arrow keys and gives focus back when it closes', async () => {
-    const user = userEvent.setup()
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`)])
-    renderDesktopApp()
-    const row = await screen.findByRole('button', { name: 'a, shell, idle' })
-    row.focus()
-    fireEvent.contextMenu(row)
-    const rename = await screen.findByRole('menuitem', { name: /^Rename/ })
-    expect(rename).toHaveFocus()
-
-    // The one pane on screen is this session, so Open in a new pane is greyed and the arrow skips it.
-    await user.keyboard('{ArrowDown}')
-    expect(screen.getByRole('menuitem', { name: 'Copy folder path' })).toHaveFocus()
-    await user.keyboard('{ArrowUp}')
-    expect(rename).toHaveFocus()
-    await user.keyboard('{ArrowDown}{Home}')
-    expect(rename).toHaveFocus()
-
-    await user.keyboard('{Escape}')
-    await waitFor(() => { expect(screen.queryByRole('menuitem', { name: /^Rename/ })).not.toBeInTheDocument() })
-    expect(row).toHaveFocus()
   })
 
   it('starts a new terminal in the start folder from Settings, with ~ meaning the home folder', async () => {

@@ -591,9 +591,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   popovers: `[role="menu"]`, `.mx-pop`, `.mx-ctx`, Radix poppers) is drawn once, in `material.css`, as the floating surface
   (`--float-bg`, `--float-line`, `--float-sh`); no blur, no gradient. The row under the pointer or the keys is `--float-hover`. Fields, segmented tracks and every selected state use the same card tokens (`--c-field-*`, `--c-track-*`, `--c-sel-bg`). A danger row is red; one that stops something running
   is handled by the app, which asks in a dialog first (see Close ends the session). Arrow keys, Home and End move, Esc or a click outside closes and
-  gives focus back. **Session**: Open, Open in split right, Open in split down (not for the one in front), Open
-  terminal here (agents), Rename… (F2), Copy folder path, Get a file… (another machine's sessions), Show changes
-  (agents), Stop session or Close shell.
+  gives focus back. **Session** (a sidebar row): its name as the heading, then Rename (F2), New worktree, Open worktree…,
+  Copy path, a divider and Close session…, and nothing else (see *Session row*).
   **Pane**: a terminal pane (a right-click anywhere in it) has Split right, Split down, Rename…, Maximize pane, Clear,
   Copy folder path, **Restart shell** when it ended and an entry for each request it waits on (helpers, a secret), then
   **Close**. A chat pane (a right-click on its header only) has **Rename…** and **Close session**, and Maximize pane
@@ -635,9 +634,18 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent) and the 14px
   status mark at the right, nothing else. Hover is the ink at 3.5%; the selected row is the one selection fill, `--t2`.
   A helper is under its lead, set in 16px with a hairline down its left edge. There is no × on a row: closing is in its
-  right-click menu, which reads Rename (F2), Open in a new pane, Copy folder path, a divider, Close session (a shell
-  says Close shell), a second divider, then the rest: Open, Open in split down, Show changes, New worktree…, Open
-  worktree…, Rename machine…, Get a file… and Mark as done, each where it applies.
+  right-click menu (`sessionMenu.ts`), which is the session's name as a dim heading and then exactly five rows:
+  **Rename** (F2), **New worktree** (its key from the binding table), **Open worktree…**, **Copy path**, a divider and
+  the red **Close session…** (its key; a shell says Close shell…). The two worktree rows are disabled outside a
+  repository. Nothing is added to this menu: what else a session can do is a terminal pane's menu (split, maximize, clear),
+  the command palette (Show changes, Get a file from another machine's session), the machine tag (Rename the machine) or
+  a drag of the row onto a pane (show it there). The menu key or Shift+F10 on a focused row, or on a project heading,
+  opens the same menu under it.
+  **Rename** edits the name in the row (`InlineName`): the name becomes a 24px field on `--t3` with a 1px inset edge
+  of the accent at 60%, the text selected, and the row keeps its height and its status mark. Enter or leaving the field
+  saves, Esc cancels, and an empty or unchanged name changes nothing; a session nothing was sent to starts with an empty
+  field over "New session". Enter and Esc give the row the keyboard back. The rail and a pane's menu, which show no
+  name to type on, open the rename dialog instead, where an empty name clears it.
   **Idle** is one section fixed under the list (at most 45% of the height, with its own scroll): its heading (12px 600
   `--muted`, the count, a caret) folds it. Under it each project is a dimmed heading (badge, name, machine tag) whose
   click opens the project's `+` menu, with **No sessions** at its right when it has none, then its idle rows, set in
@@ -648,14 +656,23 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   by machine name and folder), so a fold survives a restart.
   A row whose status changes glides to its new place, and the headings and rows it passes glide with it (`useFlip`);
   Reduce motion turns it off. A row is never tinted or flashed when its status changes.
-  A pointer resting on a row for 450ms shows a **hover card** beside it (`RowHoverCard`, 300px, its top 4px above the row (a row in the lower half of the window stands the card on its
-  bottom instead, so it grows up) and kept inside the window, fading in by opacity with a one-pixel ring and no blurred
-  shadow; while it is warm, moving to another row within 250ms shows it there at once, with no 450ms wait and no fade;
-  never a native `title`): the status icon and name (two lines at most) over the
-  activity line in the daemon's own words (the status word, dim, only when it said nothing; never both), then icon rows hanging in the left margin: the
-  folder (locked for a worktree; a shell shows its working directory in mono), the branch in mono with an **own worktree** tag, the changes
-  (`+added` `--ok`, `−removed` `--danger`) and the pull request (`#218` and its state in the state's colour), and a 30px footer with the agent's mark,
-  `agent · machine` (the agent alone on this computer) and how long ago it last changed. It takes no pointer input and goes on leave, click, scroll or a menu.
+  A pointer resting on a row for 380ms shows a **hover card** (`RowHoverCard`; its text is `hoverCardText` in
+  `model/hoverCard.ts`): 290px, 8px outside the sidebar's edge, its top 8px above the row (a row in the lower half of
+  the window stands the card on its bottom instead, so it grows up) and kept inside the window, fading in by opacity
+  with a one-pixel ring and no blurred shadow; while it is warm, moving to another row within 250ms shows it there at
+  once, with no wait and no fade; never a native `title`. Padding 12px 14px, 9px between its three parts, a hairline
+  (the ink at 7%) over the second and third. First the name (13.5px 600, two lines at most) and one line with the 14px
+  status mark, the state word (12px 600 in the state's colour: Needs you, Working, Done, Idle) and the activity in the
+  daemon's own words (`--muted`, one line, cut with an ellipsis). Then 12.5px rows, each a 13px `--dim` line icon and
+  its text in `--fg2`, in this order, a row with nothing to say left out: **Started by “lead”** (a helper whose lead is
+  listed), the **project**, with ` / worktree` when it has a checkout of its own (the folder icon in the project's
+  colour; a shell shows its working directory in mono), the **branch** in mono, the **machine** (This computer, or the
+  other machine's name in the accent text colour with how it is reached, dim mono, at the right; `name · offline` in
+  the needs-you colour while it is not connected; left out while only this computer is configured), **agent · model**
+  with the agent's own mark, **Last active 3m ago** (when its status last changed, on the shared second clock) and, on
+  a lead, **N helpers** with `1 needs you` at the right. Last, **Context**: a 4px bar and the percentage in mono, the
+  bar in the needs-you colour from 80%; left out when the agent has not said. The card shows no line counts and no
+  pull request. It takes no pointer input and goes on leave, click, scroll or a menu.
   A stopped agent and an exited shell are idle rows: the reason is the hover card's activity line and, for an agent,
   an error toast with the fix.
   An agent the daemon holds
@@ -663,8 +680,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and only one the daemon calls idle or done): an idle row whose activity line says `Limited until 14:05` in this
   computer's time (`Limited until Thu 14:05` when that is not today). It is never listed, counted or announced as needs
   you, because it waits on the limit and not on you, and its limit ending is not a new finish.
-  A finished agent's menu has **Mark as done**, which makes it idle without opening it (`MarkSeen`). A row is named by
-  the name you gave it, else the folder it was made in. **Rename** (F2 or the menu) opens the rename dialog. Project
+  A finished agent stays done until its session is shown, which makes it idle (`MarkSeen`). A row is named by
+  the name you gave it, else the folder it was made in. Project
   colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
   it shows a quiet card, **No sessions yet**.

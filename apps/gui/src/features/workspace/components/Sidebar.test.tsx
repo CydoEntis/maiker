@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
@@ -41,7 +41,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened:
     sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none, projectActions,
     onOpenProject: none, onAddMachine: none, onMachineSettings: none, onRetryMachine: none, onSignInMachine: none, onCopyCommand: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
-    onSplitSession: none, onCopyPath: none, onShowChanges: none, onMarkDone: none, onGetFile: none, onEndSession: none, onOpenSettings: none,
+    onCopyPath: none, onEndSession: none, onOpenSettings: none,
     ...more,
   }
   const view = render(<Sidebar {...props} />)
@@ -89,14 +89,11 @@ describe('the list', () => {
     expect(screen.getByRole('button', { name: /^One,/ })).not.toHaveAttribute('aria-current')
   })
 
-  it('reaches a row from the keyboard, and F2 asks to rename it', async () => {
+  it('reaches a row from the keyboard, and Enter shows it', async () => {
     const user = userEvent.setup()
-    const onRenameSession = vi.fn()
     const onShowSession = vi.fn()
-    show([session(1, 'One', { status: 'working' })], { onRenameSession, onShowSession })
+    show([session(1, 'One', { status: 'working' })], { onShowSession })
     act(() => { screen.getByRole('button', { name: /^One,/ }).focus() })
-    await user.keyboard('{F2}')
-    expect(onRenameSession).toHaveBeenCalledWith('t1')
     await user.keyboard('{Enter}')
     expect(onShowSession).toHaveBeenCalledWith('t1')
   })
@@ -237,6 +234,16 @@ describe('a project heading', () => {
     expect(projectActions.onShowFiles).toHaveBeenCalledWith('t1')
   })
 
+  it('opens its menu from the menu key on the focused heading', async () => {
+    const user = userEvent.setup()
+    show([session(1, 'One', { status: 'working' })])
+    act(() => { heading('shop').focus() })
+    await user.keyboard('{ContextMenu}')
+    expect(await screen.findByRole('menu', { name: 'shop' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    expect(heading('shop')).toHaveFocus()
+  })
+
   it('offers no worktree in a project whose sessions run outside git', async () => {
     const user = userEvent.setup()
     show([session(1, 'One', { status: 'working' })])
@@ -316,22 +323,105 @@ describe('a project on another machine', () => {
 })
 
 describe('a session row\'s menu', () => {
-  it('renames, opens beside the focused pane and closes, and offers Mark as done on a finished agent only', async () => {
+  it('holds Rename, New worktree, Open worktree, Copy path and Close session, and nothing else', () => {
+    show([session(1, 'Shipped', { status: 'done' }), onDevbox(2, 'There', { status: 'working' })], { machines: [LOCAL_HEAD, DEVBOX], onNewWorktree: vi.fn(), onOpenWorktree: vi.fn() })
+    for (const row of [/^Shipped,/, /^There,/]) {
+      fireEvent.contextMenu(screen.getByRole('button', { name: row }))
+      expect(menuItems()).toEqual(['Rename', 'New worktree', 'Open worktree…', 'Copy path', 'Close session…'])
+    }
+  })
+
+  it('does each item\'s own action once, for the row it was opened on', async () => {
+    const user = userEvent.setup()
+    const calls = { onNewWorktree: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onEndSession: vi.fn() }
+    show([session(1, 'One', { status: 'working', repo: 'shop' }), session(2, 'Two', { status: 'working', repo: 'shop' })], { ...calls, onSaveSessionName: vi.fn() })
+    const pick = async (item: RegExp) => {
+      fireEvent.contextMenu(screen.getByRole('button', { name: /^Two,/ }))
+      await user.click(await screen.findByRole('menuitem', { name: item }))
+    }
+    await pick(/^New worktree/)
+    await pick(/^Open worktree/)
+    await pick(/^Copy path/)
+    await pick(/^Close session/)
+    for (const action of Object.values(calls)) {
+      expect(action).toHaveBeenCalledTimes(1)
+      expect(action).toHaveBeenCalledWith('t2')
+    }
+    await pick(/^Rename/)
+    expect(await screen.findByRole('textbox', { name: 'Session name' })).toHaveValue('Two')
+  })
+
+  it('opens from the menu key or Shift+F10 on a focused row, moves with the arrows and closes on Escape back to the row', async () => {
+    const user = userEvent.setup()
+    show([session(1, 'One', { status: 'working', repo: 'shop' })], { onNewWorktree: vi.fn(), onOpenWorktree: vi.fn() })
+    const row = screen.getByRole('button', { name: /^One,/ })
+    act(() => { row.focus() })
+    await user.keyboard('{ContextMenu}')
+    await waitFor(() => { expect(screen.getByRole('menuitem', { name: /^Rename/ })).toHaveFocus() })
+    await user.keyboard('{End}')
+    expect(screen.getByRole('menuitem', { name: /^Close session/ })).toHaveFocus()
+    await user.keyboard('{Home}{ArrowDown}')
+    expect(screen.getByRole('menuitem', { name: /^New worktree/ })).toHaveFocus()
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('menu')).toBeNull()
+    expect(row).toHaveFocus()
+    await user.keyboard('{Shift>}{F10}{/Shift}')
+    expect(await screen.findByRole('menu', { name: 'One' })).toBeTruthy()
+  })
+})
+
+describe('renaming a session in its row', () => {
+  const renameOne = async (user: ReturnType<typeof userEvent.setup>) => {
+    act(() => { screen.getByRole('button', { name: /^One,/ }).focus() })
+    await user.keyboard('{F2}')
+    const field = await screen.findByRole('textbox', { name: 'Session name' })
+    await waitFor(() => { expect(field).toHaveFocus() })
+    return field
+  }
+
+  it('saves the name typed on Enter and gives the row the keyboard back', async () => {
+    const user = userEvent.setup()
+    const onSaveSessionName = vi.fn()
+    show([session(1, 'One', { status: 'working' })], { onSaveSessionName })
+    const field = await renameOne(user)
+    expect(field).toHaveValue('One')
+    await user.clear(field)
+    await user.keyboard('Fix the cart{Enter}')
+    expect(onSaveSessionName).toHaveBeenCalledExactlyOnceWith('t1', 'Fix the cart')
+    expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
+    expect(screen.getByRole('button', { name: /^One,/ })).toHaveFocus()
+  })
+
+  it('saves on leaving the field, and Escape changes nothing', async () => {
+    const user = userEvent.setup()
+    const onSaveSessionName = vi.fn()
+    show([session(1, 'One', { status: 'working' })], { onSaveSessionName })
+    await user.type(await renameOne(user), ' more')
+    await user.keyboard('{Escape}')
+    expect(onSaveSessionName).not.toHaveBeenCalled()
+    await user.type(await renameOne(user), ' more')
+    await user.click(screen.getByRole('button', { name: 'Search' }))
+    expect(onSaveSessionName).toHaveBeenCalledExactlyOnceWith('t1', 'One more')
+  })
+
+  it('changes nothing for an empty or an unchanged name', async () => {
+    const user = userEvent.setup()
+    const onSaveSessionName = vi.fn()
+    show([session(1, 'One', { status: 'working' })], { onSaveSessionName })
+    await renameOne(user)
+    await user.keyboard('{Enter}')
+    await user.clear(await renameOne(user))
+    await user.keyboard('{Enter}')
+    expect(onSaveSessionName).not.toHaveBeenCalled()
+    expect(screen.queryByRole('textbox', { name: 'Session name' })).toBeNull()
+  })
+
+  it('asks the window to rename where it cannot save a name itself', async () => {
     const user = userEvent.setup()
     const onRenameSession = vi.fn()
-    const onSplitSession = vi.fn()
-    const onMarkDone = vi.fn()
-    show([session(1, 'Shipped', { status: 'done' }), session(2, 'Busy', { status: 'working' })], { onRenameSession, onSplitSession, onMarkDone })
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Busy,/ }))
-    expect(menuItems()).toEqual(expect.arrayContaining(['Rename', 'Open in a new pane', 'Copy folder path', 'Close session']))
-    expect(menuItems()).not.toContain('Mark as done')
-    await user.click(screen.getByRole('menuitem', { name: /Open in a new pane/ }))
-    expect(onSplitSession).toHaveBeenCalledWith('t2', 'right')
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Shipped,/ }))
-    await user.click(await screen.findByRole('menuitem', { name: 'Mark as done' }))
-    expect(onMarkDone).toHaveBeenCalledWith('t1')
-    fireEvent.contextMenu(screen.getByRole('button', { name: /^Shipped,/ }))
-    await user.click(await screen.findByRole('menuitem', { name: /Rename/ }))
+    show([session(1, 'One', { status: 'working' })], { onRenameSession })
+    act(() => { screen.getByRole('button', { name: /^One,/ }).focus() })
+    await user.keyboard('{F2}')
     expect(onRenameSession).toHaveBeenCalledWith('t1')
   })
 })
@@ -402,6 +492,6 @@ function propsOf(sessions: SessionView[]): SidebarProps {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: groupByProject(sessions, []).machines, selectedProject: null, installedAgents: null, focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
     onToggleRail: none, side: 'left', width: 264, onResize: none, onResizeEnd: none, onSearch: none,
     onOpenProject: none, onAddMachine: none, onMachineSettings: none, onRetryMachine: none, onSignInMachine: none, onCopyCommand: none, onRenameMachine: none, onUpdateMachine: none, onShowSession: none, onRenameSession: none,
-    onSplitSession: none, onCopyPath: none, onShowChanges: none, onMarkDone: none, onGetFile: none, onEndSession: none, onOpenSettings: none,
+    onCopyPath: none, onEndSession: none, onOpenSettings: none,
   }
 }
