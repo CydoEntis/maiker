@@ -6,7 +6,6 @@ import type { Transfer } from '@/features/updates/downloadEta'
 import { Fragment, useContext, useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { groupShowsWhole, GroupShowsAll, matchesQuery, rowIsResult, SettingsSearch } from '../settingsSearch'
 import { ThemePicker } from './ThemePicker'
-import { Button } from '@/components/ui/button'
 import { Panel } from '@/components/ui/panel'
 import { PickerSelect, type PickerGroup, type PickerItem } from './PickerSelect'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
@@ -470,9 +469,9 @@ function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onS
               <span className="mono mx-folder-path" style={{ color: home ? 'var(--dim)' : 'var(--fg)' }}>{home ? 'Your home folder' : preferences.startFolder}</span>
             </div>
             {onChooseFolder && (
-              <Button variant="ghost" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) setStart(picked) }) }}>Browse…</Button>
+              <button type="button" className="mx-scard-button" aria-label="Choose the start folder" onClick={() => { void onChooseFolder(preferences.startFolder).then((picked) => { if (picked) setStart(picked) }) }}>Browse…</button>
             )}
-            {!home && <Button variant="ghost" onClick={() => { setStart('') }}>Use home folder</Button>}
+            {!home && <button type="button" className="mx-scard-button" onClick={() => { setStart('') }}>Use home folder</button>}
           </div>
         </div>
       </Card>
@@ -486,9 +485,9 @@ function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onS
               <span className="mono mx-folder-path" style={{ color: preferences.exportFolder === '' ? 'var(--dim)' : 'var(--fg)' }}>{preferences.exportFolder === '' ? 'Your Downloads folder' : preferences.exportFolder}</span>
             </div>
             {onChooseFolder && (
-              <Button variant="ghost" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</Button>
+              <button type="button" className="mx-scard-button" aria-label="Choose the export folder" onClick={() => { void onChooseFolder(preferences.exportFolder).then((picked) => { if (picked) update('exportFolder', picked) }) }}>Browse…</button>
             )}
-            {preferences.exportFolder !== '' && <Button variant="ghost" onClick={() => { update('exportFolder', '') }}>Use Downloads</Button>}
+            {preferences.exportFolder !== '' && <button type="button" className="mx-scard-button" onClick={() => { update('exportFolder', '') }}>Use Downloads</button>}
           </div>
         </div>
       </Card>

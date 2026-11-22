@@ -48,7 +48,7 @@
 .mx-app :is(.mx-rename, .mx-op, .mx-palette):focus-visible { box-shadow: var(--float-sh); }
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
-:is(.mx-op, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }
+:is(.mx-op, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-edge); }
 @media (prefers-reduced-motion: reduce) {
   .mx-op, .mx-op-scrim, .mx-chip-menu.is-token, .mx-palette, .mx-rename { animation: none; }
 }

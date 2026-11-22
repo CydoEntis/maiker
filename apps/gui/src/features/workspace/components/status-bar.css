@@ -16,7 +16,7 @@
 /* A hint: the key, then what it opens. */
 .mx-status-hint { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px; border-radius: var(--r-control); color: var(--muted); }
 .mx-status-hint:hover { background: var(--m-hover); color: var(--fg); }
-.mx-status-hint:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-status-hint:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-status-hint kbd { font: 500 10.5px var(--mono); color: var(--fg2); padding: 0 4px; border-radius: var(--r-badge); box-shadow: inset 0 0 0 1px var(--line2); }
 /* The smallest window has no room for all of it: the hints keep their words and drop their keys, the meters drop
    their window names (the tooltip and the popover still say them), and the row closes up. Should it still not fit, the

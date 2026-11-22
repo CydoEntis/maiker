@@ -268,13 +268,14 @@ a hidden bold twin of its label. Panels that open (a drawer, a disclosure) are t
 is what they are for. `src/revealSpace.test.ts` fails on a hover, focus or selection rule that sets `display: none` or
 `width: 0`, and on a close-button rule that sets `width: 0`; the few deliberate cases are listed in it with the reason.
 
-**Focus on a control is one style: a 2px accent underline, drawn inside the control.** The token is `--focus-underline`
-(`inset 0 -2px 0 var(--focus-line)`, `tokens.css`; `--focus-line` is the accent, and the one place to point at `--fg` if a
+**Focus on a control is one style: a 1px accent edge around the whole control, drawn inside it.** The token is `--focus-edge`
+(`inset 0 0 0 1px var(--focus-line)`, `tokens.css`; it follows the control's own corners, so a rounded row is ringed whole,
+never underlined; `--focus-line` is the accent, and the one place to point at `--fg` if a
 theme's accent falls under 3:1 on its ground). `.mx-app :focus-visible` sets it on everything, so a new control needs no
 rule; a field whose input sits inside a bordered wrapper puts it on the wrapper (`:focus-within`) and lists the input in
 the exclusion beside that rule, and a control that rests with a hairline border in `box-shadow` writes
-`inset 0 0 0 1px <its edge>, var(--focus-underline)` so the border stays whole on the cut corners too. No `outline`, no
-ring (`0 0 0 Npx`), no glow, no `outline-offset`, no growing border. The design's explicit exceptions are bordered, and
+`var(--focus-edge)` alone, the focus edge taking the place of its resting one. No `outline`, no
+ring outside the control (`0 0 0 Npx`), no glow, no `outline-offset`, no growing border. The design's explicit exceptions are bordered, and
 only these: the message box (`.mx-box`, border to accent), the commit message (`.mx-commit-message`, border to
 `--accent-line`) and the legacy composer. A menu item or option shows the item the keys are on with its highlight.
 
@@ -283,7 +284,7 @@ the message box take `border-color: var(--field-focus)` (`--field-focus` is `--f
 theme); a field that draws its edge in `box-shadow` (a wrapper around a bare input) uses `--field-focus-edge`
 (`inset 0 0 0 1px var(--field-focus)`). No underline, ring, glow or outline, and the edge follows the corner mode. It is one
 rule in `material.css` (*field focus*): a new field joins its list and writes no focus rule of its own. An invalid field
-keeps its danger edge. Buttons, rows, tabs and chips keep the underline above.
+keeps its danger edge. Buttons, rows, tabs and chips take the edge above, so focus reads the same on a field and on a button.
 `src/focusStyle.test.ts` fails on a focus rule that breaks this; its allowlist gives each exception its reason.
 
 **A hover, focus or press changes colour and opacity, nothing else, and does it at once.**

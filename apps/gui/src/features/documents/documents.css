@@ -20,10 +20,10 @@
 .mx-docview-drawn, .mx-docview-preview { flex: 1 1 0; min-width: 0; overflow: auto; padding: 16px 18px 24px; font-size: 13.5px; line-height: 1.6; color: var(--fg); }
 .mx-docview-page { max-width: 78ch; margin-inline: auto; }
 .mx-docview-editor { flex: 1 1 0; min-width: 0; resize: none; margin: 0; padding: 14px 18px; border: 0; border-radius: 0; font: 400 12.5px/1.7 var(--mono); tab-size: 4; white-space: pre; color: var(--fg); background: transparent; outline: none; }
-.mx-docview-editor:focus-visible { box-shadow: var(--focus-underline, inset 0 -1px 0 var(--ring)); }
+.mx-docview-editor:focus-visible { box-shadow: var(--focus-edge, inset 0 -1px 0 var(--ring)); }
 .mx-docview-body.is-beside > .mx-docview-editor { border-inline-end: 1px solid var(--pane-line); }
 .mx-docview-preview { border-inline-start: 0; }
-.mx-docview-drawn:focus-visible { outline: none; box-shadow: var(--focus-underline, inset 0 -1px 0 var(--ring)); }
+.mx-docview-drawn:focus-visible { outline: none; box-shadow: var(--focus-edge, inset 0 -1px 0 var(--ring)); }
 .mx-docview-body > .mx-docview-note { flex: 1; border-bottom: 0; }
 .mx-docview-foot { flex: none; height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-top: 1px solid var(--panel-line); font: 400 11.5px var(--mono); color: var(--dim); white-space: nowrap; }
 .mx-docview-where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }

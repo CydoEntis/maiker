@@ -16,7 +16,7 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .terminal-screen.is-attaching .xterm { visibility: hidden; }
 .terminal-attaching { position: absolute; top: 30px; left: 32px; right: 32px; z-index: 1; pointer-events: none; }
 .terminal-screen { background: var(--term); border: 1px solid var(--line); border-radius: var(--r-panel); flex: 1; font-size: 12.5px; margin: 8px 0 0; min-height: 180px; min-width: 0; overflow: hidden; padding: 9px; }
-.terminal-screen:focus-within { box-shadow: var(--focus-underline, inset 0 -2px 0 var(--ring)); }
+.terminal-screen:focus-within { box-shadow: var(--focus-edge, inset 0 0 0 1px var(--ring)); }
 .terminal-screen .xterm { height: 100%; }
 .terminal-screen .xterm-screen { padding-bottom: 1px; }
 /* xterm's own sheet paints the viewport black, and the strip under the last whole row showed as a black bar: the

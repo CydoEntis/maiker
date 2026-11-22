@@ -403,7 +403,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `interactive` for a card that is itself a button, `--line2` edge on hover and the focus underline inside), **Button**
   (`button.tsx`: kinds `primary` (the theme's accent), `needs` (only the main answer to something waiting on you),
   `soft`, `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button); `keyHint` draws the key that also
-  presses it; hover brightens, press darkens toward `--bg`, focus is the one 2px accent underline (`--focus-underline`),
+  presses it; hover brightens, press darkens toward `--bg`, focus is the one 1px accent edge around the control (`--focus-edge`),
   disabled is 42% opacity), **IconButton** (`icon-button.tsx`, the one icon button; see *Icon buttons* below), **Tag** (`tag.tsx`: a
   mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
   Loading or Reading, the label is for screen readers only), **FileBadge** (the path with its folder dimmed and no type icon,
@@ -531,13 +531,17 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   dim caps: **APP** (General, Appearance, Notifications, Hotkeys), **AGENTS** (Chat, Permissions, Helpers, Terminal, Extensions)
   and **MACHINES** (Remote machines). Each item is 32px with a 15px monochrome glyph (the item's own text colour) and
   its name, with no shortcut letter; the current one is the sidebar's selected row (`--t2`), and hover is the ink at
-  3.5%. Inside the dialog every field is flat: the search field, the folder fields, inputs, the pickers and the
-  segment trays are `--t3` with no edge until they have focus (`--c-field-*` and `--c-track-*`, set on `.mx-settings`
-  in `material.css`), and rows are parted by the ink at 4.5% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`): a
-  dot in the state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Up to date", "Update
-  failed"), the running version at its right, a dim note when there is one, the download bar while it downloads, and
-  the one button the state offers (Restart to update, Download, Check now, Try again), drawn as the pages' own button
-  (`.mx-scard-button`, full width) on the dialog's ground. General keeps only the two
+  3.5%. Inside the dialog every control reads as one: the search field, the folder fields, inputs, the pickers and the
+  segment trays are `--t3` with a `--line2` hairline (`--c-field-*` and `--c-track-*`, set on `.mx-settings` in
+  `material.css`), the chosen segment has its own hairline, and every button on a page (Browse…, Use home folder,
+  Reset) is the pages' own button (`.mx-scard-button`: `--fg` 500 on the ink at 9% with a `--line2` hairline). Rows are
+  parted by the ink at 4.5% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). With nothing to
+  report (Up to date, Not checked yet, Checking) it is one quiet line: the state in 12px `--muted`, the running
+  version, and a small **Check** word (`.mx-scard-meta-button`, named "Check now"). Otherwise it is a card: a dot in the
+  state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Update failed"), the running version at
+  its right, a dim note when there is one, the download bar while it downloads, and the one button the state offers
+  (Restart to update, Download, Try again), the pages' own button at full width on the dialog's ground. It sits at the
+  nav's foot and never makes the nav scroll. General keeps only the two
   update switches. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
   button, tooltip "Close (Esc)", no label) above a body that scrolls; the page itself never scrolls. The title and
   description slide with the page. A page is groups (`Card`) of up to 640px: an uppercase 11px `--dim` title over

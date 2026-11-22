@@ -55,7 +55,7 @@
 .mx-onb-track { position: absolute; left: 50%; top: 4px; display: flex; gap: 14px; transition: transform var(--t-slow) var(--ease); }
 .mx-onb-theme { flex: none; display: flex; flex-direction: column; width: 232px; height: 142px; padding: 0; overflow: hidden; border-radius: var(--r-panel); background: var(--c-ground); box-shadow: 0 0 0 1px var(--line2); transform: scale(.86); opacity: .45; outline: none; transition: transform var(--t-slow) var(--ease), opacity var(--t-slow) var(--ease); }
 .mx-onb-theme[data-state="checked"] { transform: none; opacity: 1; }
-.mx-onb-theme:focus-visible { box-shadow: var(--focus-underline); }
+.mx-onb-theme:focus-visible { box-shadow: var(--focus-edge); }
 
 /* A tiny Maiker in the card's own theme (`--c-*`, set on the card from that theme's roles). */
 .mx-mini-bar { flex: none; display: flex; align-items: center; gap: 6px; height: 16px; padding: 0 7px; }

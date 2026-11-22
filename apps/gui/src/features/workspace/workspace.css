@@ -66,7 +66,7 @@
 /* Focus is a 1px accent underline on buttons, fields, rows and menu items, never a ring (design rule 10; docs/UI.md). A field
    whose input sits in a wrapper draws it on the wrapper and lists the input here. The message box is the one exception: its
    whole border turns accent (the terminal's own focus is the pane's line, not a box). */
-.mx-app :focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-app :focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-app :is(.xterm-helper-textarea, .mx-box-text):focus-visible { box-shadow: none; }
 
 /* One fade for every state a control can take (hover, focus, picked, pressed): the colours and the opacity move over
@@ -161,7 +161,7 @@
 /* With a single pane the workspace's own border takes the focus; with several, the focused pane does. Never both. */
 .mx-app[data-side="right"] .mx-sidebar { margin: 12px 12px 12px 0; }
 /* A name edited where it is shown: on a sidebar row's title line and on a tab. */
-.mx-inline-name { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 0; background: transparent; box-shadow: var(--focus-underline); font: inherit; color: var(--fg); }
+.mx-inline-name { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 0; background: transparent; box-shadow: var(--focus-edge); font: inherit; color: var(--fg); }
 .mx-inline-name::placeholder { color: var(--dim); }
 
 .mx-text-button.is-armed { color: var(--warn); }
@@ -214,7 +214,7 @@
 /* Settings */
 .mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(3, 5, 8, .62); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
 .mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
-.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 18px 10px; overflow-y: auto; background: transparent; }
+.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 18px 10px 0; overflow-y: auto; background: transparent; }
 .mx-app.is-narrow .mx-settings-nav { width: 176px; }
 .mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 10px; }
 /* A flat field: the theme's field tone and no edge until it has focus (material.css › field focus). */
@@ -227,13 +227,16 @@
 .mx-settings-nav-item:hover { color: var(--fg); background: rgba(var(--ink), .035); }
 /* The sidebar's selected row (sidebar.css). */
 .mx-settings-nav-item.is-current, .mx-settings-nav-item.is-current:hover { background: var(--t2); color: var(--fg); box-shadow: none; }
-.mx-settings-nav-item.is-current:focus-visible { box-shadow: var(--focus-underline); }
+.mx-settings-nav-item.is-current:focus-visible { box-shadow: var(--focus-edge); }
 /* The nav icon: a plain glyph in its section's tint, with no tile behind it. */
 .mx-settings-nav-text { flex: 1; white-space: nowrap; }
 .mx-settings-nav-icon { flex: none; color: currentColor; opacity: .85; }
 .mx-settings-nav-spacer { flex: 1; min-height: 12px; }
 /* The update box sits at the foot of the nav, pinned while the nav scrolls. */
-.mx-settings-update { position: sticky; bottom: -18px; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: 0 -10px -18px; padding: 12px 14px 16px; background: var(--m-pane); border-top: 1px solid var(--line); }
+.mx-settings-update { position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: auto -10px 0; padding: 12px 14px 16px; background: var(--m-pane); border-top: 1px solid var(--line); }
+/* Nothing to report: one quiet line under the nav, the version and a small Check word, with no card of its own. */
+.mx-settings-update.is-quiet { padding: 10px 14px 12px; background: transparent; }
+.mx-settings-update.is-quiet .mx-settings-update-word { font-weight: 400; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .mx-settings-update-line { display: flex; align-items: center; gap: 8px; }
 .mx-settings-update-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--dim); }
 .mx-settings-update-dot.is-ok { background: var(--ok); }
@@ -283,7 +286,7 @@
 .mx-switch[aria-checked="true"] { background: color-mix(in srgb, var(--fg) 30%, transparent); }
 .mx-switch-knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: transform var(--t-base) var(--ease), background-color var(--t-fast) var(--ease); }
 .mx-switch[aria-checked="true"] .mx-switch-knob { transform: translateX(14px); background: var(--fg); }
-.mx-switch:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-switch:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-switch:disabled { cursor: default; opacity: .45; }
 .mx-switch:disabled .mx-switch-knob { background: var(--dim); }
 /* The segmented control, as the design draws it (Chat | Terminal): a 28px frame on --well with a 1px --line edge and 2px of
@@ -299,7 +302,7 @@
 .mx-picker.is-dimmed { opacity: .62; }
 .mx-picker-button { width: 250px; max-width: 100%; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 7px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); text-align: left; transition: box-shadow var(--t-fast) var(--ease); }
 .mx-picker-button:hover, .mx-picker-button.is-open { box-shadow: inset 0 0 0 1px var(--muted); }
-.mx-picker-button:focus-visible { box-shadow: inset 0 0 0 1px var(--muted), var(--focus-underline); }
+.mx-picker-button:focus-visible { box-shadow: var(--focus-edge); }
 .mx-picker-button .mx-swatch { width: 28px; height: 28px; }
 .mx-picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-picker-chevron { flex: none; color: var(--dim); transition: transform var(--t-base) var(--ease); }
@@ -313,7 +316,7 @@
 .mx-theme-card { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-control); }
 .mx-theme-card:not([aria-checked="true"]):hover { background: rgba(var(--hl), calc(.055 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); }
 .mx-theme-card[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--accent-line); }
-.mx-theme-card[aria-checked="true"]:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line), var(--focus-underline); }
+.mx-theme-card[aria-checked="true"]:focus-visible { box-shadow: var(--focus-edge); }
 .mx-swatch { width: 46px; height: 32px; flex: none; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .22); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px; }
 .mx-swatch span { display: flex; gap: 3px; }
 .mx-swatch i { height: 3px; border-radius: var(--r-badge); display: block; }
@@ -382,7 +385,7 @@
 .mx-recent-list { list-style: none; margin: 0; display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); padding: 4px; }
 .mx-recent-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .mx-recent-row:hover:not([aria-disabled="true"]), .mx-recent-row:focus-visible { background: var(--m-hover); outline: none; }
-.mx-recent-row:focus-visible { box-shadow: var(--focus-underline); }
+.mx-recent-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-recent-row[aria-disabled="true"] { cursor: not-allowed; color: var(--muted); }
 .mx-recent-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* A row of the Other agents list: text, then its own buttons; the row itself is not one. */
@@ -452,7 +455,7 @@
 .mx-confirm-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
 .mx-confirm-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
 .mx-confirm-button:disabled { opacity: .5; }
-.mx-scard-button { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-scard-button { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg); background: rgba(var(--hl), calc(.09 * var(--hk))); box-shadow: inset 0 0 0 1px var(--line2); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-scard-input.is-invalid { box-shadow: inset 0 0 0 1px var(--danger-line); }
 .mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
@@ -534,7 +537,7 @@
 .mx-upd-button .mx-upd-dot { position: static; flex: none; }
 .mx-upd-button .mx-upd-label { white-space: nowrap; }
 .mx-upd-keyonly { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; width: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
-.mx-upd-keyonly:focus-visible { clip: auto; clip-path: none; height: 24px; width: auto; padding: 0 8px; font-size: 12px; background: var(--main); color: var(--fg); box-shadow: var(--focus-underline); z-index: 1; }
+.mx-upd-keyonly:focus-visible { clip: auto; clip-path: none; height: 24px; width: auto; padding: 0 8px; font-size: 12px; background: var(--main); color: var(--fg); box-shadow: var(--focus-edge); z-index: 1; }
 .mx-upd-dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; background: var(--accent); }
 .mx-upd-card { width: 300px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); color: var(--fg); position: relative; }
 .mx-upd-head { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 10px; }

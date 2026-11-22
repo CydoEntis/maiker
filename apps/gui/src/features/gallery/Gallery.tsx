@@ -32,7 +32,7 @@ const FORCED: Record<(typeof KINDS)[number], { hover: string; pressed: string }>
   ghost: { hover: 'bg-(--hover) text-(--fg)', pressed: 'bg-(--sel)' },
   danger: { hover: 'bg-[color-mix(in_oklab,var(--err)_18%,transparent)]', pressed: 'bg-[color-mix(in_oklab,var(--err)_24%,transparent)]' },
 }
-const FOCUS_RING = 'shadow-(--focus-underline)'
+const FOCUS_RING = 'shadow-(--focus-edge)'
 
 function Sample({ label, children }: { label: string; children: ReactNode }) {
   return (

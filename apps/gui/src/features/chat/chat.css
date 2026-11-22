@@ -42,7 +42,7 @@
 .mx-msg-user.is-echo .mx-bubble { opacity: .6; }
 .mx-msg-menu { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border: 0; background: none; color: var(--muted); cursor: pointer; outline: none; }
 .mx-msg-menu:hover, .mx-msg-menu[data-state="open"] { background: var(--m-hover); color: var(--fg); }
-.mx-msg-menu:focus-visible { box-shadow: var(--focus-underline); }
+.mx-msg-menu:focus-visible { box-shadow: var(--focus-edge); }
 .mx-msg-menu-why { margin: 2px 6px 4px; max-width: 240px; font-size: 11.5px; line-height: 1.4; color: var(--dim); white-space: normal; }
 /* The agent's reply: plain text, its first paragraph in the text colour and the rest a step quieter, 8px between blocks.
    Nothing in it is bold unless the writer made it so. */
@@ -118,7 +118,7 @@
 .mx-step { display: flex; flex-direction: column; min-width: 0; }
 .mx-step-row { display: flex; width: 100%; min-width: 0; min-height: 30px; align-items: center; gap: 9px; padding: 0 8px; text-align: left; font-size: 13px; color: var(--fg2); outline: none; }
 button.mx-step-row:hover { background: var(--m-hover); }
-button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
+button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
 .mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
 /* The mark in front of a step sits in a 16px slot: ✓ and ■ quiet, × red, ! amber, the running light while it works. */
@@ -163,7 +163,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-block-head.is-static { gap: 8px; padding: 0 10px 0 12px; }
 .mx-block-toggle { display: flex; flex: 1; min-width: 0; align-items: center; align-self: stretch; gap: 8px; padding: 0 10px 0 12px; text-align: left; outline: none; }
 .mx-block-toggle:hover { background: color-mix(in srgb, var(--fg) 4%, transparent); }
-.mx-block-toggle:focus-visible { box-shadow: var(--focus-underline); }
+.mx-block-toggle:focus-visible { box-shadow: var(--focus-edge); }
 .mx-block-prompt { flex: none; font: 400 12px var(--mono); color: var(--dim); user-select: none; }
 /* What the block is: one line that cuts with an ellipsis, never wraps, so a long command or path cannot push the head wider than the column. */
 .mx-block-title { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 12px var(--mono); color: var(--fg); }
@@ -172,7 +172,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-block-command { flex: 1; min-width: 0; padding: 7px 0; font: 400 12px/1.5 var(--mono); color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-block-action { flex: none; height: 22px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; font-size: 12px; color: var(--dim); white-space: nowrap; outline: none; }
 .mx-block-action:hover { color: var(--fg); background: var(--m-hover); }
-.mx-block-action:focus-visible { box-shadow: var(--focus-underline); }
+.mx-block-action:focus-visible { box-shadow: var(--focus-edge); }
 .mx-block-output { margin: 0; max-height: 320px; overflow: auto; padding: 8px 14px; font: 400 12px/1.7 var(--mono); white-space: pre; color: var(--fg2); }
 .mx-out-pass { color: var(--done); font-weight: 600; }
 .mx-out-fail { color: var(--err); font-weight: 600; }
@@ -242,7 +242,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-changed-counts { display: flex; gap: 6px; font-family: var(--mono); font-size: 12px; font-weight: 500; }
 .mx-changed-review { flex: none; height: 24px; padding: 0 8px; border: 1px solid var(--line2); background: var(--m-hover); color: var(--fg); font-size: 12px; font-weight: 600; white-space: nowrap; outline: none; }
 .mx-changed-review:hover { border-color: var(--fg2); }
-.mx-changed-review:focus-visible { box-shadow: var(--focus-underline); }
+.mx-changed-review:focus-visible { box-shadow: var(--focus-edge); }
 .mx-changed-counts .is-add { color: var(--done); }
 .mx-changed-counts .is-remove { color: var(--err); }
 
@@ -251,7 +251,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-work { display: flex; min-width: 0; flex-direction: column; }
 .mx-work-head { align-self: flex-start; display: flex; max-width: 100%; min-width: 0; min-height: 26px; align-items: center; gap: 8px; padding: 0 6px 0 0; text-align: left; font-size: 13px; color: var(--muted); outline: none; }
 .mx-work-head:hover { color: var(--fg); }
-.mx-work-head:focus-visible { box-shadow: var(--focus-underline); }
+.mx-work-head:focus-visible { box-shadow: var(--focus-edge); }
 .mx-work-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-work-count { flex: none; font-size: 12px; color: var(--dim); white-space: nowrap; }
 .mx-work-count::before { content: "· "; }
@@ -264,7 +264,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-thought { display: flex; flex-direction: column; gap: 6px; }
 .mx-thought-toggle { align-self: flex-start; display: inline-flex; height: 26px; align-items: center; gap: 7px; padding: 0 4px; font-size: 13px; font-style: italic; color: var(--dim); outline: none; }
 .mx-thought-toggle:hover { color: var(--fg2); }
-.mx-thought-toggle:focus-visible { box-shadow: var(--focus-underline); }
+.mx-thought-toggle:focus-visible { box-shadow: var(--focus-edge); }
 .mx-thought-text { display: flex; flex-direction: column; gap: 8px; margin-left: 9px; padding: 2px 0 2px 12px; border-left: 1px solid var(--line2); font-size: 13.5px; font-style: italic; line-height: 1.6; color: var(--muted); }
 .mx-thought-text p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 
@@ -311,7 +311,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-answers { display: flex; flex-direction: column; gap: 2px; padding: 4px 6px 6px; border-top: 1px solid var(--float-line); }
 .mx-answer { display: flex; width: 100%; min-width: 0; height: 34px; text-align: left; align-items: center; gap: 10px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg2); cursor: pointer; }
 .mx-answer:hover:enabled, .mx-answer[data-highlight="true"] { background: var(--float-hover); color: var(--fg); }
-.mx-answer:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-answer:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-answer-key { flex: none; display: inline-flex; min-width: 22px; height: 22px; align-items: center; justify-content: center; padding: 0 6px; border-radius: var(--r-control); background: color-mix(in srgb, var(--fg) 12%, transparent); font: 700 12px var(--mono); color: var(--fg); }
 .mx-answer[data-highlight="true"] > .mx-answer-key { background: var(--fg); color: var(--float-bg); }
 .mx-answer-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -362,7 +362,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-underline); }
 .mx-waiting-options { display: flex; flex-direction: column; gap: 0; }
 .mx-option { display: flex; width: 100%; align-items: baseline; gap: 10px; min-height: 32px; padding: 7px 8px 7px 0; text-align: left; font-size: 13px; color: var(--fg2); cursor: pointer; outline: none; background: transparent; }
 .mx-option:hover, .mx-option.is-active { background: var(--m-hover); color: var(--fg); }
-.mx-option:focus-visible, .mx-option:has(input:focus-visible) { box-shadow: var(--focus-underline); }
+.mx-option:focus-visible, .mx-option:has(input:focus-visible) { box-shadow: var(--focus-edge); }
 .mx-option.is-picked { color: var(--fg); }
 .mx-option:disabled { cursor: default; opacity: .55; }
 .mx-option-key { flex: none; width: 22px; text-align: right; font: 600 11.5px var(--mono); color: var(--dim); }
@@ -439,7 +439,7 @@ button.mx-row-button:not(.is-locked):hover, button.mx-row-button[data-state="ope
 .mx-send { width: 26px; height: 26px; flex: none; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; background: var(--fg); color: var(--bg); }
 .mx-send.is-off { background: var(--m-hover); color: var(--dim); box-shadow: inset 0 0 0 1px var(--line); }
 .mx-send.is-stop { background: var(--m-hover); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-send:is(.is-off, .is-stop):focus-visible { box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+.mx-send:is(.is-off, .is-stop):focus-visible { box-shadow: var(--focus-edge); }
 .mx-stop-square { width: 9px; height: 9px; border-radius: var(--r-badge); background: currentColor; }
 .mx-send.is-stop.is-off { color: var(--dim); }
 .mx-send.is-busy { cursor: progress; }
@@ -496,26 +496,26 @@ button.mx-row-button:not(.is-locked):hover, button.mx-row-button[data-state="ope
 .mx-msg-quote { position: absolute; top: -13px; right: 0; z-index: 1; display: inline-flex; width: 24px; height: 24px; align-items: center; justify-content: center; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--main); color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-msg-agent:hover > .mx-msg-quote, .mx-msg-agent:focus-within > .mx-msg-quote, .mx-msg-user:hover .mx-msg-quote.is-own, .mx-msg-user:focus-within .mx-msg-quote.is-own { opacity: 1; }
 .mx-msg-quote:hover { color: var(--fg); }
-.mx-msg-quote:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-msg-quote:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-msg-quote.is-own { position: static; width: 28px; height: 28px; border: 0; background: none; }
 /* A question the agent asked in plain words: a quiet Reply at its right edge, its room (56px) always kept. */
 .mx-md-list > li.has-reply, p.has-reply { position: relative; padding-right: 56px; }
 .mx-ask-reply { position: absolute; top: 0; right: 0; height: 24px; padding: 0 8px; border-radius: var(--r-control); font-size: 12px; line-height: 24px; color: var(--muted); cursor: pointer; opacity: 0; transition: opacity var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .has-reply:hover > .mx-ask-reply, .has-reply:focus-within > .mx-ask-reply, .mx-ask-reply:focus-visible { opacity: 1; }
 .mx-ask-reply:hover { color: var(--fg); }
-.mx-ask-reply:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-ask-reply:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 @media (hover: none) { .mx-ask-reply, .mx-msg-quote { opacity: 1; } }
 .mx-ask-foot { margin: 0; }
 .mx-ask-all { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0; font-size: 12px; color: var(--muted); cursor: pointer; }
 .mx-ask-all:hover .mx-ask-all-do { color: var(--fg); text-decoration: underline; }
-.mx-ask-all:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-ask-all:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 /* A quote above words: a 2px left edge, who it quotes, one line of what was said. */
 .mx-bubble.has-quotes { display: flex; flex-direction: column; gap: 6px; white-space: normal; }
 .mx-said-words { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-quote-stub { display: flex; align-items: baseline; gap: 8px; width: 100%; min-width: 0; margin: 0; padding: 2px 0 2px 8px; border: 0; border-left: 1px solid color-mix(in srgb, var(--fg) 28%, transparent); background: none; text-align: left; font-size: 12.5px; line-height: 1.5; color: var(--muted); cursor: default; transition: color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
 button.mx-quote-stub { cursor: pointer; }
 button.mx-quote-stub:hover { color: var(--fg2); border-left-color: var(--muted); }
-button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-quote-who { flex: none; font-weight: 600; color: var(--fg2); }
 .mx-quote-line { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* The strip above the message box: a row per quote, always the same height. */
@@ -524,17 +524,17 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-quote-row { display: flex; align-items: center; gap: 8px; height: 26px; min-width: 0; font-size: 12.5px; color: var(--muted); }
 .mx-quote-x { flex: none; display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: var(--r-control); color: var(--dim); cursor: pointer; transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
 .mx-quote-x:hover { color: var(--fg); background: var(--m-hover); }
-.mx-quote-x:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-quote-x:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-quote-clear { flex: none; height: 26px; padding: 0 8px; font-size: 12px; color: var(--muted); cursor: pointer; }
 .mx-quote-clear:hover { color: var(--fg); }
-.mx-quote-clear:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-quote-clear:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-quote-clear.is-idle { visibility: hidden; }
 /* The reply tray: the question card's shape, neutral because the agent is not blocked. */
 .mx-waiting.is-neutral .mx-waiting-bang { font-family: var(--ui); font-weight: 600; color: var(--muted); }
 .mx-reply-rows { display: flex; flex-direction: column; }
 .mx-reply-row { display: grid; grid-template-columns: 34px minmax(0, 1fr); padding: 8px 12px; border-bottom: 1px solid var(--line); outline: none; }
 .mx-reply-row:last-child { border-bottom: 0; }
-.mx-reply-row:focus-visible { box-shadow: var(--focus-underline); }
+.mx-reply-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-reply-label { grid-column: 1; grid-row: 1; padding-top: 1px; font: 600 12px/1.45 var(--mono); color: var(--dim); white-space: nowrap; }
 .mx-reply-row.is-answered .mx-reply-label { color: var(--fg); }
 .mx-reply-q { grid-column: 2; grid-row: 1; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; margin: 0; overflow: hidden; font-size: 13px; line-height: 1.45; color: var(--fg); overflow-wrap: anywhere; }
@@ -546,7 +546,7 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-reply-chip { height: 24px; padding: 0 9px; border: 1px solid var(--line2); border-radius: var(--r-control); font-size: 12px; color: var(--fg2); cursor: pointer; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease); }
 .mx-reply-chip:hover { background: var(--m-hover); color: var(--fg); }
 .mx-reply-chip[aria-pressed="true"] { border-color: var(--fg); background: var(--fg); color: var(--bg); }
-.mx-reply-chip:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+.mx-reply-chip:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-reply-send:not(:disabled) { border-color: var(--fg); background: var(--fg); color: var(--bg); }
 .mx-reply-send:not(:disabled):hover { background: color-mix(in oklab, var(--fg) 88%, var(--bg)); }
 
@@ -560,4 +560,4 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-unde
 .mx-ended-button { height: 28px; padding: 0 12px; font-size: 12.5px; font-weight: 500; color: var(--fg); background: var(--m-raise); border: 1px solid var(--line2); }
 .mx-ended-button.is-primary { font-weight: 600; color: var(--bg); background: var(--fg); border-color: var(--fg); }
 .mx-ended-button[aria-disabled="true"] { cursor: not-allowed; opacity: .6; }
-.mx-ended-button:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-ended-button:focus-visible { outline: none; box-shadow: var(--focus-edge); }

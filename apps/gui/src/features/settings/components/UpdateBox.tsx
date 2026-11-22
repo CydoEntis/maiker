@@ -27,9 +27,23 @@ function faceOf(updates: SettingsUpdates): Face {
   }
 }
 
+/** The states with nothing to report: the box is one quiet line, and checking is a small word on it, not a full button. */
+const QUIET: ReadonlySet<SettingsUpdates['status']> = new Set(['current', 'idle', 'checking'])
+
 /** The foot of the Settings nav: where the app's update is, with the one thing to do about it. */
 export function UpdateBox({ updates, appVersion }: { updates: SettingsUpdates; appVersion: string | null }) {
   const face = faceOf(updates)
+  if (QUIET.has(updates.status)) {
+    return (
+      <div className="mx-settings-update is-quiet" aria-label="Updates" role="group">
+        <div className="mx-settings-update-line">
+          <span className="mx-settings-update-word" role="status">{face.line}</span>
+          {appVersion !== null && <span className="mx-settings-update-now" title="The version running now">{vee(appVersion)}</span>}
+          {face.button !== null && <button type="button" className="mx-scard-meta-button" aria-label={face.button.label} onClick={face.button.run}>Check</button>}
+        </div>
+      </div>
+    )
+  }
   return (
     <div className="mx-settings-update" aria-label="Updates" role="group">
       <div className="mx-settings-update-line">
