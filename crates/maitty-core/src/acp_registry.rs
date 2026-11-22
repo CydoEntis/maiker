@@ -1,4 +1,4 @@
-//! Installing agents from the ACP registry (ADR 0019), so an agent run over ACP needs no
+//! Installing agents from the ACP registry (ADR 0021), so an agent run over ACP needs no
 //! hand-written `[[agents]]` entry and no manual install.
 //!
 //! The registry is one public JSON file. Everything in it is untrusted input: an entry is used
@@ -29,7 +29,7 @@ const MAX_WORDS: usize = 32;
 const MAX_WORD: usize = 4096;
 const SHA256_HEX: usize = 64;
 
-/// Registry entries that only wrap an agent this app runs through its own adapter (ADR 0018).
+/// Registry entries that only wrap an agent this app runs through its own adapter (ADR 0020).
 const NATIVE_HELPERS: [&str; 2] = ["claude-acp", "codex-acp"];
 
 #[derive(Deserialize)]

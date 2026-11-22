@@ -56,7 +56,7 @@ message. Starting one in the Chat view did (protocol 122, below).
 
 ## Starting a chat on a remote machine
 
-**In the Chat view** (ADR 0018) the start is a chat that machine's daemon runs itself, with no terminal session:
+**In the Chat view** (ADR 0020) the start is a chat that machine's daemon runs itself, with no terminal session:
 
 - The window sends `Command::ConversationStart` over a request line with a target that names no program:
   `StartTarget::Agent { provider, cwd, sandbox, approval_policy }` for Claude Code and Codex,

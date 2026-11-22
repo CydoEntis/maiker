@@ -1,4 +1,4 @@
-# 0017. ACP is for agents without an adapter, and what it claims is labelled
+# 0019. ACP is for agents without an adapter, and what it claims is labelled
 
 - **Status:** Proposed
 - **Date:** 2026-11-20
@@ -8,7 +8,7 @@
 Maiker runs Codex and Claude Code as chats through adapters written against each one's native
 protocol and verified against pinned versions (0005). Other agents (Gemini CLI, OpenCode) can
 only be watched in a terminal. Several of them speak the Agent Client Protocol, so one adapter
-could run many agents. The provider contract (0016) gives it a place.
+could run many agents. The provider contract (0018) gives it a place.
 
 Three things had to be decided by the owner: which agents go through ACP, what "supported" means
 for an agent nobody here has pinned, and how the protocol change reaches installed peers.

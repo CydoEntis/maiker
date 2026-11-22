@@ -1,5 +1,5 @@
 //! `agents`: the agents that run as a chat over ACP on this computer, and installing one from
-//! the ACP registry (ADR 0019). The downloading is done here, in a command that ends, never in
+//! the ACP registry (ADR 0021). The downloading is done here, in a command that ends, never in
 //! the service; the desktop app runs these same commands.
 
 use crate::acp_registry::{self as registry, Installed, Listed};

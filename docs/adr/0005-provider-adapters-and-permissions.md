@@ -12,7 +12,7 @@ a pane (0003). Each provider speaks its own protocol.
 
 - Codex (`app-server`) and Claude Code (headless `stream-json`) each live in their own adapter
   crate behind the daemon's provider contract, whose shape is
-  [0016](0016-one-provider-contract-with-no-io.md). Adapters are built with the daemon; there is
+  [0018](0018-one-provider-contract-with-no-io.md). Adapters are built with the daemon; there is
   no plugin ABI or runtime download.
 - Maiker launches the official CLI with the user's own sign-in. It offers no login screen and
   does not handle OAuth tokens.

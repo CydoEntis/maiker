@@ -1,14 +1,14 @@
 # Agent Client Protocol (ACP)
 
 > **Use for:** Running an agent that has no adapter of its own as a daemon-owned chat.
-> **Requires:** the provider contract ([ADR 0016](../adr/0016-one-provider-contract-with-no-io.md))
+> **Requires:** the provider contract ([ADR 0018](../adr/0018-one-provider-contract-with-no-io.md))
 > **Fills:** ARCHITECTURE § provider adapters; SECURITY § provider permissions
 
 ## Rules
 
 - ACP is one dialect behind the provider contract, in `crates/adapters/maitty-provider-acp`.
   Nothing outside that crate names an ACP type, and no ACP frame reaches a client
-  ([ADR 0017](../adr/0017-acp-for-agents-without-an-adapter.md)).
+  ([ADR 0019](../adr/0019-acp-for-agents-without-an-adapter.md)).
 - Codex and Claude Code keep their own adapters. ACP is only for an agent that has none.
 - Speak protocol version 1 only. An agent that answers `initialize` with another version is
   refused, with its version in the message.
@@ -105,7 +105,7 @@ ACP flag. The keys and their checks are in
 ## Project-specific: the registry
 
 `maiker agents list`, `install <id>` and `remove <id>` (`maitty-core/src/acp_registry.rs`,
-[ADR 0019](../adr/0019-acp-agents-are-installed-from-the-registry.md)) install agents from
+[ADR 0021](../adr/0021-acp-agents-are-installed-from-the-registry.md)) install agents from
 `https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json`.
 
 - An agent lands in `<data folder>/acp-agents/<id>/<version>/`, and
@@ -114,7 +114,7 @@ ACP flag. The keys and their checks are in
 - A config entry wins over an installed agent of the same name.
 - A binary download needs the registry's SHA-256. An npm agent needs Node.js and npm on this
   computer and runs as `node <the package's program>`. A Python (`uvx`) agent is not installed.
-- The registry's `claude-acp` and `codex-acp` are not listed (ADR 0018).
+- The registry's `claude-acp` and `codex-acp` are not listed (ADR 0020).
 - The checks on an entry and a download are in
   [SECURITY](../SECURITY.md#project-specific-installing-an-agent-from-the-acp-registry).
 - Run by hand on Linux x86_64 (2026-11-21): `agents install opencode` (binary, 2.3.2) followed by

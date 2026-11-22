@@ -264,7 +264,7 @@ fn codex_from(search: &std::ffi::OsStr) -> Option<PathBuf> {
 
 impl Daemon {
     /// The program of the agent `name`: the config's entry, else the one installed from the ACP
-    /// registry (ADR 0019). The installed list is one small file, read when a chat starts.
+    /// registry (ADR 0021). The installed list is one small file, read when a chat starts.
     fn acp_program(&self, name: &str) -> Result<AcpProgram> {
         let agent = self
             .cfg

@@ -58,7 +58,7 @@ pub struct AgentDef {
 
 /// The longest name an ACP agent may have: it names the agent in every conversation it runs.
 pub const ACP_NAME_MAX: usize = maitty_shared::conversation::ACP_AGENT_NAME_MAX;
-/// The agents with an adapter of their own, which are never run over ACP (ADR 0017).
+/// The agents with an adapter of their own, which are never run over ACP (ADR 0019).
 pub const NATIVE_CHAT_AGENTS: [&str; 2] = ["claude", "codex"];
 const ACP_ARGS_MAX: usize = 32;
 const ACP_ENV_MAX: usize = 32;

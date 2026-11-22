@@ -41,7 +41,7 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
  * `bypass` is this session's Bypass Permissions choice over Settings, and `name` a name for it; without one the first
  * message names the session.
  */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0019); the model, effort and mode are then its own. */ acp?: string; name?: string; bypass?: boolean | undefined }
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0021); the model, effort and mode are then its own. */ acp?: string; name?: string; bypass?: boolean | undefined }
 
 /** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
 export type NewChatSeed = {
@@ -109,7 +109,7 @@ type Props = {
   seed?: NewChatSeed | null
   /** Before the where chips: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
-  /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0019). */
+  /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0021). */
   otherAgents?: boolean
 }
 

@@ -272,7 +272,7 @@ describe('starting a chat on another machine', () => {
   })
 })
 
-// ADR 0018 on another machine: its own daemon runs the chat, and no shell is started there for it.
+// ADR 0020 on another machine: its own daemon runs the chat, and no shell is started there for it.
 describe('starting a chat on another machine in the Chat view', () => {
   /** Machine 2 is `build`; the chat its daemon starts shows in its next list. */
   const lists = (id: string) => () => {
@@ -325,7 +325,7 @@ describe('starting a chat on another machine in the Chat view', () => {
   })
 })
 
-// ADR 0018: what the Chat view starts is a chat the daemon owns, with no terminal behind it.
+// ADR 0020: what the Chat view starts is a chat the daemon owns, with no terminal behind it.
 describe('starting a chat from the draft in the Chat view', () => {
   beforeEach(() => { localStorage.clear() })
 

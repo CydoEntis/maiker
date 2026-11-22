@@ -59,7 +59,7 @@ export function WorkspacePane({ shown, pane, kept }: {
     add: (text: string, first: boolean, operation: number) => queueFollowUp(session, text, first, operation),
     drop: (index: number, text: string) => dropQueuedFollowUp(session, index, text),
   }
-  // A session is shown as the app's view says; no control on it moves it between chat and terminal (ADR 0018).
+  // A session is shown as the app's view says; no control on it moves it between chat and terminal (ADR 0020).
   const view = chat.view
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })

@@ -994,7 +994,7 @@ app installs nothing. Running a downloaded script is running remote code as the 
 
 ## Project-specific: installing an agent from the ACP registry
 
-`maiker agents install <id>` (`crates/maitty-core/src/acp_registry.rs`, ADR 0019) installs an agent that
+`maiker agents install <id>` (`crates/maitty-core/src/acp_registry.rs`, ADR 0021) installs an agent that
 runs over ACP from the public ACP registry. The owner approved this; unlike the installer above, what it
 installs is chosen by a file fetched at run time, so the file is untrusted input and the rules are checks,
 not a list:

@@ -1,5 +1,5 @@
 //! The agents that run as a chat over ACP on this computer: listing them and installing one from
-//! the ACP registry (ADR 0019). The work is the command line's (`agents list`, `install`,
+//! the ACP registry (ADR 0021). The work is the command line's (`agents list`, `install`,
 //! `remove`), run off the UI thread; the window only ever names an agent's id.
 
 use std::io::Read;

@@ -1388,12 +1388,12 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   Files at the right of the title bar, Terminal icon, `aria-pressed` while the dock shows) is drawn only for a chat of this computer in the
   Chat view; it is `toggleTerminal`, the same as the Terminal key, and the first press starts the chat's first terminal. The terminal stays mounted under the chat and keeps its size, and
   no daemon command is sent. **No control on a session moves it between chat and terminal**
-  ([ADR 0018](adr/0018-the-chat-view-talks-to-the-agent-directly.md)): there is no terminal log over a chat and no
+  ([ADR 0020](adr/0020-the-chat-view-talks-to-the-agent-directly.md)): there is no terminal log over a chat and no
   **Back to chat**. A terminal agent shown as a chat that cannot carry on (it never reports in, or it waits on a
   question only its terminal draws) says so in a line that names the way out, the Terminal view in Settings; a command
   whose menu only the terminal draws is not run from the chat and says the same. A shell's ⋯ menu offers
   **Start a Claude chat here**, **Start a Codex chat here** and **Start Gemini here**.
-- **What the Chat view starts** ([ADR 0018](adr/0018-the-chat-view-talks-to-the-agent-directly.md), proposed).
+- **What the Chat view starts** ([ADR 0020](adr/0020-the-chat-view-talks-to-the-agent-directly.md)).
   Sending the New session draft on this computer starts a chat session the daemon owns, with no terminal behind it
   (`startDirectChat` in `useSessionStarts`); "Start a chat" on a shell's empty chat card does the same. No agent is
   started ahead of the first message, and nothing the agent draws on a terminal can stand in the chat's way. The chat is
@@ -1417,7 +1417,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
     put away go to that machine. A new worktree is made there first; switching that checkout's branch, and resuming a
     conversation saved on this computer, are refused in a line. Changes and Files stay local-only for it.
   - **Other agents…** under the draft's box (Chat view, this computer; `AcpAgentsDialog`) lists the agents that run
-    over ACP: the config's, and the ACP registry's ([ADR 0019](adr/0019-acp-agents-are-installed-from-the-registry.md)).
+    over ACP: the config's, and the ACP registry's ([ADR 0021](adr/0021-acp-agents-are-installed-from-the-registry.md)).
     A registry agent has **Install** (it says it downloads a program that runs as you), then **Use**, **Update** when
     a newer version is out, and **Remove**; one that cannot be installed here says why and has no button. The work is
     the host's `acp_agents`, `install_acp_agent` and `remove_acp_agent`, which run the `maiker agents` command off the

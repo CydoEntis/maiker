@@ -12,7 +12,7 @@ const AcpAgentSchema = z.object({
 })
 
 /**
- * An agent that can run as a chat over ACP on this computer (ADR 0019): one the config names, or one the ACP registry
+ * An agent that can run as a chat over ACP on this computer (ADR 0021): one the config names, or one the ACP registry
  * lists. `installed` is the version here (empty for a config entry, which is always ready), null when it is not
  * installed; `unavailable` is why it cannot be installed here, when it cannot.
  */

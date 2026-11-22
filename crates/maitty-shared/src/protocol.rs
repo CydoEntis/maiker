@@ -430,7 +430,7 @@ pub struct AllowedCommand {
 /// sent (`ServerMsg::introduced_in`), or a field it does not need. Set it to the current version
 /// in the change that removes, renames or retypes anything an older peer reads or writes, or
 /// that adds a value inside a message it is still sent (a new `Status`, say): such a peer would
-/// misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0017): a peer before
+/// misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0019): a peer before
 /// it cannot read a list of conversations that holds one. 122 added a start a daemon before it
 /// cannot read (`StartTarget::Agent`), so a client would wait on a chat that never starts.
 pub const COMPATIBLE_SINCE: u32 = 122;

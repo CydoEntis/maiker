@@ -2061,7 +2061,7 @@ impl Permissions {
 }
 
 /// Start a chat session: a structured conversation the daemon owns (ADR 0003), with the posture the
-/// person picked for it (ADR 0018: the New session draft starts chats, and carries its mode). With a
+/// person picked for it (ADR 0020: the New session draft starts chats, and carries its mode). With a
 /// `branch` the daemon makes a worktree for it from the project at `cwd` and starts there.
 pub async fn start_chat_session(
     cwd: PathBuf,

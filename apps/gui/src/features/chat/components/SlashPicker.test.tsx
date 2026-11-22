@@ -152,7 +152,7 @@ describe('the agent\'s commands in the message box', () => {
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/compact', '\r'])
   })
 
-  // ADR 0018: a chat never shows a terminal, so a command whose menu only the terminal draws is not typed into one.
+  // ADR 0020: a chat never shows a terminal, so a command whose menu only the terminal draws is not typed into one.
   it('offers the commands only the terminal runs to an agent that has one, and types nothing when one is run', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto })

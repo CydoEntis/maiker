@@ -536,7 +536,7 @@ function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): C
   }
   const terminals = listed
     .map((term) => toTerminalConversation(term, snapshot.workspaces, machine, chatOf.get(term.id), term.agent === null ? undefined : limitsOf.get(term.agent), secretsOf.get(term.id) ?? [], sessionOfChat(term.started_by_chat)))
-  // Another machine lists its panes and the chat sessions its daemon started (ADR 0018). A conversation it
+  // Another machine lists its panes and the chat sessions its daemon started (ADR 0020). A conversation it
   // follows in a pane this list does not show stays out: only its own daemon can say what that is.
   if (machine !== undefined) {
     return [
@@ -1267,7 +1267,7 @@ export async function startChatSession(folder: string, agent: 'claude' | 'codex'
 
 /**
  * Opens a saved Claude Code or Codex conversation of this computer as a chat session: the agent's own session
- * `session` in `folder`, continued where it stopped, with its earlier messages as the chat's history (ADR 0018).
+ * `session` in `folder`, continued where it stopped, with its earlier messages as the chat's history (ADR 0020).
  */
 export async function resumeChatSession(folder: string, agent: 'claude' | 'codex', session: string, permissions: SessionPermissions = 'workspace-write'): Promise<{ id: number; generation: number }> {
   return invokeParsed('resume_chat_session', CreatedConversationSchema, {
@@ -1279,7 +1279,7 @@ export async function resumeChatSession(folder: string, agent: 'claude' | 'codex
 }
 
 /**
- * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0018). Only the agent's name is sent: the
+ * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0020). Only the agent's name is sent: the
  * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */
 export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
@@ -1592,7 +1592,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
   // (ADR 0003). A followed pane's conversation is read-only and belongs to that pane, so it is not one.
   const chatSession = summary.execution === 'Structured' && summary.native_term === null
   const root = summary.root
-  // A chat over ACP is named by its agent (ADR 0018); the others by their provider.
+  // A chat over ACP is named by its agent (ADR 0020); the others by their provider.
   const acp = summary.provider === 'Acp'
   const agent = acp ? (summary.agent ?? 'agent') : summary.provider.toLowerCase()
   const provider: Conversation['provider'] = summary.provider === 'Acp' ? (agent === 'claude' ? 'Claude' : 'Codex') : summary.provider

@@ -126,7 +126,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   }, [queryClient, setLayout])
 
   // A chat session in `path`, opened in a layout of its own: Claude Code and Codex through their own adapters, any other
-  // agent over ACP, where its own settings decide what it may do (ADR 0018). Chats are this computer's: another machine's
+  // agent over ACP, where its own settings decide what it may do (ADR 0020). Chats are this computer's: another machine's
   // shell asks first.
   const startChat = useCallback((path: string, agent: ChatAgent, fullAccess: boolean) => {
     const started = hasAbility(agent, 'structuredChat')
@@ -220,7 +220,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       return
     }
     if (!online) return
-    // A chat with no terminal has no agent to start ahead: its start is the daemon's, on the first message (ADR 0018).
+    // A chat with no terminal has no agent to start ahead: its start is the daemon's, on the first message (ADR 0020).
     if (chatView) return
     void connectAgentOnce(spec.agent)
       .catch((error: unknown) => { console.warn(`Could not connect ${spec.agent}'s status hooks`, error) })
@@ -228,7 +228,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       .catch((error: unknown) => { console.warn(`Could not start ${spec.agent} ahead of the first message`, error) })
   }, [online, startWords, chatView])
 
-  // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0018). Claude Code
+  // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0020). Claude Code
   // and Codex run through their own adapters, with the mode, model and effort picked, on a new session or a saved one;
   // any other agent runs over ACP by its name, where its own settings decide those. The start answers once the agent is up, so the page stays until
   // then, and the first message is an ordinary send after it.
@@ -236,7 +236,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     const { agent, model, reasoning } = request
     // A saved conversation is resumed with no mode picked for it, so it opens in the agent's usual one.
     const picked = request.resume === null ? request.mode : START_MODE[agent]
-    // Another agent picked for the session runs over ACP by its id, whatever the draft's own agent is (ADR 0019).
+    // Another agent picked for the session runs over ACP by its id, whatever the draft's own agent is (ADR 0021).
     const permissions = request.acp === undefined && hasAbility(agent, 'structuredChat') ? chatPermissions(agent, picked, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
     if (permissions === null) throw new Error(`${agentLabel(agent)} cannot start a chat in this permission mode yet. Pick another mode.`)
     const mode: StartMode = background ? 'background' : 'alongside'
@@ -420,7 +420,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (!online) throw new Error('The Maiker service is not reachable')
     if (request.machine !== LOCAL_MACHINE) {
       if (!chatView) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
-      // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0018).
+      // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0020).
       // Its worktree is made by that daemon first; its checkout's branch is never switched from here (ADR 0007).
       if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
       const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
@@ -433,7 +433,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
     if (request.acp !== undefined && !chatView) throw new Error('An agent from the ACP registry starts only in the Chat view. Switch to it in Settings.')
-    // In the Chat view a session is a chat with no terminal behind it (ADR 0018), a saved conversation included.
+    // In the Chat view a session is a chat with no terminal behind it (ADR 0020), a saved conversation included.
     if (chatView) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the

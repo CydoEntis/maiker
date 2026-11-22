@@ -42,7 +42,7 @@ holds the history; an ADR states only what is true now.
 | [0015](0015-worktrees-live-in-one-folder-under-home.md) | Worktrees live in one folder under home, grouped by project and named for the task |
 | [0016](0016-a-chat-asks-before-it-starts-helpers.md) | A chat asks before it starts helpers, and the consent belongs to the conversation (proposed) |
 | [0017](0017-remote-machines-rely-on-your-ssh-setup.md) | Remote machines rely on your own ssh setup and trust a new host key once |
-| [0016](0016-one-provider-contract-with-no-io.md) | Every provider is one dialect with no I/O, named in one registry (proposed) |
-| [0017](0017-acp-for-agents-without-an-adapter.md) | ACP is for agents without an adapter, and what it claims is labelled (proposed) |
-| [0018](0018-the-chat-view-talks-to-the-agent-directly.md) | The chat view talks to the agent directly, never through a terminal (proposed) |
-| [0019](0019-acp-agents-are-installed-from-the-registry.md) | Agents run over ACP are installed from the ACP registry (proposed) |
+| [0018](0018-one-provider-contract-with-no-io.md) | Every provider is one dialect with no I/O, named in one registry (proposed) |
+| [0019](0019-acp-for-agents-without-an-adapter.md) | ACP is for agents without an adapter, and what it claims is labelled (proposed) |
+| [0020](0020-the-chat-view-talks-to-the-agent-directly.md) | The chat view talks to the agent directly, never through a terminal |
+| [0021](0021-acp-agents-are-installed-from-the-registry.md) | Agents run over ACP are installed from the ACP registry |

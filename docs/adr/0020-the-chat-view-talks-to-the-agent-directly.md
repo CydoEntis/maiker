@@ -1,6 +1,6 @@
-# 0018. The chat view talks to the agent directly, never through a terminal
+# 0020. The chat view talks to the agent directly, never through a terminal
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 
 ## Context
@@ -13,7 +13,7 @@ in the terminal, and sends the person to a terminal log they did not ask for. Ho
 installed version leave it empty too.
 
 The daemon already owns structured conversations that have no terminal: Codex and Claude Code
-through their own adapters (0005, 0016) and any other agent over ACP (0017). The Chat view
+through their own adapters (0005, 0018) and any other agent over ACP (0019). The Chat view
 reaches them only from a shell's "Start a chat here".
 
 ## Decision
@@ -38,7 +38,7 @@ reaches them only from a shell's "Start a chat here".
 - **Keep the terminal and show its menus in the chat**: read the agent's screen and draw its
   update and trust questions as buttons. It lost because it means recognising each agent's
   screens by their text, which breaks with every release of every agent.
-- **Run every agent over ACP in the Chat view**: one path. It lost for the reasons in 0017: the
+- **Run every agent over ACP in the Chat view**: one path. It lost for the reasons in 0019: the
   native adapters carry more and are the ones verified here.
 - **Keep one session with two views**: the same session shown as a chat or its terminal. It lost
   because the chat half is only as good as what hooks report, and the person cannot tell which
@@ -57,6 +57,6 @@ reaches them only from a shell's "Start a chat here".
 - Showing a terminal agent as a chat from its hooks stays only for sessions started in the
   Terminal view or outside the app; whether that stays at all is a later decision.
 - Gemini gets a chat only over ACP, so it starts from the Chat view only where it is installed
-  from the registry (0019) or the config has an ACP entry for it.
+  from the registry (0021) or the config has an ACP entry for it.
 - `docs/UI.md` changes with each ticket that lands: it still describes a session with a chat and
   a terminal log.

@@ -131,7 +131,7 @@ message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `S
 `ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
 "came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
 
-Protocol 121 added a provider (ADR 0017): `Provider::Acp`, with the agent's name in `agent` on `LaunchSettings`,
+Protocol 121 added a provider (ADR 0019): `Provider::Acp`, with the agent's name in `agent` on `LaunchSettings`,
 `NativeBinding` and `ConversationSummary` (absent for every other provider), and `StartTarget::Acp { agent, cwd }`,
 which names an `[[agents]]` entry of the daemon's config and never a program. The list of conversations goes to every
 client, and a peer from before 121 cannot decode one that holds an ACP conversation, so `COMPATIBLE_SINCE` moved to
@@ -734,7 +734,7 @@ See [stack/claude-code-cli.md](stack/claude-code-cli.md) for the Claude CLI
 process boundary and event/approval handling rules.
 
 Between the daemon and a provider the flow is the provider contract
-([ADR 0016](adr/0016-one-provider-contract-with-no-io.md)): a client's command becomes a typed
+([ADR 0018](adr/0018-one-provider-contract-with-no-io.md)): a client's command becomes a typed
 `runtime::Rpc`, the provider's adapter turns it into its own wire form, and what the provider
 reports comes back as typed `ProviderEvent`s that one place in the daemon turns into status and
 history. No provider frame is forwarded to a client, and a client names a provider only by the

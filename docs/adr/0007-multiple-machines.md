@@ -61,7 +61,7 @@ People run agents on more than one computer and want one window over all of them
   the new folder), and a project heading's New worktree makes one off a pane there (`Command::NewWorktree`,
   answering only that it was done; the session opened in it arrives in the machine's list). Removing, merging
   and remaking worktrees stay this computer's. Its checkout's branch is never switched from here. See [the spec](../features/remote-chat/spec.md).
-- **A chat started on another machine (protocol 122).** In the Chat view ([0018](0018-the-chat-view-talks-to-the-agent-directly.md))
+- **A chat started on another machine (protocol 122).** In the Chat view ([0020](0020-the-chat-view-talks-to-the-agent-directly.md))
   a session started on another machine is a conversation that machine's own daemon runs, with no terminal behind it.
   The window cannot know where that machine keeps an agent or its settings, so the start names neither
   (`StartTarget::Agent`: the provider, the folder and the posture; `StartTarget::Acp`: the agent's name and the

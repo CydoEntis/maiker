@@ -125,7 +125,7 @@ export function ChatPane(props: ChatPaneProps) {
 
 type NoChatProps = ChatPaneProps & { availability: Exclude<ChatAvailability, { kind: 'ready' }> }
 
-/** A session that has no chat: why, and what runs here. It is a terminal, shown in the Terminal view (ADR 0018). */
+/** A session that has no chat: why, and what runs here. It is a terminal, shown in the Terminal view (ADR 0020). */
 function NoChat({ availability, process }: NoChatProps) {
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">

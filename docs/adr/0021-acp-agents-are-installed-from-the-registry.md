@@ -1,11 +1,11 @@
-# 0019. Agents run over ACP are installed from the ACP registry
+# 0021. Agents run over ACP are installed from the ACP registry
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-11-21
 
 ## Context
 
-An agent with no adapter of its own runs as a chat over ACP (0017, 0018). Until now that needed
+An agent with no adapter of its own runs as a chat over ACP (0019, 0020). Until now that needed
 two manual steps: install the agent's ACP program, and write an `[[agents]]` entry naming it,
 its arguments and its variables. Someone who installs Maiker and picks an agent in the Chat view
 should not have to do either.
@@ -35,7 +35,7 @@ commands written in the source; a registry cannot be held to that.
 - The work is done by the command line (`maiker agents install <id>`), which the desktop app
   runs. The daemon downloads nothing.
 - The registry's helpers for Claude Code and Codex are not listed: those agents run through
-  their own adapters (0018).
+  their own adapters (0020).
 
 ## Alternatives considered
 

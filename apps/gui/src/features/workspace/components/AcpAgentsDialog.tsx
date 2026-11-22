@@ -23,7 +23,7 @@ function stateOf(agent: AcpAgent): string {
 }
 
 /**
- * Other agents: the ones that run as a chat over ACP (ADR 0019). The config's are ready; the ACP registry's are installed
+ * Other agents: the ones that run as a chat over ACP (ADR 0021). The config's are ready; the ACP registry's are installed
  * here on request, into the app's own folder, and can be removed again. Using one picks it for the session being drafted.
  */
 export function AcpAgentsDialog({ onPick, onCancel }: Props) {

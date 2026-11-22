@@ -178,7 +178,7 @@ describe('a session of another machine the next list leaves out', () => {
   })
 })
 
-// ADR 0018: the Chat view starts chats the daemon owns, with no terminal. One that is not listed runs where nobody sees it.
+// ADR 0020: the Chat view starts chats the daemon owns, with no terminal. One that is not listed runs where nobody sees it.
 describe('a chat the daemon owns with no terminal', () => {
   const chat = (id: string, archived = false): Conversation => ({
     id, generation: 1, execution: 'Structured', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', repo: null, branch: 'working tree', provider: 'Claude', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude',

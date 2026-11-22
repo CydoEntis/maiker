@@ -383,7 +383,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     applyNow(heldMode.mode)
   }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
-  // A command that opens a menu of its own is drawn only by the agent's terminal, and a chat never shows one (ADR 0018):
+  // A command that opens a menu of its own is drawn only by the agent's terminal, and a chat never shows one (ADR 0020):
   // it is not typed, so no menu is left open out of sight, and the person is told where it runs.
   const runInTerminal = typeInto === undefined || link.readOnly !== true ? undefined : (command: string) => {
     toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version: its menu is in the terminal. Switch to the Terminal view in Settings to use it.`)

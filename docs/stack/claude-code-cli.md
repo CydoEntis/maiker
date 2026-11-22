@@ -52,7 +52,7 @@ is asked: `TurnProjector` and the approval reading (`maitty-provider-claude/src/
 hand the daemon typed provider events, no Claude frame reaches a client, and `claude.rs` takes
 the daemon's typed commands (`runtime::Rpc`). One Codex shape is left: `claude.rs` answers a
 send, and the opening of a conversation, in the JSON the daemon reads every provider's answers
-in ([ADR 0016](../adr/0016-one-provider-contract-with-no-io.md)). `ClaudeDialect` (`dialect.rs`)
+in ([ADR 0018](../adr/0018-one-provider-contract-with-no-io.md)). `ClaudeDialect` (`dialect.rs`)
 implements the provider contract and is tested by itself; the daemon still runs Claude through
 `claude.rs`, which starts the next message's process ahead.
 

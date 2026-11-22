@@ -34,7 +34,7 @@ export type ChatLink = {
    * it did, but sending, answering and interrupting happen in the terminal.
    */
   readonly readOnly?: boolean
-  /** The agent runs over ACP (ADR 0018): its model and permissions are its own settings, so the chat offers no picker for them. */
+  /** The agent runs over ACP (ADR 0020): its model and permissions are its own settings, so the chat offers no picker for them. */
   readonly acp?: boolean
   /** The machine the agent runs on, so attachments are sent there; absent for this computer. */
   readonly machine?: string | null

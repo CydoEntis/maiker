@@ -1,4 +1,4 @@
-# 0016. Every provider is one dialect with no I/O, named in one registry
+# 0018. Every provider is one dialect with no I/O, named in one registry
 
 - **Status:** Proposed
 - **Date:** 2026-11-20
