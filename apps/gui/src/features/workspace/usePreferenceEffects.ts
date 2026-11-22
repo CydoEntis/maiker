@@ -21,6 +21,10 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     document.documentElement.dataset.reducedMotion = String(reducedMotion)
   }, [reducedMotion])
 
+  useEffect(() => {
+    document.documentElement.dataset.fileColours = preferences.colourFileNames ? 'on' : 'off'
+  }, [preferences.colourFileNames])
+
   useEffect(() => { markGpu() }, [])
 
   // Looping effects pause in the stylesheet while the window is hidden or in the background. It is an
