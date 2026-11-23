@@ -537,6 +537,9 @@ struct Daemon {
     turns_to_continue: BTreeMap<crate::conversation::ConversationId, u64>,
     turn_continues: conversation::continue_turn::Continues,
     conversation_states: BTreeMap<crate::conversation::ConversationId, conversation::State>,
+    /// Each chat's status as last listed and when it became that (unix seconds), for a row's age.
+    /// Kept apart from `conversation_states` so the many places that set a status need not stamp it.
+    conversation_since: HashMap<crate::conversation::ConversationId, (Status, u64)>,
     /// Conversations whose agent was stopped on purpose, so its exit is not a failure.
     conversation_ending: std::collections::BTreeSet<crate::conversation::ConversationId>,
     /// Chats closed with an undo window, and when each was: ended for real when the window passes.
@@ -1383,6 +1386,7 @@ impl Daemon {
             turns_to_continue: BTreeMap::new(),
             turn_continues: conversation::continue_turn::Continues::default(),
             conversation_states: BTreeMap::new(),
+            conversation_since: HashMap::new(),
             conversation_ending: std::collections::BTreeSet::new(),
             conversation_closing: std::collections::BTreeMap::new(),
             chat_allowed: conversation::allowed::Allowed::default(),
@@ -1499,6 +1503,7 @@ impl Daemon {
                 }
             }
             self.publish_conversation_news();
+            self.note_conversation_status_times();
             if self.dirty {
                 self.dirty = false;
                 self.sync_scan_roots();

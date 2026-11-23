@@ -540,6 +540,10 @@ pub struct ConversationSummary {
     /// other provider, whose name is the agent.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent: Option<String>,
+    /// When `status` last changed (unix seconds): a pane's own time, or since the daemon first
+    /// listed a chat that way. Display only (a row's age). Absent from an older daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_since: Option<u64>,
 }
 
 impl ConversationSummary {
@@ -3738,6 +3742,7 @@ mod tests {
         assert!(summary.helpers.is_empty(), "an older daemon reports no helpers");
         assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
+        assert_eq!(summary.status_since, None, "an older daemon says no status time");
 
         // Capabilities are written only when the daemon knows them.
         let unknown = serde_json::to_value(&summary).unwrap();
@@ -4956,6 +4961,22 @@ mod tests {
         assert_eq!((&written["provider"], &written["agent"]), (&serde_json::json!("Acp"), &serde_json::json!("gemini")));
         assert_eq!((read.provider, read.agent.as_deref()), (Provider::Acp, Some("gemini")));
         assert_eq!((codex.agent_label(), acp.agent_label()), ("Codex".to_owned(), "gemini".to_owned()));
+    }
+
+    #[test]
+    fn a_chat_says_when_its_status_changed_and_is_left_out_when_unknown() {
+        let old = serde_json::json!({
+            "id": 7, "generation": 3, "provider": "Claude", "cwd": "/code", "worktree": null,
+            "state": "Running", "status": "Done", "native_term": null, "checks": []
+        });
+        let unknown: ConversationSummary = serde_json::from_value(old).unwrap();
+        let mut known = unknown.clone();
+        known.status_since = Some(1_780_000_000);
+
+        let read: ConversationSummary = decode(&encode(&known).unwrap()).unwrap();
+
+        assert!(serde_json::to_value(&unknown).unwrap().get("status_since").is_none());
+        assert_eq!(read.status_since, Some(1_780_000_000));
     }
 
     /// The shapes version 118 wrote for what 119 still reads, as a peer of that version encodes them.

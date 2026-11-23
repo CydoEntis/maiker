@@ -24,6 +24,7 @@ fn conversation() -> ConversationSummary {
         helper_ask: Vec::new(),
         capabilities: None,
         agent: None,
+        status_since: None,
     }
 }
 

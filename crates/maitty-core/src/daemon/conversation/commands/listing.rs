@@ -61,27 +61,7 @@ impl Daemon {
                     cwd: c.binding.cwd.clone(),
                     worktree: c.binding.worktree.clone(),
                     state: c.state,
-                    status: if c.execution == ExecutionKind::Native {
-                        native_term.map_or_else(
-                            || {
-                                if c.state == RecoveryState::RecoveryRequired {
-                                    Status::Blocked
-                                } else {
-                                    Status::Idle
-                                }
-                            },
-                            |term| term.status,
-                        )
-                    } else {
-                        state.map_or(
-                            if c.state == RecoveryState::RecoveryRequired {
-                                Status::Blocked
-                            } else {
-                                Status::Idle
-                            },
-                            |s| s.effective_status(),
-                        )
-                    },
+                    status: self.listed_status(c, native_term),
                     native_term: native_term
                         .filter(|term| !term.process_exited)
                         .map(|term| term.id),
@@ -98,6 +78,10 @@ impl Daemon {
                         .then(|| self.conversation_capabilities(c.binding.provider, c.id, c.generation))
                         .flatten(),
                     agent: c.binding.agent.clone(),
+                    status_since: match native_term {
+                        Some(term) if c.execution == ExecutionKind::Native => Some(term.status_since),
+                        _ => self.conversation_since.get(&c.id).map(|(_, at)| *at),
+                    },
                 }
             })
             .collect();
@@ -124,6 +108,7 @@ impl Daemon {
                 // The daemon only reads this pane's transcript; what the agent can do is the pane's.
                 capabilities: None,
                 agent: None,
+                status_since: Some(term.status_since),
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -135,10 +120,7 @@ impl Daemon {
                 cwd: p.settings.cwd.clone(),
                 worktree: None,
                 state: RecoveryState::RecoveryRequired,
-                status: self
-                    .conversation_states
-                    .get(&p.id)
-                    .map_or(Status::Blocked, |s| s.status),
+                status: self.pending_status(p),
                 native_term: None,
                 checks: Vec::new(),
                 title: None,
@@ -150,9 +132,57 @@ impl Daemon {
                 // Not running yet, so nothing its provider's own run decides is known.
                 capabilities: self.conversation_capabilities(p.settings.provider, p.id, p.generation),
                 agent: p.settings.agent.clone(),
+                status_since: self.conversation_since.get(&p.id).map(|(_, at)| *at),
             }
         }));
         summaries
+    }
+
+    /// A conversation's status as the list reports it: its pane's for a native one, else its
+    /// chat's, and needs-you for one that must be recovered.
+    fn listed_status(
+        &self,
+        c: &crate::conversation::Conversation,
+        native_term: Option<&crate::daemon::term::Term>,
+    ) -> Status {
+        let unrun = if c.state == RecoveryState::RecoveryRequired {
+            Status::Blocked
+        } else {
+            Status::Idle
+        };
+        if c.execution == ExecutionKind::Native {
+            native_term.map_or(unrun, |term| term.status)
+        } else {
+            self.conversation_states
+                .get(&c.id)
+                .map_or(unrun, |s| s.effective_status())
+        }
+    }
+
+    fn pending_status(&self, p: &crate::conversation::PendingStart) -> Status {
+        self.conversation_states
+            .get(&p.id)
+            .map_or(Status::Blocked, |s| s.status)
+    }
+
+    /// Stamps the time each chat's listed status changed, and forgets chats that are gone. A
+    /// native conversation's pane keeps its own time, so only chats are stamped here.
+    pub(in crate::daemon) fn note_conversation_status_times(&mut self) {
+        let now = crate::daemon::term::unix_now();
+        let listed: Vec<(ConversationId, Status)> = self
+            .conversations
+            .iter()
+            .filter(|c| c.execution == ExecutionKind::Structured)
+            .map(|c| (c.id, self.listed_status(c, None)))
+            .chain(self.pending_starts.iter().map(|p| (p.id, self.pending_status(p))))
+            .collect();
+        self.conversation_since
+            .retain(|id, _| listed.iter().any(|(listed_id, _)| listed_id == id));
+        for (id, status) in listed {
+            if self.conversation_since.get(&id).is_none_or(|(was, _)| *was != status) {
+                self.conversation_since.insert(id, (status, now));
+            }
+        }
     }
 
     /// What a chat's provider can do. Whether it takes a message into a running turn is its
@@ -165,5 +195,51 @@ impl Daemon {
     ) -> Option<crate::conversation::capabilities::Capabilities> {
         let structured = crate::daemon::providers::adapter(provider).structured.as_ref()?;
         Some((structured.capabilities)(self.conversation_runtimes.can_steer(id, generation)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const LONG_AGO: u64 = 1_000;
+
+    fn daemon_with_chat() -> (Daemon, ConversationId) {
+        let mut c = crate::test_support::conversation();
+        c.execution = ExecutionKind::Structured;
+        let id = c.id;
+        let (tx, _rx) = tokio::sync::mpsc::channel(1);
+        let mut d = Daemon::new(crate::config::Config::default(), tx, || {});
+        d.conversations.push(c);
+        d.conversation_states.entry(id).or_default().status = Status::Working;
+        (d, id)
+    }
+
+    fn since(d: &Daemon, id: ConversationId) -> Option<u64> {
+        d.conversation_summaries().into_iter().find(|s| s.id == id).and_then(|s| s.status_since)
+    }
+
+    #[test]
+    fn a_chat_keeps_its_status_time_until_the_status_changes() {
+        let (mut d, id) = daemon_with_chat();
+        assert_eq!(since(&d, id), None, "not stamped before it is first listed");
+
+        d.note_conversation_status_times();
+        d.conversation_since.insert(id, (Status::Working, LONG_AGO));
+        d.note_conversation_status_times();
+        assert_eq!(since(&d, id), Some(LONG_AGO), "the same status keeps its time");
+
+        d.conversation_states.entry(id).or_default().status = Status::Done;
+        d.note_conversation_status_times();
+        assert!(since(&d, id).is_some_and(|at| at > LONG_AGO), "a new status is stamped now");
+    }
+
+    #[test]
+    fn a_chat_that_is_gone_is_forgotten() {
+        let (mut d, _) = daemon_with_chat();
+        d.note_conversation_status_times();
+        d.conversations.clear();
+        d.note_conversation_status_times();
+        assert!(d.conversation_since.is_empty());
     }
 }

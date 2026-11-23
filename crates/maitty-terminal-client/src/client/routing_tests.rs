@@ -208,6 +208,7 @@ fn a_chat_command_goes_to_the_machine_that_lists_the_chat() {
         helper_ask: Vec::new(),
         capabilities: None,
         agent: None,
+        status_since: None,
     };
     app.remotes.get_mut(&THERE).unwrap().snap.conversations = vec![chat];
     app.archive_conversation(id);

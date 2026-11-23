@@ -987,6 +987,7 @@ fn a_helper_a_chat_started_names_the_chat_and_the_chat_counts_it() {
         helper_ask: Vec::new(),
         capabilities: None,
         agent: None,
+        status_since: None,
     });
     app.snap.terms.get_mut(&2).expect("a session").started_by_chat = Some(ConversationId(41));
     // A chat the list does not hold started nothing that shows as its helper.

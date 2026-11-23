@@ -657,7 +657,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Session row** (`SessionRow`; padding 6px 8px, radius `--r-control`): the name at the left (13.5px
   `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent), how long it
   has been as it is (`SessionAge`: `formatAgo` from `statusSince`, mono 11px `--dim`; absent when the daemon did not say;
-  chat sessions carry no such time yet) and the 14px status mark at the right. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
+  a chat session's time is `ConversationSummary.status_since`, stamped by its daemon when the status changes, so after a
+  daemon restart it counts from the restart) and the 14px status mark at the right. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
   **Helpers** (`HelperGroup` in `Sidebar.tsx`, `model/helpers.ts`) sit under their lead in the order they were made,
   set in 16px with a 1px rule (the ink at 8%) down their left edge and 1px between rows; a helper row is 12.5px with
   padding 5px 8px. A helper is named by its task, never "New session": the daemon gives it the first line of the task

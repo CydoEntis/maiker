@@ -89,6 +89,13 @@ describe('chat sessions', () => {
     expect(older?.details?.helperAsk).toEqual([])
   })
 
+  it('gives a chat the time its status changed, and none from an older daemon', () => {
+    const [chat] = conversationsFromSnapshot(snapshot([summary({ status_since: 1_780_000_000 })]))
+    expect(chat?.details?.since).toBe(1_780_000_000)
+    const [older] = conversationsFromSnapshot(snapshot([summary()]))
+    expect(older?.details?.since).toBe(0)
+  })
+
   it('names the pane of a chat that has one as the starter of that chat\'s helper', () => {
     const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
     const followed = summary({ id: 9, execution: 'Native', native_term: 7 })

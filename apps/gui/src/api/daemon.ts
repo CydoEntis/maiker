@@ -56,6 +56,8 @@ const ConversationSummarySchema = z.object({
   helper_ask: z.array(z.string()).default([]),
   // Absent from an older daemon and for a conversation it only follows; the window then falls back to what it knows.
   capabilities: CapabilitiesSchema.nullable().default(null).catch(null),
+  // When its status last changed (unix seconds), for the row's age; absent from an older daemon.
+  status_since: z.number().int().nonnegative().nullable().default(null).catch(null),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -1204,7 +1206,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           agent,
           process: agent,
           chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
-          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
+          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),
   }
