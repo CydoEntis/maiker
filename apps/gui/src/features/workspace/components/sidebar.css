@@ -73,6 +73,10 @@
 .mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-control); text-align: left; }
 .mx-sb-row:hover { background: rgba(var(--ink), .035); }
 .mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--c-sel-bg); }
+/* On a light theme the sidebar's ground is the darkest surface, and the selected step (mixed toward the text) landed on
+   that same tone, so the picked session vanished. There it takes the card's own ground instead, as a lighter slip with a
+   hairline, the way the session it opens sits on the window. The drawer's sidebar is a card already, so it keeps the step. */
+.mx-app[data-theme-kind="light"] .mx-sidebar:not(.mx-drawer .mx-sidebar) .mx-sb-row.is-selected { background: var(--t1); box-shadow: 0 0 0 1px var(--panel-line); }
 .mx-sb-row-name { flex: 1; min-width: 0; font-size: 13.5px; line-height: 20px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 /* What needs you and what is working read a step stronger; being picked changes the colour only, so a click never re-sets the text. */
 .mx-sb-row:is(.is-needs, .is-working) .mx-sb-row-name { font-weight: 500; color: var(--fg); }

@@ -555,6 +555,8 @@
   --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--float-sh);
   --sbm: 12px 0 12px 12px; --sbw: 1px; --tba: center; --tl: 4px; --edge: 8px; --tsh: 32px; --tsw: 26px; --ibh: 30px;
 }
+/* On a light ground the bright squares washed out (pale letters on a paler tint), so a light theme takes the same hues darker. */
+.mx-app[data-theme-kind="light"] { --proj-1: #0E7C6F; --proj-2: #2560C8; --proj-3: #B8327A; --proj-4: #5E4BC9; --proj-5: #1F8A55; }
 .mx-app[data-theme-kind="light"] { --sh: none; }
 
 .mx-app .title-bar { background: var(--tbar); border-bottom: var(--tbar-b); }
