@@ -37,14 +37,14 @@ describe('the order of the sidebar', () => {
     expect(order(sessions, [], NO_FILTER, null, 'machine').map((group) => [group.name, group.head.name])).toEqual([['beta', null], ['Zoo', null], ['api', 'devbox']])
   })
 
-  it('keeps every session of a project under it, the most urgent first', () => {
+  it('keeps every session of a project under it in the order they were made, idle ones last', () => {
     const projects = order([
       session(1, '/home/me/shop', { status: 'done' }),
       session(2, '/home/me/shop', { status: 'needs-you' }),
       session(3, '/home/me/shop'),
       session(4, '/home/me/shop', { status: 'working' }),
     ])
-    expect(shape(projects)).toEqual([['shop', ['t2', 't4', 't1', 't3']]])
+    expect(shape(projects)).toEqual([['shop', ['t1', 't2', 't4', 't3']]])
   })
 
   it('gives each project its own state, its most urgent session\'s, and none to a project with no session', () => {
@@ -97,9 +97,9 @@ describe('helpers', () => {
     expect(order([session(1, '/home/me/shop'), helper(2)]).map((group) => group.mark)).toEqual(['working'])
   })
 
-  it('that have finished rank their lead as done, under the rows still working', () => {
+  it('that have finished rank their lead as done, so it stays above the idle rows', () => {
     const nodes = sessionNodes([session(1, '/home/me/shop'), helper(2, { status: 'done' }), session(5, '/home/me/shop', { status: 'working' })])
-    expect(nodes.map((node) => [node.session.id, node.mark])).toEqual([['t5', 'working'], ['t1', 'done']])
+    expect(nodes.map((node) => [node.session.id, node.mark])).toEqual([['t1', 'done'], ['t5', 'working']])
   })
 
   it('whose starter is not listed are ordinary rows', () => {

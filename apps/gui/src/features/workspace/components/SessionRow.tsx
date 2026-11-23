@@ -1,3 +1,4 @@
+import { GitBranch } from 'lucide-react'
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
 import { SESSION_ROW_ATTRIBUTE } from '../keyTargets'
 import { StatusIcon } from '@/components/ui/status-icon'
@@ -110,6 +111,8 @@ export function SessionRow({ session, selected, starter = null, helpers = null, 
       onContextMenu={onContextMenu}
     >
       <span className="mx-sb-row-name">{title}</span>
+      {/* A session in a worktree of its own names the branch; one in the project's own checkout shows nothing. */}
+      {session.worktree && session.branch !== null && <span className="mx-sb-row-branch" title={`Worktree on ${session.branch}`}><GitBranch aria-hidden="true" /><span>{session.branch}</span></span>}
       {diff !== null && <span className="mx-sb-row-diff">{diffText(diff)}</span>}
       {session.statusSince !== null && <SessionAge since={session.statusSince} status={session.status} />}
       <StatusIcon status={session.status} size={MARK_PX} className="mx-sb-row-mark" />

@@ -29,7 +29,6 @@
 .mx-sb-head-main { flex: 0 1 auto; min-width: 0; display: flex; align-items: center; gap: 7px; font-weight: 600; color: var(--fg); text-align: left; }
 .mx-sb-head-main::after { content: ''; position: absolute; inset: 0; border-radius: inherit; }
 .mx-sb-head-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.mx-sb-count { flex: none; font: 500 10.5px var(--mono); color: var(--dim); opacity: .7; font-variant-numeric: tabular-nums; }
 /* A project's own state, the most urgent of its sessions, so a folded project still says it. */
 .mx-sb-head-state { flex: none; display: flex; }
 .mx-sb-caret { flex: none; display: flex; margin-left: auto; color: var(--dim); transition: transform var(--t-base) var(--ease), opacity var(--t-fast) var(--ease); }
@@ -78,6 +77,9 @@
 .mx-sb-row.is-fresh .mx-sb-row-name { font-style: italic; color: var(--muted); }
 .mx-sb-row-mark { flex: none; }
 /* How long the session has been as it is: mono, quiet, before the mark. */
+.mx-sb-row-branch { flex: 0 1 auto; min-width: 0; max-width: 45%; display: inline-flex; align-items: center; gap: 3px; font: 400 11px var(--mono); color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-sb-row-branch svg { flex: none; width: 11px; height: 11px; }
+.mx-sb-row-branch span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-sb-row-age { flex: none; font: 400 11px var(--mono); font-variant-numeric: tabular-nums; color: var(--dim); white-space: nowrap; }
 .mx-sb-row.is-selected .mx-sb-row-age { color: var(--muted); }
 /* What a finished helper changed, before its mark; the name gives way to it. */

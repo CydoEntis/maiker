@@ -4,7 +4,7 @@ import { useConfirm } from '@/features/confirm/useConfirm'
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
-import { isDesktop, markSeenOnDaemon, renameConversationOnDaemon } from '@/api/daemon'
+import { isDesktop, renameConversationOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import { readSettingsPreferences, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN } from '@/features/settings/preferences'
@@ -417,17 +417,8 @@ export function useWorkspaceState() {
   }, [sessions, sessionMap, ownedShells])
   const inspectTerm = focusedSession ? repoPaneOf(focusedSession) : null
   const { openDocument, openPath } = useDocuments({ layout, setLayout, showSessionById })
-  // Looking at a pane acknowledges it: a finished agent's done goes back to idle, as when the terminal app
-  // focuses it, and an error in it leaves the tray menu. Needs-you stays until the agent is answered.
-  const viewedId = focusedSession?.id
-  const viewedStatus = focusedSession?.status
-  useEffect(() => {
-    if (!online || !windowFocused || viewedId === undefined) return
-    if (viewedStatus !== 'done') return
-    markSeenOnDaemon({ id: viewedId })
-      .then(() => queryClient.invalidateQueries({ queryKey: ['conversations'] }))
-      .catch((error: unknown) => { console.warn('Could not mark the session seen', error) })
-  }, [online, windowFocused, viewedId, viewedStatus, queryClient])
+  // Looking at a finished session does not acknowledge it: done stays until the next message, which the daemon turns into
+  // working, so a glance at a pane never hides that it finished.
   const { answerSession, sendTo, resumeInterrupted } = useSessionReplies({ sessionMap, flash, showSessionById, setDismissedRestores })
   // Back after an outage: the toast names the chats a service restart cut mid-turn (the daemon marks them), if any.
   const sayBack = useCallback(() => {

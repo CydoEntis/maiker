@@ -384,10 +384,9 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
         )}
         {menus.tag}
         <span className="mx-spacer" />
-        {empty
-          ? <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>
-          : <span className="mx-sb-count" aria-hidden="true">{group.rows.length}</span>}
-        {state !== null && <span className="mx-sb-head-state" aria-hidden="true" title={PROJECT_STATE_WORDS[state]}><StatusIcon status={state} size={SUMMARY_MARK_PX} /></span>}
+        {empty && <span className="mx-sb-head-note" aria-hidden="true">No sessions</span>}
+        {/* The sessions under an open project show their own state; folded, the project carries the most urgent one. */}
+        {state !== null && !open && <span className="mx-sb-head-state" aria-hidden="true" title={PROJECT_STATE_WORDS[state]}><StatusIcon status={state} size={SUMMARY_MARK_PX} /></span>}
         {!empty && <span className={`mx-sb-caret is-quiet${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>}
         {/* With no session the heading itself opens this menu from the keyboard, so the + is only the pointer's second way in. */}
         {onPlus !== null && (

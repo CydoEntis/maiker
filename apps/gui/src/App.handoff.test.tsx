@@ -1028,17 +1028,8 @@ describe('desktop overlays and pane tools', () => {
     }
   })
 
-  it('marks a finished session seen once you are in its pane, and leaves a needs-you one alone', async () => {
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'done' })])
-    renderDesktopApp()
-    await screen.findByRole('region', { name: 'Shell in ~/a' })
-    act(() => { window.dispatchEvent(new Event('focus')) })
-
-    await waitFor(() => { expect(daemon.markSeenOnDaemon).toHaveBeenCalledWith({ id: 't2' }) })
-  })
-
-  it('does not mark a needs-you session seen just because you are in its pane', async () => {
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'needs-you' })])
+  it.each(['done', 'needs-you'] as const)('leaves a %s session as it is when you are in its pane: only the next message changes it', async (status) => {
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status })])
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     act(() => { window.dispatchEvent(new Event('focus')) })

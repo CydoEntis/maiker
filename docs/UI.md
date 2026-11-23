@@ -325,7 +325,7 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    them there and in DESIGN, nowhere else.
 2. The sidebar lists **agents and shells only** (`model/sidebarTree.ts`, drawn by `Sidebar.tsx`), in
    [the sidebar's order](DESIGN.md#design-language): one list of the **opened projects** (item 5), each holding all its
-   sessions, the most urgent first, and saying its own state (`ProjectGroup.mark`, the most urgent of its rows; null with
+   sessions in the order they were made with idle ones last, and saying its own state (`ProjectGroup.mark`, the most urgent of its rows; null with
    no session). Projects are ordered by the sort the person picked (`SidebarSort`: `recent`, the project opened last
    first by `useOpenedProjects().opened`; `name`; `machine`), kept in the settings as `sidebarSort`; a project never
    moves because its sessions change state. The order is one pure function, `sidebarOrder(heads, machines, filter,
@@ -348,8 +348,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    `useOpenedProjects().machines` and adds nothing itself; when `selected` changes, that project is unfolded and the filter is cleared if it would hide it. The header's filter
    (`SidebarFilterMenu`, `filterChoices`, `passesFilter`) narrows the list to one project, one machine or both; it is this window's state and is not saved. The same menu's
    **Sort by** sets the order and is saved. The session on screen keeps the state it was picked in until another is picked (`sidebarOrder`'s
-   `held`), so looking at a finished agent, which makes it idle, does not move its row from under the pointer; only
-   that shift between done and idle is held. Until the daemon's first list arrives the sidebar says "Looking for your
+   `held`), so a row that turns idle while it is on screen does not drop from under the pointer; only that shift
+   between done and idle is held. The desktop app never sends `MarkSeen`: done stays until the next message. Until the daemon's first list arrives the sidebar says "Looking for your
    sessions…" and the main area the same, never "No agents running".
    **A machine that is not connected** has no heading to say so: its projects' tags turn amber, the tag's tooltip is
    the host's sentence (ADR 0017) and its menu (`machineMenu.ts`) holds that sentence with Retry, Copy the command,

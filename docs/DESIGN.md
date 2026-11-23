@@ -331,8 +331,9 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   takes its own room beside a file pane too (it floats only in a narrow window). The **status bar**: version and `Update to …` at the
   left; at the right a usage bar for every limit of each agent (its 5-hour and weekly ones), then the Commands and Shortcuts keys. **Context is
   always a bar, never a ring.** The side panel holds tabs of four surfaces: Files, Changes, Terminal, Pull requests.
-- **The sidebar's order.** One list of projects, each self-contained: it holds all its sessions (the most urgent
-  first: needs you, working, done, idle) and says its own state, the most urgent of them, on its heading. A project
+- **The sidebar's order.** One list of projects, each self-contained: it holds all its sessions in the order they
+  were made, so a row stays put while its state changes, with idle rows dropped below the rest; folded, its heading
+  says its own state, the most urgent of them. A project
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
   opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
@@ -629,9 +630,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Order** (`model/sidebarTree.ts`, `sidebarOrder`): *The sidebar's order* in [Design language](#design-language).
   A **project** is a heading and all its rows, with no card and no rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
   letters, in the project's colour on an 18% tint of it), the name (12px 600 `--fg`; the folder is its tooltip), on
-  another machine the machine tag, the session count (10.5px mono, dim) and the project's **own state**: the 14px status
-  mark of its most urgent session (needs you, working, done), nothing while all are idle. The mark stays when the
-  project is folded, so a folded project still says it needs you. A click folds it: the caret shows on hover and while
+  another machine the machine tag and, **while folded**, the project's own state: the 14px status mark of its most urgent
+  session (needs you, working, done), nothing while all are idle. Open, it shows no count or mark: its rows say their
+  own. A session in a worktree of its own shows its branch after its name (a branch mark and the name, 11px mono
+  `--dim`, cut short at 45% of the row); one in the project's own checkout shows nothing there. A click folds it: the caret shows on hover and while
   folded. A `+` button shows on hover and on focus. The project just opened or picked is unfolded, and shown whatever the filter said.
   **Machine tag** (`MachineTag`): the machine's name with a 10px server mark, in `--accent-text`, 10.5px mono, with no
   fill; amber (`--needs`) while that machine is not connected. Its tooltip is the host's one sentence for what failed
@@ -718,7 +720,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and only one the daemon calls idle or done): an idle row whose activity line says `Limited until 14:05` in this
   computer's time (`Limited until Thu 14:05` when that is not today). It is never listed, counted or announced as needs
   you, because it waits on the limit and not on you, and its limit ending is not a new finish.
-  A finished agent stays done until its session is shown, which makes it idle (`MarkSeen`). A row is named by
+  A finished agent stays done until it is sent its next message, which the daemon turns into working; looking at it changes nothing. A row is named by
   the name you gave it, else the folder it was made in. Project
   colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none

@@ -108,7 +108,7 @@ describe('the list', () => {
 
   it('keeps a helper under the session that started it', () => {
     show([session(1, 'Lead', { status: 'working' }), session(2, 'Helper', { status: 'working', ...startedBy('t1') }), session(3, 'Other', { status: 'needs-you' })])
-    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Other', 'Lead', 'Helper'])
+    expect(rowsIn(screen.getByRole('list', { name: 'shop' }))).toEqual(['Lead', 'Helper', 'Other'])
     expect(screen.getByRole('button', { name: 'Helper, claude, helper of Lead, working' })).toBeTruthy()
     expect(rowsIn(screen.getByRole('list', { name: 'Helpers of Lead' }))).toEqual(['Helper'])
   })

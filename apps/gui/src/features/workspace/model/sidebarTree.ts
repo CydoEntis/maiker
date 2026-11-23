@@ -3,7 +3,7 @@ import { baseName } from './folderPick'
 import { machineTitle, type MachineHead } from './machines'
 import { sameProject, type MachineProjects, type OpenedProject, type ProjectSessions } from './openedProjects'
 import { inCreationOrder, type SessionView } from './session'
-import { byLatestChange, mostUrgent, URGENCY } from './sidebar'
+import { mostUrgent } from './sidebar'
 
 /** A session kept in the state it was in when it was picked, whatever its status says since. */
 export type HeldRow = { readonly id: string; readonly mark: StatusMarkKind }
@@ -34,7 +34,8 @@ export type SessionNode = {
 const MAX_STARTER_DEPTH = 8
 
 /**
- * A project's sessions as rows, the most urgent first and the latest change first within a state, each with its helpers
+ * A project's sessions as rows in the order they were made, so a row stays where it is while its state changes (a list
+ * that reorders on every status cannot be read or clicked); only an idle row drops below the rest. Each has its helpers
  * under it in the order they were made. A helper keeps its place under its lead whatever its own status does: helpers
  * start, finish and ask within seconds, and a list that reorders each time cannot be read or clicked. A helper whose
  * starter is not listed here is an ordinary row.
@@ -60,12 +61,12 @@ export function sessionNodes(sessions: readonly SessionView[], held: HeldRow | n
     nested.add(session.id)
     helpersOf.set(lead.id, [...(helpersOf.get(lead.id) ?? []), session])
   }
-  return byLatestChange(sessions.filter((session) => !nested.has(session.id)))
+  return inCreationOrder(sessions.filter((session) => !nested.has(session.id)))
     .map((session): SessionNode => {
       const helpers = helpersOf.get(session.id) ?? []
       return { session, helpers, mark: mostUrgent([session, ...helpers].map((each) => placedMark(each, held))) }
     })
-    .sort((a, b) => URGENCY[a.mark] - URGENCY[b.mark])
+    .sort((a, b) => Number(a.mark === 'idle') - Number(b.mark === 'idle'))
 }
 
 /** What this computer is called in a key: a machine's name never holds a space (`data/openedProjects.ts`). */
