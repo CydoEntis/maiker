@@ -1327,16 +1327,21 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is remembered per session (`panelTabsStorage.ts`); whether the panel is open is the window's, and hiding it keeps
   the tabs and the shells.
   **Pull requests** (`features/pull-requests/`, the design's `.prr`) lists the open pull requests of the session's
-  project, the ones that need you first: one row each on `--r-control`, padded 8px, a 16px status mark at the left
-  (needs you, working while checks run, done when it is ready; none otherwise), the title (13px 500, `--fg`), under it
-  `#number branch · author` in 11.5px mono `--dim` with the number in `--muted` ("You" for your own, "· draft" for a
-  draft), then where it stands in 12px `--muted` ("Review requested", "Checks running", "Ready to merge") with
-  "· needs you" in `--needs`. A row hovers on 4% ink and opens the pull request in the browser. Under the list, in
-  `--dim`: "Showing the first 50…" when there are more, and whose account it is read as. Every other state is one
-  centred note (the empty panel's `mx-sp-needs`): reading, none open, `gh` not installed (with where to get it), not
-  signed in (with **Sign in to GitHub**), not on GitHub, and a failure with its reason and **Try again**. When other
-  opened projects have pull requests that need you, they follow under a hairline and the heading "Needs you in other
-  projects", each row naming its project, so the count on the sidebar's button is always found here.
+  project. Over the list: a 36px search (title, branch, author or number, every word), then on one line a segmented
+  **Show** (All, Needs you, Mine, Failing, Drafts), the count ("6 open", or "2 of 6") and a **Sort** menu (Needs you
+  first, the default; Recently updated; Newest; Oldest). One row each on `--r-control`, padded 8px: the title (13px
+  500, `--fg`), under it `#number branch · author` in 11.5px mono `--dim` with the number in `--muted` ("You" for your
+  own, "· draft" for a draft), then where it stands in 12px `--muted` behind a 14px mark in the standing's colour: a
+  check in `--ok` (Checks passed, Ready to merge), a cross in `--danger` (Checks failed, Has conflicts), the working
+  mark (Checks running), a clock in `--dim` (Waiting for review, Changes requested), an alert in `--needs` with
+  "· needs you" for one that needs you, and an alert in `--ansi-blue` for a plain Open. A row hovers on 4% ink and opens
+  the pull request in the browser. "Showing the first 50…" follows when there are more; "No pull requests match. Show
+  all" when the search and filter hide them all. Every other state is one centred note: reading, none open, `gh` not
+  installed (with where to get it), not signed in (with **Sign in to GitHub**, which on this computer in the chat view
+  runs `gh`'s web sign-in in place and shows its code and link in a card, and elsewhere opens `gh auth login` in a
+  terminal), not on GitHub, and a failure with its reason and **Try again**. When other opened projects have pull
+  requests that need you, they follow under a hairline and the heading "Needs you in other projects", each row naming
+  its project, so the count on the sidebar's button is always found here.
   Files reads the focused session's top folder before the panel opens; while the list is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
   opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them).

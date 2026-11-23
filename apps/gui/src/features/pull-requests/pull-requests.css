@@ -1,15 +1,32 @@
 /* The Pull requests surface: one row a pull request, as the design's `.prr`. */
 .mx-pr { display: flex; flex-direction: column; gap: 4px; }
 .mx-pr-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
-.mx-pr-row { width: 100%; display: grid; grid-template-columns: 16px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; row-gap: 2px; padding: 8px; border-radius: var(--r-control); text-align: left; transition: background-color var(--t-fast) var(--ease); }
+.mx-pr-row { width: 100%; display: flex; flex-direction: column; gap: 3px; padding: 8px; border-radius: var(--r-control); text-align: left; transition: background-color var(--t-fast) var(--ease); }
 .mx-pr-row:hover { background: rgba(var(--ink), .04); }
-.mx-pr-mark { grid-row: 1 / 3; align-self: start; margin-top: 1px; width: 16px; height: 16px; display: flex; align-items: center; justify-content: center; }
-.mx-pr-text { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-pr-title { font-size: 13px; font-weight: 500; color: var(--fg); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-pr-detail { font: 400 11.5px var(--mono); color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-pr-detail b { font-weight: 500; color: var(--muted); }
-.mx-pr-standing { grid-column: 2; font-size: 12px; color: var(--muted); }
 .mx-pr-you { color: var(--needs); }
+/* Where it stands: a 14px mark in the standing's colour, then the words in `--muted`. Open is blue, so a plain open pull
+   request still has a mark; failed is red and passed green, the same as a step's result. */
+.mx-pr-standing { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.mx-pr-standing > svg { flex: none; width: 14px; height: 14px; }
+.mx-pr-standing.is-needs > svg { color: var(--needs); }
+.mx-pr-standing.is-failed > svg { color: var(--danger); }
+.mx-pr-standing.is-passed > svg { color: var(--ok); }
+.mx-pr-standing.is-waiting > svg { color: var(--dim); }
+.mx-pr-standing.is-open > svg { color: var(--ansi-blue); }
+/* The tools over the list: a full-width search, then the filter, the count and the sort on one line. */
+.mx-pr-tools { display: flex; flex-direction: column; gap: 8px; margin-bottom: 8px; }
+.mx-pr-tools .mx-pr-search { flex: none; height: 36px; padding: 0 12px; }
+.mx-pr-tools .mx-pr-search input { font-size: 13px; }
+.mx-pr-tools-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.mx-pr-count { margin-left: auto; font-size: 12px; color: var(--dim); font-variant-numeric: tabular-nums; }
+.mx-pr-sort { height: 28px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border-radius: var(--r-control); font-size: 12px; font-weight: 500; color: var(--muted); }
+.mx-pr-sort:hover, .mx-pr-sort[data-state="open"] { color: var(--fg); background: var(--icon-button-fill); }
+.mx-pr-sort > svg { width: 13px; height: 13px; }
+.mx-pr-none { margin: 0; padding: 20px 8px; font-size: 13px; color: var(--muted); }
+.mx-pr-clear { margin-left: 4px; color: var(--fg); text-decoration: underline; text-underline-offset: 3px; }
 .mx-pr-elsewhere { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(var(--ink), .06); }
 .mx-pr-heading { margin: 0; padding: 2px 8px 4px; font-size: 11.5px; font-weight: 500; color: var(--dim); }
 

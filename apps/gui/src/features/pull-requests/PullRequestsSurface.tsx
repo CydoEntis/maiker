@@ -1,9 +1,11 @@
-import type { ReactNode } from 'react'
-import { AlertTriangle, GitPullRequest } from 'lucide-react'
+import { useState, type ReactNode } from 'react'
+import { AlertTriangle, ArrowDownUp, CircleAlert, CircleCheck, CircleX, Clock, GitPullRequest } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuRadioGroup, DropdownMenuRadioItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import type { PullRequest } from '@/api/pullRequests'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { explainPullsFailure, orderPulls, pullAuthor, pullStanding, type ProjectPulls, type PullElsewhere } from './model'
+import { explainPullsFailure, PULLS_SHOW, PULLS_SORT, pullAuthor, pullStanding, shownPulls, type ProjectPulls, type PullElsewhere, type PullsShow, type PullsSort, type PullTone } from './model'
 import './pull-requests.css'
 
 /** Where GitHub gives out its command line. */
@@ -24,7 +26,22 @@ type Props = {
   onSignIn?: (() => void) | undefined
 }
 
-/** One pull request: its mark, title, number, branch and author, and where it stands. A click opens it on GitHub. */
+/** The mark before where a pull request stands, in its tone's colour. */
+function ToneMark({ tone }: { tone: PullTone }) {
+  switch (tone) {
+    case 'needs': return <CircleAlert aria-hidden="true" />
+    case 'failed': return <CircleX aria-hidden="true" />
+    case 'running': return <StatusIcon status="working" size={14} />
+    case 'passed': return <CircleCheck aria-hidden="true" />
+    case 'waiting': return <Clock aria-hidden="true" />
+    case 'open': return <CircleAlert aria-hidden="true" />
+  }
+}
+
+/**
+ * One pull request: its title, then its number, branch and author, then where it stands behind a mark in that standing's
+ * colour (a check by Checks passed, a cross by Checks failed, a blue mark by Open). A click opens it on GitHub.
+ */
 function PullRow({ pull, project, onOpen }: { pull: PullRequest; project?: string; onOpen: (url: string) => void }) {
   const standing = pullStanding(pull)
   const title = pull.title === '' ? `Pull request ${String(pull.number)}` : pull.title
@@ -32,14 +49,40 @@ function PullRow({ pull, project, onOpen }: { pull: PullRequest; project?: strin
   return (
     <li>
       <button type="button" className="mx-pr-row" data-needs={pull.needsYou ? true : undefined} title="Open on GitHub" onClick={() => { onOpen(pull.url) }}>
-        <span className="mx-pr-mark"><StatusIcon status={standing.mark} /></span>
-        <span className="mx-pr-text">
-          <span className="mx-pr-title">{title}</span>
-          <span className="mx-pr-detail"><b>#{pull.number}</b> {where}</span>
-        </span>
-        <span className="mx-pr-standing">{standing.text}{pull.needsYou && <span className="mx-pr-you"> · needs you</span>}</span>
+        <span className="mx-pr-title">{title}</span>
+        <span className="mx-pr-detail"><b>#{pull.number}</b> {where}</span>
+        <span className={`mx-pr-standing is-${standing.tone}`}><ToneMark tone={standing.tone} />{standing.text}{pull.needsYou && standing.tone === 'needs' && <span className="mx-pr-you"> · needs you</span>}</span>
       </button>
     </li>
+  )
+}
+
+/** Search, which pull requests to show and their order, over the list; the count says how many of how many show. */
+function PullsTools({ query, onQuery, show, onShow, sort, onSort, shown, total }: { query: string; onQuery: (query: string) => void; show: PullsShow; onShow: (show: PullsShow) => void; sort: PullsSort; onSort: (sort: PullsSort) => void; shown: number; total: number }) {
+  const sortLabel = PULLS_SORT.find((option) => option.key === sort)?.label ?? ''
+  return (
+    <div className="mx-pr-tools">
+      <label className="mx-search-field mx-pr-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7" /><path d="m20 20-3.5-3.5" /></svg>
+        <input value={query} placeholder="Search by title, branch, author or #" aria-label="Search pull requests" onChange={(event) => { onQuery(event.target.value) }} onKeyDown={(event) => { if (event.key === 'Escape' && query !== '') { event.stopPropagation(); onQuery('') } }} />
+      </label>
+      <div className="mx-pr-tools-row">
+        <Segmented aria-label="Show" value={show} onValueChange={(value) => { onShow(value as PullsShow) }}>
+          {PULLS_SHOW.map((option) => <SegmentedItem key={option.key} value={option.key}>{option.label}</SegmentedItem>)}
+        </Segmented>
+        <span className="mx-pr-count" role="status">{shown === total ? `${String(total)} open` : `${String(shown)} of ${String(total)}`}</span>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button type="button" className="mx-pr-sort" aria-label={`Sort: ${sortLabel}`}><ArrowDownUp aria-hidden="true" />{sortLabel}</button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" container={document.querySelector<HTMLElement>('.mx-app')} aria-label="Sort pull requests">
+            <DropdownMenuRadioGroup value={sort} onValueChange={(value) => { onSort(value as PullsSort) }}>
+              {PULLS_SORT.map((option) => <DropdownMenuRadioItem key={option.key} value={option.key}>{option.label}</DropdownMenuRadioItem>)}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
   )
 }
 
@@ -61,6 +104,9 @@ function Note({ title, children, action, detail, failed = false }: { title: stri
 
 function ProjectList({ pulls, where, onOpen, onRetry, onSignIn }: Pick<Props, 'pulls' | 'where' | 'onOpen' | 'onRetry' | 'onSignIn'>) {
   const { answer, loading } = pulls
+  const [query, setQuery] = useState('')
+  const [show, setShow] = useState<PullsShow>('all')
+  const [sort, setSort] = useState<PullsSort>('needs-you')
   if (answer === null) return <Note title="Reading pull requests…" />
   switch (answer.state) {
     case 'not-installed':
@@ -93,17 +139,29 @@ function ProjectList({ pulls, where, onOpen, onRetry, onSignIn }: Pick<Props, 'p
     }
     case 'listed':
       if (answer.items.length === 0) return <Note title="No open pull requests" />
-      return (
-        <>
-          <ul className="mx-pr-list" aria-label="Pull requests">
-            {orderPulls(answer.items).map((pull) => <PullRow key={pull.number} pull={pull} onOpen={onOpen} />)}
-          </ul>
-          {answer.more && <p className="mx-inspect-note">Showing the first {answer.items.length}. The rest are on GitHub.</p>}
-          {/* Whose "needs you" this is: the machine's signed-in account, which a folder's own rule may differ from. */}
-          {answer.login !== '' && <p className="mx-inspect-note">Signed in as {answer.login} on {where}</p>}
-        </>
-      )
+      return <Listed items={answer.items} more={answer.more} onOpen={onOpen} tools={{ query, setQuery, show, setShow, sort, setSort }} />
   }
+}
+
+type Tools = { query: string; setQuery: (query: string) => void; show: PullsShow; setShow: (show: PullsShow) => void; sort: PullsSort; setSort: (sort: PullsSort) => void }
+
+/** A project's open pull requests under the search, filter and sort, or a line saying none match. */
+function Listed({ items, more, onOpen, tools }: { items: readonly PullRequest[]; more: boolean; onOpen: (url: string) => void; tools: Tools }) {
+  const { query, setQuery, show, setShow, sort, setSort } = tools
+  const shown = shownPulls(items, { query, show, sort })
+  return (
+    <>
+      <PullsTools query={query} onQuery={setQuery} show={show} onShow={setShow} sort={sort} onSort={setSort} shown={shown.length} total={items.length} />
+      {shown.length === 0
+        ? <p className="mx-pr-none" role="status">No pull requests match. <button type="button" className="mx-pr-clear" onClick={() => { setQuery(''); setShow('all') }}>Show all</button></p>
+        : (
+          <ul className="mx-pr-list" aria-label="Pull requests">
+            {shown.map((pull) => <PullRow key={pull.number} pull={pull} onOpen={onOpen} />)}
+          </ul>
+        )}
+      {more && <p className="mx-inspect-note">Showing the first {items.length}. The rest are on GitHub.</p>}
+    </>
+  )
 }
 
 /**

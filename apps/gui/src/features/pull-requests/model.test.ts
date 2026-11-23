@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequest, PullRequestsAnswer } from '@/api/pullRequests'
-import { explainPullsFailure, needsYouCount, needsYouElsewhere, needsYouIn, orderPulls, pullsKey, pullStanding, type ProjectPulls } from './model'
+import { explainPullsFailure, needsYouCount, needsYouElsewhere, needsYouIn, orderPulls, pullsKey, pullStanding, shownPulls, type ProjectPulls } from './model'
 
 function pull(number: number, more: Partial<PullRequest> = {}): PullRequest {
   return { number, url: `https://github.com/o/r/pull/${String(number)}`, title: `Change ${String(number)}`, author: 'someone', branch: 'work', draft: false, checks: 'none', review: 'none', conflicting: false, mine: false, reviewRequested: false, needsYou: false, updatedAt: '', ...more }
@@ -86,5 +86,33 @@ describe('explainPullsFailure', () => {
     expect(explainPullsFailure('error connecting to api.github.com', 'box').title).toBe('GitHub could not be reached')
     expect(explainPullsFailure('HTTP 401: Bad credentials', 'box')).toMatchObject({ title: 'GitHub sign-in has run out', signIn: true })
     expect(explainPullsFailure('something odd', 'box')).toMatchObject({ title: 'Could not read the pull requests', detail: 'something odd', signIn: false })
+  })
+})
+
+describe('the list tools', () => {
+  const items = [
+    pull(5, { title: 'Fix the cart', branch: 'fix/cart', mine: true, updatedAt: '2026-11-20T10:00:00Z' }),
+    pull(9, { title: 'Bump vite', author: 'dependabot', checks: 'failed', updatedAt: '2026-11-22T10:00:00Z' }),
+    pull(7, { title: 'Review me', needsYou: true, reviewRequested: true, updatedAt: '2026-11-21T10:00:00Z' }),
+    pull(3, { title: 'Early idea', draft: true, updatedAt: '2026-11-19T10:00:00Z' }),
+  ]
+  const numbers = (list: readonly { number: number }[]) => list.map((each) => each.number)
+
+  it('filters by what the person picked and searches every word in the title, branch, author or number', () => {
+    expect(numbers(shownPulls(items, { query: '', show: 'mine', sort: 'newest' }))).toEqual([5])
+    expect(numbers(shownPulls(items, { query: '', show: 'failing', sort: 'newest' }))).toEqual([9])
+    expect(numbers(shownPulls(items, { query: '', show: 'drafts', sort: 'newest' }))).toEqual([3])
+    expect(numbers(shownPulls(items, { query: 'CART fix', show: 'all', sort: 'newest' }))).toEqual([5])
+    expect(numbers(shownPulls(items, { query: '#9', show: 'all', sort: 'newest' }))).toEqual([9])
+  })
+
+  it('orders by needs you first, last change, or number', () => {
+    expect(numbers(shownPulls(items, { query: '', show: 'all', sort: 'needs-you' }))).toEqual([7, 5, 9, 3])
+    expect(numbers(shownPulls(items, { query: '', show: 'all', sort: 'updated' }))).toEqual([9, 7, 5, 3])
+    expect(numbers(shownPulls(items, { query: '', show: 'all', sort: 'oldest' }))).toEqual([3, 5, 7, 9])
+  })
+
+  it('draws a plain open pull request in its own tone, apart from passed and failed checks', () => {
+    expect([pull(1), pull(2, { checks: 'passed' }), pull(3, { checks: 'failed' })].map((each) => pullStanding(each).tone)).toEqual(['open', 'passed', 'failed'])
   })
 })
