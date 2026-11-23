@@ -12,3 +12,14 @@
 .mx-pr-you { color: var(--needs); }
 .mx-pr-elsewhere { margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(var(--ink), .06); }
 .mx-pr-heading { margin: 0; padding: 2px 8px 4px; font-size: 11.5px; font-weight: 500; color: var(--dim); }
+
+/* A state with nothing to list (reading, signed out, no GitHub, a failure): centred in the column, a 40px mark tile, the
+   title, one paragraph, gh's own words in a well when it failed, and the shared buttons. */
+.mx-pr-state { max-width: 440px; margin: 0 auto; padding: 48px 16px; display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; }
+.mx-pr-state-mark { width: 40px; height: 40px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-panel); background: var(--m-card); color: var(--muted); }
+.mx-pr-state-mark svg { width: 20px; height: 20px; }
+.mx-pr-state[data-failed] .mx-pr-state-mark { color: var(--needs); background: color-mix(in oklab, var(--needs) 12%, var(--m-card)); }
+.mx-pr-state-title { font-size: 15px; font-weight: 600; color: var(--fg); }
+.mx-pr-state-body { margin: 0; font-size: 13px; line-height: 1.55; color: var(--fg2); text-wrap: pretty; }
+.mx-pr-state-detail { width: 100%; margin: 4px 0 0; padding: 10px 12px; border-radius: var(--r-control); background: var(--m-well); font: 400 11.5px/1.5 var(--mono); color: var(--muted); text-align: left; white-space: pre-wrap; overflow-wrap: anywhere; }
+.mx-pr-state-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 6px; }

@@ -740,8 +740,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   "Search"; it opens the command palette), so the flat sidebar has an edge to start from.
   **Foot** (48px, a hairline above it, no card): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings), then **Pull requests**, and **Settings** at the right. The pull-request button
-  opens the open pull requests of the session in front's project in a **window of their own over the app**
-  (`PullRequestsWindow`: Settings' scrim and frame, 760 by 620 at most, a title and ×; Esc or a click outside closes it). Its badge counts **only the pull requests
+  opens the open pull requests of the session in front's project in a **page in the main area**
+  (`PullRequestsPage`: over the panes as the New session draft is, no scrim; the pane header `project / Pull requests`
+  with ×, then a centred 760px column; Esc or × closes it, and showing another session leaves it). A state with nothing
+  to list (reading, signed out, no GitHub, a failure) is a centred block: a 40px mark tile (amber-tinted warning for a
+  failure), a 15px title, one paragraph in plain words (`explainPullsFailure`: a repository GitHub cannot see names both
+  no access and a rename, a lost sign-in, a rate limit, no connection), gh's own message in a mono well, and the shared
+  buttons (**Try again** primary, **Sign in to GitHub** where a new sign-in would help). Its badge counts **only the pull requests
   that need you**, across the opened projects: 13px tall on its top right corner, 9px 600, `--t1` on `--fg2` (quiet,
   not amber: the row in the surface says why), and absent at zero or while nothing could be read. The rail has no
   pull-request button.

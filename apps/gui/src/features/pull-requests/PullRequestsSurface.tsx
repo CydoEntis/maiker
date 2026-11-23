@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react'
+import { AlertTriangle, GitPullRequest } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import type { PullRequest } from '@/api/pullRequests'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { orderPulls, pullAuthor, pullStanding, type ProjectPulls, type PullElsewhere } from './model'
+import { explainPullsFailure, orderPulls, pullAuthor, pullStanding, type ProjectPulls, type PullElsewhere } from './model'
 import './pull-requests.css'
 
 /** Where GitHub gives out its command line. */
@@ -41,13 +43,18 @@ function PullRow({ pull, project, onOpen }: { pull: PullRequest; project?: strin
   )
 }
 
-/** A state with nothing to list: one plain sentence, and the one thing to do about it when there is one. */
-function Note({ title, children, action }: { title: string; children?: ReactNode; action?: ReactNode }) {
+/**
+ * A state with nothing to list: a mark, a title, one plain paragraph, the raw detail when there is one, and the things to
+ * do about it. A failure takes the warning mark and tone; anything else the pull-request mark.
+ */
+function Note({ title, children, action, detail, failed = false }: { title: string; children?: ReactNode; action?: ReactNode; detail?: string; failed?: boolean }) {
   return (
-    <div className="mx-sp-needs" role="status">
-      <strong>{title}</strong>
-      {children !== undefined && <span>{children}</span>}
-      {action}
+    <div className="mx-pr-state" role="status" data-failed={failed ? true : undefined}>
+      <span className="mx-pr-state-mark" aria-hidden="true">{failed ? <AlertTriangle /> : <GitPullRequest />}</span>
+      <strong className="mx-pr-state-title">{title}</strong>
+      {children !== undefined && <p className="mx-pr-state-body">{children}</p>}
+      {detail !== undefined && detail !== '' && <pre className="mx-pr-state-detail">{detail}</pre>}
+      {action !== undefined && <div className="mx-pr-state-actions">{action}</div>}
     </div>
   )
 }
@@ -60,18 +67,30 @@ function ProjectList({ pulls, where, onOpen, onRetry, onSignIn }: Pick<Props, 'p
       return <Note title="GitHub’s command line is not installed">Maiker reads pull requests with gh on {where}. Get it from {GH_SITE}, then sign in.</Note>
     case 'not-signed-in':
       return (
-        <Note title="Not signed in to GitHub" action={onSignIn && <button type="button" className="mx-sp-needs-go" onClick={onSignIn}>Sign in to GitHub</button>}>
+        <Note title="Not signed in to GitHub" action={onSignIn && <Button type="button" variant="primary" size="lg" onClick={onSignIn}>Sign in to GitHub</Button>}>
           Nobody is signed in to GitHub on {where}, so its pull requests can’t be read.
         </Note>
       )
     case 'not-on-github':
       return <Note title="This project is not on GitHub">Pull requests show here for a project with a GitHub remote.</Note>
-    case 'failed':
+    case 'failed': {
+      const failure = explainPullsFailure(answer.why, where)
       return (
-        <Note title="Could not read the pull requests" action={<button type="button" className="mx-sp-needs-go" disabled={loading} onClick={onRetry}>Try again</button>}>
-          {answer.why}
+        <Note
+          failed
+          title={failure.title}
+          detail={failure.detail}
+          action={(
+            <>
+              {failure.signIn && onSignIn && <Button type="button" variant="ghost" size="lg" onClick={onSignIn}>Sign in to GitHub</Button>}
+              <Button type="button" variant="primary" size="lg" disabled={loading} onClick={onRetry}>{loading ? 'Trying…' : 'Try again'}</Button>
+            </>
+          )}
+        >
+          {failure.body}
         </Note>
       )
+    }
     case 'listed':
       if (answer.items.length === 0) return <Note title="No open pull requests" />
       return (

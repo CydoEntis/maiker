@@ -71,3 +71,32 @@ export function needsYouElsewhere(projects: ReadonlyMap<string, ProjectPulls>, s
     return project.answer.items.filter((pull) => pull.needsYou).map((pull) => ({ project: nameOf(key), pull }))
   })
 }
+
+/** A failure in words a person can act on: what is wrong, what to do, and gh's own message kept as the detail. */
+export type PullsFailure = { title: string; body: string; detail: string; signIn: boolean }
+
+const REPO_NOT_FOUND = /Could not resolve to a Repository with the name '([^']+)'/i
+const SIGNED_OUT = /bad credentials|authentication|HTTP 401|gh auth login/i
+const RATE_LIMITED = /rate limit/i
+const OFFLINE = /error connecting|could not resolve host|timed? ?out|network/i
+
+/**
+ * What a failed read of the pull requests means, from gh's own words (`why`) on the machine `where` names. gh answers
+ * a private repository the signed-in account cannot see exactly as one that does not exist, so that case names both.
+ */
+export function explainPullsFailure(why: string, where: string): PullsFailure {
+  const detail = why.trim()
+  const missing = REPO_NOT_FOUND.exec(detail)
+  if (missing !== null) {
+    return {
+      title: 'GitHub can’t see this repository',
+      body: `The GitHub account signed in on ${where} has no access to ${missing[1] ?? 'it'}, or the repository was renamed or moved. Sign in with an account that can see it, or check the project’s remote address.`,
+      detail,
+      signIn: true,
+    }
+  }
+  if (SIGNED_OUT.test(detail)) return { title: 'GitHub sign-in has run out', body: `Sign in to GitHub again on ${where} to read this project’s pull requests.`, detail, signIn: true }
+  if (RATE_LIMITED.test(detail)) return { title: 'GitHub is limiting requests', body: 'Too many requests were made to GitHub in a short time. Try again in a few minutes.', detail, signIn: false }
+  if (OFFLINE.test(detail)) return { title: 'GitHub could not be reached', body: `${where === 'this computer' ? 'This computer' : where} could not reach GitHub. Check the connection, then try again.`, detail, signIn: false }
+  return { title: 'Could not read the pull requests', body: 'GitHub answered with an error. Its message is below.', detail, signIn: false }
+}

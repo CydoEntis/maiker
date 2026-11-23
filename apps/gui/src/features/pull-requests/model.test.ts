@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { PullRequest, PullRequestsAnswer } from '@/api/pullRequests'
-import { needsYouCount, needsYouElsewhere, needsYouIn, orderPulls, pullsKey, pullStanding, type ProjectPulls } from './model'
+import { explainPullsFailure, needsYouCount, needsYouElsewhere, needsYouIn, orderPulls, pullsKey, pullStanding, type ProjectPulls } from './model'
 
 function pull(number: number, more: Partial<PullRequest> = {}): PullRequest {
   return { number, url: `https://github.com/o/r/pull/${String(number)}`, title: `Change ${String(number)}`, author: 'someone', branch: 'work', draft: false, checks: 'none', review: 'none', conflicting: false, mine: false, reviewRequested: false, needsYou: false, updatedAt: '', ...more }
@@ -70,5 +70,21 @@ describe('a project\'s pull requests', () => {
     const elsewhere = needsYouElsewhere(projects, 'shop', (key) => key.toUpperCase())
 
     expect(elsewhere.map(({ project, pull: found }) => [project, found.number])).toEqual([['API', 2]])
+  })
+})
+
+describe('explainPullsFailure', () => {
+  it('names the repository GitHub cannot see and offers a new sign-in, keeping gh’s words', () => {
+    const why = "GraphQL: Could not resolve to a Repository with the name 'acme/shop'. (repository)"
+    const said = explainPullsFailure(why, 'this computer')
+    expect(said.title).toBe('GitHub can’t see this repository')
+    expect(said.body).toContain('acme/shop')
+    expect(said).toMatchObject({ detail: why, signIn: true })
+  })
+
+  it('tells a lost connection from a run-out sign-in, and falls back to gh’s own message', () => {
+    expect(explainPullsFailure('error connecting to api.github.com', 'box').title).toBe('GitHub could not be reached')
+    expect(explainPullsFailure('HTTP 401: Bad credentials', 'box')).toMatchObject({ title: 'GitHub sign-in has run out', signIn: true })
+    expect(explainPullsFailure('something odd', 'box')).toMatchObject({ title: 'Could not read the pull requests', detail: 'something odd', signIn: false })
   })
 })

@@ -112,7 +112,6 @@
 .mx-app .mx-dock-list,
 .mx-app .mx-changes-menu,
 .mx-app .mx-keys-dialog,
-.mx-app .mx-pulls-window,
 .mx-pop {
   background: var(--float-bg);
   border: 1px solid var(--float-line);
@@ -126,7 +125,7 @@
 .mx-app :is([role="menu"], [role="dialog"], [role="alertdialog"]) { box-shadow: var(--float-sh); }
 /* A dialog, a window over the app or a palette is one level up from a menu: the dialog shadow. A popover is a dialog by role
    but hangs from its anchor (`data-side`), so it keeps the menu's. */
-.mx-app :is(.mx-settings, .mx-palette, .mx-op, .mx-rename, .mx-keys-dialog, .mx-pulls-window, [role="dialog"]:not([data-side]), [role="alertdialog"]) { box-shadow: var(--dialog-sh); }
+.mx-app :is(.mx-settings, .mx-palette, .mx-op, .mx-rename, .mx-keys-dialog, [role="dialog"]:not([data-side]), [role="alertdialog"]) { box-shadow: var(--dialog-sh); }
 /* The narrow window's sidebar drawer is a dialog by role, but the sidebar card inside it is the surface: no float behind it. */
 .mx-app .mx-drawer { background: none; border: 0; box-shadow: none; }
 /* A select's list is the raised float (see `--float-raised`). */
