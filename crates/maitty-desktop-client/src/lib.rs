@@ -1911,28 +1911,12 @@ pub async fn archive_conversation(
     }
 }
 
-pub async fn resume_codex_conversation(
-    id: u64,
-    generation: u64,
-    daemon_executable: PathBuf,
-) -> Result<Value> {
-    let reply = request(
-        ClientMsg::Command(Command::ConversationStart {
-            target: StartTarget::Conversation {
-                id: maitty_shared::conversation::ConversationId(id),
-                generation,
-            },
-            branch: None,
-        }),
-        daemon_executable,
-    )
-    .await?;
-    match reply {
-        Reply::ConversationStarted { id, generation } => {
-            Ok(json!({"id": id.0, "generation": generation}))
-        }
-        _ => bail!("The Maiker service gave an answer this app does not understand (conversation resume). Restart the service in Settings, or update the app so both are the same version."),
-    }
+/// Take a chat up again on its own provider session: its agent starts afresh at a new generation,
+/// and the daemon reads its past back before answering. What a chat the daemon refused to
+/// continue (after a service restart) offers.
+pub async fn resume_conversation(id: u64, generation: u64, daemon: impl Into<Daemon>) -> Result<Value> {
+    let target = StartTarget::Conversation { id: maitty_shared::conversation::ConversationId(id), generation };
+    start_conversation(target, None, daemon).await
 }
 
 /// Approve a command request of a chat and have the daemon remember it for the chat's project.

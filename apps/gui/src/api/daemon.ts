@@ -834,6 +834,14 @@ export async function setChatPermissions(conversation: Pick<Conversation, 'id' |
   await invokeParsed('set_conversation_permissions', NullSchema, { ...chatArgs(conversation.id), generation: conversation.generation, permissions })
 }
 
+/**
+ * Takes a chat up again on its own agent session: its agent starts afresh and the service reads its past back first.
+ * What a chat the service could not continue (after a restart) offers. Resolves to the chat's new generation.
+ */
+export async function resumeChat(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<{ id: number; generation: number }> {
+  return invokeParsed('resume_conversation', CreatedConversationSchema, { ...chatArgs(conversation.id), generation: conversation.generation })
+}
+
 export async function renameConversationOnDaemon(conversation: Pick<Conversation, 'id'>, title: string): Promise<void> {
   const pane = addressOf(conversation.id)
   if (pane !== null) {

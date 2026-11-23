@@ -1290,6 +1290,19 @@ async fn set_conversation_permissions(
 }
 
 #[tauri::command]
+async fn resume_conversation(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+    generation: u64,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::resume_conversation(id, generation, wire.daemon(machine, || daemon_executable(&app))?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+#[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
     wire: tauri::State<'_, terminal_stream::Wire>,
@@ -1451,6 +1464,7 @@ pub fn run() {
             add_branch_worktree,
             mark_conversation_seen,
             set_conversation_permissions,
+            resume_conversation,
             saved_conversations,
             side_answer,
             closed_sessions,

@@ -1330,6 +1330,9 @@ generation, another provider or a chat with no settings is refused in words. The
 the next `Rpc::Send` (`State::new_permissions`): Claude's per-message process starts with them, Codex gets
 `approvalPolicy` and a `sandboxPolicy` matching `thread/start`'s on `turn/start`. The desktop client sends it through
 `set_conversation_permissions` and refuses an older daemon in words (`ask_running_daemon_if_it_reads`).
+A chat's Reconnect is `resume_conversation`: `ConversationStart` with `StartTarget::Conversation` at the chat's
+generation, which starts its agent again; a Claude chat is read back from its transcript before the start is answered,
+except one whose turn was cut.
 The seen is the window opening a finished chat: the daemon turns its done to idle, as `MarkSeen` does for a pane, and
 leaves every other status alone; human clients with the write grant only. A daemon before 124 is not asked
 (`mark_conversation_seen`, through `ask_if_known`) and the chat keeps its done. With `base`, `branch` is a new branch cut
