@@ -668,7 +668,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session rows** sit under their project set in 16px, with 6px and a 1px rule (the ink at 8%) down their left edge.
   **Session row** (`SessionRow`; padding 6px 8px, radius `--r-control`): the name at the left (13.5px
-  `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent), how long it
+  `--fg2`; 500 `--fg` while it needs you, works or is done (a finished helper stays 400 `--muted`); italic `--muted` "New session" before anything is sent), how long it
   has been as it is (`SessionAge`: `formatAgo` from `statusSince`, mono 11px `--dim`; absent when the daemon did not say;
   a chat session's time is `ConversationSummary.status_since`, stamped by its daemon when the status changes, so after a
   daemon restart it counts from the restart) and the 14px status mark at the right. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
@@ -698,8 +698,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   name to type on, open the rename dialog instead, where an empty name clears it.
   A project with no session has nothing to fold: its heading's click opens the project's `+` menu, with **No
   sessions** at its right. A session the daemon has put away or snoozed is listed like any other.
-  **A project with nothing going on is grey**: its name, machine tag and rows in `--dim` (the badge keeps its project
-  colour, so a project is found by its colour at a glance), never a raw colour or a filter. The row the pointer is on, the heading or row
+  **A project with nothing going on is quiet**: its name in `--muted` at the heading's usual weight, so every heading
+  lines up, and its rows in `--dim` (the badge keeps its project colour and a machine tag its machine colour, so both are
+  found at a glance), never a raw colour or a filter. The row the pointer is on, the heading or row
   that holds keyboard focus (`:focus-visible`), and the selected session take their own colours back (a heading `--fg`
   with its badge's colour, a row `--fg2`, the selected row `--fg`), fading over `--t-fast`; only colour changes, never
   the weight or the place, so a project that starts working only brightens. A machine tag that is not connected stays
