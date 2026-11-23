@@ -12,7 +12,7 @@ import { codeExtension, tableCsv, tableHtml, tableMarkdown } from '../exportBloc
 import { numericColumns } from '../tableColumns'
 import { OpenFileContext } from '../openFile'
 import { saveBlock } from '../saveBlock'
-import { TypeTag, typeTone } from '@/components/ui/tag'
+import { typeTone } from '@/components/ui/tag'
 import { Block as BlockBox, BlockHead } from './Block'
 import { CopyButton } from './CopyButton'
 import type { Askable } from '../plainQuestions'
@@ -118,7 +118,6 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
   const diff = DIFF_LANGUAGES.has(language.toLowerCase())
   const shown = folds && !all ? lines.slice(0, CODE_FOLD_LINES) : lines
   const hint = `code.${extensionForLanguage(language)}`
-  const tag = fileTag(hint)
   return (
     <BlockBox>
       <BlockHead
@@ -131,7 +130,6 @@ function CodeBlock({ language, text }: { language: string; text: string }) {
           </>
         )}
       >
-        {tag !== null && <TypeTag tag={tag} />}
         <span className="mx-block-title">{language === '' ? 'code' : language}</span>
       </BlockHead>
       {open && (

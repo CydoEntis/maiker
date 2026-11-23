@@ -16,7 +16,6 @@ import { MachineTag } from './MachineTag'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { isMenuKey } from './menuPoint'
 import { useReducedMotion } from './motion'
-import { ProjectBadge } from './ProjectBadge'
 import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
 import { RowHoverHost } from './RowHoverHost'
 import { sessionMenuEntries } from './sessionMenu'
@@ -363,7 +362,6 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
   const state = group.mark === null || group.mark === 'idle' ? null : group.mark
   const name = (
     <>
-      <ProjectBadge name={group.name} />
       <span className="mx-sb-head-name">{group.name}</span>
     </>
   )

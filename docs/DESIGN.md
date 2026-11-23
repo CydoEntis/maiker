@@ -631,8 +631,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is picked and the button is in its on state then) and **Open a project** (a folder with a plus; the Open a project
   dialog for this computer; see *Starting a session*, below).
   **Order** (`model/sidebarTree.ts`, `sidebarOrder`): *The sidebar's order* in [Design language](#design-language).
-  A **project** is a heading and all its rows, with no card and no rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
-  letters, in the project's colour on an 18% tint of it), the name (12px 600 `--fg`; the folder is its tooltip), on
+  A **project** is a heading and all its rows, with no card and no rule: no badge (the two-letter `ProjectBadge` is
+  only for the collapsed rail, the empty start and the filter menu, where there is no name beside it), the name (12px 600 `--fg`; the folder is its tooltip), on
   another machine the machine tag and, **while folded**, the project's own state: the 14px status mark of its most urgent
   session (needs you, working, done), nothing while all are idle. Open, it shows no count or mark: its rows say their
   own. A session in a worktree of its own has a 15px branch mark (`--muted`) before its name, with the branch in its
@@ -1462,7 +1462,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Chat blocks follow the Maiker Desktop prototype, not Chat Feed.dc.html** (the older spec). Your message is a plain bubble
   (no border, `--fg` 7% over `--main`, 14.5px/1.6, 10px 14px); the agent's reply is plain 14.5/1.65 text with its first
   paragraph in `--fg` and the rest `--fg2`, nothing bold unless written so. A command, a diff and a code block are one `Block`
-  (the card tone `--m-card`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns), so it sits on the page
+  (the card tone `--m-card`, `--line` hairline, `data-fold`, a 34px head with a chevron that turns and the language as plain text, no type badge), so it sits on the page
   as a card, never as a black hole cut in it. A code block that was short when it first showed stays whole as it is written;
   only one that arrives past the fold starts folded. A ```diff fence colours its lines by their sign as an edit's diff does
   (added `--done`, removed `--err`, both on a 10% tint; hunk and file heads `--link`). A command head reads `$ command` and, at the
