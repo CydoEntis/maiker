@@ -415,7 +415,10 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through
    `loadFolderBranches`), and since git's listing does not say a worktree's folder was deleted, each folder is looked for
-   with `listFolders` and one that is gone is listed as missing and cannot be picked. Picking a worktree starts the new-chat
+   with `listFolders` and one that is gone is listed as missing and cannot be picked. The dialog is a modal window (`ModalHead`, `ModalBody`,
+   `ModalFoot`): each row a branch mark on a tile, the folder name over its branch, and a badge at the right, **In use**
+   (with the count when several sessions share it; its label names them) or **Missing**; over six worktrees a search
+   field filters by folder or branch; the foot is Close (ghost) and **New worktree…** (primary). Picking a worktree starts the new-chat
    draft in its folder on the project's machine; one a session of that machine runs in (its checkout is the worktree, or its
    folder is inside it when the daemon gave no checkout, compared as `samePath`/`inFolder` compare, put-away sessions
    included) says so and shows that session instead. An empty list says so and offers New worktree… when the project has a

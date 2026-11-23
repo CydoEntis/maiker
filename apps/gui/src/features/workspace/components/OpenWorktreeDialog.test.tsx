@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { FolderBranchList } from '@/api/folderGit'
 import type { Conversation } from '@/data/preview'
@@ -64,7 +64,8 @@ describe('Open worktree', () => {
     const running = agentIn(3, 'Fix the parser', FEAT.path)
     const { onStart, onShow } = open(listing(MAIN, FEAT, DOCS), { sessions: [running] })
     const row = await screen.findByRole('button', { name: /feat-x/ })
-    expect(row.textContent).toContain('In use by Fix the parser · Show')
+    expect(row.textContent).toContain('In use')
+    expect(within(row).getByLabelText('In use by Fix the parser')).toBeInTheDocument()
     fireEvent.click(row)
     expect(onShow).toHaveBeenCalledWith('t3')
     expect(onStart).not.toHaveBeenCalled()
@@ -74,7 +75,7 @@ describe('Open worktree', () => {
   it('shows a worktree whose folder is gone as missing, and does not open it', async () => {
     const { onStart } = open(listing(MAIN, OLD), { gone: [OLD.path] })
     const row = await screen.findByRole('button', { name: /old/ })
-    expect(row.textContent).toContain('Folder missing')
+    expect(row.textContent).toContain('Missing')
     expect(row.getAttribute('aria-disabled')).toBe('true')
     expect(row.title).toContain('Its folder is gone')
     fireEvent.click(row)

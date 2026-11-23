@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Folder, TreePine } from 'lucide-react'
+import { Folder, GitBranch } from 'lucide-react'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { SHELL_PROCESS } from '../model/session'
 import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
@@ -67,8 +67,8 @@ const ICON_DRAWINGS = {
   drawer: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M3 14.5h18" /></Svg>,
   maximize: () => <Svg size={15} strokeWidth={1.8}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Svg>,
   restore: () => <Svg size={15} strokeWidth={1.8}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Svg>,
-  /** A linked worktree: a tree, so it is not taken for the branch mark beside it. It takes the text's colour. */
-  worktree: ({ size = 11, strokeWidth = 2.2 }: IconProps) => <TreePine size={size} strokeWidth={strokeWidth} aria-hidden="true" />,
+  /** A linked worktree: the git branch mark, as git tools draw a worktree's branch. It takes the text's colour. */
+  worktree: ({ size = 11, strokeWidth = 2.2 }: IconProps) => <GitBranch size={size} strokeWidth={strokeWidth} aria-hidden="true" />,
   branch: ({ size = 11, strokeWidth = 2.2, stroke = 'var(--ansi-mag)' }: IconProps) => (
     <Svg size={size} strokeWidth={strokeWidth} stroke={stroke}><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="8" r="2.5" /><path d="M6 8.5v7M18 10.5c0 4-6 3-10 5.5" /></Svg>
   ),
