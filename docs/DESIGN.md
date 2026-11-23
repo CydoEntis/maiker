@@ -1012,7 +1012,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   buttons are disabled and say so. The panes are a small binary tree per session (`model/splitTree.ts`: a leaf is the
   session's pane or a shell, a branch is right or down with the share of its first side), drawn inside the session's
   pane of the arrangement (`SplitTree.tsx` places each pane from the tree, in one box, so a split or a close mounts no
-  terminal again); dragging a branch's line resizes it (never under 15% a side), double-click halves it. The tree is
+  terminal again); dragging a branch's line resizes it (never under 15% a side), double-click halves it. Every pane of a split
+  session drags by its header: dropped on another of the session's panes they trade places (`swapLeaves`, the
+  arrangement's glide), dropped on another session's pane the two sessions swap. A split opens and closes through the
+  same glide: the new pane's card stands in its room before its shell is listed (`SplitPlaceholder`), so it grows in
+  beside the pane it halved, and a closed one fades out while its neighbour takes the room. The tree is
   kept per session in `localStorage` (`maiker.gui.session-splits.v1`, `model/splitStorage.ts`), so going to another
   session and back, or restarting the app, shows the same shells in the same places; a split whose shell is gone is
   dropped from the tree. The shell is an ordinary session of the daemon's. A pane's number is no proof of which pane

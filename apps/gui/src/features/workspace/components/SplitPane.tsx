@@ -8,6 +8,7 @@ import { projectOf } from '../model/sidebar'
 import type { SplitDir } from '../model/splitTree'
 import { splitName } from '../useSessionSplits'
 import { useWorkspace } from '../workspaceContext'
+import { beginPointerDrag } from './dragSession'
 import { Icon } from './glyphs'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
@@ -21,9 +22,19 @@ const CLEAR_SCREEN = '\x0c'
  * Its header is `project / Split n` with the folder on hover, then split right, split down and close; Maiker draws
  * nothing inside it. It belongs to `owner`: it is not in the sidebar and ends with that session.
  */
-export function SplitPane({ slotId, owner, shell, number, focused, splitRefusal, onFocus, onSplit, onClose }: {
+/**
+ * The card of a split whose shell is not listed: just started and not in the daemon's list yet, or just closed. It holds
+ * the split's room and its name for the pane glide (`movePanes`), with nothing inside.
+ */
+export function SplitPlaceholder({ id }: { id: string }) {
+  return <section className="mx-pane is-terminal is-card is-placeholder" aria-hidden="true" data-session-id={id}><div className="mx-pane-head" /></section>
+}
+
+export function SplitPane({ slotId, leaf, owner, shell, number, focused, splitRefusal, onFocus, onSplit, onClose }: {
   /** The arrangement's pane this split is drawn in: what a session dropped on it lands on. */
   slotId: string
+  /** This split for a drag (`leafKey`): dropped on another pane of the session, they trade places. */
+  leaf: string
   owner: SessionView
   shell: SessionView
   number: number | undefined
@@ -64,7 +75,14 @@ export function SplitPane({ slotId, owner, shell, number, focused, splitRefusal,
           setMenuAt(menuPoint(event, false))
         }}
       >
-        <div className="mx-pane-head">
+        <div
+          className="mx-pane-head is-draggable"
+          title="Drag to move this pane"
+          onPointerDown={(event) => {
+            // Buttons in the header keep their own clicks; only the bar itself starts a drag.
+            if (!(event.target instanceof Element && event.target.closest('button, input'))) beginPointerDrag(event, { kind: 'pane', id: slotId, label: name, leaf })
+          }}
+        >
           <span className="mx-pane-title" title={shell.cwd}>
             <span className="mx-pane-project">{projectOf(owner)}</span>
             <span className="mx-pane-slash" aria-hidden="true">/</span>

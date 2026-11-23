@@ -33,6 +33,8 @@ export type PaneCardProps = {
   focused: boolean
   maximized: boolean
   dropTarget: boolean
+  /** Set when the session is split: this pane for a drag (`leafKey`), so it can trade places with another of its panes. */
+  leaf?: string | undefined
   /** This pane is the one being dragged. */
   dragging: boolean
   /** What letting go over this pane does, said on it while it is the target. */
@@ -73,6 +75,8 @@ export function PaneCard(props: PaneCardProps) {
   const tip = useTipWithKeys()
   const [menuAt, setMenuAt] = useState<{ x: number; y: number } | null>(null)
   const multi = paneCount > 1
+  // A split session's own pane moves among its splits even when it is the window's only pane.
+  const draggable = multi || props.leaf !== undefined
   const unsplittable = props.splitRefusal !== null
   const splitWhy = props.splitRefusal ?? undefined
   const ended = session.ended
@@ -126,11 +130,11 @@ export function PaneCard(props: PaneCardProps) {
       }}
     >
       <div
-        className={`mx-pane-head${multi ? ' is-draggable' : ''}`}
-        title={multi ? 'Drag to move this pane' : undefined}
+        className={`mx-pane-head${draggable ? ' is-draggable' : ''}`}
+        title={draggable ? 'Drag to move this pane' : undefined}
         onPointerDown={(event) => {
           // Buttons in the header keep their own clicks; only the bar itself starts a drag.
-          if (multi && !(event.target instanceof Element && event.target.closest('button, input'))) beginPointerDrag(event, { kind: 'pane', id: pane.id, label: title })
+          if (draggable && !(event.target instanceof Element && event.target.closest('button, input'))) beginPointerDrag(event, { kind: 'pane', id: pane.id, label: title, ...(props.leaf === undefined ? {} : { leaf: props.leaf }) })
         }}
       >
         {props.leading}

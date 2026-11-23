@@ -9,7 +9,8 @@ import { dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from 
 import { sendHelpersAnswer } from '../useOutsideAsks'
 import { isChatSession } from '../model/chatSession'
 import { PaneCard } from './PaneCard'
-import { SplitPane } from './SplitPane'
+import { leafKey } from './dragSession'
+import { SplitPane, SplitPlaceholder } from './SplitPane'
 import { SplitTree } from './SplitTree'
 import { AGENT_LEAF, leavesOf } from '../model/splitTree'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
@@ -43,7 +44,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -114,6 +115,7 @@ export function WorkspacePane({ shown, pane, kept }: {
       leading={sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
       session={session}
       paneCount={shown.panes.length}
+      leaf={isSplit ? leafKey(session.id, AGENT_LEAF) : undefined}
       card={isSplit || shown.panes.length > 1}
       splitRefusal={splitRefusal}
       broadcast={shown.broadcast === true}
@@ -203,16 +205,22 @@ export function WorkspacePane({ shown, pane, kept }: {
   return (
     <SplitTree
       tree={splits.tree}
+      leafKeyOf={(leaf) => leafKey(session.id, leaf)}
+      dropLeaf={dragLeaf !== null && dropLeaf !== dragLeaf ? dropLeaf : null}
       onResize={(path, ratio) => { resizeSplit(session.id, path, ratio) }}
       renderPane={(leaf) => {
         if (leaf === AGENT_LEAF) return agentPane
         const shell = sessionMap.get(leaf)
         // A shell's terminal is built when its session is on screen: one kept mounted out of sight would hold a GPU
         // context for a pane nobody is looking at, and a browser has few of those.
-        if (shell === undefined || kept) return null
+        if (kept) return null
+        // A shell just started, or just closed, is not in the list yet or any more: its card stands in its room
+        // meanwhile, so the split glides open around a pane and a close fades a pane out, never an empty gap.
+        if (shell === undefined) return <SplitPlaceholder id={leaf} />
         return (
           <SplitPane
             slotId={pane.id}
+            leaf={leafKey(session.id, leaf)}
             owner={session}
             shell={shell}
             number={splits.numbers[leaf]}

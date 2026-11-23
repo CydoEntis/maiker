@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { AGENT_LEAF, closeLeaf, focusLeaf, layoutOf, leavesOf, type ListedPane, liveSplits, MAX_SESSION_PANES, parseSplits, provenShells, type SessionSplits, setRatio, splitLeaf, stepFocus, UNSPLIT } from './splitTree'
+import { AGENT_LEAF, closeLeaf, focusLeaf, layoutOf, leavesOf, type ListedPane, liveSplits, MAX_SESSION_PANES, parseSplits, provenShells, type SessionSplits, setRatio, splitLeaf, stepFocus, swapLeaves, UNSPLIT } from './splitTree'
 
 const split = (splits: SessionSplits, leaf: string, dir: 'right' | 'down', id: string) => splitLeaf(splits, leaf, dir, id, `mark ${id}`)
 const rectOf = (splits: SessionSplits, id: string) => {
@@ -42,6 +42,22 @@ describe('splitting a pane', () => {
     const one = split(UNSPLIT, AGENT_LEAF, 'right', 's1')
     expect(split(one, 'gone', 'right', 's2')).toBe(one)
     expect(split(one, AGENT_LEAF, 'right', 's1')).toBe(one)
+  })
+})
+
+describe('dragging a pane onto another of the session', () => {
+  it('trades their places and gives the moved one the keys', () => {
+    const two = split(split(UNSPLIT, AGENT_LEAF, 'right', 's1'), 's1', 'down', 's2')
+    const swapped = swapLeaves(two, AGENT_LEAF, 's2')
+    expect(rectOf(swapped, AGENT_LEAF)).toEqual({ ...rectOf(two, 's2'), id: AGENT_LEAF })
+    expect(rectOf(swapped, 's2')).toEqual({ ...rectOf(two, AGENT_LEAF), id: 's2' })
+    expect(swapped.focus).toBe(AGENT_LEAF)
+  })
+
+  it('changes nothing for a pane that is not one of it, or the pane itself', () => {
+    const one = split(UNSPLIT, AGENT_LEAF, 'right', 's1')
+    expect(swapLeaves(one, 's1', 's9')).toBe(one)
+    expect(swapLeaves(one, 's1', 's1')).toBe(one)
   })
 })
 

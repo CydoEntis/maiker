@@ -190,3 +190,15 @@ export function parseSplits(value: unknown): SessionSplits | null {
   }
   return { tree, focus: typeof record.focus === 'string' && leaves.includes(record.focus) ? record.focus : AGENT_LEAF, numbers, marks }
 }
+
+/** The tree with the panes `a` and `b` in each other's places and the focus on `a`, the one that was moved. Unchanged unless both are panes of it. */
+export function swapLeaves(splits: SessionSplits, a: string, b: string): SessionSplits {
+  const leaves = leavesOf(splits.tree)
+  if (a === b || !leaves.includes(a) || !leaves.includes(b)) return splits
+  const swap = (tree: SplitTree): SplitTree => {
+    if (!isLeaf(tree)) return { ...tree, a: swap(tree.a), b: swap(tree.b) }
+    if (tree === a) return b
+    return tree === b ? a : tree
+  }
+  return { ...splits, tree: swap(splits.tree), focus: a }
+}

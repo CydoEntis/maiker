@@ -36,8 +36,12 @@ function steady(a: PaneRect, b: PaneRect): number {
  * A session's panes, each placed from the tree (`model/splitTree.ts`). The panes are siblings in one box, in an order
  * that does not follow the tree, so a split or a close moves and sizes them without mounting any terminal again.
  */
-export function SplitTree({ tree, renderPane, onResize }: {
+export function SplitTree({ tree, leafKeyOf, dropLeaf, renderPane, onResize }: {
   tree: Tree
+  /** Each pane for a drag (`leafKey`), carried on its box so a drop finds it. */
+  leafKeyOf: (id: string) => string
+  /** The pane another of the session's panes is held over, which it would trade places with. */
+  dropLeaf: string | null
   renderPane: (id: string) => ReactNode
   /** The branch at `path` gets a new share for its first side; `null` halves it. */
   onResize: (path: string, ratio: number | null) => void
@@ -45,7 +49,15 @@ export function SplitTree({ tree, renderPane, onResize }: {
   const { panes, dividers } = layoutOf(tree)
   return (
     <div className="mx-split-tree">
-      {[...panes].sort(steady).map((rect) => <div key={rect.id} className="mx-split-leaf" style={placeOf(rect)}>{renderPane(rect.id)}</div>)}
+      {[...panes].sort(steady).map((rect) => {
+        const key = leafKeyOf(rect.id)
+        return (
+          <div key={rect.id} className="mx-split-leaf" data-leaf={key} style={placeOf(rect)}>
+            {renderPane(rect.id)}
+            {dropLeaf === key && <span className="mx-pane-drop" aria-hidden="true">Drop to swap</span>}
+          </div>
+        )
+      })}
       {dividers.map((divider) => (
         <TreeSplitHandle key={divider.path} divider={divider} onResize={(ratio) => { onResize(divider.path, ratio) }} onReset={() => { onResize(divider.path, null) }} />
       ))}
