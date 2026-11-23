@@ -181,7 +181,7 @@ There are no banners. Every surface but the toast (below: the status mark, no ed
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
-- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a 14px `!` in a `--danger` circle, a warning the same in `--needs`, a note none; the `!` circle is the toast's own mark, because neither is a state a session can be in). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a failure's or a warning's action (its fix) is the `solid` button; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
+- **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a 14px `!` in a `--danger` circle, a warning the same in `--needs`, a note none; the `!` circle is the toast's own mark, because neither is a state a session can be in). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a failure's or a warning's action (its fix) is the `primary` button; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
   OS failure of a known kind in plain words), with **Copy details** when the tool's text says more (CODE-STANDARDS ›
   error messages). The same failure again is one toast with `×2`. A needs-you toast names the session ("Parser fix needs you"), says what it
@@ -327,8 +327,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   or split, switch the view, discard changes, remove a project, pull when the branch has diverged. Each has **Don't ask
   again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. Nothing else confirms.
 - **The window.** Title bar: the Maiker logo and name; at the right **one side-panel button** and the window controls.
-  Under it: sidebar | main pane | optional file pane | optional side panel, all cards with gaps; when a file is open
-  the side panel floats over the file pane and does not squeeze it. The **status bar**: version and `Update to …` at the
+  Under it: sidebar | main pane | optional file pane | optional side panel, all cards with gaps; the side panel
+  takes its own room beside a file pane too (it floats only in a narrow window). The **status bar**: version and `Update to …` at the
   left; at the right a usage bar for every limit of each agent (its 5-hour and weekly ones), then the Commands and Shortcuts keys. **Context is
   always a bar, never a ring.** The side panel holds tabs of four surfaces: Files, Changes, Terminal, Pull requests.
 - **The sidebar's order.** One list of projects, each self-contained: it holds all its sessions (the most urgent
@@ -406,7 +406,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `CardBody` 10px 12px, `CardFoot` 40px with the answers; `tone` `needs` for an amber edge, `err` for a red one;
   `interactive` for a card that is itself a button, `--line2` edge on hover and the focus underline inside), **Button**
   (`button.tsx`: kinds `primary` (the theme's accent), `needs` (only the main answer to something waiting on you),
-  `soft` (the text colour at 10% with a hairline, so it reads as a button on a card or a float too), `ghost`, `danger`, `link`; sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button); `keyHint` draws the key that also
+  `ghost` (text until hovered: **every other action**, Cancel, Close, Back, a second answer), `danger`, `link`; there is no
+  other kind, so every main action in the app is the accent and every secondary one is the ghost (the plain-markup
+  `.mx-text-button` and `.mx-fb-btn` draw the same two looks); sizes `sm` 24px, `md` 30px, `icon` 28px (a round or filled glyph button: the chat's jump button); `keyHint` draws the key that also
   presses it; hover brightens, press darkens toward `--bg`, focus is the one 1px accent edge around the control (`--focus-edge`),
   disabled is 42% opacity), **IconButton** (`icon-button.tsx`, the one icon button; see *Icon buttons* below), **Tag** (`tag.tsx`: a
   mono word in a hairline, `neutral`, `done`, `err` or `working`), **SkeletonLines** (`skeleton.tsx`: pulsing bars in `--line2` where something is on its way; nothing on screen says
@@ -716,7 +718,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
   **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings), then **Pull requests**, and **Settings** at the right. The pull-request button
-  opens the side panel's Pull requests surface for the session in front. Its badge counts **only the pull requests
+  opens the open pull requests of the session in front's project in a **window of their own over the app**
+  (`PullRequestsWindow`: Settings' scrim and frame, 760 by 620 at most, a title and ×; Esc or a click outside closes it). Its badge counts **only the pull requests
   that need you**, across the opened projects: 13px tall on its top right corner, 9px 600, `--t1` on `--fg2` (quiet,
   not amber: the row in the surface says why), and absent at zero or while nothing could be read. The rail has no
   pull-request button.
@@ -926,8 +929,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   under reduced motion the whole mark is held still for a moment instead). The agent and project scans start while it
   draws. Then one window rises in, the float card (`--float-bg`, hairline, `--r-dialog`, the float shadow), 680px wide
   and 680px tall on both screens so its header and foot never move: a header of the mark, **two dots** (the screen in
-  view is a short bar) and **Skip**; the screen; a foot of **Back** (second screen only), the Enter keycap and the
-  `solid` primary. Enter continues, Esc skips.
+  view is a short bar) and **Skip**; the screen; a foot of **Back** (second screen only), and the primary with its
+  key inside after the word (`keyHint`). Enter continues, Esc skips. The veil darkens the app behind (its ground at 45%
+  over black at 62%, blurred) and the window carries a stronger edge and a deep shadow, so it stands clear of it.
   - **Welcome to Maiker** (setup). **Projects folder**: a card with the folder (the saved one, else the folder under
     home that holds the most git projects, else home), "Found N git projects" with the first five names as tags and a
     `+N`, and **Change**, a menu of the other folders that hold code and **Choose another folder…**. **Agents**: one
@@ -936,13 +940,15 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
     **Run it** and **Cancel**; a running install shows its percent and a thin bar under the row, a second one waits as
     "Queued", and an installed agent moves up. Installs never hold up **Continue**. An agent the app cannot install
     says "Not installable here". While the scan runs the card says "Looking for agents…".
-  - **Make it yours** (style). **Sessions open as**: Terminal and Chat as two cards, each a small still picture over a
-    radio dot and its name; Chat is picked and tagged **Recommended**; the picked card has a 1.5px ring in the text
-    colour. **Theme**: a carousel of every theme, each card a tiny Maiker in that theme's own colours (title bar,
+  - **Make it yours** (style). **Sessions open as**: Terminal and Chat as two cards, each a small still window (a
+    title strip of three dots and its name, then a terminal running `claude` or a chat with a bubble, steps, an answer
+    and a message box) over a radio dot and its name; Chat is picked and tagged **Recommended**; the picked card has a 1.5px ring in the text
+    colour. **Theme**: **Dark | Light** first (a segmented control
+    beside the label; picking the other kind jumps to its default theme), then a carousel of the themes of that kind, each card a tiny Maiker in that theme's own colours (title bar,
     sidebar with its status dots, chat, chat box); the picked card is in the middle at full size, its neighbours
     smaller and faded out at the sides; ‹ › and the left and right arrows slide it, going round; under it the theme's
     name ("Midnight · Dark") and a dot per theme, or "3 of 60" when there are too many for dots. The app behind
-    recolours as it slides. The primary is **Open your first project**: it saves the folder, the view and the theme
+    recolours as it slides. The primary is **Open** with a folder mark: it saves the folder, the view and the theme
     slid to (in the mode that shows it), closes, and opens the Open a project palette in the projects folder.
   - Skip and Esc save nothing: the view stays Chat and the theme goes back to what it was. Either way the first run
     is not shown again. Global shortcuts are ignored while it is open. A window that already has settings is never
@@ -971,8 +977,14 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   the Rust tile; any other name gets its first letter on a colour taken from the name. The marks are
   the LobeHub icon set's (MIT) and stay their owners' trademarks; they say which agent runs, nothing
   more.
+- **Anything clickable shows the pointer** (a button, link, menu row, option, tab, switch; `workspace.css`), whatever
+  a library's own class says; a disabled control keeps the arrow.
+- **A select's list is the raised float** (`--float-raised`, one step lighter than `--float-bg`, with a stronger edge),
+  so it lifts off the dialog or popover it drops from. Selects and menus mount inside `.mx-app` like the dialogs.
+- **A pane's header has no rule under it**: the header and the body are one card.
 - **Anything with a `title`, and every icon-only button, radio or switch**
-  (by its `aria-label`), shows a themed tooltip (`HoverTips`), not the browser's: 420 ms after the
+  (by its `aria-label`), shows a themed tooltip (`HoverTips`, mounted inside `.mx-app` on the float material with the
+  `--r-panel` corner), not the browser's: 420 ms after the
   pointer rests, 40 ms when another tip was on screen in the last 400 ms; hidden on a press, a key
   or the wheel; held back while a menu or a rich hover card is open. A trailing `(keys)` becomes
   keycaps and text after ` · ` a muted second line. It sits above the control, below it within 56px
@@ -1589,6 +1601,6 @@ text `--dim`; it is one flat box (no box inside a box), the same size in both st
 ## Dialog corner, solid buttons and the setup (audit of the handoff screens)
 
 - **`--r-dialog`** is the corner of the big windows (the Open a project palette, the first-run window): 14px.
-- **Button** has a `solid` variant (the text colour as fill, the ground colour as text: the primary of the setup) and an `outline` variant (a `--line2` ring); sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
-- **First-run window**: 680 by 680px, header 52px (mark, two dots, Skip), body padded 26/28 with a 12px gap (14px on the style screen), title 22px with a 14px `--muted` lead, section labels 13.5px semibold with a 12.5px `--dim` line, a foot with Back, the Enter keycap and the `solid` `xl` primary. `ChoiceCards` are the view cards: a picture, a radio dot, a 14px title; the picked card is a 1.5px ring in the text colour; a card marked `recommended` carries a "Recommended" tag.
+- **Button** sizes `lg` (34px, a footer's quiet buttons), `xl` (36px, the primary at a foot) and `field` (40px, beside a field). The accent Button stays for in-app actions.
+- **First-run window**: 680 by 680px, header 52px (mark, two dots, Skip), body padded 26/28 with a 12px gap (14px on the style screen), title 22px with a 14px `--muted` lead, section labels 13.5px semibold with a 12.5px `--dim` line, a foot with Back and the `xl` primary with its ⏎ keycap inside. `ChoiceCards` are the view cards: a picture, a radio dot, a 14px title; the picked card is a 1.5px ring in the text colour; a card marked `recommended` carries a "Recommended" tag.
 - **Settings › Appearance › Session view** holds **Open sessions in** (an icon-less Chat | Terminal switch). A machine on an older Maiker is not connected (its service turns the app away): it shows the amber `!`, "Needs an update to connect" and an Update button. The machine marks are drawn dots (round, hollow for connecting) so they match in every font.

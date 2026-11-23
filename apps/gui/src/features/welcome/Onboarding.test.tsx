@@ -27,7 +27,9 @@ import { themeCaption } from './setup'
 
 const HOME = '/home/ada'
 const START_THEME = THEMES[0]?.name ?? ''
-const NEXT_THEME = THEMES[1]
+/** The carousel slides through the themes of the start theme's kind only. */
+const SAME_KIND = THEMES.filter((theme) => theme.light === (THEMES[0]?.light ?? false))
+const NEXT_THEME = SAME_KIND[1]
 
 function setup(over: { reducedMotion?: boolean; startFolder?: string } = {}) {
   const props = {
@@ -201,14 +203,26 @@ describe('the style screen', () => {
     const props = setup()
     await toStyle(user)
     const themes = screen.getByRole('radiogroup', { name: 'Theme' })
-    expect(within(themes).getAllByRole('radio')).toHaveLength(THEMES.length)
+    expect(within(themes).getAllByRole('radio')).toHaveLength(SAME_KIND.length)
     await user.keyboard('{ArrowRight}')
     expect(props.onPreviewTheme).toHaveBeenLastCalledWith(NEXT_THEME?.name)
     expect(within(themes).getByRole('radio', { name: themeCaption(NEXT_THEME ?? { name: '', light: false }) })).toBeChecked()
     await user.click(screen.getByRole('button', { name: 'Previous theme' }))
     expect(props.onPreviewTheme).toHaveBeenLastCalledWith(START_THEME)
     await user.click(screen.getByRole('button', { name: 'Previous theme' }))
-    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(THEMES[THEMES.length - 1]?.name)
+    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(SAME_KIND[SAME_KIND.length - 1]?.name)
+  })
+
+  it('asks dark or light first, and the carousel then holds only that kind', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    await toStyle(user)
+    const kind = THEMES[0]?.light === true ? 'Dark' : 'Light'
+    await user.click(screen.getByRole('radio', { name: kind }))
+    const picked = THEMES.find((theme) => theme.name === (props.onPreviewTheme.mock.calls.at(-1)?.[0] as string))
+    expect(picked?.light).toBe(kind === 'Light')
+    const themes = screen.getByRole('radiogroup', { name: 'Theme' })
+    expect(within(themes).getAllByRole('radio')).toHaveLength(THEMES.filter((theme) => theme.light === (kind === 'Light')).length)
   })
 
   it('ends by handing over the folder, the view and the theme slid to', async () => {
@@ -220,7 +234,7 @@ describe('the style screen', () => {
     await screen.findByRole('heading', { name: /yours/ })
     await user.click(screen.getByRole('radio', { name: /Terminal/ }))
     await user.click(screen.getByRole('button', { name: 'Next theme' }))
-    await user.click(screen.getByRole('button', { name: /first project/ }))
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
     const mode = NEXT_THEME?.light === true ? { themeMode: 'light', lightTheme: NEXT_THEME.name } : { themeMode: 'dark', darkTheme: NEXT_THEME?.name }
     expect(props.onFinish).toHaveBeenCalledWith({ startFolder: `${HOME}/code`, openSessionsIn: 'terminal', ...mode }, `${HOME}/code`)
     expect(props.onSkip).not.toHaveBeenCalled()

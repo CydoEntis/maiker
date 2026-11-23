@@ -10,7 +10,6 @@ const CARD_HALF = 116
 /** More themes than this and a dot each no longer fits under the cards, so the place is said in words. */
 const MOST_DOTS = 24
 
-const NAMES = THEMES.map((theme) => theme.name)
 
 /** The theme's own colours as the card's custom properties: it is drawn in its theme, not in the one showing. */
 function cardColours(theme: ThemeEntry): CSSProperties {
@@ -52,6 +51,8 @@ type Props = {
   /** The theme showing, by name. */
   value: string
   onPick: (name: string) => void
+  /** The themes it slides through, by name: one kind, dark or light, chosen above it. */
+  names: readonly string[]
 }
 
 /**
@@ -59,11 +60,12 @@ type Props = {
  * radio group with one Tab stop: the arrows pick the theme before or after, going round, and so do the two buttons.
  * The track moves by `transform` alone, and the group clips without scrolling, so focusing a card never shifts it.
  */
-export function ThemeCarousel({ labelledBy, value, onPick }: Props) {
-  const at = Math.max(0, NAMES.indexOf(value))
-  const current = THEMES[at]
+export function ThemeCarousel({ labelledBy, value, onPick, names }: Props) {
+  const themes = names.flatMap((name) => THEMES.filter((theme) => theme.name === name))
+  const at = Math.max(0, names.indexOf(value))
+  const current = themes[at]
 
-  const step = (by: number) => { onPick(stepTheme(NAMES, value, by)) }
+  const step = (by: number) => { onPick(stepTheme(names, value, by)) }
 
   return (
     <div className="flex flex-col items-center gap-2">
@@ -71,7 +73,7 @@ export function ThemeCarousel({ labelledBy, value, onPick }: Props) {
         <IconButton label="Previous theme" onClick={() => { step(-1) }}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><path d="m15 6-6 6 6 6" /></svg></IconButton>
         <RadioGroup aria-labelledby={labelledBy} value={value} onValueChange={onPick} className="mx-onb-themes">
           <div className="mx-onb-track" style={{ transform: `translateX(${String(-(at * CARD_PITCH + CARD_HALF))}px)` }}>
-            {THEMES.map((theme) => (
+            {themes.map((theme) => (
               <RadioGroupItem key={theme.name} value={theme.name} aria-label={themeCaption(theme)} className="mx-onb-theme" style={cardColours(theme)}>
                 <MiniApp />
               </RadioGroupItem>
@@ -82,9 +84,9 @@ export function ThemeCarousel({ labelledBy, value, onPick }: Props) {
       </div>
       <div className="flex flex-col items-center gap-2 text-[13px]" aria-hidden="true">
         <b className="font-semibold text-(--fg)">{current === undefined ? value : themeCaption(current)}</b>
-        {THEMES.length <= MOST_DOTS
-          ? <span className="mx-onb-dots">{THEMES.map((theme) => <i key={theme.name} data-at={theme.name === value ? 'now' : 'todo'} />)}</span>
-          : <span className="text-[11.5px] text-(--dim)">{at + 1} of {THEMES.length}</span>}
+        {themes.length <= MOST_DOTS
+          ? <span className="mx-onb-dots">{themes.map((theme) => <i key={theme.name} data-at={theme.name === value ? 'now' : 'todo'} />)}</span>
+          : <span className="text-[11.5px] text-(--dim)">{at + 1} of {themes.length}</span>}
       </div>
     </div>
   )

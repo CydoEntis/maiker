@@ -1064,7 +1064,7 @@ describe('desktop overlays and pane tools', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
     await user.click(await within(dialog).findByRole('radio', { name: /Terminal/ }))
-    await user.click(within(dialog).getByRole('button', { name: /first project/ }))
+    await user.click(within(dialog).getByRole('button', { name: 'Open a project' }))
     expect(screen.queryByRole('dialog', { name: 'Set up Maiker' })).not.toBeInTheDocument()
     expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
     expect(screen.getByRole('status', { name: 'Side panel tip', hidden: true })).toBeInTheDocument()

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { FolderOpen } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { Dialog, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -6,7 +7,7 @@ import { MaikerMark } from '@/components/ui/maiker-mark'
 import { APP_NAME } from '@/brand'
 import type { PaneView } from '@/features/workspace/model/chatView'
 import { useInstalledAgents } from '@/features/workspace/model/newChatHost'
-import { findTheme, THEMES } from '@/features/workspace/theme/themes'
+import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, findTheme, THEMES } from '@/features/workspace/theme/themes'
 import { IntroMark, INTRO_MS, INTRO_STILL_MS } from './IntroMark'
 import { SetupScreen } from './SetupScreen'
 import { StyleScreen } from './StyleScreen'
@@ -35,7 +36,8 @@ type Props = {
   onSkip: () => void
 }
 
-const THEME_NAMES = THEMES.map((entry) => entry.name)
+/** The themes of one kind, by name, in the carousel's order: the setup asks dark or light first, then slides through those. */
+const themeNamesOf = (light: boolean): string[] => THEMES.filter((entry) => entry.light === light).map((entry) => entry.name)
 const HEADING_ID = 'mx-onb-h'
 
 /** What a key landed on, for `keyStep`. A radio is not an action: Enter never picks one, so there it continues. */
@@ -59,6 +61,7 @@ export function Onboarding({ home, startFolder, onChooseFolder, theme, onPreview
   const folder = useProjectsFolder(home, startFolder.trim(), onChooseFolder)
   const heading = useRef<HTMLHeadingElement>(null)
   const shownTheme = slid ?? theme
+  const light = THEMES.find((entry) => entry.name === shownTheme)?.light ?? false
 
   useEffect(() => {
     if (stage !== 'intro') return undefined
@@ -75,6 +78,8 @@ export function Onboarding({ home, startFolder, onChooseFolder, theme, onPreview
   useEffect(() => () => { onPreviewTheme(null) }, [onPreviewTheme])
 
   const slideTo = (name: string) => { setSlid(name); onPreviewTheme(name) }
+  // Picking the other kind starts its carousel at that kind's own default theme.
+  const pickKind = (wantLight: boolean) => { if (wantLight !== light) slideTo(wantLight ? DEFAULT_LIGHT_THEME : DEFAULT_THEME) }
 
   const take = (step: Step) => {
     if ('stage' in step) { setStage(step.stage); return }
@@ -95,7 +100,7 @@ export function Onboarding({ home, startFolder, onChooseFolder, theme, onPreview
     if (step === null) return
     event.preventDefault()
     if (step.kind === 'continue') take(continueFrom(stage))
-    else slideTo(stepTheme(THEME_NAMES, shownTheme, step.by))
+    else slideTo(stepTheme(themeNamesOf(light), shownTheme, step.by))
   }
 
   const screen = SCREENS.indexOf(stage === 'style' ? 'style' : 'setup')
@@ -135,14 +140,17 @@ export function Onboarding({ home, startFolder, onChooseFolder, theme, onPreview
                 <section key={stage} aria-labelledby={HEADING_ID} className="mx-onb-screen" data-screen={stage}>
                   {stage === 'setup'
                     ? <SetupScreen headingId={HEADING_ID} headingRef={heading} folder={folder} found={found} installs={installs} portalContainer={portalContainer} />
-                    : <StyleScreen headingId={HEADING_ID} headingRef={heading} view={view} onView={setView} theme={shownTheme} onTheme={slideTo} />}
+                    : <StyleScreen headingId={HEADING_ID} headingRef={heading} view={view} onView={setView} theme={shownTheme} onTheme={slideTo} light={light} onLight={pickKind} names={themeNamesOf(light)} />}
                 </section>
               </div>
               <div className="mx-onb-foot">
                 {stage === 'style' && <Button variant="ghost" size="lg" onClick={() => { setStage(backFrom(stage)) }}>Back</Button>}
                 <span className="flex-1" />
-                <kbd aria-hidden="true" className="mx-onb-kbd">Enter</kbd>
-                <Button variant="solid" size="xl" onClick={() => { take(continueFrom(stage)) }}>{stage === 'style' ? 'Open your first project' : 'Continue'}</Button>
+                {/* The key that presses it sits inside, after the word, as every button with a key draws it. */}
+                <Button variant="primary" size="xl" keyHint="⏎" aria-label={stage === 'style' ? 'Open a project' : 'Continue'} onClick={() => { take(continueFrom(stage)) }}>
+                  {stage === 'style' && <FolderOpen aria-hidden="true" />}
+                  {stage === 'style' ? 'Open' : 'Continue'}
+                </Button>
               </div>
             </div>
           )}
