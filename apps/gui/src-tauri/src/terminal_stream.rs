@@ -15,7 +15,7 @@
 //! The stream attaches without replays: a pane's replay is asked for over the stream when a view
 //! opens on it (`terminal_history`), so panes nobody looks at cost nothing to carry.
 
-use crate::hub::{Hub, HubHandle, LocalDial, MACHINE_STATE_EVENT, MachineState, Update, describe};
+use crate::hub::{Hub, HubHandle, LocalDial, MACHINE_STATE_EVENT, MachineState, StateWords, Update, describe};
 use crate::routing::{self, machine_of};
 use crate::streams::{Out, Streams};
 use maitty_desktop_client::PaneCommand;
@@ -653,11 +653,29 @@ fn refusal(handle: &HubHandle, machine: MachineId) -> String {
         return NOT_CONNECTED.to_string();
     }
     match handle.name_of(machine) {
-        Some(name) => format!("{name} is not connected"),
+        Some(name) => not_connected_words(&name, handle.last_said(machine).as_ref()),
         None => format!(
             "Machine {} is not one of this computer's machines",
             machine.0
         ),
+    }
+}
+
+/// Why `name` took nothing, from what its state last said: the sentence a person acts on when
+/// there is one, else what is happening to its line. A state that still says connected means its
+/// line ended a moment ago and the next state is on its way.
+fn not_connected_words(name: &str, said: Option<&StateWords>) -> String {
+    let Some(said) = said else {
+        return format!("{name} is not connected");
+    };
+    if let Some(why) = &said.why {
+        return format!("{name} is not connected. {why}");
+    }
+    match (said.kind, said.attempt) {
+        ("connected", _) => format!("{name}'s line just dropped; it is being made again"),
+        ("reconnecting", Some(attempt)) => format!("{name} is not connected; reconnecting (try {attempt})"),
+        ("connecting" | "reconnecting", _) => format!("{name} is not connected; still connecting"),
+        (kind, _) => format!("{name} is not connected ({kind})"),
     }
 }
 
@@ -1111,6 +1129,7 @@ pub fn react(
                 // Typing the machine could not take while it was down, now it can be said.
                 told.unsent = Some(handle.take_unsent(machine)).filter(|n| *n > 0);
             }
+            handle.note_state(machine, StateWords { kind: told.state, why: told.why.clone(), attempt: told.attempt });
             return vec![Reaction::State(told)];
         }
         Update::Removed { machine } => {
@@ -1520,6 +1539,24 @@ mod tests {
     use super::*;
     use maitty_shared::protocol::ServerMsg;
     use maitty_shared::settings_view::WindowStyle;
+
+    #[test]
+    fn a_machine_that_takes_nothing_says_why_from_its_last_state() {
+        let said = |kind, why: Option<&str>, attempt| StateWords { kind, why: why.map(str::to_owned), attempt };
+        assert_eq!(not_connected_words("kingdom", None), "kingdom is not connected");
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("unreachable", Some("kingdom does not answer on port 22."), None))),
+            "kingdom is not connected. kingdom does not answer on port 22."
+        );
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("reconnecting", None, Some(3)))),
+            "kingdom is not connected; reconnecting (try 3)"
+        );
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("connected", None, None))),
+            "kingdom's line just dropped; it is being made again"
+        );
+    }
 
     #[test]
     fn a_github_list_reaches_the_window_as_one_of_four_named_states() {

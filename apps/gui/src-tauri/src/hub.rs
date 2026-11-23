@@ -131,6 +131,17 @@ struct Shared {
     routes: Mutex<BTreeMap<MachineId, Machine>>,
     /// When each machine that is not connected stopped being, in milliseconds since the epoch.
     down_since: Mutex<BTreeMap<MachineId, u64>>,
+    /// What each machine's state last said, as the window was told it: what a request it could
+    /// not take answers with, so a refusal says why and not only that it was refused.
+    last_said: Mutex<BTreeMap<MachineId, StateWords>>,
+}
+
+/// A machine's last state in words: its kind and, when a person has to act, the sentence why.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StateWords {
+    pub kind: &'static str,
+    pub why: Option<String>,
+    pub attempt: Option<u32>,
 }
 
 fn is_typing(msg: &ClientMsg) -> bool {
@@ -282,6 +293,16 @@ impl HubHandle {
         } else {
             Some(*down.entry(machine).or_insert(now_ms))
         }
+    }
+
+    /// Keep what the window was last told of the machine, for the requests it cannot take.
+    pub fn note_state(&self, machine: MachineId, words: StateWords) {
+        lock(&self.shared.last_said).insert(machine, words);
+    }
+
+    /// What the window was last told of the machine, if anything.
+    pub fn last_said(&self, machine: MachineId) -> Option<StateWords> {
+        lock(&self.shared.last_said).get(&machine).cloned()
     }
 
     /// How many keystrokes the machine could not take while it was down, and start counting again.
@@ -517,6 +538,7 @@ impl Hub {
                 lock(&shared.allowance).remove(&machine);
                 lock(&shared.list_wanted).remove(&machine);
                 lock(&shared.down_since).remove(&machine);
+                lock(&shared.last_said).remove(&machine);
                 if self.ids.forget(&configured) {
                     self.ids.save(&self.ids_file);
                 }
