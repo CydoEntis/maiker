@@ -327,7 +327,7 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   or split, switch the view, discard changes, remove a project, pull when the branch has diverged. Each has **Don't ask
   again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. Nothing else confirms.
 - **The window.** Title bar: the Maiker logo and name; at the right **one side-panel button** and the window controls.
-  Under it: sidebar | main pane | optional file pane | optional side panel, all cards with gaps; the side panel
+  Under it: sidebar | main pane | optional file pane | optional side panel; the sidebar sits flat on the window ground and the others are cards with gaps; the side panel
   takes its own room beside a file pane too (it floats only in a narrow window). The **status bar**: version and `Update to …` at the
   left; at the right a usage bar for every limit of each agent (its 5-hour and weekly ones), then the Commands and Shortcuts keys. **Context is
   always a bar, never a ring.** The side panel holds tabs of four surfaces: Files, Changes, Terminal, Pull requests.
@@ -375,7 +375,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   use cheaper values: a 1px ring for the popover shadow ([PERFORMANCE](PERFORMANCE.md)). The window ground is opaque
   on every platform (no Mica), and nothing blurs.
 - **The toast (`components/ui/toaster.tsx`).** 380px wide, 18px from the bottom and right edges; see *Errors*.
-- **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (sidebar, main card,
+- **One material, three roles (`apps/gui/src/material.css`).** Every surface is a *panel* (main card,
   inspector), a *float* (menus, popovers, dialogs, the palette, find, toasts) or a *field* (the message box and its
   tray), and takes its fill, hairline and shadow from that role's rule in `material.css`: a panel is `--main` with a
   `--line` hairline and no shadow, a float is the floating surface (below), a field `--raise` with a `--line2` hairline.
@@ -525,7 +525,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   the side panel. **Show changes** and **Show files** are in the command palette, and a chat's terminal is on its key
   (`terminal` in the binding table).
 - **The frame** (`frame.css`; the gaps are `--frame-edge` 8px, `--frame-top` 4px and `--frame-gap` 6px in
-  `tokens.css`). Under the title bar: sidebar | main | side panel, each a **card on `--t1`** with a 10px corner
+  `tokens.css`). Under the title bar: sidebar | main | side panel. The **sidebar has no card**: it sits flat on the window ground,
+  so the session in front is the one raised surface (in the narrow window's drawer it is a card again). Main and side
+  panel are each a **card on `--t1`** with a 10px corner
   (`--r-panel`) and a faint ink edge (`--panel-line`, the ink at 8%; `material.css`), 8px from the window's sides
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file

@@ -84,6 +84,10 @@
   border: 1px solid var(--panel-line);
   box-shadow: none;
 }
+/* The sidebar sits flat on the window's ground, not in a panel, so the session in front is the one raised surface and
+   draws the eye. In the drawer (a narrow window) it floats over the session, so there it is a panel again. */
+.mx-app .mx-sidebar { background: transparent; border-color: transparent; }
+.mx-app .mx-drawer .mx-sidebar { background: var(--t1); border-color: var(--panel-line); }
 
 /* ---- float ----
    One material for everything that opens over the window: `--float-bg`, the ink hairline and the one shadow. A float sets

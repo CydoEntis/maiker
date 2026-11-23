@@ -16,8 +16,8 @@
 .mx-tbar-word { font-size: 13px; font-weight: 600; }
 .title-bar[data-platform="windows"] [data-testid="window-controls"] > button { height: 36px; }
 
-/* Under the title bar: sidebar | main | side panel, each a card on `--t1` with the window's ground showing in the gap
-   between them. The window keeps the cards off its edges, so a card that is hidden leaves no hole. */
+/* Under the title bar: sidebar | main | side panel. The sidebar sits flat on the window's ground (material.css); main and
+   the side panel are cards on `--t1` with the ground showing in the gap between them. The window keeps the cards off its edges, so a card that is hidden leaves no hole. */
 .mx-app .mx-window { padding: var(--frame-top) var(--frame-edge) var(--frame-edge); }
 .mx-app .mx-sidebar { margin: 0 var(--frame-gap) 0 0; border-radius: var(--r-panel); }
 .mx-app[data-side="right"] .mx-sidebar { margin: 0 0 0 var(--frame-gap); }
