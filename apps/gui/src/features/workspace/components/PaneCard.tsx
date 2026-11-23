@@ -1,15 +1,15 @@
-import { useMemo, useState, type ReactNode } from 'react'
+import { useMemo, useState, type CSSProperties, type ReactNode } from 'react'
 import type { PaneSlot } from '../model/layout'
 import type { SplitDir } from '../model/splitTree'
 import type { SessionView } from '../model/session'
-import { isShell, keepsRunningUnseen, projectOf, rowTitle } from '../model/sidebar'
+import { isShell, keepsRunningUnseen, machineColor, projectOf, rowTitle } from '../model/sidebar'
 import { startedBypassed } from '@/features/chat/bypassSessions'
 import { modelWords } from '@/features/chat/modelName'
 import { ContextMeter } from '@/features/usage/UsageMeter'
 import { machineLabel } from '@/data/machineNicknames'
 import { Tag } from '@/components/ui/tag'
 import { agentName } from '../model/agentMessage'
-import { Icon } from './glyphs'
+import { Icon, MachineIcon } from './glyphs'
 import { beginPointerDrag } from './dragSession'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { menuPoint } from './menuPoint'
@@ -177,13 +177,20 @@ function outsideEntries(session: SessionView, asks: NonNullable<PaneCardProps['o
  * The left of every pane's header (handoff 5 and 6.1): the machine (a remote one only), then `project / session name`
  * for an agent, or a plain shell's name alone. It carries no status mark: the status is the sidebar's.
  */
+/** The server mark in the machine chip, as in the sidebar's tag. */
+const MACHINE_MARK_PX = 10
+
 function PaneTitle({ session }: { session: SessionView }) {
   const shell = isShell(session)
   const model = modelWords(session.agentModel)
   const who = shell ? null : model === null ? agentName(session.process) : `${agentName(session.process)} · ${model}`
   return (
     <>
-      {session.machineName !== null && <Tag className="mx-pane-machine">{machineLabel(session.machineName)}</Tag>}
+      {session.machineName !== null && (
+        <Tag className="mx-pane-machine" style={{ '--machine': machineColor(session.machineName) } as CSSProperties}>
+          <MachineIcon remote size={MACHINE_MARK_PX} />{machineLabel(session.machineName)}
+        </Tag>
+      )}
       <span className="mx-pane-title" title={who === null ? session.cwd : `${who} · ${session.cwd}`}>
         {!shell && <><span className="mx-pane-project">{projectOf(session)}</span><span className="mx-pane-slash" aria-hidden="true">/</span></>}
         <span className="mx-pane-name">{rowTitle(session)}</span>

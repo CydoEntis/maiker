@@ -344,7 +344,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
   opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
-  project carries a machine tag, amber while that machine is offline. A project's sessions are set in under its badge
+  project carries a machine tag (the server mark and name in that machine's own colour, `machineColor`, one of the five
+  project colours picked from its name), amber while that machine is offline. A project's sessions are set in under its badge
   with a rule down their left edge. A session row is its name at the left, then how long it has been as it is (`4m`, when
   the daemon says) and its status mark at the right; no agent icon. A lead sorts by its most urgent helper. There is no Put
   away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
@@ -1541,7 +1542,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
 - **Pane header, pane foot and status bar.** A terminal pane's header (`PaneTitle` and `TerminalFacts` in `PaneCard.tsx`) is one 34px
-  line ruled off by a `--line` hairline, its parts 10px apart: a machine tag (remote only), `project / session name`
+  line ruled off by a `--line` hairline, its parts 10px apart: a machine tag (remote only: the server mark and name in
+  the machine's colour on a 14% tint of it, matching its sidebar tag), `project / session name`
   (13px; the project `--muted`, the slash `--dim`, the name `--fg` at 500, cut with an ellipsis; the agent, its model and
   the folder in its tooltip), the permission shield (13px, `--dim`), the context bar (32px, with its figure in mono 11px),
   then **split right**, **split down** and **×** (`IconButton`). A plain shell's header is its name and the same three

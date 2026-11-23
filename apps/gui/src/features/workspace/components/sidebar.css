@@ -49,7 +49,7 @@
 .mx-sb-badge { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-right: 1px; border-radius: var(--r-control); font: 700 8.5px var(--mono); letter-spacing: -.02em; color: var(--badge); background: color-mix(in srgb, var(--badge) 18%, transparent); }
 
 /* Another machine's name on its project: the accent's text colour, and amber while that machine is not connected. */
-.mx-sb-tag { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 96px; height: 18px; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding: 0 3px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--accent-text); }
+.mx-sb-tag { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 96px; height: 18px; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding: 0 3px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--machine, var(--accent-text)); }
 .mx-sb-tag:hover { background: rgba(var(--ink), .06); }
 .mx-sb-tag.is-down { color: var(--needs); }
 .mx-sb-tag svg { flex: none; }

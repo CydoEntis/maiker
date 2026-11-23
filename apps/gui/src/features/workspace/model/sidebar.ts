@@ -53,6 +53,14 @@ export function projectColor(project: string): string {
 }
 
 /**
+ * A remote machine's colour, from its name, so its tag in the sidebar and its chip over a pane match and two machines
+ * usually differ. The same five colours as projects, picked with a prefix so a machine and a project of one name need not match.
+ */
+export function machineColor(machine: string): string {
+  return projectColor(`machine:${machine}`)
+}
+
+/**
  * Whether this session has work in it that a closed pane must not take away: it has not ended, and it is an agent,
  * a chat, or a shell with a program running in it. A plain idle shell has none.
  */
