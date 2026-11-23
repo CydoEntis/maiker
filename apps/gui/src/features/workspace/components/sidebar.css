@@ -102,8 +102,6 @@
    text never re-sets and nothing moves when a project starts or stops; a machine that is not connected keeps its amber. */
 .mx-sb-head.is-idle .mx-sb-head-main { font-weight: 500; color: var(--dim); }
 .mx-sb-head.is-idle:is(:hover, :has(:focus-visible)) .mx-sb-head-main { color: var(--fg); }
-.mx-sb-group.is-idle .mx-sb-badge { transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
-.mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-badge { color: var(--dim); background: rgba(var(--ink), .06); }
 .mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-tag:not(.is-down) { color: var(--dim); }
 .mx-sb-group.is-idle .mx-sb-row-name { color: var(--dim); transition: color var(--t-fast) var(--ease); }
 .mx-sb-group.is-idle .mx-sb-row:is(:hover, :focus-visible) .mx-sb-row-name { color: var(--fg2); }

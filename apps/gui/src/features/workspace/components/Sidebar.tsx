@@ -17,6 +17,7 @@ import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { isMenuKey } from './menuPoint'
 import { useReducedMotion } from './motion'
 import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
+import { ProjectBadge } from './ProjectBadge'
 import { RowHoverHost } from './RowHoverHost'
 import { sessionMenuEntries } from './sessionMenu'
 import { SessionRow } from './SessionRow'
@@ -263,10 +264,11 @@ function Expanded(props: SidebarProps) {
       <div ref={body} className="mx-sb-body">
         <div className="mx-sb-list" onScroll={endHover}>
           {!props.listed && props.sessions.length === 0 && <p className="mx-sb-note">Looking for your sessions…</p>}
-          {props.listed && props.sessions.length === 0 && (
+          {/* With a project open, its own heading says it has no sessions; the card is only for a sidebar with nothing in it. */}
+          {props.listed && props.sessions.length === 0 && nothingListed && (
             <div className="mx-sb-empty">
               <b>No sessions yet</b>
-              <span>{nothingListed ? 'Open a project, then start a session in it. It shows here, with the ones that need you on top.' : 'Start one from the main screen. It shows here, with the ones that need you on top.'}</span>
+              <span>Open a project, then start a session in it. It shows here, with the ones that need you on top.</span>
             </div>
           )}
           {order.projects.map((group) => (
@@ -363,6 +365,7 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
   const state = group.mark === null || group.mark === 'idle' ? null : group.mark
   const name = (
     <>
+      <ProjectBadge name={group.name} />
       <span className="mx-sb-head-name">{group.name}</span>
     </>
   )
