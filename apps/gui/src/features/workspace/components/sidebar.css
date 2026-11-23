@@ -49,7 +49,7 @@
 .mx-sb-badge { flex: none; width: 18px; height: 18px; display: inline-flex; align-items: center; justify-content: center; margin-right: 1px; border-radius: var(--r-control); font: 700 8.5px var(--mono); letter-spacing: -.02em; color: var(--badge); background: color-mix(in srgb, var(--badge) 18%, transparent); }
 
 /* Another machine's name on its project: the accent's text colour, and amber while that machine is not connected. */
-.mx-sb-tag { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 96px; height: 18px; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding: 0 3px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--accent-text); }
+.mx-sb-tag { position: relative; z-index: 1; flex: 0 1 auto; min-width: 0; max-width: 96px; height: 18px; display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; padding: 0 3px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--machine, var(--accent-text)); }
 .mx-sb-tag:hover { background: rgba(var(--ink), .06); }
 .mx-sb-tag.is-down { color: var(--needs); }
 .mx-sb-tag svg { flex: none; }
@@ -73,9 +73,13 @@
 .mx-sb-row { width: 100%; display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: var(--r-control); text-align: left; }
 .mx-sb-row:hover { background: rgba(var(--ink), .035); }
 .mx-sb-row.is-selected, .mx-sb-row.is-selected:hover { background: var(--c-sel-bg); }
+/* On a light theme the sidebar's ground is the darkest surface, and the selected step (mixed toward the text) landed on
+   that same tone, so the picked session vanished. There it takes the card's own ground instead, as a lighter slip with a
+   hairline, the way the session it opens sits on the window. The drawer's sidebar is a card already, so it keeps the step. */
+.mx-app[data-theme-kind="light"] .mx-sidebar:not(.mx-drawer .mx-sidebar) .mx-sb-row.is-selected { background: var(--t1); box-shadow: 0 0 0 1px var(--panel-line); }
 .mx-sb-row-name { flex: 1; min-width: 0; font-size: 13.5px; line-height: 20px; color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-/* What needs you and what is working read a step stronger; being picked changes the colour only, so a click never re-sets the text. */
-.mx-sb-row:is(.is-needs, .is-working) .mx-sb-row-name { font-weight: 500; color: var(--fg); }
+/* What needs you, what is working and what is done read a step stronger; being picked changes the colour only, so a click never re-sets the text. */
+.mx-sb-row:is(.is-needs, .is-working, .is-done) .mx-sb-row-name { font-weight: 500; color: var(--fg); }
 .mx-sb-row.is-idle .mx-sb-row-name { color: var(--muted); }
 .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
 /* A session that has not been sent anything is a quiet, italic "New session". */
@@ -95,16 +99,15 @@
 .mx-sb-item.is-nested .mx-sb-row-name { font-size: 12.5px; }
 .mx-sb-item.is-nested .mx-sb-row .mx-inline-name { font-size: 12.5px; }
 /* A finished helper stays listed until it is closed, a step quieter than the ones still at work. */
+.mx-sb-item.is-nested .mx-sb-row.is-done .mx-sb-row-name { font-weight: 400; }
 .mx-sb-item.is-nested .mx-sb-row.is-done:not(.is-selected) .mx-sb-row-name { color: var(--muted); }
 
-/* A project with nothing going on is grey (`--dim`, the badge and a machine tag too) until the pointer or the keyboard is
-   on it: that row alone, and the selected one, take their own colours back over `--t-fast`. Only colour changes, so the
-   text never re-sets and nothing moves when a project starts or stops; a machine that is not connected keeps its amber. */
-.mx-sb-head.is-idle .mx-sb-head-main { font-weight: 500; color: var(--dim); }
+/* A project with nothing going on keeps its heading's weight, so every heading lines up, but its name is muted and its
+   rows grey until the pointer or the keyboard is on it; its badge and a machine tag keep their colours. That row alone,
+   and the selected one, take their own colours back over `--t-fast`. Only colour changes, so the text never re-sets and
+   nothing moves when a project starts or stops; a machine that is not connected keeps its amber. */
+.mx-sb-head.is-idle .mx-sb-head-main { color: var(--muted); }
 .mx-sb-head.is-idle:is(:hover, :has(:focus-visible)) .mx-sb-head-main { color: var(--fg); }
-.mx-sb-group.is-idle .mx-sb-badge { transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
-.mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-badge { color: var(--dim); background: rgba(var(--ink), .06); }
-.mx-sb-head.is-idle:not(:hover, :has(:focus-visible)) .mx-sb-tag:not(.is-down) { color: var(--dim); }
 .mx-sb-group.is-idle .mx-sb-row-name { color: var(--dim); transition: color var(--t-fast) var(--ease); }
 .mx-sb-group.is-idle .mx-sb-row:is(:hover, :focus-visible) .mx-sb-row-name { color: var(--fg2); }
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }

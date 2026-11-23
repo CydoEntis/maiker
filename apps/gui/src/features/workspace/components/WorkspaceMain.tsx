@@ -6,6 +6,7 @@ import { discardDraft } from '../model/newSessionDraft'
 import { rowTitle } from '../model/sidebar'
 import { resolveStartFolder } from '../model/startFolder'
 import { useOpenProject } from '../useOpenProject'
+import { PullRequestsPage } from './PullRequestsPage'
 import { NewChatPage } from './NewChatPage'
 import { ShowSidebarButton } from './ShowSidebarButton'
 import { useFolderPick } from './useFolderPick'
@@ -65,7 +66,7 @@ function MainEmpty() {
 
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { newChatOpen, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, paneCountOf, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { newChatOpen, pullsOf, setPullsOf, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, paneCountOf, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
@@ -104,6 +105,14 @@ export function WorkspaceMain() {
                     onAgentChange={setNewChatAgent}
                     onAddMachine={openProject.addMachine}
                     onCancel={() => { discardDraft(); setNewChatOpen(false); setNewChatSeed(null) }}
+                  />
+                )}
+                {/* Pull requests are the focused session's project's: showing another session leaves the page. */}
+                {pullsOf !== null && focusedSession?.id === pullsOf && (
+                  <PullRequestsPage
+                    session={focusedSession}
+                    leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
+                    onClose={() => { setPullsOf(null) }}
                   />
                 )}
                 {findOpen && (

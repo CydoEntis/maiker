@@ -52,7 +52,8 @@
 /* Where the Show sidebar button sits; the button itself is the shared icon button. */
 .mx-pane-show-sidebar { margin-left: -4px; }
 /* The machine a remote session runs on: a small chip on the selected ground, in the mono face. */
-.mx-pane-head .mx-pane-machine { flex: none; height: auto; padding: 1px 6px; border-radius: var(--r-badge); font: 500 11.5px var(--mono); color: var(--fg); background: var(--m-sel); box-shadow: inset 0 0 0 1px var(--line2); }
+/* The remote machine: its mark and name in the machine's colour on a tint of it, as its tag in the sidebar. */
+.mx-pane-head .mx-pane-machine { flex: none; height: auto; gap: 4px; padding: 1px 6px; border-radius: var(--r-badge); font: 500 11.5px var(--mono); color: var(--machine, var(--fg)); background: color-mix(in srgb, var(--machine, var(--fg)) 14%, transparent); box-shadow: none; }
 .mx-crumb { flex: 0 2 auto; min-width: 0; height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 0 4px; margin-left: -4px; border-radius: var(--r-control); white-space: nowrap; outline: none; color: var(--branch); }
 .mx-crumb:not(.is-static):hover, .mx-crumb[data-state="open"] { background: var(--m-hover); color: var(--fg); }
 .mx-crumb > svg:last-child { flex: none; color: var(--dim); }

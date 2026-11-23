@@ -8,7 +8,6 @@ import type { ItemStatus } from '../chatEvents'
 import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
 import { useTypedText } from '../useTypedText'
-import { WorkingMark } from './WorkingMark'
 import { LiveBox } from './LiveBox'
 import { ReducedMotionContext } from '@/features/workspace/components/motion'
 import { parseAttachmentMessage } from '../attachmentMessage'
@@ -241,8 +240,9 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, root,
       return (
         <Frame>
           <div className="mx-msg-user is-echo" aria-label="Sending">
+            {/* No "Sending…" line under it: the Working row below already moves, and two spinners for one wait read as two
+                things going on. The message stays dim until it is in the agent's history. */}
             <SaidText text={row.text} rowKey={row.key} />
-            <div className="mx-msg-meta"><WorkingMark agent={agent} />Sending…</div>
           </div>
         </Frame>
       )

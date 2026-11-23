@@ -262,7 +262,7 @@ impl ProviderDialect for CodexDialect {
         let step = match command {
             Command::Open { session } => self.open(session)?,
             Command::Send { user_item, text, choice, .. } => {
-                let params = requests::turn_start_params(self.thread()?, &text, &user_item, &choice);
+                let params = requests::turn_start_params(self.thread()?, &text, &user_item, &choice, None);
                 self.request(Waiting::Send, "turn/start", params)?
             }
             Command::Steer { turn, text } => {

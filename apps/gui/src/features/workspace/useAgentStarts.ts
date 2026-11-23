@@ -16,7 +16,7 @@ import { resolveStartFolder } from './model/startFolder'
 import { makeId } from './makeId'
 import { chatAgentOf } from './model/chatView'
 import { agentLabel } from '@/features/welcome/setup'
-import { DEFAULT_PICK } from '@/features/chat/agentChoice'
+import { startChoiceFor } from './model/lastWho'
 import type { NewChatRequest, NewChatSeed } from './components/NewChatPage'
 import { REMOTE_HOME } from './useSessionStarts'
 
@@ -88,7 +88,7 @@ export function useAgentStarts({ sessionMap, endSessions, confirm, setAgentTermi
         return
       }
       folder
-        .then((path) => startNewChat({ agent, folder: path, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine, machineName: machineNameOf(machine), resume: null }))
+        .then((path) => startNewChat({ agent, folder: path, ...startChoiceFor(agent), mode: 'default', message: '', branch: null, machine, machineName: machineNameOf(machine), resume: null }))
         .catch(report)
       return
     }

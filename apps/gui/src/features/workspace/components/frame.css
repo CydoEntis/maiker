@@ -34,8 +34,11 @@
 .mx-app .mx-main { border-radius: var(--r-panel); }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-/* A split pane's edge is the card's hairline until it has the keys, then the same edge in a brighter ink: neutral, never
-   the accent, and the other panes are not dimmed. One edge, not a ring over another. */
+/* A split pane's edge is the card's hairline until it has the keys, then a 2px ring in a strong ink: neutral, never the
+   accent, and the other panes are not dimmed. The ring is drawn over the pane's content on its own layer, rounded with the
+   pane, because a recoloured 1px border was too faint to find and the terminal and header painted over its corners. */
 .mx-app .mx-pane.is-card { background: var(--t1); border-color: var(--panel-line); box-shadow: none; }
+/* The pane clips to inside its border, so the ring is its border plus a 1px ring just inside it, together 2px. */
 .mx-app .mx-pane.is-card.is-focused { border-color: var(--pane-focus-line); }
+.mx-app .mx-pane.is-card.is-focused::after { content: ''; position: absolute; inset: 0; z-index: 40; border-radius: calc(var(--r-panel) - 1px); box-shadow: inset 0 0 0 1px var(--pane-focus-line); pointer-events: none; }
 

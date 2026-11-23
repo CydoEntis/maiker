@@ -175,11 +175,14 @@ frame* (Toast). The desktop app's toasts are under *Errors*.
 
 The desktop app's error states (built 2026-11-18; `components/ui/feedback.tsx`, `feedback.css`, `lib/toast.ts`,
 `components/ui/toaster.tsx`). The rule: **say it where it happened, only as loud as what it blocks, and never twice.**
-There are no banners. Every surface but the toast (below: the status mark, no edge) is the float (a `--line2` hairline, the dialog shadow) with a 3px
-**status edge** on its left in its tone: `--err` failed, `--caution` (`--m-mid`) a warning, `--blocked` needs you,
-`--ok` back or done, `--working` running, the accent a note. The mark before the title is the tone's glyph (`×`, `▲`,
+There are no banners. Every surface but the toast (below: the status mark, no edge) is the float (a `--line2` hairline, the dialog shadow), with no edge bar: the tone (`--err` failed, `--caution`
+(`--m-mid`) a warning, `--blocked` needs you, `--ok` back or done, `--working` running, the accent a note) is carried
+by the mark before the title, the tone's glyph (`×`, `▲`,
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
+A blocking alert (`alertdialog`, such as Restart to finish updating) takes the shared modal's frame: 460px, the
+dialog radius and shadow, 22px by 24px of body, its facts in a `--m-well` block, and its actions in a foot under a
+`--line` hairline.
 
 - **Toasts** (`toast.*`; the handoff's "Maiker Current", Toasts). The floating surface (the one float of `material.css`, the `--r-panel` radius) with **no coloured edge**: the status colour is the **status mark** at its head (a needs-you toast the needs-you mark, a success the done mark, a progress the working mark, an error a 14px `!` in a `--danger` circle, a warning the same in `--needs`, a note none; the `!` circle is the toast's own mark, because neither is a state a session can be in). Bottom right, 18px in from the side and 40px up from the bottom so they clear the 26px status bar, 380px wide, newest on top. The title is 13.5px 500; the optional `context` (the project or machine) sits on the title's line at the right in 11px mono `--dim`; the reason is 12.5px `--muted` up to three lines (`--needs`-tinted on a needs-you toast). Actions are the `Button` (24px): the first a `soft` one (`needs` on a needs-you toast, the answer), the rest `ghost`, **Copy details** last. A success or a note with no reason is one line (40px), its one action a ghost button at the right; a failure's or a warning's action (its fix) is the `primary` button; a ✕ shows at the top right while the pointer or focus is on the toast. From 3 toasts on only the newest shows, with two layers peeking out behind it and "N more, hover to see all" above; the pointer or focus on the stack opens the rest. Errors, warnings, needs-you and progress stay until dismissed or replaced; success and notes go after 5 s (`TOAST_HIDE_MS`), show a 2px line that runs out in that time, and wait (the line too) while the pointer or focus is on the stack.
   An error toast's title is what failed ("Could not …") and its reason why in plain words (`explainError`: a raw tool or
@@ -268,6 +271,10 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
 
 ### Design language
 
+- **No edge bars.** Nothing gets a coloured bar down its left side: not a picked row, a quote, a notice, a found
+  message or a log block. Selection is a fill, a tone is its icon's colour, a quote is a well. A 1px rule between two
+  columns, or down the left of a nested list (sessions under a project, steps under a turn), is structure and stays.
+  `leftEdge.test.ts` fails on an `inset Npx 0 0` shadow or a left border wider than 1px.
 - **The tree.** Machine › project › session › helper or split. A project is a folder on a machine, so the same folder
   on two machines is two projects. There is no session without a project: open a project, then start sessions and
   worktrees from its `+`. A **helper** is a session its lead started; it nests one level under the lead while the lead
@@ -337,7 +344,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
   opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
-  project carries a machine tag, amber while that machine is offline. A project's sessions are set in under its badge
+  project carries a machine tag (the server mark and name in that machine's own colour, `machineColor`, one of the five
+  project colours picked from its name), amber while that machine is offline. A project's sessions are set in under its badge
   with a rule down their left edge. A session row is its name at the left, then how long it has been as it is (`4m`, when
   the daemon says) and its status mark at the right; no agent icon. A lead sorts by its most urgent helper. There is no Put
   away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
@@ -472,7 +480,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
 - **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
   box (a caller beside smaller text may ask for less): needs you is a 14px speech bubble holding `?` in `--needs`, done
-  the same bubble holding a tick in `--ok`, working an 11px ring in `--working` with half of it lit, turning once in
+  the same bubble holding a tick in `--ok`, working a 12px ring in `--working` with half of it lit, turning once in
   `--t-spin`; idle draws **nothing** (no element at all), and the row that holds it does the dimming. With motion
   reduced the ring stands still and is lit all the way round. `markOf` is the one function that files a status under a
   mark (the table is `lib/statusMark.ts`), and nothing else decides it: it files `error`, `limited` and `unknown` under idle. Sections, counts, the rail, the tray, the title badge and the jump all read it (`sectionOf`). A mark is
@@ -532,8 +540,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file
   pane and the terminal drawer are each a card of their own, the same 6px apart, and the panes of one session's splits
-  8px apart (`--split-gap`). Among several panes the one with the keys has its edge in a brighter ink
-  (`--pane-focus-line`, the ink at 30%): neutral, never the accent, and the others are not dimmed. Every gap between two
+  8px apart (`--split-gap`). Among several panes the one with the keys has a 2px ring in a strong ink
+  (`--pane-focus-line`, the ink at 50%), drawn over the pane's content and rounded with it so no corner is cut: neutral,
+  never the accent, and the others are not dimmed. Every gap between two
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
   side; a session's splits: `TreeSplitHandle`, the same handle over a branch's line; the sidebar's and the side panel's
   edges resize them). There is no tools bar, no middle column and no tab bar.
@@ -553,12 +562,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   segment trays are `--t3` with a `--line2` hairline (`--c-field-*` and `--c-track-*`, set on `.mx-settings` in
   `material.css`), the chosen segment has its own hairline, and every button on a page (Browse…, Use home folder,
   Reset) is the pages' own button (`.mx-scard-button`: `--fg` 500 on the ink at 9% with a `--line2` hairline). Rows are
-  parted by the ink at 7% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). With nothing to
-  report (Up to date, Not checked yet, Checking) it is one quiet line: the state in 12px `--muted`, the running
-  version, and a small **Check** word (`.mx-scard-meta-button`, named "Check now"). Otherwise it is a card: a dot in the
-  state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Update failed"), the running version at
-  its right, a dim note when there is one, the download bar while it downloads, and the one button the state offers
-  (Restart to update, Download, Try again), the pages' own button at full width on the dialog's ground. It sits at the
+  parted by the ink at 7% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). It is one line under a `--line` hairline: "Maiker v0.82.0"
+  in 11px mono `--dim` at the left and, only when there is something to do, its one control at the right: **Update**
+  (a download mark, outlined) while one is available, then a working mark and "Updating 42%" while it downloads, then
+  **Restart to update** filled in the accent. Checking happens on its own, so there is no Check button and no "Up to
+  date". A failed update adds "Update failed: …" in `--dim` under the line, with **Try again** at the right. It sits at the
   nav's foot and never makes the nav scroll. General keeps only the two
   update switches. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
   button, tooltip "Close (Esc)", no label) above a body that scrolls; the page itself never scrolls. The title and
@@ -632,8 +640,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is picked and the button is in its on state then) and **Open a project** (a folder with a plus; the Open a project
   dialog for this computer; see *Starting a session*, below).
   **Order** (`model/sidebarTree.ts`, `sidebarOrder`): *The sidebar's order* in [Design language](#design-language).
-  A **project** is a heading and all its rows, with no card and no rule: no badge (the two-letter `ProjectBadge` is
-  only for the collapsed rail, the empty start and the filter menu, where there is no name beside it), the name (12px 600 `--fg`; the folder is its tooltip), on
+  A **project** is a heading and all its rows, with no card and no rule: an 18px two-letter badge (`ProjectBadge`: the first letters of the name's first two words, else its first two
+  letters, in the project's colour on an 18% tint of it, the colour picked from the name so it is the same everywhere
+  and kept even while the project is quiet), the name (12px 600 `--fg`; the folder is its tooltip), on
   another machine the machine tag and, **while folded**, the project's own state: the 14px status mark of its most urgent
   session (needs you, working, done), nothing while all are idle. Open, it shows no count or mark: its rows say their
   own. A session in a worktree of its own has a 15px branch mark (`--muted`) before its name, with the branch in its
@@ -658,7 +667,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session rows** sit under their project set in 16px, with 6px and a 1px rule (the ink at 8%) down their left edge.
   **Session row** (`SessionRow`; padding 6px 8px, radius `--r-control`): the name at the left (13.5px
-  `--fg2`; 500 `--fg` while it needs you or works; italic `--muted` "New session" before anything is sent), how long it
+  `--fg2`; 500 `--fg` while it needs you, works or is done (a finished helper stays 400 `--muted`); italic `--muted` "New session" before anything is sent), how long it
   has been as it is (`SessionAge`: `formatAgo` from `statusSince`, mono 11px `--dim`; absent when the daemon did not say;
   a chat session's time is `ConversationSummary.status_since`, stamped by its daemon when the status changes, so after a
   daemon restart it counts from the restart) and the 14px status mark at the right. Hover is the ink at 3.5%; the selected row is the one selection fill, `--c-sel-bg`.
@@ -688,8 +697,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   name to type on, open the rename dialog instead, where an empty name clears it.
   A project with no session has nothing to fold: its heading's click opens the project's `+` menu, with **No
   sessions** at its right. A session the daemon has put away or snoozed is listed like any other.
-  **A project with nothing going on is grey**: its name, badge letters and fill, machine tag and rows in `--dim` (a badge
-  on the ink at 6%, no project colour), never a raw colour or a filter. The row the pointer is on, the heading or row
+  **A project with nothing going on is quiet**: its name in `--muted` at the heading's usual weight, so every heading
+  lines up, and its rows in `--dim` (the badge keeps its project colour and a machine tag its machine colour, so both are
+  found at a glance), never a raw colour or a filter. The row the pointer is on, the heading or row
   that holds keyboard focus (`:focus-visible`), and the selected session take their own colours back (a heading `--fg`
   with its badge's colour, a row `--fg2`, the selected row `--fg`), fading over `--t-fast`; only colour changes, never
   the weight or the place, so a project that starts working only brightens. A machine tag that is not connected stays
@@ -725,21 +735,27 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and only one the daemon calls idle or done): an idle row whose activity line says `Limited until 14:05` in this
   computer's time (`Limited until Thu 14:05` when that is not today). It is never listed, counted or announced as needs
   you, because it waits on the limit and not on you, and its limit ending is not a new finish.
-  A finished agent stays done until it is sent its next message, which the daemon turns into working; looking at it changes nothing. A row is named by
+  A finished agent stays done until you open its session, which tells the daemon it was seen and makes it idle (`MarkSeen` for a pane, `ConversationMarkSeen` for a chat). A row is named by
   the name you gave it, else the folder it was made in. Project
   colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
-  it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
+  and no project open it shows a quiet card, **No sessions yet**, saying to open a project; once a project is open its
+  heading says **No sessions** and the card goes. The rail then holds only its buttons.
   **Search** sits under the header as a field across the sidebar (34px, the field tone and hairline, a search mark and
   "Search"; it opens the command palette), so the flat sidebar has an edge to start from.
   **Foot** (48px, a hairline above it, no card): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings), then **Pull requests**, and **Settings** at the right. The pull-request button
-  opens the open pull requests of the session in front's project in a **window of their own over the app**
-  (`PullRequestsWindow`: Settings' scrim and frame, 760 by 620 at most, a title and ×; Esc or a click outside closes it). Its badge counts **only the pull requests
+  opens the open pull requests of the session in front's project in a **page in the main area**
+  (`PullRequestsPage`: over the panes as the New session draft is, no scrim; the pane header `project / Pull requests`
+  with ×, then a centred 760px column; Esc or × closes it, and showing another session leaves it). A state with nothing
+  to list (reading, signed out, no GitHub, a failure) is a centred block: a 40px mark tile (amber-tinted warning for a
+  failure), a 15px title, one paragraph in plain words (`explainPullsFailure`: a repository GitHub cannot see names both
+  no access and a rename, a lost sign-in, a rate limit, no connection), gh's own message in a mono well, and the shared
+  buttons (**Try again** primary, **Sign in to GitHub** where a new sign-in would help). Its badge counts **only the pull requests
   that need you**, across the opened projects: 13px tall on its top right corner, 9px 600, `--t1` on `--fg2` (quiet,
   not amber: the row in the surface says why), and absent at zero or while nothing could be read. The rail has no
   pull-request button.
-  Hidden (the sidebar key, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
+  Hidden (the sidebar key, or Hide sidebar), the sidebar slides out (its width and gap run to nothing over `--panel-in`, and back in the same way; at once with motion reduced) and leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
   `SidebarRail.tsx`) is 56px, padded 9px above and 10px below with 4px between its parts: the expand button on top,
   then each project with something going on, in the sidebar's own order and 10px apart, as its 18px badge over one
@@ -765,7 +781,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   quiet text buttons, **Open a project** with its key from the binding table and **Add a remote machine** (the palette's
   New machine level), and the fine print "Sessions keep running when you close this window." While sessions exist and
   none is open the same screen is headed **No session open**, never "Nothing running".
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`). Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
+- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`), on the model and effort that agent was last started with or last given in a chat (`startChoiceFor`), so the two views agree. Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
@@ -825,7 +841,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   size, cursor) and Panes (where an agent's terminals open, lines kept), then a folded **Advanced** card (text and bold
   weight, scroll speed, line height, screen reader support) that shows only its title until **Show**; a search looks
   inside it anyway. **Appearance**: **Theme** (System, Dark or Light and the dark and light theme pickers, each over
-  every theme of its kind), **Size and text** (Interface size, Chat text size, Chat font), Motion with Reduce motion,
+  every theme of its kind, A to Z, with the one in use checked in its place; the keys stay in a 36px search field, Up
+  and Down light a row and preview it, Enter picks), **Size and text** (Interface size, Chat text size, Chat font), Motion with Reduce motion,
   and the sidebar's position and width. **Notifications** has two
   switches, Needs you and Done, and the test toast. **Extensions** is the last page under Agents and stays short: Where
   to look (the project picker), one card per agent listing what is installed, an **Add** card with one row per kind
@@ -904,11 +921,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   "↳ Set model to Haiku 5.5" line, never as a shell step, and a turn that was only that gets no divider. What the
   agent then says it runs (`/model`, `/effort`) replaces the model and effort picked in the chat.
 - **The chat box** (`Composer.tsx`, `boxRow.ts`; handoff 5, screenshots 01 and 31 to 33) is one field: the field tone (`--c-field-bg`, a step lighter than the pane; `--t3` equals the pane in most themes) inside a hairline of the ink, radius `--r-panel`; focused, its border turns `--focus` with a 1px inset glow of the same colour (the one bordered focus). The text is on top (44px at least, growing to 160px), then a plan strip while Plan mode is on (`PLAN MODE` in mono blue, then what it means), then ONE compact row. Every control in the row is 26px high in 12.5px `--muted` text, and takes the hover fill and `--fg` under the pointer or while its menu is open.
-  **At the left:** the model button (the agent's mark, then `Model · Reasoning level`, such as `Sonnet 5.5 · Medium`; the agent's name stands in until a model is known, and an agent with no reasoning setting shows no level), a 12px hairline, the shield (`ModeControl`), and the context bar. The shield shows the mode's name beside it only when the session is off the mode its agent starts in (`permissionWords`: Ask before edits for Claude and Gemini, Auto for Codex); the name is always in its accessible name and tooltip. In a mode that asks about nothing it is `--danger` with a small dot, and Bypass permissions reads "Bypass". The context bar (`UsageMeter`: a 36px bar and the figure in mono 11px) turns the needs colour from 70% and the danger colour from 90%, and a click opens Usage & cost; an agent that reports its context has it from the start, at 0%. The plan's limits are not in the chat box: the status bar has them.
+  **At the left:** the model button (the agent's mark, then `Model · Reasoning level`, such as `Sonnet 5.5 · Medium`; the agent's name stands in until a model is known, and an agent with no reasoning setting shows no level), a 12px hairline, the shield (`ModeControl`), and the context bar. The shield shows the mode's name beside it only when the session is off the mode its agent starts in (`permissionWords`: Ask before edits for Claude and Gemini, Auto for Codex); the name is always in its accessible name and tooltip. In a Claude or Codex chat the daemon runs (no terminal), the shield's menu offers the three postures a chat starts with (Claude: Ask before edits, Plan mode, Bypass permissions; Codex: Read only, Auto, Full access), picked at any time, the agent working with the pick from its next message (a toast says so mid-turn); an agent over ACP keeps its own. The shield is the one place a bypassed chat says so (ADR 0005): it is red, with a red dot, while the mode asks about nothing and for the whole of a chat started with Bypass permissions (it can go back to it at any time); no tag or bar above the chat repeats it. In a mode that asks about nothing it is `--danger` with a small dot, and Bypass permissions reads "Bypass". The context bar (`UsageMeter`: a 36px bar and the figure in mono 11px) turns the needs colour from 70% and the danger colour from 90%, and a click opens Usage & cost; an agent that reports its context has it from the start, at 0%. The plan's limits are not in the chat box: the status bar has them.
   **At the right:** attach (the shared icon button, a paperclip) and send, both 26px. Send is `--fg` with a `--bg` arrow when there is something to send, and a quiet outlined square when there is not. While the agent works and nothing is typed it is the Stop square, still; just after a send, before there is a turn to stop, the square is there and off.
   **Locks.** The model and reasoning level lock while the agent works (`workingLock`): the button dims, does not open, and says why in its accessible name and tooltip, "You can change this when <agent> finishes, or after you stop it (Esc)." The permission mode can still be picked then and waits for the turn's end. The controls are drawn from the first frame of a new chat and only dim, so the row never gains or loses one.
   **Ended.** An ended session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder).
-- **Model picker** (`AgentPicker.tsx`, `modelPicker.ts`, `model-picker.css`; screenshot 31). The model button opens a float (the float material, radius `--r-panel`) anchored above the chat box's left edge: 580px by 300px in three columns, 46px, the rest and 190px, parted by float hairlines. The agent rail and the reasoning column sink below the float (the float mixed 22% toward black) and the model list keeps the float's own ground, so the columns read apart in every theme; a picked model or level lifts above its column with a 2px accent edge.
+- **Model picker** (`AgentPicker.tsx`, `modelPicker.ts`, `model-picker.css`; screenshot 31). The model button opens a float (the float material, radius `--r-panel`) anchored above the chat box's left edge: 580px by 300px in three columns, 46px, the rest and 190px, parted by float hairlines. The agent rail and the reasoning column sink below the float (the float mixed 22% toward black) and the model list keeps the float's own ground, so the columns read apart in every theme; a picked model or level lifts above its column as a lighter fill. On a light theme the steps are a 4% ink tint for the sunk columns and 9% for the picked row, since mixing toward black there reads as grey mud.
   **The rail** holds a 32px mark per agent: the built-in agents installed on this computer (all of them on another machine, where that is not read) and, before a session starts, the agents ready to run over ACP. The agent whose models show has the ink fill and a 2px bar at the rail's edge; the agent this session runs has a 5px `--ok` dot. Before the session starts a mark switches the agent. Once it runs its agent cannot change: another agent's models are shown under a note ("This session runs Claude. Picking a Codex model starts a new session."), and picking one opens a New session draft in the same folder with that agent.
   **The middle** is a 34px search row ("Search models…") over the model rows (34px, 13.5px, the agent's mark, the name, a dim "default" on the model the agent's settings name). Earlier models wait behind **Show more**; a search looks through all of them. An agent over ACP lists none: a note says it keeps its own model and permission settings. Where an agent's own list of models is read (`useDiscoveredModels`) it is what shows.
   **The right** is headed Reasoning with the model's name, then a 32px row per level the model takes, with a dim **Default** on the level it runs at when none is picked. An agent with no reasoning setting has a line saying so instead. A level the agent runs at that cannot be picked here (Codex's `xhigh`) is shown picked and off. Pressing the picked level again goes back to the agent's own.
@@ -942,7 +959,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and status bar*). The header has no view switch: the view is one app-wide setting. The main area is one
   flat card on `--card` with a `--line` hairline, 8px from the window and the sidebar, and a lone pane fills it edge to
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
-  focused one has its edge in a brighter ink (`--pane-focus-line`). A pane's status is the
+  focused one has a 2px ring in a strong ink (`--pane-focus-line`). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
 - **First run.** On the first launch (no saved settings and no earlier first run) the app behind goes under a flat veil
   (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first run is on screen once over a
@@ -1178,7 +1195,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   table is a card (**Table**, "N rows", **Copy**, **Save as** Markdown / CSV / HTML; cells never wrap, numbers right-aligned, a wide table scrolls sideways).
   **A step** is a 30px row, gap 9: its status mark (14px), a verb at 13/600, what it acted on in mono 12.5 (cut at
   the end), how it ended in mono 11.5 `--dim` at the right, and a caret; it opens to its detail. The step a pending
-  request is about is the only one in amber: a 9% `--needs` tint, a 2px left edge and "waiting for you ↓". A file is a
+  request is about is the only one in amber: a 9% `--needs` tint and "waiting for you ↓". A file is a
   badge (type tag, folder in `--dim`, name in `--fg`, cut from the front so the name stays). A **command on its own**
   is a card: its mark, `$` and the command, an exit tag ("exit 0" in `--done`, "exit 1" in `--err`), the time and
   **Copy command** in the head, and the last 6 lines of output on `--well` with "Show all N lines"; a failed one has the
@@ -1260,8 +1277,13 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   the notification card and the tray menu say the same; the desktop app has no separate Inbox panel.
 - **Session header.** See *Pane header, pane foot and status bar*: one line, `project / session name` and the close
   button; a chat pane has no buttons for Changes or Files, no `⋯` and no branch crumb.
-- **New session draft.** A chat that has not been sent, opened by a project's **New session** and by the New session key in the project in front (nothing starts before the first send), in the main area (`--main`, opaque), never a float or a scrim. It is the same pane a started session has. The header is the chat pane's own (`.mx-pane-head`): `project / New session` (the machine's tag before it on another machine, the folder's path in its tooltip) and **×**, which discards the draft (absent on the home screen); it has no status strip and no menu. The question, where the session runs and the box sit as one block in the middle of the pane, a little above centre: a 24-32px 500 heading, "What should we build in <project>?" ("What are we building today?" with no project), then two large chips on the field ground, the machine ("This computer" or its name) and the project, each opening its list downward, and a quiet underlined "or start without a project", which runs the session in Settings' start folder. While the big chips show, the row under the box keeps only the branch and sync. Under it sits the chat's own message box (`Composer`; placeholder "Describe the task, or type / for commands"): inside the box are the model button with its picker (whose rail picks the agent), the shield, attach and send. Under the box is the chips row (`SessionBar`), with the context bar at its right: Machine chip (a laptop or server mark, its name only when remote), Folder chip, Branch chip, Sync chip. Before the first message these chips choose: the Folder list is **Recent projects**, ends in **Open folder…**, **Clone a repository…** (**Clone from link…** and **My GitHub repos…** where a cloner is given) and takes a typed or pasted path or link; the Branch list picks, creates (typed name) or sets **Own worktree** with a switch under the list; branches in use show "In use by" the chat; a folder with no git repository gets a quiet `Branch unavailable` chip with the reason as its tooltip; on another machine the Branch chip reads `not read here` and still holds the worktree switch. A machine that is down is a dimmed row with its reason, and as the current machine its chip takes the warning colour. Notes (a worktree line, a clone in progress or failure with **Use it**, **Pick another folder** or **Open GitHub settings**, a failed start, the checkout behind origin with **Update first** or **Use a worktree**, Gemini's terminal line) sit above the box in the composer's problem slot. While it starts, the heading is replaced by the message sent and the working line, and the box is locked. Each agent keeps its own model and effort while the draft is open, and the last agent and choices are the next default. Focus is the 2px accent underline on every control. All colours are theme role tokens.
+- **New session draft.** A chat that has not been sent, opened by a project's **New session** and by the New session key in the project in front (nothing starts before the first send), in the main area (`--main`, opaque), never a float or a scrim. It is the same pane a started session has. The header is the chat pane's own (`.mx-pane-head`): `project / New session` (the machine's tag before it on another machine, the folder's path in its tooltip) and **×**, which discards the draft (absent on the home screen); it has no status strip and no menu. The question, where the session runs and the box sit as one block in the middle of the pane, a little above centre: a 24-32px 500 heading, "What should we build in <project>?" ("What are we building today?" with no project), then two large chips on the field ground, the machine ("This computer" or its name) and the project, each opening its list downward, and a quiet underlined "or start without a project", which runs the session in Settings' start folder. While the big chips show, the row under the box keeps only the branch and sync. Under it sits the chat's own message box (`Composer`; placeholder "Describe the task, or type / for commands"): inside the box are the model button with its picker (whose rail picks the agent), the shield, attach and send. Under the box is the chips row (`SessionBar`), with the context bar at its right: Machine chip (a laptop or server mark, its name only when remote), Folder chip, Branch chip, Sync chip. Before the first message these chips choose: the Folder list is **Recent projects**, ends in **Open folder…**, **Clone a repository…** (**Clone from link…** and **My GitHub repos…** where a cloner is given) and takes a typed or pasted path or link; the Branch list picks, creates (typed name) or sets **Own worktree** with a switch under the list; branches in use show "In use by" the chat; a branch open in another folder (git opens a branch in one place only) reads "open elsewhere: a new worktree off it", and picking it turns Own worktree on so the session starts on a new branch cut from it (the service names it); with Own worktree on, any picked branch is copied the same way, on a new branch named for the task, and the worktree line says "A copy of <branch> on its own branch, <name>"; a folder with no git repository gets a quiet `Branch unavailable` chip with the reason as its tooltip; on another machine the Branch chip reads `not read here` and still holds the worktree switch. A machine that is down is a dimmed row with its reason, and as the current machine its chip takes the warning colour. Notes (a worktree line, a clone in progress or failure with **Use it**, **Pick another folder** or **Open GitHub settings**, a failed start, the checkout behind origin with **Update first** or **Use a worktree**, Gemini's terminal line) sit above the box in the composer's problem slot. While it starts, the heading is replaced by the message sent and the working line, and the box is locked. Each agent keeps its own model and effort while the draft is open, and the last agent and choices are the next default. Focus is the 2px accent underline on every control. All colours are theme role tokens.
 - **Open a project palette** (handoff 7, screenshots 19 to 25, 28 and 30). One float, 600px wide, 92px from the top over a dimmed scrim, at the dialog radius: a 52px field row, a 340px list and a 48px foot, the same 440px at every level. The field row starts with a 28px mark (a search glass on the first level, a back arrow after it), then in the folder browser a crumb: the machine as a 24px chip on `rgba(--ink, .07)` (monitor or server, 12px 500) and the path in 13px mono `--muted`, ending in its separator and cut to its last two folders past 26 characters. The field is 15px with a `--dim` placeholder and no edge of its own. The clone levels end the row with **onto <machine>** (26px, 12px `--muted`, the name in `--fg2`). List rows are 44px at the panel radius: a 17px stroked icon in `--muted`, a 13.5px 500 name over a 12px `--dim` line, and a 11.5px `--dim` tag at the right (Open, Private; Offline in `--needs`). The highlighted row is `--t2` with its icon in `--fg`; `..` and Add a remote machine are 400 weight in `--fg2`. Group headings are 11.5px 500 `--dim`. A message (a wait, an empty folder, a machine that is offline, a refusal) is one block on `rgba(--ink, .03)`: a 13px 500 title (in `--needs` for offline, `--danger` for a refusal) over a 12px `--dim` line, the running light before it while it waits, a 4px progress bar under it while cloning, and at most one 28px button (Try again). The foot sits on `rgba(--ink, .025)`: key hints (a 20px keycap on `rgba(--ink, .08)` and a 12px `--dim` word), then in the folder browser the quiet **Use system dialog…** (this computer only) and the solid **Open this folder** (30px, `--fg` ground, `--t1` text). Nothing in it moves or changes size on hover, focus or selection. **New machine** is a level of it and keeps the frame: the field row ends with **Options** (the same 26px control as onto), which opens a Port box (90px) and a Key file box in one row under the field row (30px wells at the control radius, 12.5px mono, an 11px `--dim` label over each, a `--link` ring on focus); the row takes its 50px from the list. After Enter the field gives way to a **New machine** chip (the crumb's machine chip, with the server mark) and the address in 14px mono. Connecting is the message block with the running light and a quiet **Cancel** in the foot. A failure is the same block stacked: the host's one sentence as its title (`--needs` when it is the person's to finish, `--danger` otherwise), the Copy line for its command, then **Try again** (the solid 30px button), **Edit the address** and **Sign in in a terminal** (quiet). Added is one plain message and a **Name** field (a 12px 500 `--muted` label, a 36px well with 14px 500 text, a 12px `--dim` line under it), with the quiet **Done** and the solid **Browse folders on <name>** in the foot. It draws no checklist, no fingerprint, no password field and no key-copy tick (ADR 0017).
+- **Other agents** (`AcpAgentsDialog.tsx`; from the draft's agent rail). The shared modal (52px head, scrolling body,
+  foot with Close), 600px wide: one muted line on what installing does, a search field (name, id or description), then
+  **Ready to use** (the config's and the installed ones) and **Available to install**, each a row of a 30px initial
+  mark, the name with its version in mono, a two-line description and its state, and the shared buttons at the right
+  (**Use** or **Install** primary; **Update** and **Remove** ghost). A search with no match says so.
 - **New session draft on another machine.** The same draft, with the machine in its Machine chip: its projects, a pasted path, **Open folder…** (the Open a project palette's folder browser on that machine, choosing a folder), a Branch chip that reads `not read here` with the Own worktree switch (made on that machine on a new two-word branch), no attach or warm-agent controls, and the picker with the fixed models (Default, Fable, Opus, Sonnet, Haiku for Claude) and the effort.
 - **Focus mode (⌘.).** Hides the sidebar; a pill at the bottom says where you are and
   how many sessions need you elsewhere. Esc or the pill's Exit leaves it.
@@ -1305,16 +1327,21 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   is remembered per session (`panelTabsStorage.ts`); whether the panel is open is the window's, and hiding it keeps
   the tabs and the shells.
   **Pull requests** (`features/pull-requests/`, the design's `.prr`) lists the open pull requests of the session's
-  project, the ones that need you first: one row each on `--r-control`, padded 8px, a 16px status mark at the left
-  (needs you, working while checks run, done when it is ready; none otherwise), the title (13px 500, `--fg`), under it
-  `#number branch · author` in 11.5px mono `--dim` with the number in `--muted` ("You" for your own, "· draft" for a
-  draft), then where it stands in 12px `--muted` ("Review requested", "Checks running", "Ready to merge") with
-  "· needs you" in `--needs`. A row hovers on 4% ink and opens the pull request in the browser. Under the list, in
-  `--dim`: "Showing the first 50…" when there are more, and whose account it is read as. Every other state is one
-  centred note (the empty panel's `mx-sp-needs`): reading, none open, `gh` not installed (with where to get it), not
-  signed in (with **Sign in to GitHub**), not on GitHub, and a failure with its reason and **Try again**. When other
-  opened projects have pull requests that need you, they follow under a hairline and the heading "Needs you in other
-  projects", each row naming its project, so the count on the sidebar's button is always found here.
+  project. Over the list: a 36px search (title, branch, author or number, every word), then on one line a segmented
+  **Show** (All, Needs you, Mine, Failing, Drafts), the count ("6 open", or "2 of 6") and a **Sort** menu (Needs you
+  first, the default; Recently updated; Newest; Oldest). One row each on `--r-control`, padded 8px: the title (13px
+  500, `--fg`), under it `#number branch · author` in 11.5px mono `--dim` with the number in `--muted` ("You" for your
+  own, "· draft" for a draft), then where it stands in 12px `--muted` behind a 14px mark in the standing's colour: a
+  check in `--ok` (Checks passed, Ready to merge), a cross in `--danger` (Checks failed, Has conflicts), the working
+  mark (Checks running), a clock in `--dim` (Waiting for review, Changes requested), an alert in `--needs` with
+  "· needs you" for one that needs you, and an alert in `--ansi-blue` for a plain Open. A row hovers on 4% ink and opens
+  the pull request in the browser. "Showing the first 50…" follows when there are more; "No pull requests match. Show
+  all" when the search and filter hide them all. Every other state is one centred note: reading, none open, `gh` not
+  installed (with where to get it), not signed in (with **Sign in to GitHub**, which on this computer in the chat view
+  runs `gh`'s web sign-in in place and shows its code and link in a card, and elsewhere opens `gh auth login` in a
+  terminal), not on GitHub, and a failure with its reason and **Try again**. When other opened projects have pull
+  requests that need you, they follow under a hairline and the heading "Needs you in other projects", each row naming
+  its project, so the count on the sidebar's button is always found here.
   Files reads the focused session's top folder before the panel opens; while the list is still being read
   it shows still bars in its place, never the word "Loading". **References** is the first entry of the Files tree and
   opens as `Files › References`, which says "Every agent on this project sees these · kept on this computer, not in git" and, when empty, "Show agents what to build". It only lists: adding, renaming and deleting references need GUI commands that do not exist yet (the TUI adds them).
@@ -1472,7 +1499,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (added `--done`, removed `--err`, both on a 10% tint; hunk and file heads `--link`). A command head reads `$ command` and, at the
   right, "exit 1 · 2.9s" (red when it failed; a provider with no exit code shows only the time, and a screen reader hears "exit
   code not reported"); a failed block has no coloured edge (its words and meta are in `--err`, and a command's output marks passing lines `--done`, failing lines `--err` and colours the counts in its "2 failed | 9 passed" summary line); there is no check mark, chip or copy icon (Copy is a text button
-  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a 2px `--line2` edge with no box and a bold lead. A list uses dim bullets; a table is a card like a code block (a 36px head with its row count
+  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a `--m-well` block at the control radius with a bold lead, no edge bar. A list uses dim bullets; a table is a card like a code block (a 36px head with its row count
   in 11px mono `--muted`, Copy and Save as; rules under the head and between rows; 7px 12px cells, the head 11.5px 600
   `--muted`). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
   agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row has the run's own mark
@@ -1521,7 +1548,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (`codex resume --last`). **Restart** types it into that session; **Dismiss** on the dock line puts it away. Nothing
   resumes on its own.
 - **Pane header, pane foot and status bar.** A terminal pane's header (`PaneTitle` and `TerminalFacts` in `PaneCard.tsx`) is one 34px
-  line ruled off by a `--line` hairline, its parts 10px apart: a machine tag (remote only), `project / session name`
+  line ruled off by a `--line` hairline, its parts 10px apart: a machine tag (remote only: the server mark and name in
+  the machine's colour on a 14% tint of it, matching its sidebar tag), `project / session name`
   (13px; the project `--muted`, the slash `--dim`, the name `--fg` at 500, cut with an ellipsis; the agent, its model and
   the folder in its tooltip), the permission shield (13px, `--dim`), the context bar (32px, with its figure in mono 11px),
   then **split right**, **split down** and **×** (`IconButton`). A plain shell's header is its name and the same three

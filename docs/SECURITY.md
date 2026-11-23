@@ -895,8 +895,10 @@ The agent runs with the user's permissions, so the window's start path is narrow
   `--allow-dangerously-skip-permissions`; Codex `danger-full-access` with approval `never`). The window always
   sends the choice explicitly: a labelled checkbox with a warning, ticked at first because **Bypass Permissions** is on
   by default (Settings › Permissions, one switch per agent, `[permissions.bypass]`), and unticked for one chat or for
-  good by turning the agent's switch off. It is fixed for the session: Maiker never widens a running session, and a
-  chat started with it always shows that it is: the message box's shield turns red in a mode that asks about nothing,
+  good by turning the agent's switch off. Maiker never widens a running session on its own; a person can change a
+  Claude or Codex chat's permissions from its shield (`ConversationSetPermissions`, ADR 0005: human clients with the
+  admin grant only, the three start postures only, from the next message), and a chat in full access always shows
+  that it is: the message box's shield turns red in a mode that asks about nothing,
   and a chat whose shield does not show its mode carries a visible Bypass permissions tag instead. The same switch adds the agent's own flag
   (`AgentDef.bypass_flag`) to every agent the daemon or either app starts in a terminal: new sessions, branch agents,
   MCP `maiker_start`, CLI handoff and resume. A resume adds it only when the session started with it and the switch

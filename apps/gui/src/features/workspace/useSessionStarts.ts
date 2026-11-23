@@ -396,7 +396,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // (ADR 0007), so asking for it is refused rather than left to edit the checkout.
   const startRemoteChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
-    const folder = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+    const folder = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine, request.branch.base) : request.folder
     const id = await startOnMachine({ machine: request.machine, name: request.machineName }, folder, undefined, !background)
     if (id === null) throw new Error(`${request.machineName} did not report the new session`)
     if (request.message !== '') {
@@ -423,14 +423,14 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0020).
       // Its worktree is made by that daemon first; its checkout's branch is never switched from here (ADR 0007).
       if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
-      const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+      const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine, request.branch.base) : request.folder
       return startDirectChat({ ...request, folder: there, branch: null }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     }
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.
     let folder = request.folder
-    if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
+    if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name, LOCAL_MACHINE, request.branch.base)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
     if (request.acp !== undefined && !chatView) throw new Error('An agent from the ACP registry starts only in the Chat view. Switch to it in Settings.')
     // In the Chat view a session is a chat with no terminal behind it (ADR 0020), a saved conversation included.

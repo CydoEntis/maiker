@@ -9,6 +9,7 @@ import { registerComposerDrop } from '../composerDrop'
 import { clearQuotes, removeQuote, updateComposer, useComposerDraft, useComposerSlice } from '../composerStore'
 import type { ChatComposer } from '../useChatComposer'
 import { defaultChoice, useAgentChoice, type AgentChoice } from '../agentChoice'
+import { rememberChoice } from '@/features/workspace/model/lastWho'
 import { DraftAttachments } from './Attachments'
 import { QuoteStrip } from './QuoteStubs'
 import { AgentPicker, type OtherAgents } from './AgentPicker'
@@ -643,7 +644,7 @@ function ModelPicker({ agent, conversation, model, effort, live, locked, remote,
   // the button names what the agent says it runs, so it never disagrees with the terminal. A kept pick could, as one
   // made in the terminal or before a restart would not reach it.
   const choice = live === undefined ? stored : FOLLOWS_AGENT
-  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? change : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} installed={remote ? null : installed} {...(onStartWith === undefined ? {} : { onStartWith })} {...(live ? { live } : {})} />
+  return <AgentPicker fixedModels={remote} agent={agent} choice={choice} onChange={live === undefined ? (picked) => { change(picked); rememberChoice(agent, { ...stored, ...picked }) } : ignoreChange} currentModel={model} currentEffort={effort} locked={locked ?? undefined} installed={remote ? null : installed} {...(onStartWith === undefined ? {} : { onStartWith })} {...(live ? { live } : {})} />
 }
 
 const FOLLOWS_AGENT: AgentChoice = defaultChoice()

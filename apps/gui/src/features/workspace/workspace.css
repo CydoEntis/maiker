@@ -122,6 +122,20 @@
   box-shadow: var(--sh);
   transition: width var(--panel-in), background-color var(--t-slow) var(--ease);
 }
+/* Hiding and showing the docked sidebar slides it: its width and its gap to the main card run to nothing (or from it)
+   over `--panel-in` while what is inside keeps its width, so nothing in it re-wraps; the terminal refits at most every
+   90ms meanwhile (PERFORMANCE.md). With motion reduced it goes and comes at once. */
+@keyframes mx-sb-slide-in { from { width: 0; margin-left: 0; margin-right: 0; opacity: 0; } }
+@keyframes mx-sb-slide-out { to { width: 0; margin-left: 0; margin-right: 0; opacity: 0; } }
+.mx-sidebar.is-sliding-in { animation: mx-sb-slide-in var(--panel-in); }
+.mx-sidebar.is-sliding-out { animation: mx-sb-slide-out var(--panel-in) forwards; pointer-events: none; }
+.mx-sidebar:is(.is-sliding-in, .is-sliding-out) > * { min-width: var(--sidebar-w, 264px); }
+.mx-app[data-motion="reduced"] .mx-sidebar.is-sliding-in { animation: none; }
+.mx-app[data-motion="reduced"] .mx-sidebar.is-sliding-out { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mx-sidebar.is-sliding-in { animation: none; }
+  .mx-sidebar.is-sliding-out { display: none; }
+}
 .mx-drawer-scrim { position: absolute; inset: 0; z-index: 54; background: var(--scrim); animation: v7scrim .2s ease-out; }
 .mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: mx-panel-from-left var(--panel-in); }
 .mx-drawer .mx-sidebar { margin: 8px; max-width: calc(100vw - 48px); }
@@ -215,10 +229,6 @@
    renderer keeps the theme's opaque terminal ground, so a row repaint never blends through the card. */
 
 /* The pull requests in a window of their own over the app: Settings' scrim and frame, one column. */
-.mx-pulls-window { width: 100%; max-width: 760px; height: 100%; max-height: 620px; display: flex; flex-direction: column; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: mx-dialog-in .16s ease-out; }
-.mx-pulls-window-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 52px; padding: 0 12px 0 20px; }
-.mx-pulls-window-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
-.mx-pulls-window-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
 
 /* Settings */
 .mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
@@ -242,20 +252,19 @@
 .mx-settings-nav-icon { flex: none; color: currentColor; opacity: .85; }
 .mx-settings-nav-spacer { flex: 1; min-height: 12px; }
 /* The update box sits at the foot of the nav, pinned while the nav scrolls. */
-.mx-settings-update { position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: auto -10px 0; padding: 12px 14px 16px; background: var(--m-pane); border-top: 1px solid var(--line); }
+.mx-settings-update { position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 6px; margin: auto -10px 0; padding: 10px 14px 12px; background: transparent; border-top: 1px solid var(--line); }
 /* Nothing to report: one quiet line under the nav, the version and a small Check word, with no card of its own. */
-.mx-settings-update.is-quiet { padding: 10px 14px 12px; background: transparent; }
-.mx-settings-update.is-quiet .mx-settings-update-word { font-weight: 400; color: var(--muted); font-size: 12px; white-space: nowrap; }
-.mx-settings-update-line { display: flex; align-items: center; gap: 8px; }
-.mx-settings-update-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--dim); }
-.mx-settings-update-dot.is-ok { background: var(--ok); }
-.mx-settings-update-dot.is-accent { background: var(--accent); }
-.mx-settings-update-dot.is-danger { background: var(--danger); }
-.mx-settings-update-word { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--fg); }
+.mx-settings-update-line { min-height: 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mx-settings-update-now { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+/* The one thing to do about an update: a small outlined control, filled when it finishes the update. */
+.mx-settings-update-act { height: 26px; display: inline-flex; align-items: center; gap: 6px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; font-weight: 500; color: var(--fg); box-shadow: inset 0 0 0 1px var(--line2); white-space: nowrap; }
+.mx-settings-update-act:hover { background: var(--icon-button-fill); }
+.mx-settings-update-act:focus-visible { outline: none; box-shadow: var(--focus-edge); }
+.mx-settings-update-act.is-primary { color: var(--on-accent); background: var(--accent); box-shadow: none; }
+.mx-settings-update-act.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, rgb(var(--ink))); }
+.mx-settings-update-busy { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .mx-settings-update-note { font-size: 11.5px; line-height: 1.45; color: var(--dim); overflow-wrap: anywhere; }
 /* The look is the settings pages' own button (`.mx-scard-button`); only its width is the nav's. */
-.mx-settings-update-button { width: 100%; text-align: center; }
 .mx-settings-body { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .mx-settings-close { width: 30px; height: 30px; border-radius: var(--r-control); color: var(--muted); }
 .mx-settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 28px; scroll-behavior: smooth; }
@@ -320,14 +329,17 @@
 .mx-picker-button.is-open .mx-picker-chevron { transform: rotate(180deg); }
 .mx-picker-menu { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-panel); background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 16px 44px rgba(0, 0, 0, .5); animation: v7fade .14s ease-out; }
 .mx-picker-list { max-height: 280px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
-.mx-picker-list .mx-theme-card { width: 100%; text-align: left; }
+.mx-picker-list .mx-theme-card { width: 100%; text-align: left; cursor: default; }
+/* The search sits at the top of a column, where the shared field's `flex: 1` squashed it to its text's height. */
+.mx-picker-menu .mx-picker-search { flex: none; height: 36px; padding: 0 12px; }
+.mx-picker-menu .mx-picker-search input { font-size: 13px; }
 .mx-picker-list .mx-swatch { width: 34px; height: 24px; }
 .mx-picker-empty { padding: 14px 6px; font-size: 12.5px; color: var(--dim); }
 .mx-picker-foot { padding: 2px 4px 0; font-size: 11px; color: var(--dim); }
 .mx-theme-card { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-control); }
-.mx-theme-card:not([aria-checked="true"]):hover { background: rgba(var(--hl), calc(.055 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); }
-.mx-theme-card[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--accent-line); }
-.mx-theme-card[aria-checked="true"]:focus-visible { box-shadow: var(--focus-edge); }
+/* The row the pointer or the keys are on is lit with the float's hover fill; the theme in use carries a check at its right. */
+.mx-theme-card[data-lit] { background: var(--float-hover); }
+.mx-theme-check { flex: none; margin-right: 2px; color: var(--fg); }
 .mx-swatch { width: 46px; height: 32px; flex: none; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .22); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px; }
 .mx-swatch span { display: flex; gap: 3px; }
 .mx-swatch i { height: 3px; border-radius: var(--r-badge); display: block; }
@@ -392,7 +404,7 @@
 .mx-getfile-list p { margin: 8px; }
 /* flex: none, or a long list squeezes its rows (overflow: hidden lets them shrink) to slivers of text. */
 .mx-getfile-row { flex: none; display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-getfile-row.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.mx-getfile-row.is-selected { background: var(--accent-soft); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 .mx-rename.mx-recent { max-width: 560px; }
 .mx-rename.mx-modal.mx-recent { width: 560px; }
@@ -405,8 +417,25 @@
 .mx-recent-row[aria-disabled="true"] { cursor: not-allowed; color: var(--muted); }
 .mx-recent-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* A row of the Other agents list: text, then its own buttons; the row itself is not one. */
-.mx-acp-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 10px; }
-.mx-acp-row small { color: var(--muted); }
+/* Other agents (`AcpAgentsDialog`): a search, then Ready to use and Available to install as rows with the shared buttons. */
+.mx-rename.mx-modal.mx-acp { width: min(600px, calc(100vw - 32px)); max-height: min(680px, calc(100vh - 64px)); }
+.mx-acp-lead { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.mx-acp-search { flex: none; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
+.mx-acp-search svg { flex: none; width: 15px; height: 15px; }
+.mx-acp-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; }
+.mx-acp-note { margin: 0; padding: 18px 0; text-align: center; font-size: 12.5px; color: var(--dim); }
+.mx-acp-list { display: flex; flex-direction: column; gap: 14px; }
+.mx-acp-group { display: flex; flex-direction: column; gap: 2px; }
+.mx-acp-heading { margin: 0 0 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.mx-acp-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px; border-radius: var(--r-control); transition: background-color var(--t-fast) var(--ease); }
+.mx-acp-row:hover { background: var(--m-hover); }
+.mx-acp-mark { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: var(--m-card); font-size: 13px; font-weight: 600; color: var(--fg2); }
+.mx-acp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-acp-name { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--fg); }
+.mx-acp-version { font: 400 11.5px var(--mono); color: var(--dim); }
+.mx-acp-about { font-size: 12.5px; line-height: 1.45; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mx-acp-state { font-size: 11.5px; color: var(--muted); }
+.mx-acp-actions { flex: none; display: flex; align-items: center; gap: 6px; align-self: center; }
 .mx-recent-title, .mx-recent-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-recent-title { font-size: 13.5px; }
 .mx-recent-where { font-size: 12px; color: var(--muted); }
@@ -542,6 +571,8 @@
   --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--float-sh);
   --sbm: 12px 0 12px 12px; --sbw: 1px; --tba: center; --tl: 4px; --edge: 8px; --tsh: 32px; --tsw: 26px; --ibh: 30px;
 }
+/* On a light ground the bright squares washed out (pale letters on a paler tint), so a light theme takes the same hues darker. */
+.mx-app[data-theme-kind="light"] { --proj-1: #0E7C6F; --proj-2: #2560C8; --proj-3: #B8327A; --proj-4: #5E4BC9; --proj-5: #1F8A55; }
 .mx-app[data-theme-kind="light"] { --sh: none; }
 
 .mx-app .title-bar { background: var(--tbar); border-bottom: var(--tbar-b); }
@@ -683,11 +714,7 @@
 .mx-rm-empty p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
 
 /* The one block that reports progress and problems: a mark or spinner, one sentence, an optional command, the actions. */
-.mx-rm-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--m-well); box-shadow: inset 2px 0 0 var(--line2); animation: mx-rm-in .16s ease-out; }
-.mx-rm-block.is-ok { box-shadow: inset 2px 0 0 var(--ok); }
-.mx-rm-block.is-work { box-shadow: inset 2px 0 0 var(--working); }
-.mx-rm-block.is-needs { box-shadow: inset 2px 0 0 var(--needs); }
-.mx-rm-block.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
+.mx-rm-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--m-well); border-radius: var(--r-control); animation: mx-rm-in .16s ease-out; }
 .mx-rm-block.is-plain { padding: 12px 0; background: none; box-shadow: none; }
 @keyframes mx-rm-in { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: none; } }
 .mx-app[data-motion="reduced"] .mx-rm-block { animation: none; }
@@ -712,3 +739,9 @@
 .mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 13px; color: var(--fg); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
 
+
+/* Pull requests as a page in the main area (`PullRequestsPage`): the draft's frame, a centred 760px column that scrolls. */
+.mx-pulls-page { z-index: 21; }
+.mx-pulls-page-body { flex: 1; min-height: 0; overflow-y: auto; padding: 16px 20px 24px; }
+.mx-pulls-page-column { width: 100%; max-width: 760px; margin: 0 auto; }
+.mx-pulls-page:focus { outline: none; }

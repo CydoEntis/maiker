@@ -233,7 +233,7 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('general', { updates })
 
     const box = screen.getByRole('group', { name: 'Updates' })
-    await user.click(within(box).getByRole('button', { name: 'Download' }))
+    await user.click(within(box).getByRole('button', { name: 'Update' }))
     expect(updates.onDownload).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('switch', { name: 'Download updates automatically' })).toBeChecked()
     expect(screen.getByRole('switch', { name: 'Install updates when idle' })).not.toBeChecked()
@@ -251,12 +251,18 @@ describe('desktop settings', () => {
     expect(updates.onRestart).toHaveBeenCalledTimes(1)
   })
 
-  it('checks for an update again on request', async () => {
-    const user = userEvent.setup()
-    const updates = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
-    renderSettings('general', { updates })
-    await user.click(screen.getByRole('button', { name: 'Check now' }))
-    expect(updates.onCheck).toHaveBeenCalledTimes(1)
+  it('shows only the version while up to date', () => {
+    const quiet = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    renderSettings('general', { updates: quiet })
+    const box = screen.getByRole('group', { name: 'Updates' })
+    expect(within(box).queryByRole('button')).not.toBeInTheDocument()
+    expect(box).not.toHaveTextContent('Up to date')
+    expect(box).toHaveTextContent('Maiker v0.64.0')
+  })
+
+  it('turns Update into a working mark while the update downloads', () => {
+    renderSettings('general', { updates: { summary: '', status: 'downloading' as const, version: '0.90.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() } })
+    expect(within(screen.getByRole('group', { name: 'Updates' })).getByRole('status', { name: 'Downloading v0.90.0' })).toHaveTextContent('Updating')
   })
 
   it('says a failed update in its own words, with a way to try again', () => {
@@ -265,24 +271,43 @@ describe('desktop settings', () => {
     expect(box).toHaveTextContent('The download broke off.')
     expect(within(box).getByRole('button', { name: 'Try again' })).toBeInTheDocument()
   })
-  it('picks a dark and a light theme separately, from searchable dropdowns that list the one in use first', async () => {
+  it('picks a dark and a light theme separately, from searchable A to Z dropdowns that check the one in use', async () => {
     const user = userEvent.setup()
     const { onChange } = renderSettings('appearance', { preferences: { ...PREFS, darkTheme: 'Gruvbox Dark' } })
     expect(screen.queryByText(/themes installed/)).not.toBeInTheDocument()
     expect(screen.queryByText('in use')).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Dark theme: Gruvbox Dark' }))
-    const dark = (await screen.findByRole('radiogroup', { name: 'Dark themes' }))
-    expect(within(dark).getAllByRole('radio')[0]).toHaveTextContent('Gruvbox Dark')
-    expect(within(dark).queryByRole('radio', { name: /Maiker Day/ })).not.toBeInTheDocument()
-    await user.type(screen.getByRole('textbox', { name: 'Search dark themes' }), 'tokyo')
-    expect(within(dark).getAllByRole('radio')).toHaveLength(1)
-    await user.click(within(dark).getByRole('radio', { name: /Tokyo Night/ }))
+    const dark = (await screen.findByRole('listbox', { name: 'Dark themes' }))
+    const names = within(dark).getAllByRole('option').map((option) => option.querySelector('.mx-theme-name')?.textContent ?? '')
+    expect(names).toEqual([...names].sort((a, b) => a.localeCompare(b)))
+    expect(within(dark).getByRole('option', { current: true })).toHaveTextContent('Gruvbox Dark')
+    expect(within(dark).queryByRole('option', { name: /Maiker Day/ })).not.toBeInTheDocument()
+    await user.type(screen.getByRole('combobox', { name: 'Search dark themes' }), 'tokyo')
+    expect(within(dark).getAllByRole('option')).toHaveLength(1)
+    await user.click(within(dark).getByRole('option', { name: /Tokyo Night/ }))
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ darkTheme: 'Tokyo Night' }))
-    expect(screen.queryByRole('radiogroup', { name: 'Dark themes' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('listbox', { name: 'Dark themes' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Light theme: Maiker Day' }))
-    expect(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ })).toBeInTheDocument()
+    expect(within((await screen.findByRole('listbox', { name: 'Light themes' }))).getByRole('option', { name: /GitHub Light/ })).toBeInTheDocument()
+  })
+
+  it('moves through the themes with the keys from the search field, previewing each, and picks with Enter', async () => {
+    const user = userEvent.setup()
+    const { onChange, onPreviewTheme } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'dark' } })
+
+    await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
+    const list = await screen.findByRole('listbox', { name: 'Dark themes' })
+    const options = within(list).getAllByRole('option')
+    const from = options.findIndex((option) => option.getAttribute('aria-current') === 'true')
+    const next = options[(from + 1) % options.length]?.querySelector('.mx-theme-name')?.textContent
+    await user.keyboard('{ArrowDown}')
+    expect(screen.getByRole('combobox', { name: 'Search dark themes' })).toHaveAttribute('aria-activedescendant', options[(from + 1) % options.length]?.id)
+    expect(onPreviewTheme).toHaveBeenLastCalledWith(next)
+    await user.keyboard('{Enter}')
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ darkTheme: next }))
+    expect(screen.queryByRole('listbox', { name: 'Dark themes' })).not.toBeInTheDocument()
   })
 
   it('previews a hovered theme only for the slot that is in use, and ends the preview on leaving', async () => {
@@ -290,15 +315,15 @@ describe('desktop settings', () => {
     const { onPreviewTheme } = renderSettings('appearance', { preferences: { ...PREFS, themeMode: 'dark' } })
 
     await user.click(screen.getByRole('button', { name: 'Dark theme: Maiker Dark' }))
-    await user.hover(within((await screen.findByRole('radiogroup', { name: 'Dark themes' }))).getByRole('radio', { name: /Gruvbox Dark/ }))
+    await user.hover(within((await screen.findByRole('listbox', { name: 'Dark themes' }))).getByRole('option', { name: /Gruvbox Dark/ }))
     expect(onPreviewTheme).toHaveBeenLastCalledWith('Gruvbox Dark')
-    await user.hover(screen.getByRole('textbox', { name: 'Search dark themes' }))
+    await user.hover(screen.getByRole('combobox', { name: 'Search dark themes' }))
     expect(onPreviewTheme).toHaveBeenLastCalledWith(null)
 
     await user.keyboard('{Escape}')
     await user.click(screen.getByRole('button', { name: 'Light theme: Maiker Day' }))
     onPreviewTheme.mockClear()
-    await user.hover(within((await screen.findByRole('radiogroup', { name: 'Light themes' }))).getByRole('radio', { name: /GitHub Light/ }))
+    await user.hover(within((await screen.findByRole('listbox', { name: 'Light themes' }))).getByRole('option', { name: /GitHub Light/ }))
     expect(onPreviewTheme).not.toHaveBeenCalledWith('GitHub Light')
   })
 

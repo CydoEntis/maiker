@@ -1,4 +1,4 @@
-import { REASONING_PICKS, type AgentChoice, type ReasoningPick } from '@/features/chat/agentChoice'
+import { DEFAULT_PICK, REASONING_PICKS, type AgentChoice, type ReasoningPick } from '@/features/chat/agentChoice'
 import { CHAT_AGENTS, type ChatAgent } from './chatView'
 
 /**
@@ -29,6 +29,20 @@ export function readLastWho(): LastWho | null {
     // Storage is blocked or holds something else: there is no last agent.
     return null
   }
+}
+
+/**
+ * The model and effort a start that skips the draft (the Terminal view's) gives `agent`: what it was last started with or
+ * last picked in a chat, else the agent's own default, which adds nothing to its command line.
+ */
+export function startChoiceFor(agent: ChatAgent): AgentChoice {
+  return readLastWho()?.choices[agent] ?? { model: DEFAULT_PICK, reasoning: DEFAULT_PICK }
+}
+
+/** A model or effort picked in a chat becomes that agent's next start, in either view; the last agent stays as it was. */
+export function rememberChoice(agent: ChatAgent, choice: AgentChoice): void {
+  const last = readLastWho()
+  rememberWho({ agent: last?.agent ?? agent, choices: { ...last?.choices, [agent]: choice } })
 }
 
 export function rememberWho(who: LastWho): void {

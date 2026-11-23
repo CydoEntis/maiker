@@ -14,6 +14,7 @@ import { OpenProjectPalette, type PaletteStart } from '@/features/open-project/O
 import type { PaletteMachine } from '@/features/open-project/openPalette'
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
+import { AcpAgentsDialog } from '@/features/workspace/components/AcpAgentsDialog'
 import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
@@ -206,6 +207,7 @@ function Show({ what }: { what: string }): ReactNode {
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />
   if (what.startsWith('settings')) return <Settings section={(what.split('-')[1] ?? 'appearance') as DesktopSettingsSection} />
   if (what === 'palette') return <CommandPalette items={ITEMS} outputItem={() => null} onClose={() => undefined} />
+  if (what === 'agents') return <AcpAgentsDialog onPick={() => undefined} onCancel={() => undefined} />
   if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onReopened={() => undefined} onCancel={() => undefined} />
   if (what === 'resume') return <ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} />
   return null

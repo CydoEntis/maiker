@@ -42,7 +42,7 @@
   --panel-line: rgba(var(--ink), .08);
   /* The pane that has the keys, among several: the same edge in a brighter ink. Neutral in every theme, so it never
      reads as a state colour or the accent. */
-  --pane-focus-line: rgba(var(--ink), .3);
+  --pane-focus-line: rgba(var(--ink), .5);
   /* The icon button's hover and on fill (components/ui/icon-button.tsx). */
   --icon-button-fill: rgba(var(--ink), .07);
   /* A row the pointer or the keys are on, inside a float: the ink again, so it shows on any theme's float ground. */
@@ -112,7 +112,6 @@
 .mx-app .mx-dock-list,
 .mx-app .mx-changes-menu,
 .mx-app .mx-keys-dialog,
-.mx-app .mx-pulls-window,
 .mx-pop {
   background: var(--float-bg);
   border: 1px solid var(--float-line);
@@ -126,7 +125,7 @@
 .mx-app :is([role="menu"], [role="dialog"], [role="alertdialog"]) { box-shadow: var(--float-sh); }
 /* A dialog, a window over the app or a palette is one level up from a menu: the dialog shadow. A popover is a dialog by role
    but hangs from its anchor (`data-side`), so it keeps the menu's. */
-.mx-app :is(.mx-settings, .mx-palette, .mx-op, .mx-rename, .mx-keys-dialog, .mx-pulls-window, [role="dialog"]:not([data-side]), [role="alertdialog"]) { box-shadow: var(--dialog-sh); }
+.mx-app :is(.mx-settings, .mx-palette, .mx-op, .mx-rename, .mx-keys-dialog, [role="dialog"]:not([data-side]), [role="alertdialog"]) { box-shadow: var(--dialog-sh); }
 /* The narrow window's sidebar drawer is a dialog by role, but the sidebar card inside it is the surface: no float behind it. */
 .mx-app .mx-drawer { background: none; border: 0; box-shadow: none; }
 /* A select's list is the raised float (see `--float-raised`). */
@@ -173,7 +172,7 @@
    the lists here and writes no focus rule of its own. An invalid field keeps its danger edge. The palette's search is its
    header, not a field: it has no ring, which its rounded frame would cut at the corners. */
 .mx-app :is(input, textarea, select):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])):focus-visible { border-color: var(--field-focus); box-shadow: none; }
-.mx-app :is(.mx-chip-search, .mx-settings-search, .mx-folder-field, .mx-search-field, .mx-sbf-search):focus-within,
+.mx-app :is(.mx-chip-search, .mx-settings-search, .mx-folder-field, .mx-search-field, .mx-sbf-search, .mx-acp-search):focus-within,
 .mx-app :is(.mx-find-input, .mx-scard-input, .mx-reply-input):focus-visible { box-shadow: var(--field-focus-edge); }
 .mx-app :is(.mx-folder-field, .mx-scard-input).is-invalid:is(:focus-within, :focus-visible) { box-shadow: inset 0 0 0 1px var(--danger); }
 

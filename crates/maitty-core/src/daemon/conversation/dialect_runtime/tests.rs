@@ -158,6 +158,7 @@ fn send(text: &str) -> Rpc {
         text: text.into(),
         message: "message-1".into(),
         choice: TurnChoice::default(),
+        permissions: None,
     }
 }
 

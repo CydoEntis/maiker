@@ -137,10 +137,23 @@ pub(super) fn recreate_worktree(
 pub(super) fn branch_worktree(
     project: &std::path::Path,
     branch: &str,
+    base: Option<&str>,
     template: &str,
     from_default: bool,
 ) -> Result<(PathBuf, String), String> {
     let root = crate::gitfs::head(project).map_or_else(|| project.to_path_buf(), |h| h.main_root);
+    // Asked for a copy of `base`: a new branch cut from it, whether or not `base` is free. A
+    // branch only on the remote is named by its remote ref, which is all git can start from.
+    if let Some(base) = base {
+        let has = |r: &str| git::git(&root, &["show-ref", "--verify", "--quiet", r]).is_ok();
+        let remote = format!("origin/{base}");
+        let from = if !has(&format!("refs/heads/{base}")) && has(&format!("refs/remotes/{remote}")) {
+            remote.as_str()
+        } else {
+            base
+        };
+        return create_trusted_worktree(project, branch, Some(from), template, from_default);
+    }
     match base_for_busy_branch(&root, branch) {
         Some(base) => {
             let taken = git::branch_names_in_use(&root);

@@ -334,7 +334,8 @@ pub(super) async fn run(
     mut stop: tokio::sync::mpsc::Receiver<()>,
     mut requests: tokio::sync::mpsc::Receiver<super::runtime::Command>,
 ) {
-    let Some(settings) = launch.settings().cloned() else {
+    // A person may change the permissions while the chat runs; each turn's process starts with them.
+    let Some(mut settings) = launch.settings().cloned() else {
         let _ = super::runtime::emit(
             &events,
             owner,
@@ -435,7 +436,10 @@ pub(super) async fn run(
                             result: Ok(serde_json::json!({"data":[],"nextCursor":null})),
                         }).await;
                     }
-                    super::runtime::Rpc::Send { session: target, text, choice, .. } => {
+                    super::runtime::Rpc::Send { session: target, text, choice, permissions, .. } => {
+                        if let Some(permissions) = permissions {
+                            permissions.apply_to(&mut settings);
+                        }
                         match run_turn(
                             TurnContext {
                                 launch: &launch,

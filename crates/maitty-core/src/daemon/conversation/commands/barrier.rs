@@ -170,7 +170,12 @@ impl Daemon {
                 let state = self.conversation_states.entry(id).or_default();
                 state.status = Status::Working;
                 state.error = None;
-                let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { session: thread, text, message: format!("{}-{generation}-{operation}", id.0), choice }).map_err(|e| (token, e.to_string()));
+                let permissions = state.new_permissions.take();
+                let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { session: thread, text, message: format!("{}-{generation}-{operation}", id.0), choice, permissions }).map_err(|e| (token, e.to_string()));
+                if sent.is_err() {
+                    // Not handed over: the next message carries them.
+                    self.conversation_states.entry(id).or_default().new_permissions = permissions;
+                }
                 if sent.is_ok() {
                     self.snapshot_conversation_turn(id, "before");
                 }

@@ -236,5 +236,5 @@ button.mx-inspect-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk)))
 .mx-src-line.is-meta { color: var(--dim); }
 .mx-src-gap { display: block; height: 0; margin: 7px 0; border-top: 1px dashed var(--pane-line); overflow: hidden; }
 .mx-src-line.is-commentable { cursor: pointer; }
-.mx-src-line.is-commentable:hover { box-shadow: inset 2px 0 0 var(--accent); }
+.mx-src-line.is-commentable:hover { background: var(--m-hover); }
 .mx-src-line.is-commentable:focus-visible { box-shadow: var(--focus-edge); outline: none; }

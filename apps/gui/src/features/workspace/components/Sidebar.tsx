@@ -17,6 +17,7 @@ import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { isMenuKey } from './menuPoint'
 import { useReducedMotion } from './motion'
 import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
+import { ProjectBadge } from './ProjectBadge'
 import { RowHoverHost } from './RowHoverHost'
 import { sessionMenuEntries } from './sessionMenu'
 import { SessionRow } from './SessionRow'
@@ -29,6 +30,8 @@ import { useHoverController } from './useHoverController'
 import { useSidebarFolds } from './useSidebarFolds'
 
 export type SidebarProps = {
+  /** The docked column sliding in after it was hidden, or out as it hides (`useSidebarSlide`); absent at rest. */
+  slide?: 'in' | 'out' | undefined
   /** Every session of every machine. */
   sessions: readonly SessionView[]
   /** The daemon has sent its first list; until then an empty list means "not known yet", not "none". */
@@ -116,7 +119,7 @@ function cardAnchor(row: HTMLElement): DOMRect {
 
 export function Sidebar(props: SidebarProps) {
   const [resizing, setResizing] = useState(false)
-  const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}`
+  const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}${props.slide === undefined ? '' : ` is-sliding-${props.slide}`}`
   return (
     <nav aria-label="Sessions" className={className}>
       {props.mode === 'rail' ? <SidebarRail {...props} /> : <Expanded {...props} />}
@@ -263,10 +266,11 @@ function Expanded(props: SidebarProps) {
       <div ref={body} className="mx-sb-body">
         <div className="mx-sb-list" onScroll={endHover}>
           {!props.listed && props.sessions.length === 0 && <p className="mx-sb-note">Looking for your sessions…</p>}
-          {props.listed && props.sessions.length === 0 && (
+          {/* With a project open, its own heading says it has no sessions; the card is only for a sidebar with nothing in it. */}
+          {props.listed && props.sessions.length === 0 && nothingListed && (
             <div className="mx-sb-empty">
               <b>No sessions yet</b>
-              <span>{nothingListed ? 'Open a project, then start a session in it. It shows here, with the ones that need you on top.' : 'Start one from the main screen. It shows here, with the ones that need you on top.'}</span>
+              <span>Open a project, then start a session in it. It shows here, with the ones that need you on top.</span>
             </div>
           )}
           {order.projects.map((group) => (
@@ -363,6 +367,7 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
   const state = group.mark === null || group.mark === 'idle' ? null : group.mark
   const name = (
     <>
+      <ProjectBadge name={group.name} />
       <span className="mx-sb-head-name">{group.name}</span>
     </>
   )

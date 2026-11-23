@@ -16,8 +16,6 @@
 .mx-chat.is-starting { position: relative; }
 .mx-chat.is-starting .mx-chat-notices { position: absolute; top: 0; left: 0; right: 0; z-index: 2; margin-top: 10px; }
 .mx-chat-starting { font-weight: 600; color: var(--fg); }
-.mx-chat-tag { padding: 0 6px; font-family: var(--mono); font-size: 10.5px; font-weight: 600; box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-chat-tag.is-danger { color: var(--err); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--err) 45%, transparent); }
 .mx-chat-starting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .mx-chat-starting p { margin: 0; }
 .mx-chat-empty { margin: 0; flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 24px; text-align: center; font-size: 13px; color: var(--dim); }
@@ -33,7 +31,7 @@
 .mx-chat-column { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); padding: 0 20px; display: flex; flex-direction: column; gap: 16px; }
 .mx-chat-row { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); padding: 8px 20px; }
 /* The row Find stopped on. */
-.mx-chat-found { background: var(--m-sel); box-shadow: inset 2px 0 0 var(--focus); }
+.mx-chat-found { background: var(--m-sel); }
 
 /* The person's message: attachments, the bubble, then its time and menu under it. */
 .mx-msg-user { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
@@ -101,7 +99,7 @@
 .mx-task-tick { width: 10px; height: 10px; }
 .mx-md-item { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A note (Heads up): a 2px hairline edge and no box; its lead in the text colour. Amber is kept for "needs you". */
-.mx-md-quote { display: flex; gap: 10px; padding: 2px 0 2px 14px; box-shadow: inset 2px 0 0 var(--line2); font-size: 13.5px; line-height: 1.55; }
+.mx-md-quote { display: flex; gap: 10px; padding: 8px 12px; border-radius: var(--r-control); background: var(--m-well); font-size: 13.5px; line-height: 1.55; }
 .mx-md-quote-lead { flex: none; font-weight: 600; color: var(--fg); }
 .mx-md-quote-text { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
@@ -127,7 +125,7 @@
 button.mx-step-row:hover { background: var(--m-hover); }
 button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
-.mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
+.mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); }
 /* The mark in front of a step sits in a 16px slot: ✓ and ■ quiet, × red, ! amber, the running light while it works. */
 .mx-step-glyph { flex: none; display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font: 600 11px var(--mono); color: var(--dim); }
 .mx-step-glyph.is-failed { color: var(--err); font-size: 13px; }
@@ -426,7 +424,8 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-slash-keys { flex: none; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
 .mx-slash-keys kbd { margin-right: 4px; font: 500 11px var(--mono); }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
-.mx-box-text { width: 100%; min-height: 64px; max-height: 220px; resize: none; background: transparent; border: 0; padding: 0; font-family: var(--chat-font, var(--ui)); font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
+/* overflow-x: hidden: WebKitGTK gave the field a horizontal scrollbar a pixel too wide for it, drawn as a line under the text. */
+.mx-box-text { width: 100%; min-height: 64px; max-height: 220px; overflow-x: hidden; overflow-y: auto; resize: none; background: transparent; border: 0; padding: 0; font-family: var(--chat-font, var(--ui)); font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }

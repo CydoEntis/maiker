@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 123;
+pub const PROTOCOL_VERSION: u32 = 124;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -833,6 +833,18 @@ pub enum Command {
         cols: u16,
         rows: u16,
     },
+    /// You've seen a finished chat (the window shows it): done → idle, as `MarkSeen` does for a
+    /// pane. Came in `CHAT_CONTROLS_SINCE`.
+    ConversationMarkSeen {
+        id: crate::conversation::ConversationId,
+    },
+    /// A person changes a running chat's permissions (ADR 0005); its agent works with them from the
+    /// next message. Claude and Codex chats only. Came in `CHAT_CONTROLS_SINCE`.
+    ConversationSetPermissions {
+        id: crate::conversation::ConversationId,
+        generation: u64,
+        permissions: crate::conversation::Permissions,
+    },
     /// Put a conversation away or bring it back; it keeps running.
     ConversationArchive {
         id: crate::conversation::ConversationId,
@@ -1020,6 +1032,11 @@ pub enum Command {
     BranchWorktree {
         project: PathBuf,
         branch: String,
+        /// When set, `branch` is a new branch cut from this one, even when `base` is free to
+        /// check out: the worktree is the person's own copy, never `base` itself. Came in
+        /// `CHAT_CONTROLS_SINCE`; absent, the message is the older one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        base: Option<String>,
     },
     /// From a pane about to start an agent in `dir`: a new worktree for it when `dir` is
     /// in a repo's main checkout (and per-agent worktrees are on). Replies with the folder
@@ -2781,6 +2798,11 @@ impl ClientMsg {
         match self {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+            ClientMsg::Command(
+                Command::ConversationMarkSeen { .. }
+                | Command::ConversationSetPermissions { .. }
+                | Command::BranchWorktree { base: Some(_), .. },
+            ) => CHAT_CONTROLS_SINCE,
             ClientMsg::Command(Command::SetSetting {
                 key: SettingKey::Helpers | SettingKey::HelpersAtOnce,
                 ..
@@ -2789,6 +2811,12 @@ impl ClientMsg {
         }
     }
 }
+
+/// The first version whose daemon reads `Command::ConversationMarkSeen`,
+/// `Command::ConversationSetPermissions` and a `BranchWorktree` with a `base`. A daemon before it
+/// passes the first two over and would make the worktree on the base branch itself, so a client
+/// checks before it sends any of them.
+pub const CHAT_CONTROLS_SINCE: u32 = 124;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3120,6 +3148,21 @@ mod tests {
             ClientMsg::Command(Command::BranchWorktree {
                 project: PathBuf::from("/code"),
                 branch: "feat/x".into(),
+                base: None,
+            }),
+            ClientMsg::Command(Command::BranchWorktree {
+                project: PathBuf::from("/code"),
+                branch: "keen-otter".into(),
+                base: Some("dev".into()),
+            }),
+            ClientMsg::Command(Command::ConversationMarkSeen { id }),
+            ClientMsg::Command(Command::ConversationSetPermissions {
+                id,
+                generation: 2,
+                permissions: crate::conversation::Permissions {
+                    approval_policy: crate::conversation::ApprovalPolicy::Never,
+                    sandbox: crate::conversation::Sandbox::FullAccess,
+                },
             }),
             ClientMsg::Command(Command::SaveFile {
                 term: 3,
@@ -3419,6 +3462,11 @@ mod tests {
                     key: SettingKey::Helpers | SettingKey::HelpersAtOnce,
                     ..
                 }) => HELPER_SETTINGS_SINCE,
+                ClientMsg::Command(
+                    Command::ConversationMarkSeen { .. }
+                    | Command::ConversationSetPermissions { .. }
+                    | Command::BranchWorktree { base: Some(_), .. },
+                ) => CHAT_CONTROLS_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3430,6 +3478,31 @@ mod tests {
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
         }
+    }
+
+    /// 124 added a chat's "seen" and a worktree cut from a base. A daemon at 123 still talks to
+    /// this build; it reads a `BranchWorktree` without a base exactly as before, and is never sent
+    /// the seen or a worktree with a base, which it would pass over or make on the base itself.
+    #[test]
+    fn a_daemon_from_before_chat_controls_reads_the_old_worktree_and_is_never_sent_the_new() {
+        #[derive(Deserialize, PartialEq, Debug)]
+        enum Command123 {
+            BranchWorktree { project: PathBuf, branch: String },
+        }
+        const { assert!(CHAT_CONTROLS_SINCE > COMPATIBLE_SINCE && CHAT_CONTROLS_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(CHAT_CONTROLS_SINCE - 1, 0));
+
+        let old = Command::BranchWorktree { project: "/code".into(), branch: "feat/x".into(), base: None };
+        assert_eq!(
+            decode::<Command123>(&encode(&old).unwrap()).unwrap(),
+            Command123::BranchWorktree { project: "/code".into(), branch: "feat/x".into() }
+        );
+        assert_eq!(ClientMsg::Command(old).introduced_in(), COMPATIBLE_SINCE);
+        let based = Command::BranchWorktree { project: "/code".into(), branch: "keen-otter".into(), base: Some("dev".into()) };
+        assert_eq!(ClientMsg::Command(based).introduced_in(), CHAT_CONTROLS_SINCE);
+        let seen = Command::ConversationMarkSeen { id: crate::conversation::ConversationId(3) };
+        assert!(decode::<Command123>(&encode(&seen).unwrap()).is_err());
+        assert_eq!(ClientMsg::Command(seen).introduced_in(), CHAT_CONTROLS_SINCE);
     }
 
     fn sample_pull_requests() -> ProjectPulls {

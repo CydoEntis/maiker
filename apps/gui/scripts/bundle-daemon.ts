@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -25,5 +25,14 @@ execFileSync('cargo', [
 
 if (!existsSync(executable)) throw new Error(`Cargo did not produce ${executable}`)
 mkdirSync(sidecarDirectory, { recursive: true })
-copyFileSync(executable, sidecar)
+// The service a previous dev run started outlives its window and runs from this file, and Linux and macOS refuse to
+// write into a running program (ETXTBSY). Renaming a new file over it is allowed: the running service keeps the old
+// one until it restarts. Windows refuses both, and scripts/dev.ps1 stops before this while the service runs.
+const staged = `${sidecar}.${String(process.pid)}.tmp`
+try {
+  copyFileSync(executable, staged)
+  renameSync(staged, sidecar)
+} finally {
+  rmSync(staged, { force: true })
+}
 process.stdout.write(`Prepared daemon sidecar for ${targetTriple}\n`)

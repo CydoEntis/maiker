@@ -103,6 +103,12 @@ impl Daemon {
                 self.pane_resize(client, term, cols, rows)?
             }
             Command::ConversationRename { id, title } => self.conversation_rename(id, &title)?,
+            Command::ConversationMarkSeen { id } => self.conversation_mark_seen(id),
+            Command::ConversationSetPermissions {
+                id,
+                generation,
+                permissions,
+            } => self.conversation_set_permissions(id, generation, permissions)?,
             Command::ConversationArchive { id, archived } => {
                 self.conversation_archive(id, archived)?
             }
@@ -691,9 +697,11 @@ impl Daemon {
                 });
                 return Ok(false);
             }
-            Command::BranchWorktree { project, branch } => {
-                if let Some(problem) = branch_agent::branch_problem(&branch) {
-                    anyhow::bail!("{problem}");
+            Command::BranchWorktree { project, branch, base } => {
+                for name in std::iter::once(&branch).chain(base.as_ref()) {
+                    if let Some(problem) = branch_agent::branch_problem(name) {
+                        anyhow::bail!("{problem}");
+                    }
                 }
                 // The same limit as a chat on a branch: no checkout (and no setup hook) in a
                 // repository the app has never been shown, unless a person picked the folder.
@@ -712,7 +720,8 @@ impl Daemon {
                 let tx = self.tx.clone();
                 self.pending_ops += 1;
                 tokio::task::spawn_blocking(move || {
-                    let result = branch_worktree(&project, &branch, &template, from_default);
+                    let result =
+                        branch_worktree(&project, &branch, base.as_deref(), &template, from_default);
                     let _ = tx.blocking_send(Ev::BranchWorktreeMade {
                         client,
                         set_up: false,

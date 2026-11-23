@@ -49,6 +49,32 @@ pub enum Sandbox {
     FullAccess,
 }
 
+/// How far a running chat's agent may go without asking, as a person changes it mid-chat (ADR
+/// 0005): the pair `LaunchSettings` starts it with, set again. Takes effect from the next message.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Permissions {
+    pub approval_policy: ApprovalPolicy,
+    pub sandbox: Sandbox,
+}
+
+impl Permissions {
+    /// No sandbox goes only with no approvals, as at start: a provider has no posture that
+    /// asks first but then runs unsandboxed.
+    pub fn validate(&self) -> Result<(), &'static str> {
+        if self.sandbox == Sandbox::FullAccess && self.approval_policy != ApprovalPolicy::Never {
+            return Err("Full access asks nothing: it goes only with the approval policy Never");
+        }
+        Ok(())
+    }
+
+    /// What `settings` would run with these permissions.
+    pub fn apply_to(self, settings: &mut LaunchSettings) {
+        settings.approval_policy = self.approval_policy;
+        settings.sandbox = self.sandbox;
+    }
+}
+
 /// Reasoning efforts both providers' CLIs accept, lowest first.
 pub const TURN_EFFORTS: [&str; 5] = ["low", "medium", "high", "xhigh", "max"];
 /// The model aliases `claude --model` takes, strongest first. Each names the newest model of its
@@ -58,7 +84,8 @@ pub const CLAUDE_MODEL_ALIASES: [&str; 4] = ["fable", "opus", "sonnet", "haiku"]
 pub const MAX_MODEL_CHARS: usize = 64;
 
 /// What the user picked in the chat for the next message: a model and a reasoning effort. A field
-/// left `None` keeps what the conversation already uses. Permissions are never part of it (ADR 0005).
+/// left `None` keeps what the conversation already uses. Permissions are not part of it: they
+/// change with `Command::ConversationSetPermissions` (ADR 0005).
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TurnChoice {

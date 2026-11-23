@@ -857,8 +857,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(fireEvent.keyDown(terminal, { key: 'Tab', shiftKey: true })).toBe(true)
     expect(fireEvent.keyDown(terminal, { key: '|', code: 'Backslash', ctrlKey: true, shiftKey: true })).toBe(false)
 
-    // Hidden, the sidebar leaves no rail; the first pane's header offers it back.
-    expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument()
+    // Hidden, the sidebar slides out and leaves no rail; the first pane's header offers it back.
+    await waitFor(() => { expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument() })
     expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeInTheDocument()
   })
 
@@ -1028,8 +1028,17 @@ describe('desktop overlays and pane tools', () => {
     }
   })
 
-  it.each(['done', 'needs-you'] as const)('leaves a %s session as it is when you are in its pane: only the next message changes it', async (status) => {
-    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status })])
+  it('marks a finished session seen once you are in it', async () => {
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'done' })])
+    renderDesktopApp()
+    await screen.findByRole('region', { name: 'Shell in ~/a' })
+    act(() => { window.dispatchEvent(new Event('focus')) })
+
+    await waitFor(() => { expect(daemon.markSeenOnDaemon).toHaveBeenCalledWith({ id: 't2' }) })
+  })
+
+  it('does not mark a needs-you session seen just because you are in it', async () => {
+    daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`, { status: 'needs-you' })])
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
     act(() => { window.dispatchEvent(new Event('focus')) })

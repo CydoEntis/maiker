@@ -31,9 +31,11 @@ function Bubble({ holds }: { holds: "question" | "tick" }) {
 
 function Spinner() {
   return (
-    <svg viewBox="0 0 24 24" className="mx-status-light" focusable="false" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle className="mx-status-track" cx="12" cy="12" r={RING_RADIUS} vectorEffect="non-scaling-stroke" />
-      <path className="mx-status-arc" d={RING_LIT} vectorEffect="non-scaling-stroke" />
+    // No non-scaling stroke: WebKit works it out again on every turned frame, and the ring wobbled as it spun. The stroke
+    // is drawn at the ring's own scale instead (4 of 24 units is 2px at 12px).
+    <svg viewBox="0 0 24 24" className="mx-status-light" focusable="false" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round">
+      <circle className="mx-status-track" cx="12" cy="12" r={RING_RADIUS} />
+      <path className="mx-status-arc" d={RING_LIT} />
     </svg>
   )
 }
