@@ -88,13 +88,17 @@
 .mx-veil.is-chat { z-index: 45; }
 .mx-veil.is-window { z-index: 92; background: color-mix(in srgb, var(--bg) 78%, transparent); }
 :root[data-gpu="software"] .mx-veil { animation: none; }
-.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; box-shadow: var(--float-sh); animation: mx-fb-fade .18s var(--ease); }
+/* A blocking alert is the shared modal's frame: the dialog radius and shadow, a roomy body, and its actions in a foot
+   under a hairline, as every other window's are. */
+.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(460px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 22px 24px 0; border-radius: var(--r-dialog); box-shadow: var(--dialog-sh); animation: mx-fb-fade .18s var(--ease); }
 .mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--fg); }
 .mx-alert-reason { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
+.mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
+.mx-app .mx-alert[role="alertdialog"] .mx-alert-actions { margin: 12px -24px 0; padding: 14px 24px 16px; border-top: 1px solid var(--line); }
+.mx-app .mx-alert[role="alertdialog"] > :last-child:not(.mx-alert-actions) { margin-bottom: 20px; }
 .mx-alert-actions .mx-fb-end { margin-left: auto; }
 .mx-alert-count { margin-left: auto; font: 400 11.5px var(--mono); color: var(--dim); white-space: nowrap; }
-.mx-alert-facts { display: flex; flex-direction: column; gap: 4px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--fg2); }
+.mx-alert-facts { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 0; padding: 10px 12px; border-radius: var(--r-control); background: var(--m-well); list-style: none; font-size: 12.5px; line-height: 1.5; color: var(--fg2); }
 .mx-alert-facts li { display: flex; gap: 8px; }
 .mx-alert-facts b { flex: none; width: 14px; font: 800 12px/18px var(--mono); text-align: center; color: var(--dim); }
 .mx-alert-facts .is-ok b { color: var(--ok); }
