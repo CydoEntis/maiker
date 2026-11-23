@@ -785,9 +785,9 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     </>
   )
   const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
-  // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag is
-  // for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
-  const bypassTag = fullAccess && !shieldDanger
+  // A bypassed chat always shows it (ADR 0005), and only in the message box: its shield is red while the mode asks about
+  // nothing, and stays red for a chat started with Bypass permissions even after its mode moved, since it can go back.
+  const modeDanger = shieldDanger || fullAccess
   const problemView = useChatProblem(problem, () => summaryOf(bareRows))
   // The chat's own read: while it reconnects, or when it failed, one line in the dock says so, under any real problem.
   // A lost service is the window's news, said once by its bar (lib/toast.ts), so the chat speaks only while the service is up.
@@ -802,11 +802,6 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       {confirming !== null && <ConfirmDialog danger title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
       {editFromHere.ask !== null && <ConfirmDialog danger title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
-      {bypassTag && (
-        <div className="mx-chat-notices">
-          <span className="mx-chat-tag is-danger" title="No sandbox and no approval prompts. End the session and start a new one to change this.">Bypass permissions</span>
-        </div>
-      )}
       {/* Politely announces a change of state only; the log itself is not a live region, so streaming text never floods a screen reader. */}
       <div role="status" aria-live="polite" className="sr-only">{announcement(feed, agent, working)}</div>
       <div role="status" aria-live="polite" className="sr-only">{quoteNote}</div>
@@ -850,7 +845,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
         place={place}
         // Nothing has run in a chat that is read and empty, with no turn under way: its chips can still change where it works.

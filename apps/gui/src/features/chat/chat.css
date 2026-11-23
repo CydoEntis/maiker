@@ -16,8 +16,6 @@
 .mx-chat.is-starting { position: relative; }
 .mx-chat.is-starting .mx-chat-notices { position: absolute; top: 0; left: 0; right: 0; z-index: 2; margin-top: 10px; }
 .mx-chat-starting { font-weight: 600; color: var(--fg); }
-.mx-chat-tag { padding: 0 6px; font-family: var(--mono); font-size: 10.5px; font-weight: 600; box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-chat-tag.is-danger { color: var(--err); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--err) 45%, transparent); }
 .mx-chat-starting { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .mx-chat-starting p { margin: 0; }
 .mx-chat-empty { margin: 0; flex: 1; display: flex; align-items: center; justify-content: center; padding: 0 24px; text-align: center; font-size: 13px; color: var(--dim); }
