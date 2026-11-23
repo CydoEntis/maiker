@@ -405,8 +405,25 @@
 .mx-recent-row[aria-disabled="true"] { cursor: not-allowed; color: var(--muted); }
 .mx-recent-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 /* A row of the Other agents list: text, then its own buttons; the row itself is not one. */
-.mx-acp-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 10px; }
-.mx-acp-row small { color: var(--muted); }
+/* Other agents (`AcpAgentsDialog`): a search, then Ready to use and Available to install as rows with the shared buttons. */
+.mx-rename.mx-modal.mx-acp { width: min(600px, calc(100vw - 32px)); max-height: min(680px, calc(100vh - 64px)); }
+.mx-acp-lead { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--muted); }
+.mx-acp-search { flex: none; display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 12px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
+.mx-acp-search svg { flex: none; width: 15px; height: 15px; }
+.mx-acp-search input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; font-size: 13px; color: var(--fg); outline: none; }
+.mx-acp-note { margin: 0; padding: 18px 0; text-align: center; font-size: 12.5px; color: var(--dim); }
+.mx-acp-list { display: flex; flex-direction: column; gap: 14px; }
+.mx-acp-group { display: flex; flex-direction: column; gap: 2px; }
+.mx-acp-heading { margin: 0 0 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
+.mx-acp-row { display: flex; align-items: flex-start; gap: 12px; padding: 10px; border-radius: var(--r-control); transition: background-color var(--t-fast) var(--ease); }
+.mx-acp-row:hover { background: var(--m-hover); }
+.mx-acp-mark { flex: none; width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: var(--m-card); font-size: 13px; font-weight: 600; color: var(--fg2); }
+.mx-acp-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.mx-acp-name { display: flex; align-items: baseline; gap: 8px; font-size: 13.5px; font-weight: 600; color: var(--fg); }
+.mx-acp-version { font: 400 11.5px var(--mono); color: var(--dim); }
+.mx-acp-about { font-size: 12.5px; line-height: 1.45; color: var(--fg2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.mx-acp-state { font-size: 11.5px; color: var(--muted); }
+.mx-acp-actions { flex: none; display: flex; align-items: center; gap: 6px; align-self: center; }
 .mx-recent-title, .mx-recent-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-recent-title { font-size: 13.5px; }
 .mx-recent-where { font-size: 12px; color: var(--muted); }

@@ -173,7 +173,7 @@
    the lists here and writes no focus rule of its own. An invalid field keeps its danger edge. The palette's search is its
    header, not a field: it has no ring, which its rounded frame would cut at the corners. */
 .mx-app :is(input, textarea, select):where(:not([type="checkbox"], [type="radio"], [type="range"], [type="file"])):focus-visible { border-color: var(--field-focus); box-shadow: none; }
-.mx-app :is(.mx-chip-search, .mx-settings-search, .mx-folder-field, .mx-search-field, .mx-sbf-search):focus-within,
+.mx-app :is(.mx-chip-search, .mx-settings-search, .mx-folder-field, .mx-search-field, .mx-sbf-search, .mx-acp-search):focus-within,
 .mx-app :is(.mx-find-input, .mx-scard-input, .mx-reply-input):focus-visible { box-shadow: var(--field-focus-edge); }
 .mx-app :is(.mx-folder-field, .mx-scard-input).is-invalid:is(:focus-within, :focus-visible) { box-shadow: inset 0 0 0 1px var(--danger); }
 

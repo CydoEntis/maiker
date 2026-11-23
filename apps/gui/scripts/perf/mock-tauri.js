@@ -212,6 +212,13 @@
       case 'plugin:event|emit':
       case 'plugin:event|emit_to':
         return null
+      case 'acp_agents':
+        return [
+          { id: 'mine', name: 'Mine', version: '', description: 'An agent your config names.', source: 'config', installed: '', unavailable: null },
+          { id: 'opencode', name: 'OpenCode', version: '1.4.2', description: 'The open source coding agent for the terminal, over ACP.', source: 'registry', installed: '1.4.0', unavailable: null },
+          { id: 'goose', name: 'Goose', version: '1.9.0', description: 'An on-machine agent that can build, run and test code.', source: 'registry', installed: null, unavailable: null },
+          { id: 'kiro', name: 'Kiro', version: '0.3.1', description: 'Spec-driven development from prompt to production.', source: 'registry', installed: null, unavailable: 'publishes no checksum for its download' },
+        ]
       case 'list_sessions':
         return snapshot()
       case 'default_session_folder':
