@@ -75,7 +75,7 @@ export function MachineUpdateDialog({ name, action, checkActivity, onUpdate, onC
             : <p className="mx-modal-note" role="status">Checking what is open on {name}…</p>}
         </ModalBody>
         <ModalFoot left={<Button variant="ghost" size="lg" onClick={onCancel}>Cancel</Button>}>
-          {action === 'update' && <Button variant="outline" size="lg" disabled={!asked.done} onClick={() => { onUpdate(true) }}>{verb} when idle</Button>}
+          {action === 'update' && <Button variant="ghost" size="lg" disabled={!asked.done} onClick={() => { onUpdate(true) }}>{verb} when idle</Button>}
           <Button variant="primary" size="xl" disabled={!asked.done} onClick={() => { onUpdate(false) }}>{verb} now</Button>
         </ModalFoot>
       </div>

@@ -30,7 +30,7 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
       </CardBody>
       {(state.kind === 'answered' || question !== undefined) && (
         <CardFoot>
-          {state.kind === 'answered' && <Button variant="soft" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
+          {state.kind === 'answered' && <Button variant="ghost" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
           {question !== undefined && state.kind !== 'asking' && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
         </CardFoot>
       )}

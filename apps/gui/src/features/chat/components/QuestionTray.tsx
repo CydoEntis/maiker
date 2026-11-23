@@ -54,7 +54,7 @@ export function ScreenMenuTray({ agent, menu, send }: { agent: string; menu: Scr
       label={`${agentLabel(agent)} is asking`}
       title={`${agentLabel(agent)} is asking`}
       foot={menu.options.map((option, index) => (
-        <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'soft'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
+        <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'ghost'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
       ))}
     >
       {menu.question !== '' && <p className="mx-waiting-text is-pre">{menu.question}</p>}
@@ -76,8 +76,8 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
       aside={agent}
       foot={(
         <>
-          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.declineKeys), setBusy) }}>Don’t trust</Button>
-          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.trustKeys), setBusy) }}>Trust this folder</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => { RUN(() => send(trust.declineKeys), setBusy) }}>Don’t trust</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => { RUN(() => send(trust.trustKeys), setBusy) }}>Trust this folder</Button>
         </>
       )}
     >
@@ -181,7 +181,7 @@ export function ChoiceMenuTray({ label, title, aside, menu, send, sendKeys, read
       aside={aside}
       foot={(
         <>
-          <Button variant="soft" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
+          <Button variant="ghost" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
           <span className="mx-spacer" />
           <Button variant="ghost" size="sm" aria-expanded={terminal} onClick={() => { setTerminal((now) => !now) }}>{terminal ? 'Hide terminal' : 'Show terminal'}</Button>
         </>
@@ -412,7 +412,7 @@ function PlanTray({ label, plan, asking, send, readScreen }: { label: string; pl
       aside="Plan mode"
       foot={press === undefined
         ? (send === undefined ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : null)
-        : <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
+        : <Button variant="ghost" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
     >
       <PlanBody plan={plan} />
       {press !== undefined && (

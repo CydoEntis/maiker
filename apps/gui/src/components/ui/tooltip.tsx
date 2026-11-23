@@ -34,8 +34,11 @@ function TooltipContent({
   arrow = true,
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content> & { arrow?: boolean }) {
+  // Inside the app, where the theme's tokens and the float material are scoped, as the dialogs are; on the page's body
+  // a tip lost both and was drawn in the library's own square box.
+  const root = typeof document === "undefined" ? null : document.querySelector<HTMLElement>(".mx-app")
   return (
-    <TooltipPrimitive.Portal>
+    <TooltipPrimitive.Portal container={root}>
       <TooltipPrimitive.Content
         data-slot="tooltip-content"
         sideOffset={sideOffset}

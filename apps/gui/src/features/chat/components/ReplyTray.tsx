@@ -131,7 +131,7 @@ export function ReplyTray({ who, asked, focus, message: row, blocked, onSend, on
       flush
       foot={(
         <>
-          <Button variant="soft" className="mx-reply-send" disabled={built === null || blocked !== null || sending} title="Ctrl+Enter sends" onClick={send}>{sendLabel}</Button>
+          <Button variant="ghost" className="mx-reply-send" disabled={built === null || blocked !== null || sending} title="Ctrl+Enter sends" onClick={send}>{sendLabel}</Button>
           <Button variant="ghost" onClick={onClose}>Cancel</Button>
           <span className="mx-spacer" />
           <span className="mx-waiting-note">{blocked ?? 'Unanswered questions are left out'}</span>

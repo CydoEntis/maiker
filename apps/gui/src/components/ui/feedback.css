@@ -11,13 +11,13 @@
 .is-edge-working { --edge: var(--working); }
 .is-edge-info { --edge: var(--muted); }
 
-/* ---- buttons: outlined, a status-tinted primary, the needs answer, a quiet text button ---- */
-.mx-fb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; font: 500 12px var(--ui); color: var(--fg); white-space: nowrap; background: transparent; box-shadow: inset 0 0 0 1px var(--line2); --fold-line: var(--line2); }
-.mx-fb-btn:hover { background: var(--m-hover); }
+/* ---- buttons: the ghost (as `Button`'s), the accent primary, the needs answer, a quiet text button ---- */
+.mx-fb-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 26px; padding: 0 10px; font: 500 12px var(--ui); color: var(--fg2); white-space: nowrap; background: transparent; box-shadow: none; --fold-line: var(--line2); }
+.mx-fb-btn:hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-fb-btn:focus-visible { box-shadow: var(--focus-edge); }
 .mx-fb-btn.is-lg { height: 30px; padding: 0 12px; font-size: 12.5px; }
-.mx-fb-btn.is-primary { background: color-mix(in srgb, var(--edge, var(--fg)) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--edge, var(--fg)) 55%, transparent); --fold-line: color-mix(in srgb, var(--edge, var(--fg)) 55%, transparent); }
-.mx-fb-btn.is-primary:hover { background: color-mix(in srgb, var(--edge, var(--fg)) 22%, transparent); }
+.mx-fb-btn.is-primary { background: var(--accent); color: var(--on-accent); font-weight: 600; box-shadow: none; --fold-line: transparent; }
+.mx-fb-btn.is-primary:hover { background: color-mix(in oklab, var(--accent) 90%, white); }
 .mx-fb-btn.is-primary:focus-visible { box-shadow: var(--focus-edge); }
 .mx-fb-btn.is-lg.is-primary { padding: 0 14px; }
 .mx-fb-btn.is-needs { background: var(--needs); color: var(--on-needs); box-shadow: none; --fold-line: transparent; }

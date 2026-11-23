@@ -31,7 +31,8 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
 
 function SelectContent({ className, children, container, position = "popper", ...props }: React.ComponentProps<typeof SelectPrimitive.Content> & { container?: HTMLElement | null }) {
   return (
-    <SelectPrimitive.Portal container={container}>
+    // Inside the app by default, where the theme's tokens and the float material are scoped.
+    <SelectPrimitive.Portal container={container ?? document.querySelector<HTMLElement>(".mx-app")}>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}

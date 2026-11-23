@@ -35,7 +35,7 @@ export function CommandMenuTray({ agent, topic, readScreen, sendKeys, onClose }:
       title={`${agentLabel(agent)}'s ${topic} menu`}
       aside="From its terminal"
       flush
-      foot={<Button variant="soft" disabled={busy} title="Esc in the terminal: leaves the menu" onClick={close}>Close</Button>}
+      foot={<Button variant="ghost" disabled={busy} title="Esc in the terminal: leaves the menu" onClick={close}>Close</Button>}
     >
       <TerminalPrompt readScreen={readScreen} sendKeys={sendKeys} />
     </WaitingCard>

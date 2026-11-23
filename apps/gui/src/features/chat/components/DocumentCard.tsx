@@ -26,7 +26,7 @@ export function DocumentCard({ path, document }: DocumentCardProps) {
         <FileBadge path={path} />
         <span className="mx-doc-lines">· wrote {document.lineCount} {document.lineCount === 1 ? 'line' : 'lines'}</span>
         <span className="mx-spacer" />
-        <Button variant="soft" size="sm" aria-expanded={open} onClick={() => { setOpen((current) => !current) }}>{open ? 'Close' : 'Read'}</Button>
+        <Button variant="ghost" size="sm" aria-expanded={open} onClick={() => { setOpen((current) => !current) }}>{open ? 'Close' : 'Read'}</Button>
         <Button variant="ghost" size="sm" onClick={() => { copy(document.text) }}>{copied ? 'Copied' : 'Copy'}</Button>
       </CardHead>
       <CardBody>

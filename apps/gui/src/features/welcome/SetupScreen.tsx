@@ -94,14 +94,14 @@ function MissingActions({ row, state, installs }: { row: AgentRow; state: Instal
   const { program, label } = row.agent
   const installable = installableAgent(program)
   if (installable === null) return <span className="flex-none text-xs text-(--dim)">Not installable here</span>
-  if (state === undefined) return <Button size="sm" variant="soft" className={ROW_BUTTON} aria-label={`Install ${label}`} onClick={() => { installs.ask(installable) }}>Install</Button>
-  if (state.phase === 'failed') return <Button size="sm" variant="soft" className={ROW_BUTTON} aria-label={`Try installing ${label} again`} onClick={() => { installs.ask(installable) }}>Try again</Button>
+  if (state === undefined) return <Button size="sm" variant="ghost" className={ROW_BUTTON} aria-label={`Install ${label}`} onClick={() => { installs.ask(installable) }}>Install</Button>
+  if (state.phase === 'failed') return <Button size="sm" variant="ghost" className={ROW_BUTTON} aria-label={`Try installing ${label} again`} onClick={() => { installs.ask(installable) }}>Try again</Button>
   if (state.phase === 'waiting') return <span className="flex-none text-xs text-(--dim)">Queued</span>
   if (state.phase === 'running') return <span className="flex-none font-(family-name:--mono) text-xs text-(--fg2)">{state.percent === null ? 'Installing' : `${String(Math.round(state.percent))}%`}</span>
   return (
     <span className="flex flex-none gap-1.5">
       <Button size="sm" variant="ghost" aria-label={`Cancel installing ${label}`} onClick={() => { installs.dismiss(program) }}>Cancel</Button>
-      <Button size="sm" variant="soft" disabled={state.command === null} aria-label={`Run the install of ${label}`} onClick={() => { installs.run(installable) }}>Run it</Button>
+      <Button size="sm" variant="ghost" disabled={state.command === null} aria-label={`Run the install of ${label}`} onClick={() => { installs.run(installable) }}>Run it</Button>
     </span>
   )
 }

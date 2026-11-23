@@ -166,7 +166,7 @@ export function NewWorktreeDialog({ term, repoName, machine, folder, task = '', 
             )}
           </div>
           <footer className="mx-wt-foot">
-            <Button type="button" variant="soft" onClick={onCancel}>Cancel</Button>
+            <Button type="button" variant="ghost" onClick={onCancel}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={working}>{working ? (moving ? 'Moving…' : 'Creating…') : moving ? 'Move chat' : 'Create worktree'}</Button>
           </footer>
         </form>

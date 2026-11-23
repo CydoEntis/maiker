@@ -23,12 +23,11 @@ import { galleryParams, galleryHash } from './galleryParams'
  */
 
 const STATES: readonly StatusMarkKind[] = ['idle', 'done', 'needs', 'working']
-const KINDS = ['primary', 'needs', 'soft', 'ghost', 'danger'] as const
+const KINDS = ['primary', 'needs', 'ghost', 'danger'] as const
 /** What hover and press look like for each kind, drawn at rest so they can be compared side by side. */
 const FORCED: Record<(typeof KINDS)[number], { hover: string; pressed: string }> = {
   primary: { hover: 'brightness-108', pressed: 'bg-[color-mix(in_oklab,var(--accent)_80%,var(--bg))]' },
   needs: { hover: 'brightness-108', pressed: 'bg-[color-mix(in_oklab,var(--needs)_80%,var(--bg))]' },
-  soft: { hover: 'bg-[color-mix(in_oklab,var(--raise)_88%,var(--fg))]', pressed: 'bg-[color-mix(in_oklab,var(--raise)_80%,var(--bg))]' },
   ghost: { hover: 'bg-(--hover) text-(--fg)', pressed: 'bg-(--sel)' },
   danger: { hover: 'bg-[color-mix(in_oklab,var(--err)_18%,transparent)]', pressed: 'bg-[color-mix(in_oklab,var(--err)_24%,transparent)]' },
 }
@@ -53,7 +52,7 @@ function Captioned({ caption, children }: { caption: string; children: ReactNode
 }
 
 function ButtonRow({ kind }: { kind: (typeof KINDS)[number] }) {
-  const hint = kind === 'needs' || kind === 'soft' ? 'y' : undefined
+  const hint = kind === 'needs' ? 'y' : undefined
   const label = kind === 'needs' ? 'Yes once' : 'Label'
   return (
     <Sample label={`Button/kind=${kind}`}>
@@ -78,7 +77,7 @@ function Primitives() {
           <Card>
             <CardHead><span>Head strip</span><span className="flex-1" /><IconButton label="Copy"><Copy /></IconButton></CardHead>
             <CardBody><span className="text-[13px] text-(--fg2)">Body. 10px 12px padding.</span></CardBody>
-            <CardFoot><Button size="sm">Primary</Button><Button size="sm" variant="soft">Soft</Button></CardFoot>
+            <CardFoot><Button size="sm">Primary</Button><Button size="sm" variant="ghost">Soft</Button></CardFoot>
           </Card>
         </Sample>
         <Sample label="Card · hover"><Card className="border-(--line2)"><CardHead>Edge goes to line2</CardHead></Card></Sample>
@@ -162,7 +161,7 @@ export function Gallery() {
           <p className="m-0 text-sm text-(--muted)">Every shared component in every state. {theme.name}.</p>
           <nav aria-label="Theme" className="flex flex-wrap gap-1.5">
             {QUICK_THEMES.filter((name) => THEMES.some((entry) => entry.name === name)).map((name) => (
-              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'soft'}><a href={galleryHash(name)}>{name}</a></Button>
+              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'ghost'}><a href={galleryHash(name)}>{name}</a></Button>
             ))}
           </nav>
         </header>

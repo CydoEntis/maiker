@@ -63,6 +63,9 @@
   :where(.mx-app) button { font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: pointer; text-align: inherit; }
   :where(.mx-app) button:disabled { cursor: default; }
 }
+/* Anything that does something when clicked shows the pointer, whatever its own rule or a library's class says: a menu
+   row, an option, a tab, a switch. Disabled controls keep the arrow (or the button's not-allowed). */
+.mx-app :is(button, a[href], summary, select, label:has(> input), [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"]):not(:disabled, [aria-disabled="true"], [data-disabled]) { cursor: pointer; }
 /* Focus is a 1px accent underline on buttons, fields, rows and menu items, never a ring (design rule 10; docs/UI.md). A field
    whose input sits in a wrapper draws it on the wrapper and lists the input here. The message box is the one exception: its
    whole border turns accent (the terminal's own focus is the pane's line, not a box). */
@@ -211,6 +214,12 @@
 /* With the WebGL renderer the terminal is see-through and the card shows behind the text. The DOM
    renderer keeps the theme's opaque terminal ground, so a row repaint never blends through the card. */
 
+/* The pull requests in a window of their own over the app: Settings' scrim and frame, one column. */
+.mx-pulls-window { width: 100%; max-width: 760px; height: 100%; max-height: 620px; display: flex; flex-direction: column; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: mx-dialog-in .16s ease-out; }
+.mx-pulls-window-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 52px; padding: 0 12px 0 20px; }
+.mx-pulls-window-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.mx-pulls-window-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
+
 /* Settings */
 .mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(3, 5, 8, .62); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
 .mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
@@ -345,8 +354,9 @@
 .mx-sidebar-resizer:hover::after, .mx-sidebar-resizer:focus-visible::after, .mx-sidebar.is-resizing .mx-sidebar-resizer::after { background: var(--accent-line); }
 .mx-sidebar-resizer:focus-visible { outline: none; }
 
-.mx-text-button { height: 28px; padding: 0 12px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); color: var(--fg2); font-size: 12.5px; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-text-button:not(:disabled):hover { background: var(--m-sel); color: var(--fg); }
+/* The plain-markup buttons look as `Button` does: a quiet one is the ghost (text until hovered), `.is-primary` the accent. */
+.mx-text-button { height: 28px; padding: 0 12px; border-radius: var(--r-control); background: transparent; color: var(--fg2); font-size: 12.5px; font-weight: 500; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-text-button:not(:disabled):hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-text-button:disabled { opacity: .4; }
 
 /* Naming a session. */
@@ -382,6 +392,9 @@
 .mx-getfile-row.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 .mx-rename.mx-recent { max-width: 560px; }
+.mx-rename.mx-modal.mx-recent { width: 560px; }
+/* The worktree's branch mark on a small tile, as a file or an agent has one. */
+.mx-recent-mark { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: rgba(var(--ink), .06); color: var(--fg2); }
 .mx-recent-list { list-style: none; margin: 0; display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); padding: 4px; }
 .mx-recent-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .mx-recent-row:hover:not([aria-disabled="true"]), .mx-recent-row:focus-visible { background: var(--m-hover); outline: none; }
@@ -396,7 +409,7 @@
 .mx-recent-where { font-size: 12px; color: var(--muted); }
 .mx-recent-when { flex: none; font-size: 11.5px; color: var(--dim); }
 .mx-text-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
-.mx-text-button.is-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 90%, #fff); color: var(--on-accent); }
+.mx-text-button.is-primary:not(:disabled):hover { background: color-mix(in oklab, var(--accent) 90%, white); color: var(--on-accent); }
 
 /* Hotkeys as keycaps */
 .mx-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
@@ -474,7 +487,7 @@
 .mx-scard-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); color: var(--on-accent); }
 
 /* Hover tooltip for anything with a title. */
-.mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 5px 9px; border-radius: var(--r-control); background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
+.mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: var(--r-panel); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
 .mx-tip-line { display: flex; align-items: center; gap: 8px; }
 .mx-tip-name { font-size: 12px; font-weight: 500; }
 .mx-tip-keys { display: inline-flex; gap: 2px; }

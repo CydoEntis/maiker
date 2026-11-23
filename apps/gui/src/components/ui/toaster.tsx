@@ -52,8 +52,8 @@ function ToastView({ item }: { item: ToastItem }) {
   const titleId = React.useId()
   const note = isNote(item)
   const action = item.action === undefined ? null : (
-    // A failure's or a warning's action is its fix, the one thing to do next, so it is the solid button; elsewhere it is one choice among others.
-    <Button variant={item.kind === "needs" ? "needs" : note ? "ghost" : item.kind === "error" || item.kind === "warning" ? "solid" : "soft"} size="sm" onClick={() => { if (item.action !== undefined) run(item, item.action) }}>{item.action.label}</Button>
+    // A failure's or a warning's action is its fix, the one thing to do next, so it is the primary button; elsewhere it is a quiet choice.
+    <Button variant={item.kind === "needs" ? "needs" : item.kind === "error" || item.kind === "warning" ? "primary" : "ghost"} size="sm" onClick={() => { if (item.action !== undefined) run(item, item.action) }}>{item.action.label}</Button>
   )
   return (
     <div

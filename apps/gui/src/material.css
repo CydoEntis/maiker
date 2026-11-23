@@ -48,6 +48,10 @@
   /* A row the pointer or the keys are on, inside a float: the ink again, so it shows on any theme's float ground. */
   --float-hover: rgba(var(--ink), .06);
   --float-sh: 0 10px 28px rgba(0, 0, 0, calc(.45 * var(--shk)));
+  /* A list that drops from a field (a select's options) opens over a dialog or popover more often than over a pane: one
+     step lighter than the float, a stronger edge, so it lifts off the float it opens from. */
+  --float-raised: color-mix(in srgb, var(--float-bg) 93%, rgb(var(--ink)));
+  --float-raised-line: rgba(var(--ink), .16);
 }
 /* ---- component tokens ----
    The shared pieces every control reads, so one component serves every theme:
@@ -106,6 +110,8 @@
   border-color: var(--float-line);
 }
 .mx-app :is([role="menu"], [role="dialog"], [role="alertdialog"]) { box-shadow: var(--float-sh); }
+/* A select's list is the raised float (see `--float-raised`). */
+:is(.mx-app, :root) :is([role="listbox"].mx-pop, [data-slot="select-content"]) { background-color: var(--float-raised); border-color: var(--float-raised-line); }
 :root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--float-bg); border-color: var(--float-line); }
 /* A tip and the hover card are drawn over the busiest part of the window and come and go with the pointer: a flat ring, no
    blur to repaint (docs/PERFORMANCE.md). */

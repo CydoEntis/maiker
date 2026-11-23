@@ -42,7 +42,8 @@ function DropdownMenuContent({
   container?: HTMLElement | null
 }) {
   return (
-    <DropdownMenuPrimitive.Portal container={container}>
+    // Inside the app by default, where the theme's tokens and the float material are scoped.
+    <DropdownMenuPrimitive.Portal container={container ?? document.querySelector<HTMLElement>(".mx-app")}>
       <DropdownMenuPrimitive.Content
         data-slot="dropdown-menu-content"
         sideOffset={sideOffset}

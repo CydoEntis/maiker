@@ -43,9 +43,9 @@ export function SignInCard({ view, onCancel, onClose, onRetry }: { view: SignInV
       </CardBody>
       <CardFoot>
         {waiting && link !== null && <Button variant="primary" size="sm" onClick={() => { openSignInLink(link) }}>Open link</Button>}
-        {waiting && code !== null && <Button variant="soft" size="sm" onClick={() => { copySignInCode(code) }}>Copy code</Button>}
+        {waiting && code !== null && <Button variant="ghost" size="sm" onClick={() => { copySignInCode(code) }}>Copy code</Button>}
         {waiting && <Button variant="ghost" size="sm" onClick={onCancel}>Cancel</Button>}
-        {(problem !== null || (state.kind === 'failed' && state.failure !== 'unsupported' && state.failure !== 'not-installed')) && <Button variant="soft" size="sm" onClick={onRetry}>Try again</Button>}
+        {(problem !== null || (state.kind === 'failed' && state.failure !== 'unsupported' && state.failure !== 'not-installed')) && <Button variant="ghost" size="sm" onClick={onRetry}>Try again</Button>}
         {state.kind !== 'waiting' && <Button variant="ghost" size="sm" onClick={onClose}>{state.kind === 'signed-in' ? 'Done' : 'Close'}</Button>}
       </CardFoot>
     </Card>
