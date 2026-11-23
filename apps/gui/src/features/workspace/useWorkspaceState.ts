@@ -39,7 +39,7 @@ import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type La
 import { LAYOUT_RESET_NOTICE, readLayout, writeLayout } from './model/layoutStorage'
 import { byPriority } from './model/attentionOrder'
 import { agentLabel, folderNameOf, inCreationOrder, type SessionView } from './model/session'
-import { DEFAULT_PICK } from '@/features/chat/agentChoice'
+import { startChoiceFor } from './model/lastWho'
 import { sharedCheckoutRefusal } from './model/sharedCheckout'
 import { bindingFor, detectPlatform, shortcutChords } from './model/shortcuts'
 import { themeStyle } from './theme/themes'
@@ -311,7 +311,8 @@ export function useWorkspaceState() {
     setSettingsSection(null)
     if (!chatView && seed.worktree !== true && seed.message === '') {
       const machineName = heads.find((head) => head.machine === machine)?.name ?? ''
-      startNewChat({ agent: seed.agent ?? preferences.defaultAgent, folder: seed.folder, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine, machineName, resume: null })
+      const agent = seed.agent ?? preferences.defaultAgent
+      startNewChat({ agent, folder: seed.folder, ...startChoiceFor(agent), mode: 'default', message: '', branch: null, machine, machineName, resume: null })
         .catch((error: unknown) => { toast.failed(`Could not start ${agentLabel(seed.agent ?? preferences.defaultAgent)}`, error) })
       return
     }
