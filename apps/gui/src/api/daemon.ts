@@ -1153,6 +1153,19 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
  * A conversation as a session. `limitsOf` is each agent's plan limits as it last reported them (`Snapshot.limits`): a chat
  * session carries its agent's, as a terminal session does, so the status bar has them while only chats are open.
  */
+/**
+ * Whether a chat works in a linked worktree rather than its repository's main checkout: the daemon names the worktree,
+ * or its folder is outside the main checkout (`root`). A subfolder of the main checkout is not a worktree.
+ */
+export function chatInWorktree(cwd: string, root: string | null, worktree: string | null): boolean {
+  if (worktree !== null) return true
+  if (root === null) return false
+  const clean = (path: string) => path.replace(/\\/g, '/').replace(/\/+$/, '')
+  const folder = clean(cwd)
+  const main = clean(root)
+  return folder !== main && !folder.startsWith(`${main}/`)
+}
+
 function toConversation(summary: ConversationSummary, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, limitsOf: ReadonlyMap<string, readonly z.infer<typeof PlanLimitSchema>[]> = new Map()): Conversation {
   // Another machine's chat is named by a key that holds the machine too (`conversationKey`); the caller lists only those that have one.
   const key = machine === undefined ? summary.id : (conversationKey(machine.id, summary.id) ?? summary.id)
@@ -1202,6 +1215,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
       ? {
           cwd,
           checkout: summary.worktree,
+          linked: chatInWorktree(cwd, root, summary.worktree),
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent,
           process: agent,

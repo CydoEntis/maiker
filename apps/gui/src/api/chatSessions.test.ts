@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import { answerHelpers, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
+import { answerHelpers, chatInWorktree, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -118,4 +118,18 @@ describe('chat sessions', () => {
     expect(chat).toMatchObject({ folder: '/work/app-trees/agent-x', repo: null })
   })
 
+})
+
+describe('chatInWorktree', () => {
+  it('is a worktree when the daemon names one or the folder is outside the main checkout', () => {
+    expect(chatInWorktree('/home/me/.maiker/worktrees/shop/keen-otter', '/home/me/dev/shop', null)).toBe(true)
+    expect(chatInWorktree('/home/me/dev/shop', '/home/me/dev/shop', '/home/me/dev/shop-wt')).toBe(true)
+  })
+
+  it('is not one in the main checkout, a subfolder of it, or outside git', () => {
+    expect(chatInWorktree('/home/me/dev/shop/', '/home/me/dev/shop', null)).toBe(false)
+    expect(chatInWorktree('/home/me/dev/shop/web', '/home/me/dev/shop', null)).toBe(false)
+    expect(chatInWorktree('C:\\dev\\shop\\web', 'C:\\dev\\shop', null)).toBe(false)
+    expect(chatInWorktree('/home/me/notes', null, null)).toBe(false)
+  })
 })
