@@ -29,6 +29,8 @@
 /* Three grounds, so the columns read apart: the agent rail and the levels sink below the float, the model list keeps the
    float's own, and a picked row lifts above whichever column it is in. Mixed from the float, so every theme keeps the steps. */
 .mx-pop.mx-mp { --mp-sunk: color-mix(in srgb, var(--float-bg) 78%, #000); --mp-picked: color-mix(in srgb, var(--float-bg) 86%, rgb(var(--ink))); }
+/* A light float would turn muddy grey at those steps: there the sunk columns are a faint tint and the picked row a light one. */
+.mx-app[data-theme-kind="light"] .mx-pop.mx-mp { --mp-sunk: color-mix(in srgb, var(--float-bg) 96%, rgb(var(--ink))); --mp-picked: color-mix(in srgb, var(--float-bg) 91%, rgb(var(--ink))); }
 .mx-mp-rail, .mx-mp-side { background: var(--mp-sunk); }
 .mx-mp-side .mx-mp-level:not(:disabled, [aria-checked="true"]):is(:hover, :focus-visible, [data-lit]) { background: color-mix(in srgb, var(--mp-sunk) 88%, rgb(var(--ink))); }
 :is(.mx-mp-row, .mx-mp-level):disabled { cursor: default; }
