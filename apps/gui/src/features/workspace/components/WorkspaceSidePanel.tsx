@@ -126,7 +126,7 @@ export function WorkspaceSidePanel() {
       nameOf={nameOf}
       menuRoot={root}
       leaving={presence.leaving}
-      floating={panelPlacement(files.openPath !== null, narrow) === 'floating'}
+      floating={panelPlacement(narrow) === 'floating'}
       onOpen={open}
       onShow={(id, by) => {
         changePanel(session.id, (current) => showTab(current, id))

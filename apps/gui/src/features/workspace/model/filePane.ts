@@ -1,8 +1,8 @@
 import type { Arrangement } from './layout'
 
 /**
- * Whether picking a file also hides the side panel. It does not: the panel floats over the right of the file pane and
- * the title bar's button hides it. One switch, so the other answer is one word away.
+ * Whether picking a file also hides the side panel. It does not: the panel stays beside the file pane, and the title
+ * bar's button hides it. One switch, so the other answer is one word away.
  */
 export const PICKING_A_FILE_HIDES_THE_PANEL: boolean = false
 
@@ -22,9 +22,9 @@ export function filePaneShowing(shown: Arrangement | undefined, sessionId: strin
 export type PanelPlacement = 'docked' | 'floating'
 
 /**
- * With a file open the panel floats over the file pane instead of taking room from it, so the chat is never squeezed
- * by both; in a narrow window there is no room beside the pane either way.
+ * The panel takes its own room beside the panes, a file pane too: lying over the file it hid what the person had just
+ * opened. Only a narrow window, with no room beside the pane, has it float.
  */
-export function panelPlacement(fileOpen: boolean, narrow: boolean): PanelPlacement {
-  return fileOpen || narrow ? 'floating' : 'docked'
+export function panelPlacement(narrow: boolean): PanelPlacement {
+  return narrow ? 'floating' : 'docked'
 }

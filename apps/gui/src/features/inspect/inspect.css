@@ -54,7 +54,7 @@
 .mx-sp-picks { display: flex; flex-direction: column; gap: 2px; }
 /* A terminal fills the panel under the tabs on one opaque ground, as a pane's does (docs/PERFORMANCE.md). */
 .mx-inspect-scroll:has(.mx-sp-term) { overflow: hidden; padding: 0; }
-.mx-sp-term { height: 100%; min-height: 0; display: flex; padding: 10px 14px; box-sizing: border-box; font-family: var(--mono); line-height: 1.6; cursor: text; }
+.mx-sp-term { height: 100%; min-height: 0; display: flex; padding: 10px 14px; background: var(--terminal-ground, var(--main)); box-sizing: border-box; font-family: var(--mono); line-height: 1.6; cursor: text; }
 .mx-sp-term > :first-child { flex: 1; min-width: 0; min-height: 0; }
 .mx-sp-term .terminal-view { display: flex; flex-direction: column; height: 100%; gap: 0; padding: 0; }
 .mx-sp-term .terminal-screen, .mx-sp-term .terminal-screen:focus-within { flex: 1; min-height: 0; margin: 0; background: transparent; border: 0; border-radius: 0; box-shadow: none; padding: 0; }

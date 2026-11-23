@@ -38,10 +38,9 @@
 .mx-pane-head { position: relative; flex: none; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 12px; cursor: default; container: pane-head / inline-size; }
 .mx-pane-head.is-draggable { cursor: grab; }
 /* The name takes the room and the buttons sit 10px apart. A terminal pane adds the shield, the context bar and the two
-   split buttons before the close; a chat pane has only the close (its shield and context are in its chat box). The
-   bottom edge is a plain hairline: the status is the sidebar's mark, not a strip here. A narrow pane gives up the
-   project, then the shield and the meter; the name and the buttons stay. */
-.mx-pane > .mx-pane-head { border-bottom: 1px solid var(--line); }
+   split buttons before the close; a chat pane has only the close (its shield and context are in its chat box). There is
+   no rule under it: the header and the body are one card. A narrow pane gives up the project, then the shield and the
+   meter; the name and the buttons stay. */
 .mx-pane-title { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; overflow: hidden; white-space: nowrap; font-size: 13px; }
 .mx-pane-project { flex: none; color: var(--muted); }
 .mx-pane-slash { flex: none; color: var(--dim); }

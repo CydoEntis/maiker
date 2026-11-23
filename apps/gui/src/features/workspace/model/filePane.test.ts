@@ -11,13 +11,9 @@ function withFile(): Layout {
 }
 
 describe('the file pane and the side panel', () => {
-  it('floats the panel over the file pane while a file is open, and docks it beside the main pane otherwise', () => {
-    expect(panelPlacement(false, false)).toBe('docked')
-    expect(panelPlacement(true, false)).toBe('floating')
-  })
-
-  it('floats the panel in a narrow window, which has no room beside the pane', () => {
-    expect(panelPlacement(false, true)).toBe('floating')
+  it('docks the panel beside the panes, a file pane too, and floats it only in a narrow window', () => {
+    expect(panelPlacement(false)).toBe('docked')
+    expect(panelPlacement(true)).toBe('floating')
   })
 
   it('names the file a session’s file pane shows, with what it was asked to open as', () => {

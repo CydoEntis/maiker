@@ -69,7 +69,6 @@
 /* It sits over the panes, so it stays opaque. Inside it is a started chat's pane: `.mx-pane-head`, then the chat with its box. */
 .mx-newchat { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--main); }
 /* The header is the chat pane's (`.mx-pane-head`): `project / New session` and the × that discards the draft, over the same hairline. */
-.mx-newchat > .mx-pane-head { border-bottom: 1px solid var(--line); }
 /* The body centres the question, where it runs and the box as one block; while it starts the card takes the top and the box stays low. */
 /* The chips of the box's foot: the agent keeps the room it needs, the rest sit beside it. */
 .mx-newchat-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; font-family: var(--ui); line-height: normal; }
