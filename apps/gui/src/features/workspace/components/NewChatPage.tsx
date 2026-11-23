@@ -37,8 +37,11 @@ import { copyText } from '@/lib/clipboard'
 import { AcpAgentsDialog, type OtherAgent } from './AcpAgentsDialog'
 import { IconButton } from '@/components/ui/icon-button'
 
-/** The branch a session starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
-export type BranchChoice = { name: string; create: boolean; worktree: boolean }
+/**
+ * The branch a session starts on when it is not the folder's current one: switch to it, or work in a new worktree of it.
+ * With `base`, the worktree is a copy of that branch on a new branch of its own, `name`.
+ */
+export type BranchChoice = { name: string; create: boolean; worktree: boolean; base?: string }
 
 /**
  * What the page asks the window to start: a session with this agent, model and effort, in this folder, and its first
@@ -240,6 +243,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const rolled = useMemo(() => (treeMode && (remote || branches !== null) ? suggestBranchName(takenBranches) : null), [treeMode, remote, branches, takenBranches])
   const suggested = rolled !== null && slugFromTask(message) !== '' ? nameForTask(message, takenBranches) : rolled
   const branch = useMemo<BranchChoice | null>(() => {
+    // A worktree of a picked branch is a copy of it on a new branch, so the branch itself stays free for its checkout.
+    if (explicit !== null && treeMode && !explicit.create && suggested !== null) return { name: suggested, create: true, worktree: true, base: explicit.name }
     if (explicit !== null) return { ...explicit, worktree: treeMode }
     return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null
   }, [explicit, treeMode, suggested])
@@ -436,11 +441,11 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     if (!isPath(typed)) return null
     return { key: 'path', label: `Use ${typed}`, icon: <Icon name="folder" size={12} />, checked: false, onPick: () => { openFolder(typed) } }
   }
-  const branchLabel = branch?.create === true ? branch.name : onBranch ?? 'detached'
+  const branchLabel = branch?.create === true && branch.base === undefined ? branch.name : onBranch ?? 'detached'
   const busyLine = busyWith !== undefined && workIn !== 'folder' && onBranch !== null
     ? `${busyWith} is already working on ${onBranch} here, so this session gets its own worktree. Your checkout stays untouched.`
     : null
-  const treeLine = busyLine ?? (treeMode && branch !== null ? `A copy of the repository on its own branch, ${branch.name}. Your checkout stays untouched.` : null)
+  const treeLine = busyLine ?? (treeMode && branch !== null ? `A copy of ${branch.base ?? 'the repository'} on its own branch, ${branch.name}. Your checkout stays untouched.` : null)
   // The checkout is judged only when the session would edit it, on the branch it is on: another branch is switched to, a new one is made from here.
   const editsCheckout = !remote && !treeMode && sync?.branch != null && sync.branch === onBranch && explicit?.create !== true
   const behindOrigin = editsCheckout ? sync.behind : 0

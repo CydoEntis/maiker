@@ -681,9 +681,10 @@ async fn add_branch_worktree(
     machine: Option<u16>,
     folder: PathBuf,
     branch: String,
+    base: Option<String>,
 ) -> Result<serde_json::Value, String> {
     // The project's own machine makes it, in its own checkout; another machine answers only with the new folder.
-    maitty_desktop_client::branch_worktree(folder, branch, wire.worktree_daemon(machine, || daemon_executable(&app))?)
+    maitty_desktop_client::branch_worktree(folder, branch, base, wire.worktree_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1259,6 +1260,19 @@ async fn send_conversation_now(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// The window shows a finished chat: the daemon that runs it turns its done to idle.
+#[tauri::command]
+async fn mark_conversation_seen(
+    app: tauri::AppHandle,
+    wire: tauri::State<'_, terminal_stream::Wire>,
+    machine: Option<u16>,
+    id: u64,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::mark_conversation_seen(id, wire.daemon(machine, || daemon_executable(&app))?)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
@@ -1419,6 +1433,7 @@ pub fn run() {
             new_chat::git_branches,
             new_chat::git_switch_branch,
             add_branch_worktree,
+            mark_conversation_seen,
             saved_conversations,
             side_answer,
             closed_sessions,

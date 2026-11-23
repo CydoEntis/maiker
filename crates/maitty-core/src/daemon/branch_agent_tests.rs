@@ -199,6 +199,7 @@ fn a_worktree_asked_by_folder_is_refused_before_anything_is_made_when_it_is_wron
     let ask = |project: &Path, branch: &str| Command::BranchWorktree {
         project: project.to_path_buf(),
         branch: branch.into(),
+        base: None,
     };
     let cases = [
         (ask(&repo, "bad name"), "letters, digits"),
@@ -240,6 +241,7 @@ fn a_worktree_asked_by_folder_is_made_tracked_and_answered_with_its_folder() {
         ClientMsg::Command(Command::BranchWorktree {
             project: repo.clone(),
             branch: "feat/x".into(),
+            base: None,
         }),
     ));
     let until = Instant::now() + Duration::from_secs(60);
@@ -299,6 +301,7 @@ fn a_person_may_name_a_repository_the_app_has_not_seen_and_an_agent_may_not() {
     let ask = || Command::BranchWorktree {
         project: repo.clone(),
         branch: "feat/picked".into(),
+        base: None,
     };
 
     // An agent acting from a pane cannot point a checkout (and its setup hook) at it.
@@ -340,8 +343,8 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
     let busy = crate::gitfs::head(&repo).map(|h| h.branch).expect("the main checkout has a branch");
     let template = super::worktree_path::SIBLING_TEMPLATE;
 
-    let (first, _) = branch_worktree(&repo, &busy, template, false).expect("first worktree off it");
-    let (second, _) = branch_worktree(&repo, &busy, template, false).expect("and a second one");
+    let (first, _) = branch_worktree(&repo, &busy, None, template, false).expect("first worktree off it");
+    let (second, _) = branch_worktree(&repo, &busy, None, template, false).expect("and a second one");
     assert_ne!(first, second, "each gets its own folder");
     let tip = |dir: &Path| git::git(dir, &["rev-parse", "HEAD"]).unwrap();
     for made in [&first, &second] {
@@ -352,8 +355,25 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
 
     // A branch checked out nowhere is checked out itself, as before.
     git::git(&repo, &["branch", "free"]).unwrap();
-    let (free, _) = branch_worktree(&repo, "free", template, false).expect("a free branch");
+    let (free, _) = branch_worktree(&repo, "free", None, template, false).expect("a free branch");
     assert_eq!(crate::gitfs::head(&free).map(|h| h.branch).as_deref(), Some("free"));
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_worktree_with_a_base_is_a_new_branch_cut_from_it_even_when_the_base_is_free() {
+    let root = scratch("branch-worktree-base");
+    let repo = repo_in(&root);
+    let template = super::worktree_path::SIBLING_TEMPLATE;
+    git::git(&repo, &["branch", "dev"]).unwrap();
+
+    let (made, _) = branch_worktree(&repo, "keen-otter", Some("dev"), template, false).expect("a copy of dev");
+    assert_eq!(crate::gitfs::head(&made).map(|h| h.branch).as_deref(), Some("keen-otter"));
+    let tip = |dir: &Path, rev: &str| git::git(dir, &["rev-parse", rev]).unwrap();
+    assert_eq!(tip(&made, "HEAD"), tip(&repo, "dev"), "cut from dev");
+    // dev itself stays free: the worktree never checked it out.
+    let listed = git::git(&repo, &["worktree", "list", "--porcelain"]).unwrap();
+    assert!(!listed.lines().any(|line| line == "branch refs/heads/dev"), "{listed}");
     let _ = std::fs::remove_dir_all(&root);
 }
 

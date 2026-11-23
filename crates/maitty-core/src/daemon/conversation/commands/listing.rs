@@ -19,6 +19,17 @@ impl Daemon {
         Ok(())
     }
 
+    /// The window shows a finished chat: its done becomes idle, as a pane's does when the cursor
+    /// rests on it. Anything else (working, needs you, a check holding it) is left as it is.
+    pub(in crate::daemon) fn conversation_mark_seen(&mut self, id: ConversationId) {
+        if let Some(state) = self.conversation_states.get_mut(&id)
+            && state.status == Status::Done
+        {
+            state.status = Status::Idle;
+            self.dirty = true;
+        }
+    }
+
     /// Put a conversation away, or bring it back. It keeps running either way.
     pub(in crate::daemon) fn conversation_archive(
         &mut self,

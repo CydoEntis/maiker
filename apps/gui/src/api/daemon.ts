@@ -811,11 +811,15 @@ export async function answerHelpers(conversation: Pick<Conversation, 'id'>, choi
   await invokeParsed('answer_chat_helpers', NullSchema, { id: Number(conversation.id), choice })
 }
 
-/** The user is looking at this pane: a finished agent's "done" becomes idle, as when the terminal app focuses it. */
+/** The user opened this session: a finished agent's "done" becomes idle, as when the terminal app focuses its pane. */
 export async function markSeenOnDaemon(conversation: Pick<Conversation, 'id'>): Promise<void> {
   if (!isDesktop()) return
   const pane = addressOf(conversation.id)
-  if (pane !== null) await invokeParsed('mark_terminal_seen', NullSchema, { term: pane.term, ...machineArgs(pane) })
+  if (pane !== null) {
+    await invokeParsed('mark_terminal_seen', NullSchema, { term: pane.term, ...machineArgs(pane) })
+    return
+  }
+  if (chatAddressOf(conversation.id) !== null) await invokeParsed('mark_conversation_seen', NullSchema, chatArgs(conversation.id))
 }
 
 /** Hands a message to a terminal session's daemon, which types it in once the agent starting there takes input. */
@@ -1041,9 +1045,10 @@ export async function switchBranch(folder: string, branch: string, create: boole
 /**
  * A worktree of the folder's project on a branch (an existing one, else a new one), made by the daemon of the folder's
  * machine the way every other is: trusted like its repo, the repo's setup run, tracked for tidy-up. Resolves to its folder.
+ * With `base`, `branch` is a new branch cut from it: a copy of `base`, never `base` itself.
  */
-export async function addWorktree(folder: string, branch: string, machine: number = LOCAL_MACHINE): Promise<string> {
-  return invokeParsed('add_branch_worktree', z.string(), { folder, branch, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
+export async function addWorktree(folder: string, branch: string, machine: number = LOCAL_MACHINE, base?: string): Promise<string> {
+  return invokeParsed('add_branch_worktree', z.string(), { folder, branch, ...(machine === LOCAL_MACHINE ? {} : { machine }), ...(base === undefined ? {} : { base }) })
 }
 
 /** Opens an agent's official setup page in the browser. */

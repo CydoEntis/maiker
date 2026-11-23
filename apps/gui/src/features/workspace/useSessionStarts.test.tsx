@@ -40,6 +40,7 @@ vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 
 import { useSessionStarts } from './useSessionStarts'
+import { LOCAL_MACHINE } from '@/api/machines'
 import type { NewChatRequest } from './components/NewChatPage'
 
 const ID = '0d0f5c1e-1111-4222-8333-444455556666'
@@ -112,7 +113,7 @@ describe('starting new chats in the background', () => {
     finishFirstTree()
     await first
 
-    expect(daemon.addWorktree.mock.calls).toEqual([['/dev/app', 'bold-otter'], ['/dev/app', 'calm-heron']])
+    expect(daemon.addWorktree.mock.calls).toEqual([['/dev/app', 'bold-otter', LOCAL_MACHINE, undefined], ['/dev/app', 'calm-heron', LOCAL_MACHINE, undefined]])
     expect(daemon.startAgentSession.mock.calls.map(([folder]) => folder)).toEqual(['/dev/app-calm-heron', '/dev/app-bold-otter'])
     expect(daemon.renameConversationOnDaemon.mock.calls).toEqual([[{ id: '1' }, 'second task'], [{ id: '2' }, 'first task']])
   })
@@ -200,7 +201,7 @@ describe('starting a chat on another machine', () => {
 
   it('has that machine make the new worktree and starts the agent in it', async () => {
     await starts().startNewChat(request({ machine: 2, machineName: 'kingdom', folder: '/srv/app', branch: { name: 'quiet-otter', create: true, worktree: true } }))
-    expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2)
+    expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2, undefined)
     expect(startSessionOnMachine).toHaveBeenCalledWith(2, '/srv/app-quiet-otter')
   })
 
@@ -248,7 +249,7 @@ describe('starting a chat on another machine in the Chat view', () => {
 
     await starts({ openSessionsIn: 'chat' }).startNewChat(onBuild({ agent: 'gemini', branch: { name: 'quiet-otter', create: true, worktree: true } }))
 
-    expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2)
+    expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2, undefined)
     expect(daemon.startAcpChat).toHaveBeenCalledWith('/srv/app-quiet-otter', 'gemini', 2)
     expect(daemon.switchBranch).not.toHaveBeenCalled()
   })

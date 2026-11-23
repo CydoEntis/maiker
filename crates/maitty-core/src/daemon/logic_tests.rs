@@ -8570,6 +8570,24 @@ fn a_conversation_is_named_and_put_away_for_every_client_and_an_unknown_one_is_r
 }
 
 #[test]
+fn a_finished_chat_you_open_goes_idle_and_one_that_needs_you_or_works_does_not() {
+    let (mut d, _rx) = daemon();
+    d.conversations.push(crate::test_support::conversation());
+    let id = d.conversations[0].id;
+    let seen = |d: &mut Daemon, status: Status| {
+        d.conversation_states.entry(id).or_default().status = status;
+        d.command(0, Command::ConversationMarkSeen { id }).unwrap();
+        d.conversation_states[&id].status
+    };
+    assert_eq!(seen(&mut d, Status::Done), Status::Idle);
+    assert_eq!(seen(&mut d, Status::Working), Status::Working);
+    assert_eq!(seen(&mut d, Status::Blocked), Status::Blocked);
+    // An unknown chat is nothing to do: the window may name one that just ended.
+    d.command(0, Command::ConversationMarkSeen { id: crate::conversation::ConversationId(99) })
+        .unwrap();
+}
+
+#[test]
 fn a_terminal_pane_can_be_read_resized_and_typed_into_by_its_own_number() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);

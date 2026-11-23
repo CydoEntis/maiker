@@ -1334,8 +1334,10 @@ const BRANCH_WORKTREE_TIMEOUT: Duration = Duration::from_secs(11 * 60);
 /// answer is its folder there, the place to start an agent. This computer's daemon built before the
 /// command is told so in words, since it would never answer; another machine's is on this version
 /// or not used.
-pub async fn branch_worktree(project: PathBuf, branch: String, daemon: impl Into<Daemon>) -> Result<Value> {
-    let message = ClientMsg::Command(Command::BranchWorktree { project, branch });
+///
+/// With `base`, `branch` is a new branch cut from it, so the worktree is a copy of `base` and never `base` itself.
+pub async fn branch_worktree(project: PathBuf, branch: String, base: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
+    let message = ClientMsg::Command(Command::BranchWorktree { project, branch, base });
     let reply = match daemon.into() {
         Daemon::Local(_) => {
             answered_within(BRANCH_WORKTREE_TIMEOUT, async {
@@ -1846,6 +1848,24 @@ pub async fn rename_conversation(
         Reply::Ok => Ok(Value::Null),
         _ => bail!("The Maiker service gave an answer this app does not understand (rename). Restart the service in Settings, or update the app so both are the same version."),
     }
+}
+
+/// The window shows a finished chat, so its done becomes idle. This computer's daemon from before the command is
+/// not asked (it would never answer) and the chat keeps its done; another machine's is on this version.
+pub async fn mark_conversation_seen(id: u64, daemon: impl Into<Daemon>) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ConversationMarkSeen {
+        id: maitty_shared::conversation::ConversationId(id),
+    });
+    match daemon.into() {
+        Daemon::Local(_) => {
+            ask_if_known(message).await?;
+        }
+        remote => match request(message, remote).await? {
+            Reply::Ok => {}
+            _ => bail!("The Maiker service gave an answer this app does not understand (seen). Restart the service in Settings, or update the app so both are the same version."),
+        },
+    }
+    Ok(Value::Null)
 }
 
 pub async fn archive_conversation(

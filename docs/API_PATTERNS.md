@@ -218,7 +218,7 @@ or a structured runtime. Both commands came in protocol 79 (`PREWARM_SINCE`, eac
 commands are `prewarm_agent_session` (the agent names and flag rules of `start_agent_session`; it answers false when the
 daemon running is older) and `drop_prewarmed_agent`.
 
-`Command::BranchWorktree { project, branch }` makes a worktree for a window with no pane to ask from (the desktop
+`Command::BranchWorktree { project, branch, base }` makes a worktree for a window with no pane to ask from (the desktop
 app's New session draft, on this computer or another machine, whose own daemon makes it in its checkout
 over a request line and answers only the new folder, which `remote_chat::vet_worktree_reply` takes when it is one plain
 absolute path, where "New worktree" used to run a plain `git worktree add` beside the project, skipping the
@@ -1320,6 +1320,16 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`apps/gui/src/api/githubRepos.ts`). Their answers are expected for 75 seconds
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
+
+Protocol 124 adds `Command::ConversationMarkSeen { id }` and `BranchWorktree.base` (`CHAT_CONTROLS_SINCE`, with an arm
+in `ClientMsg::introduced_in` for the seen and for a `BranchWorktree` that carries a base; `COMPATIBLE_SINCE` stays 122).
+The seen is the window opening a finished chat: the daemon turns its done to idle, as `MarkSeen` does for a pane, and
+leaves every other status alone; human clients with the write grant only. A daemon before 124 is not asked
+(`mark_conversation_seen`, through `ask_if_known`) and the chat keeps its done. With `base`, `branch` is a new branch cut
+from `base` (its `origin/` ref when it is only on the remote), even when `base` is free to check out, so a worktree of a
+picked branch is a copy of it and never the branch itself; without it the message is the older one, which a daemon on
+123 reads unchanged. A client asks a daemon before 124 for a base not at all: the desktop client refuses in words
+(test: `a_daemon_from_before_chat_controls_reads_the_old_worktree_and_is_never_sent_the_new`).
 
 Protocol 123 adds `Query::PullRequests { folder, fresh, tag }` with `Reply::PullRequests { tag, answer }`
 (`PULL_REQUESTS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an

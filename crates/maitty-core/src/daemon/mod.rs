@@ -1093,7 +1093,9 @@ impl Daemon {
                 anyhow::bail!("Only a human client can change settings")
             }
             Command::SetSetting { .. } => Ok(()),
-            Command::ConversationRename { .. } | Command::ConversationArchive { .. }
+            Command::ConversationRename { .. }
+            | Command::ConversationArchive { .. }
+            | Command::ConversationMarkSeen { .. }
                 if structured
                     || self
                         .clients
@@ -1102,9 +1104,9 @@ impl Daemon {
             {
                 anyhow::bail!("Only a human client can rename or put away a conversation")
             }
-            Command::ConversationRename { .. } | Command::ConversationArchive { .. } => {
-                self.may(client, Grant::Write, None)
-            }
+            Command::ConversationRename { .. }
+            | Command::ConversationArchive { .. }
+            | Command::ConversationMarkSeen { .. } => self.may(client, Grant::Write, None),
             Command::ConversationTerminalInput { .. }
             | Command::ConversationTerminalResize { .. }
                 if structured

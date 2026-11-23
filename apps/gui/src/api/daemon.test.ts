@@ -219,6 +219,20 @@ describe('names and closed sessions shared through the daemon', () => {
       ['rename_conversation', { id: 12, machine: 3, title: 'Fix the login bug' }],
     ])
   })
+
+  it('tells the daemon that runs a chat it was seen, on this computer or another', async () => {
+    vi.mocked(isTauri).mockReturnValue(true)
+    vi.mocked(invoke).mockResolvedValue(null)
+    registerMachine('build', 3)
+
+    await markSeenOnDaemon({ id: '42' })
+    await markSeenOnDaemon({ id: 'build/c12' })
+
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['mark_conversation_seen', { id: 42 }],
+      ['mark_conversation_seen', { id: 12, machine: 3 }],
+    ])
+  })
 })
 
 describe('terminal sessions shown beside chats', () => {
