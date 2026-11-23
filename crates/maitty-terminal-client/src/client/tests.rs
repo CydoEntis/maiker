@@ -2143,8 +2143,10 @@ mod screen_tests {
         let o = draw(&mut app, 160, 45);
         show(&o);
         let cap = screen::ends(app.theme.btn).0.0.to_string();
+        // The sentence starts with the temp folder's path, which on Windows is long enough to wrap
+        // the sentence across lines, so it is read from the dialog; the screen still shows the buttons.
         assert!(
-            o.contains("isn't a git repository yet.")
+            matches!(&app.mode, Mode::Confirm(c) if c.what.ends_with("isn't a git repository yet."))
                 && o.contains(&format!("{cap}Make it a git repo g"))
                 && o.contains(&format!("{cap}Cancel Esc"))
         );
