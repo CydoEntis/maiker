@@ -16,7 +16,7 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
   const { copied, copy } = useCopied('Could not copy the answer')
   return (
     <Card role="region" aria-label={aside.title} tone={state.kind === 'failed' ? 'err' : 'none'} className={`mx-aside${question === undefined ? '' : ' is-side'}`} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
-      <CardHead>
+      <CardHead className="mx-aside-head">
         {question !== undefined && <span className="mx-aside-badge" aria-hidden="true">btw</span>}
         <span className="min-w-0 flex-1 truncate">{aside.title}</span>
         <span className="mx-aside-note">Not added to the conversation</span>
@@ -28,10 +28,10 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
         {state.kind === 'answered' && <Markdown text={state.text} />}
         {state.kind === 'failed' && <p role="alert">{state.reason}</p>}
       </CardBody>
-      {(state.kind === 'answered' || question !== undefined) && (
-        <CardFoot>
+      {(state.kind === 'answered' || (question !== undefined && state.kind !== 'asking')) && (
+        <CardFoot className="mx-aside-foot">
           {state.kind === 'answered' && <Button variant="ghost" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
-          {question !== undefined && state.kind !== 'asking' && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
+          {question !== undefined && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
         </CardFoot>
       )}
     </Card>
