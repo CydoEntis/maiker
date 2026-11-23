@@ -9,6 +9,8 @@ import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
 import { Composer, type ComposerFacts } from '@/features/chat/components/Composer'
+import { FolderChip } from '@/features/chat/place/FolderChip'
+import { MachineChip } from '@/features/chat/place/MachineChip'
 import type { SessionPlace } from '@/features/chat/components/SessionBar'
 import type { ChatComposer } from '@/features/chat/useChatComposer'
 import type { PlacePicking } from '@/features/chat/place/picking'
@@ -114,6 +116,8 @@ type Props = {
   leading?: ReactNode
   /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0021). */
   otherAgents?: boolean
+  /** Where a session with no project runs on this machine (Settings' start folder); without it there is no such choice. */
+  looseFolder?: string
 }
 
 /** The key the first message's files are kept under: no conversation exists yet, and a real one is never negative. */
@@ -160,7 +164,7 @@ const refused = (): Promise<boolean> => Promise.resolve(false)
  * in. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it in the background and keeps the draft
  * for the next one, Esc discards it. A plain shell is "New terminal", not here.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, otherAgents = false, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, otherAgents = false, leading, looseFolder }: Props) {
   // On another machine the session is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -554,7 +558,18 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
       <div className="mx-newchat-body">
         <div className="mx-chat is-starting">
           {sent === null ? (
-            <div className="mx-chat-empty"><h1 className="mx-chat-hello">What are we building today?</h1></div>
+            // The question and where the session runs, over the box and centred with it: the machine and the project are the
+            // two choices a new session most often needs changed, so they are large here and not only in the row under the box.
+            <div className="mx-nc-hero">
+              <h1 className="mx-chat-hello">{folder === '' || folder === looseFolder ? 'What are we building today?' : `What should we build in ${folderName}?`}</h1>
+              <div className="mx-nc-hero-where">
+                <MachineChip machine={picking.machine} hero />
+                <FolderChip folder={folder} text={folder === '' ? 'Choose a project' : folder === looseFolder ? 'No project' : folderName} machine={machine} projects={[]} onNewSessionIn={openFolder} picking={picking.folder} hero />
+                {looseFolder !== undefined && looseFolder !== '' && folder !== looseFolder && (
+                  <button type="button" className="mx-nc-hero-loose" disabled={starting} title={`Runs in ${looseFolder}`} onClick={() => { openFolder(looseFolder) }}>or start without a project</button>
+                )}
+              </div>
+            </div>
           ) : (
             // The same rows the session's chat draws until its agent reports in, so the swap to the real pane changes nothing the eye sees.
             <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto" role="status">

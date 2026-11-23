@@ -196,7 +196,7 @@ function Show({ what }: { what: string }): ReactNode {
   const long = what === 'new-long'
   if (what === 'new' || what.startsWith('new-')) {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
-    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} /></div></ScriptedNew>
+    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} looseFolder="/home/you" /></div></ScriptedNew>
   }
   if (what === 'open' || what.startsWith('open-')) return <PaletteShown what={what} />
   if (what === 'add' || what.startsWith('add-')) {

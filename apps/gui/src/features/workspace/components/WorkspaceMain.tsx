@@ -99,6 +99,7 @@ export function WorkspaceMain() {
                     onOpenProject={openProject.open}
                     onStart={startNewChat}
                     otherAgents={chatView}
+                    looseFolder={newChatStartFolder}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
                     onAddMachine={openProject.addMachine}

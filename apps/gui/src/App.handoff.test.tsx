@@ -1188,7 +1188,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
     const draft = await screen.findByRole('region', { name: 'New session' })
-    expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(within(draft).getByRole('heading', { name: 'What should we build in a?' })).toBeInTheDocument()
     expect(within(draft).getByRole('button', { name: `${HOME}/a: a` })).toBeInTheDocument()
     expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()

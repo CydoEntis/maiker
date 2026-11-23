@@ -674,6 +674,21 @@ describe('the New session draft as a chat that has not been sent', () => {
   })
 })
 
+describe('the empty draft\'s question and where it runs', () => {
+  it('asks about the project, and starts without one in the start folder', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} looseFolder="/home/me" />, { container: windowRoot() })
+    expect(screen.getByRole('heading', { name: 'What should we build in growth?' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Runs on: This computer/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'or start without a project' }))
+    expect(screen.getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'or start without a project' })).not.toBeInTheDocument()
+    await userEvent.type(box(), 'go')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/home/me', message: 'go' })) })
+  })
+})
+
 describe('starting from a checkout: sync with origin, branch names and worktree failures', () => {
   const openBranches = async () => {
     await userEvent.click(await screen.findByRole('button', { name: /^Branch(?! unavailable)/ }))

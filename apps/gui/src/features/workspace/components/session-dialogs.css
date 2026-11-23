@@ -74,6 +74,21 @@
 .mx-newchat-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; font-family: var(--ui); line-height: normal; }
 /* The question, centred in the empty conversation above the box. */
 .mx-chat-hello { margin: 0; font-size: clamp(20px, 2.2vw, 24px); font-weight: 600; line-height: 1.25; letter-spacing: -.015em; color: var(--fg); }
+/* An empty draft: the question, where it runs and the box as one block in the middle of the pane, a little above centre. */
+.mx-chat.is-starting:has(> .mx-nc-hero) { justify-content: center; padding-bottom: 8vh; }
+.mx-nc-hero { flex: none; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px 22px; text-align: center; }
+.mx-nc-hero .mx-chat-hello { font-size: clamp(24px, 2.6vw, 32px); font-weight: 500; letter-spacing: -.02em; }
+.mx-nc-hero-where { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
+/* The two big chips: a real control ground and hairline, so where the session runs is plain at a glance. */
+.mx-place-chip.is-hero { height: 32px; max-width: 320px; gap: 7px; padding: 0 10px 0 11px; border-radius: var(--r-control); font-size: 13.5px; font-weight: 500; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
+button.mx-place-chip.is-hero:hover, button.mx-place-chip.is-hero[data-state="open"] { background: var(--m-hover); color: var(--fg); }
+.mx-place-chip.is-hero.is-down { color: var(--warn); }
+.mx-place-chip.is-hero svg:last-child { color: var(--dim); }
+.mx-nc-hero-loose { height: 32px; padding: 0 8px; border: 0; border-radius: var(--r-control); background: none; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; transition: color var(--t-fast) var(--ease); }
+.mx-nc-hero-loose:hover:not(:disabled) { color: var(--fg); text-decoration-color: currentColor; }
+.mx-nc-hero-loose:focus-visible { outline: none; box-shadow: var(--focus-edge); }
+/* The big chips say the machine and the project, so the row under the box keeps only the branch and sync while they show. */
+.mx-chat.is-starting:has(> .mx-nc-hero) .mx-session-bar :is(.mx-place-chip.is-machine, .mx-place-chip.is-folder) { display: none; }
 /* What the start needs said (a machine that is down, a clone, a refused start) sits above the box, as wide as it. */
 .mx-composer-column > .mx-nsd-note { align-self: stretch; padding: 0 4px 8px; }
 /* The branch menu's own-worktree switch, under its list. */
