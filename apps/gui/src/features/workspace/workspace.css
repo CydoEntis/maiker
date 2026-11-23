@@ -227,7 +227,7 @@
 .mx-app.is-narrow .mx-settings-nav { width: 176px; }
 .mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 10px; }
 /* A flat field: the theme's field tone and no edge until it has focus (material.css › field focus). */
-.mx-settings-search { flex: none; display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--t3); color: var(--dim); }
+.mx-settings-search { flex: none; display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
 .mx-settings-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; }
 .mx-settings-search input::placeholder { color: var(--dim); }
 .mx-settings-nav-group { flex: none; display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
@@ -370,12 +370,13 @@
 /* A small dialog is the float of material.css with the dialog corner; it sets no fill, edge or shadow of its own. */
 .mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }
 .mx-folder-row { display: flex; gap: 8px; align-items: center; }
-.mx-folder-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid var(--pane-line); background: var(--well, var(--m-raise)); color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; }
+.mx-folder-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid transparent; background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; }
 .mx-folder-row input.is-missing { border-color: var(--danger-line, var(--danger)); box-shadow: 0 0 0 3px var(--danger-soft, transparent); }
 .mx-rename h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
 .mx-rename p { margin: 0; font-size: 12.5px; color: var(--muted); }
-.mx-rename input:not([data-bare]) { height: 38px; padding: 0 12px; border-radius: var(--r-control); background: var(--m-well); border: 1px solid var(--line); color: var(--fg); font-size: 14px; outline: none; }
-.mx-rename select { height: 38px; padding: 0 10px; border-radius: var(--r-control); background: var(--m-well); border: 1px solid var(--line); color: var(--fg); font-size: 14px; outline: none; }
+/* Every field: the field tone inside its hairline (`--c-field-*`); in a float that is the well. */
+.mx-rename input:not([data-bare]) { height: 38px; padding: 0 12px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); border: 1px solid transparent; color: var(--fg); font-size: 14px; outline: none; }
+.mx-rename select { height: 38px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); border: 1px solid transparent; color: var(--fg); font-size: 14px; outline: none; }
 .mx-rename-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .mx-rename:focus-visible { outline: none; }
 .mx-rename.mx-getfile { max-width: 560px; }
@@ -653,7 +654,7 @@
 
 .mx-rm-head { display: flex; align-items: center; gap: 10px; min-height: 30px; }
 .mx-rm-count { flex: 1; font-size: 12.5px; color: var(--muted); }
-.mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }
+.mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 12.5px; color: var(--fg); }
 .mx-rm-list { border-top: 1px solid var(--line); }
 .mx-rm-item { border-bottom: 1px solid var(--line); }
 .mx-rm-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto 28px; align-items: center; column-gap: 12px; min-height: 52px; padding: 6px 6px 6px 10px; border-radius: var(--r-control); cursor: pointer; }
@@ -708,6 +709,6 @@
 /* A machine's More fold: plain settings rows under its row, indented past the mark so they read as the machine's. */
 .mx-rm-fold { padding: 0 6px 6px 32px; }
 .mx-rm-foldvalue { font-size: 12.5px; color: var(--fg2); text-align: right; }
-.mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
+.mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 13px; color: var(--fg); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
 

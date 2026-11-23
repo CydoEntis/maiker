@@ -113,7 +113,7 @@
 /* The filter (`SidebarFilterMenu`): a project search, the projects (six rows, then they scroll), the machines, and Reset
    while anything is picked. */
 .mx-pop.mx-sbf { width: 262px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
-.mx-sbf-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-control); color: var(--dim); }
+.mx-sbf-search { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
 .mx-sbf-search input { flex: 1; min-width: 0; height: 100%; padding: 0; border: 0; outline: none; background: transparent; font-size: 13px; color: var(--fg); }
 .mx-sbf-search input::placeholder { color: var(--dim); }
 .mx-sbf-list { display: flex; flex-direction: column; gap: 1px; }

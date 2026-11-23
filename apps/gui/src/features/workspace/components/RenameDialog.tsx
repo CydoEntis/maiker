@@ -1,4 +1,6 @@
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { useEffect, useRef, useState } from 'react'
 import { MAX_MACHINE_NICKNAME_LENGTH } from '../model/machines'
 import { MAX_SESSION_NAME_LENGTH, type SessionView } from '../model/session'
@@ -36,7 +38,7 @@ function NameDialog({ heading, hint, field, initial, placeholder, maxLength, onS
       <DialogContent unstyled asChild aria-describedby={undefined}>
       <form
         aria-label={heading}
-        className="mx-rename"
+        className="mx-rename mx-modal is-compact"
         onSubmit={(event) => {
           event.preventDefault()
           onSave(value.trim())
@@ -46,13 +48,15 @@ function NameDialog({ heading, hint, field, initial, placeholder, maxLength, onS
           if (event.key === 'Escape') event.stopPropagation()
         }}
       >
-        <DialogTitle asChild><h2>{heading}</h2></DialogTitle>
+        <ModalHead title={heading} onClose={onCancel} />
+        <ModalBody>
         <p>{hint}</p>
         <input ref={input} aria-label={field} value={value} maxLength={maxLength} placeholder={placeholder} onChange={(event) => { setValue(event.target.value) }} />
-        <div className="mx-rename-actions">
-          <button type="button" className="mx-text-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="mx-text-button is-primary">Save</button>
-        </div>
+        </ModalBody>
+        <ModalFoot>
+          <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Cancel</Button>
+          <Button type="submit" variant="primary" size="lg">Save</Button>
+        </ModalFoot>
       </form>
       </DialogContent>
     </Dialog>

@@ -1,5 +1,7 @@
 import { useRef, type KeyboardEvent } from 'react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { helpersRequestWords } from '../model/outsideAsks'
 import type { SecretAsk } from '../model/session'
@@ -29,17 +31,19 @@ export function HelpersRequestDialog({ asker, tasks, online, onAnswer, onCancel 
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onCancel() }}>
       <DialogContent unstyled asChild aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); allow.current?.focus() }}>
-        <div className="mx-rename mx-outside-ask" onKeyDown={keepEscape}>
-          <DialogTitle asChild><h2>{helpersRequestWords(tasks.length)}</h2></DialogTitle>
+        <div className="mx-rename mx-modal is-compact mx-outside-ask" onKeyDown={keepEscape}>
+          <ModalHead title={helpersRequestWords(tasks.length)} onClose={onCancel} />
+          <ModalBody>
           <p>{`${asker.name} in ${asker.project} asks to start other agents for these tasks.`}</p>
           <ul className="mx-outside-ask-tasks" aria-label="Tasks">
             {tasks.map((task, index) => <li key={`${String(index)}:${task}`}>{task}</li>)}
           </ul>
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" disabled={!online} title="Every session of this project may, from now on" onClick={() => { onAnswer('always') }}>Always for this project</button>
-            <button type="button" className="mx-text-button" disabled={!online} title="It does the work alone" onClick={() => { onAnswer('no') }}>No, do it yourself</button>
-            <button ref={allow} type="button" className="mx-text-button is-primary" disabled={!online} title="This session may start helpers from now on" onClick={() => { onAnswer('allow') }}>Allow</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" disabled={!online} title="Every session of this project may, from now on" onClick={() => { onAnswer('always') }}>Always for this project</Button>
+            <Button type="button" variant="ghost" size="lg" disabled={!online} title="It does the work alone" onClick={() => { onAnswer('no') }}>No, do it yourself</Button>
+            <Button ref={allow} type="button" variant="primary" size="lg" disabled={!online} title="This session may start helpers from now on" onClick={() => { onAnswer('allow') }}>Allow</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>
@@ -65,17 +69,19 @@ export function SecretDialog({ asker, ask, machine, online, onDone }: {
   return (
     <Dialog open onOpenChange={(open) => { if (!open) onDone() }}>
       <DialogContent unstyled asChild aria-describedby={undefined} onOpenAutoFocus={(event) => { event.preventDefault(); field.current?.focus() }}>
-        <form className="mx-rename mx-outside-ask" onKeyDown={keepEscape} onSubmit={(event) => { event.preventDefault(); give() }}>
-          <DialogTitle asChild><h2>{`Wants a secret: ${ask.label}`}</h2></DialogTitle>
+        <form className="mx-rename mx-modal is-compact mx-outside-ask" onKeyDown={keepEscape} onSubmit={(event) => { event.preventDefault(); give() }}>
+          <ModalHead title={`Wants a secret: ${ask.label}`} onClose={onDone} />
+          <ModalBody>
           <p>{`${asker.name} in ${asker.project} asks for it.`}{ask.reason === '' ? '' : ` ${ask.reason}`}</p>
           <p>{here ? 'The value goes to the Maiker service only. The agent gets a single-use reference, never the value.' : 'Secrets are only taken for this computer’s sessions.'}</p>
           <input ref={field} type="password" autoComplete="off" spellCheck={false} aria-label={`Value for ${ask.label}`} disabled={busy || !here} />
           {failure !== null && <p className="mx-rm-error" role="alert">{failure}</p>}
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" disabled={busy} onClick={onDone}>Cancel</button>
-            <button type="button" className="mx-text-button" disabled={busy || !online || !here} title="The agent is told no" onClick={decline}>Decline</button>
-            <button type="submit" className="mx-text-button is-primary" disabled={busy || !online || !here}>Give it</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" disabled={busy} onClick={onDone}>Cancel</Button>
+            <Button type="button" variant="ghost" size="lg" disabled={busy || !online || !here} title="The agent is told no" onClick={decline}>Decline</Button>
+            <Button type="submit" variant="primary" size="lg" disabled={busy || !online || !here}>Give it</Button>
+          </ModalFoot>
         </form>
       </DialogContent>
     </Dialog>

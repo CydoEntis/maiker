@@ -40,7 +40,7 @@
 .mx-chip-menu.is-crumb { gap: 4px; padding: 4px; }
 .mx-chip-menu.is-crumb .mx-chip-row { min-height: 32px; padding: 6px 8px; font-size: 12.5px; }
 .mx-chip-menu.is-crumb .mx-chip-search { margin: 2px 4px; height: 30px; }
-.mx-chip-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r-panel); color: var(--dim); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-chip-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r-control); color: var(--dim); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-chip-search input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font-size: 13px; color: var(--fg); }
 .mx-chip-count { font-size: 11.5px; color: var(--dim); }
 .mx-chip-list { display: flex; flex-direction: column; gap: 2px; max-height: 300px; overflow-x: hidden; overflow-y: auto; }

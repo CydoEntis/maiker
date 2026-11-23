@@ -38,7 +38,8 @@ describe('HelpersRequestDialog', () => {
 
   it('cannot be answered while the service is out of reach', () => {
     render(<HelpersRequestDialog asker={asker} tasks={['Search the docs']} online={false} onAnswer={vi.fn()} onCancel={vi.fn()} />)
-    for (const button of screen.getAllByRole('button')) expect(button).toBeDisabled()
+    // Only the answers wait on the service; Close still closes.
+    for (const button of screen.getAllByRole('button').filter((each) => each.getAttribute('aria-label') !== 'Close')) expect(button).toBeDisabled()
   })
 })
 

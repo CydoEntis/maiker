@@ -1,4 +1,6 @@
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { useEffect, useRef, useState } from 'react'
 import { readSpecialists, type SpecialistFile, type SpecialistList } from '@/api/daemon'
 import { errorMessage } from '@/lib/error-message'
@@ -46,18 +48,20 @@ export function SpecialistsDialog({ title, term, onClose, load = readSpecialists
           ref={dialog}
           tabIndex={-1}
           aria-label={heading}
-          className="mx-rename mx-specialists"
+          className="mx-rename mx-modal mx-specialists"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>{heading}</h2></DialogTitle>
+          <ModalHead title={heading} onClose={onClose} />
+          <ModalBody>
           {open === null ? <Listing loaded={loaded} onOpen={setOpen} /> : <FileView file={open} />}
-          <div className="mx-rename-actions">
-            {open !== null && <button type="button" className="mx-text-button" onClick={() => { setOpen(null) }}>Back</button>}
-            <button type="button" className="mx-text-button is-primary" onClick={onClose}>Close</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            {open !== null && <Button type="button" variant="ghost" size="lg" onClick={() => { setOpen(null) }}>Back</Button>}
+            <Button type="button" variant="primary" size="lg" onClick={onClose}>Close</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>

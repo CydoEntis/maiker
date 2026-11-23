@@ -423,7 +423,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-slash-keys { flex: none; margin: 0; display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 6px 10px; border-top: 1px solid var(--line); font-size: 11.5px; color: var(--dim); }
 .mx-slash-keys kbd { margin-right: 4px; font: 500 11px var(--mono); }
 @media (prefers-reduced-motion: reduce) { .mx-slash { animation: none; } }
-.mx-box-text { width: 100%; min-height: 44px; max-height: 160px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
+.mx-box-text { width: 100%; min-height: 64px; max-height: 220px; resize: none; background: transparent; border: 0; padding: 0; font-size: 14px; line-height: 1.5; color: var(--fg); outline: none; field-sizing: content; }
 .mx-box-text:focus-visible { outline: none; }
 .mx-box-text::placeholder { color: var(--dim); }
 .mx-box-text:disabled { cursor: not-allowed; }

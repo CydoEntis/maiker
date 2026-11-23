@@ -1,6 +1,8 @@
 import { useRef } from 'react'
 import { windowRoot } from './windowRoot'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import type { ClosedSession } from '@/api/daemon'
 import { agentName } from '../model/agentMessage'
 import { ageOf, nowSeconds } from '../model/newChatHost'
@@ -79,19 +81,21 @@ export function RecentSessionsDialog({ home, onPick, onReopened, onCancel }: Pro
           ref={dialog}
           tabIndex={-1}
           aria-label="Recent sessions"
-          className="mx-rename mx-recent"
+          className="mx-rename mx-modal mx-recent"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>Recent sessions</h2></DialogTitle>
+          <ModalHead title="Recent sessions" onClose={onCancel} />
+          <ModalBody>
           <p>Agent sessions closed on this computer, newest first. Picking one starts its agent in that folder with its conversation; a worktree whose folder was removed is made again first.</p>
           <RemakeLine state={remake.state} />
           <Body read={read} home={home} locked={remake.state.kind === 'working'} onPick={pick} onRetry={retry} />
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" onClick={onCancel}>Close</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Close</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>

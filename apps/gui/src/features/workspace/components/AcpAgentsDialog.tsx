@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { windowRoot } from './windowRoot'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { installAcpAgent, loadAcpAgents, removeAcpAgent, type AcpAgent } from '@/api/acpAgents'
 
 /** The agent a session starts with over ACP: its id is what the daemon runs, its name is what the page says. */
@@ -52,13 +54,14 @@ export function AcpAgentsDialog({ onPick, onCancel }: Props) {
           ref={dialog}
           tabIndex={-1}
           aria-label="Other agents"
-          className="mx-rename mx-recent"
+          className="mx-rename mx-modal mx-recent"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>Other agents</h2></DialogTitle>
+          <ModalHead title="Other agents" onClose={onCancel} />
+          <ModalBody>
           <p>Agents from the ACP registry. Installing one downloads its program to this computer and runs it as you, like any program you install. It uses its own model and permission settings.</p>
           {read.kind === 'loading' && <p role="status">Reading the registry…</p>}
           {read.kind === 'failed' && <p role="alert" className="mx-nsd-note is-error">{`Could not list the agents: ${read.why}`}</p>}
@@ -86,9 +89,10 @@ export function AcpAgentsDialog({ onPick, onCancel }: Props) {
               })}
             </ul>
           )}
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" onClick={onCancel}>Close</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Close</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>

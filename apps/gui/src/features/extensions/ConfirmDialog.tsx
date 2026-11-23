@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 
 type Props = {
   title: string
@@ -38,19 +40,21 @@ export function ConfirmDialog({ title, confirmLabel, danger = false, onConfirm, 
       <DialogContent unstyled asChild aria-describedby={undefined}>
         <div
           aria-label={title}
-          className="mx-rename mx-getfile"
+          className="mx-rename mx-modal is-compact mx-getfile"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>{title}</h2></DialogTitle>
+          <ModalHead title={title} onClose={cancel} />
+          <ModalBody>
           {children}
           {refused !== null && <p role="alert">Not done. {refused}</p>}
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" autoFocus disabled={busy} onClick={cancel}>Cancel</button>
-            <button type="button" className={`mx-text-button is-primary${danger ? ' is-danger' : ''}`} disabled={busy} onClick={confirm}>{busy ? 'Working…' : confirmLabel}</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" autoFocus disabled={busy} onClick={cancel}>Cancel</Button>
+            <Button type="button" variant={danger ? 'danger' : 'primary'} size="lg" disabled={busy} onClick={confirm}>{busy ? 'Working…' : confirmLabel}</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>
