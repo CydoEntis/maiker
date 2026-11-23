@@ -5,6 +5,7 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers } from '../composerStore'
 import { forgetSlashCommands } from '../slashCommands'
 import { forgetChatFeeds } from '../useChatFeed'
+import { forgetMachines, registerMachine } from '@/api/machines'
 import { ChatSession, type WindowActions } from './ChatSession'
 import { agentLabel } from '@/features/workspace/model/session'
 
@@ -14,6 +15,7 @@ const fake = vi.hoisted(() => ({
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string) => Promise<unknown>>(),
   loadAgentCommands: vi.fn<(agent: string, folder: string) => Promise<{ name: string; description: string; hint: string; aliases: string[] }[]>>(),
   sideAnswer: vi.fn<(conversation: number, ask: unknown) => Promise<{ ok: true; text: string } | { ok: false; reason: string }>>(),
+  setChatPermissions: vi.fn<(conversation: { id: string; generation: number }, permissions: string) => Promise<void>>(),
 }))
 
 vi.mock('@/lib/clipboard', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/lib/clipboard')>()), copyText: fake.copyText }))
@@ -23,6 +25,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
   submitMessage: fake.submitMessage,
   loadAgentCommands: fake.loadAgentCommands,
   sideAnswer: fake.sideAnswer,
+  setChatPermissions: fake.setChatPermissions,
   readConversationPage: (_id: number, cursor: unknown) => {
     if (fake.current === null) throw new Error('no fake daemon')
     return fake.current.read(cursor as never)
@@ -47,6 +50,7 @@ beforeEach(() => {
   fake.submitMessage.mockReset().mockResolvedValue({})
   fake.loadAgentCommands.mockReset().mockResolvedValue(COMMANDS)
   fake.copyText.mockReset().mockResolvedValue(undefined)
+  fake.setChatPermissions.mockReset().mockResolvedValue(undefined)
   fake.sideAnswer.mockReset().mockResolvedValue({ ok: true, text: '## Context Usage\n\n**Tokens:** 48.2k' })
 })
 
@@ -54,6 +58,7 @@ afterEach(() => {
   cleanup()
   vi.useRealTimers()
   fake.current = null
+  forgetMachines()
 })
 
 async function settle(ms = 0) {
@@ -244,11 +249,25 @@ describe('the commands the window answers itself', () => {
   })
 
   it('never changes the mode for /plan without a yes: a chat with no mode control says so, and sends nothing', async () => {
-    const { user, box } = await open({ windowActions: windowActions() })
+    // Another machine's agent in its terminal: its mode is read off a screen this window cannot see, so it is not picked here.
+    registerMachine('kingdom', 3)
+    const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
+    const { user, box } = await open({ windowActions: windowActions(), sessionId: 'kingdom/t7', typeInto, link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true } })
 
     await user.type(box, '/plan{Escape}{Enter}')
 
     expect(screen.getByRole('region', { name: 'Plan mode' })).toHaveTextContent('cannot change its permission mode')
+    expect(fake.submitMessage).not.toHaveBeenCalled()
+    expect(typeInto).not.toHaveBeenCalled()
+  })
+
+  it('moves a chat the daemon runs to plan mode on /plan once you say yes, through the daemon and not as a message', async () => {
+    const { user, box } = await open({ windowActions: windowActions() })
+
+    await user.type(box, '/plan{Escape}{Enter}')
+    await user.click(screen.getByRole('button', { name: 'Plan mode' }))
+
+    expect(fake.setChatPermissions).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'read-only')
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 

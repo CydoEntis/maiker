@@ -104,6 +104,11 @@ impl Daemon {
             }
             Command::ConversationRename { id, title } => self.conversation_rename(id, &title)?,
             Command::ConversationMarkSeen { id } => self.conversation_mark_seen(id),
+            Command::ConversationSetPermissions {
+                id,
+                generation,
+                permissions,
+            } => self.conversation_set_permissions(id, generation, permissions)?,
             Command::ConversationArchive { id, archived } => {
                 self.conversation_archive(id, archived)?
             }

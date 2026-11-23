@@ -188,6 +188,31 @@ async fn the_next_claude_message_goes_to_the_process_started_after_the_last() {
 }
 
 #[tokio::test]
+async fn permissions_changed_mid_chat_start_the_next_claude_process_with_them() {
+    use crate::conversation::{ApprovalPolicy, Permissions, Sandbox};
+    let mut chat = Waiting::new(None).await;
+
+    let mut request = claude_message(Default::default());
+    if let super::runtime::Rpc::Send { permissions, .. } = &mut request {
+        *permissions = Some(Permissions { approval_policy: ApprovalPolicy::Never, sandbox: Sandbox::FullAccess });
+    }
+    chat.requests.send(super::runtime::Command { token: 5, request }).await.unwrap();
+    finish_turn(&mut chat.received, chat.owner).await;
+    let log = fake_log(&chat.executable).await;
+    let sent_to = pids(&log, "message")[1];
+    assert_ne!(sent_to, chat.warm, "the process started on the old permissions is not used: {log:?}");
+    let started = log.iter().find(|line| line.kind == "start" && line.pid == sent_to).unwrap();
+    assert!(started.arguments.contains("--permission-mode bypassPermissions"), "{started:?}");
+    assert!(started.arguments.contains("--allow-dangerously-skip-permissions"), "{started:?}");
+    // They hold for the turns after: the next process waiting is started with them too.
+    let next = wait_for(&chat.executable, "start", 4).await[3];
+    let log = fake_log(&chat.executable).await;
+    let waiting = log.iter().find(|line| line.kind == "start" && line.pid == next).unwrap();
+    assert!(waiting.arguments.contains("--permission-mode bypassPermissions"), "{waiting:?}");
+    chat.stop().await;
+}
+
+#[tokio::test]
 async fn a_message_with_another_model_starts_a_new_claude_process() {
     let mut chat = Waiting::new(None).await;
 

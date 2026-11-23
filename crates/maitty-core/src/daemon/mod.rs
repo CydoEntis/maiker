@@ -1093,6 +1093,17 @@ impl Daemon {
                 anyhow::bail!("Only a human client can change settings")
             }
             Command::SetSetting { .. } => Ok(()),
+            Command::ConversationSetPermissions { .. }
+                if structured
+                    || self
+                        .clients
+                        .get(&client)
+                        .is_some_and(|client| client.from.is_some()) =>
+            {
+                anyhow::bail!("Only a person can change a chat's permissions, from the app")
+            }
+            // It can widen what an agent may do without asking, so it takes the grant to administer.
+            Command::ConversationSetPermissions { .. } => self.may(client, Grant::Admin, None),
             Command::ConversationRename { .. }
             | Command::ConversationArchive { .. }
             | Command::ConversationMarkSeen { .. }

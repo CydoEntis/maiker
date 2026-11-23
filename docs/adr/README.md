@@ -29,7 +29,7 @@ holds the history; an ADR states only what is true now.
 | [0002](0002-terminal-substrate-and-wire-protocol.md) | portable-pty and vt100; msgpack over local sockets, versioned |
 | [0003](0003-status-and-conversation-trust.md) | Status comes only from the owning runtime, and one writer decides it |
 | [0004](0004-client-split-and-desktop-host.md) | Clients are views: TUI, CLI and an optional desktop app, sharing one installed daemon |
-| [0005](0005-provider-adapters-and-permissions.md) | Provider adapters sit behind the daemon; Maiker never widens permissions |
+| [0005](0005-provider-adapters-and-permissions.md) | Provider adapters sit behind the daemon; only a person changes permissions |
 | [0006](0006-secrets-never-enter-chat.md) | Secrets never enter chat |
 | [0007](0007-multiple-machines.md) | One connection per machine, held by the client (the disk-reading limit amended by 0014, reaching and adding a machine by 0017) |
 | [0008](0008-windows-first-and-one-product-name.md) | Windows is first-class; the product name lives in one place |

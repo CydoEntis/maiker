@@ -8588,6 +8588,46 @@ fn a_finished_chat_you_open_goes_idle_and_one_that_needs_you_or_works_does_not()
 }
 
 #[test]
+fn a_person_changes_a_running_chats_permissions_and_its_next_message_carries_them() {
+    use crate::conversation::{ApprovalPolicy, LaunchSettings, Permissions, Provider, Sandbox};
+    let (mut d, _rx) = daemon();
+    let mut chat = crate::test_support::conversation();
+    chat.settings = Some(LaunchSettings {
+        provider: Provider::Codex,
+        executable: "codex".into(),
+        config_root: std::env::temp_dir(),
+        cwd: std::env::temp_dir(),
+        model: None,
+        model_provider: None,
+        approval_policy: ApprovalPolicy::OnRequest,
+        sandbox: Sandbox::WorkspaceWrite,
+        agent: None,
+    });
+    d.conversations.push(chat);
+    let (id, generation) = (d.conversations[0].id, d.conversations[0].generation);
+    let set = |d: &mut Daemon, generation: u64, permissions: Permissions| {
+        d.command(0, Command::ConversationSetPermissions { id, generation, permissions })
+    };
+    let full = Permissions { approval_policy: ApprovalPolicy::Never, sandbox: Sandbox::FullAccess };
+
+    set(&mut d, generation, full).unwrap();
+    let settings = d.conversations[0].settings.clone().unwrap();
+    assert_eq!((settings.approval_policy, settings.sandbox), (ApprovalPolicy::Never, Sandbox::FullAccess));
+    assert_eq!(d.conversation_states[&id].new_permissions, Some(full), "handed over with the next message");
+
+    // Asking first while running unsandboxed is no provider's posture.
+    let mixed = Permissions { approval_policy: ApprovalPolicy::OnRequest, sandbox: Sandbox::FullAccess };
+    assert!(set(&mut d, generation, mixed).is_err());
+    // A chat that restarted since the window showed it is not changed blind.
+    let read = Permissions { approval_policy: ApprovalPolicy::OnRequest, sandbox: Sandbox::ReadOnly };
+    assert!(set(&mut d, generation + 1, read).is_err());
+    // An agent run over ACP keeps its own settings.
+    d.conversations[0].binding.provider = Provider::Acp;
+    assert!(set(&mut d, generation, read).is_err());
+    assert_eq!(d.conversations[0].settings.as_ref().unwrap().sandbox, Sandbox::FullAccess);
+}
+
+#[test]
 fn a_terminal_pane_can_be_read_resized_and_typed_into_by_its_own_number() {
     let (mut d, _rx) = daemon();
     let t = pane(&mut d);

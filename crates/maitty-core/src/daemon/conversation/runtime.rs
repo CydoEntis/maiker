@@ -23,12 +23,14 @@ pub(super) enum Rpc {
         cursor: Option<String>,
         limit: usize,
     },
-    /// Start a turn. `message` is the daemon's own name for this message.
+    /// Start a turn. `message` is the daemon's own name for this message. `permissions` are set
+    /// when a person changed them since the last turn; the agent works with them from this one on.
     Send {
         session: String,
         text: String,
         message: String,
         choice: crate::conversation::TurnChoice,
+        permissions: Option<crate::conversation::Permissions>,
     },
     Interrupt {
         session: String,
@@ -73,9 +75,9 @@ impl Rpc {
                 "thread/turns/list",
                 requests::turns_list_params(&session, cursor.as_deref(), limit),
             ),
-            Self::Send { session, text, message, choice } => CodexCall::Request(
+            Self::Send { session, text, message, choice, permissions } => CodexCall::Request(
                 "turn/start",
-                requests::turn_start_params(&session, &text, &message, &choice),
+                requests::turn_start_params(&session, &text, &message, &choice, permissions.as_ref()),
             ),
             Self::Interrupt { session, turn } => {
                 CodexCall::Request("turn/interrupt", requests::turn_interrupt_params(&session, &turn))

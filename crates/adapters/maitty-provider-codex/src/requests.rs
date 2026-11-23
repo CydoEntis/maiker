@@ -2,12 +2,18 @@
 //! of each request, the answer to each approval, and the checks on a thread's reply.
 
 use anyhow::{Result, bail};
-use maitty_shared::conversation::{ApprovalDecision, ApprovalPolicy, LaunchSettings, Sandbox, TurnChoice};
+use maitty_shared::conversation::{
+    ApprovalDecision, ApprovalPolicy, LaunchSettings, Permissions, Sandbox, TurnChoice,
+};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 fn approval(settings: &LaunchSettings) -> &'static str {
-    match settings.approval_policy {
+    approval_word(settings.approval_policy)
+}
+
+fn approval_word(policy: ApprovalPolicy) -> &'static str {
+    match policy {
         ApprovalPolicy::Untrusted => "untrusted",
         ApprovalPolicy::OnRequest => "on-request",
         ApprovalPolicy::Never => "never",
@@ -37,13 +43,24 @@ pub fn thread_resume_params(settings: &LaunchSettings, thread: &str) -> Value {
     params
 }
 
+/// The sandbox `turn/start` sets: the same policy `thread_start_params` asks for, as an object.
+fn sandbox_policy(sandbox: Sandbox) -> Value {
+    match sandbox {
+        Sandbox::ReadOnly => json!({"type":"readOnly","networkAccess":false}),
+        Sandbox::WorkspaceWrite => json!({"type":"workspaceWrite","networkAccess":false,"writableRoots":[],"excludeTmpdirEnvVar":true,"excludeSlashTmp":true}),
+        Sandbox::FullAccess => json!({"type":"dangerFullAccess"}),
+    }
+}
+
 /// The parameters of `turn/start`. Only what the user picked is added; the providers keep a
-/// model and effort for the turns after, so a choice made once holds until changed.
+/// model and effort for the turns after, so a choice made once holds until changed. Permissions a
+/// person changed mid-chat ride the same way: Codex keeps them for the turns after (ADR 0005).
 pub fn turn_start_params(
     thread: &str,
     text: &str,
     client_message_id: &str,
     choice: &TurnChoice,
+    permissions: Option<&Permissions>,
 ) -> Value {
     let mut params = json!({"threadId":thread,"input":[{"type":"text","text":text,"text_elements":[]}],"clientUserMessageId":client_message_id});
     if let Some(model) = &choice.model {
@@ -51,6 +68,10 @@ pub fn turn_start_params(
     }
     if let Some(effort) = &choice.effort {
         params["effort"] = json!(effort);
+    }
+    if let Some(permissions) = permissions {
+        params["approvalPolicy"] = json!(approval_word(permissions.approval_policy));
+        params["sandboxPolicy"] = sandbox_policy(permissions.sandbox);
     }
     params
 }
@@ -208,22 +229,44 @@ mod tests {
 
     #[test]
     fn a_picked_model_and_effort_ride_on_the_codex_turn_start_and_nothing_else_changes() {
-        let plain = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default());
+        let plain = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default(), None);
         assert!(plain.get("model").is_none() && plain.get("effort").is_none());
         let picked = turn_start_params(
             "thread",
             "hi",
             "1-1-1",
             &TurnChoice { model: Some("gpt-x".into()), effort: Some("high".into()) },
+            None,
         );
         assert_eq!(picked["model"], "gpt-x");
         assert_eq!(picked["effort"], "high");
-        // Permissions are set when the thread starts and are not part of a turn's parameters.
+        // Permissions go on a turn only when a person changed them (the next test).
         for key in ["approvalPolicy", "sandbox", "sandboxPolicy", "cwd"] {
             assert!(picked.get(key).is_none(), "{key}");
         }
         let mut stripped = picked.clone();
         stripped.as_object_mut().unwrap().retain(|key, _| key != "model" && key != "effort");
         assert_eq!(stripped, plain);
+    }
+
+    #[test]
+    fn changed_permissions_ride_on_the_next_turn_start_as_the_thread_asks_for_them() {
+        let full = Permissions { approval_policy: ApprovalPolicy::Never, sandbox: Sandbox::FullAccess };
+        let params = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default(), Some(&full));
+        assert_eq!(params["approvalPolicy"], "never");
+        assert_eq!(params["sandboxPolicy"], json!({"type":"dangerFullAccess"}));
+
+        let ask = Permissions { approval_policy: ApprovalPolicy::OnRequest, sandbox: Sandbox::WorkspaceWrite };
+        let params = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default(), Some(&ask));
+        assert_eq!(params["approvalPolicy"], "on-request");
+        // The same sandbox `thread/start` sets up: no network, no writable roots beyond the folder, no temp folders.
+        assert_eq!(
+            params["sandboxPolicy"],
+            json!({"type":"workspaceWrite","networkAccess":false,"writableRoots":[],"excludeTmpdirEnvVar":true,"excludeSlashTmp":true})
+        );
+
+        let read = Permissions { approval_policy: ApprovalPolicy::OnRequest, sandbox: Sandbox::ReadOnly };
+        let params = turn_start_params("thread", "hi", "1-1-1", &TurnChoice::default(), Some(&read));
+        assert_eq!(params["sandboxPolicy"], json!({"type":"readOnly","networkAccess":false}));
     }
 }

@@ -1,4 +1,4 @@
-# 0005. Provider adapters sit behind the daemon, and Maiker never widens permissions
+# 0005. Provider adapters sit behind the daemon, and only a person changes permissions
 
 - **Status:** Accepted
 - **Date:** 2026-11-06
@@ -16,14 +16,23 @@ a pane (0003). Each provider speaks its own protocol.
   no plugin ABI or runtime download.
 - Maiker launches the official CLI with the user's own sign-in. It offers no login screen and
   does not handle OAuth tokens.
-- Permission posture is the provider's. Maiker only chooses the setting and never widens a
-  session's permissions after it starts. **Bypass Permissions** (the provider's own skip-permissions
+- Permission posture is the provider's. Maiker only chooses the setting, and never widens a
+  session's permissions on its own: only a person does, in the app. **Bypass Permissions** (the provider's own skip-permissions
   mode: Claude `--dangerously-skip-permissions`, Codex `--dangerously-bypass-approvals-and-sandbox` or
   `Sandbox::FullAccess` always paired with `ApprovalPolicy::Never`, Gemini `--yolo`) is **on by default
   for every agent**, with one switch per agent to turn it off (`[permissions.bypass]` in `config.toml`,
-  shared by both apps). It is chosen when a session starts and fixed for it: a chat still sends its
-  choice explicitly and shows a visible tag, a session already running keeps how it started, and a
-  resumed session gets the flag again only when it started with it and its switch is still on. An
+  shared by both apps). It is chosen when a session starts: a chat still sends its choice
+  explicitly and shows a visible tag, and a resumed session gets the flag again only when it started
+  with it and its switch is still on.
+- A person may change a running **Claude or Codex chat** the daemon runs to read-only, ask before
+  edits, or full access, wider or narrower (`Command::ConversationSetPermissions`): the same three
+  postures a chat starts with, never a mix (full access goes only with approval `Never`). Only a
+  human client with the admin grant may send it; a pane or a chat's own agent is refused. The daemon
+  saves the new settings at once, so a restart or resume keeps them, and hands them to the agent
+  with the next message: Claude starts that turn's process with them, Codex takes them on
+  `turn/start` and keeps them for the turns after. The turn under way keeps how it started. An agent
+  run over ACP, and an agent in a terminal, keep their own settings; a terminal's mode is the
+  agent's own key or command, typed as its user would. An
   agent with no known flag (or a custom flag that is not a plain option) starts as it always did.
   The reason for the default: people run many agents at once and approving each step one by one was
   the main thing that stopped them; the switch keeps a per-agent way back.

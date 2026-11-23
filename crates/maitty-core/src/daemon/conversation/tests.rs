@@ -831,5 +831,6 @@ fn claude_message(choice: crate::conversation::TurnChoice) -> super::runtime::Rp
         text: "hello fake Claude".into(),
         message: "message-1".into(),
         choice,
+        permissions: None,
     }
 }

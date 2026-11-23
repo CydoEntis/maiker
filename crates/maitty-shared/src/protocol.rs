@@ -838,6 +838,13 @@ pub enum Command {
     ConversationMarkSeen {
         id: crate::conversation::ConversationId,
     },
+    /// A person changes a running chat's permissions (ADR 0005); its agent works with them from the
+    /// next message. Claude and Codex chats only. Came in `CHAT_CONTROLS_SINCE`.
+    ConversationSetPermissions {
+        id: crate::conversation::ConversationId,
+        generation: u64,
+        permissions: crate::conversation::Permissions,
+    },
     /// Put a conversation away or bring it back; it keeps running.
     ConversationArchive {
         id: crate::conversation::ConversationId,
@@ -2793,6 +2800,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
+                | Command::ConversationSetPermissions { .. }
                 | Command::BranchWorktree { base: Some(_), .. },
             ) => CHAT_CONTROLS_SINCE,
             ClientMsg::Command(Command::SetSetting {
@@ -2804,9 +2812,10 @@ impl ClientMsg {
     }
 }
 
-/// The first version whose daemon reads `Command::ConversationMarkSeen` and a `BranchWorktree`
-/// with a `base`. A daemon before it passes the first over and would make the worktree on the
-/// base branch itself, so a client checks before it sends either.
+/// The first version whose daemon reads `Command::ConversationMarkSeen`,
+/// `Command::ConversationSetPermissions` and a `BranchWorktree` with a `base`. A daemon before it
+/// passes the first two over and would make the worktree on the base branch itself, so a client
+/// checks before it sends any of them.
 pub const CHAT_CONTROLS_SINCE: u32 = 124;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
@@ -3147,6 +3156,14 @@ mod tests {
                 base: Some("dev".into()),
             }),
             ClientMsg::Command(Command::ConversationMarkSeen { id }),
+            ClientMsg::Command(Command::ConversationSetPermissions {
+                id,
+                generation: 2,
+                permissions: crate::conversation::Permissions {
+                    approval_policy: crate::conversation::ApprovalPolicy::Never,
+                    sandbox: crate::conversation::Sandbox::FullAccess,
+                },
+            }),
             ClientMsg::Command(Command::SaveFile {
                 term: 3,
                 tag: 1,
@@ -3447,6 +3464,7 @@ mod tests {
                 }) => HELPER_SETTINGS_SINCE,
                 ClientMsg::Command(
                     Command::ConversationMarkSeen { .. }
+                    | Command::ConversationSetPermissions { .. }
                     | Command::BranchWorktree { base: Some(_), .. },
                 ) => CHAT_CONTROLS_SINCE,
                 _ => COMPATIBLE_SINCE,

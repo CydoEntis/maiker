@@ -1,3 +1,5 @@
+import type { SessionPermissions } from '@/api/daemon'
+
 
 /** Claude's permission modes in plain words. A mode not listed is shown as it was written. */
 const MODE_WORDS: Readonly<Record<string, string>> = {
@@ -56,6 +58,23 @@ export const CODEX_FULL_MODE = 'codexFullAccess'
 
 /** The modes a Codex chat can start in. Codex has no key that cycles them, so they are picked before it starts. */
 export const CODEX_START_MODES: readonly string[] = ['codexReadOnly', 'codexAuto', CODEX_FULL_MODE]
+
+/**
+ * The modes a chat the daemon runs (Claude or Codex, no terminal) switches between while it runs, each with the
+ * permissions it stands for (ADR 0005): the three a chat can start with, so a pick is never a posture it could not start in.
+ */
+export const CHAT_PERMISSION_MODES: Readonly<Record<'claude' | 'codex', readonly { readonly mode: string; readonly permissions: SessionPermissions }[]>> = {
+  claude: [
+    { mode: 'default', permissions: 'workspace-write' },
+    { mode: PLAN_MODE, permissions: 'read-only' },
+    { mode: BYPASS_MODE, permissions: 'full-access' },
+  ],
+  codex: [
+    { mode: 'codexReadOnly', permissions: 'read-only' },
+    { mode: 'codexAuto', permissions: 'workspace-write' },
+    { mode: CODEX_FULL_MODE, permissions: 'full-access' },
+  ],
+}
 
 /** The mode each agent starts a new chat in until another is picked: the one that puts nothing on its launch line. */
 export const START_MODE: Readonly<Record<'claude' | 'codex' | 'gemini', string>> = { claude: 'default', codex: 'codexAuto', gemini: 'default' }

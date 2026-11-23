@@ -1321,8 +1321,15 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
-Protocol 124 adds `Command::ConversationMarkSeen { id }` and `BranchWorktree.base` (`CHAT_CONTROLS_SINCE`, with an arm
-in `ClientMsg::introduced_in` for the seen and for a `BranchWorktree` that carries a base; `COMPATIBLE_SINCE` stays 122).
+Protocol 124 adds `Command::ConversationMarkSeen { id }`, `Command::ConversationSetPermissions { id, generation,
+permissions }` and `BranchWorktree.base` (`CHAT_CONTROLS_SINCE`, with an arm in `ClientMsg::introduced_in` for the two
+commands and for a `BranchWorktree` that carries a base; `COMPATIBLE_SINCE` stays 122). `ConversationSetPermissions`
+(ADR 0005) sets a running Claude or Codex chat's `LaunchSettings` approval policy and sandbox again; `Permissions` is
+that pair and refuses full access with anything but `Never`. Human clients with the admin grant only; a stale
+generation, another provider or a chat with no settings is refused in words. The new pair is saved at once and rides on
+the next `Rpc::Send` (`State::new_permissions`): Claude's per-message process starts with them, Codex gets
+`approvalPolicy` and a `sandboxPolicy` matching `thread/start`'s on `turn/start`. The desktop client sends it through
+`set_conversation_permissions` and refuses an older daemon in words (`ask_running_daemon_if_it_reads`).
 The seen is the window opening a finished chat: the daemon turns its done to idle, as `MarkSeen` does for a pane, and
 leaves every other status alone; human clients with the write grant only. A daemon before 124 is not asked
 (`mark_conversation_seen`, through `ask_if_known`) and the chat keeps its done. With `base`, `branch` is a new branch cut

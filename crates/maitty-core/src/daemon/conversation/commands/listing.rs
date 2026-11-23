@@ -30,6 +30,44 @@ impl Daemon {
         }
     }
 
+    /// A person changes a running Claude or Codex chat's permissions (ADR 0005). The saved settings
+    /// change at once, so a restart or a resume keeps them; the agent is handed them with the next
+    /// message (`State::new_permissions`), since both providers take them per turn.
+    pub(in crate::daemon) fn conversation_set_permissions(
+        &mut self,
+        id: ConversationId,
+        generation: u64,
+        permissions: crate::conversation::Permissions,
+    ) -> Result<()> {
+        use crate::conversation::{ExecutionKind, Provider};
+        permissions.validate().map_err(anyhow::Error::msg)?;
+        let conversation = self
+            .conversations
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or_else(|| anyhow::anyhow!("No such conversation"))?;
+        anyhow::ensure!(
+            conversation.generation == generation,
+            "This chat changed since it was shown: look again and pick its permissions there"
+        );
+        anyhow::ensure!(
+            conversation.execution == ExecutionKind::Structured
+                && matches!(conversation.binding.provider, Provider::Claude | Provider::Codex),
+            "Only a Claude or Codex chat's permissions can be changed here; this agent keeps its own"
+        );
+        let settings = conversation
+            .settings
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("This chat has no launch settings to change"))?;
+        let before = (settings.approval_policy, settings.sandbox);
+        permissions.apply_to(settings);
+        if (permissions.approval_policy, permissions.sandbox) != before {
+            self.conversation_states.entry(id).or_default().new_permissions = Some(permissions);
+            self.dirty = true;
+        }
+        Ok(())
+    }
+
     /// Put a conversation away, or bring it back. It keeps running either way.
     pub(in crate::daemon) fn conversation_archive(
         &mut self,

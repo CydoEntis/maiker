@@ -829,6 +829,11 @@ export async function sendWhenAgentReady(sessionId: string, text: string, operat
   await invokeParsed('send_when_agent_ready', NullSchema, { term: pane.term, text, operation, ...machineArgs(pane) })
 }
 
+/** Changes a running chat's permissions on the daemon that runs it (ADR 0005); its agent works with them from the next message. */
+export async function setChatPermissions(conversation: Pick<Conversation, 'id' | 'generation'>, permissions: SessionPermissions): Promise<void> {
+  await invokeParsed('set_conversation_permissions', NullSchema, { ...chatArgs(conversation.id), generation: conversation.generation, permissions })
+}
+
 export async function renameConversationOnDaemon(conversation: Pick<Conversation, 'id'>, title: string): Promise<void> {
   const pane = addressOf(conversation.id)
   if (pane !== null) {

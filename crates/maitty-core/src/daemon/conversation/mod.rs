@@ -57,6 +57,9 @@ pub(super) struct State {
     pub(super) unsupported_requests:
         std::collections::BTreeMap<crate::conversation::ProviderRequestId, String>,
     pub(super) cancelling: Option<String>,
+    /// Permissions a person changed since the agent last started a turn: handed to it with the
+    /// next message, then cleared.
+    pub(super) new_permissions: Option<crate::conversation::Permissions>,
     /// Approvals a person already answered, oldest first and capped, so a viewer that restarts
     /// can still show what was decided. Held in memory only: they follow the daemon's life.
     pub(super) answered_approvals: std::collections::VecDeque<crate::conversation::AnsweredApproval>,

@@ -1,8 +1,8 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
-import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen } from '@/api/daemon'
+import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen, setChatPermissions, type SessionPermissions } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
-import { readConversationPermissions } from '@/data/conversationPermissions'
+import { readConversationPermissions, rememberConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
 import type { SecretAsk, SessionStatus } from '@/features/workspace/model/session'
@@ -17,7 +17,7 @@ import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } f
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
 import { startedBypassed } from '../bypassSessions'
-import { asksToSwitchModel, CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
+import { asksToSwitchModel, CHAT_PERMISSION_MODES, CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
 import { ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
@@ -249,7 +249,16 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const metaModel = feed.meta?.model ?? null
   // What the chat was started with, until the agent's own file says it: the chips the starting chat drew stay as they were.
   const [started] = useState(() => startChoiceOf(sessionId))
-  const shownMode = (liveMode !== null && liveMode.base === metaMode ? liveMode.value : metaMode) ?? started?.mode ?? null
+  // A chat the daemon runs (Claude or Codex, with no terminal and not over ACP) changes its permissions through the daemon
+  // (ADR 0005), from its next message. The daemon does not list them, so the window keeps what each chat was started with and
+  // changed to, under its session id.
+  const ownKey = sessionId ?? String(link.conversation)
+  const chatModes = typeInto === undefined && link.readOnly !== true && link.acp !== true && (agent === 'claude' || agent === 'codex') ? CHAT_PERMISSION_MODES[agent] : null
+  const recorded = useMemo(() => readConversationPermissions()[ownKey] ?? null, [ownKey])
+  const [changed, setChanged] = useState<{ key: string; value: SessionPermissions } | null>(null)
+  const permissions = changed?.key === ownKey ? changed.value : recorded
+  const chatMode = chatModes?.find((entry) => entry.permissions === permissions)?.mode ?? null
+  const shownMode = (liveMode !== null && liveMode.base === metaMode ? liveMode.value : metaMode) ?? chatMode ?? started?.mode ?? null
   const startedModel = started === null || started.model === DEFAULT_PICK ? null : started.model
   const startedEffort = started === null || started.reasoning === DEFAULT_PICK ? null : started.reasoning
   const shownModel = (liveModel !== null && liveModel.base === metaModel ? liveModel.value : metaModel) ?? startedModel
@@ -273,6 +282,21 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   // A menu the agent's own command opened (Codex's /model), drawn in the chat until it is closed.
   const [menuOpen, setMenuOpen] = useState(false)
   const agentControls = useMemo(() => {
+    if (chatModes !== null) {
+      return {
+        modes: chatModes.map((entry) => entry.mode),
+        modeAgent: agentLabel(agent),
+        onPickMode: (target: string) => {
+          const picked = chatModes.find((entry) => entry.mode === target)
+          if (picked === undefined || picked.permissions === permissions) return
+          setChatPermissions({ id: ownKey, generation: link.generation }, picked.permissions).then(() => {
+            rememberConversationPermissions(ownKey, picked.permissions)
+            setChanged({ key: ownKey, value: picked.permissions })
+            if (working) toast.info(`${modeLabel(target) ?? target} from the next message`, { description: `${agentLabel(agent)} is working: this turn keeps the permissions it started with.` })
+          }, (error: unknown) => { toast.failed('Could not change the permissions', error) })
+        },
+      }
+    }
     if (canPickCodexMode) {
       return {
         // Codex has no model flag a chat can set on a running session: its /model menu is typed and shown here, and the person picks in it.
@@ -365,7 +389,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         })
       } }),
     }
-  }, [agent, canChangeAgent, canPickCodexMode, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
+  }, [agent, canChangeAgent, canPickCodexMode, chatModes, permissions, ownKey, link.generation, working, chipsLocked, typeInto, refresh, sessionId, metaMode, metaModel, effort, shownMode, pickerLocked, remote])
   // The mode is picked at any time but typed only between turns: a pick while the agent works shows at once and is held.
   const applyNow = 'onPickMode' in agentControls ? agentControls.onPickMode : undefined
   const pickHeld = useCallback((target: string) => {
@@ -382,7 +406,8 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     setLiveMode({ base: metaMode, value: target })
     toast.info(`${modeLabel(target) ?? target} from the next turn`, { description: `${agentLabel(agent)} is working, so the mode changes once this turn ends.` })
   }, [applyNow, pickerLocked, working, metaMode, agent])
-  const pickMode = applyNow === undefined ? undefined : pickHeld
+  // A chat the daemon runs takes a pick at once, even mid-turn: the daemon hands it to the agent with the next message.
+  const pickMode = applyNow === undefined ? undefined : chatModes === null ? pickHeld : applyNow
   useEffect(() => {
     if (applyNow === undefined || heldMode === null || heldMode.pick <= appliedPick.current || working || pickerLocked !== null) return
     appliedPick.current = heldMode.pick
@@ -432,7 +457,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       case 'rename': windowActions.renameSession(route.name); void sendText(typed); return
       case 'card':
         if (route.card === 'status') aside.show('Status', statusCard({ agent, model: shownModel, effort, mode: shownMode, folder: root, usage, now: nowSeconds(), working, online }))
-        else aside.show('Permissions', permissionsCard(agent, shownMode, agent === 'codex' ? CODEX_START_MODES : PICKABLE_MODES))
+        else aside.show('Permissions', permissionsCard(agent, shownMode, chatModes?.map((entry) => entry.mode) ?? (agent === 'codex' ? CODEX_START_MODES : PICKABLE_MODES)))
         return
       case 'copy': {
         const reply = lastReply(bareRows)
@@ -569,7 +594,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     if (sessionId !== undefined && held !== null && heldByDaemon && personSpoke) releaseFirstMessage(sessionId)
   }, [sessionId, held, heldByDaemon, personSpoke])
   // The daemon does not report how a session was started, so the window remembers the sessions it started with full access.
-  const fullAccess = useMemo(() => readConversationPermissions()[String(link.conversation)] === 'full-access', [link.conversation])
+  const fullAccess = permissions === 'full-access'
 
   const [answering, setAnswering] = useState(false)
   const answer = useCallback((requestId: number | string, decision: ApprovalDecision) => {
@@ -845,7 +870,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: chatModes !== null || startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(pickMode === undefined ? {} : { onPickMode: pickMode }) }}
         sent={sentMessages}
         place={place}
         // Nothing has run in a chat that is read and empty, with no turn under way: its chips can still change where it works.

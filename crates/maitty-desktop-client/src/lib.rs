@@ -1868,6 +1868,30 @@ pub async fn mark_conversation_seen(id: u64, daemon: impl Into<Daemon>) -> Resul
     Ok(Value::Null)
 }
 
+/// A person changes a running chat's permissions (ADR 0005); its agent works with them from the next message.
+/// This computer's daemon from before the command is told so in words; another machine's is on this version.
+pub async fn set_conversation_permissions(
+    id: u64,
+    generation: u64,
+    permissions: Permissions,
+    daemon: impl Into<Daemon>,
+) -> Result<Value> {
+    let (sandbox, approval_policy) = permissions.launch_policy();
+    let message = ClientMsg::Command(Command::ConversationSetPermissions {
+        id: maitty_shared::conversation::ConversationId(id),
+        generation,
+        permissions: maitty_shared::conversation::Permissions { approval_policy, sandbox },
+    });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        remote => request(message, remote).await?,
+    };
+    match reply {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("The Maiker service gave an answer this app does not understand (permissions). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
 pub async fn archive_conversation(
     id: u64,
     archived: bool,
