@@ -80,7 +80,9 @@ pnpm desktop:build     # create platform installer packages
 
 Desktop commands build the Rust CLI sidecar for the current host platform. In dev,
 Tauri's `beforeDevCommand` rebuilds it (`pnpm bundle:daemon:dev`) on every start, so
-`pnpm tauri dev` never runs a stale service copy. A packaged app instead installs that
+`pnpm tauri dev` never runs a stale service copy. On Linux and macOS it renames the new copy
+over the old one, so a service still running from an earlier start keeps its old code until it
+is restarted (Settings › Daemon). A packaged app instead installs that
 file as the shared `maiker` on first start and after each update (see
 [ADR 0004](adr/0004-client-split-and-desktop-host.md)).
 The packaged GUI uses that sidecar to start the separate daemon when needed;
