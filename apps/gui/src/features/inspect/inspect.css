@@ -29,7 +29,7 @@
 .mx-inspect-head { position: relative; flex: none; height: 34px; display: flex; align-items: center; gap: 2px; padding: 0 6px; border-bottom: 1px solid var(--line); color: var(--muted); }
 .mx-sp-tabs { display: flex; align-items: center; gap: 2px; min-width: 0; overflow: hidden; }
 /* The tab in front shows its icon, its name and a close; the others are their icon alone, so four or five still fit. */
-.mx-sp-tab { flex: none; height: 26px; display: inline-flex; align-items: center; border-radius: var(--r-control); color: var(--muted); }
+.mx-sp-tab { flex: none; height: 26px; display: inline-flex; align-items: center; border-radius: var(--r-control); color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
 .mx-sp-tab:hover { color: var(--fg); background: var(--m-hover); }
 .mx-sp-tab.is-on { color: var(--fg); background: var(--c-sel-bg); }
 .mx-sp-tab-pick { height: 100%; display: inline-flex; align-items: center; gap: 6px; padding: 0 6px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; color: inherit; white-space: nowrap; }
@@ -71,7 +71,8 @@
 @keyframes mx-inspect-out-left { to { opacity: 0; transform: translateX(-28px); width: 0; min-width: 0; margin-right: 0; border-width: 0; } }
 :root[data-motion="reduced"] .mx-inspect, .mx-app[data-motion="reduced"] .mx-inspect { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-inspect { animation: none; } }
-.mx-inspect-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px; }
+/* Each tab's body is its own element (keyed by tab), so switching tabs fades the new one in rather than cutting to it. */
+.mx-inspect-scroll { flex: 1; min-height: 0; overflow: auto; padding: 10px; animation: v7scrim var(--t-fast) var(--ease); }
 /* Changes: the branch bar, the changed files, then the commit. A file's diff opens in the file pane, never here. */
 .mx-inspect-scroll:has(.mx-changes) { overflow: hidden; padding: 0; }
 .mx-changes { height: 100%; min-height: 0; display: flex; flex-direction: column; }
@@ -197,7 +198,7 @@ button.mx-inspect-row:hover { background: rgba(var(--hl), calc(.05 * var(--hk)))
 .mx-split-main:disabled, .mx-split-more:disabled { opacity: .55; cursor: default; }
 .mx-changes-menu { min-width: 220px; padding: 4px; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--sh-pop); color: var(--fg); z-index: 80; }
 .mx-changes-menu-item { display: flex; align-items: center; gap: 8px; padding: 6px 10px; border-radius: var(--r-control); font-size: 12.5px; outline: none; cursor: default; }
-.mx-changes-menu-item[data-highlighted] { background: var(--m-hover); }
+.mx-changes-menu-item[data-highlighted] { background: var(--float-hover); }
 .mx-changes-menu-item[data-disabled] { color: var(--fg); }
 .mx-changes-menu-item.is-two-line { flex-direction: column; align-items: flex-start; gap: 1px; }
 .mx-changes-menu-name { flex: 1; min-width: 0; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

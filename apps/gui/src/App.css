@@ -27,7 +27,7 @@ kbd { align-items: center; background: var(--secondary); border: 1px solid var(-
 .sr-only { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; overflow: hidden; position: absolute; white-space: nowrap; width: 1px; }
 
 @keyframes spin { to { transform: rotate(360deg); } }
-.panel-scrim { background: rgb(0 0 0 / 40%); display: none; inset: 0; position: absolute; z-index: 4; }
+.panel-scrim { background: var(--scrim); display: none; inset: 0; position: absolute; z-index: 4; }
 @media (max-width: 1279px) { .panel-scrim { display: block; } }
 
 /* Custom title bar in the app's own colors (the native bar is off). */

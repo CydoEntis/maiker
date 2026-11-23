@@ -52,6 +52,10 @@
      step lighter than the float, a stronger edge, so it lifts off the float it opens from. */
   --float-raised: color-mix(in srgb, var(--float-bg) 93%, rgb(var(--ink)));
   --float-raised-line: rgba(var(--ink), .16);
+  /* A dialog sits a level above a menu: a deeper shadow with a dark rim, so a window over the app reads as above it. */
+  --dialog-sh: 0 0 0 1px rgba(0, 0, 0, calc(.2 * var(--shk))), 0 24px 64px rgba(0, 0, 0, calc(.55 * var(--shk)));
+  /* The one veil behind every dialog, window and palette: black, a little lighter where the theme's shadows are softer. */
+  --scrim: rgba(0, 0, 0, calc(.3 + .25 * var(--shk)));
 }
 /* ---- component tokens ----
    The shared pieces every control reads, so one component serves every theme:
@@ -99,6 +103,11 @@
 .mx-app .mx-waiting,
 .mx-app .mx-focus-pill,
 .mx-app .mx-select-bar,
+.mx-app .mx-slash,
+.mx-app .mx-dock-list,
+.mx-app .mx-changes-menu,
+.mx-app .mx-keys-dialog,
+.mx-app .mx-pulls-window,
 .mx-pop {
   background: var(--float-bg);
   border: 1px solid var(--float-line);
@@ -110,12 +119,17 @@
   border-color: var(--float-line);
 }
 .mx-app :is([role="menu"], [role="dialog"], [role="alertdialog"]) { box-shadow: var(--float-sh); }
+/* A dialog, a window over the app or a palette is one level up from a menu: the dialog shadow. A popover is a dialog by role
+   but hangs from its anchor (`data-side`), so it keeps the menu's. */
+.mx-app :is(.mx-settings, .mx-palette, .mx-op, .mx-rename, .mx-keys-dialog, .mx-pulls-window, [role="dialog"]:not([data-side]), [role="alertdialog"]) { box-shadow: var(--dialog-sh); }
+/* The narrow window's sidebar drawer is a dialog by role, but the sidebar card inside it is the surface: no float behind it. */
+.mx-app .mx-drawer { background: none; border: 0; box-shadow: none; }
 /* A select's list is the raised float (see `--float-raised`). */
 :is(.mx-app, :root) :is([role="listbox"].mx-pop, [data-slot="select-content"]) { background-color: var(--float-raised); border-color: var(--float-raised-line); }
 :root :is([data-radix-popper-content-wrapper] > *) { background-color: var(--float-bg); border-color: var(--float-line); }
 /* A tip and the hover card are drawn over the busiest part of the window and come and go with the pointer: a flat ring, no
    blur to repaint (docs/PERFORMANCE.md). */
-.mx-app :is(.mx-tip, .mx-hover-card) { box-shadow: var(--pop-sh-flat); --float-bleed: 4px; }
+.mx-app :is(.mx-tip, .mx-hover-card) { box-shadow: var(--pop-sh-flat); border-color: transparent; --float-bleed: 4px; }
 /* A field inside a float is sunk into it: the well, not the card a field on a pane is. */
 .mx-app :is(.mx-ctx, .mx-picker-menu, .mx-pop, .mx-rename, .mx-toast, .mx-alert, [role="menu"], [role="alertdialog"]) { --c-field-bg: var(--m-well); }
 
@@ -129,12 +143,21 @@
 /* Under software painting a scale repaints the popover at every size: it fades and slides 4px instead (transform and opacity only). */
 @keyframes mx-grow-flat { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
 :root[data-gpu="software"] .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation-name: mx-grow-flat; }
+/* And shrinks back into that corner as it closes, faster than it came, so a menu never just vanishes. Radix waits for the
+   animation before it removes the menu. */
+@keyframes mx-shrink { from { opacity: 1; transform: none; } to { opacity: 0; transform: scale(.96); } }
+@keyframes mx-fade-out { from { opacity: 1; } to { opacity: 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .mx-app:not([data-motion="reduced"]) :is(.mx-pop, .mx-picker-menu, [role="menu"], [role="listbox"])[data-side][data-state="closed"] { animation: mx-shrink var(--t-fast) cubic-bezier(.4, 0, 1, 1) forwards; }
+  :root[data-gpu="software"] .mx-app:not([data-motion="reduced"]) :is(.mx-pop, .mx-picker-menu, [role="menu"], [role="listbox"])[data-side][data-state="closed"] { animation-name: mx-fade-out; }
+}
 @media (prefers-reduced-motion: reduce) { .mx-app :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; } }
 .mx-app[data-motion="reduced"] :is(.mx-pop, .mx-picker-menu, .mx-upd-card, [role="menu"], [role="listbox"])[data-side] { animation: none; }
-/* The chat box (the chat's and the new-session draft's, one component) is a field: the theme's field tone (`--t3`, read
-   through its role `--m-raise`) inside a hairline of the ink, so it reads as the place to type on any pane. */
+/* The chat box (the chat's and the new-session draft's, one component) is a field: the field tone (`--c-field-bg`, a step
+   lighter than the pane; the theme's `--t3` equals the pane in most themes) inside a hairline of the ink, so it reads as the
+   place to type on any pane. */
 .mx-app .mx-box {
-  background: var(--m-raise);
+  background: var(--c-field-bg);
   border: 1px solid rgba(var(--ink), .11);
   box-shadow: none;
 }

@@ -10,8 +10,8 @@
 .mx-confirm-skip input { accent-color: var(--fg); }
 .mx-confirm-cancel, .mx-confirm-ok { height: 32px; padding: 0 14px; border-radius: var(--r-control); font-size: 13px; font-weight: 500; cursor: pointer; }
 .mx-confirm-cancel { color: var(--fg2); }
-.mx-confirm-cancel:hover { background: rgba(var(--ink), .06); color: var(--fg); }
-.mx-confirm-ok { font-weight: 600; color: var(--t1); background: var(--fg); }
-.mx-confirm-ok:hover { background: color-mix(in srgb, var(--fg) 85%, var(--t1)); }
+.mx-confirm-cancel:hover { background: var(--icon-button-fill); color: var(--fg); }
+.mx-confirm-ok { font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.mx-confirm-ok:hover { background: color-mix(in oklab, var(--accent) 90%, white); }
 .mx-confirm-ok.is-danger { color: var(--on-danger); background: var(--danger); }
 .mx-confirm-ok.is-danger:hover { background: color-mix(in srgb, var(--danger) 88%, var(--fg)); }

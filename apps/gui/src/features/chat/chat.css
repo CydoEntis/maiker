@@ -367,7 +367,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-waiting-any { margin-left: 8px; font-size: 11.5px; font-weight: 400; color: var(--dim); }
 .mx-waiting-options { display: flex; flex-direction: column; gap: 0; }
 .mx-option { display: flex; width: 100%; align-items: baseline; gap: 10px; min-height: 32px; padding: 7px 8px 7px 0; text-align: left; font-size: 13px; color: var(--fg2); cursor: pointer; outline: none; background: transparent; }
-.mx-option:hover, .mx-option.is-active { background: var(--m-hover); color: var(--fg); }
+.mx-option:hover, .mx-option.is-active { background: var(--float-hover); color: var(--fg); }
 .mx-option:focus-visible, .mx-option:has(input:focus-visible) { box-shadow: var(--focus-edge); }
 .mx-option.is-picked { color: var(--fg); }
 .mx-option:disabled { cursor: default; opacity: .55; }
@@ -400,7 +400,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-app .mx-box:focus-within { border-color: var(--focus); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--focus) 40%, transparent); }
 /* The agent's commands, over the box while a slash and a name are typed. It floats, so the box and the chat stay put. */
 /* A head that counts the matches, the rows, and the keys at its foot. */
-.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); border: 1px solid var(--line2); background: var(--main); box-shadow: 0 3px 10px rgba(var(--sd), calc(.35 * var(--sk))); animation: v7fade .12s var(--ease-out); }
+.mx-slash { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 3; display: flex; flex-direction: column; max-height: min(340px, 50vh); overflow: hidden; border-radius: var(--r-panel); animation: v7fade .12s var(--ease-out); }
 .mx-slash-head { flex: none; margin: 0; display: flex; align-items: center; gap: 8px; padding: 7px 10px 5px; font-size: 11px; font-weight: 600; color: var(--dim); }
 .mx-slash-count { font-weight: 400; }
 .mx-slash-none { display: flex; flex-direction: column; gap: 4px; padding: 4px 12px 12px; font-size: 12px; color: var(--muted); }
@@ -408,7 +408,7 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-slash-none code { font-family: var(--mono); }
 .mx-slash-list { min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 1px; }
 .mx-slash-row { display: grid; grid-template-columns: minmax(120px, 34%) minmax(0, 1fr); align-items: baseline; gap: 14px; padding: 6px 10px; cursor: pointer; }
-.mx-slash-row.is-active { background: var(--accent-soft); }
+.mx-slash-row.is-active { background: var(--c-sel-bg); }
 .mx-slash-row.is-file { grid-template-columns: minmax(0, 1fr); }
 .mx-slash-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--mono); font-size: 12.5px; color: var(--fg); }
 .mx-slash-row.is-active .mx-slash-name { color: var(--accent-text, var(--accent)); }
@@ -566,7 +566,10 @@ button.mx-quote-stub:focus-visible { outline: none; box-shadow: var(--focus-edge
 /* The ended line stands where the box was: the same well the prototype draws, so the chat reads as closed. */
 .mx-ended-line { width: 100%; display: flex; align-items: center; gap: 10px; padding: 12px; background: var(--m-well); border: 1px solid var(--line); }
 .mx-ended-text { flex: 1; min-width: 0; font-size: 12.5px; color: var(--muted); }
-.mx-ended-button { height: 28px; padding: 0 12px; font-size: 12.5px; font-weight: 500; color: var(--fg); background: var(--m-raise); border: 1px solid var(--line2); }
-.mx-ended-button.is-primary { font-weight: 600; color: var(--bg); background: var(--fg); border-color: var(--fg); }
+/* The app's two buttons: the ghost, and the accent for the main answer. */
+.mx-ended-button { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg2); background: transparent; border: 0; }
+.mx-ended-button:hover:not([aria-disabled="true"]) { background: var(--icon-button-fill); color: var(--fg); }
+.mx-ended-button.is-primary { font-weight: 600; color: var(--on-accent); background: var(--accent); }
+.mx-ended-button.is-primary:hover:not([aria-disabled="true"]) { color: var(--on-accent); background: color-mix(in oklab, var(--accent) 90%, white); }
 .mx-ended-button[aria-disabled="true"] { cursor: not-allowed; opacity: .6; }
 .mx-ended-button:focus-visible { outline: none; box-shadow: var(--focus-edge); }

@@ -70,6 +70,9 @@
 .mx-toast-ghost[data-depth="2"] { transform: translateY(-18px) scale(.92); }
 /* The collapsed stack's one line; it takes the pointer so hovering it opens the rest. */
 .mx-toast-more { pointer-events: auto; align-self: flex-end; padding: 0 2px; font-size: 11.5px; color: var(--dim); }
+/* A dismissed toast fades and drops a little (TOAST_EXIT_MS in toaster.tsx), then goes. */
+.mx-toast-slot.is-leaving { animation: mx-toast-out .14s cubic-bezier(.4, 0, 1, 1) forwards; }
+@keyframes mx-toast-out { to { opacity: 0; transform: translateY(8px) scale(.98); } }
 @keyframes mx-toast-in { from { opacity: 0; transform: translateY(14px) scale(.98); } to { opacity: 1; transform: none; } }
 @keyframes mx-toast-bar { to { transform: scaleX(0); } }
 @keyframes mx-fb-rise { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }

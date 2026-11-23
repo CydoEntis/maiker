@@ -9,7 +9,7 @@ import { Popover } from 'radix-ui'
 export function PopupContent({ className = '', children, ...props }: ComponentProps<typeof Popover.Content>) {
   return (
     <Popover.Portal container={document.querySelector<HTMLElement>('.mx-app')}>
-      <Popover.Content sideOffset={8} {...props} className={`mx-pop z-(--layer-pop) rounded-2xl p-2 ${className}`}>
+      <Popover.Content sideOffset={8} {...props} className={`mx-pop z-(--layer-pop) rounded-xl p-2 ${className}`}>
         {children}
       </Popover.Content>
     </Popover.Portal>

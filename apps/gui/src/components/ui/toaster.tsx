@@ -14,6 +14,32 @@ const STATE_MARK: Partial<Record<ToastKind, StatusIconKind>> = { success: "done"
 const EXCLAIM_RADIUS = 8.8
 const EXCLAIM = "M12 7.6v5.2M12 16.3v.1"
 
+/** How long a dismissed toast takes to fade and drop away: the `mx-toast-out` animation in feedback.css. */
+const TOAST_EXIT_MS = 140
+
+type Leaving = { item: ToastItem; at: number }
+
+/**
+ * The toasts just dismissed, kept for TOAST_EXIT_MS at the place they held so they fade out instead of vanishing. Only a
+ * toast that left the list counts; one folded into the collapsed stack is still there.
+ */
+function useLeavingToasts(items: readonly ToastItem[]): readonly Leaving[] {
+  const [seen, setSeen] = React.useState(items)
+  const [leaving, setLeaving] = React.useState<readonly Leaving[]>([])
+  if (seen !== items) {
+    const kept = new Set(items.map((item) => item.id))
+    const gone = seen.flatMap((item, at) => (kept.has(item.id) ? [] : [{ item, at }]))
+    setSeen(items)
+    if (gone.length > 0) setLeaving([...leaving.filter((entry) => !kept.has(entry.item.id)), ...gone])
+  }
+  React.useEffect(() => {
+    if (leaving.length === 0) return undefined
+    const timer = window.setTimeout(() => { setLeaving([]) }, TOAST_EXIT_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [leaving])
+  return leaving
+}
+
 /**
  * A toast's mark: needs you and done are the session marks, a failure a red `!` in a circle and a warning the same in
  * amber, and a plain note has none. The failure and the warning have a shape of their own because neither is a state a
@@ -107,6 +133,10 @@ function Toaster() {
   const shown = collapsed ? visible.slice(0, 1) : visible
   const ghosts = collapsed ? Math.min(visible.length - 1, MAX_GHOSTS) : 0
   const any = visible.length > 0
+  const leaving = useLeavingToasts(items)
+  const rows = shown.map((item) => ({ item, leaving: false }))
+  // A collapsed stack shows one toast; a dismissed one fading in beside it would read as a second.
+  if (!collapsed && !held) for (const entry of leaving) rows.splice(Math.min(entry.at, rows.length), 0, { item: entry.item, leaving: true })
   React.useEffect(() => {
     if (!any) return undefined
     const jump = (event: KeyboardEvent) => {
@@ -135,8 +165,8 @@ function Toaster() {
       onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) { readingToasts(false); setOpen(false) } }}
     >
       {collapsed && <span className="mx-toast-more">{visible.length - 1} more, hover to see all</span>}
-      {shown.map((item, index) => (
-        <div key={item.id} className="mx-toast-slot" data-ghosts={index === 0 ? ghosts : 0}>
+      {rows.map(({ item, leaving: gone }, index) => (
+        <div key={item.id} className={gone ? "mx-toast-slot is-leaving" : "mx-toast-slot"} data-ghosts={index === 0 ? ghosts : 0} aria-hidden={gone || undefined} inert={gone}>
           {index === 0 && Array.from({ length: ghosts }, (_, layer) => <span key={layer} className="mx-toast-ghost" data-depth={ghosts - layer} aria-hidden="true" />)}
           <ToastView item={item} />
         </div>

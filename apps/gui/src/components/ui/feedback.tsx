@@ -28,13 +28,13 @@ function FeedbackMark({ tone, running = false }: { tone: FeedbackTone; running?:
 }
 
 type FeedbackButtonProps = React.ComponentProps<"button"> & {
-  /** primary: tinted in the status colour; needs: the solid needs-you answer; outline: neutral; text: quiet. */
-  kind?: "primary" | "needs" | "outline" | "text"
+  /** primary: the accent, the main answer; needs: the solid needs-you answer; ghost: every other action; text: quieter still. */
+  kind?: "primary" | "needs" | "ghost" | "text"
   large?: boolean
 }
 
-function FeedbackButton({ kind = "outline", large = false, className, type = "button", ...props }: FeedbackButtonProps) {
-  return <button type={type} className={cn("mx-fb-btn", kind !== "outline" && `is-${kind}`, large && "is-lg", className)} {...props} />
+function FeedbackButton({ kind = "ghost", large = false, className, type = "button", ...props }: FeedbackButtonProps) {
+  return <button type={type} className={cn("mx-fb-btn", kind !== "ghost" && `is-${kind}`, large && "is-lg", className)} {...props} />
 }
 
 /**

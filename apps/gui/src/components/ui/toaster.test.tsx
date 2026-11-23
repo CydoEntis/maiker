@@ -29,6 +29,9 @@ describe('the toaster', () => {
     expect(screen.getByText('Put away Parser fix')).toBeInTheDocument()
     await user.unhover(screen.getByText('Put away Parser fix'))
     act(() => { vi.advanceTimersByTime(TOAST_HIDE_MS) })
+    expect(screen.queryByRole('status')).not.toBeInTheDocument()
+    // It fades out for a moment, then is gone.
+    act(() => { vi.advanceTimersByTime(TOAST_HIDE_MS) })
     expect(screen.queryByText('Put away Parser fix')).not.toBeInTheDocument()
   })
 })
