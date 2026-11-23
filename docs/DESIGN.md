@@ -195,11 +195,12 @@ dialog radius and shadow, 22px by 24px of body, its facts in a `--m-well` block,
   ("Branch names can’t contain spaces. Try feat-new-login."). The field keeps its value and its edge turns red. It
   shows once the field is left or the form sent, never while typing.
 - **Inline notes** (`InlineNote`). A failure on the page you came to read (a start that failed in New session, a clone, a
-  git rule): the edge, a title, the reason in full, and text actions (Put back, Dismiss, Copy details).
+  git rule): a card (`--m-card`, the `--line` hairline, the `--r-panel` corner) with the status mark, a title, the reason in
+  full, and text actions (Put back, Dismiss, Copy details).
 - **Chat problem** (`ScopedAlert` scope `chat`, `ChatProblem.tsx`). A machine that stopped answering, or a turn a service
   restart cut, dims only the chat column (a flat veil of `--bg` at 72%, nothing blurs) under one 480px dialog: "devbox
   stopped answering" / the reason / **Try again** (or **Restart**), **Not now**, and **Copy details** at the right. Not
-  now leaves the **problem line** at the top of the dock: the edge, the title in bold and the reason on one line, the fix
+  now leaves the **problem line** at the top of the dock, a card like the inline note's: the status mark, the title in bold and the reason on one line, the fix
   and Copy details at its right. **A stopped agent is never a dialog**: the session is idle, its problem line is in the
   dock from the start ("Claude stopped", why, **Restart** where the session has a terminal to restart, **Copy details**),
   and the stop toast (below) says it once. A context at 95% or more is a caution line there instead ("Context almost
