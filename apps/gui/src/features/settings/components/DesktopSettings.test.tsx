@@ -233,7 +233,7 @@ describe('desktop settings', () => {
     const { onChange } = renderSettings('general', { updates })
 
     const box = screen.getByRole('group', { name: 'Updates' })
-    await user.click(within(box).getByRole('button', { name: 'Download' }))
+    await user.click(within(box).getByRole('button', { name: 'Update' }))
     expect(updates.onDownload).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('switch', { name: 'Download updates automatically' })).toBeChecked()
     expect(screen.getByRole('switch', { name: 'Install updates when idle' })).not.toBeChecked()
@@ -251,12 +251,18 @@ describe('desktop settings', () => {
     expect(updates.onRestart).toHaveBeenCalledTimes(1)
   })
 
-  it('checks for an update again on request', async () => {
-    const user = userEvent.setup()
-    const updates = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
-    renderSettings('general', { updates })
-    await user.click(screen.getByRole('button', { name: 'Check now' }))
-    expect(updates.onCheck).toHaveBeenCalledTimes(1)
+  it('shows only the version while up to date', () => {
+    const quiet = { summary: 'You are on the latest version.', status: 'current' as const, onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() }
+    renderSettings('general', { updates: quiet })
+    const box = screen.getByRole('group', { name: 'Updates' })
+    expect(within(box).queryByRole('button')).not.toBeInTheDocument()
+    expect(box).not.toHaveTextContent('Up to date')
+    expect(box).toHaveTextContent('Maiker v0.64.0')
+  })
+
+  it('turns Update into a working mark while the update downloads', () => {
+    renderSettings('general', { updates: { summary: '', status: 'downloading' as const, version: '0.90.0', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn() } })
+    expect(within(screen.getByRole('group', { name: 'Updates' })).getByRole('status', { name: 'Downloading v0.90.0' })).toHaveTextContent('Updating')
   })
 
   it('says a failed update in its own words, with a way to try again', () => {

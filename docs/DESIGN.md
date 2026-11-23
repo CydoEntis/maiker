@@ -562,12 +562,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   segment trays are `--t3` with a `--line2` hairline (`--c-field-*` and `--c-track-*`, set on `.mx-settings` in
   `material.css`), the chosen segment has its own hairline, and every button on a page (Browse…, Use home folder,
   Reset) is the pages' own button (`.mx-scard-button`: `--fg` 500 on the ink at 9% with a `--line2` hairline). Rows are
-  parted by the ink at 7% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). With nothing to
-  report (Up to date, Not checked yet, Checking) it is one quiet line: the state in 12px `--muted`, the running
-  version, and a small **Check** word (`.mx-scard-meta-button`, named "Check now"). Otherwise it is a card: a dot in the
-  state's colour, one line ("v0.65.0 is ready", "Downloading v0.65.0 · 42%", "Update failed"), the running version at
-  its right, a dim note when there is one, the download bar while it downloads, and the one button the state offers
-  (Restart to update, Download, Try again), the pages' own button at full width on the dialog's ground. It sits at the
+  parted by the ink at 7% (`--s-rule`). The nav's foot is the **update box** (`UpdateBox.tsx`). It is one line under a `--line` hairline: "Maiker v0.82.0"
+  in 11px mono `--dim` at the left and, only when there is something to do, its one control at the right: **Update**
+  (a download mark, outlined) while one is available, then a working mark and "Updating 42%" while it downloads, then
+  **Restart to update** filled in the accent. Checking happens on its own, so there is no Check button and no "Up to
+  date". A failed update adds "Update failed: …" in `--dim` under the line, with **Try again** at the right. It sits at the
   nav's foot and never makes the nav scroll. General keeps only the two
   update switches. At the right, a fixed header (the page title, a one-line description and a 30x30 **×** icon
   button, tooltip "Close (Esc)", no label) above a body that scrolls; the page itself never scrolls. The title and
