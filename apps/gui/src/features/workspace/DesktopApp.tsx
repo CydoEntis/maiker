@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { rememberGround } from '@/data/bootGround'
 import { APP_NAME } from '@/brand'
 import { Toaster } from '@/components/ui/toaster'
 import { KeyOverridesContext } from '@/features/shortcuts/platform'
+import { Splash } from '@/features/welcome/Splash'
 import { ReducedMotionContext } from './components/motion'
 import { useWorkspaceState } from './useWorkspaceState'
 import { WorkspaceContext } from './workspaceContext'
@@ -26,9 +27,11 @@ import '@/features/chat/chat.css'
 
 export function DesktopApp() {
   const workspace = useWorkspaceState()
-  const { reducedMotion, setRoot, narrow, rootStyle, theme, preferences, machineSaid } = workspace
+  const { reducedMotion, setRoot, narrow, rootStyle, theme, preferences, machineSaid, sessionsQuery, welcomeOpen } = workspace
   // The next start opens on this theme's ground, not a flash of another colour.
-  useEffect(() => { rememberGround(theme.tokens.bg) }, [theme.tokens.bg])
+  useEffect(() => { rememberGround(theme.roles.t0) }, [theme.roles.t0])
+  // The first run draws the mark in its own welcome, so the splash is only for the starts after it.
+  const [splash] = useState(() => !welcomeOpen)
   useCloseGuard()
   return (
     <WorkspaceContext.Provider value={workspace}>
@@ -47,6 +50,7 @@ export function DesktopApp() {
           </div>
           {preferences.statusBar && <WorkspaceStatusBar />}
           <Toaster />
+          {splash && <Splash ready={!sessionsQuery.isPending} reducedMotion={reducedMotion} />}
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>
     </KeyOverridesContext.Provider>

@@ -1,7 +1,7 @@
 import type { ITheme } from '@xterm/xterm'
 import maittyTokens from '@tokens/maitty-tokens.json'
 import themeManifest from '@tokens/themes.json'
-import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, luminance, mixOklab, withAlpha } from './color'
+import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, lightnessOf, luminance, mixOklab, withAlpha } from './color'
 
 /** The design's seven syntax colours, by what they colour: keyword, string, function or name, number, type, comment, property. */
 export type SyntaxRoles = { kw: string; str: string; fn: string; num: string; ty: string; com: string; prop: string }
@@ -281,8 +281,18 @@ export function generateTheme(inputs: ThemeInputs): ThemeTokens {
 // (#1b1b1b and #2a2a2a on #151517, 3.5% and 12%) left a card, a field and a selected row too close to the panel to
 // tell apart on a real screen, so they are a step stronger. On a panel that is all but grey the cards are pure grey, so
 // the panel's faint tint is dropped there; a theme with a real hue keeps it.
-const CARD_STEP = 6
-const CARD_SEL_STEP = 14
+// A second pass made them stronger again, so a card, the message box and a field stand off their pane in every theme,
+// and a float sits a step above a card.
+const CARD_STEP = 9
+const CARD_SEL_STEP = 16
+const FLOAT_STEP = 12
+/**
+ * How much darker (OKLab lightness) the window's ground is than its cards (the sidebar, the panes) at the least, so the
+ * cards read as separate surfaces in every theme. A theme whose ground is closer is darkened toward black until it is.
+ */
+const GROUND_GAP = { dark: 0.04, light: 0.03 }
+const GROUND_STEP = 3
+const GROUND_MOST = 60
 const NEAR_GREY_CHROMA = 0.01
 
 /** White on a dark theme, black on a light one: the one colour every hairline and hover fill is a low-opacity wash of. */
@@ -293,15 +303,33 @@ const SHADOW = { dark: '.6', light: '.35' }
 /** What a theme may write of the design's roles itself, where reading them off its tokens would not be exact. */
 type OwnRoles = { float?: string | undefined; sy?: SyntaxRoles | undefined; shadow?: string | undefined }
 
+/** The theme's ground, or one darkened toward black until it sits `GROUND_GAP` below the cards on it. */
+export function separatedGround(ground: string, card: string, light: boolean): string {
+  const most = lightnessOf(card) - (light ? GROUND_GAP.light : GROUND_GAP.dark)
+  if (lightnessOf(ground) <= most) return ground
+  for (let step = GROUND_STEP; step < GROUND_MOST; step += GROUND_STEP) {
+    const darker = mixOklab(ground, '#000000', step)
+    if (lightnessOf(darker) <= most) return darker
+  }
+  return mixOklab(ground, '#000000', GROUND_MOST)
+}
+
+/** A dark theme's float: its own colour when that sits above a card, else the float step, so a menu never sinks into the card under it. */
+function liftedFloat(tokens: ThemeTokens, own: string | undefined): string {
+  const step = mixOklab(tokens.main, tokens.fg, FLOAT_STEP)
+  return own !== undefined && lightnessOf(own) >= lightnessOf(step) ? own : step
+}
+
 /**
  * The design's roles for a theme. A theme that is not one of the design's own derives the three it has no colour for:
- * the float ground is the card step on a dark theme (a float is lifted by tone as well as shadow) and the pane itself
- * on a light one, and the syntax colours are its own ANSI and status colours.
+ * the float ground is a step above a card on a dark theme (a float is lifted by tone as well as shadow) and the pane itself
+ * on a light one, and the syntax colours are its own ANSI and status colours. Every theme's ground is kept a step below
+ * its cards (`separatedGround`).
  */
 export function designRoles(tokens: ThemeTokens, light: boolean, own: OwnRoles = {}): DesignRoles {
   return {
-    t0: tokens.bg, t1: tokens.main, t2: tokens.sel, t3: tokens.raise,
-    floatBg: own.float ?? (light ? tokens.main : mixOklab(tokens.main, tokens.fg, CARD_STEP)),
+    t0: separatedGround(tokens.bg, tokens.main, light), t1: tokens.main, t2: tokens.sel, t3: tokens.raise,
+    floatBg: light ? (own.float ?? tokens.main) : liftedFloat(tokens, own.float),
     well: tokens.well,
     fg: tokens.fg, fg2: tokens.fg2, muted: tokens.muted, dim: tokens.dim,
     ink: light ? INK.light : INK.dark,

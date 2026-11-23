@@ -28,7 +28,7 @@
   /* A card on a panel (a code block, a table, a field): a clear step lighter than the panel it sits on, with a hairline a
      step lighter again and a selected row two steps up. Never darker than the panel. */
   /* Mixed from the panel toward the text colour, not from --raise: several themes set --raise equal to --main, which would leave no step. */
-  --m-card: var(--card-step, color-mix(in srgb, var(--main) 95%, var(--fg)));
+  --m-card: var(--card-step, color-mix(in srgb, var(--main) 93%, var(--fg)));
   /* The theme's stronger hairline: with the plain line a card, a field and a segment tray blurred into the panel. */
   --m-card-line: var(--line2);
   /* A dark theme's two steps are computed with the theme (`cardSteps` in themes.ts); the mixes here are a light theme's. */
