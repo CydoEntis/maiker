@@ -539,8 +539,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and foot, 4px under the title bar and 6px from each other, with the window ground (`--t0`) showing in the gaps.
   A card is lifted by its tone alone: no shadow, no heavier border. One pane fills the main card; split panes, the file
   pane and the terminal drawer are each a card of their own, the same 6px apart, and the panes of one session's splits
-  8px apart (`--split-gap`). Among several panes the one with the keys has its edge in a brighter ink
-  (`--pane-focus-line`, the ink at 30%): neutral, never the accent, and the others are not dimmed. Every gap between two
+  8px apart (`--split-gap`). Among several panes the one with the keys has a 2px ring in a strong ink
+  (`--pane-focus-line`, the ink at 50%), drawn over the pane's content and rounded with it so no corner is cut: neutral,
+  never the accent, and the others are not dimmed. Every gap between two
   cards is a drag handle (panes and columns: `SplitHandle`, as wide as the gap and grabbed 3px onto the cards either
   side; a session's splits: `TreeSplitHandle`, the same handle over a branch's line; the sidebar's and the side panel's
   edges resize them). There is no tools bar, no middle column and no tab bar.
@@ -956,7 +957,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   and status bar*). The header has no view switch: the view is one app-wide setting. The main area is one
   flat card on `--card` with a `--line` hairline, 8px from the window and the sidebar, and a lone pane fills it edge to
   edge; with two or more the shared card goes and each pane is a card of its own (the same `--card` and hairline) and the
-  focused one has its edge in a brighter ink (`--pane-focus-line`). A pane's status is the
+  focused one has a 2px ring in a strong ink (`--pane-focus-line`). A pane's status is the
   badge on its icon; there is no status chip in a corner. While broadcasting, the header says "◉ Broadcast".
 - **First run.** On the first launch (no saved settings and no earlier first run) the app behind goes under a flat veil
   (`--bg` at 55% over a 16px blur of the app: the one place anything blurs, because the first run is on screen once over a

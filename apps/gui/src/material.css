@@ -42,7 +42,7 @@
   --panel-line: rgba(var(--ink), .08);
   /* The pane that has the keys, among several: the same edge in a brighter ink. Neutral in every theme, so it never
      reads as a state colour or the accent. */
-  --pane-focus-line: rgba(var(--ink), .3);
+  --pane-focus-line: rgba(var(--ink), .5);
   /* The icon button's hover and on fill (components/ui/icon-button.tsx). */
   --icon-button-fill: rgba(var(--ink), .07);
   /* A row the pointer or the keys are on, inside a float: the ink again, so it shows on any theme's float ground. */
