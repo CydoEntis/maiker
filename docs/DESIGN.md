@@ -479,7 +479,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   Everything else is flat tones and hairlines; no card, row or pane casts a shadow.
 - **Status marks.** One set, drawn by `StatusIcon` (`components/ui/status-icon.tsx`, with its own `status-icon.css`) in one 16px
   box (a caller beside smaller text may ask for less): needs you is a 14px speech bubble holding `?` in `--needs`, done
-  the same bubble holding a tick in `--ok`, working an 11px ring in `--working` with half of it lit, turning once in
+  the same bubble holding a tick in `--ok`, working a 12px ring in `--working` with half of it lit, turning once in
   `--t-spin`; idle draws **nothing** (no element at all), and the row that holds it does the dimming. With motion
   reduced the ring stands still and is lit all the way round. `markOf` is the one function that files a status under a
   mark (the table is `lib/statusMark.ts`), and nothing else decides it: it files `error`, `limited` and `unknown` under idle. Sections, counts, the rail, the tray, the title badge and the jump all read it (`sectionOf`). A mark is
