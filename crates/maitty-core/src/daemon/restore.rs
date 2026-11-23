@@ -541,14 +541,13 @@ impl Daemon {
     /// runtime that fails again stays failed until a person resumes it.
     pub(super) fn resume_conversations(&mut self) {
         let candidates = std::mem::take(&mut self.resumable_conversations);
-        let cut = std::mem::take(&mut self.cut_conversations);
         if !self.cfg.restore.conversations {
             return;
         }
         for (id, generation) in candidates {
             let target = crate::conversation::StartTarget::Conversation { id, generation };
             match self.conversation_start(conversation::commands::DAEMON_REQUESTER, target) {
-                Ok(()) if cut.contains(&id) => self.continue_when_resumed(id),
+                Ok(()) if self.cut_conversations.contains(&id) => self.continue_when_resumed(id),
                 Ok(()) => {}
                 Err(error) => tracing::warn!("conversation {} was not resumed: {error:#}", id.0),
             }

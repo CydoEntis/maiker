@@ -105,6 +105,7 @@ async fn restart_daemon(session: &mut TestSession, id: ConversationId) {
     daemon.session_path = session.daemon.session_path.clone();
     daemon.check_dir = session.daemon.check_dir.clone();
     daemon.approvals_file = session.daemon.approvals_file.clone();
+    daemon.followed_home = session.daemon.followed_home.clone();
     session.daemon = daemon;
     session.events = events;
     assert!(session.daemon.restore(saved));
@@ -259,6 +260,66 @@ async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_blocked_without_a_second
         session.daemon.resume_conversations();
         assert_eq!(generation(&session, id), resumed, "a second resume does nothing");
         assert_eq!(claude_messages(&executable).await, 1, "the prompt was not sent again");
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
+async fn a_daemon_restart_between_turns_takes_a_claude_chat_up_again_from_its_transcript() {
+    let mut session = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (executable, id, started) = start_claude_chat(&mut session, 650, "reply").await;
+        let sent = send(&mut session, 651, id, started, "hello fake Claude").await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        handle_until(&mut session, "the turn ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| state.status == Status::Done)
+        })
+        .await;
+        // What Claude Code keeps of the chat, as its own transcript, under the name the daemon looks for.
+        let binding = session.daemon.conversations[0].binding.clone();
+        let path = super::super::claude::transcript_path(&binding.config_root, &binding.cwd, &binding.session_id).unwrap();
+        session.daemon.followed_home = Some(binding.config_root.clone());
+        tokio::task::spawn_blocking(move || {
+            let transcript = include_str!("../fixtures/claude_transcript.jsonl")
+                .replace("00000000-0000-4000-8000-000000000001", &binding.session_id);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, transcript).unwrap();
+        })
+        .await
+        .unwrap();
+
+        restart_daemon(&mut session, id).await;
+
+        let state = &session.daemon.conversation_states[&id];
+        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert_eq!(state.status, Status::Idle, "nothing runs and nothing waits on the person");
+        let resumed = generation(&session, id);
+        assert!(resumed > started, "the restart fenced the old generation");
+        let next = exchange(
+            &mut session,
+            652,
+            ClientMsg::Command(Command::ConversationSend {
+                id,
+                generation: resumed,
+                operation: 2,
+                // The fake echoes these words back, which is how the daemon knows a send arrived.
+                text: "hello fake Claude".into(),
+                choice: None,
+            }),
+            None,
+        )
+        .await;
+        assert!(matches!(next, ServerMsg::Reply(Reply::ConversationSent(_))), "{next:?}");
+        handle_until(&mut session, "the next turn ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| state.status == Status::Done)
+        })
+        .await;
+        assert_eq!(claude_messages(&executable).await, 2, "the chat goes on, and only the new message is sent");
     })
     .catch_unwind()
     .await;

@@ -104,6 +104,16 @@ impl Daemon {
             .get(&id)
             .is_some_and(|state| state.history_ready)
             && self.conversation_runtimes.owns(id);
+        // Claude's transcript is the chat's whole past, so a chat the daemon no longer holds in step
+        // with it (a restart, a stop, an agent gone between turns) is read again from it instead of
+        // refused. A cut turn is not: its transcript may stop partway through that turn.
+        if let (Some(client), None) = (started, &read)
+            && !recorded
+            && !is_currently_reconciled
+            && !self.cut_conversations.contains(&id)
+        {
+            return self.begin_saved_history(id, generation, client);
+        }
         let (history, is_complete) = if recorded {
             recorded_history(id, self.conversation_histories.get(&id))?
         } else {
@@ -165,9 +175,10 @@ impl Daemon {
         })
     }
 
-    /// Opens a chat on a session that began outside this app: nothing was recorded here, so its
-    /// transcript is read into the history before the start is answered. The read is off the
-    /// daemon's thread; `saved_history_read` takes what it found.
+    /// Opens a chat on a session that began outside this app, or takes up again one the daemon no
+    /// longer holds in step with its agent: the transcript is read into the history before the
+    /// start is answered. The read is off the daemon's thread; `saved_history_read` takes what it
+    /// found.
     pub(super) fn begin_saved_history(
         &mut self,
         id: ConversationId,
@@ -245,7 +256,9 @@ impl Daemon {
         state.history_ready = true;
         state.blocked = false;
         state.error = None;
-        if state.status == Status::Working {
+        // The whole past is read and nothing runs yet: neither working nor waiting on the person,
+        // whatever an earlier refusal or a stopped agent left.
+        if matches!(state.status, Status::Working | Status::Blocked) {
             state.status = Status::Idle;
         }
         self.conversation_histories.insert(id, history);
