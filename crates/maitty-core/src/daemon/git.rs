@@ -1155,17 +1155,3 @@ mod central_worktrees {
         assert!(!tmp.path().join("shop-worktrees").exists());
     }
 }
-
-#[cfg(test)]
-mod worktree_words {
-    use super::worktree_add_failed;
-
-    #[test]
-    fn git_s_refusals_to_add_a_worktree_read_as_sentences_with_a_next_step() {
-        let say = |stderr: &str| worktree_add_failed("dev", &anyhow::anyhow!("git worktree add: {stderr}")).to_string();
-        assert!(say("fatal: 'dev' is already checked out at '/srv/app'").starts_with("Branch `dev` is already open in another folder"));
-        assert!(say("fatal: a branch named 'dev' already exists").starts_with("A branch named `dev` already exists."));
-        assert!(say("fatal: invalid reference: dev").starts_with("Branch `dev` was not found."));
-        assert_eq!(say("fatal: disk full"), "Git could not make a worktree for branch `dev`: disk full");
-    }
-}

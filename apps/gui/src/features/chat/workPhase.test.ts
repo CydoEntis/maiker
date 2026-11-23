@@ -12,10 +12,6 @@ const fields = (id: string, status: ItemFields['status'] = 'running'): ItemField
 
 const tool = (id: string, name: string, target: string | null, status: ItemFields['status'] = 'running'): ChatEvent =>
   ({ ...fields(id, status), kind: 'tool', name, target, input: null, detail: '' })
-const command = (id: string, text: string): ChatEvent =>
-  ({ ...fields(id), kind: 'command', command: text, output: '', exitCode: null, durationMs: null })
-const edit = (id: string, file: string | null, toolName: string, change: 'add' | 'update'): ChatEvent =>
-  ({ ...fields(id), kind: 'edit', tool: toolName, file, change, diff: { status: 'unavailable' } })
 const user = (id: string, text: string): ChatEvent => ({ ...fields(id, 'completed'), kind: 'message', role: 'user', text })
 
 describe('what the working line says', () => {
@@ -28,16 +24,6 @@ describe('what the working line says', () => {
     expect(describeWork([tool('a', 'Read', '/work/src/app.ts')], '/work')).toBe('reading src/app.ts')
     expect(describeWork([tool('a', 'Grep', 'TODO')], null)).toBe('searching TODO')
     expect(describeWork([tool('a', 'Frobnicate', null)], null)).toBe('using Frobnicate')
-  })
-
-  it('says writing for a new file and editing for a change to one', () => {
-    expect(describeWork([edit('a', '/work/hello.txt', 'Write', 'add')], '/work')).toBe('writing hello.txt')
-    expect(describeWork([edit('a', '/work/a.ts', 'Edit', 'update')], '/work')).toBe('editing a.ts')
-  })
-
-  it('shows the first line of a command, cut short', () => {
-    expect(describeWork([command('a', 'npm test\nthen more')], null)).toBe('running npm test')
-    expect(describeWork([command('a', 'x'.repeat(80))], null)).toBe(`running ${'x'.repeat(47)}…`)
   })
 
   it('reports the newest step still running, not an older one', () => {

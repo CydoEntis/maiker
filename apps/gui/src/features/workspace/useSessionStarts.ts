@@ -3,9 +3,10 @@ import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef
 import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
-import { everywhereModel } from '@/features/chat/agentChoice'
-import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
-import { LOCAL_MACHINE, startSessionOnMachine } from '@/api/machines'
+import { DEFAULT_PICK, everywhereModel, writeChoice } from '@/features/chat/agentChoice'
+import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, resumeChatSession, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { LOCAL_MACHINE, askMachineList, remoteChatId, startSessionOnMachine } from '@/api/machines'
+import { conversationKey } from '@/api/conversationKey'
 import { startGitHubSignIn } from '@/api/githubAccounts'
 import { useSessionsEnded } from './useSessionsEnded'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
@@ -13,18 +14,19 @@ import type { SettingsPreferences } from '@/features/settings/preferences'
 import { newWorktreeSession } from '@/features/worktrees/api'
 import { rememberConversationPermissions } from '@/data/conversationPermissions'
 import { reserveOperation } from '@/features/chat/sendOperation'
+import { updateComposer } from '@/features/chat/composerStore'
 import { entrustFirstMessage, holdFirstMessage, holdStartChoice } from '@/features/chat/firstMessage'
 import { connectAgentOnce } from './model/agentHooks'
 import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
-import type { ChatAgent, StructuredAgent } from './model/chatView'
+import type { ChatAgent } from './model/chatView'
 import { rememberShellStart } from './model/shellStarts'
 import type { NewChatRequest, NewChatSeed, NewChatStartOptions } from './components/NewChatPage'
 import type { WireChoice } from '@/features/chat/agentChoice'
 import { rememberBypassSession } from '@/features/chat/bypassSessions'
 import { bypasses } from '@/features/settings/preferences'
-import { launchFlags, startsBypassed, withBypass } from './model/newChatHost'
-import { CODEX_FULL_MODE } from '@/features/chat/chatMeta'
+import { chatPermissions, launchFlags, startsBypassed, withBypass } from './model/newChatHost'
+import { CODEX_FULL_MODE, START_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
 import { resolveStartFolder } from './model/startFolder'
@@ -103,7 +105,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
 
   const createWorktree = useCallback(async (from: SessionView, branch: string, base: string | null) => {
     const known = new Set(sessions.map((session) => session.id))
-    await newWorktreeSession(from.pane, branch, base)
+    await newWorktreeSession(from.pane, branch, base, from.machine)
     const id = await newSessionSince(known)
     setWorktreeFrom(null)
     if (id) movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) })
@@ -123,12 +125,18 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     }
   }, [queryClient, setLayout])
 
-  // A chat session in `path`, opened in a layout of its own. Chats are this computer's: another machine's shell asks first.
-  const startChat = useCallback((path: string, agent: StructuredAgent, fullAccess: boolean) =>
-    startChatSession(path, agent, null, fullAccess).then((started) => {
-      if (fullAccess) rememberConversationPermissions(String(started.id), 'full-access')
-      return openStartedChat(started, '')
-    }).then(() => { flash(`${agentLabel(agent)} chat started`) }), [openStartedChat, flash])
+  // A chat session in `path`, opened in a layout of its own: Claude Code and Codex through their own adapters, any other
+  // agent over ACP, where its own settings decide what it may do (ADR 0020). Chats are this computer's: another machine's
+  // shell asks first.
+  const startChat = useCallback((path: string, agent: ChatAgent, fullAccess: boolean) => {
+    const started = hasAbility(agent, 'structuredChat')
+      ? startChatSession(path, agent, null, fullAccess ? 'full-access' : 'workspace-write').then((chat) => {
+        if (fullAccess) rememberConversationPermissions(String(chat.id), 'full-access')
+        return chat
+      })
+      : startAcpChat(path, agent)
+    return started.then((chat) => openStartedChat(chat, '')).then(() => { flash(`${agentLabel(agent)} chat started`) })
+  }, [openStartedChat, flash])
 
 
   // What the New session draft asks for: a structured chat in the folder, with the model and effort picked, and its first message.
@@ -194,6 +202,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // shell is ready. Its status hooks are connected first: an agent already running never loads them, and its chat would
   // wait on them until it was restarted.
   const bypassOff = preferences.bypassOff
+  const chatView = preferences.openSessionsIn === 'chat'
   // The words an agent is started with, its Bypass Permissions switch taken into account. A warm agent is taken only for
   // exactly these, so both ask through here.
   // `bypass` is the choice made for one session in the New session draft; without it Settings says.
@@ -211,11 +220,84 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       return
     }
     if (!online) return
+    // A chat with no terminal has no agent to start ahead: its start is the daemon's, on the first message (ADR 0020).
+    if (chatView) return
     void connectAgentOnce(spec.agent)
       .catch((error: unknown) => { console.warn(`Could not connect ${spec.agent}'s status hooks`, error) })
       .then(() => prewarmAgentSession(spec.folder, spec.agent, startWords(spec.agent, launchFlags(spec.agent, spec.model, spec.reasoning, spec.mode), spec.bypass)))
       .catch((error: unknown) => { console.warn(`Could not start ${spec.agent} ahead of the first message`, error) })
-  }, [online, startWords])
+  }, [online, startWords, chatView])
+
+  // What the New session draft starts in the Chat view: a chat the daemon owns, with no terminal (ADR 0020). Claude Code
+  // and Codex run through their own adapters, with the mode, model and effort picked, on a new session or a saved one;
+  // any other agent runs over ACP by its name, where its own settings decide those. The start answers once the agent is up, so the page stays until
+  // then, and the first message is an ordinary send after it.
+  const startDirectChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions): Promise<void> => {
+    const { agent, model, reasoning } = request
+    // A saved conversation is resumed with no mode picked for it, so it opens in the agent's usual one.
+    const picked = request.resume === null ? request.mode : START_MODE[agent]
+    // Another agent picked for the session runs over ACP by its id, whatever the draft's own agent is (ADR 0021).
+    const permissions = request.acp === undefined && hasAbility(agent, 'structuredChat') ? chatPermissions(agent, picked, request.bypass ?? bypasses({ bypassOff }, agent)) : undefined
+    if (permissions === null) throw new Error(`${agentLabel(agent)} cannot start a chat in this permission mode yet. Pick another mode.`)
+    const mode: StartMode = background ? 'background' : 'alongside'
+    if (!beginStart(mode)) throw new Error(ANOTHER_START_RUNNING)
+    try {
+      // A saved conversation opens as a chat on the agent's own session, with what was said before as its history.
+      const there = request.machine === LOCAL_MACHINE ? null : machinesRef.current.get(request.machine)
+      if (there === undefined) throw new Error(`${request.machineName} is not one of this computer's machines`)
+      if (there !== null && request.resume !== null) throw new Error('A saved conversation is resumed on the computer that saved it')
+      const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
+        ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions, request.machine) : await resumeChatSession(request.folder, agent, request.resume, permissions)
+        : await startAcpChat(request.folder, request.acp ?? agent, request.machine)
+      // Another machine's chat is `build/c12`, and its feed, box and sends are kept under a key that holds the machine too.
+      const id = there === null ? String(started.id) : remoteChatId(started.id, there.state.name)
+      const key = there === null ? started.id : conversationKey(request.machine, started.id)
+      if (key === null) throw new Error(`${request.machineName} gave the chat a number this window cannot keep apart from other machines'`)
+      const choice: WireChoice = permissions === undefined ? {} : { ...(model === DEFAULT_PICK ? {} : { model }), ...(reasoning === DEFAULT_PICK ? {} : { effort: reasoning }) }
+      if (permissions !== undefined) {
+        rememberConversationPermissions(id, permissions)
+        // The chat's own model and effort chips read this, and the first message carries it to the daemon.
+        writeChoice(key, { model, reasoning })
+      }
+      const named = request.name ?? (request.message === '' ? '' : nameFromMessage(request.message))
+      if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
+      if (there === null) {
+        await queryClient.invalidateQueries({ queryKey: ['conversations'] })
+        await queryClient.query({ queryKey: ['conversations'], queryFn: loadConversations, staleTime: 0 })
+      } else {
+        // The machine tells its new chat in its next list, and the pane opens when it does (see `startOnMachine`).
+        void askMachineList(request.machine).catch((error: unknown) => { console.warn(`Could not ask ${request.machineName} for its session list`, error) })
+        const deadline = Date.now() + REMOTE_START_WAIT_MS
+        while (!machinesRef.current.get(request.machine)?.conversations.some((item) => item.id === id)) {
+          if (Date.now() >= deadline) throw new Error(`${request.machineName} started the chat but did not list it. It shows once the machine reports its sessions`)
+          await new Promise((resolve) => { setTimeout(resolve, REMOTE_START_POLL_MS) })
+        }
+      }
+      // The page closes in the same update as the pane opens, so nothing shows in between (see `startAgentSession`).
+      const settle = () => {
+        if (!background) setNewChatOpen(false)
+        onPlaced?.(id)
+      }
+      if (background) {
+        setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
+        settle()
+      } else {
+        movePanes(() => {
+          setLayout((current) => openArrangement(current, id, makeId))
+          settle()
+        })
+      }
+      if (request.message === '') return
+      const operation = reserveOperation(key, { receipt: null, queued: [] })
+      // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
+      await submitMessage({ id: String(key), generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
+        updateComposer(key, (state) => ({ ...state, draft: request.message }))
+        toast.failed(`The chat started, but ${request.acp ?? agentLabel(agent)} did not take the first message`, error)
+      })
+    } finally {
+      endStart(mode)
+    }
+  }, [bypassOff, beginStart, endStart, queryClient, setNewChatOpen, setStartedFrom, setLayout, machinesRef])
 
   // `background` leaves the new session unopened, listed in the sidebar, and the window as it was.
   const startAgentSession = useCallback((folder: () => Promise<string>, agent: ChatAgent, firstMessage = '', flags = '', placed: { afterPlace?: (id: string) => void; alongside?: boolean; background?: boolean; /** This session's Bypass Permissions choice, over Settings. */ bypass?: boolean; /** A name typed for it, in place of the first message's words. */ name?: string } = {}): Promise<boolean> => {
@@ -267,16 +349,11 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       return
     }
     if (!online || starting) return
-    // Gemini has no structured chat: it starts as a terminal session shown as its chat.
-    if (!hasAbility(agent, 'structuredChat')) {
-      void startAgentSession(() => Promise.resolve(from.cwd), agent)
-      return
-    }
     if (!beginStart('alone')) return
     startChat(from.cwd, agent, fullAccess)
       .catch((error: unknown) => { toast.failed(`Could not start a ${agentLabel(agent)} chat`, error) })
       .finally(() => { endStart('alone') })
-  }, [online, starting, beginStart, endStart, startChat, startAgentSession])
+  }, [online, starting, beginStart, endStart, startChat])
 
   // "Hand off to …": a new session of another agent in the same folder, starting with a text brief of this one's work.
   const handoffSession = useCallback(async (from: SessionView, to: ChatAgent) => {
@@ -341,13 +418,23 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // other; one in the `background` is not opened and leaves the page open for the next.
   const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The Maiker service is not reachable')
-    if (request.machine !== LOCAL_MACHINE) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    if (request.machine !== LOCAL_MACHINE) {
+      if (!chatView) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+      // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0020).
+      // Its worktree is made by that daemon first; its checkout's branch is never switched from here (ADR 0007).
+      if (request.branch?.worktree === false) throw new Error(`A branch is switched only on this computer. Start it in a new worktree, or in ${request.machineName}'s folder as it is.`)
+      const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine) : request.folder
+      return startDirectChat({ ...request, folder: there, branch: null }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    }
     const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.
     let folder = request.folder
     if (request.branch?.worktree) folder = await addWorktree(folder, request.branch.name)
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
+    if (request.acp !== undefined && !chatView) throw new Error('An agent from the ACP registry starts only in the Chat view. Switch to it in Settings.')
+    // In the Chat view a session is a chat with no terminal behind it (ADR 0020), a saved conversation included.
+    if (chatView) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.
@@ -358,22 +445,22 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       if (!background) setNewChatOpen(false)
       onPlaced?.(id)
     } })
-  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff])
+  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff, chatView, startDirectChat])
 
   // A shell in another machine's home folder, opened in the window when that machine lists it.
   const startRemoteShell = useCallback((machine: number) => startOnMachine({ machine, name: 'The machine' }, REMOTE_HOME), [startOnMachine])
 
-  // A plain shell in the start folder: terminal view only, whatever the default agent is.
-  // On another machine it starts in that machine's home folder.
-  const newTerminal = useCallback((machine?: number) => {
+  // A plain shell: terminal view only, whatever the default agent is. In `folder` (a project's) when one is given;
+  // otherwise the start folder, or on another machine that machine's home folder.
+  const newTerminal = useCallback((machine?: number, folder?: string) => {
     setSettingsSection(null)
     const target = machine ?? remoteTargetOf(focusedSession)?.machine ?? LOCAL_MACHINE
     if (target !== LOCAL_MACHINE) {
-      void startRemoteShell(target).then((id) => { if (id !== null) rememberShellStart(id) })
+      void startOnMachine({ machine: target, name: 'The machine' }, folder ?? REMOTE_HOME).then((id) => { if (id !== null) rememberShellStart(id) })
       return
     }
-    void runStart(async () => resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
-  }, [setSettingsSection, focusedSession, runStart, startRemoteShell, preferences.startFolder, home, setLayout])
+    void runStart(async () => folder ?? resolveStartFolder(preferences.startFolder, home || (await defaultSessionFolder())), (id) => { movePanes(() => { setLayout((current) => openArrangement(current, id, makeId)) }) })
+  }, [setSettingsSection, focusedSession, runStart, startOnMachine, preferences.startFolder, home, setLayout])
 
   // "New chat with summary" on a chat whose context is nearly full: the New session draft, on the same machine and folder, with
   // the summary as its first message to read and edit before it is sent.

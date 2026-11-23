@@ -1,4 +1,4 @@
-import { useLayoutEffect, useState, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import { isWindowShown, subscribeWindowActivity } from './window-activity'
 
 export const CLOCK_TICK_MS = 1000
@@ -53,18 +53,4 @@ function now(): number {
 /** The time, to the second, for text such as "0:42" or "4m". */
 export function useNow(): number {
   return useSyncExternalStore(subscribe, now, now)
-}
-
-/**
- * True while `at` is less than `forMs` ago, turning false on time without a clock subscription.
- */
-export function useRecent(at: number | null, forMs: number): boolean {
-  // A moment already over when the component first renders starts out expired, so it never shows.
-  const [expiredAt, setExpiredAt] = useState<number | null>(() => (at !== null && Date.now() - at >= forMs ? at : null))
-  useLayoutEffect(() => {
-    if (at === null) return
-    const timeout = setTimeout(() => { setExpiredAt(at) }, Math.max(0, at + forMs - Date.now()))
-    return () => { clearTimeout(timeout) }
-  }, [at, forMs])
-  return at !== null && expiredAt !== at
 }

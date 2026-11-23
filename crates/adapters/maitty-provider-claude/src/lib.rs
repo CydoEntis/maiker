@@ -3,6 +3,8 @@ use serde_json::Value;
 use maitty_shared::conversation::TurnChoice;
 use std::ffi::OsString;
 
+pub mod approvals;
+pub mod dialect;
 mod hooks;
 mod projection;
 pub use hooks::{
@@ -10,10 +12,10 @@ pub use hooks::{
     is_our_statusline, json_hook_group, replace_json_hook_group, runs_our_hook, stale_hooks,
     status_from_hook, update_statusline,
 };
-pub use projection::{MAX_PENDING_TOOLS, ProjectedEvent, TurnProjector};
+pub use projection::{MAX_PENDING_TOOLS, TurnProjector};
 
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
-const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327"];
+const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327", "2.1.330"];
 
 #[derive(Debug, PartialEq)]
 pub enum OutputFrame {
@@ -359,6 +361,17 @@ pub fn command_arguments_for_turn(
     arguments
 }
 
+/// What Claude Code can do in a chat, checked against the pinned version. It takes no message
+/// into a running turn and has no history to ask for: its saved conversation is a file.
+pub fn capabilities() -> maitty_shared::conversation::capabilities::Capabilities {
+    use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+    Capabilities {
+        resume: true,
+        verified: Verified::Pinned,
+        ..Capabilities::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -369,17 +382,15 @@ mod tests {
     use std::path::PathBuf;
 
     #[test]
-    fn only_the_locally_verified_cli_version_is_supported() {
+    fn only_the_locally_verified_cli_version_read_from_its_output_is_supported() {
         assert!(verified_version("2.1.312"));
         assert!(verified_version("2.1.314"));
         assert!(verified_version("2.1.316"));
         assert!(verified_version("2.1.327"));
+        assert!(verified_version("2.1.330"));
         assert!(!verified_version("2.1.313"));
         assert!(!verified_version("2.1.326"), "only the versions run through the adapter are listed");
-    }
-
-    #[test]
-    fn reads_supported_versions_from_claude_version_output() {
+        // The version is read from what `claude --version` prints.
         assert_eq!(version_number("2.1.314 (Claude Code)"), Some("2.1.314"));
         assert_eq!(version_number("Claude Code 2.1.312"), Some("2.1.312"));
         assert_eq!(version_number(" 2.1.313 "), Some("2.1.313"));
@@ -415,6 +426,7 @@ mod tests {
     #[test]
     fn read_only_launch_arguments_select_plan_mode_and_the_model() {
         let settings = LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: PathBuf::from("claude"),
             config_root: PathBuf::from("config"),

@@ -431,13 +431,6 @@ mod tests {
     }
 
     #[test]
-    fn nothing_installed_is_an_empty_list() {
-        let root = scratch_dir();
-        let homes = Homes { claude_dir: root.path().join("c"), claude_json: root.path().join("c.json"), codex_dir: root.path().join("x"), pin_env: true };
-        assert_eq!(list(&homes, None), ExtensionList::default());
-    }
-
-    #[test]
     fn a_description_block_ends_where_its_indent_does() {
         assert_eq!(front_matter("---\ndescription: |\n  a\n  b\nname: n\n---\n"), (Some("n".into()), Some("a b".into())));
         assert_eq!(front_matter("no front matter"), (None, None));

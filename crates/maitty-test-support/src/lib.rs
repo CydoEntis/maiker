@@ -87,6 +87,60 @@ pub fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+/// A folder of one test's own in the temp folder, removed with everything in it when it drops,
+/// so a test leaves nothing behind whether it passes or fails. The label only tells a person
+/// whose folder it is; the process id and a counter keep it apart from every other test's.
+pub struct TempFolder(PathBuf);
+
+impl TempFolder {
+    pub fn new(label: &str) -> Self {
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+        let n = NEXT.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "{}-{label}-{}-{n}",
+            maitty_shared::brand::APP_COMMAND,
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&path).expect("create the test's temp folder");
+        TempFolder(path)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.0
+    }
+
+    /// The folder's path, with the folder kept until the test's thread ends (each test runs on a
+    /// thread of its own): for a helper that hands back a plain path to tests that take one.
+    pub fn until_test_ends(self) -> PathBuf {
+        thread_local! {
+            static KEPT: std::cell::RefCell<Vec<TempFolder>> = const { std::cell::RefCell::new(Vec::new()) };
+        }
+        let path = self.0.clone();
+        KEPT.with(|kept| kept.borrow_mut().push(self));
+        path
+    }
+}
+
+impl std::ops::Deref for TempFolder {
+    type Target = Path;
+
+    fn deref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl AsRef<Path> for TempFolder {
+    fn as_ref(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempFolder {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_dir_all(&self.0);
+    }
+}
+
 /// The terminal app's binary, built here: a test of another crate does not get it built
 /// for it.
 pub fn maitty_binary() -> PathBuf {
@@ -278,7 +332,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn windows_with_pwsh_gets_a_config_that_turns_history_off() {
+    fn only_windows_with_pwsh_gets_a_config_that_turns_history_off() {
         let text = config_text(true, true).expect("a config");
         let parsed: toml::Table = text.parse().expect("valid toml");
         assert_eq!(parsed["shell"].as_str(), Some("pwsh.exe"));
@@ -290,11 +344,7 @@ mod tests {
             .filter_map(|a| a.as_str())
             .collect();
         assert_eq!(args, ["-NoExit", "-Command", PWSH_PRIVATE_HISTORY]);
-    }
-
-    #[test]
-    fn other_setups_keep_the_default_config() {
-        assert_eq!(config_text(false, true), None);
+        assert_eq!(config_text(false, true), None, "other setups keep the default config");
         assert_eq!(config_text(true, false), None);
     }
 }

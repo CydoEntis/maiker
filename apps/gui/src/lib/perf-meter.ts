@@ -1,11 +1,12 @@
 import { useSyncExternalStore } from 'react'
 
 /**
- * What the web view is doing, once a second, for Settings › Performance and the overlay.
+ * What the web view is doing, once a second. No screen shows it: a sample is read through `usePerfSample`
+ * by whoever is measuring (docs/PERFORMANCE.md).
  *
  * The counters cost an addition each and always run. The sampler (animation frames, the DOM,
- * running animations) runs only while something shows a sample, so the monitor costs nothing
- * when it is closed. Process CPU comes from the host instead (`loadPerformanceSample`).
+ * running animations) runs only while something reads a sample, so it costs nothing otherwise.
+ * Process CPU is the host's to say (its `performance_sample` command).
  */
 export type PerfSample = {
   /** False while the window is hidden: animation frames stop, so the frame figures mean nothing. */

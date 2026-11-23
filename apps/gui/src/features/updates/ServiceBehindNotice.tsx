@@ -142,7 +142,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
         {failure !== null && <InlineNote title="Could not restart the service" reason={failure} />}
         <DialogFooter>
           <Button
-            variant="soft"
+            variant="ghost"
             disabled={pending}
             onClick={() => {
               setDialogOpen(false)

@@ -97,11 +97,6 @@ function graphemeCells(grapheme: string): number {
   return WIDE.test(grapheme) || PICTOGRAPH.test(grapheme) ? WIDE_CELLS : 1
 }
 
-/** How many terminal cells `text` takes: a CJK character or an emoji takes two. */
-export function cellsOf(text: string): number {
-  return graphemes(text).reduce((sum, grapheme) => sum + graphemeCells(grapheme), 0)
-}
-
 /** The first graphemes of `parts` that fit in `cells` terminal cells. */
 function fitCells(parts: readonly string[], cells: number): string[] {
   const kept: string[] = []

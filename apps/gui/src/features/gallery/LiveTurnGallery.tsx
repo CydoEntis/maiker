@@ -58,7 +58,7 @@ const READS: readonly (readonly ChatEvent[])[] = [
 ]
 const LAST = READS.length - 1
 
-const CONTEXT: ChatItemContext = { agent: 'claude', workingSince: WORKING_SINCE, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+const CONTEXT: ChatItemContext = { agent: 'claude', workingSince: WORKING_SINCE, root: null, openDiff: null, goToStep: null, waitingStep: null }
 const rowKey = (row: ChatRow) => row.key
 
 /** The turn at one read, in the real list, with buttons to step through the reads or play them at the chat's pace. */
@@ -76,9 +76,9 @@ export function LiveTurnGallery({ width }: { width: number }) {
   return (
     <div className="flex flex-col gap-2" style={{ width }} data-live-turn={width}>
       <div className="flex items-center gap-1.5">
-        <Button size="sm" variant="soft" onClick={() => { setPlaying(false); setAt((now) => Math.max(0, now - 1)) }}>Back</Button>
-        <Button size="sm" variant="soft" data-live-next="" onClick={() => { setPlaying(false); setAt((now) => Math.min(LAST, now + 1)) }}>Next</Button>
-        <Button size="sm" variant="soft" onClick={() => { setAt(0); setPlaying(true) }}>Play</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setPlaying(false); setAt((now) => Math.max(0, now - 1)) }}>Back</Button>
+        <Button size="sm" variant="ghost" data-live-next="" onClick={() => { setPlaying(false); setAt((now) => Math.min(LAST, now + 1)) }}>Next</Button>
+        <Button size="sm" variant="ghost" onClick={() => { setAt(0); setPlaying(true) }}>Play</Button>
         <span className="text-xs text-(--muted)">Read {at + 1} of {LAST + 1}</span>
       </div>
       <div className="mx-chat flex flex-col border border-(--line)" style={{ flex: 'none', height: LIST_HEIGHT_PX, zoom: 1 }}>

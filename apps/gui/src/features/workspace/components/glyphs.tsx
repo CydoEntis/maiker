@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Folder, TreePine } from 'lucide-react'
+import { Folder, GitBranch } from 'lucide-react'
 import { StatusIcon } from '@/components/ui/status-icon'
 import { SHELL_PROCESS } from '../model/session'
 import { CODEX_MARK, DEEPSEEK_MARK, GEMINI_MARK, OPENCODE_MARK } from './agentMarks'
@@ -10,8 +10,8 @@ export function FolderMark({ size = 14 }: { size?: number }) {
   return <Folder className="mx-folder-mark" size={size} strokeWidth={1.9} aria-hidden="true" />
 }
 
-/** The one working spinner: a ring with a lit arc running round it, round or square with the corners (more can be added later). */
-export function Spinner({ className = 'mx-spin' }: { className?: string; frozen?: boolean }) {
+/** The one working spinner beside text: the working status icon at text size. */
+export function Spinner({ className = 'mx-spin' }: { className?: string }) {
   return <StatusIcon status="working" size={SPINNER_PX} className={className} />
 }
 
@@ -43,8 +43,8 @@ const ICON_DRAWINGS = {
   folder: ({ size = 13 }: IconProps) => (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={FOLDER_PATH} /></svg>
   ),
-  gear: () => (
-    <Svg size={13} strokeWidth={1.75}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z" /></Svg>
+  gear: ({ size = 13 }: IconProps) => (
+    <Svg size={size} strokeWidth={1.75}><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.8 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0-1.2-2.8H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 2.8-1.2V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0 1.2 2.8H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1.1z" /></Svg>
   ),
   chart: ({ size = 14 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M4 20V10M10 20V4M16 20v-7M22 20H2" /></Svg>,
   list: ({ size = 12 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M4 6h16M4 12h16M4 18h16" /></Svg>,
@@ -67,8 +67,8 @@ const ICON_DRAWINGS = {
   drawer: () => <Svg size={16} strokeWidth={1.6}><rect x="3" y="4.5" width="18" height="15" rx="2.5" /><path d="M3 14.5h18" /></Svg>,
   maximize: () => <Svg size={15} strokeWidth={1.8}><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" /></Svg>,
   restore: () => <Svg size={15} strokeWidth={1.8}><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" /></Svg>,
-  /** A linked worktree: a tree, so it is not taken for the branch mark beside it. It takes the text's colour. */
-  worktree: ({ size = 11, strokeWidth = 2.2 }: IconProps) => <TreePine size={size} strokeWidth={strokeWidth} aria-hidden="true" />,
+  /** A linked worktree: the git branch mark, as git tools draw a worktree's branch. It takes the text's colour. */
+  worktree: ({ size = 11, strokeWidth = 2.2 }: IconProps) => <GitBranch size={size} strokeWidth={strokeWidth} aria-hidden="true" />,
   branch: ({ size = 11, strokeWidth = 2.2, stroke = 'var(--ansi-mag)' }: IconProps) => (
     <Svg size={size} strokeWidth={strokeWidth} stroke={stroke}><circle cx="6" cy="6" r="2.5" /><circle cx="6" cy="18" r="2.5" /><circle cx="18" cy="8" r="2.5" /><path d="M6 8.5v7M18 10.5c0 4-6 3-10 5.5" /></Svg>
   ),
@@ -77,12 +77,13 @@ const ICON_DRAWINGS = {
   repo: ({ size = 16 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3v12" /><circle cx="18" cy="6" r="3" /><circle cx="6" cy="18" r="3" /><path d="M18 9a9 9 0 0 1-9 9" /></Svg>,
   files: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" /></Svg>,
   changes: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><rect x="3.5" y="3.5" width="17" height="17" rx="3" /><path d="M8 9h8M12 7v4M8 16h8" /></Svg>,
-  history: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><circle cx="12" cy="12" r="8.5" /><path d="M12 7.5V12l3 2" /></Svg>,
   references: ({ size = 18 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M6 3.5h12a1 1 0 0 1 1 1V21l-7-4-7 4V4.5a1 1 0 0 1 1-1Z" /></Svg>,
   laptop: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="4.5" y="5" width="15" height="10.5" rx="1.8" /><path d="M2.5 19h19" /></Svg>,
   /** This computer, in a sidebar row and a machine group. */
   monitor: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3" y="4.5" width="18" height="11.5" rx="1.8" /><path d="M9 20h6M12 16v4" /></Svg>,
   server: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.7}><rect x="3.5" y="4" width="17" height="6.5" rx="1.8" /><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.8" /><path d="M7 7.25h.01M7 16.75h.01" /></Svg>,
+  clock: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>,
+  helpers: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><path d="M7 4h10v6H7zM12 10v4M7 14h10v6H7z" /></Svg>,
   search: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.9}><circle cx="11" cy="11" r="6.5" /><path d="m20 20-4.2-4.2" /></Svg>,
   pin: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z" /></Svg>,
   pencil: ({ size = 13 }: IconProps) => <Svg size={size} strokeWidth={1.8}><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></Svg>,

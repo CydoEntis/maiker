@@ -1,0 +1,6 @@
+/* The one-time tip under the title bar's side-panel button: the float card with a small arrow up at the button. It takes no focus and covers nothing that is in use. */
+.mx-coach-anchor { position: relative; display: inline-flex; }
+.mx-coach { position: absolute; z-index: 60; top: calc(100% + 8px); right: -6px; width: 250px; display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border-radius: var(--r-panel); background: var(--float-bg); border: 1px solid var(--float-line); box-shadow: var(--float-sh); font-size: 12.5px; line-height: 1.5; color: var(--fg2); cursor: default; }
+.mx-coach::before { content: ''; position: absolute; top: -6px; right: 14px; width: 10px; height: 10px; background: var(--float-bg); border-left: 1px solid var(--float-line); border-top: 1px solid var(--float-line); transform: rotate(45deg); }
+.mx-coach b { color: var(--fg); font-weight: 600; }
+.mx-coach .mx-keycap { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-badge); border-bottom-width: 2px; font-size: 10.5px; vertical-align: 1px; }

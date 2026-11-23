@@ -258,11 +258,8 @@ pub(super) fn search_home() -> Found {
 mod tests {
     use super::*;
 
-    fn scratch(label: &str) -> PathBuf {
-        let folder = std::env::temp_dir().join(format!("{}-repo-index-{label}-{}", env!("APP_COMMAND"), std::process::id()));
-        let _ = std::fs::remove_dir_all(&folder);
-        std::fs::create_dir_all(&folder).unwrap();
-        folder
+    fn scratch(label: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("repo-index-{label}"))
     }
 
     fn repo_in(folder: &Path, branch: &str) {

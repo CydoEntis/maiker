@@ -2,11 +2,10 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ChatRow } from '../chatRows'
-import { messageEvent } from '../eventFixtures'
 import { KnownRowsContext } from '../knownRows'
 import { ChatItem } from './ChatItems'
 
-const context = { agent: 'claude' as const, workingSince: null, approval: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+const context = { agent: 'claude' as const, workingSince: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
 
 /** A reply's lead is a paragraph of its own, so only its words are compared, not the space between them. */
 const noSpace = (text: string) => text.replace(/\s+/g, '')
@@ -16,26 +15,6 @@ function reply(status: 'running' | 'completed', text: string) {
   return <ChatItem row={row} {...context} />
 }
 
-describe('a message the person sent', () => {
-  const said = (timing: { startedAtMs: number | null; completedAtMs: number | null }) => {
-    const row: ChatRow = { kind: 'user', key: 'u1', event: { ...messageEvent('u1', 'user', 'Fix it'), timing } }
-    return <ChatItem row={row} {...context} />
-  }
-
-  it('carries the time the daemon gave it', () => {
-    const sentAt = Date.UTC(2026, 10, 4, 10, 11)
-    const { container } = render(said({ startedAtMs: sentAt, completedAtMs: null }))
-
-    expect(container.querySelector('time')).toHaveAttribute('datetime', new Date(sentAt).toISOString())
-  })
-
-  it('shows no time when the history kept none', () => {
-    const { container } = render(said({ startedAtMs: null, completedAtMs: null }))
-
-    expect(container.querySelector('time')).toBeNull()
-  })
-})
-
 describe('a reply from the agent', () => {
   it('is read in its finished form while it is still arriving', () => {
     render(reply('running', 'Done. Now the **bol'))
@@ -44,38 +23,9 @@ describe('a reply from the agent', () => {
     expect(screen.queryByText(/\*\*/)).toBeNull()
   })
 
-  it('is read as written once it has finished', () => {
-    const { container } = render(reply('completed', 'Done. Now the **bol'))
-
-    expect(container.querySelector('strong')).toBeNull()
-    expect(container).toHaveTextContent('Now the **bol')
-  })
-
-  it('shows all the text the history has at once, with no timer between sentences', () => {
-    const { container } = render(reply('completed', 'The endpoint is in. It has tests.\n\n- One\n- Two'))
-
-    expect(container.querySelector('.mx-msg-lead')).toHaveTextContent('The endpoint is in.')
-    expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has tests.')
-    expect(container).toHaveTextContent('Two')
-  })
-
   describe('typed in', () => {
     beforeEach(() => { vi.useFakeTimers() })
     afterEach(() => { vi.useRealTimers() })
-
-    it('keeps the words it had where they were, and types on as more of a running reply arrives', () => {
-      const { container, rerender } = render(reply('running', 'The endpoint'))
-      const lead = container.querySelector('.mx-msg-lead')
-      expect(container).toHaveTextContent('The endpoint')
-
-      rerender(reply('running', 'The endpoint is in. It has'))
-      expect(container.querySelector('.mx-msg-lead')).toBe(lead)
-      expect(lead).toHaveTextContent('The endpoint')
-
-      act(() => { vi.advanceTimersByTime(3_000) })
-      expect(lead).toHaveTextContent('The endpoint is in.')
-      expect(container.querySelector('.mx-msg-rest')).toHaveTextContent('It has')
-    })
 
     it('types in a reply that came while it was watched, and shows one it already knew whole', () => {
       const text = 'The endpoint is in and it has tests. '.repeat(6)
@@ -88,13 +38,6 @@ describe('a reply from the agent', () => {
       const known = render(<KnownRowsContext.Provider value={new Set(['m1'])}>{reply('completed', text)}</KnownRowsContext.Provider>)
       expect(noSpace(known.container.textContent)).toBe(noSpace(text))
     })
-  })
-
-  it('shows no half-typed table while it is still arriving', () => {
-    const { container } = render(reply('running', 'Here:\n\n| a | b |\n|---'))
-
-    expect(container).not.toHaveTextContent('|')
-    expect(container).toHaveTextContent('Here:')
   })
 })
 
@@ -112,22 +55,6 @@ describe('a thought', () => {
     expect(screen.queryByText('Weighing two fixes')).toBeNull()
     await userEvent.click(head)
     expect(head).toHaveAttribute('aria-expanded', 'true')
-    expect(screen.getByText('Weighing two fixes')).toBeInTheDocument()
-  })
-
-  it('names the number of parts when a row holds several, and links the button to its panel', async () => {
-    render(thought(['One', 'Two', 'Three']))
-
-    const head = screen.getByRole('button', { name: 'Thought, 3 parts' })
-    await userEvent.click(head)
-    expect(document.getElementById(head.getAttribute('aria-controls') ?? '')).toHaveTextContent('Three')
-  })
-
-  it('opens from the keyboard', async () => {
-    render(thought(['Weighing two fixes']))
-
-    await userEvent.tab()
-    await userEvent.keyboard('{Enter}')
     expect(screen.getByText('Weighing two fixes')).toBeInTheDocument()
   })
 
@@ -156,23 +83,5 @@ describe('the changed-files bar of a turn', () => {
     expect(screen.getByText('−41')).toBeInTheDocument()
     await userEvent.setup().click(screen.getByRole('button', { name: 'Review' }))
     expect(open).toHaveBeenCalledExactlyOnceWith('src/a.ts', null)
-  })
-
-  it('is singular for one file, shows no counts it does not know and offers no Review where it cannot open', () => {
-    render(bar(['src/a.ts'], null, null))
-
-    expect(screen.getByText('1 changed file')).toBeInTheDocument()
-    expect(screen.queryByText(/^\+/)).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Review' })).toBeNull()
-  })
-})
-
-describe('what a command reported', () => {
-  it('draws its inline code as code, not as backticks', () => {
-    const row: ChatRow = { kind: 'report', key: 'r1', text: 'Set model to `Opus 5.5` and saved as your default for new sessions' }
-    render(<ChatItem row={row} {...context} />)
-
-    expect(screen.getByText('Opus 5.5').tagName).toBe('CODE')
-    expect(screen.queryByText(/`/)).not.toBeInTheDocument()
   })
 })

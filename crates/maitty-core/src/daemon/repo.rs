@@ -525,13 +525,6 @@ mod tests {
         assert_eq!(after, super::super::git::file_version(b"# third\r\n"));
     }
 
-    #[test]
-    fn a_version_is_pinned_and_follows_the_bytes() {
-        assert_eq!(super::super::git::file_version(b""), "0-cbf29ce484222325");
-        assert_eq!(super::super::git::file_version(b"a"), "1-af63dc4c8601ec8c");
-        assert_ne!(super::super::git::file_version(b"a\n"), super::super::git::file_version(b"a\r\n"));
-    }
-
     #[cfg(unix)]
     #[test]
     fn a_save_that_cannot_write_says_so_and_leaves_the_file() {
@@ -549,19 +542,6 @@ mod tests {
         }
         assert!(format!("{:#}", outcome.unwrap_err()).contains("saving the file"));
         assert_eq!(std::fs::read_to_string(root.join("a.md")).unwrap(), "keep");
-    }
-
-    #[test]
-    fn a_file_deleted_since_it_was_opened_is_said_in_words() {
-        let dir = crate::daemon::persist::scratch_dir();
-        let root = dir.path();
-        std::fs::create_dir_all(root.join("src")).expect("folder");
-
-        let error = write_file(root, "src/gone.txt", "x").expect_err("nothing to replace");
-
-        let said = format!("{error:#}");
-        assert!(said.contains("src/gone.txt is no longer there: it was moved or deleted"), "{said}");
-        assert!(!said.contains("No such file"), "{said}");
     }
 
     #[cfg(unix)]

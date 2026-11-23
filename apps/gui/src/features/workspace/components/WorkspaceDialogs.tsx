@@ -1,12 +1,13 @@
 import { extensionProjects } from '@/features/extensions/projects'
-import { inspectHostKey, inspectNewHost, listenMachineUpdateProgress, listSshHosts, machineActivity, trustHostKey, trustNewHost } from '@/api/machines'
+import { listenMachineUpdateProgress, listSshHosts, machineActivity } from '@/api/machines'
 import { DesktopSettings, type MachinesInfo } from '@/features/settings/components/DesktopSettings'
-import { PerfOverlay } from './PerfOverlay'
 import { CommandPalette } from './CommandPalette'
 import { HoverTips } from './HoverTips'
 import { ShortcutOverlay } from '@/features/shortcuts/ShortcutOverlay'
 import { Onboarding } from '@/features/welcome/Onboarding'
 import { markWelcomed } from '@/features/welcome/welcomed'
+import { offerCoachMark } from '@/features/welcome/coachMarkState'
+import { activeThemeName } from '../theme/themes'
 import { UpdatedNotice } from '@/features/updates/UpdatedNotice'
 import { indexRemoteFiles, listRemoteFolder } from '@/api/fileGets'
 import { updaterSummary } from '@/features/updates/useUpdater'
@@ -19,8 +20,7 @@ import { GetFileDialog } from './GetFileDialog'
 import { SpecialistsDialog } from './SpecialistsDialog'
 import { MachineUpdateDialog } from './MachineUpdateDialog'
 import { DraftGuardHost } from '@/features/documents/DraftGuardHost'
-import { ConfirmCloseDialog } from './ConfirmCloseDialog'
-import { AddMachineDialog } from './AddMachineDialog'
+import { ConfirmHost } from '@/features/confirm/ConfirmDialog'
 import { RenameDialog, RenameMachineDialog } from './RenameDialog'
 import { RecentSessionsDialog } from './RecentSessionsDialog'
 import { ResumeSavedDialog } from './ResumeSavedDialog'
@@ -31,17 +31,29 @@ import { withNickname, writeMachineNicknames } from '@/data/machineNicknames'
 import type { SessionView } from '../model/session'
 import { sessionTask } from '../model/worktreeName'
 import { Keycaps } from '@/features/shortcuts/Keycaps'
-import { folderExists } from '../model/startFolder'
-import { OpenProjectDialog } from '@/features/open-project/OpenProjectDialog'
+import { OpenProjectPalette } from '@/features/open-project/OpenProjectPalette'
+import { ADD_MACHINE, projectRequestFor } from '../useOpenProject'
+import { osOfPlatform, paletteMachinesOf } from '@/features/open-project/paletteMachines'
+import { projectOfFolder } from '../projectOfFolder'
+import { OpenWorktreeDialog } from './OpenWorktreeDialog'
+import { useOpenWorktreeDialog } from '../useProjectActions'
 import { useWorkspace } from '../workspaceContext'
+import { HelpersRequestDialog, SecretDialog } from './OutsideAskDialogs'
+import { sendHelpersAnswer } from '../useOutsideAsks'
+import { projectOf as projectNameOf, rowTitle } from '../model/sidebar'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { addMachineFor, signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, closeAsk, setCloseAsk, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, addMachineOpen, setAddMachineOpen, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, setNewChatSeed, setNewChatMachine, setNewChatOpen } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen, openAsk, setOpenAsk, paneSessions } = useWorkspace()
+  // The session whose request is open, while it still asks: an answer from anywhere closes the dialog with it.
+  const asker = openAsk === null ? undefined : paneSessions.get(openAsk.sessionId)
+  const askedSecret = openAsk?.kind === 'secret' ? asker?.secretAsk.find((ask) => ask.id === openAsk.askId) : undefined
   const serviceFinishing = useServiceFinishing()
-  const fixed = addMachineFor === null ? null : heads.find((head) => head.name === addMachineFor) ?? null
-  // One set of host calls for Settings › Remote machines and the first-run setup's machine step.
-  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, hostKey: { inspect: inspectHostKey, trust: trustHostKey }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, inspect: inspectNewHost, trust: trustNewHost, onProgress: listenMachineUpdateProgress, open: () => { setAddMachineOpen(true) } } }
+  const openWorktree = useOpenWorktreeDialog()
+  // However the first run ends it is not shown again, and the side-panel tip is offered once.
+  const endWelcome = () => { markWelcomed(); setWelcomeOpen(false); offerCoachMark() }
+  // One set of host calls for Settings › Remote machines and the palette's New machine level.
+  const machinesInfo: MachinesInfo = { known: machinesKnown, list: heads.filter((head) => head.name !== null), onRetry: retryNamed, onRemove: removeNamed, onGrant: grantNamed, onUpdate: updateNamed, onCheckActivity: machineActivity, onCopyCommand: copyCommand, onOpenLogin: (machine) => { const name = heads.find((head) => head.machine === machine)?.name; if (name) openLoginNamed(machine, name) }, onRename: (name, nickname) => { const next = withNickname(machineNicknames, name, nickname); setMachineNicknames(next); writeMachineNicknames(next) }, sessionsOn: (machine) => sessions.filter((session) => session.machine === machine).length, add: { loadHosts: listSshHosts, onAdd: addNamed, onCancel: cancelAdding, onProgress: listenMachineUpdateProgress, open: () => { setOpenProject(ADD_MACHINE) } } }
   return (
     <>
       {/* A service on another protocol has its own card; this is for one that still talks but runs an older release. */}
@@ -54,10 +66,17 @@ export function WorkspaceDialogs() {
                 portalContainer={root}
                 home={home}
                 startFolder={preferences.startFolder}
-                validateFolder={folderExists}
                 onChooseFolder={chooseStartFolder}
-                onApply={({ startFolder, openSessionsIn }) => { setPreferences((current) => ({ ...current, startFolder, openSessionsIn })) }}
-                onClose={() => { markWelcomed(); setWelcomeOpen(false) }}
+                theme={activeThemeName(preferences, systemDark)}
+                onPreviewTheme={setPreviewTheme}
+                // Nothing is open yet on a first run, so the view is set without the switch's confirm (Settings › Appearance).
+                onFinish={(settings, folder) => {
+                  setPreferences((current) => ({ ...current, ...settings }))
+                  endWelcome()
+                  // With the home folder still unknown the palette starts where browsing does.
+                  setOpenProject(projectRequestFor(LOCAL_MACHINE, folder === '' ? undefined : folder))
+                }}
+                onSkip={endWelcome}
               />
             )}
             {paletteOpen && <CommandPalette items={paletteItems} outputItem={paletteOutputItem} onClose={() => { setPaletteOpen(false) }} />}
@@ -74,11 +93,25 @@ export function WorkspaceDialogs() {
                 term={worktreeFrom.pane}
                 repoName={worktreeFrom.repoName ?? worktreeFrom.cwdLabel}
                 machine={worktreeFrom.machine}
+                folder={worktreeFrom.repoRoot ?? worktreeFrom.cwd}
                 task={sessionTask(worktreeFrom)}
                 {...(worktreeFrom.branch === null ? {} : { fromBranch: worktreeFrom.branch })}
                 {...(abilitiesOf(worktreeFrom.process).moveToWorktree ? { move: { blocked: moveRefusal(worktreeFrom), run: async (branch: string) => { setWorktreeFrom(null); await moveToWorktree(worktreeFrom, branch) } } } : {})}
                 onCreate={(branch, base) => createWorktree(worktreeFrom, branch, base)}
                 onCancel={() => { setWorktreeFrom(null) }}
+              />
+            )}
+            {openWorktree && <OpenWorktreeDialog {...openWorktree} />}
+            {/* From a project heading: the session only lends its repository, so no name from its task and no move of its chat. */}
+            {projectWorktreeFrom && (
+              <NewWorktreeDialog
+                term={projectWorktreeFrom.pane}
+                repoName={projectWorktreeFrom.repoName ?? projectWorktreeFrom.cwdLabel}
+                machine={projectWorktreeFrom.machine}
+                folder={projectWorktreeFrom.repoRoot ?? projectWorktreeFrom.cwd}
+                {...(projectWorktreeFrom.branch === null ? {} : { fromBranch: projectWorktreeFrom.branch })}
+                onCreate={async (branch, base) => { await createWorktree(projectWorktreeFrom, branch, base); setProjectWorktreeFrom(null) }}
+                onCancel={() => { setProjectWorktreeFrom(null) }}
               />
             )}
             {getFileId !== null && sessionMap.get(getFileId)?.machineName != null && (
@@ -112,10 +145,20 @@ export function WorkspaceDialogs() {
                 onCancel={() => { setUpdateAsk(null) }}
               />
             )}
-            <DraftGuardHost />
-            {closeAsk && (
-              <ConfirmCloseDialog title={closeAsk.title} body={closeAsk.body} confirmLabel={closeAsk.confirmLabel} onCancel={() => { setCloseAsk(null) }} onConfirm={() => { const run = closeAsk.run; setCloseAsk(null); run() }} />
+            {asker !== undefined && openAsk?.kind === 'helpers' && asker.helperAsk.length > 0 && (
+              <HelpersRequestDialog
+                asker={{ name: rowTitle(asker), project: projectNameOf(asker) }}
+                tasks={asker.helperAsk}
+                online={online}
+                onAnswer={(choice) => { setOpenAsk(null); sendHelpersAnswer(asker, choice) }}
+                onCancel={() => { setOpenAsk(null) }}
+              />
             )}
+            {asker !== undefined && askedSecret !== undefined && (
+              <SecretDialog key={askedSecret.id} asker={{ name: rowTitle(asker), project: projectNameOf(asker) }} ask={askedSecret} machine={asker.machine} online={online} onDone={() => { setOpenAsk(null) }} />
+            )}
+            <DraftGuardHost />
+            <ConfirmHost pending={pendingConfirm} />
             {renamingMachine !== null && (
               <RenameMachineDialog
                 machine={renamingMachine}
@@ -138,16 +181,27 @@ export function WorkspaceDialogs() {
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}
             {openProject !== null && (
-              <OpenProjectDialog
-                tab={openProject.tab}
+              <OpenProjectPalette
+                mode="open"
+                start={openProject.start}
+                machines={paletteMachinesOf(sidebarMachineHeads, resolveStartFolder(preferences.startFolder, home))}
+                localOs={osOfPlatform(platform)}
                 home={home}
-                chooseFolder={chooseStartFolder}
-                folderExists={folderExists}
-                onStartSession={(folder) => { setNewChatMachine(LOCAL_MACHINE); setNewChatSeed({ folder, message: '' }); setNewChatOpen(true) }}
+                opened={openedProjects.opened}
+                onTake={async ({ machine, folder }) => {
+                  if (openProject.purpose === 'session') {
+                    setNewChatMachine(machine)
+                    setNewChatSeed({ folder, message: '' })
+                    setNewChatOpen(true)
+                    return
+                  }
+                  const head = sidebarMachineHeads.find((candidate) => candidate.machine === machine)
+                  openedProjects.open(await projectOfFolder(machine, head?.name ?? null, folder))
+                }}
+                adding={machinesInfo}
                 onClose={() => { setOpenProject(null) }}
               />
             )}
-            {addMachineOpen && <AddMachineDialog machines={machinesInfo} fixing={fixed} appVersion={runningVersion} onStartSession={(machine) => { setAddMachineOpen(false); newSession(machine) }} onOpenSettings={() => { setAddMachineOpen(false); setSettingsSection('machines') }} onClose={() => { setAddMachineOpen(false) }} />}
             {settingsSection && (
               <DesktopSettings
                 section={settingsSection}
@@ -174,7 +228,6 @@ export function WorkspaceDialogs() {
             )}
             {/* Not while the service still runs the older version: the update is not finished, and its card says so. */}
             {updatedTo && !mismatch && <UpdatedNotice update={updatedTo} serviceFinishing={serviceFinishing} onDone={() => { setUpdatedTo(null) }} />}
-            {preferences.perfOverlay && <PerfOverlay />}
             {restarting && (
               <div className="mx-restarting" role="status">
                 <strong>Restarting Maiker</strong>

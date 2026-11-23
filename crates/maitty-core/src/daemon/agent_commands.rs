@@ -5,18 +5,10 @@
 
 use maitty_agent_ask::{claude, codex};
 use maitty_shared::agent_commands::AgentCommand;
+use super::providers::CommandList;
 use maitty_shared::conversation::Provider;
 use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
-
-/// The agents that can be asked, by the name of their program. Gemini has no list to ask for.
-fn program(agent: Provider) -> Option<&'static str> {
-    match agent {
-        Provider::Claude => Some("claude"),
-        Provider::Codex => Some("codex"),
-        Provider::Gemini => None,
-    }
-}
 
 /// The folder the agent is started in: the one named when it is an absolute path to a folder that
 /// exists, so the project's commands and skills are among those listed, and the home folder
@@ -50,13 +42,14 @@ pub(super) async fn answer(agent: Provider, folder: String) -> Result<Vec<AgentC
 }
 
 async fn ask(agent: Provider, start: &Path, search: Option<&OsStr>) -> Result<Vec<AgentCommand>, String> {
-    let Some(name) = program(agent) else {
+    // An agent with no list to ask for has no commands.
+    let Some(commands) = &super::providers::adapter(agent).commands else {
         return Ok(Vec::new());
     };
-    let executable = find_program(name, search)?;
-    match agent {
-        Provider::Claude => claude::ask_commands(&executable, start).await,
-        _ => codex::ask_skills(&executable, start).await,
+    let executable = find_program(commands.program, search)?;
+    match commands.list {
+        CommandList::SlashCommands => claude::ask_commands(&executable, start).await,
+        CommandList::Skills => codex::ask_skills(&executable, start).await,
     }
 }
 
@@ -74,14 +67,6 @@ mod tests {
         assert_eq!(start_folder("relative/folder", None), None);
     }
 
-    #[test]
-    fn a_missing_agent_is_said_not_guessed() {
-        let nowhere = std::env::temp_dir().join("maitty-no-such-bin");
-        let why = find_program("claude", Some(nowhere.as_os_str())).unwrap_err();
-        assert_eq!(why, "claude is not installed on this machine");
-        assert!(find_program("codex", None).is_err());
-    }
-
     #[tokio::test]
     async fn gemini_has_no_list_and_a_machine_without_the_agent_says_so() {
         let nowhere = std::env::temp_dir().join("maitty-no-such-bin");
@@ -94,20 +79,17 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn the_commands_are_the_ones_the_agent_on_this_machine_lists() {
-        use std::os::unix::fs::PermissionsExt;
         let bin = std::env::temp_dir().join(format!("maitty-ask-commands-{}", std::process::id()));
         std::fs::create_dir_all(&bin).unwrap();
         let script = bin.join("claude");
-        std::fs::write(
+        crate::test_support::write_program(
             &script,
             concat!(
                 "#!/bin/sh\nread line\n",
                 r#"printf '%s\n' '{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success","response":{"commands":[{"name":"compact","description":"Summarize"},{"name":"pdf","description":"Reads PDFs","argumentHint":"<file>"}]}}}'"#,
                 "\nsleep 5\n"
             ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755)).unwrap();
+        );
         let listed = ask(Provider::Claude, &std::env::temp_dir(), Some(bin.as_os_str())).await.unwrap();
         std::fs::remove_dir_all(&bin).unwrap();
         assert_eq!(listed.iter().map(|command| command.name.as_str()).collect::<Vec<_>>(), ["compact", "pdf"]);

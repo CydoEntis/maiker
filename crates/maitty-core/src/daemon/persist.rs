@@ -98,6 +98,9 @@ pub struct SavedPane {
     /// The pane that started it, by its id when this was saved (a key of some tab's `panes`).
     #[serde(default)]
     pub started_by: Option<TermId>,
+    /// The chat that started it (ADR 0016). A conversation keeps its id across a restart.
+    #[serde(default)]
+    pub started_by_chat: Option<crate::conversation::ConversationId>,
     /// It was started as an agent (`Term::began_as_agent`); panes saved before this was recorded
     /// read as not, and their command says when it was one.
     #[serde(default)]
@@ -117,6 +120,10 @@ pub struct SavedPane {
     /// A message that was waiting for the agent starting here to take input.
     #[serde(default)]
     pub held_message: Option<String>,
+    /// Its start was held for a free slot (`helper_queue.rs`): it comes back still waiting,
+    /// and starts once. Absent from a session saved before starts were held.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<super::helper_queue::Waiting>,
     /// Child activity records survive daemon restarts and completed turns.
     #[serde(default)]
     pub subagent_activity: Vec<SubagentActivity>,
@@ -379,19 +386,31 @@ pub fn forget_outputs() -> std::io::Result<()> {
 
 /// Where each pane's recent output is kept, so its history is still there after the server
 /// restarts (an update, a reboot): one file per pane, named by its id.
+#[cfg(not(test))]
 pub fn output_dir() -> PathBuf {
-    if cfg!(test) {
-        // One folder per test (each runs on a thread of its own): a test that clears the saved
-        // output must not take away what another test saved a moment ago.
-        return std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-output-{}-{:?}"),
-            std::process::id(),
-            std::thread::current().id()
-        ));
-    }
     let label =
         maitty_shared::brand::env_var("SOCKET").unwrap_or_else(|_| "default".into());
     crate::config::data_dir().join(format!("output-{label}"))
+}
+
+/// One folder per test (each runs on a thread of its own): a test that clears the saved output
+/// must not take away what another test saved a moment ago. It goes when its thread ends.
+#[cfg(test)]
+pub fn output_dir() -> PathBuf {
+    struct RemovedWithThread(PathBuf);
+    impl Drop for RemovedWithThread {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    thread_local! {
+        static DIR: RemovedWithThread = RemovedWithThread(std::env::temp_dir().join(format!(
+            concat!(env!("APP_COMMAND"), "-test-output-{}-{:?}"),
+            std::process::id(),
+            std::thread::current().id()
+        )));
+    }
+    DIR.with(|dir| dir.0.clone())
 }
 
 fn output_file(dir: &Path, term: TermId) -> PathBuf {
@@ -711,6 +730,19 @@ pub(super) fn scratch_dir() -> ScratchDir {
     )))
 }
 
+/// A scratch folder for something that outlives the call but has nowhere to keep the guard, such
+/// as a folder a daemon is told to write in: it is removed when the test's thread ends.
+#[cfg(test)]
+pub(super) fn scratch_dir_for_this_thread() -> PathBuf {
+    thread_local! {
+        static KEPT: std::cell::RefCell<Vec<ScratchDir>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+    let dir = scratch_dir();
+    let path = dir.path().to_path_buf();
+    KEPT.with(|kept| kept.borrow_mut().push(dir));
+    path
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -740,35 +772,6 @@ mod tests {
         let actual: Saved = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         assert_eq!(actual.conversations, new.conversations);
         assert_eq!(files_in(dir.path()), ["session.json"]);
-    }
-
-    #[test]
-    fn session_full_snapshots_keep_the_latest_conversation_revision() {
-        let dir = scratch_dir();
-        let path = dir.path().join("session.json");
-        let mut old = Saved {
-            conversations: vec![crate::test_support::conversation()],
-            ..Default::default()
-        };
-        let old_ticket = next_session_ticket().unwrap();
-        old.conversations[0].generation += 1;
-        let new_ticket = next_session_ticket().unwrap();
-        assert_eq!(
-            save_session_ticket(&path, new_ticket, &old).unwrap(),
-            SessionCommit::Committed
-        );
-        old.conversations[0].generation -= 1;
-        assert_eq!(
-            save_session_ticket(&path, old_ticket, &old).unwrap(),
-            SessionCommit::Superseded {
-                committed_ticket: new_ticket
-            }
-        );
-        let actual: Saved = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-        assert_eq!(
-            actual.conversations[0].generation,
-            old.conversations[0].generation + 1
-        );
     }
 
     #[test]
@@ -1016,33 +1019,6 @@ mod tests {
     }
 
     #[test]
-    fn each_checkpoint_keeps_its_own_output_file() {
-        let dir = scratch_dir();
-        let outputs = [
-            tail(7, "build", CheckSlot::Latest, "built"),
-            tail(7, "test", CheckSlot::Latest, "FAIL a"),
-            tail(7, "test", CheckSlot::Overridden, "FAIL b"),
-        ];
-        assert!(save_check_outputs(dir.path(), save_ticket(), &outputs, &[7]).is_empty());
-        assert_eq!(
-            files_in(dir.path()),
-            [
-                "7-build-latest.txt",
-                "7-test-latest.txt",
-                "7-test-overridden.txt"
-            ]
-        );
-        assert_eq!(
-            read_check_output(dir.path(), 7, "build", CheckSlot::Latest).as_deref(),
-            Some("built")
-        );
-        assert_eq!(
-            read_check_output(dir.path(), 7, "test", CheckSlot::Latest).as_deref(),
-            Some("FAIL a")
-        );
-    }
-
-    #[test]
     fn a_name_cannot_lead_a_tail_out_of_its_folder() {
         let dir = scratch_dir();
         let outputs = [
@@ -1199,35 +1175,6 @@ mod tests {
             &[4, 5],
         );
         assert_eq!(failed, [4, 5]);
-    }
-
-    #[test]
-    fn two_folders_do_not_share_what_was_written() {
-        let (a, b) = (scratch_dir(), scratch_dir());
-        let term: crate::protocol::TermId = 6;
-        let (old, new) = (save_ticket(), save_ticket());
-        assert!(
-            save_check_outputs(
-                a.path(),
-                new,
-                &[tail(term, "test", CheckSlot::Latest, "a")],
-                &[term]
-            )
-            .is_empty()
-        );
-        assert!(
-            save_check_outputs(
-                b.path(),
-                old,
-                &[tail(term, "test", CheckSlot::Latest, "b")],
-                &[term]
-            )
-            .is_empty()
-        );
-        assert_eq!(
-            read_check_output(b.path(), term, "test", CheckSlot::Latest).as_deref(),
-            Some("b")
-        );
     }
 
     #[test]

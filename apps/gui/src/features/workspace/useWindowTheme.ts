@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { activeThemeName, findTheme, terminalMinimumContrast, terminalSlab, themeStyle, xtermTheme } from './theme/themes'
-import { withLook } from './theme/corners'
+import { withLook } from './theme/look'
 
 /** A theme previews once the pointer rests on it, not as it passes over every row (each one repaints every terminal). */
 const THEME_PREVIEW_DELAY_MS = 140
@@ -34,6 +34,6 @@ export function useWindowTheme({ preferences, systemReducedMotion, systemDark }:
     for (const name of names) document.documentElement.style.setProperty(name, values[name] ?? '')
     return () => { for (const name of names) document.documentElement.style.removeProperty(name) }
   }, [theme])
-  const look = useMemo(() => ({ fontFamily: preferences.terminalFontFamily, fontWeight: preferences.terminalFontWeight, fontWeightBold: preferences.terminalFontWeightBold, cursorStyle: preferences.cursorStyle, scrollback: preferences.scrollback, scrollSpeed: preferences.scrollSpeed, lineHeight: preferences.terminalLineHeight, screenReader: preferences.terminalScreenReader, cursorBlink: preferences.cursorBlink, plainDrawing: preferences.terminalPlainDrawing, theme: xtermTheme(theme.tokens), slab: terminalSlab(theme.tokens), minimumContrast: terminalMinimumContrast(theme) }), [preferences.terminalFontFamily, preferences.terminalFontWeight, preferences.terminalFontWeightBold, preferences.cursorStyle, preferences.cursorBlink, preferences.terminalLineHeight, preferences.scrollback, preferences.scrollSpeed, preferences.terminalScreenReader, preferences.terminalPlainDrawing, theme])
+  const look = useMemo(() => ({ fontFamily: preferences.terminalFontFamily, fontWeight: preferences.terminalFontWeight, fontWeightBold: preferences.terminalFontWeightBold, cursorStyle: preferences.cursorStyle, scrollback: preferences.scrollback, scrollSpeed: preferences.scrollSpeed, lineHeight: preferences.terminalLineHeight, screenReader: preferences.terminalScreenReader, cursorBlink: preferences.cursorBlink, theme: xtermTheme(theme.tokens), slab: terminalSlab(theme.tokens), minimumContrast: terminalMinimumContrast(theme) }), [preferences.terminalFontFamily, preferences.terminalFontWeight, preferences.terminalFontWeightBold, preferences.cursorStyle, preferences.cursorBlink, preferences.terminalLineHeight, preferences.scrollback, preferences.scrollSpeed, preferences.terminalScreenReader, theme])
   return { reducedMotion, theme, previewThemeSoon, setPreviewTheme, look }
 }

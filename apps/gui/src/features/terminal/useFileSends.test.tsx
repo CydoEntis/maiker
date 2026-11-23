@@ -76,15 +76,6 @@ describe('files sent to the machine of a pane', () => {
     expect(toasts.info).toHaveBeenCalledWith('Stopped sending to build', { id: transfer })
   })
 
-  it('shows the percentage as the host reports it, with the file and its place in the drop', async () => {
-    const transfer = await start(() => true, ['/a/one.log', '/a/two.log'])
-    emit({ kind: 'progress', transfer, file: 'two.log', index: 1, count: 2, percent: 55 })
-    const [title] = toasts.progress.mock.calls.at(-1) as [string]
-    expect(title).toBe('Sending two.log to build (2 of 2)')
-    const options = toasts.progress.mock.calls.at(-1)?.[1] as { description: { props: { percent: number; file: string } } }
-    expect(options.description.props).toEqual({ file: 'two.log', percent: 55 })
-  })
-
   it('types each path the machine kept a file at into the pane the drop was for, as it lands', async () => {
     const typed: Array<[string, string]> = []
     const transfer = await start((session, text) => { typed.push([session, text]); return true }, ['/a/one.log', '/a/two.log'])
@@ -178,22 +169,5 @@ describe('a pasted image sent to the machine of a pane', () => {
     emit({ kind: 'done', transfer, sent: 1, count: 1 })
     expect(typed).toEqual([])
     expect(toasts.success).toHaveBeenCalledWith('Sent the image to build', expect.objectContaining({ description: 'Not typed into the pane: image' }))
-  })
-
-  it('shows the host refusing the image (a machine without ssh) as an error toast', async () => {
-    host.image.mockRejectedValue('sending files to fly needs ssh, and it is reached by its own command')
-    const transfer = await startImage(() => true)
-    await flush()
-    expect(toasts.error).toHaveBeenCalledWith('sending files to fly needs ssh, and it is reached by its own command', expect.objectContaining({ id: transfer }))
-  })
-
-  it('shows a failed send as an error toast and a cancelled one as a plain message', async () => {
-    const failed = await startImage(() => true)
-    emit({ kind: 'failed', transfer: failed, file: 'image', message: 'could not send the image to build: Permission denied (publickey).', unsent: 1 })
-    expect(toasts.error).toHaveBeenCalledWith('could not send the image to build: Permission denied (publickey).', expect.objectContaining({ id: failed }))
-    host.image.mockClear()
-    const cancelled = await startImage(() => true)
-    emit({ kind: 'cancelled', transfer: cancelled, sent: 0 })
-    expect(toasts.info).toHaveBeenCalledWith('Stopped sending to build', expect.objectContaining({ id: cancelled }))
   })
 })

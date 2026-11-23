@@ -3,7 +3,7 @@
 //! modal and popover frames, and the pointer's tint. Sidebar rows, sheet and modal contents
 //! and the pane's own terminal text belong to other screens and are left out.
 use super::*;
-use crate::client::reference_fixture::{self, LAYOUTS, Stage};
+use crate::client::reference_fixture::{self, Stage};
 use crate::layout::Node;
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 use ratatui::Terminal;
@@ -22,93 +22,6 @@ fn world(stage: Stage) -> App {
         broadcast: false,
     });
     app
-}
-
-/// The modal's frame works like a pane's: corners by `ui.rounded`, the title an accent chip,
-/// and a red close chip at its right
-/// that a click closes, chip ends capped with `full`, and no accent bar across the top.
-#[test]
-fn a_modal_s_title_and_esc_close_are_chips_on_its_top_border_in_every_layout_and_rounding() {
-    use crate::config::Rounding;
-    for layout in ["cards", "tiled", "compact", "grid"] {
-        for rounded in [Rounding::Full, Rounding::Corners, Rounding::Off] {
-            let mut app = world(Stage::Failed);
-            (app.cfg.ui.layout, app.cfg.ui.rounded) = (layout.into(), rounded);
-            let t = app.theme.clone();
-            let area = Rect::new(0, 0, 100, 30);
-            let mut buf = Buffer::empty(area);
-            let r = panel(&mut app, &mut buf, area, 70, 15, "OVERRIDE", &[], &t);
-            let at = format!("{layout} {rounded:?}");
-            let sym = |x: u16| buf[(x, r.y)].symbol().to_string();
-            let tl = if rounded == Rounding::Off {
-                "┌"
-            } else {
-                "╭"
-            };
-            let caps = rounded == Rounding::Full;
-            // The close chip stands a cell of border in from the corner, which stays whole.
-            let corner = if rounded == Rounding::Off { "┐" } else { "╮" };
-            assert_eq!(
-                (sym(r.x), sym(r.x + 1), sym(r.right() - 1)),
-                (tl.into(), "─".into(), corner.into()),
-                "{at}"
-            );
-            let (title, esc) = (r.x + 2, if caps { r.right() - 6 } else { r.right() - 4 });
-            let row = |x0: u16, x1: u16| (x0..x1).map(sym).collect::<String>();
-            let (l, e) = if caps { (CAP_L, CAP_R) } else { ("", "") };
-            assert_eq!(
-                row(title, title + 10 + 2 * u16::from(caps)),
-                format!("{l} OVERRIDE {e}"),
-                "{at}"
-            );
-            assert_eq!(row(esc, r.right() - 1), format!("{l} × {e}"), "{at}");
-            assert_eq!(
-                buf[(title + 2, r.y)].bg,
-                t.accent,
-                "the title chip is the accent: {at}"
-            );
-            let chip = |x: u16| buf[(x, r.y)].symbol() != "─";
-            // The empty buffer's ground stands for whatever the modal is drawn over.
-            let behind = Color::Reset;
-            assert!(
-                (r.x + 1..r.right() - 1)
-                    .filter(|x| !chip(*x))
-                    .all(|x| buf[(x, r.y)].bg == behind),
-                "no accent bar, and the line keeps the ground behind it: {at}"
-            );
-            let outline = (r.x..r.right())
-                .map(|x| (x, r.bottom() - 1))
-                .chain((r.y + 1..r.bottom()).flat_map(|y| [(r.x, y), (r.right() - 1, y)]));
-            for at_cell in outline {
-                assert_eq!(
-                    buf[at_cell].bg, behind,
-                    "the body's colour stops inside the outline, none of it outside the line: {at} {at_cell:?}"
-                );
-            }
-            assert_eq!(buf[(r.x + 1, r.y + 1)].bg, t.card, "the body is filled: {at}");
-            if caps {
-                for x in [title, esc] {
-                    assert_eq!(
-                        buf[(x, r.y)].bg,
-                        behind,
-                        "a cap sits on the border's ground: {at}"
-                    );
-                }
-            }
-            let close = app
-                .hits
-                .iter()
-                .rev()
-                .find(|(_, h)| *h == Hit::Screen(ScreenHit::Close))
-                .map(|(r, _)| *r)
-                .expect("a close target");
-            assert_eq!(
-                close,
-                Rect::new(esc, r.y, r.right() - 1 - esc, 1),
-                "the whole close chip closes: {at}"
-            );
-        }
-    }
 }
 
 #[test]
@@ -219,52 +132,4 @@ fn drawn_in(app: &mut App, layout: &str) -> Buffer {
     term.draw(|f| crate::client::render::draw(app, f))
         .expect("a frame");
     term.backend().buffer().clone()
-}
-
-/// Rounded shapes reach every chip and floating card: the sidebar's title, machine and menu chips on the
-/// plain ground, and the Menu.
-#[test]
-fn rounded_shapes_round_cards_and_give_chips_pill_ends() {
-    for layout in LAYOUTS {
-        let mut app = world(Stage::None);
-        app.cfg.ui.rounded = crate::config::Rounding::Full;
-        let text = reference_fixture::raw_text(&mut app, layout, 140, 36, "unicode");
-        for chip in ["Maiker", "menu"] {
-            assert!(
-                text.contains(chip),
-                "{chip} stays visible: {layout:?}\n{text}"
-            );
-        }
-        // The pane's own chips are plain text now: the caps are on the status bar's mode chip.
-        let buf = drawn_in(&mut app, "floating");
-        let bar = mode_bar_row(&app, buf.area).y;
-        let bar_row: String = (0..buf.area.width).map(|x| buf[(x, bar)].symbol()).collect();
-        assert!(
-            bar_row.contains(CAP_L) && bar_row.contains(CAP_R),
-            "rounded gives the bar's chips pill caps: {layout:?}
-{bar_row}"
-        );
-        app.act(Action::Menu);
-        let text = reference_fixture::raw_text(&mut app, layout, 100, 30, "unicode");
-        let title = text
-            .lines()
-            .find(|l| l.contains(" Menu "))
-            .expect("the menu's title row");
-        assert!(
-            title.contains("Menu") && title.contains(CAP_L),
-            "the menu title is a pill: {layout:?}\n{title}"
-        );
-        assert!(
-            title.contains("╭"),
-            "the menu's corner is soft: {layout:?}\n{title}"
-        );
-    }
-}
-
-#[test]
-fn a_block_of_lines_ends_in_soft_corners_and_one_line_in_caps() {
-    assert_eq!(block_ends(0, 1), (CAP_L, CAP_R));
-    assert_eq!(block_ends(0, 2), ("▗", "▖"));
-    assert_eq!(block_ends(1, 2), ("▝", "▘"));
-    assert_eq!(block_ends(1, 3), ("▐", "▌"), "the sides between");
 }

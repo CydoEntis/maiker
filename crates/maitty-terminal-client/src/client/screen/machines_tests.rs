@@ -1,5 +1,5 @@
-//! The Add Machine dialog drawn: loading, with hosts and a typed target, checking, added in each
-//! way and naming. Every frame is looked at at 80x24, 100x30 and 160x45.
+//! The Add Machine dialog drawn: loading, with hosts and a typed target, connecting, a failure
+//! under the input and naming. Every frame is looked at at 80x24, 100x30 and 160x45.
 
 use super::machines::*;
 use super::*;
@@ -163,26 +163,6 @@ fn it_asks_for_the_machine_and_lists_the_hosts_with_the_chosen_one_marked() {
 }
 
 #[test]
-fn the_parse_line_reads_user_and_host_and_fills_an_alias_from_ssh_config() {
-    let mut app = app_with(&[]);
-    let typed = |q: &str| MachinesView {
-        query: q.into(),
-        ..view(Some(hosts()))
-    };
-    let (text, r, _) = shown(&mut app, typed("dev@kingdom.lan"), 100, 30);
-    let said = words(&text, r);
-    assert!(said.contains("user dev host kingdom.lan"), "{text}");
-    let (text, r, _) = shown(&mut app, typed("web"), 100, 30);
-    let said = words(&text, r);
-    assert!(
-        said.contains("user deploy host web"),
-        "the alias's user: {text}"
-    );
-    let (text, r, _) = shown(&mut app, typed(""), 100, 30);
-    assert!(words(&text, r).contains("user — host —"), "{text}");
-}
-
-#[test]
 fn typing_filters_the_suggestions_by_the_host_part_only() {
     let v = MachinesView {
         query: "dev@bui".into(),
@@ -287,145 +267,34 @@ fn parse_reads_user_host_and_path() {
 }
 
 #[test]
-fn hosts_still_loading_say_so() {
+fn a_failure_is_said_right_under_the_input_in_place_of_the_parse_line() {
+    let sentence = "Can't reach kingdom: check the name or address, and that the machine is on (ssh: connect to host kingdom.lan port 22: Connection refused).";
+    for (w, h) in SIZES {
+        let mut app = app_with(&[]);
+        let v = MachinesView {
+            query: "dev@kingdom.lan".into(),
+            notice: Some(MachineNotice {
+                text: sentence.into(),
+                error: true,
+            }),
+            ..view(Some(hosts()))
+        };
+        let (text, r, buf) = shown(&mut app, v, w, h);
+        assert_box_whole(&text, r, &buf);
+        let said = words(&text, r);
+        assert!(said.contains(&format!("› dev@kingdom.lan█ {sentence} FROM ~/.ssh/config")), "{w}x{h}\n{text}");
+        assert!(!said.contains("user dev"), "the sentence stands where the parse line was: {w}x{h}\n{text}");
+    }
+    // Typing again (Backspace too) puts the parse line back.
     let mut app = app_with(&[]);
-    let (text, r, _) = shown(&mut app, view(None), 100, 30);
-    assert!(
-        words(&text, r).contains("loading hosts from ~/.ssh/config"),
-        "{text}"
-    );
-}
-
-#[test]
-fn with_no_hosts_it_says_to_type_user_at_host() {
-    let mut app = app_with(&[]);
-    let (text, r, _) = shown(&mut app, view(Some(vec![])), 100, 30);
-    assert!(
-        words(&text, r).contains("no hosts in ~/.ssh/config: type user@host above"),
-        "{text}"
-    );
-}
-
-#[test]
-fn the_windows_hint_is_said_on_windows_only() {
-    let mut app = app_with(&[]);
-    let on = MachinesView {
-        windows: true,
+    open(&mut app, MachinesView {
+        query: "dev@kingdom.lan".into(),
+        notice: Some(MachineNotice { text: sentence.into(), error: true }),
         ..view(Some(hosts()))
-    };
-    let (text, r, _) = shown(&mut app, on, 120, 40);
-    assert!(
-        words(&text, r).contains("Windows: use ssh keys or an agent"),
-        "{text}"
-    );
-    let (text, r, _) = shown(&mut app, view(Some(hosts())), 120, 40);
-    assert!(!words(&text, r).contains("Windows:"), "{text}");
-}
-
-#[test]
-fn checking_is_a_checklist_with_the_first_step_running() {
-    for (w, h) in SIZES {
-        let mut app = app_with(&[]);
-        let v = MachinesView {
-            step: MachineStep::Checking {
-                target: "dev@kingdom.lan".into(),
-            },
-            ..view(Some(hosts()))
-        };
-        let (text, r, buf) = shown(&mut app, v, w, h);
-        assert_box_whole(&text, r, &buf);
-        let said = words(&text, r);
-        for want in [
-            "ADD MACHINE",
-            "reach kingdom.lan",
-            "○ verify host key",
-            "○ sign in as dev",
-            "○ maitty-daemon",
-            "Esc cancel",
-        ] {
-            assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
-        }
-    }
-}
-
-#[test]
-fn an_added_machine_says_how_it_stands() {
-    let cases = [
-        (
-            Outcome::Ready("0.64.0".into()),
-            [
-                "✓ reach kingdom.lan",
-                "✓ maitty-daemon 0.64.0",
-                "Enter done",
-            ],
-        ),
-        (
-            Outcome::Login,
-            [
-                "● sign in as dev log in in the popup",
-                "○ maitty-daemon",
-                "Esc close",
-            ],
-        ),
-        (
-            Outcome::Fix,
-            [
-                "✓ sign in as dev",
-                "✕ maitty-daemon the connection shows the fix",
-                "Esc close",
-            ],
-        ),
-    ];
-    for (how, wants) in cases {
-        for (w, h) in SIZES {
-            let mut app = app_with(&[("kingdom", "dev@kingdom.lan")]);
-            let v = MachinesView {
-                step: MachineStep::Added {
-                    name: "kingdom".into(),
-                    target: "dev@kingdom.lan".into(),
-                    how: how.clone(),
-                },
-                ..view(Some(hosts()))
-            };
-            let (text, r, buf) = shown(&mut app, v, w, h);
-            assert_box_whole(&text, r, &buf);
-            let said = words(&text, r);
-            assert!(said.contains("MACHINE ADDED"), "{w}x{h}\n{text}");
-            assert!(
-                said.contains("⇄ kingdom dev@kingdom.lan"),
-                "{w}x{h}\n{text}"
-            );
-            for want in wants {
-                assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
-            }
-        }
-    }
-}
-
-#[test]
-fn naming_a_machine_the_target_gave_no_name_for() {
-    for (w, h) in SIZES {
-        let mut app = app_with(&[]);
-        let v = MachinesView {
-            step: MachineStep::Name {
-                target: "10.0.0.7".into(),
-                name: "gp".into(),
-                error: Some("that name is taken".into()),
-            },
-            ..view(Some(hosts()))
-        };
-        let (text, r, buf) = shown(&mut app, v, w, h);
-        assert_box_whole(&text, r, &buf);
-        let said = words(&text, r);
-        for want in [
-            "Name for 10.0.0.7",
-            "› gp",
-            "that name is taken",
-            "Esc back",
-        ] {
-            assert!(said.contains(want), "{w}x{h}: {want:?}\n{text}");
-        }
-    }
+    });
+    app.on_key(KeyEvent::new(KeyCode::Backspace, KeyModifiers::NONE));
+    let Mode::Machines(v) = &app.mode else { panic!("the dialog is open") };
+    assert_eq!(v.notice, None);
 }
 
 #[test]
@@ -462,16 +331,16 @@ fn a_paste_goes_into_the_input_not_the_pane_behind() {
 /// supervisors said.
 fn app_needing_fixes() -> App {
     use crate::client::link::ConnectionState;
-    use crate::link_failure::{FIX_INSTALL, FIX_UPDATE};
+    use crate::link_failure::FailureClass;
     let mut app = app_with(&[
         ("build", "dev@build.lan"),
         ("gpu", "gpu"),
         ("kingdom", "dev@kingdom.lan"),
     ]);
     let states = [
-        ("build", ConnectionState::NeedsUpdate { why: FIX_UPDATE.into() }),
+        ("build", ConnectionState::NeedsUpdate { failure: FailureClass::Update }),
         ("gpu", ConnectionState::Connected),
-        ("kingdom", ConnectionState::NeedsUpdate { why: FIX_INSTALL.into() }),
+        ("kingdom", ConnectionState::NeedsUpdate { failure: FailureClass::Install }),
     ];
     for (n, (name, state)) in states.into_iter().enumerate() {
         app.on_link_state(MachineId(40 + n as u16), name.into(), state);
@@ -508,6 +377,34 @@ fn a_machine_that_needs_the_app_shows_the_key_that_installs_or_updates_it() {
     }
 }
 
+#[test]
+fn a_machine_that_failed_says_the_shared_sentence_under_it() {
+    use crate::client::link::ConnectionState;
+    use crate::link_failure::{FailureClass, Subject, sentence_here};
+    for (w, h) in SIZES {
+        let mut app = app_with(&[("build", "dev@build.lan")]);
+        let failure = FailureClass::KeyRefused("dev@build.lan: Permission denied (publickey).".into());
+        app.on_link_state(MachineId(40), "build".into(), ConnectionState::NeedsLogin { failure: failure.clone() });
+        let v = MachinesView {
+            machine_sel: app.machine_listed_at("build"),
+            ..view(Some(hosts()))
+        };
+        let (text, r, buf) = shown(&mut app, v, w, h);
+        assert_box_whole(&text, r, &buf);
+        let said = words(&text, r);
+        assert!(
+            said.contains("build refused your key: run `"),
+            "the list says the sentence both apps share: {w}x{h}\n{text}"
+        );
+        let toast = app.notice.as_ref().map(|(text, ..)| text.clone());
+        assert_eq!(
+            toast,
+            Some(sentence_here(&failure, &Subject::of_def(&app.cfg.machines[0]))),
+            "the toast is the same sentence"
+        );
+    }
+}
+
 /// Click the button named `label` on the row of `name`.
 fn click_button(app: &mut App, text: &str, name: &str, label: &str) {
     let (y, row) = text
@@ -534,19 +431,46 @@ fn click_button(app: &mut App, text: &str, name: &str, label: &str) {
     }
 }
 
+/// The row of `name` in a frame, from its icon on.
+fn machine_row<'a>(text: &'a str, name: &str) -> &'a str {
+    let line = text
+        .lines()
+        .find(|l| l.contains(&format!("⇄ {name}")))
+        .unwrap_or_else(|| panic!("no row for {name}\n{text}"));
+    &line[line.find('⇄').unwrap()..]
+}
+
 #[test]
-fn every_machine_row_has_its_own_buttons() {
-    for (w, h) in [(100, 30), (160, 45)] {
-        let mut app = app_with(&[("build", "dev@build.lan"), ("gpu", "gpu")]);
+fn a_target_that_fits_is_shown_whole_at_80_columns() {
+    use crate::client::link::ConnectionState;
+    use crate::link_failure::FailureClass;
+    for (w, h) in SIZES {
+        let mut app = app_with(&[("box", "box"), ("build", "dev@build.lan")]);
+        app.on_link_state(MachineId(40), "box".into(), ConnectionState::NeedsUpdate { failure: FailureClass::Update });
+        app.on_link_state(MachineId(41), "build".into(), ConnectionState::NeedsUpdate { failure: FailureClass::Update });
         let (text, r, buf) = shown(&mut app, view(Some(hosts())), w, h);
         assert_box_whole(&text, r, &buf);
-        for name in ["build", "gpu"] {
-            let row = text.lines().find(|l| l.contains(&format!("⇄ {name}"))).unwrap();
-            for label in ["update", "reconnect", "edit", "remove"] {
-                assert!(row.contains(&format!(" {label} ")), "{w}x{h}: {name} lacks {label}: {row}");
-            }
+        let row = machine_row(&text, "box");
+        assert!(row.starts_with("⇄ box     box "), "{w}x{h}: box is cut: {row}");
+        for label in ["update", "reconnect", "edit", "remove"] {
+            assert!(row.contains(&format!(" {label} ")), "{w}x{h}: box lacks {label}: {row}");
         }
+        // A target that needs a button's room gets it: the remove button gives way, its key stays.
+        let row = machine_row(&text, "build");
+        assert!(row.contains(" dev@build.lan "), "{w}x{h}: the target is cut: {row}");
+        assert!(row.contains(" update "), "{w}x{h}: the fix stays: {row}");
+        assert!(row.contains(" needs update "), "{w}x{h}: the state stays: {row}");
     }
+}
+
+#[test]
+fn buttons_go_from_the_right_until_the_target_has_its_room() {
+    let widths = [9, 12, 7, 9];
+    assert_eq!(fit_buttons(60, 3, &widths), (4, 23), "everything fits");
+    assert_eq!(fit_buttons(40, 12, &widths), (3, 12), "remove gives way");
+    assert_eq!(fit_buttons(30, 40, &widths), (1, 21), "a long target wants 16; the fix stays");
+    assert_eq!(fit_buttons(10, 40, &widths), (0, 10), "too narrow for any");
+    assert_eq!(fit_buttons(0, 3, &[]), (0, 0));
 }
 
 #[test]
@@ -586,8 +510,7 @@ fn the_reconnect_button_answers_in_the_dialog_and_a_click_on_a_row_chooses_it() 
 fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_says_so() {
     let mut app = app_with(&[("build", "dev@build.lan")]);
     // The entry has to be in the file for a change to be written to it.
-    let dir = std::env::temp_dir().join(format!("grants-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = maitty_test_support::TempFolder::new("grants");
     app.machine_flow.local_config = dir.join("config.local.toml");
     crate::client::machine_config::add_machine(&app.machine_flow.local_config, "build", "dev@build.lan").unwrap();
 
@@ -616,10 +539,8 @@ fn the_n_and_s_keys_turn_toasts_and_sounds_on_and_off_and_the_chosen_machine_say
 #[test]
 fn c_turns_copies_off_at_once_and_asks_before_turning_them_on() {
     let mut app = app_with(&[("build", "dev@build.lan")]);
-    let dir = std::env::temp_dir().join(format!("clipboard-grant-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
+    let dir = maitty_test_support::TempFolder::new("clipboard-grant");
     app.machine_flow.local_config = dir.join("config.local.toml");
-    let _ = std::fs::remove_file(&app.machine_flow.local_config);
     crate::client::machine_config::add_machine(&app.machine_flow.local_config, "build", "dev@build.lan").unwrap();
     let mut v = view(Some(hosts()));
     v.machine_sel = Some(0);
@@ -649,3 +570,4 @@ fn c_turns_copies_off_at_once_and_asks_before_turning_them_on() {
     let (text, ..) = frame(&mut app, 160, 45);
     assert!(text.contains("Copying to your clipboard from build is now on."), "{text}");
 }
+

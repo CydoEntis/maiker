@@ -131,6 +131,39 @@ message's `*_SINCE` gate and `introduced_in` arm dead, and they were removed; `S
 `ClientMsg::introduced_in` stay, answering `COMPATIBLE_SINCE`, for the next message added inside a window. Below, the
 "came in protocol N" and "`COMPATIBLE_SINCE` stays 78" lines record when each message appeared, not a live gate.
 
+Protocol 121 added a provider (ADR 0019): `Provider::Acp`, with the agent's name in `agent` on `LaunchSettings`,
+`NativeBinding` and `ConversationSummary` (absent for every other provider), and `StartTarget::Acp { agent, cwd }`,
+which names an `[[agents]]` entry of the daemon's config and never a program. The list of conversations goes to every
+client, and a peer from before 121 cannot decode one that holds an ACP conversation, so `COMPATIBLE_SINCE` moved to
+121 and every older peer is refused (test: `a_peer_from_before_acp_is_refused_because_it_cannot_read_an_acp_conversation`).
+As with 115, the `*_SINCE` gates and `introduced_in` arms of 116 to 119 became dead and were removed; the lines below
+that name them record when each message appeared. 120 belongs to a change that landed beside this one.
+
+Protocol 122 added `StartTarget::Agent { provider, cwd, sandbox, approval_policy }`: a new Claude Code or Codex
+conversation whose program and settings folder the daemon finds on its own machine. A window starting a chat on
+another machine sends it, because it cannot know where that machine keeps either (ADR 0007); a start on this computer
+still names both (`StartTarget::Create`). A daemon from before 122 cannot decode the request, and the window would
+wait on a chat that never starts, so `COMPATIBLE_SINCE` moved to 122 (test:
+`a_peer_from_before_the_daemon_found_start_is_refused_because_it_cannot_read_one`).
+`ApprovalRequest.choice_labels` (defaulted; a test reads the shape from before it) holds a provider's own names for
+`choices`, in the same order; they pair only while the two are as long as each other.
+
+Protocol 123 added `Query::DiscardFile { term, path, tag }`: discard the uncommitted changes of the one file `path`
+(relative to the top of the repository, with `/`) in the checkout pane `term` is in. Human clients only, with the
+pane checks and the write grant of `Query::Git`. The answer is the existing `Reply::GitDone` with the same `tag`: one
+line saying what was done, or one line saying why nothing was. The daemon asks git what kind of change the path is
+and undoes that kind; the client never names it. The rules, the kinds and the typed refusals are
+`maitty_shared::discard` (`discard_file`, `DiscardError`; SECURITY, *Discarding a file's changes*), which takes its
+git and its disk as a `Checkout` so the crate does no I/O itself; `daemon/discard.rs` runs it for the daemon, and
+the desktop host runs the same function with its own git for a checkout on this computer. It is a new message with its
+own arm in `ClientMsg::introduced_in` (`DISCARD_FILE_SINCE`), so `COMPATIBLE_SINCE` stays 122: a daemon on 122 is
+never asked, and the desktop client refuses in words instead (`refuse_unless_daemon_reads`; tests:
+`a_discard_is_asked_only_of_a_daemon_that_reads_it_and_older_shapes_still_decode`,
+`a_peer_from_before_a_message_cannot_read_it`). It is never sent on a kept connection (`safe_to_ask_twice`): asked
+twice, the second would report a failure for a discard that landed. The desktop command is
+`git_discard_file(machine, folder, path, term)`: this computer's checkout is named by `folder`, another machine's by
+the pane `term`, whose answer passes `remote_repo::vet_discard_reply`.
+
 A conversation that changed is announced to the desktop app's attached clients as
 `ServerMsg::ConversationChanged { id, generation }` (`daemon/conversation/news.rs`): after each
 batch of events the daemon compares a stamp of what a `ConversationRead` would answer (history
@@ -199,6 +232,15 @@ its arm in `ClientMsg::introduced_in`); `COMPATIBLE_SINCE` stays 78 because an o
 command is `add_branch_worktree` (`maitty_desktop_client::branch_worktree`); it waits up to eleven minutes, since the
 setup hook may take ten, and says the service is from an older release instead of asking a daemon that would never
 answer. It is this computer's daemon only. Structured runtimes may not ask for it.
+
+A project heading's New worktree (`new_worktree_session(machine?, term, branch, base)`, `maitty_desktop_client::new_worktree_session`)
+asks the daemon that owns the pane: `Query::List` for the pane's workspace, then `Command::NewWorktree { ws, branch, base }`
+with no command, agent or split, so that daemon makes the worktree and opens a session in it. For a pane of another machine
+the host routes both over a request line (`Wire::new_worktree_daemon`) and takes only a `List`, cleaned like a snapshot,
+and `Ok` (`remote_chat::vet_new_worktree_reply`); a machine that takes no requests (down, needing an update, or turned
+away) is refused before anything is sent, as `<machine> is not connected`. The new session reaches the window in that
+machine's own list. Removing worktrees (`remove_worktrees`), comparing checkouts (`worktree_overlaps`) and the worktree
+manager's standing, merge and remake stay this computer's and refuse another machine's with the local-only words.
 
 Protocol 113 removes `ClientMsg::WorkflowReport` and `TermInfo.workflows` (ADR 0011). An older
 `maiker workflow report` is a one-shot connection whose frame the daemon cannot read, so that call
@@ -350,15 +392,18 @@ the window, and any other miss waits for a `list_sessions` read to confirm it (U
 that machine's sessions, and a miss of one waits for a later list of that machine, which `ask_machine_list(machine)`
 asks for (`Query::List` on its line, refused for this computer and for a machine with no line, and dropped
 within `WINDOW_LIST_ASK_EVERY`, 5 s, of the last ask of that machine it sent); its connection
-state as `machine-state` (`connecting`, `connected`, `reconnecting`, `needs-login`, `needs-update`, `unreachable`, or `refused` when a different daemon answers at its name), with `since` (epoch ms) once it is not connected and the machine's `clipboard`, `notices` and `sounds` opt-ins from its entry (all off unless it says); a notice from a machine that opted in goes to the window as `machine-notice` (`{machine, text}`, cleaned, cut and led by `[name]`) and the window shows it as a toast or, away from it, a system notification; `retry_machine(name)` dials a machine now and clears a refusal; `remove_machine(name)` deletes its entry from `config.local.toml` first and only then stops it, forgets its daemon id and tells the window with `machine-removed` (its sessions and saved layout are left alone); the commands that read a pane's files or repository (`repo_query`, `restore_snapshot`, `snapshot_restore_count`, `new_worktree_session`, `pane_terminal_screen`) take the pane's `machine` and refuse another machine's with the terminal app's words (`<Feature> is local-only in v1: the files are on <machine>, not on this computer.`), as the window does before it asks (`apps/gui/src/lib/localOnly.ts`); `set_machine_grant(name, grant, on)` allows or stops a machine's `clipboard` or `notices` (written to its entry in `config.local.toml` first, then applied at once; the new state follows as `machine-state`); text an allowed machine asks to copy arrives as `machine-clipboard` (`{machine, text}`); `start_session_on_machine(machine, folder)` starts a terminal session in a typed folder of another machine (one that is not there opens in its home folder); `list_ssh_hosts` lists the `~/.ssh/config` hosts that are not machines yet; `add_machine(target, name?)` checks the target, looks at the machine over ssh without asking anyone anything (12 s at most; `cancel_add_machine` ends it), writes the entry only when that held up, and starts dialling it (a login that needs a person opens ssh in a session on this computer, and the window dials again when it closes); `list_machines_overview` gives a window that starts late each machine's last state and
+state as `machine-state` (`connecting`, `connected`, `reconnecting`, `needs-login`, `needs-update`, `unreachable`, or `refused` when a different daemon answers at its name), with `since` (epoch ms) once it is not connected and the machine's `clipboard`, `notices` and `sounds` opt-ins from its entry (all off unless it says); a notice from a machine that opted in goes to the window as `machine-notice` (`{machine, text}`, cleaned, cut and led by `[name]`) and the window shows it as a toast or, away from it, a system notification; `retry_machine(name)` dials a machine now and clears a refusal; `remove_machine(name)` deletes its entry from `config.local.toml` first and only then stops it, forgets its daemon id and tells the window with `machine-removed` (its sessions and saved layout are left alone); the commands that read a pane's files or repository (`repo_query`, `restore_snapshot`, `snapshot_restore_count`, `pane_terminal_screen`) take the pane's `machine` and refuse another machine's with the terminal app's words (`<Feature> is local-only in v1: the files are on <machine>, not on this computer.`), as the window does before it asks (`apps/gui/src/lib/localOnly.ts`); `set_machine_grant(name, grant, on)` allows or stops a machine's `clipboard` or `notices` (written to its entry in `config.local.toml` first, then applied at once; the new state follows as `machine-state`); text an allowed machine asks to copy arrives as `machine-clipboard` (`{machine, text}`); `start_session_on_machine(machine, folder)` starts a terminal session in a typed folder of another machine (one that is not there opens in its home folder); `list_ssh_hosts` lists the `~/.ssh/config` hosts that are not machines yet; `add_machine(target, name?)` checks the target, looks at the machine over ssh without asking anyone anything (12 s at most; `cancel_add_machine` ends it), writes the entry only when that held up, and starts dialling it; it answers `added`, `login` (written, but ssh could not log in alone) or `failed` (nothing written: unreachable, or a changed host key), the last two with the shared sentence (`message`), the failure's kind and its `fix_command`, or `needs-name` or `cancelled`, and rejects with words only for a request it refuses before looking (a login that needs a person opens ssh in a session on this computer through `open_machine_login`, and the machine connects once it is done); `list_machines_overview` gives a window that starts late each machine's last state and
 snapshot. The window names a machine's terminal sessions `build/t12` (the machine's name, so a saved
 layout survives a restart; this computer's stay `t12`) and passes the number the host gave the
 machine (`machine`) with each command, only for a pane of another machine. Files, Changes, Find,
-worktrees, file drops and system notices are for this computer's panes only. A desktop
+managing worktrees (except New worktree off a pane, which `new_worktree_session` sends to the pane's machine), file drops and system notices are for this computer's panes only. A desktop
 protocol-mismatch restart must recheck the exact local protocol before stopping
 an older daemon and must refuse to downgrade a newer one. It stops an older daemon that
 owns sessions only after the user confirms, and only when those sessions are saved on disk
-(the next daemon restores them); one that isn't saving them is left running.
+(the next daemon restores them); one that isn't saving them is left running. On another machine the
+same refusal comes back from `machine update`; the window then offers **Restart anyway**, which asks every time
+(`restart-machine-service`) and runs `<remote_cmd> kill-server` there over ssh (`restart_machine_service`), ending
+those sessions. The far side's own app stops a service too old to be asked by its process.
 
 ## Project-specific: response and error shapes
 
@@ -417,10 +462,66 @@ it, with `Command::AnswerHelpers { term, choice }`: `Allow` (this session may fr
 `Always` (and every session in its project; kept in `helper-projects.json` in Maiker's data
 folder), or `No` (its starts are refused for the rest of its run). A pane may not send it, and
 it is an error unless the pane is asking. `always` and `never` skip the question; `never`
-refuses with an error the agent can read. `sessions.helpers_at_once` (2, 3 or 4) bounds the
-helpers one session has working at once; a start past it is refused with what to do. A
+refuses with an error the agent can read. `sessions.helpers_at_once` (2, 4 or 8; default 4)
+bounds the helpers one session has working at once; consent comes first, and a start past the
+limit is not refused but waits for a free slot (*A helper waiting for a slot*, below). A
 person's shell (no agent in the pane) is never asked. Sessions saved before a restart keep
 `started_by`; any fleet or commander field in a saved file is ignored on load.
+
+**A helper is named by its task** (`helpers::task_title`, `Daemon::name_after_task`). When a
+helper's command starts a known agent with a task quoted at its end (as `maiker_start` builds it),
+the daemon names it as it starts: the task's first non-blank line, whitespace collapsed, cut on a
+word boundary to 80 characters with `…` after it. That is its first prompt, which `TermInfo.name`
+falls back to (and is saved with the session), and its `TermInfo.summary`, which the desktop app
+titles a row by: an agent given its task on its command line need not report it as a prompt, and
+the row would read "New session". The agent's own reports replace both as for any session. A
+command with no quoted task names nothing, and what a person starts is never named here.
+
+**A helper waiting for a slot** (`daemon/helper_queue.rs`). A helper counts as working while
+its status is Working or it is younger than `HELPER_SETTLES` (`Daemon::busy_helpers`); a waiting
+one does not count. A start past the limit, or while its starter has others waiting, is answered
+as a success: the pane is made at once as a plain shell in its folder (with the worktree, when
+one was asked for), so the session number the starter is told stays its own, and the daemon
+holds its command. The daemon itself sets the row to Working with
+`TermInfo.waiting_for_slot` (one function, `helper_queue::waiting_for_slot`, makes the flag) and
+`status_why` and `summary` reading `waiting for a free slot: 2 of 3 in line, 4 helpers at once is
+the limit`, which is what the starter reads as `on` and `status_why` in `maiker_list` (the
+`maiker_start` reply still says "started … as session N"); its name is already its task, and its
+summary becomes the task when it starts. Nothing read off that pane (hooks, the
+screen, the process scan) changes its status, it never rings and it is never quiet. On each tick,
+and at once after `ReloadConfig`, the daemon starts the oldest waiting helper of each starter that
+has room, one at a time in order; lowering the limit stops nothing. The start types into the
+pane's shell the same line `Daemon::spawn` would have run: the account wrapper around the taught
+command, built from the held command as the starter sent it (`maiker_start` quoted the task for
+the shell then; nothing new is put into the line here). Several lines go in as one bracketed
+paste, or joined into one line when the shell does not take one. A command with any other control
+character is never held: past the limit it is refused as before. At most `MOST_WAITING` (12) wait
+per starter; past that a start is refused with what to do. A start whose worktree was already made
+is never refused. Text an agent sends a waiting helper is kept (up to 64 KiB, an error past it) and
+typed once its agent takes input, as `SendWhenReady` is; a person's own keys reach the shell.
+Closing a waiting helper takes it out of the line. When its starter is gone (closed, or not back
+after a restart), each waiting helper is cancelled: its pane closes and its unused worktree is
+cleaned up, and any text held for it is dropped (logged). The hold is saved with the session
+(`SavedPane.waiting`, absent from an older file, which loads as not waiting): after a restart the
+pane comes back as a shell, still waiting, and the hold is cleared and saved the moment it starts,
+so it never starts twice. A chat started as a helper (`StartConversation` from a pane) is not
+held: past the limit it is refused as before.
+
+**A chat's helpers** ([ADR 0016](adr/0016-a-chat-asks-before-it-starts-helpers.md), proposed). A
+start from a connection that authenticated as a chat's current runtime (`Hello.structured`) is that
+chat's helper start, under the same setting, limit and `helper-projects.json`. Only `NewWorkspace`
+and `NewWorktree` with a command are let through; a bare shell and every other descendant command
+are refused ("A chat may start only helpers"), and all of them need the `start` grant in `[mcp]
+grants`. The request is held on the conversation: `ConversationSummary.helper_ask` (`Vec<String>`,
+`#[serde(default)]`) lists the tasks and its `status` reads Blocked while it is not empty. Only you
+answer it, with `Command::AnswerChatHelpers { conversation, choice }` (protocol 120,
+`CHAT_HELPERS_SINCE`; refused from a pane and from a chat's runtime, and an error unless that chat
+asks). The helper's `TermInfo.started_by_chat` (`#[serde(default)]`) names the chat, never together
+with `started_by`, and is saved with the session; a helper whose chat is gone from the saved
+conversations comes back with neither. A chat's runtime that is no longer current starts nothing.
+`COMPATIBLE_SINCE` stays 115: an older daemon is never sent the command and an older client reads
+neither field (tests: `a_peer_from_before_a_message_cannot_read_it`, `every_message_is_as_old_as_the_window`, the summary's
+old-shape decode).
 
 **Pull requests.** The daemon polls `gh` off the event loop for each pane's branch, or the URL
 set by `Command::LinkPr { term, url }`; `None` returns to branch discovery. A pane may only link
@@ -691,6 +792,13 @@ background storage lock. Attachments never submit independent cache revisions.
 See [stack/claude-code-cli.md](stack/claude-code-cli.md) for the Claude CLI
 process boundary and event/approval handling rules.
 
+Between the daemon and a provider the flow is the provider contract
+([ADR 0018](adr/0018-one-provider-contract-with-no-io.md)): a client's command becomes a typed
+`runtime::Rpc`, the provider's adapter turns it into its own wire form, and what the provider
+reports comes back as typed `ProviderEvent`s that one place in the daemon turns into status and
+history. No provider frame is forwarded to a client, and a client names a provider only by the
+`Provider` in a summary.
+
 **An agent in a pane has a read-only conversation** ([ADR 0003](adr/0003-status-and-conversation-trust.md)),
 with no protocol change. For an owned desktop pane whose hook-verified agent is `claude` or `codex` and
 whose hook gave a session id (and, for Claude, its transcript path), the snapshot's `conversations` holds
@@ -770,9 +878,19 @@ test) and `SettingKey::BypassOff`, which a client sends only to a daemon at `BYP
 later (`ClientMsg::introduced_in`), so `COMPATIBLE_SINCE` stays 115. It also adds `SharedSettings.update_machines`
 (defaulted to true, the setting's default; a test) and `SettingKey::UpdateMachines`, sent only from
 `UPDATE_MACHINES_SINCE`.
+Protocol 123 adds `SharedSettings.helpers` (`HelpersMay`: `ask`, `always` or `never`; absent reads as `ask`) and
+`SharedSettings.helpers_at_once` (a number; absent reads as 4, `HELPERS_AT_ONCE_UNSAID`, which a test holds equal to
+the config default), both defaulted (a test decodes the shape from before them), and `SettingKey::Helpers` and
+`SettingKey::HelpersAtOnce`, each taking `SettingValue::Text` (`"always"`, `"8"`) that the daemon checks against
+`HELPERS_MAY` and `HELPERS_AT_ONCE` before the file is opened. A client sends them only to a daemon at
+`HELPER_SETTINGS_SINCE` (`ClientMsg::introduced_in`); the desktop app's `set_newer_shared_setting` reads the running
+daemon's version first and refuses an older one in words, and `set_shared_setting` refuses those two keys. It also
+adds the defaulted `TermInfo.waiting_for_slot` (a test decodes the pane from before it). `COMPATIBLE_SINCE` stays 122:
+an older daemon is never sent the keys, and an older client reads a waiting helper as the working pane its status
+says.
 
-Protocol 119 adds four things, none of which an older peer is ever sent, so `COMPATIBLE_SINCE` stays 115 (tests:
-`what_119_added_is_asked_and_sent_only_where_it_is_read`, `what_118_sent_about_clones_and_sign_in_still_decodes`):
+Protocol 119 adds four things, none of which an older peer was ever sent, so `COMPATIBLE_SINCE` stayed 115 then (test:
+`what_118_sent_about_clones_and_sign_in_still_decodes`):
 
 - `Reply::CloneProgress { tag, phase, percent }` (`CLONE_PROGRESS_SINCE`), sent any number of times before
   `Reply::Cloned`. The daemon now runs `git clone --progress` and reads git's stderr, which rewrites its progress
@@ -798,8 +916,8 @@ Protocol 119 adds four things, none of which an older peer is ever sent, so `COM
   `createFolderBranch`, `checkoutRemoteBranch`). The older `git_branches` host command still reads this computer's
   local branches directly. Rules: [SECURITY](SECURITY.md#project-specific-a-folders-branches-and-what-a-machine-is).
 - `Query::MachineFacts { tag }` with `Reply::MachineFacts { tag, facts }` (`MACHINE_FACTS_SINCE`): host name, system,
-  architecture, cores and the agent programs installed with their versions. Safe to ask twice. The host raises a
-  `machine-facts` event `{machine, tag, answer}`; `apps/gui/src/api/machineFacts.ts` wraps it.
+  architecture, cores and the agent programs installed with their versions. Safe to ask twice. No client asks it
+  now (the desktop app's "Machine added" page that showed it is gone); the daemon still answers it.
 
 Protocol 76 adds `Provider::Gemini` (a conversation's provider on the wire). A Gemini CLI agent in a pane gets the same read-only, transcript-following conversation as Claude and Codex (`follow_transcript.rs`, `Format::Gemini`); the file is the one its hook's `transcript_path` names, and its name must start `session-` and end with the first 8 characters of the hook's session id. Gemini has no structured runtime: starting one is refused. A peer that predates the variant cannot decode it (a test decodes the old provider names).
 
@@ -894,8 +1012,8 @@ is the person's explicit Overwrite after that answer). The path rules, the 256 K
 checked again just before the rename, and the permissions of the old file are kept. A save that cannot be written is an
 error with the system's reason, never a quiet success. Only a human client can send it. Both are new messages: an
 older peer is never sent them (`ClientMsg::introduced_in` answers `FILE_EDIT_SINCE`, 116), so `COMPATIBLE_SINCE` stays
-115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Drawn and
-Source. The pinned bytes of `Saved` and `ChangedOnDisk` are in `a_file_write_is_asked_only_of_a_daemon_that_knows_it`.
+115, and the window offers Edit only to a daemon that answers the stamped read; against an older one it shows Preview and
+File. The pinned bytes of `Saved` and `ChangedOnDisk` are in `answers_keep_their_pinned_wire_shape`.
 For a pane on another machine the window sends `Tree`, `FileStamped` (markdown names only) and `SaveFile` (markdown only) to
 that machine's daemon on a request line (ADR 0014), each answer vetted to the kind that was asked
 (`remote_repo::vet_repo_reply(&request, reply)`, `vet_save_reply`); no message is added or changed, so `PROTOCOL_VERSION`
@@ -1007,7 +1125,7 @@ plan limit does not end it: the daemon continues that agent itself. Snoozing nev
 clients display it. Only a person snoozes: an agent pane's connection is refused. The command has its own `introduced_in` arm
 (`SNOOZE_SINCE`); `COMPATIBLE_SINCE` stays 78, since an older daemon is simply not asked and an older client reads
 the pane without the field.
-The desktop app sends it through the `snooze_terminal_session { machine, term, until }` command (`PaneCommand::Snooze`).
+The desktop app does not snooze a pane.
 
 Protocol 95 adds `Query::CloneRepo { address, parent, tag }` and `Reply::Cloned { tag, outcome }`
 (`CLONE_SINCE`; `COMPATIBLE_SINCE` stays): `git clone` of `address` into a new folder, named after the
@@ -1203,6 +1321,31 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 123 adds `Query::PullRequests { folder, fresh, tag }` with `Reply::PullRequests { tag, answer }`
+(`PULL_REQUESTS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an
+older daemon is never asked and an older client never asks). `folder` is absolute or starts with `~`,
+like `Query::FolderGit`, and needs no pane. `answer` is a `GitHubAnswer<ProjectPulls>`: `NotInstalled`,
+`NotSignedIn`, `Failed(one line)`, or `Listed` of `ProjectPulls::NotOnGitHub` (the folder is in no
+repository, or in one with no remote on github.com: not a failure) or `ProjectPulls::Open(PullRequestList)`.
+A `PullRequestList` is the signed-in `login`, at most `PULL_REQUESTS_MAX` (50) `items` in `gh`'s order
+and `more`; each `ProjectPr` has `number`, `url`, `title`, `author`, `branch`, `draft`, `checks`
+(`PrChecksState`: `None`, `Running`, `Failed`, `Passed`), `review` (`PrReview`), `conflicting`, `mine`,
+`review_requested`, `needs_you` and `updated_at`. **The daemon decides `needs_you`**
+(`daemon/pr_list.rs`): a review is asked of the signed-in account itself, or the pull request is its
+own and a check failed or a reviewer asked for changes. A client shows and counts it and never works it
+out. Human clients only. The daemon runs `gh auth status`, then one `gh pr list --state open --limit 51
+--json …` in the folder, off the event loop, stopped after `PULL_REQUESTS_LIMIT_SECS` (30). It asks only
+when a client does, keeps each folder's list for 60 seconds (`fresh` asks past it, for a client that has
+just opened a pull request), answers every ask made while `gh` is listing a folder from that one call,
+keeps only lists (so a machine that has just signed in is asked again at once), and after a rate limit
+answers `Failed` without calling `gh` for 10 minutes, doubling up to 30. From another machine the
+answer is cleaned (`remote_policy::vet_pull_requests_reply`, and `vet` on the long line). The desktop
+host asks through `pull_requests(machine, folder, fresh)`, on a request line
+(`maitty_desktop_client::pull_requests`): this computer's daemon is refused in words when it is older
+than the question, and another machine's is on this version or not used. The window reads one flat
+answer (`state`: `listed`, `not-installed`, `not-signed-in`, `not-on-github` or `failed`; `why`;
+`listed`) in `apps/gui/src/api/pullRequests.ts`. When the window asks is in UI.md, *Pull requests*.
+
 Protocol 70 adds `Query::UsageReport { period }` (`day`, `week` or `month`; rolling windows
 ending today, UTC) and `Reply::UsageReport`, answered from the daemon's usage store
 ([ADR 0009](adr/0009-usage-is-provider-reported-never-estimated.md)): totals, one entry per
@@ -1264,6 +1407,15 @@ current generation (ADR 0010; Codex's `subAgentActivity` items). It is display o
 status. It is a defaulted field, empty from an older daemon, so it needs no `PROTOCOL_VERSION` bump;
 a test decodes the old shape.
 
+`ConversationSummary.capabilities` is what the conversation's provider can do, for a chat the
+daemon runs. Each adapter states its own once (`maitty_provider_codex::capabilities`,
+`maitty_provider_claude::capabilities`) and the daemon's registry reports it; `steer` is true only
+while the running Codex says it takes a message into a turn. It is absent for a conversation
+the daemon only follows and from an older daemon, and a client then falls back to what it knows
+about the agent (the window: `agentAbilities.ts`). It is a defaulted field that is left out when
+absent, so it needs no `PROTOCOL_VERSION` bump; a test decodes the old shape. The window reads
+`steer` to say what Send now does, and treats a shape it cannot read as no report.
+
 Protocol 65 removes the handoff between chat and terminal
 (`ConversationHandoffToNative`, `ConversationHandoffToChat`): a session is a chat
 or a terminal session from the moment it starts. It adds the human-only
@@ -1275,8 +1427,7 @@ chat in either puts it away in both. Closing a chat is not stopping it: an archi
 conversation keeps running in the daemon, and a client lists it only under its own
 "archived" view. A title is trimmed, stripped of control characters and capped at 80
 characters (`clean_title`); an empty one clears it, and each client then words the session
-itself. Clients keep no copy of either in browser or file storage, except the browser
-preview, which has no daemon.
+itself. Clients keep no copy of either in browser or file storage.
 It also adds terminal access keyed by the pane, for terminal sessions that have no
 conversation: the human-only `TerminalInput` and `TerminalResize` commands and the
 `TerminalScreen` and `TerminalReplay` queries. They follow the same limits as the
@@ -1311,8 +1462,9 @@ environment claims and rejected/stale handshakes cannot become human callers.
 Every incoming request rechecks the live owner and configured MCP grants;
 structured callers have no pane self exemption or human-only approval authority.
 Granted list/read/send workflows remain available under their respective grants.
-Structured descendants are refused until conversation-owned helper consent is
-supported; ordinary native helper behavior is unchanged.
+A structured runtime may start helpers only, under the conversation's own helper
+consent (*A chat's helpers*, above); every other descendant is refused. Ordinary
+native helper behavior is unchanged.
 
 Before creating/resuming a thread, the actor reads effective provider config for
 the selected cwd on its own initialized connection. Supported shell policy retains
@@ -1429,15 +1581,47 @@ that ends sooner counts as a failure, so a line turned away as soon as it is mad
 as fast as it ends.
 
 **Failure classes** come from `link_failure::classify`, from structured signals: the error's
-type (`OtherVersion` is `NeedsUpdate`), ssh's exit status, and whether the far side ever sent
-its stream marker or a frame. Exit 127 is `NeedsUpdate` with the install text. Exit
-`NO_DAEMON_EXIT` (74) is `Unreachable` with the start-it text. Exit 255 with nothing received
-and one of three fixed tokens in stderr (`Permission denied`, `Host key verification failed`,
-`Too many authentication failures`) is `NeedsLogin`: the only place ssh's words are read.
-Everything else is `Unreachable` with ssh's last stderr line, control characters removed and
-cut to 200 characters. The fix text of each class is one constant in `maitty-machines` (`link_failure.rs`)
-(`FIX_LOGIN`, `FIX_UPDATE`, `FIX_INSTALL`, `FIX_NO_DAEMON`); `FIX_UPDATE` and `FIX_INSTALL` name
-`maiker machine update <name>` (and `--install`), with `<name>` as written, one text for every machine.
+type (`OtherVersion` is `Update`, or `UpdateHere` when the far side is newer), ssh's exit status, and
+whether the far side ever sent its stream marker or a frame. Exit 127 is `Install`. Exit
+`NO_DAEMON_EXIT` (74) is `NoDaemon`. Exit 255 with nothing received is read for a few fixed tokens,
+the only place ssh's words are read: `REMOTE HOST IDENTIFICATION HAS CHANGED` is `HostKeyChanged`
+(with the host as `known_hosts` names it, from ssh's own `ssh-keygen -R` line when it is a plain
+host), and only that banner means the key changed; `Host key verification failed` without it is
+`HostKeyUnknown`, a key ssh has never seen that the person's own `StrictHostKeyChecking=yes` (kept,
+ADR 0017) or an ssh too old for `accept-new` refused (ssh adds `No <type> host key is known for
+<host>`). Both are logins (`is_login`): the machine waits for a person. `Permission denied` or `Too many authentication
+failures` is `NeedsPerson` when the key already worked (`partial success`) or the methods ssh lists
+hold no `publickey`, else `KeyRefused`. Everything else is `Unreachable` with ssh's last stderr
+line, control characters removed and cut to 200 characters. The connection state carries the class
+itself (`ConnectionState::NeedsLogin`, `NeedsUpdate` and `Unreachable` hold a `FailureClass`;
+`ConnectionState::failure`), and a refusal by daemon id is `Refused`.
+
+**Failure sentences.** `link_failure::sentence(failure, subject, os)` is the only place a failure is
+worded: one sentence that names the machine and gives the exact fix, never an internal part of the
+app (no helper, probe or daemon), and never an offer to accept a changed host key. `Subject` is the
+machine's name, target and port (`Subject::of` a `Machine`, `Subject::of_def` a `MachineDef`);
+`ClientOs` picks the fix for the system the person types on (`ssh-copy-id` on Linux and macOS, the
+PowerShell line that does the same on Windows). `HostKeyChanged` gives `ssh-keygen -R '<host>'` after
+confirming the change; `HostKeyUnknown` gives `ssh -o StrictHostKeyChecking=ask [-p <port>] <target>`
+to run once in a terminal, check the fingerprint and answer yes (the same on Windows; on the command
+line the option comes before the person's config, so ssh asks where their config would refuse), and
+never names `ssh-keygen` or a changed key. `RefusingConnections` is a machine that took the
+connection and hung up before ssh could sign in: ssh's last line is `Connection closed by <host> port
+<n>` or `Connection reset by <host> port <n>`, with nothing before it but ssh's
+`kex_exchange_identification:` line, which is how sshd's `MaxStartups` and `PerSourcePenalties`
+(OpenSSH 9.8+) read from the client. Its sentence says the machine may be refusing new connections for a
+while, after failed sign-ins or too many at once, to wait a few minutes and try again, and to check its
+sshd and fail2ban settings if it lasts. What can't be told apart stays `Unreachable`: a firewall ban (how
+fail2ban usually bans) refuses or drops the connection like a machine that is off; a hang-up named
+`UNKNOWN port 65535` is a proxy's or jump host's, which also hangs up when the machine behind it is down;
+and a hang-up after other lines (a host key added) got past the door. Its dials carry on like an
+unreachable machine's (a redial that meets it counts as a reconnect blip), and adding a machine that
+refuses adds nothing, like one that can't be reached. `fix_command` is the one command a sentence names,
+for a Copy button. The terminal app (the Machines list, its toasts, the CLI's connect errors,
+`doctor`) and the desktop app (`MachineState.why` with `failure` and `fix_command`; the add outcomes'
+`message`) show these sentences and write none of their own; `doctor` only puts the two numbers before
+the sentence for a version or protocol that differs (`0.58.1 there, 0.60.0 here. …`). `is_failure_sentence` tells such a
+sentence from a machine's other words, for MCP's `unreachable` error code.
 
 **Custom transport.** A machine with `via` is reached by running the user's program
 (`Route::Command`, `ssh_command::command_argv`, both in `maitty-machines`) in place of ssh: the same pipes, stream marker skipping,
@@ -1454,7 +1638,7 @@ on every retry of a failed first dial, and after an explicit `Command::Retry` (t
 dialog's retry, also after a refusal). The redials after an established line ended (stalled or
 closed) run `<remote_cmd> proxy --attach-only` (built in `maitty-machines`' `ssh_command.rs`): if no daemon runs
 there, the proxy exits `NO_DAEMON_EXIT` before writing anything, and the machine is `Unreachable`
-with `FIX_NO_DAEMON` ("retry to start it there") until a person retries, so a dropped link never
+with `NoDaemon` ("try again to start it there") until a person retries, so a dropped link never
 brings back a daemon the user stopped. `Machine::from_def` is attach-only by default, which is
 what the CLI's `--on`, MCP and `doctor` use: none of them starts a remote daemon.
 

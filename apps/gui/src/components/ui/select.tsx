@@ -31,7 +31,8 @@ function SelectTrigger({ className, children, ...props }: React.ComponentProps<t
 
 function SelectContent({ className, children, container, position = "popper", ...props }: React.ComponentProps<typeof SelectPrimitive.Content> & { container?: HTMLElement | null }) {
   return (
-    <SelectPrimitive.Portal container={container}>
+    // Inside the app by default, where the theme's tokens and the float material are scoped.
+    <SelectPrimitive.Portal container={container ?? document.querySelector<HTMLElement>(".mx-app")}>
       <SelectPrimitive.Content
         data-slot="select-content"
         position={position}
@@ -58,7 +59,7 @@ function SelectItem({ className, children, text, ...props }: React.ComponentProp
   return (
     <SelectPrimitive.Item
       data-slot="select-item"
-      className={cn("mx-menu-row relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 px-1.5 text-[12.5px] outline-hidden select-none focus:bg-hover", className)}
+      className={cn("mx-menu-row relative flex min-h-10 cursor-default items-center gap-2.5 rounded-lg py-1.5 px-1.5 text-[12.5px] outline-hidden select-none focus:bg-(--float-hover)", className)}
       {...props}
     >
       <SelectPrimitive.ItemText className="sr-only">{text ?? ""}</SelectPrimitive.ItemText>

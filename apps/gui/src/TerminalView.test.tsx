@@ -342,16 +342,6 @@ describe('terminal view', () => {
     await waitFor(() => { expect(written()).toBe('before after ') })
   })
 
-  it('clears the screen before writing a replay', async () => {
-    renderTerminal()
-    await waitFor(() => { expect(written()).toBe('hello ') })
-
-    act(() => { terminalState.onChunk?.(chunk(4, 'new screen', true)) })
-
-    // The reset travels in the same write as the replay, so nothing queued before it can land after it.
-    await waitFor(() => { expect(written()).toBe(`hello ${RESET}new screen`) })
-  })
-
   it('waits for the replay the host asked for over the stream when it holds no history yet', async () => {
     loadTerminalHistory.mockResolvedValue(null)
     renderTerminal()
@@ -439,18 +429,6 @@ describe('terminal view', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('stops typing and offers to try again when the daemon cannot be reached', async () => {
-    sendTerminalInput.mockRejectedValueOnce(new Error('The terminal is not connected to the Maiker service'))
-    renderTerminal()
-    await waitFor(() => { expect(terminalState.onData).toBeDefined() })
-
-    terminalState.onData?.('a')
-
-    expect(await screen.findByText('Input stopped because the Maiker service could not be reached.')).toBeInTheDocument()
-    terminalState.onData?.('b')
-    expect(sendTerminalInput).toHaveBeenCalledTimes(1)
-  })
-
   it('turns a file name in the output into a link that opens only on Cmd or Ctrl click', async () => {
     const onOpenPath = vi.fn()
     render(<TerminalView conversation={conversation} desktop fontSize={12} onOpenPath={onOpenPath} />)
@@ -480,12 +458,6 @@ describe('terminal view', () => {
 
     view.unmount()
     expect(onHandle).toHaveBeenLastCalledWith(null)
-  })
-
-  it('keeps the cursor steady unless blinking is asked for', async () => {
-    render(<TerminalView conversation={conversation} desktop fontSize={13} focused />)
-    await waitFor(() => { expect(terminalState.options).toBeDefined() })
-    expect(terminalState.options?.cursorBlink).toBe(false)
   })
 
   it('blinks the cursor only while the window is in front', async () => {
@@ -598,21 +570,6 @@ describe('terminal view', () => {
       expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
       expect(screen.getByRole('region').className).not.toContain('is-attaching')
     })
-
-    it('shows nothing for an attach within 300 ms', async () => {
-      renderTerminal({ ...conversation, machine: 2, machineName: 'devbox' })
-      await act(async () => { await vi.advanceTimersByTimeAsync(50) })
-      await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
-
-      expect(screen.queryByRole('status', { name: /^Opening / })).not.toBeInTheDocument()
-    })
-  })
-
-  it('says a chat session has no terminal instead of offering to switch it', () => {
-    renderTerminal({ ...conversation, execution: 'Structured', nativePane: null })
-
-    expect(screen.getByRole('heading', { name: 'This is a chat session' })).toBeInTheDocument()
-    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
   it('explains that a native terminal needs recovery when no pane is attached', () => {

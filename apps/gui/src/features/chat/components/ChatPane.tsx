@@ -1,13 +1,13 @@
 import { MessageSquare } from 'lucide-react'
 import { noChatReason, type ChatAvailability } from '@/features/workspace/model/chatView'
-import { Button } from '@/components/ui/button'
 import type { OpenFile } from '../openFile'
 import type { ChatItemContext } from './ChatItems'
 import type { PermissionAsk } from '@/data/preview'
-import type { SessionStatus } from '@/features/workspace/model/session'
+import type { SecretAsk, SessionStatus } from '@/features/workspace/model/session'
 import type { PaneQueue } from '../useChatComposer'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { ChatSession, type WindowActions } from './ChatSession'
+import type { HelperAsk } from './QuestionTray'
 import type { SessionPlace } from './SessionBar'
 import type { EndedActions } from './Composer'
 import type { SessionUsage } from '../usageStrip'
@@ -32,6 +32,11 @@ export type ChatPaneProps = {
   asking?: string
   /** The permission prompt the agent's hook says the pane is stopped on. */
   ask?: PermissionAsk | null
+  /** The helpers the session waits on the person to allow (`ChatSession`). */
+  helperAsk?: HelperAsk | undefined
+  /** The secrets the session's agent asked for, and the machine it is on (`ChatSession`). */
+  secretAsks?: readonly SecretAsk[]
+  machine?: number
   /** The session's id, so what is typed before its agent is ready is kept for it. */
   sessionId?: string
   /** The pane's live status, from the sidebar's source. */
@@ -46,10 +51,6 @@ export type ChatPaneProps = {
   process: string
   /** The computer is connected to the daemon; starting an agent types into the shell. */
   online: boolean
-  /** Shows the session's terminal log over this chat for a moment, without changing the app's view; absent for a chat session, which has none. */
-  onShowLog: () => void
-  /** False for a chat session (ADR 0003): the agent has no terminal, so nothing here points to one. */
-  hasTerminal?: boolean
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage | undefined
   /** A subagent whose own chat shows instead of the session's, and the way back. */
@@ -100,10 +101,12 @@ export function ChatPane(props: ChatPaneProps) {
             paneQueue={props.paneQueue}
             ask={props.ask ?? null}
             asking={props.asking ?? ''}
+            helperAsk={props.helperAsk}
+            {...(props.secretAsks === undefined ? {} : { secretAsks: props.secretAsks })}
+            {...(props.machine === undefined ? {} : { machine: props.machine })}
             subagent={props.subagent ?? null}
             {...(props.subagents === undefined ? {} : { subagents: props.subagents })}
             {...(props.usage === undefined ? {} : { usage: props.usage })}
-            {...(props.hasTerminal === false ? {} : { onShowTerminal: props.onShowLog })}
             {...(props.onBackToMain === undefined ? {} : { onBackToMain: props.onBackToMain })}
             problem={props.problem ?? null}
             place={props.place}
@@ -119,7 +122,7 @@ export function ChatPane(props: ChatPaneProps) {
           />
         )
         : availability.kind === 'no-events' && props.sessionId !== undefined
-          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} onShowLog={props.onShowLog} {...(props.hooked === undefined ? {} : { hooked: props.hooked })} hookProblem={props.hookProblem ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
+          ? <StartingChat agent={availability.agent} sessionId={props.sessionId} {...(props.hooked === undefined ? {} : { hooked: props.hooked })} hookProblem={props.hookProblem ?? null} {...(props.paneStatus === undefined ? {} : { paneStatus: props.paneStatus })} {...(props.asking === undefined ? {} : { asking: props.asking })} {...(props.typeInto === undefined ? {} : { typeInto: props.typeInto })} />
           : <NoChat {...props} availability={availability} />}
     </section>
   )
@@ -127,8 +130,8 @@ export function ChatPane(props: ChatPaneProps) {
 
 type NoChatProps = ChatPaneProps & { availability: Exclude<ChatAvailability, { kind: 'ready' }> }
 
-/** A session that has no chat: why, what runs here, and the way to read its terminal log. */
-function NoChat({ availability, process, onShowLog }: NoChatProps) {
+/** A session that has no chat: why, and what runs here. It is a terminal, shown in the Terminal view (ADR 0020). */
+function NoChat({ availability, process }: NoChatProps) {
   return (
     <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
       <div className="flex w-full max-w-[420px] flex-col items-center gap-3 text-center">
@@ -138,7 +141,6 @@ function NoChat({ availability, process, onShowLog }: NoChatProps) {
         <h2 className="m-0 text-[15px] font-semibold text-fg">Chat view is for agent sessions</h2>
         <p className="m-0 text-[13px] leading-relaxed text-fg2">{noChatReason(availability)}</p>
         <p className="m-0 font-mono text-[12px] text-dim">Running here: {process}</p>
-        <Button type="button" size="sm" onClick={onShowLog}>Show terminal log</Button>
       </div>
     </div>
   )

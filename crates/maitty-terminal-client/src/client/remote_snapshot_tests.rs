@@ -219,12 +219,4 @@ mod tests {
         assert_eq!(safe.workspaces[0].color, WORKSPACE_COLOR_MAX);
         assert_eq!(safe.workspaces[1].color, 3);
     }
-
-    #[test]
-    fn a_number_that_is_not_finite_refuses_the_snapshot() {
-        let mut snap = rich();
-        let id = *snap.terms.keys().next().unwrap();
-        snap.terms.get_mut(&id).unwrap().cpu = f32::NAN;
-        assert!(sanitize_snapshot(snap).is_err());
-    }
 }

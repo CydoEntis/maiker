@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "maiker"
-version = "0.81.0"
+version = "0.82.0"
 dependencies = [
  "maitty-shared",
  "maitty-terminal-client",
@@ -2779,10 +2779,13 @@ dependencies = [
  "maitty-agent-detection",
  "maitty-ipc-transport",
  "maitty-machines",
+ "maitty-provider",
+ "maitty-provider-acp",
  "maitty-provider-claude",
  "maitty-provider-codex",
  "maitty-settings",
  "maitty-shared",
+ "maitty-test-support",
  "portable-pty",
  "ratatui",
  "regex",
@@ -2877,19 +2880,39 @@ name = "maitty-machines"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "base64 0.22.1",
  "directories",
  "libc",
  "maitty-ipc-transport",
  "maitty-shared",
+ "maitty-test-support",
  "serde",
  "serde_json",
- "sha2",
  "tokio",
  "tokio-util",
  "toml 0.9.12+spec-1.1.0",
  "toml_edit 0.23.10+spec-1.0.0",
  "tracing",
+]
+
+[[package]]
+name = "maitty-provider"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "maitty-shared",
+ "regex",
+ "serde_json",
+]
+
+[[package]]
+name = "maitty-provider-acp"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "maitty-provider",
+ "maitty-shared",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2899,6 +2922,7 @@ dependencies = [
  "anyhow",
  "getrandom 0.3.4",
  "jsonc-parser",
+ "maitty-provider",
  "maitty-shared",
  "serde_json",
 ]
@@ -2908,8 +2932,10 @@ name = "maitty-provider-codex"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "maitty-provider",
  "maitty-shared",
  "regex",
+ "serde",
  "serde_json",
  "toml_edit 0.23.10+spec-1.0.0",
 ]

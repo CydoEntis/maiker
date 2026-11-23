@@ -34,7 +34,7 @@ pnpm build
 pnpm desktop:build
 ```
 
-`pnpm dev` and `pnpm preview` run a browser preview with sample data. They do
+`pnpm dev` and `pnpm preview` open the primitives gallery in a browser. They do
 not connect to the daemon or start a real Codex conversation. Desktop packages
 are written to the workspace `target/release/bundle/`; build on the target OS,
 especially on Linux, where Tauri links to the installed WebKitGTK.

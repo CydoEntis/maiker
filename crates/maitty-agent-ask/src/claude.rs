@@ -206,6 +206,8 @@ mod tests {
             }
         );
         assert!(models[2].efforts.is_empty());
+        let none = reply_in(r#"{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success"}}"#).unwrap().unwrap();
+        assert!(listed(&none).is_empty(), "a reply with no models lists none");
     }
 
     #[test]
@@ -250,11 +252,5 @@ mod tests {
         assert_eq!(listed[0].name, "ok");
         assert_eq!(listed[0].description.chars().count(), DESCRIPTION_MAX_CHARS);
         assert!(commands(&serde_json::json!({})).is_empty());
-    }
-
-    #[test]
-    fn a_reply_with_no_models_lists_none() {
-        let reply = reply_in(r#"{"type":"control_response","response":{"request_id":"maiker-models","subtype":"success"}}"#).unwrap().unwrap();
-        assert!(listed(&reply).is_empty());
     }
 }

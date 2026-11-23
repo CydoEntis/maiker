@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Extension } from '@/api/extensions'
-import { detailLine, itemKey, itemsOf, scopesFor } from './model'
+import { itemKey, itemsOf, scopesFor } from './model'
 
 const item = (over: Partial<Extension>): Extension => ({ agent: 'Claude', kind: 'Plugin', scope: 'User', id: 'a@b', name: 'a', detail: '', enabled: true, ...over })
 
@@ -18,11 +18,5 @@ describe('the extensions page model', () => {
     expect(scopesFor('Codex', 'Plugin')).toEqual(['User'])
     expect(scopesFor('Claude', 'Marketplace')).toEqual(['User'])
     expect(scopesFor('Claude', 'McpServer')).toEqual(['User', 'Project', 'Local'])
-  })
-
-  it('says where a project item applies and leaves the user\'s unsaid', () => {
-    expect(detailLine({ kind: 'Plugin', scope: 'User', detail: 'version 1.0.0' })).toBe('version 1.0.0')
-    expect(detailLine({ kind: 'McpServer', scope: 'Project', detail: 'https://x' })).toBe('https://x · in this project')
-    expect(detailLine({ kind: 'Skill', scope: 'Local', detail: '' })).toBe('in this project, only on this computer')
   })
 })

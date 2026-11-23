@@ -28,7 +28,8 @@ export const daemonDocumentIO: DocumentIO = {
 type Disk = { text: string; version: string | null }
 
 export type DocumentState = {
-  phase: 'loading' | 'ready' | 'error'
+  /** `off` while the file is not to be read at all: it was deleted, or its machine keeps it. */
+  phase: 'off' | 'loading' | 'ready' | 'error'
   /** What the file says on disk, as last read or saved. */
   text: string
   error: string | null
@@ -53,7 +54,7 @@ export type DocumentState = {
  * that is when an agent's edit is noticed), and saved with the version it was read at. A newer text on disk replaces
  * the shown one at once when no draft is open, and waits as `behind` when one is.
  */
-export function useDocument({ term, machine, path, dirtyRef, io = daemonDocumentIO }: { term: number; machine: number; path: string; /** Whether a draft is open that a newer text on disk would replace; read when the window regains focus. */ dirtyRef: RefObject<boolean>; io?: DocumentIO }): DocumentState {
+export function useDocument({ term, machine, path, dirtyRef, enabled = true, io = daemonDocumentIO }: { term: number; machine: number; path: string; /** Whether a draft is open that a newer text on disk would replace; read when the window regains focus. */ dirtyRef: RefObject<boolean>; /** False for a file that cannot be read whole from here: nothing is asked. */ enabled?: boolean; io?: DocumentIO }): DocumentState {
   const [round, setRound] = useState(0)
   // What was read for the file this hook is on now. A result for another file or an earlier read is not shown: the key tells.
   const readKey = `${String(machine)}\u0000${String(term)}\u0000${path}\u0000${String(round)}`
@@ -74,12 +75,13 @@ export function useDocument({ term, machine, path, dirtyRef, io = daemonDocument
     let current = true
     keyRef.current = readKey
     diskRef.current = null
+    if (!enabled) return undefined
     io.read(term, machine, path).then(
       (next) => { if (current) { diskRef.current = next; setRead({ key: readKey, disk: next, error: null, behind: null, step: { kind: 'idle' } }) } },
       (reason: unknown) => { if (current) setRead({ key: readKey, disk: null, error: messageOf(reason), behind: null, step: { kind: 'idle' } }) },
     )
     return () => { current = false }
-  }, [io, term, machine, path, readKey])
+  }, [io, term, machine, path, readKey, enabled])
 
   useEffect(() => {
     let current = true
@@ -112,7 +114,7 @@ export function useDocument({ term, machine, path, dirtyRef, io = daemonDocument
   }, [io, term, machine, path, shown, patch])
 
   return {
-    phase: error !== null ? 'error' : disk === null ? 'loading' : 'ready',
+    phase: !enabled ? 'off' : error !== null ? 'error' : disk === null ? 'loading' : 'ready',
     text: disk?.text ?? '',
     error,
     canEdit: disk?.version != null && disk.version !== '',

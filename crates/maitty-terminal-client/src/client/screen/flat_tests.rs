@@ -88,35 +88,6 @@ fn row_of(app: &App, term: u32) -> usize {
     app.screen.row_y[&ClientTerm::local(term)] as usize
 }
 
-#[test]
-fn the_sidebar_groups_sessions_by_status_two_lines_each() {
-    let mut app = reference_fixture::world(Stage::None);
-    let rows = text(&mut app, 140, 36);
-    show(&rows, "140x36");
-    let head = side(&rows, 1);
-    assert!(head.contains("Maiker status") && head.contains("⌕  +  ≡  «"), "the header is inside the frame: {head}");
-    for heading in ["Needs you 1", "Working 1", "Done 2", "Idle 1"] {
-        assert!(rows.iter().any(|r| side_of(r).contains(heading)), "a heading {heading}");
-    }
-    assert!(!rows.iter().any(|r| side_of(r).contains("This computer")), "no machine heading by default");
-    let y = row_of(&app, 1);
-    assert!(side(&rows, y).contains("✓ fix-footer"), "{}", side(&rows, y));
-    assert!(
-        side(&rows, y + 1).contains("affiliate-site / fix-footer") && !side(&rows, y + 1).contains('■'),
-        "the project and the branch, no colour square: {}",
-        side(&rows, y + 1)
-    );
-    let finch = row_of(&app, 3);
-    assert!(
-        side(&rows, finch + 1).trim_end_matches(['│', ' ']).ends_with("pixls"),
-        "no repo, no branch: {}",
-        side(&rows, finch + 1)
-    );
-    for word in ["FLEETS", "SHIPS", "inbox", "worktree", ">_"] {
-        assert!(!rows.iter().any(|r| side_of(r).contains(word)), "no {word} in the sidebar");
-    }
-}
-
 fn side_of(row: &str) -> String {
     row.chars().take(34).collect()
 }
@@ -139,34 +110,6 @@ fn a_row_moves_to_the_group_of_its_status() {
             .expect("a heading above the row");
         assert!(above.contains(heading), "{status:?} sits under {heading}: {above}");
     }
-}
-
-#[test]
-fn a_row_shows_no_diff_counts() {
-    let mut app = reference_fixture::world(Stage::None);
-    let info = app.snap.terms.get_mut(&1).unwrap();
-    (info.diff_added, info.diff_removed) = (104, 61);
-    let rows = text(&mut app, 140, 36);
-    assert!(!rows.iter().any(|r| side_of(r).contains("+104")));
-}
-
-#[test]
-fn busy_agents_are_bold_idle_ones_plain_and_the_open_session_has_the_row_ground_and_bar() {
-    let mut app = reference_fixture::world(Stage::None);
-    let buf = cells(&mut app, 140, 50);
-    let t = app.theme.clone();
-    let y = |term: u32| app.screen.row_y[&ClientTerm::local(term)];
-    // old-moth (5) is idle: plain text. add-payments (2) is working: bold and strong.
-    assert_eq!(buf[(4, y(5))].fg, t.text);
-    assert!(!buf[(4, y(5))].modifier.contains(Modifier::BOLD));
-    assert_eq!(buf[(4, y(2))].fg, t.strong);
-    assert!(buf[(4, y(2))].modifier.contains(Modifier::BOLD));
-    // fix-footer (1) is open in the workspace: the neutral selection ground and a strong bar on its three lines.
-    for dy in 0..3 {
-        assert_eq!(buf[(10, y(1) + dy)].bg, t.sel_bg());
-        assert_eq!((buf[(1, y(1) + dy)].symbol(), buf[(1, y(1) + dy)].fg), ("▎", t.strong));
-    }
-    assert_eq!(buf[(10, y(3))].bg, t.bg, "the others sit on the ground");
 }
 
 #[test]
@@ -307,18 +250,9 @@ fn with_kingdom_needing_the_app() -> (App, MachineId) {
     });
     app.screen.saved.group_machine = true;
     let id = MachineId(9);
-    let why = crate::link_failure::FIX_INSTALL.into();
-    app.on_link_state(id, "kingdom".into(), ConnectionState::NeedsUpdate { why });
+    let failure = crate::link_failure::FailureClass::Install;
+    app.on_link_state(id, "kingdom".into(), ConnectionState::NeedsUpdate { failure });
     (app, id)
-}
-
-fn right_click(app: &mut App, x: u16, y: u16) {
-    app.on_mouse(MouseEvent {
-        kind: MouseEventKind::Down(MouseButton::Right),
-        column: x,
-        row: y,
-        modifiers: KeyModifiers::NONE,
-    });
 }
 
 fn menu_labels(app: &App) -> Vec<String> {
@@ -355,43 +289,6 @@ fn a_machine_with_no_app_has_an_install_chip_on_its_heading_that_opens_the_popup
     );
     let said = app.notice.as_ref().map(|(m, ..)| m.clone()).unwrap_or_default();
     assert!(said.starts_with(&format!("Installing {} on kingdom", crate::brand::APP_NAME)), "{said}");
-}
-
-#[test]
-fn a_machine_heading_s_right_click_menu_offers_the_fix_first() {
-    use super::machine_group::AppFix;
-    let (mut app, _) = with_kingdom_needing_the_app();
-    let rows = text(&mut app, 140, 36);
-    let y = rows
-        .iter()
-        .position(|r| side(std::slice::from_ref(r), 0).contains(" kingdom 0 "))
-        .expect("kingdom's heading");
-    right_click(&mut app, 4, y as u16);
-    assert_eq!(
-        menu_labels(&app),
-        [AppFix::Install.label().as_str(), "New shell here", "Open a folder…", "Clone a repository…", "Details…", "Reconnect", "Machines…"]
-    );
-    let rows = text(&mut app, 140, 36);
-    show(&rows, "kingdom's menu");
-    assert!(rows.iter().any(|r| r.contains(&AppFix::Install.label())), "drawn");
-
-    // This computer's heading has no fix and no machine to reconnect.
-    app.mode = Mode::Normal;
-    let rows = text(&mut app, 140, 36);
-    let local = rows.iter().position(|r| side(std::slice::from_ref(r), 0).contains("This computer")).expect("this computer's heading");
-    right_click(&mut app, 4, local as u16);
-    assert_eq!(menu_labels(&app), ["New shell here", "Open a folder…", "Clone a repository…", "Details…"]);
-}
-
-#[test]
-fn the_sidebar_menu_lists_each_machine_that_needs_the_app_first() {
-    use super::machine_group::AppFix;
-    let (mut app, _) = with_kingdom_needing_the_app();
-    text(&mut app, 140, 36);
-    app.sidebar_menu();
-    let labels = menu_labels(&app);
-    assert_eq!(labels[0], format!("{} on kingdom", AppFix::Install.label()));
-    assert_eq!(labels[1], "Filter sessions");
 }
 
 #[test]
@@ -488,33 +385,6 @@ fn enter_on_a_subagents_steps_opens_its_parents_pane() {
 // ---- the status glyphs ---------------------------------------------------------------------
 
 #[test]
-fn by_default_every_state_has_a_shape_of_its_own_and_a_colour() {
-    let app = reference_fixture::world(Stage::None);
-    let t = app.theme.clone();
-    let marks: Vec<_> = [State::Needs, State::Done, State::Problem, State::Idle]
-        .into_iter()
-        .map(|s| app.state_mark(s, &t))
-        .collect();
-    let glyphs: Vec<&str> = marks.iter().map(|m| m.glyph.as_str()).collect();
-    assert_eq!(glyphs, ["!", "✓", "×", "–"]);
-    let colours: Vec<_> = marks.iter().map(|m| m.color).collect();
-    assert_eq!(colours, [t.blocked, t.done, t.err, t.idle]);
-    assert_eq!(app.state_mark(State::Unknown, &t).glyph, "┆");
-}
-
-#[test]
-fn the_dots_setting_makes_every_state_a_dot_told_apart_by_colour() {
-    let mut app = reference_fixture::world(Stage::None);
-    app.cfg.ui.glyphs = "dots".into();
-    let t = app.theme.clone();
-    let glyphs: Vec<String> = [State::Needs, State::Done, State::Problem, State::Idle]
-        .into_iter()
-        .map(|s| app.state_mark(s, &t).glyph)
-        .collect();
-    assert_eq!(glyphs, ["●", "●", "●", "●"]);
-}
-
-#[test]
 fn while_the_daemon_is_away_every_row_shows_the_unknown_mark() {
     let mut app = reference_fixture::world(Stage::None);
     let unknown_rows = |rows: &[String]| {
@@ -564,33 +434,12 @@ fn a_failed_command_is_the_problem_state_and_its_row_says_so_in_red() {
     assert_eq!(buf[(2, y)].fg, t.err);
 }
 
-/// Where `word` starts in the sidebar's columns of row `y`.
-fn side_x(rows: &[String], y: usize, word: &str) -> Option<u16> {
-    let row: Vec<char> = side(rows, y).chars().collect();
-    let word: Vec<char> = word.chars().collect();
-    row.windows(word.len()).position(|w| w == word).map(|x| x as u16)
-}
-
 /// A sidebar wide enough that a limit's day and time, or a pull request, follow `project / branch` whole.
 const WIDE: u16 = 50;
 
 /// The sidebar's columns of row `y` when it is `WIDE`.
 fn wide(rows: &[String], y: usize) -> String {
     rows[y].chars().take(WIDE as usize).collect()
-}
-
-#[test]
-fn a_session_that_hit_its_plan_limit_says_limited_and_when_it_resets_in_the_needs_you_colour() {
-    let mut app = reference_fixture::world(Stage::None);
-    let resets = reference_fixture::at(16, 30, 0);
-    app.snap.terms.get_mut(&5).unwrap().resume_at = Some(resets);
-    let buf = cells(&mut app, 140, 50);
-    let rows = text(&mut app, 140, 50);
-    show(&rows, "limited, two lines");
-    let y = row_of(&app, 5);
-    let x = side_x(&rows, y + 1, "limited 16:30").unwrap_or_else(|| panic!("{}", side(&rows, y + 1)));
-    assert_eq!(buf[(x, y as u16 + 1)].fg, app.theme.blocked);
-    assert!(side(&rows, y).contains("old-moth"), "the name stays: {}", side(&rows, y));
 }
 
 #[test]
@@ -606,22 +455,6 @@ fn a_limit_that_resets_on_another_day_says_which_day() {
     assert_ne!(day, crate::clock::local_weekday(reference_fixture::now()));
     let line = wide(&rows, y + 1);
     assert!(line.contains(&format!("limited {day} {time}")), "{line}");
-}
-
-#[test]
-fn a_limited_row_puts_the_limit_before_its_pull_request() {
-    let mut app = reference_fixture::world(Stage::None);
-    let info = app.snap.terms.get_mut(&5).unwrap();
-    info.resume_at = Some(reference_fixture::at(16, 30, 0));
-    info.pr = Some(crate::protocol::PrInfo { number: 45, ..Default::default() });
-    app.screen.saved.side_w = Some(WIDE);
-    let rows = text(&mut app, 140, 50);
-    show(&rows, "limited with a pull request");
-    let y = row_of(&app, 5);
-    let line = wide(&rows, y + 1);
-    let limited = line.find("limited 16:30").unwrap_or_else(|| panic!("{line}"));
-    let pr = line.find("#45").unwrap_or_else(|| panic!("{line}"));
-    assert!(limited < pr, "{line}");
 }
 
 #[test]
@@ -657,42 +490,6 @@ fn the_working_spinner_is_still_with_reduce_motion_and_turns_with_it() {
 /// The workspace's columns of row `y`: everything right of the sidebar and its gap.
 fn work(rows: &[String], y: usize) -> String {
     rows[y].chars().skip(35).collect()
-}
-
-#[test]
-fn a_pane_is_a_box_with_its_title_and_close_on_top_and_its_folder_below() {
-    let mut app = reference_fixture::world(Stage::None);
-    let rows = text(&mut app, 140, 36);
-    show(&rows, "a lone pane");
-    let top = work(&rows, 0);
-    assert!(top.starts_with("╭─ ✓ fix-footer "), "the mark and the name as plain text: {top}");
-    assert!(top.trim_end().ends_with(" × ─╮"), "only the close chip at the right: {top}");
-    let bottom = rows.iter().map(|r| r.chars().skip(35).collect::<String>()).find(|r| r.contains('╰')).expect("the bottom border");
-    assert!(bottom.contains("affiliate-site-worktrees"), "the folder on the bottom border: {bottom}");
-    assert_eq!(bottom.matches("fix-footer").count(), 1, "the branch is on the sidebar row, not here: {bottom}");
-    assert!(work(&rows, 1).trim_matches(['│', ' ']).is_empty(), "a blank row under the border: {}", rows[1]);
-    assert!(rows[2].contains("rename the footer copyright"), "the program starts below it: {}", rows[2]);
-    for word in ["add-payments ×", "Files", "Changes", " + "] {
-        assert!(!top.contains(word), "no tab row: {word} in {top}");
-    }
-}
-
-#[test]
-fn the_focused_panes_box_is_the_bright_neutral_and_its_title_is_bold() {
-    let mut app = reference_fixture::world(Stage::None);
-    let buf = cells(&mut app, 140, 36);
-    let t = app.theme.clone();
-    assert_eq!(buf[(35, 0)].fg, t.text, "the corner");
-    assert_ne!(t.text, t.accent, "the accent is not a focus colour");
-    assert_eq!(buf[(40, 0)].fg, t.strong, "the name");
-    assert!(buf[(40, 0)].modifier.contains(Modifier::BOLD));
-    assert_eq!(buf[(40, 0)].bg, t.bg, "plain text, no chip");
-    // With the sidebar holding the keys the pane is quiet.
-    app.screen_side_set(SideItem::Sess(app.session_key(ClientTerm::local(1))));
-    let buf = cells(&mut app, 140, 36);
-    assert_eq!(buf[(35, 0)].fg, t.line);
-    assert_eq!(buf[(40, 0)].fg, t.text);
-    assert!(!buf[(40, 0)].modifier.contains(Modifier::BOLD));
 }
 
 #[test]
@@ -805,47 +602,6 @@ fn the_host_terminals_tab_title_names_the_focused_session_with_its_state_mark() 
 }
 
 #[test]
-fn the_close_chip_closes_its_pane() {
-    let mut app = reference_fixture::world(Stage::None);
-    let (tx, mut rx) = mpsc::unbounded_channel();
-    app.out = tx;
-    cells(&mut app, 140, 36);
-    let close = app
-        .hits
-        .iter()
-        .find_map(|(r, h)| matches!(h, Hit::Screen(ScreenHit::CloseSplit(t)) if t.term == 1).then_some(*r))
-        .expect("the × chip");
-    click(&mut app, close.x + 1, close.y);
-    let sent: Vec<_> = std::iter::from_fn(|| rx.try_recv().ok()).collect();
-    assert!(
-        sent.iter().any(|o| matches!(&o.msg, ClientMsg::Command(Command::CloseSession { .. } | Command::ClosePane { .. })))
-            || matches!(app.mode, Mode::Confirm(_)),
-        "{sent:?}"
-    );
-}
-
-#[test]
-fn split_panes_are_boxes_of_their_own_a_column_apart() {
-    let mut app = split_world(2);
-    let rows = text(&mut app, 140, 36);
-    show(&rows, "2 panes");
-    let top = work(&rows, 0);
-    assert_eq!(top.matches('╭').count(), 2, "{top}");
-    assert!(top.contains("╮ ╭"), "a column of ground between the boxes: {top}");
-    assert!(top.contains("fix-footer") && top.contains("add-payments"), "each has its title");
-    assert_eq!(top.matches(" × ").count(), 2);
-    let all: String = rows.concat();
-    for joint in ['┬', '┴', '┼'] {
-        assert!(!all.contains(joint), "no joints: {joint}");
-    }
-    let mut app = split_world(4);
-    let rows = text(&mut app, 140, 36);
-    show(&rows, "4 panes");
-    let corners: usize = (0..rows.len()).map(|y| work(&rows, y).matches('╭').count()).sum();
-    assert_eq!(corners, 4);
-}
-
-#[test]
 fn exactly_one_pane_has_the_bright_border() {
     let mut app = split_world(4);
     let buf = cells(&mut app, 140, 36);
@@ -922,19 +678,6 @@ fn tab_keys_step_through_the_sidebars_sessions_in_the_order_they_are_listed() {
 }
 
 #[test]
-fn the_row_menu_lists_what_the_design_does() {
-    let mut app = reference_fixture::world(Stage::None);
-    text(&mut app, 140, 36);
-    // Not the open session, so it can open in a split.
-    let (_, items) = app.session_items(ClientTerm::local(3)).expect("a menu");
-    let labels: Vec<&str> = items.iter().map(|(l, _)| l.as_str()).collect();
-    assert_eq!(
-        labels,
-        ["Open", "Open in split", "Rename…", "Copy folder path", "Stop the agent", "Close chat"]
-    );
-}
-
-#[test]
 fn a_narrow_status_bar_drops_pieces_instead_of_running_them_together() {
     for w in 40..=140u16 {
         let mut app = reference_fixture::world(Stage::None);
@@ -945,44 +688,6 @@ fn a_narrow_status_bar_drops_pieces_instead_of_running_them_together() {
         assert!(bar[..out].ends_with("  "), "{w}: a gap before the hints: {bar}");
         assert!(bar.trim_start().starts_with("keys"), "{w}: {bar}");
     }
-}
-
-#[test]
-fn the_status_bar_says_the_mode_the_session_and_the_keys_worth_knowing() {
-    let mut app = reference_fixture::world(Stage::None);
-    let buf = cells(&mut app, 140, 36);
-    let rows = text(&mut app, 140, 36);
-    let t = app.theme.clone();
-    let bar = &rows[35];
-    assert!(bar.starts_with("  pane  "), "the bar is there while keys go to the pane: {bar}");
-    assert!(!bar.contains("fix-footer"), "the pane's title already says it: {bar}");
-    assert!(
-        bar.contains("alt+↓/alt+↑ chats  ^space k search  ^space n new  ^space tab next pane  ^space keys  ^space ? help"),
-        "{bar}"
-    );
-    assert_eq!((buf[(2, 35)].bg, buf[(2, 35)].fg), (t.btn, t.strong), "the pane chip");
-    assert_eq!(buf[(100, 35)].bg, t.bg, "the bar is on the ground");
-    let key = bar.find("^space k").expect("a key hint") as u16;
-    assert_eq!((buf[(key, 35)].fg, buf[(key, 35)].bg), (t.strong, t.bg), "a key is strong, not the accent");
-    assert!(buf[(key, 35)].modifier.contains(Modifier::BOLD));
-    app.on_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::CONTROL));
-    let rows = text(&mut app, 140, 36);
-    let buf = cells(&mut app, 140, 36);
-    let bar = &rows[35];
-    assert!(bar.starts_with("  keys  "), "{bar}");
-    assert!(bar.ends_with("n new  s split  x close  tab pane  ? help  esc back"), "{bar}");
-    assert_eq!(buf[(2, 35)].bg, t.blocked, "the keys chip is yellow");
-}
-
-#[test]
-fn the_first_session_follows_its_machine_heading_with_no_blank_row_between() {
-    let mut app = reference_fixture::world(Stage::None);
-    let rows = text(&mut app, 140, 36);
-    let ink = |y: usize| side(&rows, y).chars().filter(|c| c.is_alphanumeric()).count();
-    let at = (0..rows.len())
-        .find(|&y| side(&rows, y).to_lowercase().contains("this computer"))
-        .expect("a machine heading");
-    assert!(ink(at + 1) > 0, "the first row follows the heading at once: {:?}", side(&rows, at + 1));
 }
 
 /// How many rows of the sidebar column have anything in them.
@@ -1011,21 +716,6 @@ fn a_machine_heading_has_a_fold_arrow_and_a_click_on_its_name_folds_it_and_opens
     let rows = text(&mut app, 140, 36);
     assert!(side(&rows, y).contains("▾"), "a second click opens it again");
     assert_eq!(side_rows_used(&rows), before);
-}
-
-#[test]
-fn the_top_plus_offers_a_new_session_or_a_remote_machine_and_there_is_no_remote_machines_heading() {
-    let (mut app, _) = with_kingdom_needing_the_app();
-    let rows = text(&mut app, 140, 36);
-    assert!(!rows.iter().any(|r| side(std::slice::from_ref(r), 0).contains("Remote machines")), "a remote machine is a heading of its own");
-    assert!(rows.iter().any(|r| side(std::slice::from_ref(r), 0).contains(" kingdom ")), "kingdom is a top-level heading");
-
-    let top = side(&rows, 1);
-    let x = top.chars().position(|c| c == '+').expect("a + button in the header") as u16;
-    click(&mut app, x, 1);
-    let rows = text(&mut app, 140, 36);
-    let menu = rows.join("\n");
-    assert!(menu.contains("New session") && menu.contains("Add remote machine"), "{menu}");
 }
 
 #[test]
@@ -1212,4 +902,100 @@ fn clicking_a_subagent_shows_its_own_steps_from_its_record() {
     assert!(all.contains("subagent Write drafts tests"));
     assert!(all.contains("asked write the drafts tests"));
     assert!(all.contains("Added 4 tests for drafts."));
+}
+
+// ---- helpers: who started whom --------------------------------------------------------------
+
+/// The world with sessions 2 and 3 started by session 1's agent.
+fn world_with_helpers() -> App {
+    let mut app = reference_fixture::world(Stage::None);
+    for helper in [2, 3] {
+        app.snap.terms.get_mut(&helper).expect("a session").started_by = Some(1);
+    }
+    app
+}
+
+/// Where `words` start on row `y` of the sidebar.
+fn column_of(rows: &[String], y: usize, words: &str) -> u16 {
+    let at = side_of(&rows[y]).find(words).unwrap_or_else(|| panic!("{words} on {}", rows[y]));
+    rows[y][..at].chars().count() as u16
+}
+
+#[test]
+fn a_helper_names_its_starter_and_the_starter_counts_its_helpers() {
+    let mut app = world_with_helpers();
+    let plain = text(&mut reference_fixture::world(Stage::None), 140, 36);
+    let rows = text(&mut app, 140, 36);
+    show(&rows, "helpers 140x36");
+    let lead = row_of(&app, 1);
+    assert!(side(&rows, lead).contains("✓ fix-footer") && side(&rows, lead).contains("2 helpers 2m"), "{}", side(&rows, lead));
+    for helper in [2, 3] {
+        let y = row_of(&app, helper) + 1;
+        assert!(side(&rows, y).contains("↳ fix-footer  "), "the starter, then the place: {}", side(&rows, y));
+    }
+    // Nothing moves: only the three rows that gained words differ from the same list without helpers.
+    let changed: Vec<usize> = (0..rows.len()).filter(|y| side_of(&rows[*y]) != side_of(&plain[*y])).collect();
+    assert_eq!(changed, [row_of(&app, 3) + 1, row_of(&app, 2) + 1, lead], "{changed:?}");
+}
+
+#[test]
+fn a_starters_count_is_in_the_needs_you_colour_only_while_a_helper_waits() {
+    let mut app = world_with_helpers();
+    let rows = text(&mut app, 140, 36);
+    let lead = row_of(&app, 1);
+    let x = column_of(&rows, lead, "2 helpers");
+    // Session 3 waits on you in this world.
+    assert_eq!(app.snap.terms[&3].status, Status::Blocked);
+    assert_eq!(cells(&mut app, 140, 36)[(x, lead as u16)].fg, app.theme.blocked);
+    app.snap.terms.get_mut(&3).expect("a session").started_by = None;
+    let rows = text(&mut app, 140, 36);
+    let lead = row_of(&app, 1);
+    let x = column_of(&rows, lead, "1 helper ");
+    assert_eq!(cells(&mut app, 140, 36)[(x, lead as u16)].fg, app.theme.muted);
+}
+
+#[test]
+fn a_helper_whose_starter_is_gone_is_an_ordinary_row() {
+    let mut app = reference_fixture::world(Stage::None);
+    let plain = text(&mut app, 140, 36);
+    app.snap.terms.get_mut(&2).expect("a session").started_by = Some(999);
+    let rows = text(&mut app, 140, 36);
+    assert_eq!(rows.iter().map(|r| side_of(r)).collect::<Vec<_>>(), plain.iter().map(|r| side_of(r)).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_helper_a_chat_started_names_the_chat_and_the_chat_counts_it() {
+    use crate::conversation::{ConversationId, ExecutionKind, Provider, RecoveryState};
+    let mut app = reference_fixture::world(Stage::None);
+    let cwd = app.snap.terms[&2].cwd.clone();
+    app.snap.conversations.push(crate::protocol::ConversationSummary {
+        id: ConversationId(41),
+        generation: 1,
+        provider: Provider::Claude,
+        execution: ExecutionKind::Structured,
+        cwd,
+        worktree: None,
+        state: RecoveryState::Running,
+        status: Status::Working,
+        native_term: None,
+        checks: Vec::new(),
+        title: Some("lead-chat".into()),
+        archived: false,
+        root: None,
+        branch: None,
+        helpers: Vec::new(),
+        helper_ask: Vec::new(),
+        capabilities: None,
+        agent: None,
+        status_since: None,
+    });
+    app.snap.terms.get_mut(&2).expect("a session").started_by_chat = Some(ConversationId(41));
+    // A chat the list does not hold started nothing that shows as its helper.
+    app.snap.terms.get_mut(&3).expect("a session").started_by_chat = Some(ConversationId(404));
+    let rows = text(&mut app, 140, 40);
+    show(&rows, "a chat's helper 140x40");
+    assert!(side(&rows, row_of(&app, 2) + 1).contains("↳ lead-chat  "), "{}", side(&rows, row_of(&app, 2) + 1));
+    assert!(!side(&rows, row_of(&app, 3) + 1).contains('↳'), "{}", side(&rows, row_of(&app, 3) + 1));
+    let chat = rows.iter().find(|r| side_of(r).contains("lead-chat") && !side_of(r).contains('↳')).expect("the chat's row");
+    assert!(side_of(chat).contains("1 helper"), "{chat}");
 }

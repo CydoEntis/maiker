@@ -53,8 +53,12 @@ export type TerminalDetails = {
   queued?: string[]
   /** The agent's own turn is over: it takes a message, though helpers it started may keep the pane working. */
   ownTurnOver?: boolean
+  /** The daemon holds this helper's start until its starter has a free slot, and reports it working meanwhile; absent from an older daemon. */
+  waitingForSlot?: boolean
   /** The helpers the session asked to start and waits on the person for, one task each; absent from an older daemon. */
   helperAsk?: string[]
+  /** The session whose agent started this one, by its id in this window; null or absent when a person did. */
+  startedBy?: string | null
   /** The agent's subagents as its runtime reports them; absent from an older daemon. */
   subagents?: SubagentActivity[]
 }
@@ -131,7 +135,7 @@ export type Conversation = {
    * one (a conversation whose native terminal is this pane). The chat view reads and writes
    * through it; without it the session has no chat.
    */
-  chat?: { conversation: number; generation: number; /** Follows an agent the user started in the terminal (ADR 0003): the chat reads, it does not write. */ readOnly?: boolean }
+  chat?: { conversation: number; generation: number; /** The agent runs over ACP (ADR 0020): its model and permissions are its own settings. */ acp?: boolean; /** Follows an agent the user started in the terminal (ADR 0003): the chat reads, it does not write. */ readOnly?: boolean; /** The daemon says the agent takes a message into a running turn; absent when it did not say. */ steers?: boolean }
 }
 
 export type Message = {
@@ -237,57 +241,4 @@ export const previewConversations: Conversation[] = [
     nativePane: 7,
     hasDiff: false,
   },
-]
-
-export const previewMessages: Record<string, Message[]> = {
-  'codex-43': [
-    {
-      id: 'm1',
-      role: 'user',
-      content: 'Can you make the branch view easier to scan and keep the session status visible while it is open?',
-      time: '10:42 AM',
-    },
-    {
-      id: 'm2',
-      role: 'assistant',
-      content: 'I’ll look at the current branch sheet and its tests, then tighten the hierarchy without changing what the controls do.',
-      time: '10:42 AM',
-    },
-    {
-      id: 'm3',
-      role: 'activity',
-      content: 'Read branch_sheet.rs and frame_tests.rs',
-      detail: '2 files · 4.2 seconds',
-      activityState: 'Completed',
-      time: '10:43 AM',
-    },
-    {
-      id: 'm4',
-      role: 'assistant',
-      content: 'The sheet already keeps its selection across refreshes. I found one command that changes the checkout, so I’m asking before I run it.',
-      time: '10:43 AM',
-    },
-    {
-      id: 'm5',
-      role: 'approval',
-      content: 'Run the branch view tests',
-      detail: 'cargo test branch_view_tests',
-      time: '10:43 AM',
-    },
-  ],
-  'codex-41': [
-    { id: 'c1', role: 'user', content: 'Add a reconnect test that proves an in-flight conversation stays attached after the GUI reconnects.', time: '10:41 AM' },
-    { id: 'c2', role: 'assistant', content: 'I’m tracing the attach handshake and the conversation generation checks first.', time: '10:42 AM' },
-    { id: 'c3', role: 'activity', content: 'Inspecting daemon conversation restore', detail: '2 files · running', activityState: 'Running', time: '10:44 AM' },
-  ],
-  'claude-18': [
-    { id: 'a1', role: 'user', content: 'Review the restore flow for sessions that were active when Maiker closed.', time: '9:18 AM' },
-    { id: 'a2', role: 'assistant', content: 'The restore path keeps active sessions marked as recovery-required and avoids launching a duplicate provider process.', time: '9:21 AM' },
-    { id: 'a3', role: 'activity', content: 'Review complete', detail: 'No findings · 3 files checked', activityState: 'Completed', time: '9:22 AM' },
-  ],
-}
-
-export const previewDiff = [
-  { file: 'src/client/screen/branch_sheet.rs', added: 18, removed: 7, lines: ['+ let status = view.status_label();', '+ render_status(buf, status, theme);', '  render_branch_name(buf, view.branch);'] },
-  { file: 'src/client/screen/frame_tests.rs', added: 12, removed: 0, lines: ['+ assert!(frame.contains("working"));', '+ assert!(frame.contains("fix/gui"));'] },
 ]

@@ -84,8 +84,8 @@ Tauri's `beforeDevCommand` rebuilds it (`pnpm bundle:daemon:dev`) on every start
 file as the shared `maiker` on first start and after each update (see
 [ADR 0004](adr/0004-client-split-and-desktop-host.md)).
 The packaged GUI uses that sidecar to start the separate daemon when needed;
-closing the GUI leaves the daemon and its sessions running. `pnpm dev` opens
-the browser preview with sample data and does not start or connect to a daemon.
+closing the GUI leaves the daemon and its sessions running. `pnpm dev` in a browser
+opens the primitives gallery (see [DESIGN](DESIGN.md)); it does not start or connect to a daemon.
 On Arch Linux, including Omarchy, install the packages listed in
 [`docs/stack/tauri.md`](stack/tauri.md#platform-prerequisites) before running
 `pnpm desktop:build`. Build on the target Linux host because the desktop shell
@@ -345,12 +345,44 @@ only for these keys. Secrets, `[[machines]]` and `[keys]` are not reachable that
 | window style | `ui.window_style` | | `flat` (default), `glass` |
 | Bypass Permissions | `permissions.bypass.<agent>` | | the agents switched off (`claude`, `codex`, `gemini`); each is written as `true` or `false`, and an agent not listed is on |
 | update remote machines | `updates.machines` | | `true` (default) or `false`: after this computer updates, each machine is updated once its agents are idle |
+| when an agent wants helpers | `sessions.helpers` | | `ask` (default), `always`, `never` |
+| helpers working at once | `sessions.helpers_at_once` | `[mcp] helpers_at_once` (a number, read only while the `[sessions]` key is unset) | `"2"`, `"4"` (default), `"8"`; more wait for a free slot. A stored `"3"`, offered before, reads as `"4"` (the file is not rewritten); an old `[mcp]` number reads as the nearest choice (the smaller on a tie; `0`, once no limit, as `"8"`) |
 
 A change edits the one key in place (comments and other keys stay), swaps the file in
 atomically, reloads, and sends `ServerMsg::SettingsChanged` to attached windows. A write
 removes the alias spelling of the same key, so the file keeps loading. A value outside the
 table is refused before the file is opened. A key set in `config.local.toml` still overrides
 what is written to `config.toml`.
+
+## Project-specific: agents run over ACP
+
+An `[[agents]]` entry with `acp = true` names an agent that can be run as a chat over the Agent
+Client Protocol ([stack/acp.md](stack/acp.md)). The keys are read when the config loads
+(`validate_agents`), and a bad entry refuses the whole file with a message that names the entry
+and the reason. The daemon starts the agent by its name (`StartTarget::Acp`): it finds `command`
+on the login PATH, passes `args`, and sets `env` over what it inherited. A client never names the
+program. A conversation that is continued runs what the config says at that moment; an agent no
+longer in the config cannot be continued.
+
+| Key | Meaning and checks |
+| --- | --- |
+| `name` | the agent's name: lowercase letters, digits, `-` or `_`, at most 32. Not `claude` or `codex`, which have their own chat support. Two ACP entries may not share a name |
+| `acp` | `true` to offer the agent as an ACP chat |
+| `command` | the program to run, alone. Required; not empty; does not start with `-` (flags go in `args`) |
+| `args` | the arguments that put the program in ACP mode, each passed as written, with no shell. At most 32 |
+| `env` | variables set for the process, over the ones it inherits. Names are letters, digits and `_`; at most 32. A name that is this app's own identity is refused. Values are never logged |
+
+`command`, `args` and `env` values are plain text: no control characters, at most 4096 bytes
+each. `command`, `args` or `env` on an entry without `acp = true` is refused, so a missing
+`acp = true` shows. `enabled = false` switches the entry off. The entry's other keys (`process`,
+patterns, `resume`) still describe the same agent in a terminal.
+
+An agent can also be installed from the ACP registry instead of written here
+([stack/acp.md](stack/acp.md#project-specific-the-registry)): `maiker agents list` shows the
+registry's agents and which are installed, `maiker agents install <id>` installs one under
+`<data folder>/acp-agents/`, and `maiker agents remove <id>` takes it off. The daemon starts a
+name from this file first and from the installed ones second. Installing needs `curl` and `tar`
+(and `unzip` for a zip outside Windows); an npm agent needs Node.js and npm.
 
 ## Project-specific: removed config keys
 

@@ -7,14 +7,26 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
  * OS file drops still go through the window (useFileDrop) and are untouched.
  */
 
-export type DragSource = { kind: 'pane' | 'session'; id: string; label: string }
+/** `leaf` is set when the pane dragged is one of a split session's panes (`leafKey`), so it can trade places inside it. */
+export type DragSource = { kind: 'pane' | 'session'; id: string; label: string; leaf?: string }
 
 export interface DragHandlers {
   start: (source: DragSource) => void
-  /** The pane under the pointer, or null when it is over none. */
-  over: (paneId: string | null) => void
-  drop: (source: DragSource, paneId: string | null) => void
+  /** The pane under the pointer, or null when it is over none, and the split pane of it, if any (`leafKey`). */
+  over: (paneId: string | null, leaf: string | null) => void
+  drop: (source: DragSource, paneId: string | null, leaf: string | null) => void
   end: () => void
+}
+
+const LEAF_SEPARATOR = '\u0000'
+
+/** Names one pane of a split session for a drag: the session and the pane in its tree. */
+export const leafKey = (owner: string, leaf: string): string => `${owner}${LEAF_SEPARATOR}${leaf}`
+
+/** The session and the pane a `leafKey` names. */
+export function parseLeafKey(key: string): { owner: string; leaf: string } {
+  const at = key.indexOf(LEAF_SEPARATOR)
+  return { owner: key.slice(0, at), leaf: key.slice(at + LEAF_SEPARATOR.length) }
 }
 
 /** How far the pointer must travel before a press becomes a drag, so a click stays a click. */
@@ -36,6 +48,10 @@ function paneUnder(target: EventTarget | null): string | null {
   return target instanceof Element ? target.closest<HTMLElement>('[data-pane]')?.dataset.pane ?? null : null
 }
 
+function leafUnder(target: EventTarget | null): string | null {
+  return target instanceof Element ? target.closest<HTMLElement>('[data-leaf]')?.dataset.leaf ?? null : null
+}
+
 function makeGhost(label: string): HTMLElement {
   const ghost = document.createElement('div')
   ghost.className = 'mx-drag-ghost'
@@ -53,7 +69,7 @@ export function beginPointerDrag(event: ReactPointerEvent, source: DragSource): 
   const place = (x: number, y: number) => {
     if (ghost) ghost.style.transform = `translate(${String(x + GHOST_OFFSET_PX)}px, ${String(y + GHOST_OFFSET_PX)}px)`
   }
-  const finish = (dropped: string | null | undefined) => {
+  const finish = (dropped: { pane: string | null; leaf: string | null } | undefined) => {
     window.removeEventListener('pointermove', move)
     window.removeEventListener('pointerup', up)
     window.removeEventListener('pointercancel', cancel)
@@ -64,7 +80,7 @@ export function beginPointerDrag(event: ReactPointerEvent, source: DragSource): 
       const swallow = (click: Event) => { click.stopPropagation(); click.preventDefault() }
       window.addEventListener('click', swallow, { capture: true, once: true })
       setTimeout(() => { window.removeEventListener('click', swallow, true) }, 0)
-      if (dropped !== undefined) handlers?.drop(source, dropped)
+      if (dropped !== undefined) handlers?.drop(source, dropped.pane, dropped.leaf)
       handlers?.end()
     }
     ghost = null
@@ -77,9 +93,9 @@ export function beginPointerDrag(event: ReactPointerEvent, source: DragSource): 
       handlers?.start(source)
     }
     place(e.clientX, e.clientY)
-    handlers?.over(paneUnder(e.target))
+    handlers?.over(paneUnder(e.target), leafUnder(e.target))
   }
-  const up = (e: PointerEvent) => { finish(ghost ? paneUnder(e.target) : undefined) }
+  const up = (e: PointerEvent) => { finish(ghost ? { pane: paneUnder(e.target), leaf: leafUnder(e.target) } : undefined) }
   const cancel = () => { finish(undefined) }
   const key = (e: KeyboardEvent) => {
     if (e.key === 'Escape' && ghost) { e.stopPropagation(); finish(undefined) }

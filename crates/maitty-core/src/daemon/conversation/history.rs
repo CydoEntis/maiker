@@ -6,6 +6,7 @@ pub(in crate::daemon) const MAX_READ_ENTRIES: usize = 128;
 pub(in crate::daemon) const MAX_READ_BYTES: usize = 256 * 1024;
 
 pub(crate) use crate::conversation::history::*;
+#[derive(Clone)]
 pub(in crate::daemon) enum Update {
     ProviderError { message: String, will_retry: bool },
     UpsertItem(Entry),
@@ -498,12 +499,24 @@ impl Attachments {
             .max()
             .unwrap_or(0)
     }
+    /// Applies what Codex reported to every attached view of the conversation.
+    #[cfg(test)]
     pub fn notification(
         &mut self,
         conversation: ConversationId,
         thread: &str,
         method: &str,
         params: &serde_json::Value,
+    ) -> Result<(), IncompleteReason> {
+        let update = super::history_provider::notification(conversation, thread, method, params);
+        self.apply(conversation, &update)
+    }
+    /// Applies one update, or the reason an event could not be read, to every attached view of
+    /// the conversation.
+    pub fn apply(
+        &mut self,
+        conversation: ConversationId,
+        update: &Result<Option<Update>, IncompleteReason>,
     ) -> Result<(), IncompleteReason> {
         for history in self
             .histories
@@ -517,10 +530,10 @@ impl Attachments {
             .values_mut()
             .filter(|h| h.conversation == conversation)
         {
-            match super::history_provider::notification(conversation, thread, method, params) {
-                Ok(Some(update)) => history.apply(update)?,
+            match update {
+                Ok(Some(update)) => history.apply(update.clone())?,
                 Ok(None) => (),
-                Err(reason) => history.set_completeness(Completeness::Incomplete(reason))?,
+                Err(reason) => history.set_completeness(Completeness::Incomplete(reason.clone()))?,
             }
         }
         Ok(())

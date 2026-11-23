@@ -1,17 +1,13 @@
-import { isSpinnerStyle, type SpinnerStyle } from '@/lib/spinner-clock'
-import { cornersOfWindowStyle, DEFAULT_CORNERS, isCorners, type Corners } from '@/features/workspace/theme/corners'
+import { isSpinnerStyle, type SpinnerStyle } from '@/lib/spinner-styles'
 import { DEFAULT_FONT_WEIGHT, DEFAULT_FONT_WEIGHT_BOLD, isFontFamily, isFontWeight, type TerminalFontWeight } from '@/lib/terminalFont'
 import { readThemePreference, type ThemePreference } from '@/data/themePreference'
 import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, THEMES, type ThemeMode } from '@/features/workspace/theme/themes'
-import { NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
+import { detectPlatform, NO_OVERRIDES, readKeyOverrides, type KeyOverrides } from '@/features/workspace/model/shortcuts'
 import { type ChatAgent, type PaneView } from '@/features/workspace/model/chatView'
+import { SIDEBAR_SORTS, type SidebarSort } from '@/features/workspace/model/sidebarTree'
+import { skippedConfirmsOf, type SkippedConfirms } from '@/features/confirm/confirm'
 
 export type CursorStyle = 'block' | 'bar' | 'underline'
-/** How much room the sidebar's rows, the tabs and the panes get. */
-export type Density = 'compact' | 'comfortable' | 'spacious'
-export const DENSITIES: readonly Density[] = ['compact', 'comfortable', 'spacious']
-/** How big the sidebar's and the rail's icons and tiles are. */
-export type IconSize = 'small' | 'medium' | 'large'
 /** How wide the chat's column of messages may be: sized to the pane, a fixed narrow or wide column, or the whole pane. */
 export type ChatWidth = 'auto' | 'narrow' | 'wide' | 'full'
 export const CHAT_WIDTHS: readonly ChatWidth[] = ['auto', 'narrow', 'wide', 'full']
@@ -22,20 +18,23 @@ const CHAT_TEXT_LARGE = 110
 const CHAT_TEXT_LARGER = 125
 const CHAT_TEXT_LARGEST = 140
 export const CHAT_TEXT_SIZES: readonly number[] = [CHAT_TEXT_SMALL, CHAT_TEXT_SIZE_DEFAULT, CHAT_TEXT_LARGE, CHAT_TEXT_LARGER, CHAT_TEXT_LARGEST]
+/**
+ * The sizes the whole window can be drawn at (Settings › Appearance › Interface size), as a percentage of the design
+ * size. The default is a step up: at the design size the text and icons read small on a laptop screen.
+ */
+const INTERFACE_SMALL = 90
+const INTERFACE_DESIGN = 100
+export const INTERFACE_SIZE_DEFAULT = 110
+const INTERFACE_LARGER = 125
+const INTERFACE_LARGEST = 140
+export const INTERFACE_SIZES: readonly number[] = [INTERFACE_SMALL, INTERFACE_DESIGN, INTERFACE_SIZE_DEFAULT, INTERFACE_LARGER, INTERFACE_LARGEST]
+/** The typeface the chat is written in: the app's own (Inter), the system's, a serif or the monospace. */
+export type ChatFont = 'inter' | 'system' | 'serif' | 'mono'
+export const CHAT_FONTS: readonly ChatFont[] = ['inter', 'system', 'serif', 'mono']
 /** Which side of the window the sidebar sits on. */
 export type SidebarSide = 'left' | 'right'
-/** How the sidebar orders sessions: as they were created (rows never move), or with what needs you first. */
-export type SidebarOrder = 'creation' | 'priority'
-/** What the sidebar's headings are: what each session is doing, its project, or its machine. */
-export type SidebarGroup = 'status' | 'project' | 'machine'
-/** Which corner the toasts stack in. */
-export type ToastPosition = 'bottom' | 'top'
 /** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
 export type TerminalDock = 'bottom' | 'right' | 'full'
-/** Square or rounded corners, the one shape choice of the desktop's look (`theme/corners.ts`). Kept by this window alone. */
-export type CornersChoice = Corners
-/** App and folder icons keep their colours, or drop to neutral gray tiles. Independent of the style. */
-export type IconColor = 'color' | 'grayscale'
 
 const SCROLLBACK_SHORT = 5000
 const SCROLLBACK_DEFAULT = 10000
@@ -62,23 +61,19 @@ export type TerminalLineHeight = (typeof LINE_HEIGHT_CHOICES)[number]
 export const DEFAULT_LINE_HEIGHT: TerminalLineHeight = LINE_SNUG
 
 export type SettingsPreferences = {
-  accent: 'teal' | 'blue' | 'violet'
   spinner: SpinnerStyle
   /** Reopen the panes and splits of last time at launch. Saved as `restoreTabs` before fleets; that name is still read. */
   restoreLayout: boolean
+  /** The line at the foot of the window: version, update, usage and the Commands and Shortcuts keys. */
+  statusBar: boolean
   reduceMotion: boolean
-  animateSidebarActivity: boolean
   /** File names in a chat's messages are drawn in the colour of their type. */
   colourFileNames: boolean
   /** The desktop sidebar is collapsed to its rail. */
   compactSidebar: boolean
   notifyNeedsYou: boolean
   notifyFinished: boolean
-  /** A session's program exited with an error (a native notification, while the window is in the background). */
-  notifyError: boolean
   notificationSound: boolean
-  /** The right-hand corner the in-window toasts stack in. */
-  toastPosition: ToastPosition
   terminalFontSize: number
   /** One family name for the terminal text; empty uses the bundled Geist Mono. */
   terminalFontFamily: string
@@ -88,7 +83,6 @@ export type SettingsPreferences = {
   startFolder: string
   /** Where a block saved from a chat goes; empty is the Downloads folder. */
   exportFolder: string
-  /** How the sidebar groups sessions: by git repository, or by the folder they are in. */
   /** Which theme is in use: your dark one, your light one, or whichever the system asks for. */
   themeMode: ThemeMode
   /** The theme names used in dark and in light (Settings › Appearance). */
@@ -101,31 +95,29 @@ export type SettingsPreferences = {
   terminalLineHeight: TerminalLineHeight
   /** Mirror the terminal's text into the page for screen readers. It makes every pane much heavier to draw. */
   terminalScreenReader: boolean
-  density: Density
-  /** Text size of the sidebar's folder names and session rows, in px. */
-  sidebarTextSize: number
-  /** Text size of the tabs, in px. */
-  tabTextSize: number
   /** The docked sidebar's width in px; dragged with the mouse. */
   sidebarWidth: number
   sidebarSide: SidebarSide
-  sidebarOrder: SidebarOrder
-  sidebarGroup: SidebarGroup
+  /** How the sidebar orders its projects, picked in its filter menu. */
+  sidebarSort: SidebarSort
   terminalDock: TerminalDock
-  iconSize: IconSize
-  corners: CornersChoice
-  iconColor: IconColor
   /** The keys chosen in Settings › Hotkeys, in place of the actions' own. */
   keyOverrides: KeyOverrides
   /** How wide the chat's messages run; `auto` grows with the pane, so a large screen is used. */
   chatWidth: ChatWidth
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
   chatTextSize: number
+  /** The typeface of the chat's messages; code stays in the monospace. */
+  chatFont: ChatFont
+  /** The size of the whole window, as a percentage (`INTERFACE_SIZES`): the webview's own zoom. */
+  interfaceSize: number
   /** Which view a Claude or Codex session opens in. Terminal until you change it. */
   /** The view a new session opens in; the other is one click away on its pane. */
   openSessionsIn: PaneView
   /** The agent a new session starts. */
   defaultAgent: ChatAgent
+  /** The confirms the person ticked "Don't ask again" on: their actions run straight away. */
+  confirmSkipped: SkippedConfirms
   /** The chat leaves out runs of reads and searches that succeeded (`isQuietRun`). Off until you turn it on. */
   hideSuccessfulTools: boolean
   /**
@@ -135,10 +127,6 @@ export type SettingsPreferences = {
   bypassOff: readonly ChatAgent[]
   /** Remote machines update themselves after this computer does, once their agents are idle. Shared with the terminal app (`[updates] machines`). */
   updateMachines: boolean
-  /** A small readout of frames and process load over the window, for finding what lags. */
-  perfOverlay: boolean
-  /** Draw terminals with xterm's DOM renderer instead of WebGL; for a web view that shows typed text late. */
-  terminalPlainDrawing: boolean
   /** The terminal cursor blinks while its pane is focused. xterm drives it, so it is off by default. */
   cursorBlink: boolean
   /** Fetch a new release in the background. Installing still waits for a restart. */
@@ -166,12 +154,6 @@ export const TERMINAL_FONT_SIZE_MAX = 16
 export const SIDEBAR_WIDTH_MIN = 208
 export const SIDEBAR_WIDTH_MAX = 440
 export const SIDEBAR_WIDTH_DEFAULT = 264
-/** The sidebar and tab text sizes the controls offer, in px; any size in range that was saved is kept. */
-export const UI_TEXT_SIZE_SMALL = 12
-export const UI_TEXT_SIZE_DEFAULT = 13.5
-export const UI_TEXT_SIZE_LARGE = 15
-const UI_TEXT_SIZE_MIN = 11
-const UI_TEXT_SIZE_MAX = 17
 
 const STORAGE_KEY = 'maiker.gui.settings.v1'
 
@@ -181,17 +163,14 @@ const THEME_FROM_PREFERENCE: Record<ThemePreference, string> = { night: DEFAULT_
 function defaults(): SettingsPreferences {
   const legacy = THEME_FROM_PREFERENCE[readThemePreference()]
   return {
-    accent: 'teal',
     spinner: 'braille',
     restoreLayout: true,
+    statusBar: true,
     reduceMotion: false,
-    animateSidebarActivity: true,
     compactSidebar: false,
     notifyNeedsYou: true,
     notifyFinished: true,
-    notifyError: true,
     notificationSound: false,
-    toastPosition: 'bottom',
     terminalFontSize: 13,
     terminalFontFamily: '',
     terminalFontWeight: DEFAULT_FONT_WEIGHT,
@@ -207,29 +186,22 @@ function defaults(): SettingsPreferences {
     scrollSpeed: SCROLL_NORMAL,
     terminalLineHeight: DEFAULT_LINE_HEIGHT,
     terminalScreenReader: false,
-    corners: DEFAULT_CORNERS,
-    density: 'comfortable',
-    sidebarTextSize: UI_TEXT_SIZE_DEFAULT,
-    tabTextSize: UI_TEXT_SIZE_DEFAULT,
     sidebarWidth: SIDEBAR_WIDTH_DEFAULT,
     sidebarSide: 'left',
-    sidebarOrder: 'creation',
-    sidebarGroup: 'status',
+    sidebarSort: 'recent',
     terminalDock: 'bottom',
-    iconSize: 'medium',
-    iconColor: 'color',
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
+    chatFont: 'inter',
+    interfaceSize: INTERFACE_SIZE_DEFAULT,
     openSessionsIn: 'chat',
     defaultAgent: 'claude',
+    confirmSkipped: [],
     hideSuccessfulTools: false,
     colourFileNames: true,
     bypassOff: [],
     updateMachines: true,
-    perfOverlay: false,
-    // WebGL everywhere. The late letters it once showed on Linux came from a page drawn on the CPU, which the host now prevents (docs/PERFORMANCE.md).
-    terminalPlainDrawing: false,
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
@@ -255,10 +227,9 @@ function readStored(): string | null {
 }
 
 /**
- * The redesign made Rounded corners and the Chat view the defaults, after Square and Terminal had been saved as plain
- * defaults. A blob saved before that has no era marker, so those two are old defaults, not choices: they read as the new
- * defaults. From the marker on, a saved choice wins; a saved `folded` (an option that no longer exists) is no choice
- * either, so it reads as Rounded.
+ * The redesign made the Chat view the default, after Terminal had been saved as a plain default. A blob saved before
+ * that has no era marker, so its Terminal is an old default, not a choice: it reads as the new default. From the marker
+ * on, a saved choice wins. The marker keeps the name it was first saved under.
  */
 const CORNERS_ERA_KEY = 'cornersEra'
 const CORNERS_ERA = 2
@@ -288,17 +259,14 @@ export function readSettingsPreferences(): SettingsPreferences {
     const fallback = fresh
     const saved = value as { restoreTabs?: unknown }
     return {
-      accent: isAccent(preferences.accent) ? preferences.accent : fallback.accent,
       spinner: isSpinnerStyle(preferences.spinner) ? preferences.spinner : fallback.spinner,
       restoreLayout: bool(preferences.restoreLayout ?? saved.restoreTabs, fallback.restoreLayout),
+      statusBar: bool(preferences.statusBar, fallback.statusBar),
       reduceMotion: bool(preferences.reduceMotion, fallback.reduceMotion),
-      animateSidebarActivity: bool(preferences.animateSidebarActivity, fallback.animateSidebarActivity),
       compactSidebar: bool(preferences.compactSidebar, fallback.compactSidebar),
       notifyNeedsYou: bool(preferences.notifyNeedsYou, fallback.notifyNeedsYou),
       notifyFinished: bool(preferences.notifyFinished, fallback.notifyFinished),
-      notifyError: bool(preferences.notifyError, fallback.notifyError),
       notificationSound: bool(preferences.notificationSound, fallback.notificationSound),
-      toastPosition: preferences.toastPosition === 'top' || preferences.toastPosition === 'bottom' ? preferences.toastPosition : fallback.toastPosition,
       terminalFontSize: terminalFontSize(preferences.terminalFontSize, fallback.terminalFontSize),
       terminalFontFamily: isFontFamily(preferences.terminalFontFamily) ? preferences.terminalFontFamily.trim() : fallback.terminalFontFamily,
       terminalFontWeight: isFontWeight(preferences.terminalFontWeight) ? preferences.terminalFontWeight : fallback.terminalFontWeight,
@@ -311,38 +279,30 @@ export function readSettingsPreferences(): SettingsPreferences {
       scrollSpeed: isScrollSpeed(preferences.scrollSpeed) ? preferences.scrollSpeed : fallback.scrollSpeed,
       terminalLineHeight: LINE_HEIGHT_CHOICES.find((choice) => choice === preferences.terminalLineHeight) ?? fallback.terminalLineHeight,
       terminalScreenReader: bool(preferences.terminalScreenReader, fallback.terminalScreenReader),
-      density: isDensity(preferences.density) ? preferences.density : fallback.density,
-      sidebarTextSize: clampNumber(preferences.sidebarTextSize, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, fallback.sidebarTextSize),
-      tabTextSize: clampNumber(preferences.tabTextSize, UI_TEXT_SIZE_MIN, UI_TEXT_SIZE_MAX, fallback.tabTextSize),
       sidebarWidth: clampNumber(preferences.sidebarWidth, SIDEBAR_WIDTH_MIN, SIDEBAR_WIDTH_MAX, fallback.sidebarWidth),
       sidebarSide: preferences.sidebarSide === 'left' || preferences.sidebarSide === 'right' ? preferences.sidebarSide : fallback.sidebarSide,
-      sidebarOrder: preferences.sidebarOrder === 'creation' || preferences.sidebarOrder === 'priority' ? preferences.sidebarOrder : fallback.sidebarOrder,
-      sidebarGroup: preferences.sidebarGroup === 'status' || preferences.sidebarGroup === 'project' || preferences.sidebarGroup === 'machine' ? preferences.sidebarGroup : fallback.sidebarGroup,
+      sidebarSort: SIDEBAR_SORTS.find((sort) => sort === preferences.sidebarSort) ?? fallback.sidebarSort,
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
-      iconSize: preferences.iconSize === 'small' || preferences.iconSize === 'medium' || preferences.iconSize === 'large' ? preferences.iconSize : fallback.iconSize,
-      // Before the corner switch a window style was saved under `style`; its corners carry over.
-      corners: (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA
-        ? (isCorners(preferences.corners) ? preferences.corners : fallback.corners)
-        : cornersOfWindowStyle((value as { style?: unknown }).style) ?? fallback.corners,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
+      chatFont: CHAT_FONTS.find((font) => font === preferences.chatFont) ?? fallback.chatFont,
+      interfaceSize: INTERFACE_SIZES.find((size) => size === preferences.interfaceSize) ?? fallback.interfaceSize,
       // Before one setting there was one per agent: what was chosen for Claude carries over.
       openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,
+      confirmSkipped: skippedConfirmsOf(preferences.confirmSkipped) ?? fallback.confirmSkipped,
       hideSuccessfulTools: bool(preferences.hideSuccessfulTools, fallback.hideSuccessfulTools),
       colourFileNames: bool(preferences.colourFileNames, fallback.colourFileNames),
       // The old Yolo and Full access switches are not read: they were off by default, not a choice to keep.
       bypassOff: bypassOffOf(preferences.bypassOff) ?? fallback.bypassOff,
       updateMachines: bool(preferences.updateMachines, fallback.updateMachines),
-      perfOverlay: bool(preferences.perfOverlay, fallback.perfOverlay),
-      terminalPlainDrawing: bool(preferences.terminalPlainDrawing, fallback.terminalPlainDrawing),
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
       restartServiceWhenIdle: bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle),
       monthlyBudget: validBudget(preferences.monthlyBudget),
-      iconColor: preferences.iconColor === 'color' || preferences.iconColor === 'grayscale' ? preferences.iconColor : fallback.iconColor,
-      keyOverrides: readKeyOverrides(preferences.keyOverrides),
+      // The keys were pressed on this computer, so they are checked against this platform's table.
+      keyOverrides: readKeyOverrides(preferences.keyOverrides, detectPlatform(navigator.userAgent)),
     }
   } catch {
     console.warn('Ignoring invalid Maiker settings')
@@ -364,14 +324,6 @@ function terminalFontSize(value: unknown, fallback: number): number {
 function clampNumber(value: unknown, min: number, max: number, fallback: number): number {
   if (typeof value !== 'number' || !Number.isFinite(value)) return fallback
   return Math.min(max, Math.max(min, value))
-}
-
-function isDensity(value: unknown): value is Density {
-  return value === 'compact' || value === 'comfortable' || value === 'spacious'
-}
-
-function isAccent(value: unknown): value is SettingsPreferences['accent'] {
-  return value === 'teal' || value === 'blue' || value === 'violet'
 }
 
 

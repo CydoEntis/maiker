@@ -15,7 +15,6 @@
 use maitty_machines::MachineId;
 use maitty_machines::remote_snapshot::sanitize_snapshot;
 use maitty_shared::agent_commands::AgentCommand;
-use maitty_shared::repositories::RepositoryIndex;
 use maitty_shared::extensions::{ExtError, ExtReply};
 use maitty_shared::protocol::{FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Reply, ServerMsg, SignInAgent, SignInState, Snapshot, Status, TermId};
 use maitty_shared::settings_view::SharedSettings;
@@ -129,12 +128,6 @@ pub enum Out {
         tag: u64,
         outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
     },
-    /// What a machine says it is, already cleaned.
-    MachineFacts {
-        machine: MachineId,
-        tag: u64,
-        facts: maitty_shared::protocol::MachineFacts,
-    },
     /// Where this computer's agent sign-in stands.
     AgentSignIn {
         tag: u64,
@@ -164,12 +157,6 @@ pub enum Out {
         machine: MachineId,
         tag: u64,
         answer: Result<Vec<AgentCommand>, String>,
-    },
-    /// The repositories a machine found, already cleaned.
-    Repositories {
-        machine: MachineId,
-        tag: u64,
-        found: RepositoryIndex,
     },
     /// What a request about the extensions of this computer did, or why it did nothing.
     Extensions {
@@ -300,9 +287,6 @@ impl Streams {
             ServerMsg::Reply(Reply::FolderGit { tag, outcome }) => {
                 out.push(Out::FolderGit { machine, tag, outcome });
             }
-            ServerMsg::Reply(Reply::MachineFacts { tag, facts }) => {
-                out.push(Out::MachineFacts { machine, tag, facts });
-            }
             // This computer's only: a link and a code another machine's login printed are not for this window.
             ServerMsg::Reply(Reply::AgentSignIn { tag, agent, state }) if machine == MachineId::LOCAL => {
                 out.push(Out::AgentSignIn { tag, agent, state });
@@ -318,9 +302,6 @@ impl Streams {
             }
             ServerMsg::Reply(Reply::AgentCommands { tag, answer }) => {
                 out.push(Out::AgentCommands { machine, tag, answer });
-            }
-            ServerMsg::Reply(Reply::Repositories { tag, found }) => {
-                out.push(Out::Repositories { machine, tag, found });
             }
             ServerMsg::Reply(Reply::Extensions { tag, answer }) => {
                 out.push(Out::Extensions { machine, tag, answer });

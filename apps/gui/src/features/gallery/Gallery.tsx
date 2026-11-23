@@ -1,11 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import { Button, IconButton } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import { Fold } from '@/components/ui/fold'
 import { Counter, Divider, Progress } from '@/components/ui/progress'
 import { StatusIcon, type StatusMarkKind } from '@/components/ui/status-icon'
 import { CodeChip, FileBadge, Tag, TextLink } from '@/components/ui/tag'
-import { CORNERS, withLook, type Corners } from '@/features/workspace/theme/corners'
+import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle, THEMES } from '@/features/workspace/theme/themes'
 import { Copy } from 'lucide-react'
 import { ChatFeed, ChatParity, SubagentsBars, WaitingCards } from './ChatFeed'
@@ -16,22 +17,21 @@ import { FlowPartsGallery } from './FlowPartsGallery'
 import { galleryParams, galleryHash } from './galleryParams'
 
 /*
- * Every shared primitive in every state, on any theme and either corner style, so the set can be checked against the
- * design's system page. Opened with `#gallery` (`#gallery?theme=Paper&corners=rounded`) in the desktop window or the
+ * Every shared primitive in every state, on any theme, so the set can be checked against the
+ * design's system page. Opened with `#gallery` (`#gallery?theme=Paper`) in the desktop window or the
  * browser preview. The hover and pressed samples are drawn with the state's own look, as the system page draws them.
  */
 
 const STATES: readonly StatusMarkKind[] = ['idle', 'done', 'needs', 'working']
-const KINDS = ['primary', 'needs', 'soft', 'ghost', 'danger'] as const
+const KINDS = ['primary', 'needs', 'ghost', 'danger'] as const
 /** What hover and press look like for each kind, drawn at rest so they can be compared side by side. */
 const FORCED: Record<(typeof KINDS)[number], { hover: string; pressed: string }> = {
   primary: { hover: 'brightness-108', pressed: 'bg-[color-mix(in_oklab,var(--accent)_80%,var(--bg))]' },
   needs: { hover: 'brightness-108', pressed: 'bg-[color-mix(in_oklab,var(--needs)_80%,var(--bg))]' },
-  soft: { hover: 'bg-[color-mix(in_oklab,var(--raise)_88%,var(--fg))]', pressed: 'bg-[color-mix(in_oklab,var(--raise)_80%,var(--bg))]' },
   ghost: { hover: 'bg-(--hover) text-(--fg)', pressed: 'bg-(--sel)' },
   danger: { hover: 'bg-[color-mix(in_oklab,var(--err)_18%,transparent)]', pressed: 'bg-[color-mix(in_oklab,var(--err)_24%,transparent)]' },
 }
-const FOCUS_RING = 'shadow-(--focus-underline)'
+const FOCUS_RING = 'shadow-(--focus-edge)'
 
 function Sample({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -52,7 +52,7 @@ function Captioned({ caption, children }: { caption: string; children: ReactNode
 }
 
 function ButtonRow({ kind }: { kind: (typeof KINDS)[number] }) {
-  const hint = kind === 'needs' || kind === 'soft' ? 'y' : undefined
+  const hint = kind === 'needs' ? 'y' : undefined
   const label = kind === 'needs' ? 'Yes once' : 'Label'
   return (
     <Sample label={`Button/kind=${kind}`}>
@@ -77,7 +77,7 @@ function Primitives() {
           <Card>
             <CardHead><span>Head strip</span><span className="flex-1" /><IconButton label="Copy"><Copy /></IconButton></CardHead>
             <CardBody><span className="text-[13px] text-(--fg2)">Body. 10px 12px padding.</span></CardBody>
-            <CardFoot><Button size="sm">Primary</Button><Button size="sm" variant="soft">Soft</Button></CardFoot>
+            <CardFoot><Button size="sm">Primary</Button><Button size="sm" variant="ghost">Soft</Button></CardFoot>
           </Card>
         </Sample>
         <Sample label="Card · hover"><Card className="border-(--line2)"><CardHead>Edge goes to line2</CardHead></Card></Sample>
@@ -91,7 +91,7 @@ function Primitives() {
       <Sample label="IconButton">
         <div className="flex gap-3.5">
           <Captioned caption="default"><IconButton label="Copy"><Copy /></IconButton></Captioned>
-          <Captioned caption="hover"><IconButton label="Copy" className="bg-(--hover) text-(--fg)"><Copy /></IconButton></Captioned>
+          <Captioned caption="hover or on"><IconButton label="Copy" on><Copy /></IconButton></Captioned>
           <Captioned caption="focus"><IconButton label="Copy" className={FOCUS_RING}><Copy /></IconButton></Captioned>
         </div>
       </Sample>
@@ -112,8 +112,8 @@ function Primitives() {
         <Sample label="CodeChip · Link">
           <span className="text-sm text-(--fg2)">Run <CodeChip>pnpm test</CodeChip> or read <TextLink href="#gallery">the guide</TextLink></span>
         </Sample>
-        <Sample label="StatusIcon (the four marks, one box)">
-          {STATES.map((state) => <Captioned key={state} caption={state}><StatusIcon status={state} /></Captioned>)}
+        <Sample label="StatusIcon (three marks; idle has none)">
+          {STATES.map((state) => <Captioned key={state} caption={state}><StatusIcon status={state} named /></Captioned>)}
         </Sample>
         <Sample label="Fold">
           <div className="w-full border border-(--line)">
@@ -143,36 +143,30 @@ function useHashParams() {
   return params
 }
 
-/** The gallery page: a theme and corner switcher over the primitives and the chat's cards. */
+/** The gallery page: a theme switcher over the primitives and the chat's cards. */
 export function Gallery() {
-  const { theme: themeName, corners } = useHashParams()
+  const { theme: themeName } = useHashParams()
   const theme = withLook(findTheme(themeName))
   const style = themeStyle(theme)
   useEffect(() => {
     const root = document.documentElement
-    root.dataset.corners = corners
     for (const [name, value] of Object.entries(style)) if (name.startsWith('--')) root.style.setProperty(name, value)
     root.style.colorScheme = theme.light ? 'light' : 'dark'
-  }, [corners, style, theme.light])
+  }, [style, theme.light])
   return (
     <div className="mx-app" data-theme-kind={theme.light ? 'light' : 'dark'} style={{ ...style, position: 'static', minHeight: '100vh', overflow: 'auto', background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--ui)' }}>
       <div className="mx-auto flex max-w-[1180px] flex-col gap-6 px-8 py-10">
         <header className="flex flex-col gap-3">
           <h1 className="m-0 text-[26px] font-[650] tracking-[-.015em]">Primitives</h1>
-          <p className="m-0 text-sm text-(--muted)">Every shared component in every state. {theme.name}, {corners} corners.</p>
+          <p className="m-0 text-sm text-(--muted)">Every shared component in every state. {theme.name}.</p>
           <nav aria-label="Theme" className="flex flex-wrap gap-1.5">
             {QUICK_THEMES.filter((name) => THEMES.some((entry) => entry.name === name)).map((name) => (
-              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'soft'}><a href={galleryHash(name, corners)}>{name}</a></Button>
-            ))}
-          </nav>
-          <nav aria-label="Corners" className="flex gap-1.5">
-            {CORNERS.map((option: Corners) => (
-              <Button key={option} asChild size="sm" variant={option === corners ? 'primary' : 'soft'}><a href={galleryHash(theme.name, option)}>{option}</a></Button>
+              <Button key={name} asChild size="sm" variant={name === theme.name ? 'primary' : 'ghost'}><a href={galleryHash(name)}>{name}</a></Button>
             ))}
           </nav>
         </header>
         <Primitives />
-        <h2 className="m-0 mt-4 text-[18px] font-[650]">Checklist and setup parts</h2>
+        <h2 className="m-0 mt-4 text-[18px] font-[650]">Setup parts</h2>
         <FlowPartsGallery />
         <h2 className="m-0 mt-4 text-[18px] font-[650]">Chat feed as the prototype draws it</h2>
         <div className="flex flex-wrap items-start gap-6">

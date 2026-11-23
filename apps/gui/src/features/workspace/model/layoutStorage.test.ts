@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { EMPTY_LAYOUT, openArrangement, type MakeId } from './layout'
-import { LAYOUT_RESET_NOTICE, readLayout, STORAGE_KEY, writeLayout } from './layoutStorage'
+import { readLayout, STORAGE_KEY, writeLayout } from './layoutStorage'
 
 const makeId: MakeId = (prefix) => `${prefix}-1`
 
@@ -35,9 +35,5 @@ describe('saved layout', () => {
   it('ignores a saved layout it cannot read', () => {
     localStorage.setItem(STORAGE_KEY, '{ not json')
     expect(readLayout()).toEqual({ layout: EMPTY_LAYOUT, reset: false })
-  })
-
-  it('names the reset in words', () => {
-    expect(LAYOUT_RESET_NOTICE).toMatch(/reset/)
   })
 })

@@ -1,6 +1,7 @@
-/* The window's foot, under the cards: one row on the window ground. */
-.mx-status-bar { flex: none; height: 26px; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 14px; font-size: 11.5px; color: var(--dim); white-space: nowrap; background: var(--bg); }
-.mx-status-version { font: 400 11px var(--mono); }
+/* The window's foot, under the cards: one 26px row on the window ground. The version and its update at the left; the
+   agents' limits, then the two hints at the right. */
+.mx-status-bar { flex: none; height: 26px; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 0 12px 0 14px; overflow: hidden; font-size: 11.5px; color: var(--dim); white-space: nowrap; background: var(--t0); }
+.mx-status-version { flex: none; display: inline-flex; align-items: center; gap: 6px; font: 400 11px var(--mono); }
 .mx-status-fill { flex: 1; }
 .mx-status-meters { display: inline-flex; align-items: center; gap: 4px; }
 /* A meter is a pill: the agent's mark, the window's short name, a thin bar and the figure, in mono. */
@@ -9,9 +10,17 @@
 .mx-status-meter .mx-usage-figure { color: inherit; }
 .mx-status-meter.is-warn { color: var(--fg); }
 .mx-status-meter:hover { background: var(--m-hover); }
-.mx-status-meter.is-current { background: var(--m-sel); color: var(--fg2); }
-.mx-status-sep { width: 1px; height: 12px; background: var(--line2); }
-.mx-status-commands { display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px; border-radius: var(--r-control); color: var(--muted); }
-.mx-status-commands:hover { background: var(--m-hover); color: var(--fg); }
-.mx-status-commands:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-underline); }
-.mx-status-commands kbd { font: 500 10.5px var(--mono); color: var(--fg2); padding: 0 4px; border-radius: var(--r-badge); box-shadow: inset 0 0 0 1px var(--line2); }
+/* The agent of the session in focus: lit with the ink, the way a hover is. */
+.mx-status-meter.is-current { background: rgba(var(--ink), .06); color: var(--fg2); }
+.mx-status-sep { flex: none; width: 1px; height: 12px; background: var(--line2); }
+/* A hint: the key, then what it opens. */
+.mx-status-hint { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 20px; padding: 0 6px; border-radius: var(--r-control); color: var(--muted); }
+.mx-status-hint:hover { background: var(--m-hover); color: var(--fg); }
+.mx-status-hint:focus-visible, .mx-status-meter:focus-visible { outline: none; box-shadow: var(--focus-edge); }
+.mx-status-hint kbd { font: 500 10.5px var(--mono); color: var(--fg2); padding: 0 4px; border-radius: var(--r-badge); box-shadow: inset 0 0 0 1px var(--line2); }
+/* The smallest window has no room for all of it: the hints keep their words and drop their keys, the meters drop
+   their window names (the tooltip and the popover still say them), and the row closes up. Should it still not fit, the
+   meters are what is cut, never the version or the hints. */
+.mx-status-meters { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.mx-app.is-narrow .mx-status-bar { gap: 8px; }
+.mx-app.is-narrow .mx-status-hint kbd, .mx-app.is-narrow .mx-status-meter .mx-usage-name { display: none; }

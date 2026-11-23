@@ -9,3 +9,8 @@ export function menuPoint(event: { clientX: number; clientY: number; currentTarg
   const box = event.currentTarget.getBoundingClientRect()
   return { x: box.right - MENU_WIDTH_PX, y: box.bottom + EDGE_PX }
 }
+
+/** The keys that open a context menu: the menu key, and Shift+F10 on a keyboard without one. */
+export function isMenuKey(event: { key: string; shiftKey: boolean }): boolean {
+  return event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')
+}

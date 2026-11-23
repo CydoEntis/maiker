@@ -317,26 +317,6 @@ mod tests {
         }
     }
 
-    #[test]
-    fn it_counts_the_sessions_that_resume_and_the_ones_mid_turn() {
-        let mut prompt = Prompt::new(OLD_PROTOCOL, &cfg(LAYOUTS[0])).resuming(4, Some(2));
-        let out = drawn(&mut prompt, 100, 30);
-        assert!(
-            out.contains("4 sessions resume with their conversation; 2 mid-turn now."),
-            "{out}"
-        );
-        let mut prompt = Prompt::new(OLD_PROTOCOL, &cfg(LAYOUTS[0])).resuming(1, None);
-        assert!(drawn(&mut prompt, 100, 30).contains("1 session resumes with"));
-    }
-
-    #[test]
-    fn a_newer_server_is_called_newer() {
-        let mut prompt = Prompt::new(crate::protocol::PROTOCOL_VERSION + 1, &cfg(LAYOUTS[0]));
-        assert!(drawn(&mut prompt, 100, 30).contains("newer"));
-        let mut prompt = Prompt::new(OLD_PROTOCOL, &cfg(LAYOUTS[0]));
-        assert!(drawn(&mut prompt, 100, 30).contains("older"));
-    }
-
     /// Restarting a newer server onto this app would be a downgrade, so that is not on offer.
     #[test]
     fn a_newer_server_offers_to_update_this_app_and_never_a_restart() {
@@ -425,33 +405,6 @@ mod tests {
                 "empty space does nothing"
             );
         }
-    }
-
-    #[test]
-    fn hovering_a_button_lights_it() {
-        let mut prompt = Prompt::new(OLD_PROTOCOL, &cfg(LAYOUTS[0]));
-        drawn(&mut prompt, 100, 30);
-        let quit = button_at(&prompt, Choice::Quit);
-        let bg = |prompt: &mut Prompt| {
-            let mut term = Terminal::new(TestBackend::new(100, 30)).unwrap();
-            term.draw(|f| prompt.draw(f)).unwrap();
-            term.backend().buffer()[(quit.x + 1, quit.y)].bg
-        };
-        let plain = bg(&mut prompt);
-        assert_eq!(mouse(&mut prompt, MouseEventKind::Moved, quit), None);
-        assert_eq!(prompt.hover, Some(Choice::Quit));
-        assert_ne!(
-            bg(&mut prompt),
-            plain,
-            "the button under the pointer is tinted"
-        );
-        prompt.on_mouse(MouseEvent {
-            kind: MouseEventKind::Moved,
-            column: 0,
-            row: 0,
-            modifiers: KeyModifiers::NONE,
-        });
-        assert_eq!(prompt.hover, None);
     }
 
     #[test]

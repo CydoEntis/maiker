@@ -1,6 +1,8 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { SkeletonLines } from '@/components/ui/skeleton'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { ResultsList, ResultsOption } from '@/components/ui/results-list'
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import type { RemoteIndex, RemoteListing } from '@/api/fileGets'
@@ -179,7 +181,7 @@ export function GetFileDialog({ session, onGet, onCancel, browse }: { session: S
       <DialogContent unstyled asChild aria-describedby={undefined}>
       <form
         aria-label={`Get a file from ${machine}`}
-        className="mx-rename mx-getfile"
+        className="mx-rename mx-modal mx-getfile"
         onSubmit={(event) => {
           event.preventDefault()
           if (ready) onGet(path)
@@ -189,7 +191,8 @@ export function GetFileDialog({ session, onGet, onCancel, browse }: { session: S
           if (event.key === 'Escape') event.stopPropagation()
         }}
       >
-        <DialogTitle asChild><h2>Get a file from {machine}</h2></DialogTitle>
+        <ModalHead title={`Get a file from ${machine}`} onClose={onCancel} />
+        <ModalBody>
         {browse !== undefined && (
           <>
             <div className="mx-getfile-where">
@@ -230,10 +233,11 @@ export function GetFileDialog({ session, onGet, onCancel, browse }: { session: S
         )}
         <p>{browse === undefined ? `Type the file's path on ${machine}.` : 'Or type a path.'} It is saved in Downloads, in the maiker folder, up to 1 GB. A folder comes as a folder.</p>
         <input ref={pathBox} aria-label={`Path on ${machine}`} value={typed} maxLength={MOST_PATH_CHARS} spellCheck={false} onChange={(event) => { setTyped(event.target.value) }} />
-        <div className="mx-rename-actions">
-          <button type="button" className="mx-text-button" onClick={onCancel}>Cancel</button>
-          <button type="submit" className="mx-text-button is-primary" disabled={!ready}>Get file</button>
-        </div>
+        </ModalBody>
+        <ModalFoot>
+          <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Cancel</Button>
+          <Button type="submit" variant="primary" size="lg" disabled={!ready}>Get file</Button>
+        </ModalFoot>
       </form>
       </DialogContent>
     </Dialog>

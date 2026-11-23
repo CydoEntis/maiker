@@ -91,6 +91,11 @@ export function mixOklab(from: string, to: string, percent: number): string {
   return formatColor(fromOklab({ L: a.L + (b.L - a.L) * t, a: a.a + (b.a - a.a) * t, b: a.b + (b.b - a.b) * t }, 1))
 }
 
+/** How light a colour looks (OKLab lightness): 0 for black, 1 for white. */
+export function lightnessOf(colour: string): number {
+  return toOklab(parseColor(colour)).L
+}
+
 /** How far a colour is from grey (OKLab chroma): 0 for a pure grey. */
 export function chromaOf(colour: string): number {
   const { a, b } = toOklab(parseColor(colour))

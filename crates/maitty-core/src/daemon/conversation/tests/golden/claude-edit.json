@@ -1,0 +1,184 @@
+{
+  "steps": [
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "created",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Idle"
+    },
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [
+        {
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Running"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "User",
+              "text": "hello fake Claude"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "<id 2>",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "content": {
+            "Tool": {
+              "input": {
+                "file_path": "src/a.rs",
+                "new_string": "new",
+                "old_string": "old"
+              },
+              "kind": "commandExecution",
+              "label": "Edit ",
+              "output": ""
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "toolu_edit",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Running"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the provider asked",
+      "open_requests": [
+        {
+          "can_remember": false,
+          "changes": [
+            {
+              "diff": "-old\n+new",
+              "kind": "update",
+              "path": "src/a.rs"
+            }
+          ],
+          "choices": [
+            "Accept",
+            "Decline"
+          ],
+          "command": "Edit: src/a.rs",
+          "cwd": null,
+          "item_id": "toolu_edit",
+          "kind": "FileChange",
+          "permissions": null,
+          "questions": [],
+          "reason": null,
+          "request_id": "edit-request",
+          "turn_id": "<id 1>"
+        }
+      ],
+      "recovery": "Running",
+      "status": "Blocked"
+    },
+    {
+      "answered_requests": [
+        {
+          "answered_at_ms": "<time>",
+          "decision": "Accept",
+          "request": {
+            "can_remember": false,
+            "changes": [
+              {
+                "diff": "-old\n+new",
+                "kind": "update",
+                "path": "src/a.rs"
+              }
+            ],
+            "choices": [
+              "Accept",
+              "Decline"
+            ],
+            "command": "Edit: src/a.rs",
+            "cwd": null,
+            "item_id": "toolu_edit",
+            "kind": "FileChange",
+            "permissions": null,
+            "questions": [],
+            "reason": null,
+            "request_id": "edit-request",
+            "turn_id": "<id 1>"
+          }
+        }
+      ],
+      "error": null,
+      "history": [
+        {
+          "completed_at_ms": "<time>",
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "User",
+              "text": "hello fake Claude"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "<id 2>",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Tool": {
+              "input": {
+                "file_path": "src/a.rs",
+                "new_string": "new",
+                "old_string": "old"
+              },
+              "kind": "commandExecution",
+              "label": "Edit ",
+              "output": "edited"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "toolu_edit",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the turn ended",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Done"
+    }
+  ]
+}

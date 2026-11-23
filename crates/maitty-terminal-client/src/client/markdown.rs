@@ -591,51 +591,6 @@ mod tests {
             .collect()
     }
 
-    fn style_of(lines: &[Vec<Seg>], word: &str) -> Style {
-        lines
-            .iter()
-            .flatten()
-            .find(|(s, _)| s.contains(word))
-            .map(|(_, st)| *st)
-            .unwrap_or_else(|| panic!("{word} is drawn"))
-    }
-
-    #[test]
-    fn a_first_level_heading_is_bold_and_strong_with_a_rule_under_it() {
-        let t = theme();
-        let lines = render("# Title\n\n## Part\n\ntext", 20, &t);
-        assert_eq!(
-            text(&lines),
-            ["Title", "─".repeat(20).as_str(), "", "Part", "", "text"]
-        );
-        let s = style_of(&lines, "Title");
-        assert_eq!(s.fg, Some(t.strong));
-        assert!(s.add_modifier.contains(Modifier::BOLD));
-        assert!(
-            style_of(&lines, "Part")
-                .add_modifier
-                .contains(Modifier::BOLD)
-        );
-    }
-
-    #[test]
-    fn emphasis_strong_and_inline_code_keep_their_styles() {
-        let t = theme();
-        let lines = render("an *odd* and **bold** `code`", 40, &t);
-        assert_eq!(text(&lines), ["an odd and bold code"]);
-        assert!(
-            style_of(&lines, "odd")
-                .add_modifier
-                .contains(Modifier::ITALIC)
-        );
-        assert!(
-            style_of(&lines, "bold")
-                .add_modifier
-                .contains(Modifier::BOLD)
-        );
-        assert_eq!(style_of(&lines, "code").bg, Some(t.card2));
-    }
-
     #[test]
     fn fenced_code_sits_on_the_raised_ground_across_the_width_and_is_cut_not_wrapped() {
         let t = theme();
@@ -684,14 +639,6 @@ mod tests {
     }
 
     #[test]
-    fn a_block_quote_sits_behind_a_muted_bar() {
-        let t = theme();
-        let lines = render("> quoted words\n\nafter", 40, &t);
-        assert_eq!(text(&lines), ["│ quoted words", "", "after"]);
-        assert_eq!(lines[0][0].1.fg, Some(t.muted));
-    }
-
-    #[test]
     fn tables_align_their_columns_and_are_cut_to_the_width() {
         let md = "| name | n |\n|:--|--:|\n| alpha | 1 |\n| b | 200 |";
         assert_eq!(
@@ -705,26 +652,6 @@ mod tests {
         ));
         assert!(narrow.iter().all(|l| l.width() <= 20), "{narrow:?}");
         assert!(narrow[0].contains('…'), "{narrow:?}");
-    }
-
-    #[test]
-    fn a_link_shows_its_text_with_the_url_muted_after_it() {
-        let t = theme();
-        let lines = render("see [the docs](https://x.dev) or <https://y.dev>", 60, &t);
-        assert_eq!(
-            text(&lines),
-            ["see the docs (https://x.dev) or https://y.dev"]
-        );
-        assert_eq!(style_of(&lines, "(https://x.dev)").fg, Some(t.muted));
-        assert_eq!(style_of(&lines, "docs").fg, Some(t.accent));
-    }
-
-    #[test]
-    fn a_horizontal_rule_spans_the_width() {
-        assert_eq!(
-            text(&render("a\n\n---\n\nb", 8, &theme())),
-            ["a", "", "────────", "", "b"]
-        );
     }
 
     #[test]

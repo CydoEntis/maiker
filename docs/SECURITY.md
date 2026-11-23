@@ -118,7 +118,9 @@ checks it the same way (one of the known agent names, flags that are single plai
 folder that exists), so it can start nothing a start could not; the daemon keeps one such
 agent, hidden, and stops it when it is not taken. The window's own permissions include setting its title and
 its icon's count (`core:window:allow-set-title`, `core:window:allow-set-badge-count`), which show how many sessions
-need you; they take a number the window counted, never text from a session.
+need you; they take a number the window counted, never text from a session. It may set its own zoom
+(`core:webview:allow-set-webview-zoom`), from the Interface size setting, a number the settings reader checks
+against a fixed list.
 
 The native host may start only the bundled CLI sidecar with the fixed `daemon`
 argument. Resolve its path from the application bundle; never accept a program
@@ -151,7 +153,7 @@ the webview itself never navigates. What the page then does is the browser's to 
 
 `agent_auth_status` and `agent_sign_out` (`agent_auth.rs`) ask an agent's own command line whether
 its account is signed in (`claude auth status --json`, `codex login status`) and end the sign-in
-(`claude auth logout`, `codex logout`), for Settings › Permissions. The program is the one the host finds
+(`claude auth logout`, `codex logout`), for Settings › Chat › Accounts. The program is the one the host finds
 on PATH, the arguments are constants, the webview supplies only the agent's name (any other name is
 refused), and each run is stopped after 15 seconds. The host reads no credential file and keeps
 none: the window is told who is signed in (the account's email and plan, as the agent prints them),
@@ -165,9 +167,12 @@ in the home folder of this computer or of the machine named, whose first command
 webview supplies the machine and nothing else, so it is not a way to run a program of the window's
 choosing. The person finishes the sign-in in that terminal and their browser; the host reads no code,
 password or token from it. SSH is set up outside Maiker for now: Add a remote machine has no key-install flow, runs no command and
-has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. The key step only says so and offers a
-one-line key-copy command to copy and run in the person's own terminal (`keySetupCommand` refuses a target that is not one plain
-word).
+has no terminal of its own, so Maiker never sees, asks for, reads, stores or logs a password. A refused key's one-line failure only says so and offers a
+one-line key-copy command to copy and run in the person's own terminal. The command comes from the host
+(`link_failure::fix_command`), which gives none for a target that is not one plain word (`check_target`). A changed host key is
+refused and its sentence says how to check and remove the old key (`ssh-keygen -R`); nothing offers to accept it. A new key the
+person's own strict config refused is not called changed: its sentence gives the `ssh -o StrictHostKeyChecking=ask <target>` line
+to run in their own terminal, where ssh shows the fingerprint and the person answers; Maiker accepts nothing itself.
 
 `export_daemon_log` (`daemon_log.rs`) saves a copy of the end of the service's log (4 MiB at most) as
 `maiker-log.txt` in the Downloads folder, for a person to send when something went wrong (Settings ›
@@ -278,9 +283,15 @@ that has been given to another process is never signalled; ids 0 and 1 and negat
 
 An agent can start helpers only if you say so. Who is asking is proven the way status reports are
 (the pane's `AGENT_PANE_TOKEN` on the connection); the answer is `AnswerHelpers`, which the daemon
-refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
+refuses from any pane and accepts only for a request it holds. The desktop app sends it through its own command (`answer_helpers`, and `answer_chat_helpers` for a chat, which takes the chat's number and is refused in words by a service too old to read it), which takes one of three words (`allow`, `always`, `no`) and refuses anything else. "Always in this project" is kept in
 `helper-projects.json` in Maiker's data folder, never in the repo, so an agent that can write the
 repo cannot grant itself helpers. A helper's own permission prompts still come to you.
+
+A chat asks the same way (ADR 0016, proposed): who is asking is the chat's runtime identity on the
+connection, checked again for every request, and the answer is `AnswerChatHelpers`, refused from any
+pane and from any chat's runtime. The consent is cooperative, as a pane's is: a process of the same
+user that connects with no identity is read as that user, so this stops an agent that follows the
+rules from spending the machine unasked and is not a sandbox.
 
 A chat's **Always in this project** (`ConversationAllowAlways`, ADR 0005) is kept the same way, in
 `chat-allowed-commands.json` in Maiker's data folder: the project and the hash of the exact command as the
@@ -380,7 +391,9 @@ control-character `ssh_args` entry, and a bad `remote_cmd`; `ssh_args` is a list
 split on spaces. The ssh command itself is built in one place (`ssh_command.rs` in `maitty-machines`, shared by the terminal app and the desktop app): ssh runs with
 `-o BatchMode=yes` (no prompts) and `-o ForwardAgent=no` and `-a` (no agent forwarding), plus
 `ConnectTimeout` and `ServerAlive*` defaults that `ssh_args` may override; `BatchMode` and
-`ForwardAgent` come before `ssh_args` so ssh's first-value-wins rule keeps them. The host follows
+`ForwardAgent` come before `ssh_args` so ssh's first-value-wins rule keeps them. A line that never asks a
+person also carries `StrictHostKeyChecking=accept-new` after `ssh_args`, only in place of ssh's own default
+(see *remote machine logins from the desktop*, Host keys). The host follows
 `--`, and a host that starts with `-` is refused there too, since `--remote host` never passes
 the config load. The remote command is one string for the remote user's login shell, so each
 word is POSIX single-quoted whatever the client runs (a Windows client to a Linux remote
@@ -407,7 +420,7 @@ ssh's login words.
 The Machines dialog adds two more ssh command lines, built beside the first in `ssh_command.rs` with the same
 target check, hardening and `--`: a probe (`BatchMode`, `ConnectTimeout=8`, stdin closed, output read to
 64 KiB and cleaned) and a first login (no `BatchMode`, so ssh can ask) that runs in a popup pane on this
-computer. A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
+computer, only for a login that needs a person (a password or a second code; ADR 0017). A person types or picks the host, so it is checked before anything runs: a target that starts with `-` or
 holds whitespace or a control character is refused with the loader's message, and nothing is spawned or
 written. A pane's shell reads the first-login line, so each word is a plain word (letters, digits and
 `_./-~:=,+@`, with a Windows path's backslashes on Windows) or one single-quoted word; a word with a quote or a
@@ -493,8 +506,10 @@ host` already runs, and the person added that machine to use it. The CLI's `--on
 `doctor` stay attach-only. What ssh
 or the far side prints (its last stderr line) is untrusted: it is stripped of control characters,
 so no escape sequence reaches the terminal, and cut to 200 characters before it is shown. The
-failure is classified from ssh's exit status and the stream, not its wording, apart from three
-fixed tokens that mark a login ssh could not do without a person (`link_failure::classify`). Typing
+failure is classified from ssh's exit status and the stream, not its wording, apart from a few
+fixed tokens that mark a login ssh could not do without a person or a host key ssh refused; only
+`REMOTE HOST IDENTIFICATION HAS CHANGED` marks a changed one (`link_failure::classify`). A host name taken from ssh's words for the `ssh-keygen -R` command is kept
+only when it is a plain host. Typing
 for a machine that is down is dropped, never queued and replayed.
 
 A remote daemon is someone else's computer, so everything it sends is untrusted: it can forge
@@ -538,6 +553,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
 | `Reply::SideAnswer` | ignore on the attached line | a side answer is asked on a request line to the chat's machine and taken only there, through `remote_chat::vet_side_answer`: nothing but a side answer passes, every string is cleaned like a chat's and the text is cut at `SIDE_ANSWER_MAX_BYTES` |
+| `Reply::PullRequests` | answer, cleaned | a project's pull requests are asked on a request line to the project's machine and taken through `remote_policy::vet_pull_requests_reply`, where nothing but that answer passes; `vet` cleans one on the attached line the same way: at most 50, each kept only with an address that is exactly `https://github.com/<owner>/<repo>/pull/<number>` (a click opens it in the browser), its title, author and branch one clean line cut at 300 characters, its time one GitHub could print, the login a GitHub login or empty. Whether one needs the person is that machine's own claim about its own account and only changes a count and a row here |
 | `AutoWorkspace` | ignore | announces a workspace and arms this computer's undo |
 
 The opt-ins are read from the machine's `[[machines]]` entry by name; a machine no entry names
@@ -581,6 +597,10 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   pull request's must be exactly `https://github.com/<owner>/<repo>/pull/<number>`
   (`maitty_shared::github::is_pull_request_address`), so a machine cannot hand the window any other
   address to show. Any other answer is dropped.
+- **Discard a file's changes on a machine** takes a pane number and one path from the window; that machine's daemon
+  checks the path and decides what a discard means there (*Discarding a file's changes*, below). The one-line
+  answer passes `remote_repo::vet_discard_reply`: cleaned, one line, at most 512 characters; any other answer is
+  dropped. The window shows its own words on success and the line only as a failure's reason.
 - **Install and restart only on a click or a step the person chose.** The owner approved installing the
   helper from the app: adding a machine whose app is missing runs the same `maiker machine update <name>
   --install` as the Fix flow, as a step of the add flow (`install_helper`), with the fixed install script
@@ -625,6 +645,30 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   git runs with `GIT_TERMINAL_PROMPT=0` and `gh` with its prompts off, so neither can ask for a
   credential, and each request is stopped at its limit. Nothing merges, rebases, forces or amends. A
   pull request answers only a `https://github.com/<owner>/<repo>/pull/<number>` address.
+- **Discarding a file's changes** (`Query::DiscardFile`; `maitty_shared::discard`, run by `daemon/discard.rs` and
+  by the desktop host's `changes.rs` for a checkout on this computer, so both hold to the same rules). It destroys
+  work, so it is the model for any git operation that removes or overwrites a file a client names:
+  - **Who:** only a person's client, with the pane checks and the write grant of `Query::Git`.
+  - **The path, before anything runs** (`checked_path`, text only, the same on every system): relative to the top
+    of the repository with `/`; not empty, at most 4,096 bytes, no control character, no leading `-`; no empty, `.`
+    or `..` part (so no leading, trailing or doubled `/`); no `\` and no `:` (a Windows folder, drive letter or
+    second stream of a file; a file with one in its name is discarded with git in a terminal); no part that is
+    `.git` in any letter case, with the trailing dots and spaces Windows drops, or the short name Windows gives it
+    (`git~1`).
+  - **The disk** (`symlink_metadata`, which does not follow a link): no folder on the way to the file is a link,
+    so nothing outside the checkout is reached; a folder is refused, so one request never removes more than one
+    file. A link as the file itself is removed as a link; what it points at is never touched.
+  - **The kind is git's answer, never the client's** (`git status --porcelain=v2 -z` for that one path, without
+    renames): a changed or deleted tracked file is put back from HEAD; a staged new file is unstaged and removed;
+    an untracked file is removed, that one file, never `git clean` and never recursively; a staged rename is
+    undone as one (the old name must be free, and passes the same path rules). A submodule, a conflicted file, an
+    ignored or unchanged one and anything else is refused with a typed `DiscardError`, whose one sentence is all
+    that is said back, with the path cleaned and cut.
+  - **git** gets arguments only, never a shell line, with `--literal-pathspecs` and the path after `--`, so a name
+    is never a pattern or an option; `GIT_TERMINAL_PROMPT=0`; the whole discard is stopped after 15 seconds.
+  - **Not covered:** the checks and git's steps are not one atomic step, so something that swaps a folder for a
+    link between them is not caught (git itself replaces such a link rather than writing through it). No lock is
+    held against an agent writing the same file. Nothing is kept of what was discarded.
 - **Who is signed in to GitHub** (`Query::GitHubAccounts`, `daemon/github.rs`) runs the machine's own
   `gh auth status --json hosts` with fixed arguments and nothing from the client in them. Only the
   logins and which one is active leave the daemon; a token is never asked for (`--show-token` is never
@@ -640,6 +684,17 @@ is a fixed set of host commands that take a machine's name or number, never a pr
   is passed on only when its name is `owner/name` in GitHub's own characters, and the address to clone
   is built from that name (`clone_address`), so text from `gh` or from another machine never becomes an
   address by itself. Only a person's client may ask.
+- **Listing a project's pull requests** (`Query::PullRequests`, `daemon/pr_list.rs`) takes one thing from
+  a client, a folder, and it never reaches `gh`'s command line: it must be an absolute path (or start
+  with `~`) of at most 4096 bytes naming a folder that exists, and it only becomes the folder `gh` runs
+  in. The arguments are fixed. No token is read, asked for or logged, and nothing `gh` prints is logged:
+  a failure passes on the first line of what it said, cleaned and cut to 300 characters. A pull request
+  is kept only when its address is `https://github.com/<owner>/<repo>/pull/<number>` and nothing more,
+  where the daemon reads it and again when it arrives from another machine
+  (`maitty_shared::github::is_pull_request_address`), because a click opens it in the browser; its
+  title, author and branch are one clean line each, and a list holds at most 50. `gh` lists one folder
+  once however many clients ask meanwhile, and at most 32 folders at a time. Only a person's client may
+  ask.
 - **Extensions** (`Query::Extensions`, `daemon/extensions/`, `maitty_shared::extensions`) install code that runs with
   the person's access: a plugin ships hooks and servers, an MCP server is a command (or a remote address that hears
   the person's prompts), and neither agent asks first (`plugin install --json` simply does it). So the daemon asks.
@@ -677,7 +732,7 @@ The one-shot commands (`--on build ...`, `--pane build/4`) treat the machine the
 What it answers is untrusted: a list (`ls`, `wait`) is cleaned like a window's snapshot
 (`remote_snapshot::sanitize_snapshot`), an error or notice and a line a `wait --regex` matched lose
 control characters and hidden characters (`hidden::sanitize`), and a failure to connect is shown as
-one cleaned line with its fix (`link_failure::classify`). `read` prints another machine's screen
+one cleaned line with its fix (`link_failure::sentence`). `read` prints another machine's screen
 without escape sequences or other control characters (newlines stay); `read --raw` prints it exactly
 as sent, which is the person's choice to make and can move the cursor or retitle the terminal. The
 pane a command runs in belongs to this computer's daemon, so `$AGENT_TERM_ID` is never the default
@@ -782,10 +837,26 @@ typed is the agent's own resume template with the entry's conversation id, which
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
 follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
 command is a worktree command, so a window sends it to this computer's daemon only (API_PATTERNS
-"client routing"; remote worktree management is out of scope, ADR 0007). `BranchWorktree` is the one
-exception: the desktop app asks another machine's daemon to make a new chat's worktree in its own
-checkout, and takes back only the folder, one plain absolute path (`remote_chat::vet_worktree_reply`),
-which becomes the folder a session starts in there. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+"client routing"; remote worktree management is out of scope, ADR 0007). Two requests make a worktree
+on another machine, and nothing else manages one there. `BranchWorktree`: the desktop app asks that machine's
+daemon to make a new chat's worktree in its own checkout, and takes back only the folder, one plain absolute
+path (`remote_chat::vet_worktree_reply`), which becomes the folder a session starts in there.
+`NewWorktree` off a pane (a project heading's New worktree, `new_worktree_session`): the host asks that
+daemon for its `List`, reads only the workspace holding the pane, and sends `NewWorktree` with no command,
+agent, split or `from`, so the daemon decides the folder from its own workspace and starts there what its
+own `[worktree] command` (else its shell) says; it takes back only that `List`, cleaned like a snapshot, and `Ok` (`remote_chat::vet_new_worktree_reply`),
+and the new session arrives in that machine's list like any other. Both need the remote daemon's own
+`Start` grant, and a machine that takes no requests (down, needing an update or turned away) is refused
+before anything is sent. Its answer is `Reply::Ok` or `Error`, which `remote_policy` already treats as an answer.
+
+Starting a chat on another machine (ADR 0007, protocol 122) is the other thing asked of it. The window names a
+provider (Claude Code or Codex) or an ACP agent's name, a folder and a posture, never a program, a settings folder,
+an argument or a variable: that machine's daemon finds the program itself (`StartTarget::Agent`, `StartTarget::Acp`).
+The folder is sent only as one plain absolute POSIX path with no control characters, at most 4096 bytes
+(`remote_folder`), and the name must be an agent's name (`acp_agent_name`). The answer is taken only when it is the
+start itself, a conversation's number and generation (`remote_chat::vet_chat_start`); they address that machine's
+request lines alone and are never drawn. This gives the window nothing it did not have: it can already start a shell
+on that machine and type into it.
 
 ## Project-specific: followed transcripts
 
@@ -800,7 +871,7 @@ The path comes from a hook report, so it is input, not trust:
   file, the same session) while it still runs that agent, even if the hook goes unverified or its session or file is
   briefly unknown; a new session, or following again after the agent leaves, needs the verified hook again.
 - Reads are incremental and bounded (4 MiB per poll, a 16 MiB tail first, lines over 1 MiB dropped), run off the
-  event loop, never write, and are cleaned and bounded like structured history (`tool_input.rs`). The text is
+  event loop, never write, and are cleaned and bounded like structured history (`maitty-provider/src/tool_input.rs`). The text is
   held in daemon memory for the conversation's life, never cached, logged or put in a fixture.
 - A followed conversation is read-only, and reading never changes a status.
 
@@ -840,6 +911,11 @@ The agent runs with the user's permissions, so the window's start path is narrow
   repository and a valid branch name (`branch_agent::branch_problem`), and the worktree is made by the daemon
   (`create_trusted_worktree`: the trust copy and the repo's allowed setup hook only). The window never builds a
   path or runs git. A start for another machine is refused in the window.
+- **An ACP agent's program** comes only from the user's own config (`[[agents]]` with `acp = true`;
+  [ENVIRONMENT](ENVIRONMENT.md#project-specific-agents-run-over-acp)), never from a client's message or a
+  repository. It is the program alone with its arguments as a list, so nothing passes through a shell, and its
+  `env` can neither set this app's identity variables nor be logged. What such an agent may ask of the daemon is in
+  [stack/acp.md](stack/acp.md).
 - **Status** comes only from the daemon's events for the current generation; a superseded generation's command
   changes nothing.
 - **User-input answers** (including a question marked secret) are relayed once, typed hidden, and never recorded
@@ -868,19 +944,21 @@ typed:
   on first use; any other missing folder is refused.
 - Git runs with `GIT_TERMINAL_PROMPT=0` and a time limit: it asks for no password, so a private repository uses the
   credentials git already has on that machine (`gh`'s, once the person has signed in through Open a project's GitHub
-  tab). Maiker stores no GitHub token; the window says so when git needs a sign-in. Git's own words are matched to a
+  level). Maiker stores no GitHub token; the window says so when git needs a sign-in. Git's own words are matched to a
   plain sentence and shown without the address.
 
-The **Open a project** dialog (`features/open-project/`) is the desktop's other way in, on this computer only:
+The **Open a project** palette (`features/open-project/`) is the desktop's other way in:
 
-- Its URL tab accepts any host, not only GitHub. `repoUrl.ts` reads `https://host/owner/repo`, `git@host:owner/repo.git` and
+- Its Git URL level accepts any host, not only GitHub. `repoUrl.ts` reads `https://host/owner/repo`, `git@host:owner/repo.git` and
   `host/owner/repo`, requires a dotted host name and path parts in the same safe characters as above, and builds the
   https or ssh address again from them (a user name or token is refused, never carried on). The daemon's check on the
-  address is unchanged and is the one that decides.
-- GitHub sign-in is `gh auth login --web`, run by the daemon (`agentSignIn('github', …)`). The window shows the one-time
+  address is unchanged and is the one that decides. The clone runs on the machine chosen with **onto**, through that
+  machine's daemon, into its projects or home folder.
+- GitHub sign-in is `gh auth login --web`, run by this computer's daemon (`agentSignIn('github', …)`). The window shows the one-time
   code and an https link and never asks for, receives or displays a token; `gh` keeps it. Sign-out is `gh auth logout`.
-- On this computer, the git projects offered come from `listFolders` on home and a fixed shortlist of folders under it,
-  one level deep, each with a timeout; no walk of the disk.
+- Every folder name it lists came from the daemon of the machine being browsed (`Query::ListFolders`), one folder at a
+  time; there is no walk of a disk. A folder it makes is made by that daemon, which checks the name again.
+- The recent projects it offers are the folders of this computer's closed sessions, as its daemon keeps them.
 
 ## Project-specific: signing an agent in from the desktop
 
@@ -958,6 +1036,38 @@ app installs nothing. Running a downloaded script is running remote code as the 
 - **Limits that remain.** The vendors' scripts are trusted as much as their domains; there is no checksum
   of the script here. npm and curl come from this computer's PATH.
 
+## Project-specific: installing an agent from the ACP registry
+
+`maiker agents install <id>` (`crates/maitty-core/src/acp_registry.rs`, ADR 0021) installs an agent that
+runs over ACP from the public ACP registry. The owner approved this; unlike the installer above, what it
+installs is chosen by a file fetched at run time, so the file is untrusted input and the rules are checks,
+not a list:
+
+- **One registry, fixed in code.** The index is fetched from one `https://` address in the source, at most
+  1 MiB, in 30 seconds. No setting, argument or input names another.
+- **Only a name comes in.** The window and the command line give an agent's id (`acp_agent_name`: lowercase
+  letters, digits, `-`, `_`). Addresses, programs and arguments come from the registry entry of that id.
+- **Every entry is checked before it is listed.** Id, name and version shapes; a download address that is
+  plain `https://` with no user name; a program path that stays inside the agent's folder (no root, drive
+  or `..`); at most 32 arguments and variables, each bounded, no control characters, no variable that is
+  this app's own identity. An entry that fails is left out.
+- **A checksum or nothing.** A download is installed only when the registry gives its SHA-256, and the file
+  is hashed and compared before anything is unpacked. A mismatch installs nothing. An entry with no checksum
+  is refused.
+- **An archive is listed before it is unpacked.** Any entry that is absolute or holds `..` refuses the
+  whole archive. The program the registry names must resolve to a file inside the agent's folder.
+- **npm at an exact version.** An npm agent is `npm install --global --prefix <the agent's folder>
+  <name>@<exact version>`, as arguments; the package's own `package.json` must name that package and
+  version. Its install scripts run, as with any npm install.
+- **No shell line is built.** curl, tar, unzip and npm are run as programs with arguments.
+- **Never elevated, and bounded.** It runs as the person, writes only under the app's data folder
+  (`acp-agents/`), and stops a download after 20 minutes or 1 GiB.
+- **Staged.** Everything is made in a folder beside the final one, which takes its place only when all
+  checks passed; a failure leaves the version installed before.
+- **Limits that remain.** The registry and each agent's publisher are trusted: the checksum proves the
+  download is the one the registry described, not that it is harmless. A link inside an archive is not
+  inspected beyond the program itself. curl, tar, unzip, npm and node come from this computer.
+
 ## Project-specific: the message the daemon sends by itself
 
 With `restore.continue_turn` on, the daemon sends one fixed message, `Continue where you left off.`,
@@ -1007,7 +1117,7 @@ environment), so it is held to the same boundary as the rest of the history: it
 leaves only in an explicit authorized read and in the private cache. It is cleaned
 of escape and control characters, invisible characters are spelled out as Unicode
 escapes, every string is cut and the whole value is capped at 64 KiB, and an input
-that cannot be bounded in shape is dropped (`tool_input.rs`). Secrets are
+that cannot be bounded in shape is dropped (`maitty-provider/src/tool_input.rs`). Secrets are
 masked on the way in; see *Conversation history and secrets* below. Answered approvals
 keep the request's command and diff in daemon memory only, never in the cache, and
 the answers to user-input requests are not kept at all.
@@ -1038,8 +1148,13 @@ to conversation, generation and connection. Strip inherited pane/structured
 credentials before launch. Do not persist this secret, copy a pane token, accept
 a partial environment claim, or treat rejected/revoked claims as human callers.
 Every request uses configured MCP grants, with no logical-conversation self
-exemption; human-only grant/check/helper answers remain human-only. Structured
-descendant starts are refused pending conversation-owned helper consent.
+exemption; human-only grant/check/helper answers remain human-only. A structured
+runtime starts helpers only (an agent on a task, in a new session or worktree),
+and only after the person's answer held on its conversation; a bare shell and
+every other descendant start are refused, and a runtime that is no longer current
+starts nothing and is never counted as a person (ADR 0016, proposed). A Claude chat's process is
+given the same four variables as a Codex chat's and no other identity, so a tool server it loads
+(`mcp`) reaches the daemon as that chat and never as a person.
 
 Codex filters MCP child environments, so validated runtime overrides append the
 four reserved identity variable names to existing stdio MCP allowlists. They
@@ -1053,7 +1168,7 @@ uncertain in every read response until its persistence barrier succeeds.
 ### Conversation history and secrets
 
 Everything the daemon stores and serves as conversation history passes one function,
-`redact_entry` (`daemon/conversation/redact.rs`), when it enters the store (`History::apply`,
+`redact_entry` (`maitty-provider/src/redact.rs`), when it enters the store (`History::apply`,
 `hydrate`) and again when a cache is loaded. That covers the Claude and Codex adapters, both
 followed-transcript parsers, message text, tool input, command output and approvals. It changes only
 Maiker's copy: the agent still sees exactly what it sent and received, and nothing is blocked.
@@ -1135,42 +1250,44 @@ is what the panes show, so the rules are those of a credential:
 
 ## Project-specific: remote machine logins from the desktop
 
-The Settings > Remote machines screens (`apps/gui/src-tauri/src/machine_access.rs`, `add_machine.rs`;
-logic in `crates/maitty-machines/src/{host_key,key_login,machine_target}.rs`) let a person fix a
-machine that will not log in without a terminal. They run ssh tools on this computer on input from
-the window, so each is bounded as follows.
+The Settings > Remote machines screens (`apps/gui/src-tauri/src/add_machine.rs`; logic in
+`crates/maitty-machines/src/{machine_target,new_host_keys}.rs`) let a person add a machine without a
+terminal. Maiker takes no account password: a login
+that needs one goes through the terminal sign-in
+([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md)). They run ssh tools on this
+computer on input from the window, so each is bounded as follows.
 
 | Command | What it takes | Rule |
 | --- | --- | --- |
-| `add_machine`, `set_machine_user` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
+| `add_machine` | user, host, port | Checked at the host as well as in the window (`machine_target`): a user or host starts with no `-`, has no whitespace, quotes or shell characters; a port is 1-65535 and becomes `-p N` in `ssh_args`. Every ssh line puts the target after `--`. The entry stays `user@host` in `config.local.toml`; entries written before still load. |
 | `add_machine` key file | a path | Optional `identity_file` on the entry, passed as `-i <path>` (one argv entry). It must be an absolute path (a leading `~/` is expanded), exist and be a file; a path that starts with `-`, has a control character or ends in `.pub` is refused. The file is never opened by Maiker (only ssh reads it) and a path with `via` is refused. Entries without it still load. |
 | `add_machine` reach and key name | none | The reached time is a plain TCP connect to the host and port `ssh -G` resolves (no login). The key name is read from a second `BatchMode` login that runs only `true` with `ssh -v`; only the file name of the key that signed in is kept, and only when it passes a character check. |
-| `inspect_new_host`, `trust_new_host` | target, port, fingerprint | The same checks as `inspect_host_key` and `trust_host_key`, for a host that is not a machine yet, so a new host is trusted before anything is written. Nothing is saved when the person cancels. |
-| `inspect_host_key` | machine name | `ssh -G` resolves the real host and port (a jump host or proxy command is refused), `ssh-keyscan` fetches the key, the SHA256 fingerprint is computed here. Read-only. |
-| `trust_host_key` | machine name, fingerprint | Fetches the key again and appends it to `known_hosts` only when it is still the fingerprint the person was shown and no key of that type is on record. A changed key is never added from the app (nothing offers it, and the host refuses it). No ssh option that turns host-key checking off is used anywhere. |
-| `inspect_key_login`, `set_up_key_login` | machine name, account password, "create a key" | See below. |
 
-Key login with a password once (`key_login`):
+Host keys ([ADR 0017](adr/0017-remote-machines-rely-on-your-ssh-setup.md), `new_host_keys.rs`):
 
-- **The password.** It arrives as one argument, is moved into a `Secret` (no `Debug`, `Clone` or
-  `Serialize`; its bytes are overwritten on drop), and lives only for that call. It is not written
-  to disk, config, logs, ssh arguments or events, never sent to the daemon, and never returned to the
-  window. It reaches ssh only through `SSH_ASKPASS` with `SSH_ASKPASS_REQUIRE=force`: a helper script
-  with no secret in it, in a mode-0700 folder that is removed afterwards, prints it from an
-  environment variable set on that one short-lived ssh process. Every text shown from ssh is scrubbed
-  of the password first. Limits that remain: the window's webview and the IPC string cannot be wiped,
-  and the environment of the ssh child (readable by the same user while it runs) holds it briefly.
-- **Where it can be used.** Never before the machine's host key is trusted: the steps run with
-  `StrictHostKeyChecking=yes`, and the command refuses when the key is not on record. Not offered when
-  this computer is Windows (the helper is a shell script); the card says so and offers the terminal.
-- **What is installed.** Only the public key. A key with a passphrase stops the flow. A new key
-  (ed25519, no passphrase) is made only after the person agrees, only where no key file exists.
-- **The far side.** OpenSSH on Linux and macOS: `~/.ssh` 700, `authorized_keys` 600, no duplicate.
-  Windows: an administrator's key goes to `ProgramData\ssh\administrators_authorized_keys` with
-  only Administrators and SYSTEM allowed; anyone else's to their own `.ssh\authorized_keys`. The
-  system is told with fixed commands (`uname -s`, then one fixed `cmd` line); when it cannot be told,
-  or the machine does not confirm, the exact steps are shown and nothing is guessed.
-- **Attempts.** One password prompt per ssh run, a wrong password stops at once, and three wrong
-  passwords for a machine in a row stop further tries until Maiker restarts.
-- **After.** The key is checked by a `BatchMode` login with passwords off; the machine is dialled
-  again only on success.
+- **No question, no key written by Maiker.** Every line Maiker runs to a machine without a person
+  (the add probe, the dial, the file, folder, paste and install lines) carries
+  `-o StrictHostKeyChecking=accept-new` after the person's own `ssh_args`. ssh itself records a key it
+  has not seen in the person's `known_hosts` and refuses one that differs from the key on record.
+  Maiker shows no fingerprint and never writes `known_hosts`. Risk accepted: the first connection to a
+  new host trusts whatever key answers, as plain ssh with `accept-new` does.
+- **Only ssh's default is replaced.** When `ssh -G` for the target shows `StrictHostKeyChecking` set
+  to anything but `ask` (by the person's `~/.ssh/config` or `ssh_args`), nothing is added. Nothing is
+  added either for a client that is not OpenSSH 7.6 or later (`ssh -V`, asked once per program), which
+  would refuse the option. ssh then behaves as it did before.
+- **Never off.** No ssh option that turns host-key checking off (`StrictHostKeyChecking=no`) is used
+  anywhere; tests pin this.
+- **A refused key adds nothing.** A machine whose host key ssh refused while it was being added is not
+  written, from the desktop app or the terminal app (`machine_probe` yields
+  `FailureClass::HostKeyChanged` or `FailureClass::HostKeyUnknown`). A changed key, while adding or on a
+  configured machine, is said in the shared sentence (above: how to check it and the `ssh-keygen -R`
+  that clears the old key) with Try again; nothing offers to trust it.
+- **A new key under a strict config is not a changed key.** When the person's own config sets
+  `StrictHostKeyChecking=yes` (kept, above), ssh refuses a key it has never seen with `Host key
+  verification failed.` and no `REMOTE HOST IDENTIFICATION HAS CHANGED` banner. That is
+  `HostKeyUnknown`: its sentence never suggests `ssh-keygen -R`, which could lead someone to delete a
+  good key, and gives `ssh -o StrictHostKeyChecking=ask <target>` to run once in a terminal. That line
+  makes ssh show the fingerprint and ask the person (it still refuses a changed key); Maiker runs it
+  nowhere itself and writes no key.
+- The terminal sign-in line (`first_login_command`) carries no setting: a person is there to answer
+  ssh, and the probe before it has already had ssh record a new key.

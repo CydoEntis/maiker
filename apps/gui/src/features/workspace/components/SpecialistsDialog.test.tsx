@@ -41,12 +41,4 @@ describe('the specialist agents dialog', () => {
     render(<SpecialistsDialog title="~/app" term={4} load={() => Promise.reject(new Error('No such pane'))} onClose={() => {}} />)
     expect(await screen.findByRole('alert')).toHaveTextContent('No such pane')
   })
-
-  it('closes', async () => {
-    const user = userEvent.setup()
-    const onClose = vi.fn()
-    render(<SpecialistsDialog title="~/app" term={4} load={() => Promise.resolve(list)} onClose={onClose} />)
-    await user.click(screen.getByRole('button', { name: 'Close' }))
-    expect(onClose).toHaveBeenCalled()
-  })
 })

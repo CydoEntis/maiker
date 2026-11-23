@@ -8,17 +8,6 @@ function session(status: SessionStatus, asking = '', extra: Partial<SessionView>
 const project = { name: 'maiker' }
 
 describe('session notice', () => {
-  it('names the session in the title, what happened beside it, and what it is asking in the body', () => {
-    const notice = sessionNoticeFor(session('needs', '$ git push origin main'), project, { open: vi.fn(), allow: vi.fn() })
-    expect(notice).toMatchObject({ kind: 'needs', title: '(root)', state: 'needs you', body: 'Wants to run $ git push origin main' })
-  })
-
-  it('offers Allow, then Open session, for a session stopped on a choice, and waits for you', () => {
-    const allow = vi.fn()
-    const notice = sessionNoticeFor(session('needs', '$ git push', { ask: { tool: 'Bash', detail: 'git push', answerable: true } }), project, { open: vi.fn(), allow })
-    expect(notice?.actions?.map((action) => action.label)).toEqual(['Allow', 'Open session'])
-    expect(notice?.actions?.[0]?.primary).toBe(true)
-  })
 
   it('offers only Open when nothing is being asked, or when it cannot be answered', () => {
     expect(sessionNoticeFor(session('needs'), project, { open: vi.fn(), allow: vi.fn() })?.actions?.map((action) => action.label)).toEqual(['Open session'])
@@ -47,15 +36,13 @@ describe('session notice', () => {
     expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
   })
 
-  it('says a finished or failed session in its status kind, which decides how long it stays, with no Allow', () => {
-    for (const status of ['done', 'error'] as const) {
-      const notice = sessionNoticeFor(session(status, '$ ls'), project, { open: vi.fn(), allow: vi.fn() })
-      expect(notice?.kind).toBe(status)
-      expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
-    }
+  it('says a finished session in its status kind, which decides how long it stays, with no Allow', () => {
+    const notice = sessionNoticeFor(session('done', '$ ls'), project, { open: vi.fn(), allow: vi.fn() })
+    expect(notice?.kind).toBe('done')
+    expect(notice?.actions?.map((action) => action.label)).toEqual(['Open session'])
   })
 
-  it('makes no card for a state that needs nothing from you', () => {
-    expect(sessionNoticeFor(session('idle'), project, { open: vi.fn(), allow: null })).toBeNull()
+  it.each(['idle', 'error', 'limited'] as const)('makes no card for a %s session: it asks nothing, and a stop has its own toast', (status) => {
+    expect(sessionNoticeFor(session(status), project, { open: vi.fn(), allow: null })).toBeNull()
   })
 })

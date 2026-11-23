@@ -1,82 +1,41 @@
 /*
- * The window frame of the desktop redesign (MAITTY-380): the title bar, the sidebar, the pane header and the side
- * panel, as the whole-app mock draws them. Every colour is a role token; corners follow `--r-*`.
+ * The window frame: the title bar, the cards under it and the gaps between them, as handoff v5 draws them. The cards'
+ * fill and edge are the panel role (material.css); this file places them. Every colour is a role token; corners follow
+ * `--r-*`; the gaps are `--frame-*` (tokens.css). The status bar under the cards is `status-bar.css`.
  */
 
-/* The title bar: 36px on the window's ground, the themed M mark and the name at the left, the 46x36 window buttons at the right. */
-.mx-app .title-bar { height: 36px; flex: 0 0 36px; gap: 12px; padding-left: 8px; background: var(--bg); border-bottom: 0; color: var(--muted); }
+/* The title bar: 36px on the window's ground. All of it drags the window except its buttons; on macOS the traffic
+   lights come first, so the mark starts after them. */
+.mx-app .title-bar { height: 36px; flex: 0 0 36px; gap: 8px; padding-left: 12px; background: var(--t0); border-bottom: 0; color: var(--muted); }
 .title-bar-fill { flex: 1; align-self: stretch; }
-.mx-tbar-logo { display: inline-flex; height: 28px; align-items: center; gap: 7px; padding: 0 8px 0 4px; border-radius: var(--r-control); outline: none; }
-.mx-tbar-logo svg { pointer-events: none; }
-/* Changes and Files for the focused pane, before the window buttons. */
-.mx-tbar-panels { display: flex; align-items: center; gap: 2px; margin-right: 8px; }
-.mx-tbar-word { font-size: 13px; font-weight: 600; color: var(--fg); }
+.mx-tbar-logo { display: inline-flex; align-self: stretch; align-items: center; gap: 8px; color: var(--fg); outline: none; }
+/* The mark and the name take no pointer, so a press on them lands on the drag area they sit in. */
+.mx-tbar-logo svg, .mx-tbar-word { pointer-events: none; }
+/* The side-panel button, before the window buttons. */
+.mx-tbar-panels { display: flex; align-items: center; gap: 2px; margin-right: 6px; }
+.mx-tbar-word { font-size: 13px; font-weight: 600; }
 .title-bar[data-platform="windows"] [data-testid="window-controls"] > button { height: 36px; }
 
-/* The sidebar: a 264px card on `--card` with a hairline, 8px from the window's edges, its top under the title bar. */
-.mx-app .mx-sidebar { margin: 4px 0 8px 8px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
-.mx-app[data-side="right"] .mx-sidebar { margin: 4px 8px 8px 0; }
-.mx-sidebar-top { flex-direction: row; align-items: center; gap: 2px; height: 28px; box-sizing: content-box; padding: 8px 8px 12px 16px; }
-.mx-sidebar-title { font-size: 12px; font-weight: 600; color: var(--muted); }
-.mx-sidebar .mx-head-button { width: 26px; height: 26px; border-radius: var(--r-control); }
-.mx-sidebar .mx-head-button:not(:disabled):hover { background: var(--m-hover); }
-.mx-sidebar-list { gap: 6px; }
-.mx-sections { gap: 6px; }
-/* Groups are cards. A status group's title and its count both take that status's colour (the count smaller, mono, faded). */
-.mx-section, .mx-machine { padding: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
-.mx-section-head { gap: 7px; border-radius: var(--r-control); color: var(--dim); }
-.mx-section-head.is-terminals { color: var(--dim); }
-.mx-section-head.is-needs { color: var(--needs); }
-.mx-section-head.is-working { color: var(--working); }
-.mx-section-head.is-done { color: var(--done); }
-.mx-section-head.is-idle { color: var(--muted); }
-.mx-section-head:hover, .mx-machine-toggle:hover { background: var(--card-hover); }
-.mx-section-count { font: 500 10.5px var(--mono); opacity: .7; }
-/* A machine's card is a status card with the machine's icon: the same title type and the same mono count. */
-.mx-machine-toggle { height: calc(28px * var(--pad, 1)); padding: 0 10px; font-size: calc(12px * var(--sidebar-text, 1)); letter-spacing: 0; text-transform: none; color: var(--muted); }
-.mx-machine-toggle:hover { color: var(--fg2); }
-.mx-machine-toggle .mx-caret-wrap, .mx-machine-toggle:hover .mx-caret-wrap { color: var(--dim); }
-.mx-machine-icon { color: var(--muted); }
-.mx-machine-count { font: 500 10.5px var(--mono); opacity: .7; }
-.mx-rows { gap: 2px; }
-/* A row: the 16px tile, the name and its time, the project and machine under it. */
-.mx-row { align-items: flex-start; gap: 10px; min-height: 0; padding: 9px 10px; border-radius: var(--r-control); }
-.mx-row:hover { background: var(--card-hover); }
-.mx-row.is-selected, .mx-row.is-selected:hover { background: var(--m-card-sel); box-shadow: none; }
-.mx-row .mx-row-icon { margin-top: 1px; }
-/* The design's row: a 13.5px title on a 19px line over a 12px second line, in a row padded 9px 10px. */
-.mx-row-name { height: calc(19px * var(--sidebar-text, 1)); font-size: calc(13.5px * var(--sidebar-text, 1)); line-height: calc(19px * var(--sidebar-text, 1)); font-weight: 450; color: var(--fg2); }
-/* What needs you and what is working are bold, as the design's rows are; being picked changes the colour only, so clicking a row never re-sets its text. */
-.mx-row:is(.is-needs, .is-working) .mx-row-name { font-weight: 600; color: var(--fg); }
-.mx-row.is-selected .mx-row-name { color: var(--fg); }
-.mx-row-when { font-family: var(--mono); color: var(--dim); }
-/* Line 2 sits under the name: the status mark's 16px and the 8px gap are its indent. */
-.mx-row-sub { gap: 6px; padding-left: 24px; font-size: calc(12px * var(--sidebar-text, 1)); line-height: calc(16px * var(--sidebar-text, 1)); color: var(--dim); }
-/* Project and branch sit side by side, `maiker / gui-revive`: the project gives way first (never to less than 6 characters), the time keeps the right edge. */
-/* The second line is a clear step quieter than the name (the design's #767c81 under a near-white title). */
-.mx-row-sub { color: var(--dim); }
-.mx-row-sub .mx-row-project-name { flex: 0 1 auto; min-width: 6ch; max-width: 55%; }
-.mx-row-sub .mx-row-branch-name { flex: 0 1 auto; }
-/* The other machine's name, in the accent colour with its server icon: only a remote session has one. */
-.mx-row-machine { flex: none; max-width: 45%; font-weight: 500; color: var(--accent-text); }
-.mx-row-sub:has(.mx-row-machine) .mx-row-folder { color: var(--accent-text); }
-/* A session that has not been sent anything is a quiet, italic "New session". */
-.mx-row.is-fresh .mx-row-name { font-style: italic; font-weight: 400; color: var(--muted); }
-.mx-sidebar-foot { margin: 0 8px 8px; height: 40px; padding: 0 8px 0 10px; gap: 4px; background: var(--m-card); border: 1px solid var(--m-card-line); border-radius: var(--r-panel); }
-.mx-sidebar-foot .mx-head-button:not(:disabled):hover { background: var(--card-hover); }
+/* Under the title bar: sidebar | main | side panel. The sidebar sits flat on the window's ground (material.css); main and
+   the side panel are cards on `--t1` with the ground showing in the gap between them. The window keeps the cards off its edges, so a card that is hidden leaves no hole. */
+.mx-app .mx-window { padding: var(--frame-top) var(--frame-edge) var(--frame-edge); }
+.mx-app .mx-sidebar { margin: 0 var(--frame-gap) 0 0; border-radius: var(--r-panel); }
+.mx-app[data-side="right"] .mx-sidebar { margin: 0 0 0 var(--frame-gap); }
+/* Over a narrow window the sidebar is a drawer, off the window's edge on every side. */
+.mx-app .mx-drawer .mx-sidebar { margin: var(--frame-edge); }
 
 .mx-app-icon.is-flat.size-16, .mx-sidebar .mx-app-icon.is-flat.size-16 { width: 16px; height: 16px; font-size: 7px; }
 .mx-app-icon.is-dimmed { opacity: .45; }
 
 
-/* The main area: one flat card on `--card`, 8px from the window and the sidebar. One pane fills it edge to edge, its
-   header ruled off by a hairline; split panes drop the shared card and each become a card of their own. */
-.mx-app .mx-main-wrap { padding: 4px 8px 8px; }
-.mx-app[data-side="right"] .mx-main-wrap { padding: 4px 0 8px 8px; }
-.mx-app .mx-main { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-panel); box-shadow: none; }
+/* The main area: one card. One pane fills it edge to edge; split panes drop the shared card and each become a card
+   of their own, the frame's gap apart. */
+.mx-app .mx-main-wrap { padding: 0; }
+.mx-app .mx-main { border-radius: var(--r-panel); }
 .mx-panes:not(.is-split) { padding: 0; }
 .mx-app .mx-pane { border-radius: var(--r-panel); }
-/* A split pane's edge is the sidebar's hairline (`--line`) until it is focused, then it fades to the focus colour: one edge, not a ring over another. */
-.mx-app .mx-pane.is-card { background: var(--card); border-color: var(--line); box-shadow: none; }
-.mx-app .mx-pane.is-card.is-focused { border-color: var(--focus-line); }
+/* A split pane's edge is the card's hairline until it has the keys, then the same edge in a brighter ink: neutral, never
+   the accent, and the other panes are not dimmed. One edge, not a ring over another. */
+.mx-app .mx-pane.is-card { background: var(--t1); border-color: var(--panel-line); box-shadow: none; }
+.mx-app .mx-pane.is-card.is-focused { border-color: var(--pane-focus-line); }
 

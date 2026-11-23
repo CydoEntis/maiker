@@ -1,14 +1,15 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { markConversationsDisconnected } from '@/data/connection'
 import type { Conversation } from '@/data/preview'
-import type { MachineState } from '@/api/machines'
+import type { FailureKind, MachineState } from '@/api/machines'
 import { LOCAL_MACHINE, machineNameOf } from '@/api/machines'
 import type { Layout } from './layout'
+import { isListedChatSession } from './chatSession'
 
 /** What the window holds of one other machine: how its line is, and the sessions it last listed. */
 export type RemoteMachine = {
   state: MachineState
-  /** The terminal sessions of its last snapshot, with ids that carry the machine's name. */
+  /** The sessions of its last snapshot, terminals and chats, with ids that carry the machine's name. */
   conversations: readonly Conversation[]
   /** Its first snapshot has come: before that, a layout's panes for it are not known to be gone. */
   heard: boolean
@@ -25,7 +26,8 @@ export function remoteTerminals(machines: ReadonlyMap<number, RemoteMachine>): C
   return [...machines.values()]
     .sort((a, b) => a.state.name.localeCompare(b.state.name, undefined, { sensitivity: 'base' }))
     .flatMap((machine) => {
-      const terminals = machine.conversations.filter((item) => item.kind === 'terminal')
+      // Its terminal sessions, and the chat sessions its daemon started that are not put away.
+      const terminals = machine.conversations.filter((item) => item.kind === 'terminal' || isListedChatSession(item))
       return machine.state.state === 'connected' ? terminals : markConversationsDisconnected([...terminals])
     })
 }
@@ -81,7 +83,12 @@ export type MachineHead = {
   nickname?: string
   label: string
   chip: MachineChip | null
+  /** The host's one sentence for what failed and what to do; null when nothing failed. */
   why: string | null
+  /** Which failure it is, as the host names it; null when nothing failed. */
+  failure: FailureKind | null
+  /** The one command `why` asks for, to copy; null when there is none. */
+  fixCommand: string | null
   /** On needs-login: ssh's own last line, why it could not log in; null otherwise. */
   said: string | null
   /** On needs-login: the line to run in a terminal to log in by hand; null otherwise. */
@@ -100,35 +107,29 @@ export type MachineHead = {
   updateAction: UpdateAction | null
 }
 
-const UPDATE_COMMAND = /`(maiker machine update [^`]+)`/
-const INSTALL_FLAG = '--install'
-const UPDATE_HERE = 'update maiker on this computer'
-
 /** The machine runs a newer app than this one: the fix is updating this app, and nothing is done to the machine. */
 export function isNewerThanThisApp(state: MachineState): boolean {
-  return state.state === 'needs-update' && (state.why ?? '').includes(UPDATE_HERE)
+  return state.state === 'needs-update' && state.failure === 'update-here'
 }
 
-/** The command a needs-update fix names, as the host wrote it (the machine's name is in it). */
+/** The command a needs-update fix names, as the host gave it (the machine's name is in it). */
 export function updateCommandOf(state: MachineState): string | null {
-  if (state.state !== 'needs-update') return null
-  return UPDATE_COMMAND.exec(state.why ?? '')?.[1] ?? null
+  return updateActionOf(state) === null ? null : state.fix_command ?? null
 }
 
 /** A first install (no app on the machine at all), or replacing the other version it runs. */
 export type UpdateAction = 'install' | 'update'
 
 /**
- * Which fix a machine that needs update gets. The host only names `--install` when the app is not
- * on the machine at all, and the update refuses a first install without it, so the button must
- * pass it exactly then. A machine newer than this app gets no button: updating it from here would
- * be a downgrade, which the update refuses.
+ * Which fix a machine that needs update gets, from the failure the host named. A machine newer than this app gets no button:
+ * updating it from here would be a downgrade, which the update refuses.
  */
 export function updateActionOf(state: MachineState): UpdateAction | null {
   if (state.state !== 'needs-update' || isNewerThanThisApp(state)) return null
-  return updateCommandOf(state)?.includes(INSTALL_FLAG) === true ? 'install' : 'update'
+  return state.failure === 'install' || state.failure === 'install-failed' ? 'install' : 'update'
 }
 
+/** `need` is the update's own question (its dialog and button); a failed connection is said by the host's sentence instead. */
 type UpdateWords = { verb: string; state: string; need: (name: string) => string; running: (name: string) => string; failed: (name: string) => string }
 
 /** What the window says of each fix, so the sidebar, its dialog, Settings and the toasts agree. */
@@ -185,11 +186,47 @@ export function isDown(state: MachineState): boolean {
 export const THIS_COMPUTER = 'this computer'
 
 /** This computer's header, which the sidebar shows even when there is no other machine. */
-export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
+export const LOCAL_HEAD: MachineHead = { key: 'machine-0', machine: LOCAL_MACHINE, name: null, label: THIS_COMPUTER, chip: null, why: null, failure: null, fixCommand: null, said: null, loginCommand: null, target: null, down: false, downSince: null, grants: { clipboard: false, notices: false }, updateCommand: null, updateAction: null }
+
+/**
+ * The number of the machine named `name` (null: this computer) when it can be asked something now, else null: a machine
+ * whose line is down, or one the window has not been told about.
+ */
+export function connectedMachine(heads: readonly MachineHead[], name: string | null): number | null {
+  if (name === null) return LOCAL_MACHINE
+  return heads.find((head) => head.name?.toLowerCase() === name.toLowerCase() && head.chip?.tone === 'ok')?.machine ?? null
+}
 
 function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): { nickname: string } | Record<string, never> {
   const nickname = nicknames[name.toLowerCase()]
   return nickname === undefined ? {} : { nickname }
+}
+
+/**
+ * What a machine that is not up says: the host's one sentence for what failed and what to do (ADR 0017), else the plain
+ * state when the host gave none.
+ */
+export function downSentence(head: MachineHead): string {
+  if (head.why !== null) return head.why
+  if (head.updateAction !== null) return UPDATE_WORDS[head.updateAction].need(machineTitle(head))
+  return 'Maiker keeps trying to reconnect. Its sessions keep running there.'
+}
+
+/** The machines that were down when last looked at, by name. */
+export type MachinesDown = ReadonlySet<string>
+
+/**
+ * What changed since `seen`: the machines that went down (`dropped`, said once each) and the names that are up again or
+ * gone (`back`). With no `seen` yet, a machine that is already down has dropped: the window says so at launch too.
+ */
+export function machineDrops(seen: MachinesDown | null, heads: readonly MachineHead[]): { seen: MachinesDown; dropped: MachineHead[]; back: string[] } {
+  const down = heads.filter((head) => head.name !== null && head.down)
+  const now = new Set(down.map((head) => head.name ?? ''))
+  return {
+    seen: now,
+    dropped: down.filter((head) => seen?.has(head.name ?? '') !== true),
+    back: [...(seen ?? [])].filter((name) => !now.has(name)),
+  }
 }
 
 /** The name a machine heading shows. */
@@ -242,7 +279,7 @@ export function machineHeads(machines: ReadonlyMap<number, RemoteMachine>, nickn
   if (machines.size === 0) return []
   const others = [...machines.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
+    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, failure: machine.state.failure ?? null, fixCommand: machine.state.fix_command ?? null, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
   return [LOCAL_HEAD, ...others]
 }
 

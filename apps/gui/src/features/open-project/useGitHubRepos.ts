@@ -10,8 +10,6 @@ type Asked = { owner: string | null; search: string }
 type Answered = { asked: Asked; result: GitHubList<GitHubRepoList> }
 
 export type GitHubRepos = {
-  typed: string
-  setTyped: (text: string) => void
   owners: readonly string[]
   owner: string | null
   setOwner: (name: string) => void
@@ -27,19 +25,19 @@ function newestFirst(repos: readonly GitHubRepo[]): GitHubRepo[] {
 }
 
 /**
- * The repositories this computer's GitHub account can clone, narrowed by a search typed in the dialog and by an owner when
- * the account belongs to organisations. Every name came from `gh` through the daemon. An answer for a search the person has
- * since changed is never shown.
+ * The repositories this computer's GitHub account can clone, narrowed by the search `typed` in the palette and by an owner
+ * when the account belongs to organisations. Nothing is asked until somebody is `signedIn`. Every name came from `gh`
+ * through the daemon. An answer for a search the person has since changed is never shown.
  */
-export function useGitHubRepos(): GitHubRepos {
+export function useGitHubRepos(typed: string, signedIn: boolean): GitHubRepos {
   const [owners, setOwners] = useState<readonly string[]>([])
   const [owner, setOwner] = useState<string | null>(null)
-  const [typed, setTyped] = useState('')
   const [search, setSearch] = useState('')
   const [answered, setAnswered] = useState<Answered | null>(null)
   const asked = useMemo<Asked>(() => ({ owner, search }), [owner, search])
 
   useEffect(() => {
+    if (!signedIn) return undefined
     let live = true
     loadGitHubOwners(LOCAL_MACHINE).then(
       (answer) => { if (live && answer.state === 'listed') setOwners(answer.listed) },
@@ -47,7 +45,7 @@ export function useGitHubRepos(): GitHubRepos {
       () => undefined,
     )
     return () => { live = false }
-  }, [])
+  }, [signedIn])
 
   useEffect(() => {
     const timer = window.setTimeout(() => { setSearch(typed.trim()) }, SEARCH_DELAY_MS)
@@ -55,15 +53,16 @@ export function useGitHubRepos(): GitHubRepos {
   }, [typed])
 
   useEffect(() => {
+    if (!signedIn) return undefined
     let live = true
     loadGitHubRepos(LOCAL_MACHINE, asked.owner, asked.search).then(
       (result) => { if (live) setAnswered({ asked, result }) },
       (error: unknown) => { if (live) setAnswered({ asked, result: { state: 'failed', why: errorMessage(error, 'The repositories could not be listed') } }) },
     )
     return () => { live = false }
-  }, [asked])
+  }, [asked, signedIn])
 
   const result = answered !== null && answered.asked.owner === asked.owner && answered.asked.search === asked.search ? answered.result : null
   const rows = useMemo(() => (result?.state === 'listed' ? newestFirst(result.listed.repos) : []), [result])
-  return { typed, setTyped, owners, owner, setOwner, result, rows }
+  return { owners, owner, setOwner, result, rows }
 }

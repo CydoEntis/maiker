@@ -93,18 +93,6 @@ mod tests {
     }
 
     #[test]
-    fn python_is_no_longer_pointed_at_the_bundle() {
-        let changes = bundle_changes(vars(&[
-            ("APPDIR", "/tmp/.mount_MaittyAbc"),
-            ("PYTHONHOME", "/tmp/.mount_MaittyAbc/usr/"),
-            ("PYTHONPATH", "/tmp/.mount_MaittyAbc/usr/share/pyshared/:"),
-        ]));
-        assert_eq!(change(&changes, "PYTHONHOME"), Some(&None));
-        assert_eq!(change(&changes, "PYTHONPATH"), Some(&None));
-        assert_eq!(change(&changes, "APPDIR"), Some(&None));
-    }
-
-    #[test]
     fn a_path_list_keeps_what_is_the_users_own_in_order() {
         let changes = bundle_changes(vars(&[
             ("APPDIR", "/tmp/.mount_MaittyAbc"),
@@ -141,15 +129,18 @@ mod tests {
         );
     }
 
+    /// Python is no longer pointed at the bundle, and what only describes the bundle goes with it.
     #[test]
-    fn what_only_describes_the_bundle_is_dropped_with_it() {
+    fn what_only_points_at_or_describes_the_bundle_is_dropped_with_it() {
         let changes = bundle_changes(vars(&[
             ("APPDIR", "/tmp/.mount_MaittyAbc"),
+            ("PYTHONHOME", "/tmp/.mount_MaittyAbc/usr/"),
+            ("PYTHONPATH", "/tmp/.mount_MaittyAbc/usr/share/pyshared/:"),
             ("APPIMAGE", "/home/casey/Apps/Maiker.AppImage"),
             ("ARGV0", "./Maiker.AppImage"),
             ("OWD", "/home/casey"),
         ]));
-        for key in ["APPIMAGE", "ARGV0", "OWD"] {
+        for key in ["APPDIR", "PYTHONHOME", "PYTHONPATH", "APPIMAGE", "ARGV0", "OWD"] {
             assert_eq!(change(&changes, key), Some(&None), "{key}");
         }
     }

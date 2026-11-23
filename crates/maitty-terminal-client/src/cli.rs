@@ -2,6 +2,7 @@
 
 use crate::brand::{APP_COMMAND, APP_VERSION};
 use crate::ipc;
+pub(crate) mod agents;
 pub(crate) mod conversation;
 pub(crate) mod doctor_machines;
 pub(crate) mod handoff;
@@ -3855,14 +3856,7 @@ mod bundled_daemon_tests {
     use std::path::Path;
 
     fn scratch(label: &str) -> std::path::PathBuf {
-        let folder = std::env::temp_dir().join(format!(
-            "{}-bundled-{label}-{}",
-            env!("APP_COMMAND"),
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&folder);
-        std::fs::create_dir_all(&folder).unwrap();
-        folder
+        maitty_test_support::TempFolder::new(&format!("bundled-{label}")).until_test_ends()
     }
 
     #[test]
@@ -3931,37 +3925,19 @@ mod tests {
     }
 
     #[test]
-    fn a_waiter_stays_blocked_while_the_check_runs() {
+    fn a_wait_ends_only_once_the_turn_and_every_running_check_are_over() {
         let running = check(CheckState::Checking);
-        assert_eq!(
-            turn_over(
-                Status::Done,
-                "all done",
-                std::slice::from_ref(&running),
-                true,
-                false
-            ),
-            None
-        );
-        assert_eq!(
-            turn_over(
-                Status::Idle,
-                "",
-                std::slice::from_ref(&running),
-                false,
-                true
-            ),
-            None,
-            "not even after the quiet-turn grace"
-        );
-        assert_eq!(
-            turn_over(Status::Done, "", &[], true, false),
-            Some(Waited::Turn(Status::Done, String::new(), None))
-        );
-    }
-
-    #[test]
-    fn a_waiter_gets_the_check_result_with_the_reply() {
+        // (status, said, checks, seen working, quiet, what the wait returns, why)
+        type Case<'a> = (Status, &'a str, Vec<CheckInfo>, bool, bool, Option<Waited>, &'a str);
+        let mut cases: Vec<Case> = vec![
+            (Status::Done, "all done", vec![running.clone()], true, false, None, "blocked while the check runs"),
+            (Status::Idle, "", vec![running.clone()], false, true, None, "not even after the quiet-turn grace"),
+            (Status::Done, "", vec![], true, false, Some(Waited::Turn(Status::Done, String::new(), None)), "no check: the turn is over"),
+            (Status::Working, "", vec![], false, true, None, "still working"),
+            (Status::Done, "x", vec![], false, false, None, "the turn never started"),
+            (Status::Blocked, "q", vec![], true, false, Some(Waited::Turn(Status::Blocked, "q".into(), None)), "needs you"),
+            (Status::None, "", vec![], false, true, Some(Waited::Turn(Status::None, String::new(), None)), "quiet with no status"),
+        ];
         for state in [
             CheckState::Passed,
             CheckState::Failed,
@@ -3969,39 +3945,19 @@ mod tests {
             CheckState::Overridden,
         ] {
             let info = check(state);
-            assert_eq!(
-                turn_over(
-                    Status::Done,
-                    "done",
-                    std::slice::from_ref(&info),
-                    true,
-                    false
-                ),
-                Some(Waited::Turn(
-                    Status::Done,
-                    "done".into(),
-                    Some(Box::new(info))
-                ))
-            );
+            cases.push((
+                Status::Done,
+                "done",
+                vec![info.clone()],
+                true,
+                false,
+                Some(Waited::Turn(Status::Done, "done".into(), Some(Box::new(info)))),
+                "the check result comes with the reply",
+            ));
         }
-    }
-
-    #[test]
-    fn a_session_with_no_check_waits_as_before() {
-        assert_eq!(turn_over(Status::Working, "", &[], false, true), None);
-        assert_eq!(
-            turn_over(Status::Done, "x", &[], false, false),
-            None,
-            "the turn never started"
-        );
-        assert_eq!(
-            turn_over(Status::Blocked, "q", &[], true, false),
-            Some(Waited::Turn(Status::Blocked, "q".into(), None))
-        );
-        assert_eq!(
-            turn_over(Status::None, "", &[], false, true),
-            Some(Waited::Turn(Status::None, String::new(), None))
-        );
+        for (i, (status, said, checks, seen_working, quiet, want, why)) in cases.into_iter().enumerate() {
+            assert_eq!(turn_over(status, said, &checks, seen_working, quiet), want, "case {i}: {why}");
+        }
     }
 
     fn named(name: &str, state: CheckState) -> CheckInfo {
@@ -4076,52 +4032,45 @@ mod tests {
     }
 
     #[test]
-    fn the_new_states_read_in_their_words() {
-        let stale = CheckInfo {
+    fn every_check_state_reads_the_same_beside_the_status_and_in_a_wait() {
+        let with_exit = |state: CheckState, exit_code: Option<i32>| CheckInfo {
+            state,
+            exit_code,
+            ..check(state)
+        };
+        let stale = |files: &[&str]| CheckInfo {
             name: "test".into(),
-            state: CheckState::Stale,
-            changed_files: ["a", "b", "c"]
+            changed_files: files
+                .iter()
                 .map(|p| ChangedFile {
                     kind: 'M',
-                    path: p.into(),
+                    path: (*p).into(),
                 })
-                .to_vec(),
+                .collect(),
             ..check(CheckState::Stale)
         };
-        let words = |c: &CheckInfo| (check_note(c), check_line(c));
-        assert_eq!(
-            words(&stale),
-            (
-                "stale pass: test · 3 files changed".into(),
-                "stale pass: test · 3 files changed".into()
-            )
-        );
-        let one = CheckInfo {
-            changed_files: vec![ChangedFile {
-                kind: 'A',
-                path: "x".into(),
-            }],
-            ..stale.clone()
-        };
-        assert_eq!(check_note(&one), "stale pass: test · 1 file changed");
-        assert_eq!(
-            words(&check(CheckState::Never)),
-            (
-                "not checked: never for this repo".into(),
-                "not checked: never for this repo".into()
-            )
-        );
-        assert_eq!(
-            words(&check(CheckState::NeedsApproval)),
-            (
-                "approve check: npm test".into(),
-                "approve check: npm test".into()
-            )
-        );
-        assert_eq!(
-            words(&check(CheckState::Pending)),
-            ("pending".into(), "pending: npm test".into())
-        );
+        // (check, the note beside the status in ls, the line a wait prints where it is pinned)
+        let cases = [
+            (with_exit(CheckState::Failed, Some(1)), "check failed (exit 1)", Some("check failed: npm test (exit 1): FAIL footer.test.ts")),
+            (with_exit(CheckState::Failed, None), "check failed", None),
+            (with_exit(CheckState::Checking, None), "checking", None),
+            (with_exit(CheckState::Passed, Some(0)), "check passed", None),
+            (check(CheckState::Passed), "check passed", Some("check passed: npm test")),
+            (with_exit(CheckState::CouldNotRun, Some(127)), "check could not run", None),
+            (check(CheckState::CouldNotRun), "check could not run", Some("check could not run: npm test")),
+            (check(CheckState::Overridden), "check overridden", Some("check failed, accepted: npm test (exit 1): FAIL footer.test.ts")),
+            (stale(&["a", "b", "c"]), "stale pass: test · 3 files changed", Some("stale pass: test · 3 files changed")),
+            (stale(&["x"]), "stale pass: test · 1 file changed", None),
+            (check(CheckState::Never), "not checked: never for this repo", Some("not checked: never for this repo")),
+            (check(CheckState::NeedsApproval), "approve check: npm test", Some("approve check: npm test")),
+            (check(CheckState::Pending), "pending", Some("pending: npm test")),
+        ];
+        for (info, note, line) in cases {
+            assert_eq!(check_note(&info), note, "{:?} exit {:?}", info.state, info.exit_code);
+            if let Some(line) = line {
+                assert_eq!(check_line(&info), line, "{:?}", info.state);
+            }
+        }
     }
 
     #[test]
@@ -4149,26 +4098,6 @@ mod tests {
         assert_eq!(listed, [("build", "passed"), ("test", "failed")]);
     }
 
-    #[test]
-    fn the_result_reads_as_one_line() {
-        assert_eq!(
-            check_line(&check(CheckState::Passed)),
-            "check passed: npm test"
-        );
-        assert_eq!(
-            check_line(&check(CheckState::Failed)),
-            "check failed: npm test (exit 1): FAIL footer.test.ts"
-        );
-        assert_eq!(
-            check_line(&check(CheckState::CouldNotRun)),
-            "check could not run: npm test"
-        );
-        assert_eq!(
-            check_line(&check(CheckState::Overridden)),
-            "check failed, accepted: npm test (exit 1): FAIL footer.test.ts"
-        );
-    }
-
     fn pane(status: &str, agent: Option<&str>, check: Option<CheckInfo>) -> TermInfo {
         let mut p: TermInfo = serde_json::from_value(json!({
             "id": 3, "cols": 80, "rows": 24, "title": "", "process": "node", "agent": agent,
@@ -4179,26 +4108,6 @@ mod tests {
         .unwrap();
         p.checks = check.into_iter().collect();
         p
-    }
-
-    #[test]
-    fn a_check_reads_beside_the_status() {
-        let note = |state, exit| {
-            check_note(&CheckInfo {
-                state,
-                exit_code: exit,
-                ..check(state)
-            })
-        };
-        assert_eq!(note(CheckState::Failed, Some(1)), "check failed (exit 1)");
-        assert_eq!(note(CheckState::Failed, None), "check failed");
-        assert_eq!(note(CheckState::Checking, None), "checking");
-        assert_eq!(note(CheckState::Passed, Some(0)), "check passed");
-        assert_eq!(
-            note(CheckState::CouldNotRun, Some(127)),
-            "check could not run"
-        );
-        assert_eq!(note(CheckState::Overridden, Some(1)), "check overridden");
     }
 
     #[test]
@@ -4491,109 +4400,87 @@ mod tests {
     }
 
     #[test]
-    fn claude_reports_input_and_output_tokens_apart() {
-        let (usage, _) = super::statusline_facts(
-            r#"{"context_window":{"total_input_tokens":1200,"total_output_tokens":300}}"#,
-        );
-        assert_eq!(
-            (usage.tokens, usage.tokens_in, usage.tokens_out),
-            (Some(1500), Some(1200), Some(300))
-        );
-        let (usage, _) = super::statusline_facts(r#"{"context_window":{"total_input_tokens":7}}"#);
-        assert_eq!(
-            (usage.tokens, usage.tokens_in, usage.tokens_out),
-            (None, Some(7), None)
-        );
-    }
-
-    #[test]
     fn claude_says_what_it_used_through_its_status_line() {
-        let json = r#"{"cost":{"total_cost_usd":1.25},"context_window":{"context_window_size":200000,"used_percentage":42},
+        use crate::protocol::Usage;
+        let full = r#"{"cost":{"total_cost_usd":1.25},"context_window":{"context_window_size":200000,"used_percentage":42},
             "rate_limits":{"five_hour":{"used_percentage":23.5,"resets_at":1738425600},"seven_day":{"used_percentage":41.2,"resets_at":1738857600}}}"#;
-        let (u, l) = super::statusline_facts(json);
-        assert_eq!(
-            u,
-            crate::protocol::Usage {
-                context: Some(42.0),
-                cost: Some(1.25),
-                ..Default::default()
-            }
-        );
-        assert_eq!(
-            l.iter()
-                .map(|x| (x.name.as_str(), x.used, x.resets_at))
-                .collect::<Vec<_>>(),
-            [("5h", 23.5, 1738425600), ("week", 41.2, 1738857600)]
-        );
-        let (u, l) = super::statusline_facts(r#"{"context_window":{"used_percentage":null}}"#);
-        assert_eq!(
-            (u, l.len()),
-            (crate::protocol::Usage::default(), 0),
-            "early in a session, or not on a plan: nothing yet"
-        );
-    }
-
-    #[test]
-    fn only_new_work_gets_a_worktree() {
-        let w = |a: &[&str]| {
-            super::starts_new_work(
-                "claude",
-                &a.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            )
-        };
-        assert!(
-            w(&[])
-                && w(&["fix the login page"])
-                && w(&["--model", "opus"])
-                && w(&["update the readme"]),
-            "a new session or a task"
-        );
-        assert!(
-            !w(&["--continue"]) && !w(&["-r"]) && !w(&["resume"]),
-            "an earlier conversation stays in its folder"
-        );
-        assert!(
-            !w(&["--version"])
-                && !w(&["-p", "what's 2+2"])
-                && !w(&["mcp", "list"])
-                && !w(&["update"]),
-            "not work: help, one-shots, subcommands"
-        );
-    }
-
-    #[test]
-    fn codex_config_and_profile_options_still_start_new_work() {
-        let w = |a: &[&str]| {
-            super::starts_new_work(
-                "codex",
-                &a.iter().map(|s| s.to_string()).collect::<Vec<_>>(),
-            )
-        };
-        for args in [
-            vec![],
-            vec!["-c", "model=\"example\""],
-            vec!["-p", "feature"],
-            vec!["--profile", "resume"],
-            vec!["--config=model=\"example\"", "build login"],
-            vec!["-pfeature"],
-            vec!["--", "--resume"],
-        ] {
-            assert!(w(&args), "new Codex work: {args:?}");
+        // (status line, what it used, plan limits, why)
+        type Case<'a> = (&'a str, Usage, &'a [(&'a str, f32, u64)], &'a str);
+        let cases: [Case; 4] = [
+            (
+                r#"{"context_window":{"total_input_tokens":1200,"total_output_tokens":300}}"#,
+                Usage { tokens: Some(1500), tokens_in: Some(1200), tokens_out: Some(300), ..Default::default() },
+                &[],
+                "input and output tokens apart, and their sum",
+            ),
+            (
+                r#"{"context_window":{"total_input_tokens":7}}"#,
+                Usage { tokens_in: Some(7), ..Default::default() },
+                &[],
+                "no total without both halves",
+            ),
+            (
+                full,
+                Usage { context: Some(42.0), cost: Some(1.25), ..Default::default() },
+                &[("5h", 23.5, 1738425600), ("week", 41.2, 1738857600)],
+                "context, cost and plan limits",
+            ),
+            (
+                r#"{"context_window":{"used_percentage":null}}"#,
+                Usage::default(),
+                &[],
+                "early in a session, or not on a plan: nothing yet",
+            ),
+        ];
+        for (json, usage, limits, why) in cases {
+            let (u, l) = super::statusline_facts(json);
+            assert_eq!(u, usage, "{why}");
+            assert_eq!(
+                l.iter()
+                    .map(|x| (x.name.as_str(), x.used, x.resets_at))
+                    .collect::<Vec<_>>(),
+                limits,
+                "{why}"
+            );
         }
-        for args in [
-            vec!["resume", "--last"],
-            vec!["-m", "example", "resume", "--last"],
-            vec!["fork", "--last"],
-            vec!["--profile", "feature", "review"],
-            vec!["--version"],
-            vec!["mcp", "list"],
-            vec!["--worktree"],
-            vec!["-C", "somewhere"],
-            vec!["--cd=somewhere"],
-            vec!["-Csomewhere"],
-            vec!["fix login", "--cd", "somewhere"],
-        ] {
-            assert!(!w(&args), "Codex stays in the requested folder: {args:?}");
+    }
+
+    #[test]
+    fn only_new_work_gets_a_worktree_and_an_earlier_conversation_stays_in_its_folder() {
+        let cases: &[(&str, &[&str], bool, &str)] = &[
+            ("claude", &[], true, "a new session"),
+            ("claude", &["fix the login page"], true, "a task"),
+            ("claude", &["--model", "opus"], true, "a new session with options"),
+            ("claude", &["update the readme"], true, "a task"),
+            ("claude", &["--continue"], false, "an earlier conversation"),
+            ("claude", &["-r"], false, "an earlier conversation"),
+            ("claude", &["resume"], false, "an earlier conversation"),
+            ("claude", &["--version"], false, "not work: help"),
+            ("claude", &["-p", "what's 2+2"], false, "not work: a one-shot"),
+            ("claude", &["mcp", "list"], false, "not work: a subcommand"),
+            ("claude", &["update"], false, "not work: a subcommand"),
+            ("codex", &[], true, "new Codex work"),
+            ("codex", &["-c", "model=\"example\""], true, "new Codex work"),
+            ("codex", &["-p", "feature"], true, "new Codex work"),
+            ("codex", &["--profile", "resume"], true, "a profile named resume"),
+            ("codex", &["--config=model=\"example\"", "build login"], true, "new Codex work"),
+            ("codex", &["-pfeature"], true, "new Codex work"),
+            ("codex", &["--", "--resume"], true, "after --, a prompt"),
+            ("codex", &["resume", "--last"], false, "Codex stays in the requested folder"),
+            ("codex", &["-m", "example", "resume", "--last"], false, "Codex stays in the requested folder"),
+            ("codex", &["fork", "--last"], false, "Codex stays in the requested folder"),
+            ("codex", &["--profile", "feature", "review"], false, "Codex stays in the requested folder"),
+            ("codex", &["--version"], false, "Codex stays in the requested folder"),
+            ("codex", &["mcp", "list"], false, "Codex stays in the requested folder"),
+            ("codex", &["--worktree"], false, "Codex stays in the requested folder"),
+            ("codex", &["-C", "somewhere"], false, "Codex stays in the requested folder"),
+            ("codex", &["--cd=somewhere"], false, "Codex stays in the requested folder"),
+            ("codex", &["-Csomewhere"], false, "Codex stays in the requested folder"),
+            ("codex", &["fix login", "--cd", "somewhere"], false, "Codex stays in the requested folder"),
+        ];
+        for &(agent, args, new_work, why) in cases {
+            let args: Vec<String> = args.iter().map(|s| s.to_string()).collect();
+            assert_eq!(super::starts_new_work(agent, &args), new_work, "{agent} {args:?}: {why}");
         }
     }
 
@@ -4804,61 +4691,28 @@ mod tests {
     }
 
     #[test]
-    fn gemini_qwen_and_opencode_events_mean_states() {
+    fn each_agents_hook_events_mean_its_states() {
         use crate::protocol::HookStatus as H;
-        let st = |v: serde_json::Value| super::status_from_hook(&v);
-        assert_eq!(
-            st(serde_json::json!({"hook_event_name": "BeforeAgent"})),
-            Some(H::Working),
-            "gemini: a turn starts"
-        );
-        assert_eq!(
-            st(serde_json::json!({"hook_event_name": "AfterAgent"})),
-            Some(H::Done)
-        );
-        assert_eq!(
-            st(
-                serde_json::json!({"hook_event_name": "Notification", "notification_type": "ToolPermission"})
-            ),
-            Some(H::Blocked)
-        );
-        assert_eq!(
-            st(serde_json::json!({"hook_event_name": "Stop"})),
-            Some(H::Done),
-            "qwen speaks claude's events"
-        );
-        assert_eq!(
-            st(
-                serde_json::json!({"type": "session.status", "properties": {"status": {"type": "busy"}}})
-            ),
-            Some(H::Working),
-            "opencode"
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "permission.asked", "properties": {}})),
-            Some(H::Blocked)
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "session.idle", "properties": {}})),
-            Some(H::Done)
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "question.replied"})),
-            Some(H::Working)
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "question.rejected"})),
-            Some(H::Working)
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "session.error"})),
-            Some(H::Done)
-        );
-        assert_eq!(
-            st(serde_json::json!({"type": "agent-turn-complete"})),
-            Some(H::Done),
-            "codex unchanged"
-        );
+        let cases = [
+            (json!({"hook_event_name": "UserPromptSubmit"}), Some(H::Working), "claude: a turn starts"),
+            (json!({"hook_event_name": "Stop"}), Some(H::Done), "claude, and qwen speaks claude's events"),
+            (json!({"hook_event_name": "Notification", "notification_type": "permission_prompt"}), Some(H::Blocked), "claude"),
+            (json!({"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion"}), Some(H::Blocked), "claude asks"),
+            (json!({"hook_event_name": "Notification", "notification_type": "auth_success"}), None, "claude: not a state"),
+            (json!({"hook_event_name": "BeforeAgent"}), Some(H::Working), "gemini: a turn starts"),
+            (json!({"hook_event_name": "AfterAgent"}), Some(H::Done), "gemini"),
+            (json!({"hook_event_name": "Notification", "notification_type": "ToolPermission"}), Some(H::Blocked), "gemini"),
+            (json!({"type": "session.status", "properties": {"status": {"type": "busy"}}}), Some(H::Working), "opencode"),
+            (json!({"type": "permission.asked", "properties": {}}), Some(H::Blocked), "opencode"),
+            (json!({"type": "session.idle", "properties": {}}), Some(H::Done), "opencode"),
+            (json!({"type": "question.replied"}), Some(H::Working), "opencode"),
+            (json!({"type": "question.rejected"}), Some(H::Working), "opencode"),
+            (json!({"type": "session.error"}), Some(H::Done), "opencode"),
+            (json!({"type": "agent-turn-complete"}), Some(H::Done), "codex"),
+        ];
+        for (payload, want, who) in cases {
+            assert_eq!(status_from_hook(&payload), want, "{who}: {payload}");
+        }
     }
 
     #[test]
@@ -5097,31 +4951,43 @@ mod tests {
     }
 
     #[test]
-    fn claude_qwen_codex_and_gemini_tool_starts_report_one() {
+    fn only_a_sessions_own_tool_start_with_its_input_reports_a_call() {
         let input = json!({ "command": "ls" });
+        let mut cases: Vec<(&str, serde_json::Value, bool, &str)> = Vec::new();
         for agent in ["claude", "qwen", "codex"] {
-            assert!(call_of(agent, pre_tool("Bash", input.clone())).is_some(), "{agent}");
+            cases.push((agent, pre_tool("Bash", input.clone()), true, "a tool start"));
         }
-        let gemini = json!({ "hook_event_name": "BeforeTool", "tool_name": "run_shell_command", "tool_input": input });
-        assert!(call_of("gemini", gemini).is_some());
-    }
-
-    #[test]
-    fn nothing_else_reports_one() {
-        let input = json!({ "command": "ls" });
+        cases.push((
+            "gemini",
+            json!({ "hook_event_name": "BeforeTool", "tool_name": "run_shell_command", "tool_input": input }),
+            true,
+            "gemini's tool start",
+        ));
         for event in ["PostToolUse", "UserPromptSubmit", "Stop", "Notification", "AfterTool"] {
-            let payload = json!({ "hook_event_name": event, "tool_name": "Bash", "tool_input": input });
-            assert_eq!(call_of("claude", payload), None, "{event}");
+            cases.push((
+                "claude",
+                json!({ "hook_event_name": event, "tool_name": "Bash", "tool_input": input }),
+                false,
+                "not a tool start",
+            ));
         }
         // Without the tool's input, two different calls would look the same, so there is no fingerprint.
-        assert_eq!(call_of("claude", json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash" })), None);
-        assert_eq!(call_of("claude", json!({ "hook_event_name": "PreToolUse", "tool_input": input })), None);
+        cases.push(("claude", json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash" }), false, "no input"));
+        cases.push(("claude", json!({ "hook_event_name": "PreToolUse", "tool_input": input }), false, "no tool"));
         // An agent that passes no payload, and one whose hooks are not tool hooks.
-        assert_eq!(call_of("kimi", json!({})), None);
-        assert_eq!(call_of("opencode", pre_tool("Bash", input.clone())), None);
+        cases.push(("kimi", json!({}), false, "no payload"));
+        cases.push(("opencode", pre_tool("Bash", input.clone()), false, "not tool hooks"));
         // A call made inside a subagent is not the session's own.
-        let inner = json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": input, "agent_id": "agent-1" });
-        assert_eq!(call_of("claude", inner), None);
+        cases.push((
+            "claude",
+            json!({ "hook_event_name": "PreToolUse", "tool_name": "Bash", "tool_input": input, "agent_id": "agent-1" }),
+            false,
+            "inside a subagent",
+        ));
+        for (agent, payload, reports, why) in cases {
+            let shown = payload.to_string();
+            assert_eq!(call_of(agent, payload).is_some(), reports, "{agent} {shown}: {why}");
+        }
     }
 
     #[test]
@@ -5385,29 +5251,6 @@ mod tests {
     }
 
     #[test]
-    fn a_seshi_install_left_behind_is_recognised_and_moved_over() {
-        let root = serde_json::json!({ "mcpServers": {
-            "seshi": { "command": "C:/Users/me/AppData/Local/Programs/seshi/seshi.exe", "args": ["mcp"] },
-            env!("APP_COMMAND"): { "command": concat!("C:/Programs/", env!("APP_COMMAND"), "/", env!("APP_COMMAND"), ".exe"), "args": ["mcp"] },
-        }});
-        assert_eq!(
-            super::old_mcp_names(&root),
-            vec!["seshi".to_string()],
-            "the seshi MCP entry is the old one"
-        );
-        assert!(
-            super::runs_our_hook(
-                "\"C:/Users/me/AppData/Local/Programs/seshi/seshi.exe\" hook claude"
-            ),
-            "its hooks are ours to rewrite"
-        );
-        assert!(
-            super::is_ours(&serde_json::json!({ "_seshi": true, "hooks": [] })),
-            "so is its tag"
-        );
-    }
-
-    #[test]
     fn hooks_from_another_hydra_are_found() {
         let want = concat!(
             "\"/home/me/.local/bin/",
@@ -5468,12 +5311,6 @@ mod tests {
         let found = super::stale_claude_settings_in(&home, &own, want);
         let _ = std::fs::remove_dir_all(&home);
         assert_eq!(found, vec![home.join(".claude-personal").join("settings.json")]);
-    }
-
-    #[test]
-    fn claudes_own_file_is_in_the_folder_it_runs_with() {
-        let folder = std::path::Path::new("/srv/agents/claude-home");
-        assert_eq!(super::claude_json_in(Some(folder)), folder.join(".claude.json"));
     }
 
     #[test]
@@ -5596,33 +5433,4 @@ mod tests {
     }
 
     use super::*;
-
-    #[test]
-    fn claude_hook_mapping() {
-        let s = |v: Value| status_from_hook(&v);
-        assert_eq!(
-            s(json!({"hook_event_name": "UserPromptSubmit"})),
-            Some(HookStatus::Working)
-        );
-        assert_eq!(
-            s(json!({"hook_event_name": "Stop"})),
-            Some(HookStatus::Done)
-        );
-        assert_eq!(
-            s(json!({"hook_event_name": "Notification", "notification_type": "permission_prompt"})),
-            Some(HookStatus::Blocked)
-        );
-        assert_eq!(
-            s(json!({"hook_event_name": "PreToolUse", "tool_name": "AskUserQuestion"})),
-            Some(HookStatus::Blocked)
-        );
-        assert_eq!(
-            s(json!({"type": "agent-turn-complete"})),
-            Some(HookStatus::Done)
-        );
-        assert_eq!(
-            s(json!({"hook_event_name": "Notification", "notification_type": "auth_success"})),
-            None
-        );
-    }
 }

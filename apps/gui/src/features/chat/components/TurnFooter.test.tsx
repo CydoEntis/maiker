@@ -14,12 +14,6 @@ const actions = (retry: ChatActions['retry']): ChatActions => ({ quote: nothing,
 const clock = () => '10:11 AM'
 
 describe('the footer of a finished turn', () => {
-  it('says Done with how many steps it took, and keeps how long in its tooltip', () => {
-    render(<TurnFooter row={row()} clock={clock} />)
-
-    expect(screen.getByText(/Done · 5 steps/)).toBeInTheDocument()
-    expect(screen.getByRole('separator')).toHaveAttribute('title', 'Finished in 7s · 10:11 AM')
-  })
 
   it('asks the same again when Retry is pressed', async () => {
     const retry = vi.fn()
@@ -27,13 +21,6 @@ describe('the footer of a finished turn', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Retry this turn' }))
     expect(retry).toHaveBeenCalledWith('Fix it')
-  })
-
-  it('offers no Retry where the chat cannot send, and no Copy where the agent wrote nothing', () => {
-    render(<TurnFooter row={row({ reply: '' })} clock={clock} />)
-
-    expect(screen.queryByRole('button', { name: 'Retry this turn' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Copy reply' })).toBeNull()
   })
 
   it('keeps its own words for a failed turn', () => {

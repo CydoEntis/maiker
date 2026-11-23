@@ -21,7 +21,7 @@
 .mx-wt-list { display: flex; flex: 1 1 auto; min-height: 0; flex-direction: column; gap: 6px; padding-top: 14px; border-top: 1px solid var(--line); }
 .mx-wt-list-head { display: flex; align-items: center; gap: 6px; width: 100%; padding: 0; text-align: left; font-size: 13px; font-weight: 600; letter-spacing: 0; text-transform: none; color: var(--fg); border-radius: var(--r-control); }
 .mx-wt-list-head:hover { color: var(--fg2); }
-.mx-wt-list-head:focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-wt-list-head:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-wt-chevron { flex: none; transition: transform var(--t-fast) var(--ease); }
 .mx-wt-list-head[aria-expanded="true"] .mx-wt-chevron { transform: rotate(90deg); }
 .mx-wt-count { font-family: var(--mono); font-weight: 400; letter-spacing: 0; color: var(--dim); }

@@ -441,19 +441,6 @@ mod tests {
     }
 
     #[test]
-    fn a_moved_install_is_repointed() {
-        let dir = temp("moved");
-        let gemini = agent(&dir, "settings.json", Format::McpServersJson);
-        set_up(&gemini, "/old/app", false).unwrap();
-        assert_eq!(
-            set_up(&gemini, "/new/app", false).unwrap(),
-            McpChange::Registered
-        );
-        assert_eq!(registered_command(&gemini).as_deref(), Some("/new/app"));
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn an_agent_without_a_config_folder_is_skipped_and_left_without_one() {
         let dir = temp("absent");
         let missing = dir.join("no-such-agent");

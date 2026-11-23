@@ -1,75 +1,121 @@
-import type { MouseEvent } from 'react'
-import { machineLabel } from '@/data/machineNicknames'
-import { STATUS_WORD, type SessionView } from '../model/session'
-import { isFreshSession, isShell, projectOf, rowTitle, rowWord } from '../model/sidebar'
+import { GitBranch } from 'lucide-react'
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent } from 'react'
+import { SESSION_ROW_ATTRIBUTE } from '../keyTargets'
 import { StatusIcon } from '@/components/ui/status-icon'
-import { MachineIcon } from './glyphs'
+import { diffSpoken, diffText, helpersSpoken, WAITING_FOR_SLOT, type HelperCount, type HelperDiff } from '../model/helpers'
+import { limitedWord, MAX_SESSION_NAME_LENGTH, STATUS_WORD, type SessionView } from '../model/session'
+import { isFreshSession, rowTitle, sectionOf } from '../model/sidebar'
+import { useNow } from '@/lib/clock'
+import { formatAgo, formatAge } from '../model/tracking'
 import { beginPointerDrag } from './dragSession'
-import { Ago } from './times'
+import { InlineName } from './InlineName'
+import { isMenuKey } from './menuPoint'
+
+/** The status mark at a row's right edge. */
+const MARK_PX = 14
+
+/**
+ * How long the session has been as it is now (`4m`, `2h`), quiet beside its mark: the time it has worked, waited or sat
+ * done. Its own component, so the clock redraws this word and not the row. Nothing when the daemon did not say.
+ */
+function SessionAge({ since, status }: { since: number; status: SessionView['status'] }) {
+  const elapsed = Math.max(0, useNow() - since)
+  return <span className="mx-sb-row-age" aria-hidden="true" title={`${STATUS_WORD[status]} for ${formatAge(elapsed)}`}>{formatAgo(elapsed)}</span>
+}
 
 type Props = {
   session: SessionView
   selected: boolean
-  /** Inside a project group the project is in the heading, so the row leaves it out. */
-  showProject: boolean
-  /** The real name of the other machine the session runs on, when no heading above the row says so. */
-  machine?: string | null
+  /** The name of the session whose agent started this one, while that session is listed. */
+  starter?: string | null
+  /** The helpers this session's agent started, when it has any listed. */
+  helpers?: HelperCount | null
+  /** What a finished helper changed, written before its mark. */
+  diff?: HelperDiff | null
+  /** The name is being typed in the row. */
+  renaming: boolean
   onShow: () => void
   onRename: () => void
+  /** The name typed, already known to be a new one. */
+  onRenameSave: (name: string) => void
+  onRenameEnd: () => void
   onContextMenu: (event: MouseEvent) => void
+  /** The context-menu key, or Shift+F10, on the row. */
+  onMenuKey: (event: KeyboardEvent<HTMLElement>) => void
 }
 
 /**
- * The line under a row's name, saying where the session is: the machine's icon (a monitor here, a server for another machine),
- * that machine's name in the accent colour when it is another one, then `project / worktree` (the worktree's name is its branch,
- * mono). `project` is null when a project heading above the row already says it.
+ * What a screen reader hears after the name: what runs in it (the row shows no agent mark, so this is the only place a
+ * row says it), whose helper it is, its own helpers, what a finished helper changed, and its status in a word.
  */
-function PlaceLine({ session, project, machine }: { session: SessionView; project: string | null; machine: string | null }) {
-  const worktree = session.worktree ? session.branch : null
-  return (
-    <span className="mx-row-sub">
-      <span className="mx-row-folder"><MachineIcon remote={session.machineName !== null} size={12} /></span>
-      {machine !== null && <span className="mx-row-machine">{machineLabel(machine)}</span>}
-      {machine !== null && project !== null && <span className="mx-row-slash" aria-hidden="true">·</span>}
-      {project !== null && <span className="mx-row-project-name">{project}</span>}
-      {project !== null && worktree !== null && <span className="mx-row-slash" aria-hidden="true">/</span>}
-      {worktree !== null && <span className="mx-row-branch-name">{worktree}</span>}
-    </span>
-  )
+function spokenState(session: SessionView, starter: string | null, helpers: HelperCount | null, diff: HelperDiff | null): string {
+  const status = session.status === 'limited' ? limitedWord(session.resumeAt, Date.now()) : STATUS_WORD[session.status]
+  return [session.process, starter === null ? null : `helper of ${starter}`, helpers === null ? null : helpersSpoken(helpers), diff === null ? null : diffSpoken(diff), status, session.waitingForSlot ? WAITING_FOR_SLOT.toLowerCase() : null].filter((part) => part !== null).join(', ')
 }
 
 /**
- * One session in the sidebar, the same in every view. Line 1: its status mark, its name, a word when it stopped or is held by
- * its plan limit, and how long it has been in its state. Line 2: where it is (`PlaceLine`). What the agent is doing is the
- * hover card's, not the row's. An idle row is dimmed.
+ * One session in the sidebar: its name at the left and its status mark at the right, and nothing else but a finished
+ * helper's line counts before its mark (a long name is cut short first). An idle session has no mark and is dimmed; where it runs, what it is doing and for how long are the hover card's. While it is renamed
+ * the name is a field in the same place: Enter or leaving it saves, Escape cancels, and an empty or unchanged name
+ * changes nothing.
  */
-export function SessionRow({ session, selected, showProject, machine = null, onShow, onRename, onContextMenu }: Props) {
+export function SessionRow({ session, selected, starter = null, helpers = null, diff = null, renaming, onShow, onRename, onRenameSave, onRenameEnd, onContextMenu, onMenuKey }: Props) {
   const title = rowTitle(session)
-  const active = !isShell(session) && session.status !== 'idle'
-  const word = rowWord(session)
-  const className = `mx-row${session.status === 'idle' ? ' is-idle' : ''}${selected ? ' is-selected' : ''}${active ? ' is-active' : ''}${session.status === 'needs' ? ' is-needs' : ''}${session.status === 'working' ? ' is-working' : ''}${isShell(session) ? ' is-shell' : ''}${isFreshSession(session) ? ' is-fresh' : ''}${session.status === 'unknown' ? ' is-offline' : ''}${session.status === 'limited' ? ' is-limited' : ''}`
-  const project = showProject ? projectOf(session) : null
+  const mark = sectionOf(session)
+  const fresh = isFreshSession(session)
+  const className = `mx-sb-row is-${mark}${selected ? ' is-selected' : ''}${fresh ? ' is-fresh' : ''}`
+  const row = useRef<HTMLButtonElement>(null)
+  const wasRenaming = useRef(false)
+  // The field took the keyboard from the row; when Enter or Escape ends it, the row has it back. A click elsewhere
+  // already put focus where it was meant to go.
+  useEffect(() => {
+    if (wasRenaming.current && !renaming && document.activeElement === document.body) row.current?.focus()
+    wasRenaming.current = renaming
+  }, [renaming])
+  if (renaming) {
+    // A session nothing was sent to has no name yet: its field starts empty over "New session".
+    const shown = fresh ? '' : title
+    return (
+      <div className={`${className} is-renaming`} {...{ [SESSION_ROW_ATTRIBUTE]: session.id }}>
+        <InlineName
+          value={shown}
+          placeholder={title}
+          label="Session name"
+          maxLength={MAX_SESSION_NAME_LENGTH}
+          onCommit={(name) => {
+            if (name !== '' && name !== shown) onRenameSave(name)
+            onRenameEnd()
+          }}
+          onCancel={onRenameEnd}
+        />
+        <StatusIcon status={session.status} size={MARK_PX} className="mx-sb-row-mark" />
+      </div>
+    )
+  }
   return (
     <button
+      ref={row}
       type="button"
       className={className}
+      {...{ [SESSION_ROW_ATTRIBUTE]: session.id }}
       onPointerDown={(event) => { beginPointerDrag(event, { kind: 'session', id: session.id, label: title }) }}
-      aria-label={`${title}, ${session.process}, ${session.status === 'limited' ? word : STATUS_WORD[session.status]}`}
+      aria-label={`${title}, ${spokenState(session, starter, helpers, diff)}`}
       aria-current={selected ? 'page' : undefined}
       onClick={onShow}
-      onKeyDown={(event) => { if (event.key === 'F2') { event.preventDefault(); onRename() } }}
+      onKeyDown={(event) => {
+        if (event.key === 'F2') {
+          event.preventDefault()
+          onRename()
+        } else if (isMenuKey(event)) onMenuKey(event)
+      }}
       onContextMenu={onContextMenu}
     >
-      <span className="mx-row-text">
-        <span className="mx-row-title">
-          <StatusIcon status={session.status} className="mx-row-status" />
-          <span className="mx-row-name">{title}</span>
-          {word !== '' && <span className="mx-row-word">{word}</span>}
-          {/* A shell has no state worth timing. */}
-          {!isShell(session) && session.statusSince !== null && <span className="mx-row-when"><Ago at={session.statusSince} /></span>}
-        </span>
-        <PlaceLine session={session} project={project} machine={machine} />
-      </span>
+      {/* A session in a worktree of its own is marked before its name; one in the project's own checkout has no mark. */}
+      {session.worktree && <span className="mx-sb-row-tree" title={session.branch === null ? 'In a worktree' : `In a worktree on ${session.branch}`}><GitBranch aria-hidden="true" /></span>}
+      <span className="mx-sb-row-name">{title}</span>
+      {diff !== null && <span className="mx-sb-row-diff">{diffText(diff)}</span>}
+      {session.statusSince !== null && <SessionAge since={session.statusSince} status={session.status} />}
+      <StatusIcon status={session.status} size={MARK_PX} className="mx-sb-row-mark" />
     </button>
   )
 }

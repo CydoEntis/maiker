@@ -49,17 +49,20 @@ describe('the window material', () => {
     expect(offenders).toEqual([])
   })
 
-  // Menus and popovers are lifted off the window by one shared fill and ring, drawn from theme tokens so both kinds of theme get it.
-  it('draws every menu and popover on the one lifted fill with a ring, from theme tokens', () => {
+  // Menus, popovers, toasts and dialogs are one material: the theme's float ground, the ink hairline and the one shadow.
+  it('draws every menu, popover, toast and dialog as the one float', () => {
     const css = SHEETS['./material.css'] ?? ''
-    expect(css).toMatch(/--pop-bg:\s*color-mix\(in srgb, var\(--m-raise\)[^;]*var\(--fg\)\)/)
-    expect(css).toMatch(/--pop-ring:\s*var\(--line2\)/)
-    expect(css).toMatch(/\[role="menu"\][^{]*\.mx-pop[^{]*\{\s*background-color: var\(--pop-bg\);\s*border-color: var\(--pop-ring\);/)
+    expect(css).toMatch(/--float-line:\s*rgba\(var\(--ink\),/)
+    expect(css).toMatch(/--float-sh:[^;]*var\(--shk\)/)
+    const float = /\.mx-app \.mx-ctx,([^{]*)\{\s*background: var\(--float-bg\);\s*border: 1px solid var\(--float-line\);\s*box-shadow: var\(--float-sh\);/.exec(css)?.[1] ?? ''
+    for (const surface of ['.mx-picker-menu', '.mx-pop', '.mx-toast', '.mx-alert', '.mx-rename', '.mx-palette']) expect(float).toContain(surface)
+    expect(css).toMatch(/\[role="menu"\][^{]*\[role="dialog"\][^{]*\[role="alertdialog"\][^{]*\{\s*background-color: var\(--float-bg\);\s*border-color: var\(--float-line\);/)
   })
 
-  it('draws the folder mark in a text colour, not a coloured tile', () => {
-    const css = SHEETS['./features/workspace/components/sidebar.css'] ?? ''
-    expect(css).toMatch(/\.mx-folder-mark\s*\{[^}]*color: var\(--muted-text\)/)
-    expect(css).not.toMatch(/mx-project-square|mx-grp-square/)
+  // The float's shadow is the only one a stylesheet may name: a surface that is not a float is lifted by tone alone.
+  it('keeps the removed popover fills and shadows out of every stylesheet', () => {
+    const removed = /var\(--(pop-bg|pop-ring|pop-sh|pop-sh-dialog|pop-sh-menu)\)/
+    const offenders = Object.entries(SHEETS).filter(([, css]) => removed.test(css)).map(([path]) => path)
+    expect(offenders).toEqual([])
   })
 })

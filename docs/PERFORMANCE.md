@@ -40,7 +40,7 @@ driven through React 12.5 times a second. Output rendering is the third, separat
 ### 1. Infinite CSS animations on working and waiting sessions (about 32 points per working session; stacks)
 
 - `apps/gui/src/features/workspace/workspace.css:502-505`: `.mx-fx-working::after`, `.mx-fx-needs::after`, `.mx-fx-done::after` move a 250%-wide gradient layer forever (`v14sweep`, `v14breathe`).
-- `workspace.css:244` `.mx-badge.is-needs` and `:754` `.mx-inbox-count.is-needs` animate `box-shadow` forever (`v7pulse`); `:1005` `.mx-upd-dot` too; `:527` `.mx-pane-status.is-idle .mx-status-dot` breathes forever.
+- `workspace.css:244` `.mx-badge.is-needs` and `:754` `.mx-inbox-count.is-needs` animate `box-shadow` forever (`v7pulse`); `:1005` `.mx-upd-dot` too.
 - `workspace.css:483` the Settings preview chip loops the sweep.
 
 The sweep was rewritten earlier to animate `transform`/`opacity`, which is cheap in Chromium (1-2
@@ -118,7 +118,7 @@ that touches this area.
 Tier 1 (small changes, measured gain):
 
 1. [x] Status effects play once when a status appears and then rest: the working sweep is one pass, the needs-you glow breathes three times, the Inbox count and update dot pulse with a `transform` ring on a pseudo-element and rest, the idle dot is still. Nothing animates `box-shadow`. One thing loops, by the owner's decision: the needs-you badge's ring (11px, `transform` and `opacity` only, paused while the window is not in front). Re-measure on WebKitGTK before adding another. `workspace.css`, `App.css`, Settings › Motion copy.
-2. [x] Spinner outside React: `lib/spinner-clock.ts` writes each frame into the elements (`attachSpinner`) at 160 ms, and stops while the window is hidden or not focused (`lib/window-activity.ts`). `.mx-spin` has a fixed `inline-size` and `contain: layout`.
+2. [x] No text spinner: the working mark is the status icon (`components/ui/status-icon.tsx`), which CSS turns and which holds while the window is hidden or not focused. `.mx-spin` has a fixed `inline-size` and `contain: layout`.
 3. [x] Cursor blink only while the pane is focused and the window is in front (`TerminalView.tsx`, `useWindowActive`).
 
 Tier 2 (needs a real machine to verify):
@@ -129,11 +129,11 @@ Tier 3 (waste; not felt as lag with one session):
 
 5. [x] Daemon: the periodic save compares the serialised session with `last_saved` and skips the write (a barrier save still goes out); the process scan marks the state dirty for the clock only when `why_process_at` enters a new minute, which is the resolution the TUI's why popover shows it at; a surface's snapshot is built only when a client of that surface is attached.
 6. [x] Tauri host: output is gathered per pane for up to 12 ms or 64 KiB and sent as one raw frame over a `tauri::ipc::Channel` the webview opens once (`watch_terminal_output`), so nothing is base64-encoded, JSON-parsed or decoded per chunk, and each view sees only its pane's frames; replays and `terminal_history` are raw bytes (`tauri::ipc::Response`; the history reply is the sequence number as 8 big-endian bytes, then the output; empty means dropped); `ServerMsg::State` goes out as `sessions-changed` (the `Snapshot`, or `null` when the stream dropped) and the GUI sets the query data from it. The 1.5 s poll is now a 15 s safety net. Replays are trimmed and asked for per pane since item 11.
-7. [x] React: the reconcile is keyed on `data` identity, tracks are set only when one changed (`tracksEqual`), `TabBar` and `StatusBar` are memoised with stable callbacks, `matchMedia` is created once, the palette's items are built only while it is open, the diff stat does not refetch on window focus, and the browser preview (`App.tsx`) is a lazy chunk the desktop never loads (`Root.tsx`). Not memoised: `Sidebar` and `PaneCard`, whose props are rebuilt by the parent on every real change anyway; `HoverTips` was measured as negligible and is unchanged.
+7. [x] React: the reconcile is keyed on `data` identity, tracks are set only when one changed (`tracksEqual`), `TabBar` and `StatusBar` are memoised with stable callbacks, `matchMedia` is created once, the palette's items are built only while it is open, the diff stat does not refetch on window focus, and the desktop window loads no browser screens: the galleries are lazy chunks (`Root.tsx`). Not memoised: `Sidebar` and `PaneCard`, whose props are rebuilt by the parent on every real change anyway; `HoverTips` was measured as negligible and is unchanged.
 
 Follow-ups done on the same day, after a second look:
 
-8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `Ago`, `ElapsedSince`), and a move highlight ends through `useRecent`, so a working session ticks a few small spans, not the window; the Settings spinner preview steps outside React; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
+8. [x] The one-second clock is a shared store only the text showing a time subscribes to (`lib/clock.ts`; `components/times.tsx`: `ElapsedSince`), so a working session ticks a few small spans, not the window; terminal output goes over one raw `tauri::ipc::Channel` instead of base64 events.
 9. [x] Resting shadows, card gradients and popup blur, the three things the audit measured at 18, 10 and more points on software WebKitGTK, are gone: the desktop has one flat finish. A web view without WebGL 2 (`data-gpu="software"`, set by `lib/gpu.ts`) also draws a popup's shadow as a hairline (`--sh-pop`); colours, radii and layout stay.
 10. [x] State deltas: when only panes changed, the daemon sends `ServerMsg::TermsChanged` (compared as encoded bytes against what that surface's clients last got) and nothing at all when nothing visible changed; `PROTOCOL_VERSION` 69. The TUI and the desktop host merge deltas into the snapshot they hold.
 11. [x] Replays only for viewed panes: the desktop stream attaches with `Hello.replays: false` and asks `WantReplay` per pane when a view opens; a desktop replay is the last 1 MiB of the ring plus the screen; the host keeps no history for a pane until its replay arrived.
@@ -181,14 +181,16 @@ so the streaming scenario measured nothing until it was fixed).
 
 ## Measuring in the app
 
-Settings › Performance (`apps/gui/src/features/settings/components/PerformanceSection.tsx`) shows,
-once a second while it is open, what the web view and the processes are doing, and **Copy report**
-puts the same figures as plain text on the clipboard for a bug report or an agent. Its **Overlay**
-switch (`perfOverlay`) keeps a one-line readout in the window's corner (`PerfOverlay.tsx`) so a
-lag spike can be matched with what the app was doing. Nothing is sampled while neither is shown.
+The app has no Performance page and no overlay: Settings shows no figures, and no setting changes
+how a terminal draws (every pane uses WebGL where the web view has WebGL 2, xterm's DOM renderer
+where it has not). What is left is the instrumentation, with no screen of its own: the window's
+counters and once-a-second sample (`apps/gui/src/lib/perf-meter.ts`, read through `usePerfSample`;
+nothing is sampled while nothing reads one) and the host's `performance_sample` command
+(`performance.rs`). To measure, use the harness above, or mount a reader of `usePerfSample` in a
+local build. Where a dated entry below names Settings › Performance, its overlay or **Draw
+terminals without the GPU**, it means the page and switches that read these figures then.
 
-What the numbers are and where they come from (`apps/gui/src/lib/perf-meter.ts`, the host's
-`performance.rs`):
+What the numbers are:
 
 - **Frames**: animation frames per second, how many took over 50 ms (a hitch you feel), and the
   worst one. The web view's main thread is busy when this drops while the window is idle.
@@ -407,7 +409,7 @@ the local socket. Typing was still late. Switching the terminals to xterm's DOM 
 session. So the delay was in the WebGL renderer presenting its canvas on this web view, not in the
 keys, the daemon, the host or the output socket. The real cause was one level down: the page was
 drawn on the CPU (see *The page was drawn on the CPU* below), and with that fixed WebGL shows
-letters on time. Every platform now starts on WebGL; the setting stays for a machine that needs it.
+letters on time. Every platform now draws with WebGL, and there is no setting for it.
 
 ### How to run measurement 2 again
 
@@ -418,8 +420,6 @@ hyprctl clients -j | jq -r '.[] | select(.class=="maitty-gui") | "\(.at[0]),\(.a
 AGENT_SOCKET=default maiker send -p <pane> --no-enter x
 grim -g "<geometry>" shot.png     # every half second; compare with the shot before the key
 ```
-
-Turn the overlay on first (Settings › Performance): its B/s figure is in every screenshot.
 
 ### The gap in what we measure
 
@@ -438,7 +438,7 @@ Measure first, change second. No fix goes in on a theory.
 2. **Add the probe.** Stamp one key at each hop and log the six times:
    xterm `onData` → the `terminal_input` command received by the host → `Output` from the daemon
    received by the hub → `Streams::flush` → the channel message received in the window →
-   `emulator.write` done. Keep it behind Settings › Performance as **Key to echo** (median, 95th
+   `emulator.write` done. Keep it in `perf-meter.ts` as **Key to echo** (median, 95th
    percentile, worst), so the next report has it.
 3. **Read the six times.** The hop where the time goes is the bug. If the times are all small and
    the screen is still late, the wait is after `emulator.write`: xterm's own render, or the web
@@ -651,17 +651,17 @@ What was changed, and how sure we are that it matters:
 
 | Change | Where | Basis |
 | --- | --- | --- |
-| Hover lives outside React state: `HoverController` (`model/hoverController.ts`) holds the card, the 450ms timer and the warm window; `RowHoverHost` is the only component that follows it. A hover no longer draws the sidebar's rows. | `Sidebar.tsx`, `RowHoverHost.tsx`, `useHoverController.ts` | Read in code: the old state sat in `Expanded`, so each show and hide re-ran every row and `useFlip`'s layout reads. Cost not measured. |
-| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `flipKey` in `Sidebar.tsx` | Read in code. |
+| Hover lives outside React state: `HoverController` (`model/hoverController.ts`) holds the card, the delay timer (`HOVER_CARD_DELAY_MS`) and the warm window; `RowHoverHost` is the only component that follows it. A hover no longer draws the sidebar's rows. | `Sidebar.tsx`, `RowHoverHost.tsx`, `useHoverController.ts` | Read in code: the old state sat in `Expanded`, so each show and hide re-ran every row and `useFlip`'s layout reads. Cost not measured. |
+| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `orderPlacement` in `model/sidebarTree.ts` | Read in code. |
 | The card is placed from the row's box alone (`placeHoverCard`: `top` for a row in the upper half, `bottom` for the lower half, `max-height: calc(100vh - 16px)`), once, in the timer callback. It no longer renders hidden, measures itself and moves. | `hoverCard.ts`, `RowHoverCard.tsx` | Read in code. |
-| One card stays mounted while warm: leaving a row hides it (`data-open="false"`), and entering another within `HOVER_CARD_WARM_MS` (250ms) shows it there at once, no 450ms wait and no fade. The first card still waits 450ms. This is a small behaviour change. | `hoverController.ts` | By design. |
+| One card stays mounted while warm: leaving a row hides it (`data-open="false"`), and entering another within `HOVER_CARD_WARM_MS` (250ms) shows it there at once, no wait and no fade. The first card still waits `HOVER_CARD_DELAY_MS`. This is a small behaviour change. | `hoverController.ts` | By design. |
 | The card fades in by opacity only (`mx-hover-in`, 120ms) and has a 1px ring (`--pop-sh-flat`) in place of the blurred shadow, so its clip-path bleed is 4px instead of 48px (`--float-bleed`). Tips take the same ring. | `sidebar.css`, `material.css` | Shadow and clip costs are in the 2026-11-03 tables above; the card's share is a guess. |
 | Software painting (`data-gpu="software"`): popovers fade and slide 4px (`mx-grow-flat`) instead of scaling; dialogs fade without their scale; full-window scrims appear at once; floats' clip bleed is 4px. | `material.css`, `workspace.css` | Guess from the same tables. |
 | `data-gpu` is also set by a probe: 1.5s after start, on the Linux web view, 6 frames are timed while a 1px element moves by transform, and at least half over 24ms flips `data-gpu` to `software` (`lib/gpu.ts`). WebKitGTK reports WebGL 2 on CPU-painting machines, so the WebGL test alone never fired. | `lib/gpu.ts` | The probe's threshold is a guess; it has not been run on a slow machine. |
-| Loops: the running light moves in 16 steps a lap (about 15 frames a second); the skeleton shimmer is a transform-moved highlight over a still base; the M loader's fill colour is computed once; the status pulse, badge pulse, dock breath, M loader, shimmer, update bar and machine spinner pause while the window is hidden (`data-window="inactive"`). | `workspace.css`, `chat.css`, `session-dialogs.css`, `frame.css`, `dock.css` | 2026-11-03: all infinite animations cost 33 of 58 points. |
+| Loops: the working spinner turns by `transform` alone (`mxStatusSpin`), so no step repaints the mark; the skeleton shimmer is a transform-moved highlight over a still base; the M loader's fill colour is computed once; the working spinner, badge pulse, dock breath, M loader, shimmer, update bar and machine spinner pause while the window is hidden (`data-window="inactive"`). | `status-icon.css`, `workspace.css`, `chat.css`, `session-dialogs.css`, `frame.css`, `dock.css` | 2026-11-03: all infinite animations cost 33 of 58 points. |
 | The reduced-motion rules no longer use `:root:has(.mx-app[data-motion="reduced"])`; they read `:root[data-reduced-motion="true"]`. | `sidebar.css`, `workspace.css` | Read in code: `:has` over the whole app is re-evaluated on every DOM change. |
 | The terminal fits its grid at most every 90ms while its pane keeps changing size (a sliding sidebar or drawer) and once at the end (`throttleTrailing`, `FIT_WHILE_ANIMATING_MS`). A fold's grid rows are `contain: layout style`. | `TerminalView.tsx`, `lib/throttle.ts`, `sidebar.css` | Read in code: a resize observer fired the fit at every frame. |
-| The offline banners and `Elapsed` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `Elapsed.tsx`, `states.tsx`, `ServiceStatus.tsx` | Read in code. |
+| The offline banners and `ElapsedSince` read the shared second clock (`lib/clock.ts`), which stops while the window is hidden, instead of one interval each. | `times.tsx`, `ServiceStatus.tsx` | Read in code. |
 
 ### What was measured, and what could not be
 
@@ -726,7 +726,7 @@ over the redesign, so the likely cost is paint or animation, which a headless te
 
 Done: the pane's 200 ms entrance fade is gone (`pane.css`); the chat paints from the feed cache with no loading frame
 (`useChatFeed`, `CACHE_LIMIT`); a pointer on a sidebar row reads its feed ahead (`warmChatFeed`); the focused id is not in
-`flipKey`. **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
+the sidebar's slide key (`orderPlacement`). **Step A:** a tab kept out of sight (`KEPT_TABS`) keeps its chat mounted as well as its terminal, with the feed
 paused (`useChatFeed` `paused`: no reads and no listening, and one read at once when it shows again), so going back to
 one of the last two tabs shows its chat, scroll position, draft and open trays as they were. Cost is memory: two more chats.
 Not measured on screen yet; record one session click in the built app (F12, Performance) before taking Step B.

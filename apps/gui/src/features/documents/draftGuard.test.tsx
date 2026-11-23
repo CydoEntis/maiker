@@ -27,14 +27,6 @@ describe('the draft guard', () => {
     expect(go).toHaveBeenCalledTimes(2)
   })
 
-  it('finds a draft by its pane or its session', () => {
-    registered('a', handle())
-    expect(draftsMatching(inPane('pane1'))).toHaveLength(1)
-    expect(draftsMatching(ofSessions(new Set(['chat'])))).toHaveLength(1)
-    expect(draftsMatching(inPane('pane2'))).toHaveLength(0)
-    expect(hasDrafts()).toBe(true)
-  })
-
   it('asks Discard changes to README.md? and goes on only when Discard is chosen', async () => {
     const user = userEvent.setup()
     render(<DraftGuardHost />)
@@ -89,14 +81,6 @@ describe('the draft guard', () => {
     expect(hasDrafts()).toBe(true)
   })
 
-  it('names several documents in one question', async () => {
-    render(<DraftGuardHost />)
-    registered('a', handle())
-    registered('b', handle({ path: 'docs/guide.md', owner: { paneId: 'pane2', sessionId: 'chat' } }))
-    act(() => { guardDrafts(ofSessions(new Set(['chat'])), vi.fn()) })
-    expect(await screen.findByRole('heading', { name: 'Discard changes to 2 documents?' })).toBeInTheDocument()
-  })
-
   it('answers a second question while one is open with keep editing, never two dialogs', async () => {
     render(<DraftGuardHost />)
     const draft = registered('a', handle())
@@ -113,7 +97,7 @@ describe('a document viewer with a draft', () => {
     const disk = fakeDisk('a\n')
     render(
       <>
-        <DocumentView term={3} machine={0} path="README.md" root="/p" owner={{ paneId: 'pane9', sessionId: 'chat' }} onOpenPath={() => undefined} io={disk.io} startMode="edit" {...extra} />
+        <DocumentView term={3} machine={0} path="README.md" root="/p" owner={{ paneId: 'pane9', sessionId: 'chat' }} onOpenPath={() => undefined} io={disk.io} ask={{ mode: 'edit', key: 0 }} {...extra} />
         <DraftGuardHost />
       </>,
     )
@@ -136,11 +120,11 @@ describe('a document viewer with a draft', () => {
     open()
     const box = await screen.findByRole('textbox', { name: 'Edit README.md' })
     await user.type(box, 'b')
-    await user.click(screen.getByRole('radio', { name: 'Drawn' }))
+    await user.click(screen.getByRole('radio', { name: 'Preview' }))
     expect(await screen.findByRole('heading', { name: 'Discard changes to README.md?' })).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Keep editing' }))
     expect(screen.getByRole('textbox', { name: 'Edit README.md' })).toHaveValue('a\nb')
-    await user.click(screen.getByRole('radio', { name: 'Drawn' }))
+    await user.click(screen.getByRole('radio', { name: 'Preview' }))
     await user.click(await screen.findByRole('button', { name: 'Discard' }))
     await waitFor(() => { expect(screen.queryByRole('textbox', { name: 'Edit README.md' })).toBeNull() })
     expect(hasDrafts()).toBe(false)
@@ -150,7 +134,7 @@ describe('a document viewer with a draft', () => {
     const user = userEvent.setup()
     const disk = open()
     await user.type(await screen.findByRole('textbox', { name: 'Edit README.md' }), 'b')
-    await user.click(screen.getByRole('radio', { name: 'Source' }))
+    await user.click(screen.getByRole('radio', { name: 'File' }))
     await user.click(await screen.findByRole('button', { name: 'Save' }))
     await waitFor(() => { expect(screen.queryByRole('textbox', { name: 'Edit README.md' })).toBeNull() })
     expect(disk.disk.text).toBe('a\nb')

@@ -6,7 +6,9 @@ import type { Conversation } from '@/data/preview'
 import { sendNativeNotice } from '@/features/notifications/native'
 import { COPY_TOAST_ID, COPY_TOAST_MS, copySaid } from '@/features/terminal/copyToast'
 import { toast } from '@/lib/toast'
-import { runMachineUpdate } from './machineUpdate'
+import { confirmAsk } from '@/features/confirm/confirm'
+import type { Confirm } from '@/features/confirm/useConfirm'
+import { runMachineUpdate, runServiceRestart } from './machineUpdate'
 import { advanceLoginWatch, LOGIN_CHECK_MS, startLoginWatch, type LoginWatch } from './model/loginWatch'
 import { announcementFor, withUnconnected, withoutUnconnected, type RemoteMachine, type UpdateAction } from './model/machines'
 import { copyText } from '@/lib/clipboard'
@@ -130,7 +132,7 @@ export function useRemoteMachines(): RemoteMachines {
 }
 
 /** What the window can ask of a machine by its name: add, retry, change what it may do, update, remove. */
-export function useMachineActions(localConversations: readonly Conversation[] | undefined, forgetMachine: (name: string) => void) {
+export function useMachineActions(localConversations: readonly Conversation[] | undefined, forgetMachine: (name: string) => void, confirm: Confirm) {
   const retryNamed = useCallback((name: string) => {
     retryMachine(name).catch((error: unknown) => { toast.failed(`Could not retry ${name}`, error) })
   }, [])
@@ -195,12 +197,16 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
     updatingRef.current.add(name)
     setUpdateProgress((current) => ({ ...current, [name]: 0 }))
     try {
-      await runMachineUpdate(name, action, whenIdle, () => { retryNamed(name) })
+      await runMachineUpdate(name, action, whenIdle, {
+        onDone: () => { retryNamed(name) },
+        // The old service kept sessions the new version cannot bring back: ending them is the person's call, asked every time.
+        onRestartAnyway: (sessions) => { confirm(confirmAsk('restart-machine-service', { name, sessions }), () => { void runServiceRestart(name, () => { retryNamed(name) }) }) },
+      })
     } finally {
       updatingRef.current.delete(name)
       setUpdateProgress((current) => Object.fromEntries(Object.entries(current).filter(([key]) => key !== name)))
     }
-  }, [retryNamed])
+  }, [retryNamed, confirm])
   const copyCommand = useCallback((command: string) => {
     copyText(command).then(
       () => { toast.info('Copied. Run it in a terminal on this computer.') },

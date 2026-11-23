@@ -1,5 +1,5 @@
 /**
- * A first login in a session: ssh asks a person for a password or a host key in a terminal
+ * A first login in a session: ssh asks a person for a password or a code in a terminal
  * session of this computer, and the machine is dialled again once that session closes. The
  * window never sees the session's id when it is made, so the session is the first new one of
  * this computer. A session that never shows up is given up on after `LOGIN_WAIT_MS`, so the

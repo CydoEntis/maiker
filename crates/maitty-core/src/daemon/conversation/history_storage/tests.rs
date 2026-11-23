@@ -260,19 +260,6 @@ fn equal_revision_from_competing_attachment_cannot_replace_a_committed_snapshot(
     );
 }
 #[test]
-fn exhausted_manifest_revision_is_rejected_before_attachment_hydration() {
-    let scratch = scratch_dir();
-    let cache = Cache::open(scratch.path().join("history"), true, true).unwrap();
-    let binding = crate::test_support::conversation().binding;
-    let h = History::new(ConversationId(1));
-    cache.commit(cache.prepare(&binding, &h).unwrap()).unwrap();
-    let path = cache.root.join("1/manifest.json");
-    let mut manifest: Manifest = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
-    manifest.revision = u64::MAX;
-    std::fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-    assert!(cache.load(h.conversation, &binding).is_err());
-}
-#[test]
 fn exhausted_projection_cannot_be_prepared_as_an_unloadable_cache_revision() {
     let scratch = scratch_dir();
     let cache = Cache::open(scratch.path().join("history"), true, true).unwrap();
@@ -373,7 +360,7 @@ fn a_corrupt_page_and_a_changed_binding_are_set_aside() {
     assert!(cache.root.join("1.bad-2").exists() && !cache.root.join("1").exists());
 }
 #[test]
-fn an_exhausted_revision_is_set_aside_and_a_new_cache_can_be_written() {
+fn an_exhausted_revision_is_refused_set_aside_and_a_new_cache_can_be_written() {
     let scratch = scratch_dir();
     let cache = Cache::open(scratch.path().join("history"), true, true).unwrap();
     let binding = crate::test_support::conversation().binding;
@@ -382,6 +369,8 @@ fn an_exhausted_revision_is_set_aside_and_a_new_cache_can_be_written() {
     let mut manifest: Manifest = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
     manifest.revision = u64::MAX;
     std::fs::write(&path, serde_json::to_vec(&manifest).unwrap()).unwrap();
+    // Refused before an attachment is hydrated from it, then set aside on a rebuild.
+    assert!(cache.load(h.conversation, &binding).is_err());
     assert_eq!(cache.load_or_rebuild(h.conversation, &binding).unwrap(), None);
     assert!(cache.root.join("1.bad-1/manifest.json").exists());
     let rebuilt = committed(&cache, &binding);

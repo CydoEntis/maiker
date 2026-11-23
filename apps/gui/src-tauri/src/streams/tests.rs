@@ -470,8 +470,8 @@ fn a_machines_github_report_is_given_with_its_machine_and_tag() {
 }
 
 #[test]
-fn a_machines_clone_progress_branches_and_facts_are_given_with_their_machine_and_tag() {
-    use maitty_shared::protocol::{ClonePhase, FolderGitAnswer, MachineFacts};
+fn a_machines_clone_progress_and_branches_are_given_with_their_machine_and_tag() {
+    use maitty_shared::protocol::{ClonePhase, FolderGitAnswer};
     let mut streams = Streams::default();
     let now = Instant::now();
     let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 5, phase: ClonePhase::Receiving, percent: 40 });
@@ -484,9 +484,6 @@ fn a_machines_clone_progress_branches_and_facts_are_given_with_their_machine_and
         &streams.on_message(BOX, branches, now)[..],
         [Out::FolderGit { machine, tag: 6, outcome: Ok(FolderGitAnswer::NotARepo) }] if *machine == BOX
     ));
-    let facts = MachineFacts { host_name: None, os: "linux".into(), os_version: None, arch: "x86_64".into(), cpu_cores: 2, agents: Vec::new() };
-    let said = streams.on_message(BOX, ServerMsg::Reply(Reply::MachineFacts { tag: 7, facts: facts.clone() }), now);
-    assert!(matches!(&said[..], [Out::MachineFacts { machine, tag: 7, facts: given }] if *machine == BOX && *given == facts));
 }
 
 #[test]

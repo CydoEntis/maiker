@@ -166,7 +166,7 @@ export function ChatFeed() {
 }
 
 const NOTHING_OPEN = () => undefined
-const ITEM_CONTEXT: ChatItemContext = { agent: 'claude', workingSince: LIVE_SINCE, approval: null, root: null, openDiff: NOTHING_OPEN, goToStep: null, waitingStep: null }
+const ITEM_CONTEXT: ChatItemContext = { agent: 'claude', workingSince: LIVE_SINCE, root: null, openDiff: NOTHING_OPEN, goToStep: null, waitingStep: null }
 const TURN: TurnEvent = { kind: 'turn', id: 'turn1', turnId: 't1', outcome: 'completed', startedAtMs: 0, endedAtMs: 124_000, timed: true }
 const CLEAN_OUTPUT = ['Reading schema from src/db/schema.ts', '1 table added: sessions', 'Migration written: drizzle/0043_add_sessions.sql'].join('\n')
 const TSC_OUTPUT = ["src/routes/logout.ts:14:22 - error TS2339: Property 'token' does not exist on type 'Session'.", "src/routes/me.ts:9:31 - error TS2345: Argument of type 'string | undefined' is not assignable to parameter of type 'string'.", '', 'Found 2 errors in 2 files.'].join('\n')

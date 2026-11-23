@@ -5,6 +5,7 @@ export type TokenKind =
   | 'number'
   | 'keyword'
   | 'variable'
+  | 'type'
   | 'flag'
 export type Token = { text: string; kind: TokenKind }
 
@@ -21,6 +22,10 @@ const HASH_LANGUAGES = new Set([
 const MARKDOWN_LANGUAGES = new Set(['md', 'markdown', 'mdx'])
 const MARKUP_LANGUAGES = new Set(['html', 'htm', 'xml', 'svg', 'vue', 'svelte'])
 const SHELL_LANGUAGES = new Set(['sh', 'bash', 'zsh', 'ps1'])
+// Languages that write a type, a class or a component in PascalCase and little else, so the spelling alone tells one.
+const TYPE_LANGUAGES = new Set(['ts', 'tsx', 'js', 'jsx', 'mjs', 'cjs', 'rs', 'java', 'kt', 'swift', 'cs'])
+// PascalCase: a capital first, and a lower-case letter somewhere, which a CONSTANT_NAME has none of.
+const TYPE_NAME = /^[A-Z][A-Za-z0-9]*[a-z][A-Za-z0-9]*$/
 
 // Common to the languages above; enough to make code scannable, not a parser.
 const KEYWORDS = new Set([
@@ -103,6 +108,7 @@ export function highlightLine(line: string, path: string): Token[] {
   if (!pattern || line.length > MAX_HIGHLIGHT_LINE_LENGTH)
     return [{ text: line, kind: 'plain' }]
 
+  const types = TYPE_LANGUAGES.has(extension)
   const tokens: Token[] = []
   let cursor = 0
   pattern.lastIndex = 0
@@ -123,7 +129,9 @@ export function highlightLine(line: string, path: string): Token[] {
               ? 'flag'
               : word && KEYWORDS.has(word)
                 ? 'keyword'
-                : 'plain'
+                : word && types && TYPE_NAME.test(word)
+                  ? 'type'
+                  : 'plain'
     tokens.push({ text, kind })
     cursor = start + text.length
   }

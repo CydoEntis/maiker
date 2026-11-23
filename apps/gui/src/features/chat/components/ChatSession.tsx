@@ -5,7 +5,7 @@ import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/
 import { readConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
 import { abilitiesOf } from '@/features/workspace/model/agentAbilities'
-import type { SessionStatus } from '@/features/workspace/model/session'
+import type { SecretAsk, SessionStatus } from '@/features/workspace/model/session'
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
 import { buildRows, type ChatRow } from '../chatRows'
@@ -17,10 +17,10 @@ import { COMMAND_SUBMIT_GAP_MS, typeMessage, useChatComposer, type PaneQueue } f
 import { countUserMessages } from '../workPhase'
 import { sentTexts } from '../promptRecall'
 import { startedBypassed } from '../bypassSessions'
-import { CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
+import { asksToSwitchModel, CODEX_MODE_COMMAND, CODEX_MODE_REFUSED, CODEX_START_MODES, DANGER_MODES, modeFromScreen, modeLabel, PICKABLE_MODES, PLAN_MODE } from '../chatMeta'
 import type { ApprovalDecision } from '../chatEvents'
 import type { PermissionAsk } from '@/data/preview'
-import { ANSWER_KEY, ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
+import { ANSWER_KEYS, ANSWER_STEP_MS, answerKeys, choiceKey, formQuestions, ownAnswerKeys, type AskChoice, type FormAnswer } from '../permissionAsk'
 import { pickedText, type PickedText } from '../selectionActions'
 import { addQuote } from '../composerStore'
 import { ChatActionsContext, RevealContext, type ChatActions, type Reveal } from '../chatActions'
@@ -47,7 +47,9 @@ import { KnownRowsContext } from '../knownRows'
 import { ChatSkeleton } from './ChatSkeleton'
 import { FilesHereContext } from '../filesHere'
 import { askedPlan, PLAN_TOOL, planMenuChoices } from '../planApproval'
-import { ApprovalTray, PromptTray } from './QuestionTray'
+import { ApprovalTray, HelpersTray, PromptTray, type HelperAsk } from './QuestionTray'
+import { SecretTray } from './SecretTray'
+import { answerKeyTarget } from '../answerKeyTarget'
 import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
@@ -57,9 +59,9 @@ import type { ChatProblem } from '../problem'
 import { SubagentBar, SubagentChat } from './SubagentChat'
 import { VirtualList } from './VirtualList'
 import { copyText } from '@/lib/clipboard'
-import { ConfirmCloseDialog } from '@/features/workspace/components/ConfirmCloseDialog'
+import { ConfirmDialog } from '@/features/confirm/ConfirmDialog'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import type { ConfirmAsk, WindowRoute } from '../windowCommands'
 import { namedCommand } from '../slashCommands'
 import { CLAUDE_TERMINAL_COMMANDS } from '../terminalCommands'
@@ -107,17 +109,12 @@ const isSentRow = (row: ChatRow) => row.kind === 'user' || row.kind === 'echo'
 /** A pending request is asked in the tray over the message box, so it is not also a row of the list. */
 const isPendingApproval = (row: ChatRow) => row.kind === 'approval' && row.event.resolution.status === 'pending'
 
-/** The keys that answer the question tray, as typing the same letters in the terminal would. */
-const KEY_DECISION: Readonly<Record<string, ApprovalDecision>> = Object.fromEntries(Object.entries(ANSWER_KEY).map(([decision, key]) => [key, decision as ApprovalDecision]))
-
-/** Whether a key press belongs to a field, where a letter is text and not an answer. */
+/** Whether a key press belongs to a field, where a letter or a number is text and never an answer, even in an empty one. */
 const typedInField = (target: EventTarget) => target instanceof Element && target.closest('input, textarea, [contenteditable="true"]') !== null
-
-/** The message box with nothing in it: y, a and n are not text there yet, so they answer the tray. Numbers stay the box's. */
-const inEmptyBox = (target: EventTarget) => target instanceof HTMLTextAreaElement && target.classList.contains('mx-box-text') && target.value === ''
 
 
 const NO_SUBAGENTS: readonly SubagentView[] = []
+const NO_SECRETS: readonly SecretAsk[] = []
 /** How long a jump marks the message it lands on, and how many frames it waits for the list to draw it. */
 const FLASH_MS = 1200
 const FLASH_FRAMES_MAX = 40
@@ -150,6 +147,12 @@ type Props = {
    * takes a message at once and says so, instead of "thinking" and queueing.
    */
   helpersOnly?: number
+  /** The helpers the session waits on the person to allow, asked in the tray over the message box. */
+  helperAsk?: HelperAsk | undefined
+  /** The secrets the session's agent asked for (ADR 0006), each a card over the message box; never their values. */
+  secretAsks?: readonly SecretAsk[]
+  /** The machine the session is on: a secret is only taken for this computer's sessions. */
+  machine?: number
   /** The session's id: a message typed while its agent was starting is held under it, and goes out from here. */
   sessionId?: string
   /** A subagent whose own chat shows instead of the session's, and the way back. */
@@ -159,8 +162,6 @@ type Props = {
   onBackToMain?: () => void
   /** What the session's agent reported using (context, plan limits), for the strip under the message box. */
   usage?: SessionUsage
-  /** Shows the session's terminal log over this chat, for a command whose menu only the terminal draws; the app's view is unchanged. */
-  onShowTerminal?: () => void
   /** What is wrong with the chat, if anything: shown as a banner over the message box when nothing else is asked of the person. */
   problem?: ChatProblem | null
   /** The effort the agent's own files say it runs at; null when they do not say. */
@@ -184,14 +185,14 @@ type Props = {
 /** The screens a command can open beside the chat: a Settings page, a tab of the session's side panel, the closed sessions. */
 export type WindowActions = {
   readonly openSettings: (section: DesktopSettingsSection) => void
-  readonly openPanel: (view: InspectView) => void
+  readonly openPanel: (view: RepoSurfaceKind) => void
   readonly openRecent: () => void
   /** Gives the session a new name in Maiker, as the sidebar's rename does. */
   readonly renameSession: (name: string) => void
 }
 
 /** The chat of one session: its history as a virtualised list, the daemon's status, and the composer under it. */
-export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, onShowTerminal, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
+export function ChatSession({ link, agent, online, root = null, onOpenDiff = null, onOpenFile = null, typeInto, paneQueue, ask = null, asking = '', helperAsk, secretAsks = NO_SECRETS, machine = LOCAL_MACHINE, sessionId, paneStatus, helpersOnly = 0, subagent = null, subagents = NO_SUBAGENTS, onBackToMain, usage, problem = null, effort = null, rewind, hideSuccessfulTools = false, fileSearch, windowActions, place, ended, paused = false }: Props) {
   const { feed, events, offline, readError, refresh, recordAnswer, unwatchedReads } = useChatFeed({ conversation: link.conversation, generation: link.generation, provider: agent, paused })
   const agentFree = helpersOnly > 0
   const paneWorking = paneStatus === 'working' && !agentFree
@@ -324,7 +325,12 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         if (level !== undefined) setLiveEffort({ base: effort, value: level })
         // Through typeMessage, so Claude Code gets its Enter after a pause: sent with the command, the Enter is taken
         // for the completion it is showing and the command never runs.
-        const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(refresh)
+        const typed = commandChain.current.then(() => typeMessage(typeInto, agent, text)).then(async () => {
+          // Picking the model was the answer: Claude Code's own "Switch model?" that can follow it is said yes to here.
+          if (model === undefined || sessionId === undefined) return
+          await new Promise<void>((resolve) => { window.setTimeout(resolve, MODE_READ_MS) })
+          if (asksToSwitchModel(await loadTerminalScreen({ id: sessionId, generation: 0 }))) await typeInto('1')
+        }).then(refresh)
         commandChain.current = typed.catch((error: unknown) => {
           if (model !== undefined) setLiveModel(null)
           if (level !== undefined) setLiveEffort(null)
@@ -383,11 +389,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     applyNow(heldMode.mode)
   }, [applyNow, heldMode, working, pickerLocked])
   const composer = useChatComposer({ link, agent, feed, online, refresh, paneWorking, ...(typeInto ? { typeInto } : {}), ...(paneQueue ? { paneQueue } : {}) })
-  // A command that opens a menu of its own is typed into the agent's terminal, whose log is shown over the chat: the chat cannot draw the menu.
-  const runInTerminal = typeInto === undefined || onShowTerminal === undefined || link.readOnly !== true ? undefined : (command: string) => {
-    onShowTerminal()
-    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version, so its menu is in the terminal log.`)
-    void typeMessage(typeInto, agent, command).catch((error: unknown) => { toast.failed(`Could not run ${command}`, error) })
+  // A command that opens a menu of its own is drawn only by the agent's terminal, and a chat never shows one (ADR 0020):
+  // it is not typed, so no menu is left open out of sight, and the person is told where it runs.
+  const runInTerminal = typeInto === undefined || link.readOnly !== true ? undefined : (command: string) => {
+    toast.info(`${command.split(/\s/, 1)[0] ?? command} has no chat version: its menu is in the terminal. Switch to the Terminal view in Settings to use it.`)
   }
   const { sendText, setDraft: setComposerDraft, ready, sending, echo } = composer
   // A command that ends or empties the session waits here for a yes, then goes to the agent as it was typed.
@@ -396,9 +401,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const aside = useAside(link.conversation)
   const signIn = useAgentSignIn(undefined)
   const signInView = signIn.view
-  // Once confirmed it runs where Claude Code runs it: one only the terminal answers is typed there and shown, the rest are sent.
+  // Once confirmed it runs where Claude Code runs it. One that only its terminal takes (`/exit`) is typed there: the yes
+  // was given here and it draws no menu, so nothing is left open out of sight. The rest are sent.
   const runConfirmed = (typed: string) => {
-    if (runInTerminal !== undefined && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) runInTerminal(typed)
+    if (typeInto !== undefined && link.readOnly === true && namedCommand(CLAUDE_TERMINAL_COMMANDS, typed)?.terminal === true) void typeMessage(typeInto, agent, typed).catch((error: unknown) => { toast.failed(`Could not run ${typed}`, error) })
     else void sendText(typed)
   }
   // A message just sent shows at once, with the agent taken to be at work on it, until the history has it.
@@ -695,19 +701,18 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const editAction = editFromHere.action
   const renderRow = useCallback(
     (row: ChatRow) => {
-      const item = <ChatItem row={row} agent={agent} workingSince={workingSince} approval={approval} root={root} openDiff={onOpenDiff} goToStep={goToStep} waitingStep={waitingStep} editFromHere={editAction} />
+      const item = <ChatItem row={row} agent={agent} workingSince={workingSince} root={root} openDiff={onOpenDiff} goToStep={goToStep} waitingStep={waitingStep} editFromHere={editAction} />
       return row.key === found ? <div className="mx-chat-found" data-found="true">{item}</div> : item
     },
-    [agent, workingSince, approval, root, onOpenDiff, goToStep, found, waitingStep, editAction],
+    [agent, workingSince, root, onOpenDiff, goToStep, found, waitingStep, editAction],
   )
 
-  // y, a and n answer the tray from anywhere in the chat but a field with text in it, as the same letters do in the terminal.
+  // A card's letters and a question's numbers answer from anywhere in the chat but a field: what is typed in the
+  // message box is always a reply, so one that starts with y, a or n is never taken for an answer.
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (event.ctrlKey || event.metaKey || event.altKey) return
-    const inField = typedInField(event.target)
-    if (inField && !inEmptyBox(event.target)) return
+    if (event.ctrlKey || event.metaKey || event.altKey || typedInField(event.target)) return
     // A question's number picks its choice, as it does in the agent's own menu.
-    const choice = inField ? Number.NaN : Number(event.key) - 1
+    const choice = Number(event.key) - 1
     // A plan is answered from Claude's own menu as the screen shows it, never a guessed key (see PlanTray).
     if (ask?.tool === PLAN_TOOL) {
       const menu = sendKeys === undefined ? [] : planMenuChoices(asking)
@@ -736,15 +741,11 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       void pickChoice(choice)
       return
     }
-    const decision = KEY_DECISION[event.key.toLowerCase()]
-    if (decision === undefined) return
-    if (pending !== null && approval !== null && !approval.busy && pending.approvalKind !== 'UserInput' && pending.choices.includes(decision)) {
-      event.preventDefault()
-      answer(pending.requestId, decision)
-    } else if (stoppedOnPrompt && answerPrompt !== undefined && ask?.answerable === true && decision !== 'AcceptForSession') {
-      event.preventDefault()
-      void answerPrompt(decision === 'Accept' ? 'approve' : 'deny')
-    }
+    // The card nearest the box answers a letter pressed elsewhere in the chat, by the row it shows on that key.
+    const row = answerKeyTarget(chat.current, event.key)
+    if (row === null) return
+    event.preventDefault()
+    row.click()
   }
 
   // The pane hands a new function on every render; the rows are given one that stays the same, so they are not drawn again for it.
@@ -759,6 +760,7 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const askKey = `${ask?.tool ?? ''}:${ask?.detail ?? ''}:${JSON.stringify(ask?.questions ?? ask?.choices ?? [])}`
   const question = pending !== null
     ? <ApprovalTray key={pending.requestId} event={pending} actions={approval} agent={agent} />
+    : helperAsk !== undefined ? <HelpersTray ask={helperAsk} online={online} agent={agent} />
     : menuOpen && sendKeys !== undefined && online ? <CommandMenuTray agent="Codex" topic="model" readScreen={readScreen} sendKeys={sendKeys} onClose={() => { setMenuOpen(false) }} />
     : stoppedOnPrompt ? <PromptTray key={askKey} agent={agent} ask={ask} online={online} answer={answerPrompt} pick={pickChoice} pickAll={pickChoices} answerOwn={answerOwn} sendKeys={sendKeys} readScreen={readScreen} plan={plan} asking={asking} />
     : replying !== null && !replyRowGone
@@ -775,6 +777,13 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         />
       )
       : null
+  // The stack over the box: what the agent asked outside its turn (a secret) first, its own question nearest the box.
+  const cards = secretAsks.length === 0 ? question : (
+    <>
+      {secretAsks.map((secret) => <SecretTray key={secret.id} ask={secret} machine={machine} online={online} agent={agentLabel(agent)} />)}
+      {question}
+    </>
+  )
   const shieldDanger = shownMode !== null && DANGER_MODES.includes(shownMode)
   // A bypassed chat always shows it (ADR 0005). The message box's red shield says it where it shows the mode; the tag is
   // for a chat whose shield does not, so the same thing is not flagged twice on nearly every chat.
@@ -790,8 +799,8 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   return (
     <FilesHereContext.Provider value={sessionId === undefined || machineNameOf(sessionId) === null}>
     <div ref={chat} className="mx-chat" onKeyDown={onKeyDown} onClick={keepComposerFocus} onMouseUp={(event) => { const next = pickedText(event); if (next !== undefined) setPicked(next) }}>
-      {confirming !== null && <ConfirmCloseDialog title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
-      {editFromHere.ask !== null && <ConfirmCloseDialog title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
+      {confirming !== null && <ConfirmDialog danger title={confirming.ask.title} body={confirming.ask.body} confirmLabel={confirming.ask.confirmLabel} onConfirm={() => { const { typed, then } = confirming; setConfirming(null); if (then === undefined) runConfirmed(typed); else then() }} onCancel={() => { setConfirming(null) }} firstFocus="cancel" />}
+      {editFromHere.ask !== null && <ConfirmDialog danger title="Restore the files and edit this message?" body={editFromHere.ask.body} confirmLabel={editFromHere.ask.confirmLabel} onConfirm={editFromHere.confirm} onCancel={editFromHere.cancel} firstFocus="cancel" />}
       {picked !== null && <SelectionBar picked={picked} onCopy={copyPicked} onQuote={composer.draftable ? quotePicked : undefined} />}
       {bypassTag && (
         <div className="mx-chat-notices">
@@ -831,18 +840,21 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
         agent={agent}
         composer={composer}
         conversation={link.conversation}
-        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet.
-        {...(abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
+        // The agent says which commands it takes, in its folder on its machine; Codex's own are a list the window keeps. Gemini has none yet,
+        // and a chat over ACP offers none: the lists and the window's own answers are read from the agent's terminal program.
+        {...(link.acp !== true && abilities.slashCommands !== null && root !== null && commandsMachine !== null ? { commandsFrom: { agent, folder: root, machine: commandsMachine, inTerminal: runInTerminal, inWindow: runInWindow } } : {})}
         problem={dockProblem}
-        question={question}
+        question={cards}
         helpers={dockedHelpers.length > 0 ? <HelpersDock helpers={dockedHelpers} open={dock.open === 'helpers'} onOpenChange={(open) => { setDockOpen(open ? 'helpers' : null) }} /> : null}
         dock={dock}
         queueNote={queueNote}
         waiting={held !== null}
         files={fileSearch}
-        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
+        facts={{ ...(usage === undefined ? {} : { usage }), ...(windowActions === undefined ? {} : { onOpenUsage: () => { windowActions.openSettings('usage') } }), mode: modeLabel(shownMode), modeDanger: shieldDanger, model: shownModel, effort: shownEffort, modeKey: shownMode, bypassAllowed: startedBypassed(sessionId), ...(link.acp === true ? { ownSettings: true } : {}), ...agentControls, ...(applyNow === undefined ? {} : { onPickMode: pickHeld }) }}
         sent={sentMessages}
         place={place}
+        // Nothing has run in a chat that is read and empty, with no turn under way: its chips can still change where it works.
+        ran={!(feed.loaded && rows.length === 0 && !working)}
         ended={ended}
       />
       {problemView.alert}

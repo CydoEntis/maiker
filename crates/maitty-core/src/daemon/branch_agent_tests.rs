@@ -3,20 +3,7 @@
 use super::branch_agent::MAX_PROMPT_CHARS;
 use super::*;
 use std::path::Path;
-
-/// Panes write launchers and startup files to the data folder: point it at a scratch one, as the
-/// other daemon tests do (the same value, so the two cannot disagree).
-fn own_data_folder() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-data-{}"),
-            std::process::id()
-        ));
-        // SAFETY: the first thing a daemon test does, before its panes read the environment.
-        unsafe { std::env::set_var("XDG_DATA_HOME", dir) };
-    });
-}
+use crate::test_support::own_data_folder;
 
 pub(super) fn daemon_with(mut cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     own_data_folder();
@@ -24,19 +11,12 @@ pub(super) fn daemon_with(mut cfg: Config) -> (Daemon, mpsc::Receiver<Ev>) {
     cfg.worktree.dir = super::worktree_path::SIBLING_TEMPLATE.into();
     let (tx, rx) = mpsc::channel(4096);
     let mut d = Daemon::new(cfg, tx, || {});
-    d.check_dir = persist::scratch_dir().path().to_path_buf();
+    d.check_dir = persist::scratch_dir_for_this_thread();
     (d, rx)
 }
 
-pub(super) fn scratch(name: &str) -> PathBuf {
-    let root = std::env::temp_dir().join(format!(
-        concat!(env!("APP_COMMAND"), "-{}-{}"),
-        name,
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
-    std::fs::create_dir_all(&root).unwrap();
-    root
+pub(super) fn scratch(name: &str) -> maitty_test_support::TempFolder {
+    maitty_test_support::TempFolder::new(name)
 }
 
 pub(super) fn repo_in(root: &Path) -> PathBuf {
@@ -375,4 +355,36 @@ fn a_branch_already_checked_out_gets_a_new_branch_cut_from_it_each_time() {
     let (free, _) = branch_worktree(&repo, "free", template, false).expect("a free branch");
     assert_eq!(crate::gitfs::head(&free).map(|h| h.branch).as_deref(), Some("free"));
     let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
+fn a_worktree_request_that_names_its_repo_needs_no_workspace_open() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, _rx) = daemon_with(Config::default());
+    let root = scratch("worktree-no-workspace");
+    let repo = repo_in(&root);
+    assert!(d.workspaces.is_empty(), "only chats are open");
+    let before = d.pending_ops;
+
+    let unknown_workspace = 0;
+    let mut named = request(unknown_workspace, &repo, "helper/x", None, None);
+    if let Command::NewWorktree { cmd, .. } = &mut named {
+        *cmd = Some("true".into());
+    }
+    d.command(0, named).expect("the repo is named, so no workspace is needed");
+    assert_eq!(d.pending_ops, before + 1, "the worktree is being made");
+
+    let unnamed = Command::NewWorktree {
+        ws: unknown_workspace,
+        branch: "helper/y".into(),
+        base: None,
+        cmd: Some("true".into()),
+        split: None,
+        from: None,
+        agent: None,
+        prompt: None,
+    };
+    let refused = d.command(0, unnamed).unwrap_err();
+    assert!(format!("{refused:#}").contains("no workspace"), "{refused:#}");
 }

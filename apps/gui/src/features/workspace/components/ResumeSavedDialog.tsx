@@ -1,7 +1,9 @@
 import { useRef, useState } from 'react'
 import { windowRoot } from './windowRoot'
 import { AppIcon } from './glyphs'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
 import { nowSeconds, useSavedConversations } from '../model/newChatHost'
 import type { NewSessionProject } from '../model/newSession'
@@ -39,13 +41,14 @@ export function ResumeSavedDialog({ projects, defaultAgent, locked, onPick, onCa
           ref={dialog}
           tabIndex={-1}
           aria-label="Resume a saved chat"
-          className="mx-rename mx-recent"
+          className="mx-rename mx-modal mx-recent"
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>Resume a saved chat</h2></DialogTitle>
+          <ModalHead title="Resume a saved chat" onClose={onCancel} />
+          <ModalBody>
           <p>The conversations an agent saved for a folder on this computer. Picking one starts the agent there with that conversation.</p>
           <div className="mx-resume-pick">
             <Segmented aria-label="Agent" value={agent} onValueChange={(next) => { if (next === 'claude' || next === 'codex') setAgent(next) }}>
@@ -56,9 +59,10 @@ export function ResumeSavedDialog({ projects, defaultAgent, locked, onPick, onCa
               sections={[{ heading: 'Folder', items: projects.map((each) => ({ key: each.folder, label: each.name, sub: each.folder, checked: each.folder === folder, onPick: () => { setFolder(each.folder) } })) }]} />
           </div>
           {folder === '' ? <p role="status">No project on this computer yet.</p> : <ResumeList read={read} disabled={locked} now={now} onPick={(id) => { onPick({ folder, agent, id }) }} />}
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" onClick={onCancel}>Close</button>
-          </div>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Close</Button>
+          </ModalFoot>
         </div>
       </DialogContent>
     </Dialog>

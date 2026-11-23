@@ -12,9 +12,9 @@ describe('what the tray menu lists', () => {
     expect(tray.needs[0]?.label).not.toBe('')
   })
 
-  it('names the agent before the session, since a name alone is often only a folder', () => {
-    const claude = { ...session('t2', 'needs', 'web'), process: 'claude' }
-    expect(traySessionsOf([claude]).needs[0]?.label.startsWith('claude: ')).toBe(true)
+  it('lists no session that stopped, is held by its plan limit or is out of reach: none of them asks anything', () => {
+    const tray = traySessionsOf([session('t1', 'error', 'api'), session('t2', 'limited', 'web'), session('t3', 'unknown', 'docs')])
+    expect(tray).toEqual({ needs: [], finished: [] })
   })
 
   it('has a key that changes only when the menu would', () => {

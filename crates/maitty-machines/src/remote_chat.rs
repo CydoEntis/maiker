@@ -29,6 +29,16 @@ pub fn vet_chat_reply(reply: Reply) -> Result<Reply, String> {
     }
 }
 
+/// The answer to a chat started on another machine, or why it is refused. Only the start itself
+/// passes: the new conversation's number and generation, which are used for requests to that
+/// machine alone and never drawn.
+pub fn vet_chat_start(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::ConversationStarted { id, generation } => Ok(Reply::ConversationStarted { id, generation }),
+        _ => Err("it is not the start of a chat".into()),
+    }
+}
+
 /// A side answer (`/btw`) from another machine's daemon, made safe, or why it is refused. Only a
 /// side answer passes, its text cut to what a side answer may hold and every string cleaned like a
 /// chat's.
@@ -59,6 +69,18 @@ pub fn vet_worktree_reply(reply: Reply) -> Result<Reply, String> {
         && folder.starts_with('/')
         && !folder.chars().any(|c| c.is_control() || is_invisible(c));
     if plain { Ok(Reply::Text(folder)) } else { Err("its folder is not a plain absolute path".into()) }
+}
+
+/// What another machine's daemon may answer while a worktree is made off one of its panes
+/// (`Command::NewWorktree`, from a project heading): its list, cleaned like a snapshot, which is read
+/// only for the workspace that holds the pane, then the acknowledgement that the worktree was made
+/// and its session opened. That session reaches the window as the machine's own list does.
+pub fn vet_new_worktree_reply(reply: Reply) -> Result<Reply, String> {
+    match reply {
+        Reply::List(snapshot) => crate::remote_snapshot::sanitize_snapshot(snapshot).map(Reply::List).map_err(String::from),
+        Reply::Ok => Ok(Reply::Ok),
+        _ => Err("it is not a session list or a worktree made".into()),
+    }
 }
 
 /// `text` cut to at most `max` bytes, on a character boundary.
@@ -125,7 +147,16 @@ mod tests {
     use maitty_shared::conversation::{ConversationId, QueuedReceipt};
 
     #[test]
-    fn a_side_answer_from_another_machine_is_cleaned_and_cut() {
+    fn only_the_start_of_a_chat_is_taken_as_the_answer_to_starting_one() {
+        let started = Reply::ConversationStarted { id: maitty_shared::conversation::ConversationId(7), generation: 1 };
+
+        assert!(matches!(vet_chat_start(started), Ok(Reply::ConversationStarted { id, generation: 1 }) if id.0 == 7));
+        assert!(vet_chat_start(Reply::Ok).is_err());
+        assert!(vet_chat_start(Reply::Text("/etc/passwd".into())).is_err());
+    }
+
+    #[test]
+    fn only_a_side_answer_answers_a_side_question_and_it_is_cleaned_and_cut() {
         let long = format!("hi\x1b[2J\u{202e}\n{}", "é".repeat(SIDE_ANSWER_MAX_BYTES));
         let Ok(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text } }) =
             vet_side_answer(Reply::SideAnswer { tag: 4, answer: SideAnswer::Answered { text: long } })
@@ -136,6 +167,11 @@ mod tests {
         assert!(text.starts_with("hi"));
         assert!(text.contains('\n'));
         assert!(!text.chars().any(|c| c == '\x1b' || c == '\u{202e}'));
+        assert!(vet_side_answer(Reply::Ok).is_err(), "only a side answer answers a side question");
+        assert!(matches!(
+            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
+            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
+        ));
     }
 
     #[test]
@@ -150,35 +186,30 @@ mod tests {
     }
 
     #[test]
-    fn only_a_side_answer_answers_a_side_question() {
-        assert!(vet_side_answer(Reply::Ok).is_err());
-        assert!(matches!(
-            vet_side_answer(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }),
-            Ok(Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported })
-        ));
+    fn a_worktree_made_off_a_pane_of_another_machine_takes_only_its_list_cleaned_and_an_acknowledgement() {
+        use maitty_shared::protocol::Snapshot;
+        assert!(matches!(vet_new_worktree_reply(Reply::Ok), Ok(Reply::Ok)));
+        let listed = Snapshot { daemon_version: "0.81\x1b[2J".into(), ..Snapshot::default() };
+        let Ok(Reply::List(cleaned)) = vet_new_worktree_reply(Reply::List(listed)) else { panic!("a list passes") };
+        assert!(!cleaned.daemon_version.contains('\x1b'), "{}", cleaned.daemon_version);
+        for other in [Reply::Text("/home/me/.maitty/worktrees/app/x".into()), Reply::SideAnswer { tag: 1, answer: SideAnswer::NotSupported }] {
+            assert!(vet_new_worktree_reply(other).is_err(), "only a list or an acknowledgement");
+        }
     }
 
     #[test]
     fn chat_text_keeps_lines_and_tabs_and_loses_escapes_and_hidden_characters() {
         let said = "fn main() {\n\tprintln!(\"hi\");\x1b[31m\x07\u{202e}\n}\r\n";
         assert_eq!(clean_text(said), "fn main() {\n\tprintln!(\"hi\");[31m\n} \n");
-    }
-
-    #[test]
-    fn a_string_past_the_limit_is_cut() {
         let long = "a".repeat(CHAT_TEXT_MAX + 10);
-        assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX);
+        assert_eq!(clean_text(&long).chars().count(), CHAT_TEXT_MAX, "a string past the limit is cut");
     }
 
     #[test]
-    fn the_names_in_an_answer_are_cleaned_too() {
+    fn every_string_and_name_in_an_answer_is_cleaned_wherever_it_sits() {
         let mut value = serde_json::json!({ "input": { "pa\u{202e}th\x1b": "x" } });
         clean(&mut value, &mut 0).unwrap();
         assert_eq!(value, serde_json::json!({ "input": { "path": "x" } }));
-    }
-
-    #[test]
-    fn every_string_in_an_answer_is_cleaned_wherever_it_sits() {
         let mut value = serde_json::json!({ "a": ["x\x1b[2Jy", { "b": "p\x07q" }], "n": 3 });
         clean(&mut value, &mut 0).unwrap();
         assert_eq!(value, serde_json::json!({ "a": ["x[2Jy", { "b": "pq" }], "n": 3 }));

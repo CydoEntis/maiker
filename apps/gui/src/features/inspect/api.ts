@@ -20,21 +20,14 @@ const DiffSchema = z.object({
   truncated: z.boolean(),
 })
 const BranchSchema = z.object({ name: z.string(), current: z.boolean() })
-const CommitSchema = z.object({ hash: z.string(), subject: z.string(), author: z.string(), time: z.number().int() })
 const WorktreeSchema = z.object({ path: z.string(), branch: z.string(), main: z.boolean(), repo: z.string() })
 const SnapshotSchema = z.object({ commit: z.string(), at: Count, why: z.string() })
 const ReferenceSchema = z.object({ name: z.string(), kind: z.string(), bytes: Count, modified: Count })
 const FoundFilesSchema = z.object({ paths: z.array(z.string()), truncated: z.boolean() })
 
-export type RepoStatus = z.infer<typeof StatusSchema>
-export type RepoChangeKind = z.infer<typeof ChangeKindSchema>
-export type RepoEntry = z.infer<typeof EntrySchema>
 export type RepoDiff = z.infer<typeof DiffSchema>
-export type RepoBranch = z.infer<typeof BranchSchema>
-export type RepoCommit = z.infer<typeof CommitSchema>
 export type RepoWorktree = z.infer<typeof WorktreeSchema>
 export type RepoSnapshot = z.infer<typeof SnapshotSchema>
-export type RepoReference = z.infer<typeof ReferenceSchema>
 
 const HighlightSchema = z.array(z.array(z.object({ text: z.string(), kind: z.enum(['plain', 'comment', 'string', 'number', 'keyword', 'variable']) }))).nullable()
 export type HighlightedLines = z.infer<typeof HighlightSchema>
@@ -43,8 +36,6 @@ export type HighlightedLines = z.infer<typeof HighlightSchema>
 export async function highlightFile(path: string, text: string): Promise<HighlightedLines> {
   return HighlightSchema.parse(await invoke('highlight_file', { path, text }))
 }
-
-const LOG_LIMIT = 60
 
 /**
  * Ask the daemon that owns pane `term` about the repository it is in: this computer's, or machine
@@ -73,7 +64,6 @@ export const repoDiffRange = (term: number, from: string, to: string, path: stri
   ask(term, { DiffRange: { from, to, path } }, 'Diff', DiffSchema)
 export const repoBranches = (term: number) => ask(term, 'Branches', 'Branches', z.array(BranchSchema))
 export const repoWorktrees = (term: number) => ask(term, 'Worktrees', 'Worktrees', z.array(WorktreeSchema))
-export const repoLog = (term: number) => ask(term, { Log: { limit: LOG_LIMIT } }, 'Log', z.array(CommitSchema))
 export const repoSnapshots = (term: number) => ask(term, 'Snapshots', 'Snapshots', z.array(SnapshotSchema))
 export const repoReferences = (term: number) => ask(term, 'References', 'References', z.array(ReferenceSchema))
 /** Files whose path holds `query`, best first, relative to the checkout's top; `truncated` when the daemon stopped looking early. */
@@ -104,10 +94,14 @@ export async function commitAll(folder: string, message: string, machine: number
   return z.string().parse(await invoke<unknown>('git_commit_all', { machine, folder, message, paths: paths ?? null, ...paneArg(term) }))
 }
 
-/** Saves the text of an existing file of the checkout `term` is in; the daemon refuses anything but a plain file inside it. */
-export async function writeProjectFile(term: number, machine: number, path: string, contents: string): Promise<void> {
-  if (!isTauri()) throw new Error('Editing is only available in the desktop app')
-  await invoke('write_project_file', { machine, term, path, contents })
+/**
+ * Discards the uncommitted changes of one file, `path` from the top of the repository: a changed or deleted file goes
+ * back to the last commit, a new one is removed for good. On this computer the checkout is the one at `folder`; on
+ * another machine, the one pane `term` there is in. Rejects with one line saying why nothing was discarded.
+ */
+export async function discardFile(folder: string, path: string, machine: number, term?: number): Promise<void> {
+  if (!isTauri()) throw new Error('Discarding is only available in the desktop app')
+  await invoke('git_discard_file', { machine, folder, path, ...paneArg(term) })
 }
 
 const SavedSchema = z.union([z.literal('ChangedOnDisk'), z.object({ Saved: z.object({ version: z.string() }) })])

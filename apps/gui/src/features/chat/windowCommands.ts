@@ -1,6 +1,6 @@
 import type { SignInAgent } from '@/api/agentSignIn'
 import type { SideAsk, SideCommand } from '@/api/daemon'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind } from '@/features/inspect/panelTabs'
 import type { DesktopSettingsSection } from '@/features/settings/components/DesktopSettings'
 import type { SlashCommand } from './slashCommands'
 
@@ -25,7 +25,7 @@ import type { SlashCommand } from './slashCommands'
  */
 export type WindowRoute =
   | { readonly kind: 'settings'; readonly section: DesktopSettingsSection }
-  | { readonly kind: 'panel'; readonly view: InspectView }
+  | { readonly kind: 'panel'; readonly view: RepoSurfaceKind }
   | { readonly kind: 'recent' }
   | { readonly kind: 'commands' }
   | { readonly kind: 'confirm'; readonly ask: ConfirmAsk }
@@ -74,7 +74,8 @@ const BACKGROUND: WindowRoute = { kind: 'confirm', ask: { title: 'Send this sess
 const CLEAR: WindowRoute = { kind: 'confirm', ask: { title: 'Start a new conversation?', body: 'Claude Code starts over with empty context. The current conversation stays on disk and can be reopened.', confirmLabel: 'Clear' } }
 // The Permissions page lists the commands approved for each project, the window's view of Claude Code's allow rules.
 const SETTINGS_PERMISSIONS: WindowRoute = { kind: 'settings', section: 'permissions' }
-const HISTORY: WindowRoute = { kind: 'panel', view: 'history' }
+// Going back is Edit from here on the message itself, which restores the files of that turn: the card says where it is.
+const GO_BACK = note('Go back', 'To go back to an earlier point, open the menu on the message you sent there and pick **Edit from here**. Maiker puts the files back as they were before that turn, after telling you how many change, and returns the message to the box.')
 // The Extensions page lists, adds, switches and removes the skills, plugins and MCP servers these commands open a menu for.
 const SETTINGS_EXTENSIONS: WindowRoute = { kind: 'settings', section: 'extensions' }
 
@@ -96,9 +97,9 @@ const CLAUDE_ROUTES: Readonly<Record<string, Routed>> = {
   ...SHARED_ROUTES,
   permissions: { route: SETTINGS_PERMISSIONS, opens: 'Settings' },
   'allowed-tools': { route: SETTINGS_PERMISSIONS, opens: 'Settings' },
-  rewind: { route: HISTORY, opens: 'History' },
-  checkpoint: { route: HISTORY, opens: 'History' },
-  undo: { route: HISTORY, opens: 'History' },
+  rewind: { route: GO_BACK, opens: ANSWERED_HERE },
+  checkpoint: { route: GO_BACK, opens: ANSWERED_HERE },
+  undo: { route: GO_BACK, opens: ANSWERED_HERE },
   help: { route: { kind: 'commands' }, opens: 'command list' },
   exit: { route: END, opens: ASKS_FIRST },
   quit: { route: END, opens: ASKS_FIRST },

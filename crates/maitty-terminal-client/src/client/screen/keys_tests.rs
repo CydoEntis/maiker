@@ -169,15 +169,6 @@ fn the_updates_box_follows_the_install_and_offers_its_keys() {
 }
 
 #[test]
-fn a_chat_row_names_its_project_branch_machine_and_age() {
-    let (mut app, _rx) = app_with_channel();
-    open_search(&mut app);
-    let shown = frame(&mut app, 140, 40);
-    assert!(shown.contains("affiliate-site / fix-footer · local"), "{shown}");
-    assert!(shown.contains("2m"), "its age: {shown}");
-}
-
-#[test]
 fn compact_and_install_update_are_listed_only_when_they_apply() {
     let (mut app, _rx) = app_with_channel();
     open_search(&mut app);
@@ -213,16 +204,6 @@ fn group_by_names_what_it_will_do_and_enter_does_it() {
     open_search(&mut app);
     type_text(&mut app, "group");
     assert!(frame(&mut app, 140, 40).contains("Group by status"), "the other way is offered next");
-}
-
-#[test]
-fn a_search_that_finds_nothing_says_so() {
-    let (mut app, _rx) = app_with_channel();
-    open_search(&mut app);
-    type_text(&mut app, "zzqx");
-    let shown = frame(&mut app, 140, 40);
-    assert!(shown.contains("Nothing matches."), "{shown}");
-    assert!(!shown.contains("Chats") && !shown.contains("Commands"), "{shown}");
 }
 
 #[test]

@@ -1,0 +1,14 @@
+/* The start screen (Splash.tsx): the window's ground and the Maiker mark, the same drawing as the first run's (onboarding.css) but
+   quicker and smaller. Each animation runs once and ends; the fade out is a transition, so nothing keeps running after it is gone. */
+.mx-splash { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; background: var(--t0); transition: opacity var(--t-slow) var(--ease); }
+.mx-splash[data-leaving="true"] { opacity: 0; pointer-events: none; }
+.mx-splash-mark { width: 84px; height: 66px; stroke: var(--fg); stroke-width: 2.6; stroke-linejoin: round; stroke-linecap: round; fill: none; transition: transform var(--t-slow) var(--ease); }
+.mx-splash[data-leaving="true"] .mx-splash-mark { transform: scale(.92); }
+.mx-splash-mark path { fill: var(--fg); fill-opacity: 0; stroke-dasharray: 320; stroke-dashoffset: 320; animation: mx-splash-draw .6s cubic-bezier(.6, 0, .3, 1) forwards, mx-splash-fill .25s ease-out .6s forwards; }
+/* The folded face is the same ink at half strength, as in the title bar's mark. */
+.mx-splash-mark path:first-child { opacity: .5; }
+.mx-splash-mark path:nth-child(2) { animation-delay: .08s, .64s; }
+.mx-splash-mark path:nth-child(3) { animation-delay: .16s, .68s; }
+.mx-app[data-motion="reduced"] .mx-splash-mark path { animation: none; stroke-dashoffset: 0; fill-opacity: .92; }
+@keyframes mx-splash-draw { to { stroke-dashoffset: 0; } }
+@keyframes mx-splash-fill { to { fill-opacity: .92; } }

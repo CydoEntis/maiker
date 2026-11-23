@@ -53,6 +53,7 @@ mod tests {
         for name in ["notes", "my project", "app-2", "v1.2", ".config", "ünï", "日本語", "a.b.c", "CONSOLE", "com10"] {
             assert_eq!(problem(name), None, "{name}");
         }
+        assert_eq!(problem(&"a".repeat(FOLDER_NAME_MAX_BYTES)), None, "the longest name");
     }
 
     #[test]
@@ -64,10 +65,5 @@ mod tests {
         ] {
             assert!(problem(name).is_some(), "{name:?} should be refused");
         }
-    }
-
-    #[test]
-    fn the_longest_name_still_passes() {
-        assert_eq!(problem(&"a".repeat(FOLDER_NAME_MAX_BYTES)), None);
     }
 }

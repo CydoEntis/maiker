@@ -1,9 +1,30 @@
 import type { ITheme } from '@xterm/xterm'
 import maittyTokens from '@tokens/maitty-tokens.json'
 import themeManifest from '@tokens/themes.json'
-import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, luminance, mixOklab, withAlpha } from './color'
+import { atLightnessOf, channelsOf, chromaOf, composite, greyOf, contrastRatio, lightnessOf, luminance, mixOklab, withAlpha } from './color'
 
-/** Every colour role the desktop app reads, set as CSS custom properties on the app root. */
+/** The design's seven syntax colours, by what they colour: keyword, string, function or name, number, type, comment, property. */
+export type SyntaxRoles = { kw: string; str: string; fn: string; num: string; ty: string; com: string; prop: string }
+
+/**
+ * The design's roles (docs/DESIGN.md, "Tokens, not colours"): the canonical token set. Every theme is drawn through
+ * these, and `themeStyle` is the one function that turns them into CSS variables. `ink` is an `r,g,b` triple, so a
+ * hairline or hover fill is `rgba(var(--ink), .08)`; `shadow` is the strength every floating shadow is scaled by.
+ */
+export type DesignRoles = {
+  t0: string; t1: string; t2: string; t3: string; floatBg: string; well: string
+  fg: string; fg2: string; muted: string; dim: string
+  ink: string
+  needs: string; working: string; ok: string; danger: string
+  sy: SyntaxRoles
+  shadow: string
+}
+
+/**
+ * A theme as it is built: the roles under the names the app had before the design's (`bg` is `t0`, `main` and `pane`
+ * are `t1`, `sel` is `t2`, `raise` is `t3`, `warn` is needs), plus the roles the design does not name (the accent, the
+ * ANSI colours, the meters, the terminal ground). `designRoles` reads the design's roles off it.
+ */
 export type ThemeTokens = {
   bg: string
   main: string
@@ -56,20 +77,25 @@ export type ThemePalette = {
   accent: string; accentText: string; onAccent: string; accentLine: string
   working: string; warn: string; onWarn: string; danger: string; ok: string; blue: string; mag: string
   paneLine: string; mOk: string; mMid: string; mOr: string; mHi: string; hk: string; sk: string
+  /** The design's own themes also write the float ground and the syntax colours; another palette theme derives them. */
+  float?: string; sy?: SyntaxRoles
 }
 
 /** The six colours (and a light flag) a theme is made from; a TUI theme imports as these. */
 export type ThemeInputs = { bg: string; fg: string; accent: string; mag: string; blue: string; green: string; light: boolean }
 
 /**
- * What the look (`corners.ts`) adds to a theme besides colours: the fonts, the two shading dials (`hk` is the
- * highlight strength, `sk` the shadow strength), and the resting card sheen (`sh`).
- * A field left out keeps the stylesheet's default.
+ * What the look (`look.ts`) adds to a theme besides colours: the fonts, the highlight strength (`hk`) and the
+ * resting card sheen (`sh`). A field left out keeps the stylesheet's default.
  */
-export type StyleLook = { ui: string; mono: string; hk?: string; sk?: string; sh?: string }
+export type StyleLook = { ui: string; mono: string; hk?: string; sh?: string }
 
-/** `cardRing` is the solid card colour that rings a status badge so it reads as cut out of the card. `look` is set by `withLook` (`corners.ts`). */
-export type ThemeEntry = { id: string; name: string; family: string; light: boolean; tokens: ThemeTokens; cardRing: string; look?: StyleLook; shading?: { hk: string; sk: string } }
+/**
+ * `roles` is what the window draws; `tokens` is what they were read from and what the terminal palette is built from.
+ * `cardRing` is the solid card colour that rings a status badge so it reads as cut out of the card. `look` is set by
+ * `withLook` (`look.ts`); `highlight` is a palette theme's own highlight strength, which wins over the look's.
+ */
+export type ThemeEntry = { id: string; name: string; family: string; light: boolean; roles: DesignRoles; tokens: ThemeTokens; cardRing: string; look?: StyleLook; highlight?: string }
 
 /** Which theme is in use: the dark theme, the light theme, or whichever one the system's own setting asks for. */
 export type ThemeMode = 'system' | 'dark' | 'light'
@@ -78,15 +104,34 @@ export const DEFAULT_THEME = 'Maiker Dark'
 export const DEFAULT_LIGHT_THEME = 'Maiker Day'
 export const MIN_TEXT_CONTRAST = 4.5
 
-const CSS_VARIABLES: Record<keyof ThemeTokens, string> = {
-  bg: '--bg', main: '--main', raise: '--raise', hover: '--hover', sel: '--sel', line: '--line', line2: '--line2',
-  well: '--well', term: '--term', fg: '--fg', fg2: '--fg2', muted: '--muted', dim: '--dim', accent: '--accent', accentText: '--accent-text', working: '--working',
-  accentSoft: '--accent-soft', accentLine: '--accent-line', onAccent: '--on-accent', warn: '--warn',
-  warnSoft: '--warn-soft', warnLine: '--warn-line', onWarn: '--on-warn', danger: '--danger',
-  dangerSoft: '--danger-soft', dangerLine: '--danger-line', ok: '--ok', ansiBlue: '--ansi-blue',
-  ansiMag: '--ansi-mag', ansiGreen: '--ansi-green', pane: '--pane', paneLine: '--pane-line',
-  meterOk: '--m-ok', meterMid: '--m-mid', meterHigh: '--m-or', meterMax: '--m-hi',
+/** The design's roles as CSS variables: the canonical names, the only ones a new component reads. */
+const ROLE_VARIABLES: Record<Exclude<keyof DesignRoles, 'sy'>, string> = {
+  t0: '--t0', t1: '--t1', t2: '--t2', t3: '--t3', floatBg: '--float-bg', well: '--well',
+  fg: '--fg', fg2: '--fg2', muted: '--muted', dim: '--dim', ink: '--ink',
+  needs: '--needs', working: '--working', ok: '--ok', danger: '--danger', shadow: '--shk',
 }
+const SYNTAX_VARIABLES: Record<keyof SyntaxRoles, string> = {
+  kw: '--sy-kw', str: '--sy-str', fn: '--sy-fn', num: '--sy-num', ty: '--sy-ty', com: '--sy-com', prop: '--sy-prop',
+}
+
+/**
+ * COMPATIBILITY: the names screens read from before the design's roles. Each is defined from its role here and nowhere
+ * else, so the roles stay the one source of truth while those screens are rebuilt; a rebuilt screen reads the role, and
+ * a name leaves this block when nothing reads it. `--hl` is the highlight colour (now the ink), `--sk` the shadow strength.
+ */
+const COMPATIBILITY: Record<string, string> = {
+  '--bg': 'var(--t0)', '--main': 'var(--t1)', '--pane': 'var(--t1)', '--sel': 'var(--t2)', '--raise': 'var(--t3)',
+  '--warn': 'var(--needs)', '--hl': 'var(--ink)', '--sk': 'var(--shk)',
+}
+
+/** The roles the design does not name, which a theme still sets itself: borders and hover as solid colours, the accent, the status inks and tints, the ANSI colours, the meters and the terminal ground. */
+const OWN_VARIABLES = {
+  hover: '--hover', line: '--line', line2: '--line2', term: '--term',
+  accent: '--accent', accentText: '--accent-text', accentSoft: '--accent-soft', accentLine: '--accent-line', onAccent: '--on-accent',
+  warnSoft: '--warn-soft', warnLine: '--warn-line', onWarn: '--on-warn', dangerSoft: '--danger-soft', dangerLine: '--danger-line',
+  ansiBlue: '--ansi-blue', ansiMag: '--ansi-mag', ansiGreen: '--ansi-green', paneLine: '--pane-line',
+  meterOk: '--m-ok', meterMid: '--m-mid', meterHigh: '--m-or', meterMax: '--m-hi',
+} as const satisfies Partial<Record<keyof ThemeTokens, string>>
 
 const DARK_STATUS = { warn: '#F2B65A', warnSoft: 'rgba(242,182,90,.07)', warnLine: 'rgba(242,182,90,.28)', onWarn: '#151007', danger: '#F07F78', dangerSoft: 'rgba(240,127,120,.07)', dangerLine: 'rgba(240,127,120,.3)' }
 // Dark enough for AA on the grounds of every generated light theme (Gruvbox Light's cream is the tightest).
@@ -107,7 +152,8 @@ const MIX = {
 }
 
 /**
- * Maiker's own themes, built from `maitty-tokens.json`: Night and Day (sea-glass green) and Dark and Light (a standard black and white ground with the same accents) (the TUI reads the same file): sea-glass and brass. Teal means
+ * Maiker's own themes, built from `maitty-tokens.json` (the TUI reads the same file, and also builds Night from it): Day
+ * (sea-glass green) and Dark and Light (a standard black and white ground with the same accents), in sea-glass and brass. Teal means
  * only "working" (`working`), coral only "needs you" (`warn`), brass is the accent. Text uses the file's *Text colours
  * so every pair meets AA; fills (a button's brass) use the fill colours with their *On ink.
  */
@@ -231,21 +277,85 @@ export function generateTheme(inputs: ThemeInputs): ThemeTokens {
   }
 }
 
-const entry = (id: string, name: string, family: string, light: boolean, tokens: ThemeTokens, shading?: ThemeEntry['shading']): ThemeEntry => ({
+// A card on a panel and its selected row, as steps from the panel toward the text colour. The design's own steps
+// (#1b1b1b and #2a2a2a on #151517, 3.5% and 12%) left a card, a field and a selected row too close to the panel to
+// tell apart on a real screen, so they are a step stronger. On a panel that is all but grey the cards are pure grey, so
+// the panel's faint tint is dropped there; a theme with a real hue keeps it.
+// A second pass made them stronger again, so a card, the message box and a field stand off their pane in every theme,
+// and a float sits a step above a card.
+const CARD_STEP = 9
+const CARD_SEL_STEP = 16
+const FLOAT_STEP = 12
+/**
+ * How much darker (OKLab lightness) the window's ground is than its cards (the sidebar, the panes) at the least, so the
+ * cards read as separate surfaces in every theme. A theme whose ground is closer is darkened toward black until it is.
+ */
+const GROUND_GAP = { dark: 0.04, light: 0.03 }
+const GROUND_STEP = 3
+const GROUND_MOST = 60
+const NEAR_GREY_CHROMA = 0.01
+
+/** White on a dark theme, black on a light one: the one colour every hairline and hover fill is a low-opacity wash of. */
+const INK = { dark: '255,255,255', light: '0,0,0' }
+/** The shadow strength of a theme that does not write its own: a light ground needs far less shadow to lift a float. */
+const SHADOW = { dark: '.6', light: '.35' }
+
+/** What a theme may write of the design's roles itself, where reading them off its tokens would not be exact. */
+type OwnRoles = { float?: string | undefined; sy?: SyntaxRoles | undefined; shadow?: string | undefined }
+
+/** The theme's ground, or one darkened toward black until it sits `GROUND_GAP` below the cards on it. */
+export function separatedGround(ground: string, card: string, light: boolean): string {
+  const most = lightnessOf(card) - (light ? GROUND_GAP.light : GROUND_GAP.dark)
+  if (lightnessOf(ground) <= most) return ground
+  for (let step = GROUND_STEP; step < GROUND_MOST; step += GROUND_STEP) {
+    const darker = mixOklab(ground, '#000000', step)
+    if (lightnessOf(darker) <= most) return darker
+  }
+  return mixOklab(ground, '#000000', GROUND_MOST)
+}
+
+/** A dark theme's float: its own colour when that sits above a card, else the float step, so a menu never sinks into the card under it. */
+function liftedFloat(tokens: ThemeTokens, own: string | undefined): string {
+  const step = mixOklab(tokens.main, tokens.fg, FLOAT_STEP)
+  return own !== undefined && lightnessOf(own) >= lightnessOf(step) ? own : step
+}
+
+/**
+ * The design's roles for a theme. A theme that is not one of the design's own derives the three it has no colour for:
+ * the float ground is a step above a card on a dark theme (a float is lifted by tone as well as shadow) and the pane itself
+ * on a light one, and the syntax colours are its own ANSI and status colours. Every theme's ground is kept a step below
+ * its cards (`separatedGround`).
+ */
+export function designRoles(tokens: ThemeTokens, light: boolean, own: OwnRoles = {}): DesignRoles {
+  return {
+    t0: separatedGround(tokens.bg, tokens.main, light), t1: tokens.main, t2: tokens.sel, t3: tokens.raise,
+    floatBg: light ? (own.float ?? tokens.main) : liftedFloat(tokens, own.float),
+    well: tokens.well,
+    fg: tokens.fg, fg2: tokens.fg2, muted: tokens.muted, dim: tokens.dim,
+    ink: light ? INK.light : INK.dark,
+    needs: tokens.warn, working: tokens.working, ok: tokens.ok, danger: tokens.danger,
+    sy: own.sy ?? { kw: tokens.ansiMag, str: tokens.ok, fn: tokens.ansiBlue, num: tokens.working, ty: tokens.meterMid, com: tokens.dim, prop: tokens.accentText },
+    shadow: own.shadow ?? (light ? SHADOW.light : SHADOW.dark),
+  }
+}
+
+const entry = (id: string, name: string, family: string, light: boolean, tokens: ThemeTokens, own: OwnRoles = {}, highlight?: string): ThemeEntry => ({
   id,
   name,
   family,
   light,
+  roles: designRoles(tokens, light, own),
   tokens,
   cardRing: composite(tokens.pane, tokens.bg),
-  ...(shading === undefined ? {} : { shading }),
+  ...(highlight === undefined ? {} : { highlight }),
 })
 
 const MAIKER_TOKENS = { day: MAIKER_DAY, dark: MAIKER_DARK, light: MAIKER_LIGHT } as const
 
 /**
- * The themes both apps ship, in display order, from `themes.json` (the TUI reads the same list): Maiker's own nine, drawn
- * exactly from the desktop design's palettes, the Retro pair, and families with a dark and a light each, generated from six colours.
+ * The themes both apps ship, in display order, from `themes.json` (the TUI reads the same list): Maiker's own, drawn
+ * exactly from their palettes (the design's ten themes among them), the Retro pair, and families with a dark and a light
+ * each, generated from six colours.
  */
 /**
  * Themes the manifest ships for the terminal app that the desktop app does not offer. The terminal app still starts on
@@ -257,7 +367,7 @@ export const THEMES: readonly ThemeEntry[] = themeManifest.themes.filter((theme)
   const kind = theme.light ? 'light' : 'dark'
   if ('palette' in theme) {
     const palette: ThemePalette = theme.palette
-    return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, paletteTheme(palette), { hk: palette.hk, sk: palette.sk })
+    return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, paletteTheme(palette), { float: palette.float, sy: palette.sy, shadow: palette.sk }, palette.hk)
   }
   if ('tokens' in theme) return entry(theme.id, theme.name, `${theme.family} · ${kind}`, theme.light, MAIKER_TOKENS[theme.tokens as keyof typeof MAIKER_TOKENS])
   const { bg, fg, accent, mag, blue, green, light } = theme
@@ -283,17 +393,15 @@ export function findTheme(name: string): ThemeEntry {
 }
 
 /**
- * The glass finish's light and shade: the highlight colour (`--hl`, as `r,g,b`) and its strength, and
- * the shadow colour (`--sd`) and its strength. `--hs` is the colour of the sheen and the top edge: white in
- * both, because a light theme's glass is frosted by white light while its hairlines are drawn in ink. Dark themes catch white light and cast black shadows;
- * light themes are lit and shaded by their own ink, more faintly.
+ * The light and shade the older screens still read beside the ink: the highlight's strength (`--hk`), the colour of a
+ * top edge (`--hs`, white in both kinds of theme) and the shadow colour (`--sd`): black under a dark theme, a warm
+ * brown under a light one.
  */
-const DARK_GLASS = { '--hl': '255,255,255', '--hs': '255,255,255', '--hk': '1', '--sd': '0,0,0', '--sk': '1' }
-// A light theme's tints (hovers, raised fills, tracks, hairlines) are a warm brown ink, not a blue-grey one, so they read as cream over a pale ground.
+const DARK_GLASS = { '--hs': '255,255,255', '--hk': '1', '--sd': '0,0,0' }
 /** The colour of every branch name and icon, one violet per ground (the design's `--branch`); the light one is deep enough to read on cream. */
 const BRANCH_DARK = '#A78BFA'
 const BRANCH_LIGHT = '#6B46C1'
-const LIGHT_GLASS = { '--hl': '112,92,52', '--hs': '255,255,255', '--hk': '.85', '--sd': '70,52,24', '--sk': '.3' }
+const LIGHT_GLASS = { '--hs': '255,255,255', '--hk': '.85', '--sd': '70,52,24' }
 
 /** A dark ground at or above this luminance (One Dark's grey) is as light as the glass's sheen can sit on without turning grey. */
 const SOFT_GROUND_LUMINANCE = 0.03
@@ -322,36 +430,32 @@ export function onDanger(tokens: Pick<ThemeTokens, 'danger'>): string {
   return contrastRatio(light, tokens.danger) >= contrastRatio(dark, tokens.danger) ? light : dark
 }
 
-// A card on a panel and its selected row, as steps from the panel toward the text colour, measured from the design
-// (#1b1b1b and #2a2a2a on #151517). On a panel that is all but grey the design's cards are pure grey, so the panel's
-// faint tint is dropped there; a theme with a real hue keeps it.
-const CARD_STEP = 3.5
-const CARD_SEL_STEP = 12
-const NEAR_GREY_CHROMA = 0.01
-
 function cardSteps(tokens: ThemeTokens): Record<string, string> {
   const tone = chromaOf(tokens.main) < NEAR_GREY_CHROMA ? greyOf : (colour: string) => colour
   return { '--card-step': tone(mixOklab(tokens.main, tokens.fg, CARD_STEP)), '--card-sel-step': tone(mixOklab(tokens.main, tokens.fg, CARD_SEL_STEP)) }
 }
 
-/** The theme as CSS custom properties, for the app root's style. */
+/**
+ * The one function that turns a theme into CSS variables, for the app root's style: the design's roles, the names kept
+ * for the screens not yet rebuilt (`COMPATIBILITY`), and the roles the design does not name.
+ */
 export function themeStyle(theme: ThemeEntry): Record<string, string> {
-  const style: Record<string, string> = { '--card-ring': theme.cardRing, colorScheme: theme.light ? 'light' : 'dark', '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, '--on-danger': onDanger(theme.tokens), ...(theme.light ? LIGHT_GLASS : DARK_GLASS) }
-  for (const [key, variable] of Object.entries(CSS_VARIABLES)) style[variable] = theme.tokens[key as keyof ThemeTokens]
-  if (!theme.light) Object.assign(style, frostOf(theme.tokens.main), cardSteps(theme.tokens))
-  const { look, shading } = theme
+  const { roles, tokens, look, highlight } = theme
+  const style: Record<string, string> = { colorScheme: theme.light ? 'light' : 'dark' }
+  for (const [key, variable] of Object.entries(ROLE_VARIABLES)) style[variable] = roles[key as keyof typeof ROLE_VARIABLES]
+  for (const [key, variable] of Object.entries(SYNTAX_VARIABLES)) style[variable] = roles.sy[key as keyof SyntaxRoles]
+  Object.assign(style, COMPATIBILITY)
+  for (const [key, variable] of Object.entries(OWN_VARIABLES)) style[variable] = tokens[key as keyof typeof OWN_VARIABLES]
+  Object.assign(style, { '--card-ring': theme.cardRing, '--branch': theme.light ? BRANCH_LIGHT : BRANCH_DARK, '--on-danger': onDanger(tokens) }, theme.light ? LIGHT_GLASS : DARK_GLASS)
+  if (!theme.light) Object.assign(style, frostOf(tokens.main), cardSteps(tokens))
   if (look !== undefined) {
     style['--ui'] = look.ui
     style['--mono'] = look.mono
     if (look.hk !== undefined) style['--hk'] = look.hk
-    if (look.sk !== undefined) style['--sk'] = look.sk
     if (look.sh !== undefined) style['--sh'] = look.sh
   }
-  // A palette theme's own shading strengths win over the look's, as the design sets them per theme.
-  if (shading !== undefined) {
-    style['--hk'] = shading.hk
-    style['--sk'] = shading.sk
-  }
+  // A palette theme's own highlight strength wins over the look's, as the design sets it per theme.
+  if (highlight !== undefined) style['--hk'] = highlight
   return style
 }
 

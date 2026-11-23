@@ -22,6 +22,7 @@ struct Kept {
     runs_with: crate::conversation::TurnChoice,
     grants: Option<Vec<String>>,
     started_by: Option<TermId>,
+    started_by_chat: Option<crate::conversation::ConversationId>,
     tab_of: Option<TermId>,
     queue: std::collections::VecDeque<String>,
     held_message: Option<String>,
@@ -47,6 +48,7 @@ impl Kept {
             runs_with: t.runs_with.clone(),
             grants: t.grants.clone(),
             started_by: t.started_by,
+            started_by_chat: t.started_by_chat,
             tab_of: t.tab_of,
             queue: t.queue.clone(),
             held_message: t.held_message.as_ref().map(|held| held.text.clone()),
@@ -63,6 +65,7 @@ impl Kept {
         t.runs_with = self.runs_with;
         (t.model, t.grants, t.started_by, t.tab_of) =
             (self.model, self.grants, self.started_by, self.tab_of);
+        t.started_by_chat = self.started_by_chat;
         t.queue = self.queue;
         t.held_message = self.held_message.as_deref().map(term::HeldMessage::new);
         t.subagent_activity = self.subagent_activity;
@@ -305,11 +308,13 @@ impl Daemon {
             put_away_for: term.put_away_for.clone(),
             snoozed_until: term.snoozed_until,
             started_by: term.started_by,
+            started_by_chat: term.started_by_chat,
             owner: term.owner,
             began_as_agent: term.began_as_agent,
             tab_of: term.tab_of,
             queue: term.queue.iter().cloned().collect(),
             held_message: term.held_message.as_ref().map(|held| held.text.clone()),
+            waiting: term.waiting.clone(),
             account: term.account.clone(),
             subagent_activity: term.subagent_activity.clone(),
             checks: term.checks.infos(),
@@ -601,7 +606,9 @@ impl Daemon {
         // back in any order, so the links are made once all of them are up.
         let mut ids: HashMap<TermId, TermId> = HashMap::new();
         let mut started: Vec<(TermId, TermId)> = Vec::new();
+        let mut started_by_chat: Vec<(TermId, crate::conversation::ConversationId)> = Vec::new();
         let mut owned: Vec<(TermId, TermId)> = Vec::new();
+        let mut held: Vec<(TermId, helper_queue::Waiting)> = Vec::new();
         let mut resuming = HashSet::new();
         for sw in saved.workspaces {
             let mut tabs = Vec::new();
@@ -617,6 +624,13 @@ impl Daemon {
                     // Linked runtimes require explicit recovery; legacy resume may choose --last.
                     if pane.conversation_id.is_some() {
                         continue;
+                    }
+                    // A start that was held never ran: it comes back as the shell it was, with
+                    // nothing to resume and no turn that was cut, and is held again below.
+                    let waiting = pane.waiting.take();
+                    if waiting.is_some() {
+                        (pane.agent, pane.session, pane.cmd) = (None, None, None);
+                        (pane.was_working, pane.interrupted) = (false, None);
                     }
                     // Saved after it lost which agent it was (asleep, before 0.26.2): its
                     // command still says, so it comes back as that agent, resumed.
@@ -683,9 +697,11 @@ impl Daemon {
                                     activity
                                 }).collect();
                             }
+                            held.extend(waiting.map(|waiting| (new, waiting)));
                             map.insert(old, new);
                             ids.insert(old, new);
                             started.extend(pane.started_by.map(|by| (new, by)));
+                            started_by_chat.extend(pane.started_by_chat.map(|chat| (new, chat)));
                             owned.extend(pane.tab_of.map(|owner| (new, owner)));
                             restored += 1;
                         }
@@ -737,12 +753,21 @@ impl Daemon {
         }
         for (term, by) in started {
             // The session that started it didn't come back: it's on its own.
-            self.started(term, ids.get(&by).copied());
+            self.started(term, ids.get(&by).copied().map(helpers::Starter::Pane));
+        }
+        for (term, chat) in started_by_chat {
+            // A chat that is gone from the saved conversations started nothing that is still its.
+            if self.conversations.iter().any(|record| record.id == chat) {
+                self.started(term, Some(helpers::Starter::Chat(chat)));
+            }
         }
         for (term, owner) in owned {
             if let Some(t) = self.terms.get_mut(&term) {
                 t.tab_of = ids.get(&owner).copied();
             }
+        }
+        for (term, waiting) in held {
+            self.hold(term, waiting);
         }
         self.active_ws = self
             .workspaces

@@ -21,8 +21,8 @@ describe('a chat session alert', () => {
   it('rings the same tone a terminal session does when it starts needing you', () => {
     const props = (session: SessionView) => ({
       sessions: [session], sessionMap: new Map([[session.id, session]]), machines: new Map(), projectOf: new Map(), online: true, focusedId: null,
-      preferences: { notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: true },
-      showSessionById: vi.fn(), answerSession: vi.fn(),
+      preferences: { notifyNeedsYou: true, notifyFinished: true, notificationSound: true },
+      showSessionById: vi.fn(), answerSession: vi.fn(), saidByOwnToast: () => false,
     })
     const { rerender } = renderHook((session: SessionView) => { useSessionAlerts(props(session)) }, { initialProps: chat('working') })
     expect(sound.play).not.toHaveBeenCalled()

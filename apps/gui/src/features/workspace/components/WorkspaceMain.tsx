@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react'
 import { LOCAL_MACHINE } from '@/api/machines'
-import { useTipWithKeys } from '@/features/shortcuts/platform'
+import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
 import { busyBranchesOf, machineProjects } from '../model/newSession'
 import { discardDraft } from '../model/newSessionDraft'
 import { rowTitle } from '../model/sidebar'
@@ -9,10 +9,18 @@ import { useOpenProject } from '../useOpenProject'
 import { NewChatPage } from './NewChatPage'
 import { ShowSidebarButton } from './ShowSidebarButton'
 import { useFolderPick } from './useFolderPick'
+import { osOfPlatform, paletteMachinesOf } from '@/features/open-project/paletteMachines'
+import { usePlatform } from '@/features/shortcuts/platform'
 import { SplitHandle } from './SplitHandle'
 import { FindBar } from '@/features/find/FindBar'
 import { chatFindOf } from '@/features/chat/chatSearch'
-import { EmptyState } from './states'
+import { LookingForSessions } from './states'
+import { EmptyStart } from './EmptyStart'
+import { pickedPlace, startPlaces } from '../model/emptyStart'
+import { useInstalledAgents } from '../model/newChatHost'
+import type { OpenedProject } from '../model/openedProjects'
+import { ADD_MACHINE, PROJECT_FROM_SOURCES } from '../useOpenProject'
+import { useProjectActions } from '../useProjectActions'
 import { useUpdateReadyToast } from './useUpdateReadyToast'
 import { paneColumns, setColumnWidths, setPaneHeights } from '../model/layout'
 import { displayName } from '../model/session'
@@ -23,9 +31,41 @@ import { useReducedMotion } from './motion'
 import { useWorkspace } from '../workspaceContext'
 import { TerminalDock, TERMINAL_DOCK_EXIT_MS } from './TerminalDock'
 
+const noop = () => undefined
+
+/**
+ * The main area with no tab and no draft in it: the empty state once the service has listed its sessions. An agent
+ * picked there starts the way a project heading's `+` menu starts it (`useProjectActions`), so the two never differ.
+ */
+function MainEmpty() {
+  const { sessionsListed, sessions, sidebarMachineHeads, openedProjects, canStart, modalOpen, welcomeOpen, shortcutsOpen, pendingConfirm, root, setOpenProject } = useWorkspace()
+  const installed = useInstalledAgents()
+  const shortcutText = useShortcutText()
+  const actions = useProjectActions()(noop)
+  const [picked, setPicked] = useState<OpenedProject | null>(null)
+  if (!sessionsListed) return <LookingForSessions />
+  const places = startPlaces(sidebarMachineHeads, openedProjects.machines)
+  return (
+    <EmptyStart
+      running={sessions.length > 0}
+      places={places}
+      place={pickedPlace(places, picked, openedProjects.selected, openedProjects.opened)}
+      installed={installed}
+      canStart={canStart}
+      covered={modalOpen || welcomeOpen || shortcutsOpen || pendingConfirm !== null}
+      openProjectKeys={shortcutText('open-folder')}
+      portalContainer={root}
+      onPick={(place) => { setPicked(place.project) }}
+      onStart={(place, agent) => { actions.onNewSession(place.machine, place.project, agent) }}
+      onOpenProject={() => { setOpenProject(PROJECT_FROM_SOURCES) }}
+      onAddMachine={() => { setOpenProject(ADD_MACHINE) }}
+    />
+  )
+}
+
 /** The middle of the window: find, the service's state, and the panes of each mounted tab. */
 export function WorkspaceMain() {
-  const { sessionsListed, newChatOpen, sessions, focusedSession, preferences, setSettingsSection, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, startFolderLabel, canStart, openStartMenu, focusedMachineNumber, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { newChatOpen, sessions, focusedSession, preferences, findOpen, online, heads, focusedId, terminalHandles, showSessionById, setFindOpen, tab, mountedTabs, layout, narrow, setLayout, closingPanes, paneCountOf, updater, restartNow, terminalShown, setDockFocused, sessionMap, chatView, newChatMachine, setNewChatMachine, setNewChatAgent, newChatSeed, setNewChatSeed, sidebarMachineHeads, setNewChatOpen, home, startNewChat, warmNewChat, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   const openProject = useOpenProject()
   useUpdateReadyToast(updater.state.status === 'ready' ? updater.state.version : null, restartNow)
@@ -36,9 +76,7 @@ export function WorkspaceMain() {
   if (terminalShown && focusedSession !== undefined && focusedSession.id !== dockAgentId) setDockAgentId(focusedSession.id)
   const dockAgent = dockAgentId === undefined ? undefined : sessionMap.get(dockAgentId)
   const dock = terminal.shown && dockAgent !== undefined ? preferences.terminalDock : null
-  // The folder picker reads every machine the window knows, this computer and the others; one that is not up is listed with why.
-  const pickerMachines = sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, ready: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok', word: head.machine === LOCAL_MACHINE ? null : head.chip?.word ?? null }))
-  const folderPick = useFolderPick(pickerMachines)
+  const folderPick = useFolderPick(paletteMachinesOf(sidebarMachineHeads, resolveStartFolder(preferences.startFolder, home)), osOfPlatform(usePlatform()), home)
   const newChatStartFolder = newChatMachine === LOCAL_MACHINE ? resolveStartFolder(preferences.startFolder, home) : '~'
   return (
     <div className="mx-main-wrap">
@@ -60,9 +98,11 @@ export function WorkspaceMain() {
                     pickFolder={folderPick.pick}
                     onOpenProject={openProject.open}
                     onStart={startNewChat}
+                    otherAgents={chatView}
+                    looseFolder={newChatStartFolder}
                     onWarm={warmNewChat}
                     onAgentChange={setNewChatAgent}
-                    onAddMachine={() => { setNewChatOpen(false); setSettingsSection('machines') }}
+                    onAddMachine={openProject.addMachine}
                     onCancel={() => { discardDraft(); setNewChatOpen(false); setNewChatSeed(null) }}
                   />
                 )}
@@ -90,8 +130,11 @@ export function WorkspaceMain() {
                   <div className="mx-pane-stack" inert={newChatOpen}>
                   {mountedTabs.map((tab) => {
                   const kept = tab.id !== layout.activeId
+                  // Two panes or more on screen, whether the arrangement holds several or a session is split: each is a card of its own.
+                  const onScreen = tab.max === null ? tab.panes : tab.panes.filter((pane) => pane.id === tab.max)
+                  const paneCount = onScreen.reduce((count, pane) => count + paneCountOf(pane), 0)
                   return (
-                  <div key={tab.id} className={`mx-panes${tab.panes.length > 1 && tab.max === null ? ' is-split' : ''}${kept ? ' is-kept' : ''}`} aria-hidden={kept ? true : undefined} inert={kept}>
+                  <div key={tab.id} className={`mx-panes${paneCount > 1 ? ' is-split' : ''}${kept ? ' is-kept' : ''}`} aria-hidden={kept ? true : undefined} inert={kept}>
                     {paneColumns(tab, narrow).map((column, columnIndex, columns) => (
                       <Fragment key={column[0]?.id ?? columnIndex}>
                         {columnIndex > 0 && tab.max === null && !narrow && (
@@ -125,17 +168,7 @@ export function WorkspaceMain() {
                   )
                   })}
                   </div>
-                ) : (
-                  <EmptyState
-                    hasSessions={sessions.length > 0}
-                    chatView={chatView}
-                    listed={sessionsListed}
-                    startFolderLabel={startFolderLabel}
-                    canStart={canStart}
-                    onNewSession={() => { openStartMenu(focusedMachineNumber) }}
-                    onChangeStartFolder={() => { setSettingsSection('general') }}
-                  />
-                )}
+                ) : !newChatOpen && <MainEmpty />}
               </main>
               {dock !== null && dockAgent !== undefined && <TerminalDock agent={dockAgent} leaving={terminal.leaving} />}
               </div>

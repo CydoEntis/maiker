@@ -265,7 +265,7 @@ mod tests {
     }
 
     #[test]
-    fn the_file_reaches_stdin_whole_and_every_byte_is_counted() {
+    fn the_file_reaches_stdin_whole_every_byte_is_counted_and_the_status_is_kept() {
         let body = vec![7u8; CHUNK * 3 + 11];
         let path = file("whole", &body);
         let watch = Watch::default();
@@ -276,14 +276,12 @@ mod tests {
         assert_eq!(ran.stderr.trim(), "said");
         assert_eq!(watch.sent.load(Ordering::Relaxed), body.len() as u64);
         assert!(!ran.cancelled);
-    }
-
-    #[test]
-    fn an_exit_status_is_kept_apart_from_what_was_said() {
         let ran = run(&sh("echo out; echo err >&2; exit 70"), None, ASK_LIMIT).unwrap();
-        assert_eq!(ran.code, Some(70));
-        assert_eq!(ran.stdout.trim(), "out");
-        assert_eq!(ran.stderr.trim(), "err");
+        assert_eq!(
+            (ran.code, ran.stdout.trim(), ran.stderr.trim()),
+            (Some(70), "out", "err"),
+            "an exit status is kept apart from what was said"
+        );
     }
 
     // `exec`, because dash forks a `-c` command instead of becoming it: killing the shell would

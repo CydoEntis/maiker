@@ -91,19 +91,6 @@ describe('a long mixed conversation', () => {
     expect(within(list).getByText(/Done 1499/)).toBeInTheDocument()
     expect(within(list).queryByText('question 0')).not.toBeInTheDocument()
   })
-
-  it('keeps every row keyed by a stable id when the same history is read again', async () => {
-    mixedConversation(40)
-    render(<ChatSession link={link()} agent="claude" online root="/repo" />)
-    await settle()
-    const keys = () => Array.from(document.querySelectorAll('[data-key]')).map((row) => row.getAttribute('data-key'))
-    const before = keys()
-
-    await settle(IDLE_POLL_MS)
-
-    expect(before.length).toBeGreaterThan(0)
-    expect(keys()).toEqual(before)
-  })
 })
 
 describe('approvals in the chat', () => {
@@ -140,24 +127,10 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'Accept')
   })
 
-  it('answers with y, a and n typed in the message box while it is empty', async () => {
+  it('leaves a letter typed in the message box to the text, even while the box is empty', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-1')]
     daemon.status = 'Blocked'
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Message Claude' }), { key: 'a' })
-    await settle()
-
-    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-1', 'AcceptForSession')
-  })
-
-  it('leaves y, a and n to the text once the message box holds some', async () => {
-    const daemon = withStep()
-    daemon.approvals = [request('req-1')]
-    daemon.status = 'Blocked'
-    updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, draft: 'yes please' }))
     render(<ChatSession link={link()} agent="claude" online />)
     await settle()
 
@@ -167,18 +140,19 @@ describe('approvals in the chat', () => {
     expect(fake.approveRequest).not.toHaveBeenCalled()
   })
 
-  it('draws the request as the needs card: the agent at the right, the command, and the four answers', async () => {
-    const daemon = withStep()
-    daemon.approvals = [request('req-1', { can_remember: true })]
-    daemon.status = 'Blocked'
-    render(<ChatSession link={link()} agent="claude" online />)
+  it('leaves the keys in the message box when a card comes up over a reply being typed', async () => {
+    withStep()
+    updateComposer(FAKE_CONVERSATION, (state) => ({ ...state, draft: 'yes please' }))
+    const view = render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    const box = screen.getByRole('textbox', { name: 'Message Claude' })
+    box.focus()
+
+    view.rerender(<ChatSession link={link()} agent="claude" online helperAsk={{ tasks: ['Run the tests'], answer: vi.fn() }} />)
     await settle()
 
-    const card = screen.getByRole('region', { name: /Approval/ })
-    expect(card).toHaveTextContent('Wants to run a command')
-    expect(card).toHaveTextContent('Claude')
-    expect(card).toHaveTextContent('$ rm -rf build')
-    for (const name of ['Yes once', 'This session', 'No']) expect(within(card).getByRole('button', { name })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Wants to start helpers' })).toBeInTheDocument()
+    expect(box).toHaveFocus()
   })
 
   it('asks one request at a time, the oldest first, and the next once that one is answered', async () => {
@@ -199,7 +173,7 @@ describe('approvals in the chat', () => {
     expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf dist')
   })
 
-  it('gives the main answer with Enter on the card, and names its keys on its buttons', async () => {
+  it('opens with the keys on the first answer, and names each answer\'s key', async () => {
     const daemon = withStep()
     daemon.approvals = [request('req-5')]
     daemon.status = 'Blocked'
@@ -210,21 +184,11 @@ describe('approvals in the chat', () => {
     expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveAttribute('aria-keyshortcuts', 'y')
     expect(within(card).getByRole('button', { name: 'This session' })).toHaveAttribute('aria-keyshortcuts', 'a')
     expect(within(card).getByRole('button', { name: 'No' })).toHaveAttribute('aria-keyshortcuts', 'n')
-    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveFocus()
+    fireEvent.keyDown(within(card).getByRole('button', { name: 'Yes once' }), { key: 'a' })
     await settle()
 
-    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'Accept')
-  })
-
-  it('shows an approval answered in the terminal as answered, with the choice the daemon kept', async () => {
-    const daemon = withStep()
-    daemon.answeredApprovals = [{ request: request('req-2'), decision: 'AcceptForSession', answered_at_ms: Date.UTC(2026, 10, 4, 10, 11) }]
-    render(<ChatSession link={link()} agent="claude" online />)
-    await settle()
-
-    const card = screen.getByRole('group', { name: /Approval/ })
-    expect(card).toHaveTextContent('Allowed for this session')
-    expect(within(card).queryByRole('button', { name: /This session/ })).toBeNull()
+    expect(fake.approveRequest).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 'req-5', 'AcceptForSession')
   })
 
   it('moves a request that disappears from the pending list to answered once the daemon records it', async () => {
@@ -241,32 +205,6 @@ describe('approvals in the chat', () => {
 
     expect(screen.getByRole('group', { name: /Approval/ })).toHaveTextContent('Denied')
     expect(screen.queryByRole('region', { name: /Approval/ })).toBeNull()
-  })
-
-  it('links the request to its tool step and scrolls the list there', async () => {
-    const daemon = withStep()
-    for (let index = 0; index < 60; index += 1) daemon.upsert(daemon.message('t1', `m${String(index)}`, 'Assistant', `filler ${String(index)}`))
-    daemon.upsert(toolEntry('t2', 'x', 'ls', ''))
-    daemon.answeredApprovals = [{ request: request('req-4', { turn_id: 't2', item_id: 'x', command: 'ls' }), decision: 'Accept' }]
-    // jsdom has no layout: a short window makes the list longer than what it shows, as it would be with this much said.
-    const shortWindow = vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(100)
-    try {
-      render(<ChatSession link={link()} agent="claude" online />)
-      await settle()
-      await settle()
-
-      // jsdom has no layout, so the list's scroll position is a plain number the test can read.
-      const region = screen.getByRole('region', { name: /Conversation/ })
-      let top = 0
-      Object.defineProperty(region, 'scrollTop', { configurable: true, get: () => top, set: (value: number) => { top = value } })
-      fireEvent.click(screen.getByRole('button', { name: /Go to the step this is about: ls/ }))
-      await settle()
-
-      // The view moved to the step's row, not to the end of the chat.
-      expect(top).toBeGreaterThan(0)
-    } finally {
-      shortWindow.mockRestore()
-    }
   })
 })
 

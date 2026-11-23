@@ -191,8 +191,9 @@ mod tests {
     }
 
     #[test]
-    fn a_newer_server_is_never_replaced_without_asking() {
+    fn a_mismatched_server_is_replaced_without_asking_only_when_it_holds_nothing() {
         let newer = crate::protocol::PROTOCOL_VERSION + 1;
+        // A newer server is never replaced without asking.
         assert!(matches!(
             plan_for_mismatch(newer, Some(&activity(0, 0)), 0),
             Plan::Ask { .. }
@@ -201,57 +202,27 @@ mod tests {
             plan_for_mismatch(newer, None, 0),
             Plan::Ask { .. }
         ));
-    }
-
-    #[test]
-    fn a_server_with_no_session_is_replaced_without_asking() {
-        assert_eq!(
-            plan_for_mismatch(OLDER, Some(&no_sessions()), 9),
-            Plan::Replace,
-            "what is saved doesn't matter once the server says it holds nothing"
-        );
-    }
-
-    #[test]
-    fn open_sessions_ask_even_when_no_agent_is_mid_turn() {
-        assert_eq!(
-            plan_for_mismatch(OLDER, Some(&activity(0, 0)), 0),
-            Plan::Ask {
-                resume: 4,
-                busy: Some(0)
-            },
-            "a shell may be running a build or a server that a restart would end"
-        );
-    }
-
-    #[test]
-    fn working_or_waiting_sessions_ask_once_and_count_what_resumes() {
-        assert_eq!(
-            plan_for_mismatch(OLDER, Some(&activity(1, 0)), 0),
-            Plan::Ask {
-                resume: 4,
-                busy: Some(1)
-            }
-        );
-        assert_eq!(
-            plan_for_mismatch(OLDER, Some(&activity(0, 2)), 0),
-            Plan::Ask {
-                resume: 4,
-                busy: Some(2)
-            }
-        );
-    }
-
-    #[test]
-    fn a_server_that_published_nothing_is_judged_by_the_saved_agents() {
-        assert_eq!(plan_for_mismatch(OLDER, None, 0), Plan::Replace);
-        assert_eq!(
-            plan_for_mismatch(OLDER, None, 3),
-            Plan::Ask {
-                resume: 3,
-                busy: None
-            }
-        );
+        let ask = |resume, busy| Plan::Ask { resume, busy };
+        for (published, saved, want, why) in [
+            (
+                Some(no_sessions()),
+                9,
+                Plan::Replace,
+                "what is saved doesn't matter once the server says it holds nothing",
+            ),
+            (
+                Some(activity(0, 0)),
+                0,
+                ask(4, Some(0)),
+                "a shell may be running a build or a server that a restart would end",
+            ),
+            (Some(activity(1, 0)), 0, ask(4, Some(1)), "a working session"),
+            (Some(activity(0, 2)), 0, ask(4, Some(2)), "waiting sessions"),
+            (None, 0, Plan::Replace, "published nothing, nothing saved"),
+            (None, 3, ask(3, None), "published nothing: judged by the saved agents"),
+        ] {
+            assert_eq!(plan_for_mismatch(OLDER, published.as_ref(), saved), want, "{why}");
+        }
     }
 
     #[test]

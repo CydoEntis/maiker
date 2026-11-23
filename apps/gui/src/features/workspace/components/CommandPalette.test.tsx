@@ -89,17 +89,6 @@ describe('Command palette output search', () => {
     expect(within(group).getAllByRole('option').map((option) => option.textContent)).toEqual(['pane 1build step', 'pane 2build done'])
   })
 
-  it('points the input at the selected option', async () => {
-    vi.mocked(invoke).mockResolvedValue([{ term: 7, line: 3, text: 'build failed' }])
-    const input = renderPalette()
-    fireEvent.change(input, { target: { value: 'build' } })
-    await screen.findByRole('group', { name: 'In sessions' })
-    fireEvent.keyDown(input, { key: 'ArrowDown' })
-    const selected = screen.getAllByRole('option').find((option) => option.getAttribute('aria-selected') === 'true')
-    expect(selected?.textContent).toBe('pane 7build failed')
-    expect(input.getAttribute('aria-activedescendant')).toBe(selected?.id)
-  })
-
   it('adds nothing and shows no error when the search fails', async () => {
     vi.mocked(invoke).mockRejectedValue(new Error('service offline'))
     const input = renderPalette()

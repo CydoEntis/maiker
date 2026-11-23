@@ -18,7 +18,7 @@ type Props = {
   bypassOff?: { note: string; why: string } | undefined
 }
 
-/** The permission modes of a chat: a row each, with what the mode does, opening up from the tray. */
+/** The permission modes of a chat: a row each, with what the mode does, opening up from the chat box's shield. It is the shared menu (its float, its keys, its picked-row fill); only the two-line rows are its own. */
 export function PermissionMenu({ children, agent, label, mode, modes = PICKABLE_MODES, onPick, bypassOff }: Props) {
   return (
     <DropdownMenu>
@@ -31,7 +31,7 @@ export function PermissionMenu({ children, agent, label, mode, modes = PICKABLE_
             const off = key === BYPASS_MODE && bypassOff !== undefined
             const tag = off ? bypassOff.note : MODE_FACTS[key]?.tag
             return (
-              <DropdownMenuRadioItem key={key} value={key} disabled={off} title={off ? bypassOff.why : undefined} className={`mx-pm-mode focus:bg-transparent focus:text-fg${DANGER_MODES.includes(key) ? ' is-danger' : ''}`}>
+              <DropdownMenuRadioItem key={key} value={key} disabled={off} title={off ? bypassOff.why : undefined} className={`mx-pm-mode${DANGER_MODES.includes(key) ? ' is-danger' : ''}`}>
                 <span className="mx-pm-text">
                   <span className="mx-pm-name">{modeLabel(key)}{tag !== undefined && <small>{tag}</small>}</span>
                   <span className="mx-pm-what">{MODE_FACTS[key]?.what}</span>

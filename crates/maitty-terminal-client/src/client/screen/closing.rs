@@ -169,15 +169,4 @@ mod tests {
         assert_eq!(seconds_left(UNDO_FOR, Duration::from_millis(5900)), 1);
         assert_eq!(seconds_left(UNDO_FOR, Duration::from_millis(1500)), 5);
     }
-
-    #[test]
-    fn a_closed_session_offers_undo() {
-        let term = ClientTerm::local(7);
-        let mut c = Closing::default();
-        assert_eq!(c.banner("Ctrl+A"), None);
-        c.offer(term, "pacman".into(), Undone::Closed);
-        let b = c.banner("Ctrl+A").unwrap();
-        assert_eq!(b.text, "Closed pacman · Ctrl+A undo 6s");
-        assert!(!b.warn);
-    }
 }

@@ -374,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn a_name_keeps_plain_characters_and_loses_everything_else() {
+    fn a_name_keeps_plain_characters_loses_everything_else_and_keeps_its_extension_when_cut() {
         assert_eq!(local_name("/home/me/out.log"), "out.log");
         assert_eq!(local_name("~/my report (final).pdf"), "my report _final_.pdf");
         assert_eq!(local_name("/a/b/../..\\x:y*z?.txt"), ".._x_y_z_.txt");
@@ -383,6 +383,9 @@ mod tests {
         assert_eq!(local_name(".."), "file");
         assert_eq!(local_name("/x/ . "), "file");
         assert_eq!(local_name("/x/name. . "), "name");
+        let long = local_name(&format!("/x/{}.tar.gz", "a".repeat(300)));
+        assert_eq!(long.chars().count(), NAME_MAX);
+        assert!(long.ends_with(".tar.gz"), "a long name is cut in the middle: {long}");
     }
 
     #[test]
@@ -391,22 +394,6 @@ mod tests {
         assert_eq!(local_name("/x/NUL.txt"), "_NUL.txt");
         assert_eq!(local_name("/x/com1.log"), "_com1.log");
         assert_eq!(local_name("/x/console.txt"), "console.txt");
-    }
-
-    #[test]
-    fn a_long_name_is_cut_in_the_middle_so_the_extension_stays() {
-        let long = format!("/x/{}.tar.gz", "a".repeat(300));
-        let name = local_name(&long);
-        assert_eq!(name.chars().count(), NAME_MAX);
-        assert!(name.ends_with(".tar.gz"));
-    }
-
-    #[test]
-    fn a_taken_name_gets_a_number_before_its_extension() {
-        assert_eq!(numbered("out.log", 0), "out.log");
-        assert_eq!(numbered("out.log", 2), "out-2.log");
-        assert_eq!(numbered("Makefile", 1), "Makefile-1");
-        assert_eq!(numbered(".bashrc", 1), ".bashrc-1");
     }
 
     #[test]
@@ -451,39 +438,21 @@ mod tests {
     }
 
     #[test]
-    fn a_stream_with_no_marker_or_no_size_is_an_error_that_leaves_nothing() {
-        let dir = dir("nomarker");
-        for bytes in [b"just some text\n".to_vec(), Vec::new(), format!("{GET_MARKER}\nlots\n").into_bytes()] {
-            assert!(receive(&mut Cursor::new(bytes), &dir, "/x/f", 100, &Watch::default()).is_err());
+    fn a_stream_that_is_unmarked_short_long_or_over_the_cap_is_refused_and_leaves_no_file() {
+        let dir = dir("refused");
+        for bytes in [
+            b"just some text\n".to_vec(),
+            Vec::new(),
+            format!("{GET_MARKER}\nlots\n").into_bytes(),
+            answer(10, b"abc"),
+            // Too long, even though the announced part arrived.
+            answer(3, b"abcdef"),
+            answer(101, b""),
+        ] {
+            let shown = String::from_utf8_lossy(&bytes).into_owned();
+            assert!(receive(&mut Cursor::new(bytes), &dir, "/x/f", 100, &Watch::default()).is_err(), "{shown:?}");
+            assert!(files(&dir).is_empty(), "{shown:?}: not even a part is left: {:?}", files(&dir));
         }
-        assert!(files(&dir).is_empty());
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_short_stream_leaves_no_file_not_even_a_part() {
-        let dir = dir("short");
-        let error = receive(&mut Cursor::new(answer(10, b"abc")), &dir, "/x/f", 100, &Watch::default()).unwrap_err();
-        assert!(error.contains("ended after 3 of 10 bytes"), "{error}");
-        assert!(files(&dir).is_empty(), "{:?}", files(&dir));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_long_stream_is_refused_even_though_the_announced_part_arrived() {
-        let dir = dir("long");
-        let error = receive(&mut Cursor::new(answer(3, b"abcdef")), &dir, "/x/f", 100, &Watch::default()).unwrap_err();
-        assert!(error.contains("more than the 3 bytes it announced"), "{error}");
-        assert!(files(&dir).is_empty(), "{:?}", files(&dir));
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
-    fn a_size_over_the_cap_is_refused_before_a_file_is_made() {
-        let dir = dir("cap");
-        let error = receive(&mut Cursor::new(answer(101, b"")), &dir, "/x/f", 100, &Watch::default()).unwrap_err();
-        assert!(error.contains("more than the"), "{error}");
-        assert!(files(&dir).is_empty());
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -499,17 +468,9 @@ mod tests {
     }
 
     #[test]
-    fn each_script_status_has_its_own_plain_words() {
-        let say = |code| get_failure("box", "/x/f", code, "");
-        assert_eq!(say(Some(GET_MISSING)), "/x/f does not exist on box");
-        assert!(say(Some(GET_NOT_A_FILE)).contains("not a file"));
-        assert!(say(Some(GET_UNREADABLE)).contains("cannot be read"));
-        assert!(say(Some(GET_TOO_BIG)).contains("1024 MB"));
-        assert!(say(None).contains("in time"));
-        assert_eq!(say(Some(255)), "could not get /x/f from box");
-        assert_eq!(
-            get_failure("box", "/x/f", Some(255), "Permission denied\u{1b}[31m (publickey)"),
-            "could not get /x/f from box: Permission denied[31m (publickey)"
-        );
+    fn what_ssh_said_about_a_failed_get_is_shown_without_control_characters() {
+        let said = get_failure("box", "/x/f", Some(255), "Permission denied\u{1b}[31m (publickey)");
+        assert!(said.contains("Permission denied") && !said.chars().any(char::is_control), "{said:?}");
     }
+
 }

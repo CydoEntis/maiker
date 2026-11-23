@@ -10,8 +10,10 @@ use tokio::io::{AsyncRead, AsyncReadExt};
 use tokio_util::codec::{FramedRead, FramedWrite, LinesCodec};
 
 use crate::conversation::TurnChoice;
+use maitty_provider::ProviderEvent;
+use maitty_provider_claude::approvals::approval_request;
 use maitty_provider_claude::{
-    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, ProjectedEvent, TurnProjector,
+    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, TurnProjector,
     command_arguments_for_turn, parse_output_frame, session_id, verified_version,
     version_number,
 };
@@ -39,6 +41,7 @@ impl Client {
         cwd: &Path,
         config_root: &Path,
         environment: &[(OsString, OsString)],
+        identity: &crate::protocol::StructuredIdentity,
         arguments: &[OsString],
     ) -> std::result::Result<Self, super::transport::StartupFailure> {
         let mut command = Command::new(executable);
@@ -56,6 +59,7 @@ impl Client {
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped());
+        super::transport::identify(&mut command, identity);
         crate::proc::quiet(&mut command);
         let mut process = super::process::OwnedChild::spawn(command)
             .await
@@ -199,12 +203,12 @@ struct Warm {
 
 /// Where Claude Code keeps this session's transcript. `None` for a session id that is not a plain
 /// file name, so no path outside the folder is ever looked at.
-fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> Option<PathBuf> {
+pub(super) fn transcript_path(config_root: &Path, cwd: &Path, session: &str) -> Option<PathBuf> {
     (!session.is_empty() && session.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')).then(
         || {
             config_root
                 .join("projects")
-                .join(super::saved::claude_folder_name(cwd))
+                .join(super::saved::claude_folder_name(&super::saved::real_folder(cwd)))
                 .join(format!("{session}.jsonl"))
         },
     )
@@ -223,6 +227,7 @@ async fn prewarm(
     launch: &super::transport::Launch,
     settings: &crate::conversation::LaunchSettings,
     transcript: Option<&Path>,
+    identity: &crate::protocol::StructuredIdentity,
     arguments: Vec<OsString>,
 ) -> Option<Warm> {
     let transcript = transcript?.to_path_buf();
@@ -239,6 +244,7 @@ async fn prewarm(
         cwd,
         &settings.config_root,
         &launch.environment,
+        identity,
         &arguments,
     )
     .await
@@ -323,6 +329,7 @@ async fn retire(mut client: Client, reason: &str) {
 pub(super) async fn run(
     launch: super::transport::Launch,
     owner: super::runtime::Owner,
+    identity: crate::protocol::StructuredIdentity,
     events: tokio::sync::mpsc::Sender<crate::daemon::Ev>,
     mut stop: tokio::sync::mpsc::Receiver<()>,
     mut requests: tokio::sync::mpsc::Receiver<super::runtime::Command>,
@@ -416,24 +423,25 @@ pub(super) async fn run(
                     return;
                 };
                 match command.request {
-                    super::runtime::Rpc::Start { .. } | super::runtime::Rpc::Resume { .. } => {
+                    super::runtime::Rpc::Open { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Ok(serde_json::json!({"thread":{"id":session}})),
                         }).await;
                     }
-                    super::runtime::Rpc::Turns { .. } => {
+                    super::runtime::Rpc::ReadHistory { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Ok(serde_json::json!({"data":[],"nextCursor":null})),
                         }).await;
                     }
-                    super::runtime::Rpc::Send { params } => {
+                    super::runtime::Rpc::Send { session: target, text, choice, .. } => {
                         match run_turn(
                             TurnContext {
                                 launch: &launch,
                                 settings: &settings,
                                 session: &session,
+                                identity: &identity,
                                 awaiting_first_message,
                                 owner,
                                 events: &events,
@@ -442,7 +450,7 @@ pub(super) async fn run(
                                 warm: &mut warm,
                             },
                             command.token,
-                            params,
+                            Message { session: target, text, choice },
                         ).await {
                             Ok((mut client, choice)) => {
                                 awaiting_first_message = false;
@@ -453,7 +461,7 @@ pub(super) async fn run(
                                 // Started only after the last process exited, so it loads the
                                 // whole transcript; it bets the next message keeps this model and effort.
                                 let arguments = command_arguments_for_turn(&session, true, &settings, &choice);
-                                warm = prewarm(&launch, &settings, transcript.as_deref(), arguments).await;
+                                warm = prewarm(&launch, &settings, transcript.as_deref(), &identity, arguments).await;
                             }
                             Err(TurnFailure::BeforeStart { token, error }) => {
                                 let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
@@ -483,7 +491,7 @@ pub(super) async fn run(
                             }
                         }
                     }
-                    super::runtime::Rpc::Answer { .. } | super::runtime::Rpc::Interrupt { .. } | super::runtime::Rpc::Steer { .. } => {
+                    super::runtime::Rpc::Answer { .. } | super::runtime::Rpc::AnswerInput { .. } | super::runtime::Rpc::Interrupt { .. } | super::runtime::Rpc::Steer { .. } => {
                         let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Response {
                             token: command.token,
                             result: Err(super::transport::RpcError::adapter_failure(-32001)),
@@ -564,6 +572,8 @@ struct TurnContext<'a> {
     launch: &'a super::transport::Launch,
     settings: &'a crate::conversation::LaunchSettings,
     session: &'a str,
+    /// Given to every process a message starts, so its tools are known as this chat.
+    identity: &'a crate::protocol::StructuredIdentity,
     awaiting_first_message: bool,
     owner: super::runtime::Owner,
     events: &'a tokio::sync::mpsc::Sender<crate::daemon::Ev>,
@@ -573,27 +583,23 @@ struct TurnContext<'a> {
     warm: &'a mut Option<Warm>,
 }
 
-/// The model and effort the user picked for this message, read back from its start parameters.
-/// They are checked again here because they end up on a command line.
-fn turn_choice(params: &Value) -> Result<TurnChoice> {
-    let field = |name: &str| params.get(name).and_then(Value::as_str).map(str::to_owned);
-    let choice = TurnChoice {
-        model: field("model"),
-        effort: field("effort"),
-    };
-    choice.validate().map_err(anyhow::Error::msg)?;
-    Ok(choice)
+/// A person's message for a session, with the model and effort picked for it.
+struct Message {
+    session: String,
+    text: String,
+    choice: TurnChoice,
 }
 
 async fn run_turn(
     context: TurnContext<'_>,
     token: u64,
-    params: Value,
+    message: Message,
 ) -> std::result::Result<(Client, TurnChoice), TurnFailure> {
     let TurnContext {
         launch,
         settings,
         session,
+        identity,
         awaiting_first_message,
         owner,
         events,
@@ -601,25 +607,24 @@ async fn run_turn(
         stop,
         warm,
     } = context;
-    if params.get("threadId").and_then(Value::as_str) != Some(session) {
+    let Message { session: target, text, choice } = message;
+    if target != session {
         return Err(TurnFailure::BeforeStart {
             token,
             error: anyhow::anyhow!("Claude send targets a different session identity"),
         });
     }
-    let text = params
-        .get("input")
-        .and_then(Value::as_array)
-        .and_then(|items| items.first())
-        .filter(|item| item.get("type").and_then(Value::as_str) == Some("text"))
-        .and_then(|item| item.get("text").and_then(Value::as_str))
-        .filter(|text| !text.is_empty())
-        .context("Claude send has no text input")
-        .map_err(|error| TurnFailure::BeforeStart { token, error })?
-        .to_owned();
+    if text.is_empty() {
+        return Err(TurnFailure::BeforeStart {
+            token,
+            error: anyhow::anyhow!("Claude send has no text input"),
+        });
+    }
     let (_, executable, cwd) = launch.paths();
-    let choice = turn_choice(&params)
-        .map_err(|error| TurnFailure::BeforeStart { token, error })?;
+    // Checked again here because the model and effort end up on a command line.
+    choice
+        .validate()
+        .map_err(|error| TurnFailure::BeforeStart { token, error: anyhow::Error::msg(error) })?;
     let args = command_arguments_for_turn(session, !awaiting_first_message, settings, &choice);
     let mut client = match take_warm(warm, &args, session).await {
         Some(client) => client,
@@ -629,6 +634,7 @@ async fn run_turn(
                 cwd,
                 &settings.config_root,
                 &launch.environment,
+                identity,
                 &args,
             )
             .await
@@ -682,18 +688,18 @@ async fn run_turn(
                     return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude command channel closed during a turn") });
                 };
                 match command.request {
-                    super::runtime::Rpc::Answer { request_id, response } => {
-                        let super::transport::RequestId::Text(request_id) = request_id else {
+                    super::runtime::Rpc::Answer { request, decision, .. } => {
+                        let crate::conversation::ProviderRequestId::Text(request_id) = request else {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval ID is not textual") });
                         };
                         let Some(input) = approvals.remove(&request_id) else {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval is stale") });
                         };
-                        let decision = response.get("decision").and_then(Value::as_str);
+                        use crate::conversation::ApprovalDecision;
                         let (behavior, message) = match decision {
-                            Some("accept") => ("allow", None),
-                            Some("decline") => ("deny", Some("The user declined this action.")),
-                            _ => return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude approval decision") }),
+                            ApprovalDecision::Accept => ("allow", None),
+                            ApprovalDecision::Decline => ("deny", Some("The user declined this action.")),
+                            ApprovalDecision::AcceptForSession | ApprovalDecision::Cancel => return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude approval decision") }),
                         };
                         let mut answer = serde_json::json!({"behavior":behavior,"updatedInput":input});
                         if let Some(message) = message { answer["message"] = Value::String(message.into()); }
@@ -701,9 +707,8 @@ async fn run_turn(
                             .await
                             .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     }
-                    super::runtime::Rpc::Interrupt { params } => {
-                        if params.get("threadId").and_then(Value::as_str) != Some(session)
-                            || params.get("turnId").and_then(Value::as_str) != Some(turn_id.as_str()) {
+                    super::runtime::Rpc::Interrupt { session: target, turn } => {
+                        if target != session || turn != turn_id {
                             return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude interruption targets a stale turn") });
                         }
                         let request_id = format!("interrupt-{}", command.token);
@@ -745,12 +750,9 @@ async fn run_turn(
                     if approvals.len() >= MAX_PENDING_TOOLS || approvals.insert(request_id.clone(), input.clone()).is_some() {
                         return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval request queue overflow or ID reuse") });
                     }
-                    let (method, params) = approval_request(session, &turn_id, request_id, request, tool_name, &input);
-                    super::runtime::emit(events, owner, super::runtime::Payload::Request {
-                        id: super::transport::RequestId::Text(request_id.clone()),
-                        method: method.into(),
-                        params,
-                    }).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                    let (request, command_hash) = approval_request(&turn_id, request_id, request, tool_name, &input);
+                    let asked = ProviderEvent::ApprovalRequested { request: Box::new(request), command_hash };
+                    super::runtime::emit(events, owner, super::runtime::Payload::Event(asked)).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     continue;
                 }
                 if let OutputFrame::ControlResponse { response } = &frame
@@ -765,27 +767,28 @@ async fn run_turn(
                         }
                         continue;
                 }
-                if matches!(frame, OutputFrame::Result { .. }) && pending_token.is_some() {
+                if matches!(frame, OutputFrame::Result { .. }) && pending_token.is_some() && !projector.takes_answer_as_receipt() {
                     return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude completed without echoing the submitted prompt; delivery is uncertain") });
                 }
                 let finished = matches!(frame, OutputFrame::Result { .. });
                 let projected = projector.project(frame).map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                 for event in projected {
                     match event {
-                        ProjectedEvent::Notification { method, params } => {
-                            super::runtime::emit(events, owner, super::runtime::Payload::Notification { method, params })
-                                .await
-                                .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
-                        }
-                        ProjectedEvent::Acknowledged { result } => {
+                        // The delivery receipt answers the send itself, in the shape the
+                        // daemon reads every provider's send answer in.
+                        ProviderEvent::Delivered { turn } => {
                             let acknowledged = pending_token.take().context("Claude acknowledgement token was already consumed")
                                 .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                             super::runtime::emit(events, owner, super::runtime::Payload::Response {
                                 token: acknowledged,
-                                result: Ok(result),
+                                result: Ok(serde_json::json!({"turn":{"id":turn,"status":"inProgress","items":[]}})),
                             }).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                         }
-                        ProjectedEvent::ControlRequest { .. } => unreachable!("control requests are mapped before turn projection"),
+                        event => {
+                            super::runtime::emit(events, owner, super::runtime::Payload::Event(event))
+                                .await
+                                .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                        }
                     }
                 }
                 if finished { return Ok((client, choice)); }
@@ -794,61 +797,20 @@ async fn run_turn(
     }
 }
 
-/// Longest tool-use id accepted as a link to a tool step.
-const MAX_TOOL_USE_ID_CHARS: usize = 256;
-
-/// The provider request that asks the person to decide on one Claude `can_use_tool` call.
-///
-/// The request is linked to the tool's own history step by `itemId` when Claude names the tool
-/// use (`tool_use_id`, the same id the step has); otherwise `itemId` falls back to the request id.
-/// An edit tool is raised as a file change that carries its diff, any other tool as a command
-/// whose text names its target.
-fn approval_request(
-    session: &str,
-    turn_id: &str,
-    request_id: &str,
-    request: &Value,
-    tool_name: &str,
-    input: &Value,
-) -> (&'static str, Value) {
-    let item_id = request
-        .get("tool_use_id")
-        .and_then(Value::as_str)
-        .filter(|id| {
-            !id.is_empty()
-                && id.chars().count() <= MAX_TOOL_USE_ID_CHARS
-                && !id.chars().any(char::is_control)
-        })
-        .unwrap_or(request_id);
-    let mut params = serde_json::json!({
-        "threadId": session,
-        "turnId": turn_id,
-        "itemId": item_id,
-        "command": super::tool_input::approval_command(tool_name, input),
-        "availableDecisions": ["accept", "decline"],
-    });
-    match super::tool_input::file_change_previews(tool_name, input) {
-        Some(changes) => {
-            params["changes"] = changes.into();
-            ("item/fileChange/requestApproval", params)
-        }
-        None => ("item/commandExecution/requestApproval", params),
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{approval_request, parse_output_frame, turn_choice, verified_version};
+    use super::parse_output_frame;
     use crate::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox};
     use crate::conversation::TurnChoice;
     use maitty_provider_claude::{
-        MAX_FRAME_BYTES, OutputFrame, command_arguments, command_arguments_for_turn, session_id,
+        MAX_FRAME_BYTES, OutputFrame, command_arguments, command_arguments_for_turn,
     };
     use serde_json::json;
     use std::path::PathBuf;
 
     fn settings(approval_policy: ApprovalPolicy, sandbox: Sandbox) -> LaunchSettings {
         LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: PathBuf::from("claude"),
             config_root: PathBuf::from("config"),
@@ -858,45 +820,6 @@ mod tests {
             approval_policy,
             sandbox,
         }
-    }
-
-    #[test]
-    fn recognizes_only_the_locally_verified_cli_version() {
-        assert!(verified_version("2.1.312"));
-        assert!(verified_version("2.1.314"));
-        assert!(verified_version("2.1.316"));
-        assert!(verified_version("2.1.327"));
-        assert!(!verified_version("2.1.313"));
-        assert!(!verified_version("2.1.31"));
-    }
-
-    #[test]
-    fn creates_a_valid_unique_provider_session_id() {
-        let first = session_id().unwrap();
-        let second = session_id().unwrap();
-        assert_eq!(first.len(), 36);
-        assert_eq!(first.as_bytes()[14], b'4');
-        assert!(matches!(first.as_bytes()[19], b'8'..=b'b'));
-        assert_ne!(first, second);
-    }
-
-    #[test]
-    fn maps_read_only_settings_to_claude_plan_mode() {
-        let args = command_arguments(
-            "session-1",
-            false,
-            &settings(ApprovalPolicy::OnRequest, Sandbox::ReadOnly),
-        );
-        let args: Vec<_> = args.iter().map(|arg| arg.to_string_lossy()).collect();
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--permission-mode", "plan"])
-        );
-        assert!(
-            args.windows(2)
-                .any(|pair| pair == ["--session-id", "session-1"])
-        );
-        assert!(args.windows(2).any(|pair| pair == ["--model", "sonnet"]));
     }
 
     #[test]
@@ -961,16 +884,6 @@ mod tests {
     }
 
     #[test]
-    fn a_turns_choice_is_read_from_its_parameters_and_checked() {
-        let choice = turn_choice(&json!({"threadId":"t","model":"sonnet","effort":"high"})).unwrap();
-        assert_eq!(choice.model.as_deref(), Some("sonnet"));
-        assert_eq!(choice.effort.as_deref(), Some("high"));
-        assert!(turn_choice(&json!({"threadId":"t"})).unwrap().is_empty());
-        assert!(turn_choice(&json!({"model":"--add-dir"})).is_err());
-        assert!(turn_choice(&json!({"effort":"warp"})).is_err());
-    }
-
-    #[test]
     fn resume_uses_the_exact_existing_provider_session_id() {
         let args = command_arguments(
             "provider-session-exact",
@@ -990,72 +903,51 @@ mod tests {
     }
 
     #[test]
-    fn reads_session_identity_from_initialization() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"system","subtype":"init","session_id":"session-1"}"#)
-                .unwrap(),
-            OutputFrame::Initialized {
-                session_id: "session-1".into()
-            }
-        );
-    }
-
-    #[test]
-    fn reads_streaming_text_and_content_block_identity() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"hello"}}}"#).unwrap(),
-            OutputFrame::TextDelta { block_index: 2, text: "hello".into() }
-        );
-    }
-
-    #[test]
-    fn reads_message_identity_and_model_from_stream_start() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg-1","model":"claude-sonnet"}}}"#).unwrap(),
-            OutputFrame::MessageStarted {
-                message_id: "msg-1".into(),
-                model: "claude-sonnet".into()
-            }
-        );
-    }
-
-    #[test]
-    fn reads_tool_input_deltas_and_content_block_completion() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"command\":"}}}"#).unwrap(),
-            OutputFrame::ToolInputDelta {
-                block_index: 3,
-                partial_json: "{\"command\":".into()
-            }
-        );
-        assert_eq!(
-            parse_output_frame(
-                r#"{"type":"stream_event","event":{"type":"content_block_stop","index":3}}"#
-            )
-            .unwrap(),
-            OutputFrame::ContentBlockEnded { block_index: 3 }
-        );
-    }
-
-    #[test]
-    fn reads_tool_name_and_initial_input() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"pwd"}}}}"#).unwrap(),
-            OutputFrame::ToolUse {
-                block_index: 1,
-                id: "tool-1".into(),
-                name: "Bash".into(),
-                input: json!({"command":"pwd"})
-            }
-        );
-    }
-
-    #[test]
-    fn ignores_nested_subagent_streams() {
-        assert_eq!(
-            parse_output_frame(r#"{"type":"stream_event","parent_tool_use_id":"tool-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private child output"}}}"#).unwrap(),
-            OutputFrame::Other
-        );
+    fn each_frame_claude_streams_is_read_with_the_identity_it_carries() {
+        let request =
+            json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"git status"}});
+        let control = json!({"type":"control_request","request_id":"request-8","request":request})
+            .to_string();
+        let cases = [
+            (
+                r#"{"type":"system","subtype":"init","session_id":"session-1"}"#,
+                OutputFrame::Initialized { session_id: "session-1".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"message_start","message":{"id":"msg-1","model":"claude-sonnet"}}}"#,
+                OutputFrame::MessageStarted { message_id: "msg-1".into(), model: "claude-sonnet".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_delta","index":3,"delta":{"type":"input_json_delta","partial_json":"{\"command\":"}}}"#,
+                OutputFrame::ToolInputDelta { block_index: 3, partial_json: "{\"command\":".into() },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_stop","index":3}}"#,
+                OutputFrame::ContentBlockEnded { block_index: 3 },
+            ),
+            (
+                r#"{"type":"stream_event","event":{"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"tool-1","name":"Bash","input":{"command":"pwd"}}}}"#,
+                OutputFrame::ToolUse {
+                    block_index: 1,
+                    id: "tool-1".into(),
+                    name: "Bash".into(),
+                    input: json!({"command":"pwd"}),
+                },
+            ),
+            // A helper's nested stream is not this conversation's.
+            (
+                r#"{"type":"stream_event","parent_tool_use_id":"tool-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"private child output"}}}"#,
+                OutputFrame::Other,
+            ),
+            // The body of an approval request is kept whole, to answer it natively.
+            (
+                control.as_str(),
+                OutputFrame::ControlRequest { request_id: "request-8".into(), request },
+            ),
+        ];
+        for (line, frame) in cases {
+            assert_eq!(parse_output_frame(line).unwrap(), frame, "{line}");
+        }
     }
 
     #[test]
@@ -1087,80 +979,6 @@ mod tests {
             "x".repeat(MAX_FRAME_BYTES)
         );
         assert!(parse_output_frame(&frame).is_err());
-    }
-
-    #[test]
-    fn preserves_control_request_body_for_provider_native_approval() {
-        let request =
-            json!({"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"git status"}});
-        let frame = json!({"type":"control_request","request_id":"request-8","request":request});
-        assert_eq!(
-            parse_output_frame(&frame.to_string()).unwrap(),
-            OutputFrame::ControlRequest {
-                request_id: "request-8".into(),
-                request
-            }
-        );
-    }
-
-    #[test]
-    fn approvals_name_their_target_and_link_to_the_tool_step() {
-        let cases = [
-            (
-                "Bash",
-                json!({"command":"cargo test"}),
-                json!({"tool_use_id":"toolu_1"}),
-                "item/commandExecution/requestApproval",
-                "toolu_1",
-                "cargo test",
-                false,
-            ),
-            (
-                "Edit",
-                json!({"file_path":"src/a.rs","old_string":"x","new_string":"y"}),
-                json!({"tool_use_id":"toolu_2"}),
-                "item/fileChange/requestApproval",
-                "toolu_2",
-                "Edit: src/a.rs",
-                true,
-            ),
-            (
-                "Write",
-                json!({"file_path":"b.txt","content":"hi"}),
-                json!({}),
-                "item/fileChange/requestApproval",
-                "request-1",
-                "Write: b.txt",
-                true,
-            ),
-            (
-                "WebFetch",
-                json!({"url":"https://example.com"}),
-                json!({"tool_use_id":""}),
-                "item/commandExecution/requestApproval",
-                "request-1",
-                "WebFetch: https://example.com",
-                false,
-            ),
-            (
-                "Bash",
-                json!({"command":"ls"}),
-                json!({"tool_use_id":"bad\nid"}),
-                "item/commandExecution/requestApproval",
-                "request-1",
-                "ls",
-                false,
-            ),
-        ];
-        for (tool, input, request, method, item_id, command, has_changes) in cases {
-            let (got_method, params) =
-                approval_request("session", "turn", "request-1", &request, tool, &input);
-            assert_eq!(got_method, method, "{tool}");
-            assert_eq!(params["itemId"], item_id, "{tool}");
-            assert_eq!(params["command"], command, "{tool}");
-            assert_eq!(params.get("changes").is_some(), has_changes, "{tool}");
-            assert_eq!(params["turnId"], "turn");
-        }
     }
 
     #[test]

@@ -1,21 +1,19 @@
-/* The status icon (status-icon.tsx): one box, 16px unless a caller asks for less, holding a dot or the working ring.
-   The light moves in 16 steps a lap (about 15 frames a second): each step repaints the SVG, and a software painter pays
-   for every one (docs/PERFORMANCE.md). Every loop below rests while the window is hidden. The colours are the theme's roles:
-   needs you `--needs`, done `--done`, working `--working`, idle `--dim`, the ring's track `--line2`. */
-@keyframes mxSq { to { stroke-dashoffset: -100; } }
-@keyframes mxStatusPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
-.mx-status-icon { position: relative; flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; color: var(--dim); }
-/* The dot: a filled mark in the status colour, half the box (8px of 16). */
-.mx-status-icon:not(.is-working)::before { content: ''; width: 50%; height: 50%; background: currentColor; border-radius: 50%; }
-.mx-status-icon.is-needs { color: var(--needs); animation: mxStatusPulse 1.6s ease-in-out infinite; }
-.mx-status-icon.is-done { color: var(--done); }
-:root[data-corners="square"] .mx-status-icon::before { border-radius: 0; }
-/* Working: an 11px ring with a 2px stroke (a smaller box shrinks it), a lit arc running round a track. Square corners swap in a square path. */
-.mx-status-light { flex: none; width: 11px; height: 11px; max-width: 100%; max-height: 100%; overflow: visible; }
-.mx-status-light .mx-track { stroke: var(--line2); }
-.mx-status-light .mx-arc { stroke: var(--working); animation: mxSq 1.1s linear infinite; }
-.mx-status-light .mx-sq { display: none; }
-:root[data-corners="square"] .mx-status-light .mx-sq { display: inline; }
-:root[data-corners="square"] .mx-status-light .mx-round { display: none; }
-:root[data-reduced-motion="true"] .mx-status-icon, :root[data-reduced-motion="true"] .mx-status-light * { animation: none; }
-@media (prefers-reduced-motion: reduce) { .mx-status-icon, .mx-status-light * { animation: none; } }
+/* The status mark (status-icon.tsx): one box, 16px unless a caller asks for less, holding a 14px speech bubble or an 11px
+   spinner; a smaller box shrinks them. Each is drawn in `currentColor`, set here from the theme's status roles: needs you
+   `--needs`, done `--ok`, working `--working`. The spinner turns by `transform` alone, which the compositor moves without
+   repainting the mark (docs/PERFORMANCE.md), and rests while the window is hidden (workspace.css). */
+@keyframes mxStatusSpin { to { transform: rotate(360deg); } }
+.mx-status-icon { position: relative; flex: none; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; }
+.mx-status-icon.is-needs { color: var(--needs); }
+.mx-status-icon.is-done { color: var(--ok); }
+.mx-status-icon.is-working { color: var(--working); }
+.mx-status-bubble { flex: none; width: 14px; height: 14px; max-width: 100%; max-height: 100%; overflow: visible; }
+.mx-status-light { flex: none; width: 11px; height: 11px; max-width: 100%; max-height: 100%; overflow: visible; animation: mxStatusSpin var(--t-spin, .9s) linear infinite; }
+.mx-status-track { opacity: .28; }
+/* With motion reduced the ring stands still and is lit all the way round, so it does not read as a stuck spinner. */
+:root[data-reduced-motion="true"] .mx-status-light, .mx-app[data-motion="reduced"] .mx-status-light { animation: none; }
+:root[data-reduced-motion="true"] .mx-status-track, .mx-app[data-motion="reduced"] .mx-status-track { opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .mx-status-light { animation: none; }
+  .mx-status-track { opacity: 1; }
+}

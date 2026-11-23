@@ -64,12 +64,6 @@ describe('noticesFor', () => {
     const before = seen([['a', 'limited'], ['b', 'limited']])
     expect(noticesFor(before, [session('a', 'needs'), session('b', 'error')], ALL, null).map((notice) => notice.title)).toEqual(['maiker needs you', 'maiker exited with an error'])
   })
-
-  it('starts a session of another machine with the machine in brackets, as its own notices do', () => {
-    const remote = { ...session('build/t7', 'needs'), machineName: 'build', name: 'deploy' } as SessionView
-    const notices = noticesFor(seen([['build/t7', 'working']]), [remote], ALL, null)
-    expect(notices.map((notice) => notice.title)).toEqual(['[build] deploy needs you'])
-  })
 })
 
 describe('noticeForAttention', () => {

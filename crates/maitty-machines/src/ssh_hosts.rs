@@ -372,100 +372,112 @@ mod tests {
 
     const ROOT: &str = "/home/me/.ssh/config";
 
+    /// Config files by path, as `unix` takes them.
+    type Files<'a> = &'a [(&'a str, &'a str)];
+
+    fn host(alias: &str, host_name: Option<&str>, user: Option<&str>) -> SshHost {
+        SshHost {
+            alias: alias.into(),
+            host_name: host_name.map(String::from),
+            user: user.map(String::from),
+        }
+    }
+
     #[test]
-    fn reads_host_name_and_user() {
-        let hosts = unix(&[(ROOT, "Host box\n  HostName 10.0.0.5\n  User ana\n")]);
-        assert_eq!(
-            hosts,
-            vec![SshHost {
-                alias: "box".into(),
-                host_name: Some("10.0.0.5".into()),
-                user: Some("ana".into()),
-            }]
+    fn a_config_gives_each_named_host_its_first_host_name_and_user() {
+        let malformed = format!(
+            "Host\nUser\nHost \"open\nHost nul\0\nHost {}\n=\n\"\nHost ok\n  HostName 1.1.1.1\n",
+            "x".repeat(MAX_LINE_BYTES + 1)
         );
+        let cases: Vec<(&str, &str, Vec<SshHost>)> = vec![
+            ("plain", "Host box\n  HostName 10.0.0.5\n  User ana\n", vec![host("box", Some("10.0.0.5"), Some("ana"))]),
+            (
+                "patterns are skipped, named aliases beside them stay",
+                "Host *\nHost *.corp\nHost !x\nHost a b*\nHost c?\nHost d\n",
+                vec![host("a", None, None), host("d", None, None)],
+            ),
+            (
+                "settings under a pattern or before any host are not applied",
+                "User root\nHost *\n  User wild\nHost box\n",
+                vec![host("box", None, None)],
+            ),
+            ("equals with or without spaces", "Host=foo\nHostName = 1.2.3.4\nUser=bob\n", vec![host("foo", Some("1.2.3.4"), Some("bob"))]),
+            ("keywords ignore case", "HOST box\nhostname h\nUSER u\n", vec![host("box", Some("h"), Some("u"))]),
+            (
+                "comments drop, a hash inside a word stays",
+                "# Host hidden\n   # indented\nHost box # trailing\nUser a#b\nHostName \"h #1\"\n",
+                vec![host("box", Some("h #1"), Some("a#b"))],
+            ),
+            ("malformed lines are skipped", malformed.as_str(), vec![host("ok", Some("1.1.1.1"), None)]),
+            (
+                "a repeated alias keeps the first",
+                "Host box\nHostName first\nHost box\nHostName second\nUser late\n",
+                vec![host("box", Some("first"), None)],
+            ),
+            ("the first value in a block wins", "Host box\nUser a\nUser b\nHostName x\nHostName y\n", vec![host("box", Some("x"), Some("a"))]),
+            (
+                "aliases on one line share settings",
+                "Host a b\n  User shared\n",
+                vec![host("a", None, Some("shared")), host("b", None, Some("shared"))],
+            ),
+            (
+                "a match block ends the host and is ignored",
+                "Host a\nUser one\nMatch host b\nUser two\nHostName nope\nHost c\n",
+                vec![host("a", None, Some("one")), host("c", None, None)],
+            ),
+            (
+                "an alias or value with a control character is dropped",
+                "Host bad\u{1b}[31m ok\nHostName x\u{7}y\nUser fine\n",
+                vec![host("ok", None, Some("fine"))],
+            ),
+        ];
+        for (case, text, expected) in cases {
+            assert_eq!(unix(&[(ROOT, text)]), expected, "{case}");
+        }
     }
 
     #[test]
-    fn follows_an_include_chain() {
-        let hosts = unix(&[
-            (ROOT, "Host a\nInclude /x/b\n"),
-            ("/x/b", "Host b\nInclude /x/c\n"),
-            ("/x/c", "Host c\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["a", "b", "c"]);
-    }
-
-    #[test]
-    fn glob_include_is_read_in_lexical_order() {
-        let hosts = unix(&[
-            (ROOT, "Include config.d/*\nHost last\n"),
-            ("/home/me/.ssh/config.d/20-b", "Host b\n"),
-            ("/home/me/.ssh/config.d/10-a", "Host a\n"),
-            ("/home/me/.ssh/config.d/sub/z", "Host z\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["a", "b", "last"]);
-    }
-
-    #[test]
-    fn patterns_are_skipped_but_named_aliases_beside_them_stay() {
-        let hosts = unix(&[(
-            ROOT,
-            "Host *\nHost *.corp\nHost !x\nHost a b*\nHost c?\nHost d\n",
-        )]);
-        assert_eq!(aliases(&hosts), ["a", "d"]);
-    }
-
-    #[test]
-    fn settings_under_a_pattern_or_before_any_host_are_not_applied() {
-        let hosts = unix(&[(ROOT, "User root\nHost *\n  User wild\nHost box\n")]);
-        assert_eq!(hosts[0].user, None);
-    }
-
-    #[test]
-    fn quoted_include_path_may_hold_spaces() {
-        let hosts = unix(&[
-            (ROOT, "Include \"/my configs/extra\" /x/plain\n"),
-            ("/my configs/extra", "Host spaced\n"),
-            ("/x/plain", "Host plain\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["spaced", "plain"]);
-    }
-
-    #[test]
-    fn equals_syntax_works_with_or_without_spaces() {
-        let hosts = unix(&[(ROOT, "Host=foo\nHostName = 1.2.3.4\nUser=bob\n")]);
-        assert_eq!(hosts[0].alias, "foo");
-        assert_eq!(hosts[0].host_name.as_deref(), Some("1.2.3.4"));
-        assert_eq!(hosts[0].user.as_deref(), Some("bob"));
-    }
-
-    #[test]
-    fn keywords_ignore_case() {
-        let hosts = unix(&[(ROOT, "HOST box\nhostname h\nUSER u\n")]);
-        assert_eq!(hosts[0].host_name.as_deref(), Some("h"));
-        assert_eq!(hosts[0].user.as_deref(), Some("u"));
-    }
-
-    #[test]
-    fn comments_are_dropped_but_a_hash_inside_a_word_is_kept() {
-        let hosts = unix(&[(
-            ROOT,
-            "# Host hidden\n   # indented\nHost box # trailing\nUser a#b\nHostName \"h #1\"\n",
-        )]);
-        assert_eq!(aliases(&hosts), ["box"]);
-        assert_eq!(hosts[0].user.as_deref(), Some("a#b"));
-        assert_eq!(hosts[0].host_name.as_deref(), Some("h #1"));
-    }
-
-    #[test]
-    fn malformed_lines_are_skipped_and_the_rest_still_reads() {
-        let huge = format!("Host {}", "x".repeat(MAX_LINE_BYTES + 1));
-        let text = format!(
-            "Host\nUser\nHost \"open\nHost nul\0\n{huge}\n=\n\"\nHost ok\n  HostName 1.1.1.1\n"
-        );
-        let hosts = unix(&[(ROOT, &text)]);
-        assert_eq!(aliases(&hosts), ["ok"]);
-        assert_eq!(hosts[0].host_name.as_deref(), Some("1.1.1.1"));
+    fn includes_are_followed_from_the_ssh_folder_in_lexical_order() {
+        let cases: [(&str, Files, &[&str]); 9] = [
+            ("a chain", &[(ROOT, "Host a\nInclude /x/b\n"), ("/x/b", "Host b\nInclude /x/c\n"), ("/x/c", "Host c\n")], &["a", "b", "c"]),
+            (
+                "a glob, not into sub-folders",
+                &[
+                    (ROOT, "Include config.d/*\nHost last\n"),
+                    ("/home/me/.ssh/config.d/20-b", "Host b\n"),
+                    ("/home/me/.ssh/config.d/10-a", "Host a\n"),
+                    ("/home/me/.ssh/config.d/sub/z", "Host z\n"),
+                ],
+                &["a", "b", "last"],
+            ),
+            (
+                "a quoted path may hold spaces",
+                &[(ROOT, "Include \"/my configs/extra\" /x/plain\n"), ("/my configs/extra", "Host spaced\n"), ("/x/plain", "Host plain\n")],
+                &["spaced", "plain"],
+            ),
+            (
+                "a relative path is under the ssh folder",
+                &[(ROOT, "Include extra\n"), ("/home/me/.ssh/extra", "Host rel\n"), ("/home/me/extra", "Host wrong\n")],
+                &["rel"],
+            ),
+            ("tilde means home", &[(ROOT, "Include ~/other/cfg\n"), ("/home/me/other/cfg", "Host tilde\n")], &["tilde"]),
+            (
+                "environment variables are not expanded",
+                &[
+                    (ROOT, "Include %USERPROFILE%/x $HOME/y\n"),
+                    ("/home/me/.ssh/%USERPROFILE%/x", "Host a\n"),
+                    ("/home/me/.ssh/$HOME/y", "Host b\n"),
+                    ("/home/me/y", "Host c\n"),
+                ],
+                &["a", "b"],
+            ),
+            ("a missing include is skipped", &[(ROOT, "Include /nope\nInclude gone/*\nHost a\n")], &["a"]),
+            ("a file including itself ends", &[(ROOT, "Host a\nInclude /home/me/.ssh/config\nHost b\n")], &["a", "b"]),
+            ("a missing root gives no hosts", &[], &[]),
+        ];
+        for (case, files, expected) in cases {
+            assert_eq!(aliases(&unix(files)), expected, "{case}");
+        }
     }
 
     #[test]
@@ -484,89 +496,6 @@ mod tests {
         let hosts = unix(&files);
         assert_eq!(hosts.len(), MAX_INCLUDE_DEPTH);
         assert_eq!(hosts.last().map(|h| h.alias.as_str()), Some("h15"));
-    }
-
-    #[test]
-    fn a_file_including_itself_ends() {
-        let hosts = unix(&[(ROOT, "Host a\nInclude /home/me/.ssh/config\nHost b\n")]);
-        assert_eq!(aliases(&hosts), ["a", "b"]);
-    }
-
-    #[test]
-    fn a_repeated_alias_keeps_the_first() {
-        let hosts = unix(&[(
-            ROOT,
-            "Host box\nHostName first\nHost box\nHostName second\nUser late\n",
-        )]);
-        assert_eq!(hosts.len(), 1);
-        assert_eq!(hosts[0].host_name.as_deref(), Some("first"));
-        assert_eq!(hosts[0].user, None);
-    }
-
-    #[test]
-    fn the_first_value_in_a_block_wins() {
-        let hosts = unix(&[(ROOT, "Host box\nUser a\nUser b\nHostName x\nHostName y\n")]);
-        assert_eq!(hosts[0].user.as_deref(), Some("a"));
-        assert_eq!(hosts[0].host_name.as_deref(), Some("x"));
-    }
-
-    #[test]
-    fn a_host_line_lists_several_aliases_that_share_settings() {
-        let hosts = unix(&[(ROOT, "Host a b\n  User shared\n")]);
-        assert_eq!(aliases(&hosts), ["a", "b"]);
-        assert!(hosts.iter().all(|h| h.user.as_deref() == Some("shared")));
-    }
-
-    #[test]
-    fn a_match_block_ends_the_host_and_its_settings_are_ignored() {
-        let hosts = unix(&[(
-            ROOT,
-            "Host a\nUser one\nMatch host b\nUser two\nHostName nope\nHost c\n",
-        )]);
-        assert_eq!(aliases(&hosts), ["a", "c"]);
-        assert_eq!(hosts[0].user.as_deref(), Some("one"));
-        assert_eq!(hosts[0].host_name, None);
-    }
-
-    #[test]
-    fn a_relative_include_is_under_the_ssh_folder() {
-        let hosts = unix(&[
-            (ROOT, "Include extra\n"),
-            ("/home/me/.ssh/extra", "Host rel\n"),
-            ("/home/me/extra", "Host wrong\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["rel"]);
-    }
-
-    #[test]
-    fn tilde_means_home() {
-        let hosts = unix(&[
-            (ROOT, "Include ~/other/cfg\n"),
-            ("/home/me/other/cfg", "Host tilde\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["tilde"]);
-    }
-
-    #[test]
-    fn environment_variables_are_not_expanded() {
-        let hosts = unix(&[
-            (ROOT, "Include %USERPROFILE%/x $HOME/y\n"),
-            ("/home/me/.ssh/%USERPROFILE%/x", "Host a\n"),
-            ("/home/me/.ssh/$HOME/y", "Host b\n"),
-            ("/home/me/y", "Host c\n"),
-        ]);
-        assert_eq!(aliases(&hosts), ["a", "b"]);
-    }
-
-    #[test]
-    fn a_missing_include_is_skipped() {
-        let hosts = unix(&[(ROOT, "Include /nope\nInclude gone/*\nHost a\n")]);
-        assert_eq!(aliases(&hosts), ["a"]);
-    }
-
-    #[test]
-    fn a_missing_root_gives_no_hosts() {
-        assert!(unix(&[]).is_empty());
     }
 
     #[test]
@@ -589,14 +518,6 @@ mod tests {
             &files,
         );
         assert_eq!(aliases(&hosts), ["glob", "back", "tilde", "rel"]);
-    }
-
-    #[test]
-    fn an_alias_with_a_control_character_is_dropped() {
-        let hosts = unix(&[(ROOT, "Host bad\u{1b}[31m ok\nHostName x\u{7}y\nUser fine\n")]);
-        assert_eq!(aliases(&hosts), ["ok"]);
-        assert_eq!(hosts[0].host_name, None);
-        assert_eq!(hosts[0].user.as_deref(), Some("fine"));
     }
 
     #[test]

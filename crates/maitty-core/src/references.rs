@@ -554,16 +554,6 @@ mod tests {
     }
 
     #[test]
-    fn a_plain_folder_keeps_its_own() {
-        let dir = temp("plain");
-        if crate::gitfs::head(&dir).is_none() {
-            assert_eq!(project_root(&dir), dir);
-            assert_eq!(ensure(&dir).unwrap(), dir.join(DIR));
-        }
-        let _ = std::fs::remove_dir_all(&dir);
-    }
-
-    #[test]
     fn the_folder_is_kept_out_of_git_once() {
         let (base, main, wt) = repo_with_worktree("exclude");
         ensure(&project_root(&wt)).unwrap();

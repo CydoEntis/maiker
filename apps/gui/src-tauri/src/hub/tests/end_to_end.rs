@@ -90,11 +90,9 @@ impl Host {
                 | Reaction::GitHubRepos { .. }
                 | Reaction::GitHubOwners { .. }
                 | Reaction::AgentCommands { .. }
-                | Reaction::Repositories { .. }
                 | Reaction::Extensions { .. }
                 | Reaction::CloneProgress { .. }
                 | Reaction::FolderGit { .. }
-                | Reaction::MachineFacts { .. }
                 | Reaction::Settings(_) => {}
                 Reaction::ConversationChanged { conversation, generation } => self.changed.push((conversation, generation)),
                 Reaction::Sessions { machine, snapshot } => {
@@ -571,6 +569,7 @@ async fn the_window_is_told_when_a_chat_of_this_computers_daemon_changes() {
     };
     command(Command::ConversationStart {
         target: StartTarget::Create(LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable,
             config_root: root.clone(),

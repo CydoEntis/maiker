@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chatAvailability, effectiveView, noChatReason, openViewFor } from './chatView'
+import { chatAvailability, effectiveView, openViewFor } from './chatView'
 
 const LINK = { conversation: 7, generation: 2 }
 
@@ -45,11 +45,5 @@ describe('effectiveView', () => {
   it('keeps a shell and an agent the app does not read in the terminal', () => {
     expect(effectiveView({ kind: 'shell' }, 'chat')).toBe('terminal')
     expect(effectiveView({ kind: 'unsupported', agent: 'opencode' }, 'chat')).toBe('terminal')
-  })
-})
-
-describe('noChatReason', () => {
-  it('names the shell case the way the design does', () => {
-    expect(noChatReason({ kind: 'shell' })).toContain('Chat view is for agent sessions')
   })
 })

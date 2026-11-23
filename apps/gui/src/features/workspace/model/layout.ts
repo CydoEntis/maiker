@@ -1,3 +1,5 @@
+import type { FileAsk } from '@/features/documents/documentEdit'
+
 /**
  * The window's split layouts, kept in this app only (sessions are the daemon's). An arrangement is
  * one to four panes in columns, each pane naming a session by id. There is no tab bar: the sidebar
@@ -6,8 +8,12 @@
  */
 export const MAX_PANES = 4
 
-/** A markdown file shown in a pane instead of a terminal or chat: `path` is relative to the checkout of `sessionId`'s pane, which the pane sits beside. */
-export type PaneDocument = { path: string }
+/**
+ * A file shown in a pane instead of a terminal or chat (the file pane): `path` is relative to the checkout of
+ * `sessionId`'s pane, which the pane sits beside. `ask` is what whoever opened it asked for (a mode, a line); it is
+ * not kept between runs.
+ */
+export type PaneDocument = { path: string; ask?: FileAsk }
 /** `h` is the pane's relative height in its column; absent means an equal share. `doc` makes it a document pane (`sessionId` is the session it belongs to, not one it shows). */
 export type PaneSlot = { id: string; sessionId: string; col: number; h?: number; doc?: PaneDocument }
 /** `widths` are the columns' relative widths (by column index); absent means equal. `broadcast` sends a typed line to every idle pane. */
@@ -93,17 +99,18 @@ export function splitPane(layout: Layout, paneId: string | null, direction: Spli
 }
 
 /**
- * Shows a markdown file of `sessionId`'s checkout in a pane beside the pane that shows that session: a new column to
- * its right, which takes the focus. The arrangement's own document pane is pointed at the file instead when it already
+ * Shows a file of `sessionId`'s checkout in the file pane, beside the pane that shows that session: a new column to
+ * its right, which takes the focus. The arrangement's own file pane is pointed at the file instead when it already
  * has one, and a full arrangement (`MAX_PANES`) is left as it is: `null` then, so the caller can say why.
  */
-export function openDocumentBeside(layout: Layout, sessionId: string, path: string, makeId: MakeId): Layout | null {
+export function openDocumentBeside(layout: Layout, sessionId: string, path: string, makeId: MakeId, ask?: FileAsk): Layout | null {
+  const doc: PaneDocument = ask === undefined ? { path } : { path, ask }
   const tab = layout.arrangements.find((candidate) => candidate.panes.some((pane) => pane.sessionId === sessionId && !pane.doc))
   const source = tab?.panes.find((pane) => pane.sessionId === sessionId && !pane.doc)
   if (!tab || !source) return null
   const existing = tab.panes.find((pane) => pane.doc && pane.sessionId === sessionId)
   if (existing) {
-    const panes = tab.panes.map((pane) => (pane.id === existing.id ? { ...pane, doc: { path } } : pane))
+    const panes = tab.panes.map((pane) => (pane.id === existing.id ? { ...pane, doc } : pane))
     return { ...replaceArrangement(layout, { ...tab, panes, focus: existing.id, max: tab.max === null ? null : existing.id }), activeId: tab.id }
   }
   if (tab.panes.length >= MAX_PANES) return null
@@ -111,7 +118,7 @@ export function openDocumentBeside(layout: Layout, sessionId: string, path: stri
   const next = splitPane({ ...shown, arrangements: shown.arrangements }, source.id, 'right', sessionId, makeId)
   const after = activeArrangement(next)
   if (!after || next === shown) return null
-  const panes = after.panes.map((pane) => (pane.id === after.focus ? { ...pane, doc: { path } } : pane))
+  const panes = after.panes.map((pane) => (pane.id === after.focus ? { ...pane, doc } : pane))
   return replaceArrangement(next, { ...after, panes })
 }
 

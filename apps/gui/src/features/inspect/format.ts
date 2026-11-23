@@ -32,3 +32,13 @@ export function parentOf(path: string): string {
 export function joinPath(folder: string, name: string): string {
   return folder ? `${folder}/${name}` : name
 }
+
+/**
+ * A project file's full path on its machine: the checkout's folder, then the project path (which is written with `/`)
+ * in that folder's own separators, so a path copied from a Windows checkout is one Windows takes.
+ */
+export function fullPathOf(root: string, path: string): string {
+  const separator = root.includes('\\') && !root.includes('/') ? '\\' : '/'
+  const folder = root.endsWith(separator) ? root.slice(0, -1) : root
+  return `${folder}${separator}${path.split('/').join(separator)}`
+}

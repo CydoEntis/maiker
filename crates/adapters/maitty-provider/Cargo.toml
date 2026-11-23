@@ -1,0 +1,11 @@
+[package]
+name = "maitty-provider"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+anyhow = "1"
+maitty-shared = { path = "../../maitty-shared" }
+regex = "1"
+serde_json = "1"

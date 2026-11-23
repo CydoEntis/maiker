@@ -2,6 +2,7 @@
 //! state of each machine, and count the typing a down machine could not take.
 
 use super::link::{ConnectionState, LinkEvent};
+use crate::link_failure::{FailureClass, Subject, sentence_here};
 use super::*;
 use maitty_settings::config::MachineDef;
 
@@ -65,17 +66,32 @@ impl App {
                 format!("Lost the connection to {name}; reconnecting"),
                 false,
             ),
-            ConnectionState::NeedsLogin { why, .. } => self.notify(format!("{name}: {why}"), true),
+            ConnectionState::NeedsLogin { failure } => {
+                let said = self.failure_sentence(&name, &failure);
+                self.notify(said, true)
+            }
             // The fix text names a command; the window has a click for it.
             ConnectionState::NeedsUpdate { .. } => {
                 if let Some(fix) = self.machine_fix(machine) {
                     self.notify(fix.notice(&name), true);
                 }
             }
-            ConnectionState::Unreachable { why, .. } => {
-                self.notify(format!("{name} is unreachable: {why}"), true)
+            ConnectionState::Unreachable { failure, .. } => {
+                let said = self.failure_sentence(&name, &failure);
+                self.notify(said, true)
             }
         }
+    }
+
+    /// The shared sentence for a machine's failure, with its address from the config when it
+    /// is there.
+    fn failure_sentence(&self, name: &str, failure: &FailureClass) -> String {
+        let def = self.cfg.machines.iter().find(|def| def.name.eq_ignore_ascii_case(name));
+        let subject = match def {
+            Some(def) => Subject::of_def(def),
+            None => Subject { name, target: None, port: None },
+        };
+        sentence_here(failure, &subject)
     }
 
     fn tell_connected(&mut self, machine: MachineId, name: &str) {

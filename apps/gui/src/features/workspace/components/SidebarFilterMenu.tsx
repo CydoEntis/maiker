@@ -1,78 +1,87 @@
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { Popover } from 'radix-ui'
+import { IconButton } from '@/components/ui/icon-button'
 import { PopupContent } from '@/components/ui/popup'
-import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
-import { DEFAULT_SIDEBAR_SORT, SIDEBAR_GROUPINGS, SIDEBAR_SORTS, type ProjectChoice, type SidebarGrouping, type SidebarSort } from '../model/sidebar'
-import { FolderMark, Icon } from './glyphs'
+import { SIDEBAR_SORTS, type MachineChoice, type ProjectChoice, type SidebarFilter, type SidebarSort } from '../model/sidebarTree'
+import { Icon, MachineIcon } from './glyphs'
+import { ProjectBadge } from './ProjectBadge'
 
 /** The project list shows this many rows before it scrolls; with more projects than this the search box says how many. */
 export const PROJECT_ROWS_SHOWN = 6
 
-/** What the menu starts as: Reset puts these back. */
-export const DEFAULT_GROUPING: SidebarGrouping = 'status'
-
 type Props = {
-  grouping: SidebarGrouping
-  onGrouping: (grouping: SidebarGrouping) => void
+  /** Every opened project by name, in the order they were opened. */
+  projects: readonly ProjectChoice[]
+  /** Every configured machine, this computer first. */
+  machines: readonly MachineChoice[]
+  filter: SidebarFilter
+  onFilter: (filter: SidebarFilter) => void
+  /** How the projects are ordered; a pick is kept with the settings. */
   sort: SidebarSort
   onSort: (sort: SidebarSort) => void
-  /** Every project that has a session, the busiest first. */
-  projects: readonly ProjectChoice[]
-  /** The project the list is narrowed to, or null for all of them. */
-  project: string | null
-  onProject: (project: string | null) => void
 }
 
-function isGrouping(value: string): value is SidebarGrouping {
-  return SIDEBAR_GROUPINGS.some(([grouping]) => grouping === value)
-}
-
-function isSort(value: string): value is SidebarSort {
-  return SIDEBAR_SORTS.some(([sort]) => sort === value)
-}
+const SORT_WORDS: Readonly<Record<SidebarSort, string>> = { recent: 'Recently opened', name: 'Name, A to Z', machine: 'Machine' }
 
 /**
- * The sidebar's ≡ menu: how the headings group the rows, how rows sort, and which project shows. A choice applies at once
- * and the menu stays open; Reset appears when anything differs from the start. It grows from the button's bottom-left corner.
+ * The sidebar's filter: how its projects are ordered, and which project and which machine it shows. A pick applies at once
+ * and the menu stays open; Reset appears while anything is narrowed. The machines are offered only once there is more
+ * than this computer, and ordering by machine only then too.
  */
-export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects, project, onProject }: Props) {
+export function SidebarFilterMenu({ projects, machines, filter, onFilter, sort, onSort }: Props) {
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
   const matching = projects.filter((choice) => needle === '' || choice.name.toLowerCase().includes(needle))
-  // The button lights up for a narrowed or re-sorted list; a changed grouping is plain to see from the headings.
-  const narrowed = sort !== DEFAULT_SIDEBAR_SORT || project !== null
-  const dirty = narrowed || grouping !== DEFAULT_GROUPING
-  const label = `Filter and group: ${project ?? 'All projects'}`
+  const narrowed = filter.project !== null || filter.machine !== null
+  const total = projects.reduce((sum, choice) => sum + choice.count, 0)
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <button type="button" className={`mx-head-button${narrowed ? ' is-on' : ''}`} data-on={narrowed} aria-label={label} title="Filter and group"><Icon name="filter" /></button>
+        <IconButton large label={narrowed ? 'Sort and filter (on)' : 'Sort and filter'} tip="Sort, or filter by project or machine" on={narrowed}><Icon name="filter" /></IconButton>
       </Popover.Trigger>
-      <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Group, sort and filter" className="mx-grp-menu">
-        <div className="mx-grp-row">
-          <span className="mx-grp-label">Group</span>
-          <Segmented aria-label="Group" full value={grouping} onValueChange={(next) => { if (isGrouping(next)) onGrouping(next) }}>
-            {SIDEBAR_GROUPINGS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
-          </Segmented>
+      <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Sort and filter the sidebar" className="mx-sbf">
+        <div className="mx-sbf-label" aria-hidden="true">Sort by</div>
+        <div className="mx-sbf-list" role="group" aria-label="Sort by">
+          {SIDEBAR_SORTS.filter((each) => each !== 'machine' || machines.length > 1 || sort === 'machine').map((each) => (
+            <button key={each} type="button" aria-pressed={sort === each} className={`mx-sbf-choice${sort === each ? ' is-on' : ''}`} onClick={() => { onSort(each) }}>
+              <span className="mx-sbf-name">{SORT_WORDS[each]}</span>
+            </button>
+          ))}
         </div>
-        <div className="mx-grp-row">
-          <span className="mx-grp-label">Sort</span>
-          <Segmented aria-label="Sort" full value={sort} onValueChange={(next) => { if (isSort(next)) onSort(next) }}>
-            {SIDEBAR_SORTS.map(([key, name]) => <SegmentedItem key={key} value={key}>{name}</SegmentedItem>)}
-          </Segmented>
-        </div>
-        <label className="mx-grp-search">
-          <Icon name="search" size={12} />
+        <div className="mx-sbf-label" aria-hidden="true">Show</div>
+        <label className="mx-sbf-search">
+          <Icon name="search" size={13} />
           <input value={query} onChange={(event) => { setQuery(event.target.value) }} placeholder={projects.length > PROJECT_ROWS_SHOWN ? `Find one of ${String(projects.length)} projects` : 'Filter projects'} aria-label="Filter projects" spellCheck={false} />
         </label>
-        <div className="mx-grp-projects" role="group" aria-label="Show projects">
-          {needle === '' && <ProjectButton name="All projects" count={projects.reduce((total, choice) => total + choice.count, 0)} on={project === null} onPick={() => { onProject(null) }} />}
-          {matching.map((choice) => <ProjectButton key={choice.name} name={choice.name} count={choice.count} on={project === choice.name} onPick={() => { onProject(choice.name); setQuery('') }} />)}
-          {matching.length === 0 && needle !== '' && <div className="mx-grp-none">No project matches.</div>}
+        <div className="mx-sbf-list is-projects" role="group" aria-label="Projects">
+          {needle === '' && <Choice name="All projects" count={total} on={filter.project === null} onPick={() => { onFilter({ ...filter, project: null }) }} />}
+          {matching.map((choice) => (
+            <Choice key={choice.name} name={choice.name} count={choice.count} on={filter.project === choice.name} mark={<ProjectBadge name={choice.name} />} onPick={() => { onFilter({ ...filter, project: choice.name }); setQuery('') }} />
+          ))}
+          {matching.length === 0 && needle !== '' && <div className="mx-sbf-none">No project matches.</div>}
         </div>
-        {dirty && (
-          <div className="mx-grp-foot">
-            <button type="button" className="mx-grp-reset" onClick={() => { onGrouping(DEFAULT_GROUPING); onSort(DEFAULT_SIDEBAR_SORT); onProject(null); setQuery('') }}>Reset</button>
+        {machines.length > 1 && (
+          <>
+            <div className="mx-sbf-label" aria-hidden="true">Machines</div>
+            <div className="mx-sbf-list" role="group" aria-label="Machines">
+              {machines.map((choice) => (
+                <Choice
+                  key={choice.key}
+                  name={choice.label}
+                  count={choice.count}
+                  note={choice.down ? 'offline' : undefined}
+                  on={filter.machine === choice.key}
+                  mark={<span className={`mx-sbf-machine${choice.down ? ' is-down' : ''}`}><MachineIcon remote={choice.remote} /></span>}
+                  // A second press on the machine picked shows every machine again: there is no "All machines" row.
+                  onPick={() => { onFilter({ ...filter, machine: filter.machine === choice.key ? null : choice.key }) }}
+                />
+              ))}
+            </div>
+          </>
+        )}
+        {narrowed && (
+          <div className="mx-sbf-foot">
+            <button type="button" className="mx-sbf-reset" onClick={() => { onFilter({ project: null, machine: null }); setQuery('') }}>Reset</button>
           </div>
         )}
       </PopupContent>
@@ -80,12 +89,13 @@ export function SidebarFilterMenu({ grouping, onGrouping, sort, onSort, projects
   )
 }
 
-function ProjectButton({ name, count, on, onPick }: { name: string; count: number; on: boolean; onPick: () => void }) {
+function Choice({ name, count, on, mark, note, onPick }: { name: string; count: number; on: boolean; mark?: ReactNode; note?: string | undefined; onPick: () => void }) {
   return (
-    <button type="button" className={`mx-grp-project${on ? ' is-on' : ''}`} aria-pressed={on} onClick={onPick}>
-      <FolderMark size={13} />
-      <span className="mx-grp-name">{name}</span>
-      <span className="mx-grp-count">{count}</span>
+    <button type="button" className={`mx-sbf-choice${on ? ' is-on' : ''}`} aria-pressed={on} onClick={onPick}>
+      {mark}
+      <span className="mx-sbf-name">{name}</span>
+      {note !== undefined && <span className="mx-sbf-note">{note}</span>}
+      <span className="mx-sbf-count">{count}</span>
     </button>
   )
 }

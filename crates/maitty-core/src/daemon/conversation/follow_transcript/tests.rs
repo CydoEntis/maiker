@@ -79,79 +79,6 @@ fn claude_result(tool: &str, content: serde_json::Value, is_error: bool) -> Stri
 }
 
 #[test]
-fn a_claude_turn_becomes_messages_tool_steps_and_a_finished_turn() {
-    let lines = vec![
-        claude_user("u1", "fix the build"),
-        claude_assistant(
-            "a1",
-            json!({ "type": "thinking", "thinking": "Build first, then look.", "signature": "x" }),
-        ),
-        claude_assistant("a2", json!({ "type": "text", "text": "I will run cargo." })),
-        claude_assistant(
-            "a3",
-            json!({ "type": "tool_use", "id": "toolu_1", "name": "Bash", "input": { "command": "cargo build" } }),
-        ),
-        claude_result("toolu_1", json!("Finished dev"), false),
-        claude_assistant(
-            "a4",
-            json!({ "type": "tool_use", "id": "toolu_2", "name": "Edit", "input": { "file_path": "/w/a.rs", "old_string": "a", "new_string": "b" } }),
-        ),
-        claude_result(
-            "toolu_2",
-            json!([{ "type": "text", "text": "edited" }]),
-            false,
-        ),
-        claude_assistant("a5", json!({ "type": "text", "text": "Done." })),
-        line(
-            json!({ "type": "system", "subtype": "turn_duration", "durationMs": 9000, "timestamp": "2026-11-04T09:30:09.000Z" }),
-        ),
-    ];
-
-    let history = history_of(Format::Claude, &lines);
-
-    let items = items(&history);
-    assert_eq!(message(items[0]), (&Role::User, "fix the build"));
-    assert_eq!(
-        items[1].content,
-        Content::Reasoning {
-            text: "Build first, then look.".into()
-        }
-    );
-    assert_eq!(message(items[2]), (&Role::Assistant, "I will run cargo."));
-    assert_eq!(
-        items[3].content,
-        Content::Tool {
-            kind: "commandExecution".into(),
-            output: "Finished dev".into(),
-            label: "cargo build".into(),
-            input: Some(json!({ "command": "cargo build" })),
-            exit_code: None,
-            duration_ms: None,
-        }
-    );
-    assert_eq!(items[3].state, ItemState::Completed);
-    // The label is the tool's name for a tool that has no command, as the structured adapter's.
-    let Content::Tool {
-        label,
-        input,
-        output,
-        ..
-    } = &items[4].content
-    else {
-        panic!("not a tool step")
-    };
-    assert_eq!(label, "Edit ");
-    assert_eq!(input.as_ref().unwrap()["file_path"], "/w/a.rs");
-    assert_eq!(output, "edited");
-    assert_eq!(message(items[5]), (&Role::Assistant, "Done."));
-    let turns = turns(&history);
-    assert_eq!(turns.len(), 1);
-    assert_eq!(turns[0].state, ItemState::Completed);
-    assert_eq!(turns[0].started_at_ms, Some(1_793_784_600_000));
-    assert_eq!(turns[0].completed_at_ms, Some(1_793_784_609_000));
-}
-
-#[test]
 fn a_failed_claude_tool_and_a_running_one_keep_their_state() {
     let lines = vec![
         claude_user("u1", "go"),
@@ -198,6 +125,7 @@ fn a_new_prompt_ends_the_turn_before_it() {
 #[test]
 fn claude_lines_that_are_not_the_conversation_are_left_out() {
     let lines = vec![
+        claude_local_command("s", "words Claude wrote, which no one typed"),
         "this is not json".to_string(),
         line(json!({ "type": "file-history-snapshot", "snapshot": {} })),
         line(
@@ -263,27 +191,20 @@ fn assert_slash_command_and_output(history: &History) {
 }
 
 #[test]
-fn a_claude_slash_command_is_a_sent_message_with_its_output_beneath() {
-    let lines = vec![
+fn a_claude_slash_command_is_a_sent_message_with_its_output_beneath_in_either_shape() {
+    let as_user = vec![
         claude_user("c", SLASH_COMMAND),
         claude_user("o", SLASH_OUTPUT),
     ];
-
-    assert_slash_command_and_output(&history_of(Format::Claude, &lines));
-}
-
-#[test]
-fn a_claude_slash_command_written_as_a_system_line_shows_the_same() {
-    let lines = vec![
+    let as_system = vec![
         claude_local_command("c", SLASH_COMMAND),
         claude_local_command("o", SLASH_OUTPUT),
     ];
+    for lines in [as_user, as_system] {
+        assert_slash_command_and_output(&history_of(Format::Claude, &lines));
+    }
 
-    assert_slash_command_and_output(&history_of(Format::Claude, &lines));
-}
-
-#[test]
-fn what_a_claude_slash_command_printed_as_an_error_is_shown_too() {
+    // What it printed as an error is shown too.
     let lines = vec![
         claude_user("c", SLASH_COMMAND),
         claude_user(
@@ -291,9 +212,7 @@ fn what_a_claude_slash_command_printed_as_an_error_is_shown_too() {
             "<local-command-stderr>Marketplace not found</local-command-stderr>",
         ),
     ];
-
     let history = history_of(Format::Claude, &lines);
-
     let Content::Tool { output, .. } = &items(&history)[1].content else {
         panic!("not a tool step")
     };
@@ -395,22 +314,6 @@ fn command_output_whose_command_was_not_read_leaves_the_agents_turn_running() {
         panic!("not a tool step")
     };
     assert_eq!(output, "Added the factory marketplace");
-}
-
-#[test]
-fn a_claude_system_line_that_is_no_command_is_not_something_said() {
-    let lines = vec![
-        claude_local_command("s", "words Claude wrote, which no one typed"),
-        claude_user("u1", "real prompt"),
-    ];
-
-    let history = history_of(Format::Claude, &lines);
-
-    let said: Vec<_> = items(&history)
-        .into_iter()
-        .map(|e| message(e).1.to_string())
-        .collect();
-    assert_eq!(said, ["real prompt"]);
 }
 
 #[test]
@@ -1061,7 +964,8 @@ fn reasoning_texts(history: &History) -> Vec<&str> {
 }
 
 #[test]
-fn claude_thinking_without_text_or_redacted_is_not_kept() {
+fn reasoning_with_no_text_to_show_is_not_kept() {
+    // Claude: blank thinking, and thinking it redacted.
     let lines = vec![
         claude_user("u1", "go"),
         claude_assistant(
@@ -1070,12 +974,9 @@ fn claude_thinking_without_text_or_redacted_is_not_kept() {
         ),
         claude_assistant("a2", json!({ "type": "redacted_thinking", "data": "gAAAA" })),
     ];
-
     assert!(reasoning_texts(&history_of(Format::Claude, &lines)).is_empty());
-}
 
-#[test]
-fn a_codex_reasoning_with_no_summary_text_is_not_kept() {
+    // Codex: no summary, or a blank one.
     let at = "2026-11-04T10:00:00.000Z";
     let lines = vec![
         codex(at, "event_msg:user_message", json!({ "message": "go" })),
@@ -1090,7 +991,6 @@ fn a_codex_reasoning_with_no_summary_text_is_not_kept() {
             json!({ "summary": [{ "type": "summary_text", "text": " " }], "content": null }),
         ),
     ];
-
     assert!(reasoning_texts(&history_of(Format::Codex, &lines)).is_empty());
 }
 

@@ -22,3 +22,13 @@ export function matchesQuery(text: string, query: string): boolean {
   const wanted = query.trim().toLowerCase()
   return wanted === '' || text.toLowerCase().includes(wanted)
 }
+
+/** Whether a group shows whole in the results: its page's name or its own title matched, so no row of it is left out. */
+export function groupShowsWhole(page: string, title: string, query: string): boolean {
+  return matchesQuery(page, query) || matchesQuery(title, query)
+}
+
+/** Whether a row is a result: its group shows whole, or its own label or detail matched. */
+export function rowIsResult(row: { label: string; detail?: string | undefined }, query: string, groupWhole: boolean): boolean {
+  return groupWhole || matchesQuery(`${row.label} ${row.detail ?? ''}`, query)
+}

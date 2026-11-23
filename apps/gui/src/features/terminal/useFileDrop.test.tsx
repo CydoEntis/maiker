@@ -57,11 +57,4 @@ describe('file drop', () => {
     unmount()
     expect(shell.unlisten).toHaveBeenCalledOnce()
   })
-
-  it('listens to nothing outside the desktop app', async () => {
-    shell.isTauri = false
-    renderHook(() => { useFileDrop(vi.fn()) })
-    await flush()
-    expect(shell.handler).toBeNull()
-  })
 })

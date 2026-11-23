@@ -1,17 +1,16 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const host = vi.hoisted(() => ({
   installed: ['claude', 'codex'] as string[],
   progress: vi.fn<(progress: { agent: string; percent: number | null; line: string }) => void>(),
-  finish: vi.fn<(result: { version: string | null }) => void>(),
   command: vi.fn((agent: string) => Promise.resolve(`install-${agent} --yes`)),
-  install: vi.fn(),
+  install: vi.fn<(agent: string) => Promise<{ version: string | null }>>(),
 }))
 
 vi.mock('@/api/daemon', () => ({ agentsInstalled: () => Promise.resolve(host.installed) }))
-vi.mock('./agentInstall', () => ({
+vi.mock('@/api/agentInstall', () => ({
   agentInstallCommand: host.command,
   installAgent: host.install,
   listenInstallProgress: (handler: (progress: { agent: string; percent: number | null; line: string }) => void) => { host.progress.mockImplementation(handler); return Promise.resolve(() => undefined) },
@@ -22,285 +21,260 @@ vi.mock('@/api/folders', () => ({
     : { path, exists: false, entries: [], truncated: false, can_create: false }),
 }))
 
+import { THEMES } from '@/features/workspace/theme/themes'
 import { Onboarding } from './Onboarding'
+import { themeCaption } from './setup'
 
 const HOME = '/home/ada'
+const START_THEME = THEMES[0]?.name ?? ''
+/** The carousel slides through the themes of the start theme's kind only. */
+const SAME_KIND = THEMES.filter((theme) => theme.light === (THEMES[0]?.light ?? false))
+const NEXT_THEME = SAME_KIND[1]
 
-function setup(over: { validateFolder?: (path: string) => Promise<boolean>; onChooseFolder?: (current: string) => Promise<string | null>; reducedMotion?: boolean; startFolder?: string } = {}) {
+function setup(over: { reducedMotion?: boolean; startFolder?: string } = {}) {
   const props = {
     home: HOME,
     startFolder: over.startFolder ?? '',
-    validateFolder: over.validateFolder ?? (() => Promise.resolve(true)),
-    onChooseFolder: over.onChooseFolder ?? (() => Promise.resolve(null)),
-    onApply: vi.fn(),
+    onChooseFolder: vi.fn(() => Promise.resolve<string | null>(null)),
+    theme: START_THEME,
+    onPreviewTheme: vi.fn(),
     reducedMotion: over.reducedMotion ?? true,
     portalContainer: null,
-    onClose: vi.fn(),
+    onFinish: vi.fn(),
+    onSkip: vi.fn(),
   }
-  render(<Onboarding {...props} />)
-  return props
+  const { unmount } = render(<Onboarding {...props} />)
+  return { ...props, unmount }
 }
 
-const press = (user: ReturnType<typeof userEvent.setup>, name: string) => user.click(screen.getByRole('button', { name }))
-const heading = (name: string | RegExp) => screen.getByRole('heading', { name })
-
-async function toStyle(user: ReturnType<typeof userEvent.setup>) {
-  await press(user, 'Continue')
-  await press(user, 'Continue')
-  expect(heading('How do you work?')).toBeInTheDocument()
+/** Past the drawing, as any key takes it. */
+async function toWindow(user: ReturnType<typeof userEvent.setup>) {
+  await user.keyboard('a')
+  return screen.findByRole('heading', { name: /Welcome/ })
 }
 
-async function answer(user: ReturnType<typeof userEvent.setup>, picks: Record<string, string>) {
-  for (const [question, title] of Object.entries(picks)) {
-    await user.click(within(screen.getByRole('radiogroup', { name: question })).getByRole('radio', { name: new RegExp(title) }))
-  }
+const group = (name: string) => screen.getByRole('list', { name })
+
+/** Install, then the confirm under the command it shows. */
+async function confirmInstall(user: ReturnType<typeof userEvent.setup>, label: string) {
+  await user.click(await screen.findByRole('button', { name: `Install ${label}` }))
+  const run = await screen.findByRole('button', { name: `Run the install of ${label}` })
+  await waitFor(() => { expect(run).toBeEnabled() })
+  await user.click(run)
 }
 
-const ALL_TERMINAL = { 'Where do you spend most of your day?': 'In a terminal', 'When an agent wants to run a command, you’d rather…': 'See the raw output', 'How do you like to review changes?': 'git diff in the shell' }
+beforeEach(() => { host.install.mockReset(); host.command.mockClear(); host.installed = ['claude', 'codex'] })
 
-describe('Onboarding steps', () => {
-  beforeEach(() => { host.installed = ['claude', 'codex']; host.install.mockReset(); host.command.mockClear() })
-
-  it('walks the five steps and applies the choices on Get started', async () => {
+describe('the drawing', () => {
+  it('gives way to the window on any key, and the scans have started under it', async () => {
     const user = userEvent.setup()
-    const props = setup()
-    expect(heading('Welcome to Maiker')).toBeInTheDocument()
-    await press(user, 'Continue')
-    expect(heading('Your agents')).toBeInTheDocument()
-    await press(user, 'Continue')
-    expect(heading('How do you work?')).toBeInTheDocument()
-    await press(user, 'Skip questions')
-    expect(heading('We’d start you in Chat')).toBeInTheDocument()
-    await press(user, 'Continue')
-    expect(heading('You’re all set')).toBeInTheDocument()
-    await press(user, 'Get started')
-    expect(props.onApply).toHaveBeenCalledWith({ startFolder: '', openSessionsIn: 'chat' })
-    expect(props.onClose).toHaveBeenCalledOnce()
+    setup({ reducedMotion: false })
+    expect(screen.queryByRole('heading', { name: /Welcome/ })).toBeNull()
+    await toWindow(user)
+    expect(await screen.findByRole('list', { name: 'Installed' })).toBeInTheDocument()
   })
 
-  it('goes back with the button, with Esc and from a finished step in the step bar', async () => {
+  it('gives way by itself, and leaves no timer running after it', async () => {
+    vi.useFakeTimers()
+    try {
+      setup({ reducedMotion: false })
+      await act(async () => { await vi.advanceTimersByTimeAsync(2000) })
+      expect(screen.getByRole('heading', { name: /Welcome/ })).toBeInTheDocument()
+      // Whatever was queued when the window came up runs once; nothing re-arms itself.
+      await act(async () => { await vi.runOnlyPendingTimersAsync() })
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps Esc for the drawing: it shows the window and ends nothing', async () => {
     const user = userEvent.setup()
-    setup()
-    await press(user, 'Continue')
+    const props = setup()
     await user.keyboard('{Escape}')
-    expect(heading('Welcome to Maiker')).toBeInTheDocument()
-    await press(user, 'Continue')
-    await press(user, 'Back')
-    expect(heading('Welcome to Maiker')).toBeInTheDocument()
-    await press(user, 'Continue')
-    await press(user, 'Continue')
-    await user.click(within(screen.getByRole('navigation', { name: 'Setup progress' })).getByRole('button', { name: /Welcome/ }))
-    expect(heading('Welcome to Maiker')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /Welcome/ })).toBeInTheDocument()
+    expect(props.onSkip).not.toHaveBeenCalled()
   })
+})
 
-  it('moves a step on with Enter', async () => {
+describe('the setup screen', () => {
+  it('offers the folder that holds git projects and names what it found', async () => {
     const user = userEvent.setup()
     setup()
+    await toWindow(user)
+    const folder = screen.getByRole('group', { name: 'Projects folder' })
+    expect(await within(folder).findByText(`${HOME}/code`)).toBeInTheDocument()
+    const projects = await within(folder).findByRole('list', { name: 'Git projects found' })
+    expect(within(projects).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['api', 'web'])
+  })
+
+  it('takes a folder from the system picker', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    props.onChooseFolder.mockResolvedValue('/srv/work')
+    await toWindow(user)
+    await user.click(screen.getByRole('button', { name: 'Change the projects folder' }))
+    await user.click(await screen.findByRole('menuitem', { name: /Choose another folder/ }))
+    expect(await within(screen.getByRole('group', { name: 'Projects folder' })).findByText('/srv/work')).toBeInTheDocument()
+  })
+
+  it('lists the installed agents first, and offers an install by name for the others', async () => {
+    const user = userEvent.setup()
+    setup()
+    await toWindow(user)
+    const installed = await screen.findByRole('list', { name: 'Installed' })
+    expect(within(installed).getAllByRole('listitem')).toHaveLength(2)
+    const missing = group('Not installed')
+    expect(within(missing).getByRole('button', { name: 'Install Gemini' })).toBeInTheDocument()
+    expect(within(missing).getByRole('button', { name: 'Install OpenCode' })).toBeInTheDocument()
+    expect(within(missing).queryByRole('button', { name: /Cursor/ })).toBeNull()
+  })
+
+  it('shows the exact command and runs nothing until it is confirmed', async () => {
+    const user = userEvent.setup()
+    setup()
+    await toWindow(user)
+    await user.click(await screen.findByRole('button', { name: 'Install Gemini' }))
+    expect(await screen.findByText('install-gemini --yes')).toBeInTheDocument()
+    expect(host.install).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Cancel installing Gemini' }))
+    expect(screen.getByRole('button', { name: 'Install Gemini' })).toBeInTheDocument()
+    expect(host.install).not.toHaveBeenCalled()
+  })
+
+  it('installs in the background: Continue still works, and the agent moves up when it is done', async () => {
+    const user = userEvent.setup()
+    let finish: (result: { version: string | null }) => void = () => undefined
+    host.install.mockReturnValue(new Promise((resolve) => { finish = resolve }))
+    setup()
+    await toWindow(user)
+    await confirmInstall(user, 'Gemini')
+    expect(await screen.findByRole('progressbar', { name: 'Installing Gemini' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Continue' }))
+    await user.click(await screen.findByRole('button', { name: 'Back' }))
+    await act(async () => { finish({ version: '0.6.1' }); await Promise.resolve() })
+    await waitFor(() => { expect(within(group('Installed')).getAllByRole('listitem')).toHaveLength(3) })
+    expect(screen.queryByRole('button', { name: 'Install Gemini' })).toBeNull()
+  })
+
+  it('runs a second install after the first, since the shell runs one at a time', async () => {
+    const user = userEvent.setup()
+    let finish: (result: { version: string | null }) => void = () => undefined
+    host.install.mockReturnValueOnce(new Promise((resolve) => { finish = resolve })).mockReturnValue(new Promise(() => undefined))
+    setup()
+    await toWindow(user)
+    await confirmInstall(user, 'Gemini')
+    await confirmInstall(user, 'OpenCode')
+    expect(host.install).toHaveBeenCalledTimes(1)
+    await act(async () => { finish({ version: null }); await Promise.resolve() })
+    await waitFor(() => { expect(host.install).toHaveBeenLastCalledWith('opencode') })
+  })
+
+  it('says why an install failed and offers it again', async () => {
+    const user = userEvent.setup()
+    host.install.mockRejectedValue(new Error('npm is not on this computer'))
+    setup()
+    await toWindow(user)
+    await confirmInstall(user, 'Gemini')
+    expect(await screen.findByRole('alert')).toHaveTextContent(/not on this computer/)
+    expect(screen.getByRole('button', { name: 'Try installing Gemini again' })).toBeInTheDocument()
+  })
+})
+
+describe('the style screen', () => {
+  async function toStyle(user: ReturnType<typeof userEvent.setup>) {
+    await toWindow(user)
     await user.keyboard('{Enter}')
-    await waitFor(() => { expect(heading('Your agents')).toBeInTheDocument() })
-  })
-
-  it('skips the whole setup without applying anything', async () => {
-    const user = userEvent.setup()
-    const props = setup()
-    await press(user, 'Skip setup')
-    expect(props.onClose).toHaveBeenCalledOnce()
-    expect(props.onApply).not.toHaveBeenCalled()
-  })
-
-  it('asks to skip until all three questions are answered, then offers the recommendation', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await answer(user, { 'Where do you spend most of your day?': 'In a terminal' })
-    expect(screen.getByRole('button', { name: 'Skip questions' })).toBeInTheDocument()
-    await answer(user, { 'When an agent wants to run a command, you’d rather…': 'See the raw output', 'How do you like to review changes?': 'Readable diffs' })
-    expect(screen.getByRole('button', { name: 'See my recommendation' })).toBeInTheDocument()
-  })
-
-  it('recommends Terminal when two answers point there, quotes them and preselects it', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await answer(user, ALL_TERMINAL)
-    await press(user, 'See my recommendation')
-    expect(heading('We’d start you in Terminal')).toBeInTheDocument()
-    expect(screen.getByText(/You said you work in a terminal, see the raw output and review changes with git diff in the shell/)).toBeInTheDocument()
-    const terminal = screen.getByRole('radio', { name: /Terminal/ })
-    expect(terminal).toBeChecked()
-    expect(terminal).toHaveTextContent('Recommended for you')
-    expect(screen.getByRole('radio', { name: /Chat/ })).not.toHaveTextContent('Recommended for you')
-  })
-
-  it('lets the person switch views and says that is fine, with the Gemini note when Gemini is here', async () => {
-    host.installed = ['claude', 'gemini']
-    const user = userEvent.setup()
-    const props = setup()
-    await toStyle(user)
-    await answer(user, ALL_TERMINAL)
-    await press(user, 'See my recommendation')
-    await user.click(screen.getByRole('radio', { name: /Chat/ }))
-    expect(screen.getByText(/You picked Chat over our suggestion\. That works too\./)).toBeInTheDocument()
-    expect(await screen.findByText(/Gemini has no chat view/)).toBeInTheDocument()
-    await press(user, 'Continue')
-    expect(within(screen.getByRole('list', { name: 'Your choices' })).getByText('Chat (Gemini in Terminal)')).toBeInTheDocument()
-    await press(user, 'Get started')
-    expect(props.onApply).toHaveBeenCalledWith({ startFolder: '', openSessionsIn: 'chat' })
-  })
-
-  it('shows the review with Change links back to the step', async () => {
-    const user = userEvent.setup()
-    setup()
-    await toStyle(user)
-    await press(user, 'Skip questions')
-    await press(user, 'Continue')
-    const rows = within(screen.getByRole('list', { name: 'Your choices' }))
-    expect(rows.getByText('/home/ada')).toBeInTheDocument()
-    expect(rows.getByText('Chat')).toBeInTheDocument()
-    await user.click(rows.getByRole('button', { name: 'Change agents' }))
-    expect(heading('Your agents')).toBeInTheDocument()
-  })
-})
-
-describe('Onboarding home directory', () => {
-  beforeEach(() => { host.installed = ['claude'] })
-
-  it('starts on the home folder and offers the folders found under it', async () => {
-    const user = userEvent.setup()
-    setup()
-    expect(screen.getByRole('textbox', { name: 'Home directory' })).toHaveValue(HOME)
-    const code = await screen.findByRole('button', { name: /\/home\/ada\/code/ })
-    expect(code).toHaveTextContent('2 git projects')
-    await user.click(code)
-    expect(screen.getByRole('textbox', { name: 'Home directory' })).toHaveValue('/home/ada/code')
-  })
-
-  it('fills the path from Browse and saves it on Get started', async () => {
-    const user = userEvent.setup()
-    const props = setup({ onChooseFolder: () => Promise.resolve('/work/api') })
-    await press(user, 'Browse…')
-    expect(await screen.findByDisplayValue('/work/api')).toBeInTheDocument()
-    await toStyle(user)
-    await press(user, 'Skip questions')
-    await press(user, 'Continue')
-    await press(user, 'Get started')
-    expect(props.onApply).toHaveBeenCalledWith({ startFolder: '/work/api', openSessionsIn: 'chat' })
-  })
-
-  it('says so when the folder is not there and stays on the welcome', async () => {
-    const user = userEvent.setup()
-    const props = setup({ validateFolder: () => Promise.resolve(false) })
-    await user.clear(screen.getByRole('textbox', { name: 'Home directory' }))
-    await user.type(screen.getByRole('textbox', { name: 'Home directory' }), '/nope{Enter}')
-    expect(await screen.findByText(/That folder was not found/)).toBeInTheDocument()
-    expect(heading('Welcome to Maiker')).toBeInTheDocument()
-    expect(props.onApply).not.toHaveBeenCalled()
-  })
-})
-
-describe('Onboarding agent install', () => {
-  beforeEach(() => { host.installed = ['claude']; host.install.mockReset(); host.command.mockClear() })
-
-  async function toAgents(user: ReturnType<typeof userEvent.setup>) {
-    await press(user, 'Continue')
-    await screen.findByRole('button', { name: 'Install Codex' })
+    return screen.findByRole('heading', { name: /yours/ })
   }
 
-  it('shows the exact command first and installs only after Run it, with progress', async () => {
+  it('is reached with Enter, with Chat picked', async () => {
     const user = userEvent.setup()
-    host.install.mockImplementation(() => new Promise<{ version: string | null }>((resolve) => { host.finish.mockImplementation(resolve) }))
     setup()
-    await toAgents(user)
-    await user.click(screen.getByRole('button', { name: 'Install Codex' }))
-    expect(await screen.findByText('install-codex --yes')).toBeInTheDocument()
-    expect(host.install).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Run it' }))
-    expect(host.install).toHaveBeenCalledWith('codex')
-    const bar = await screen.findByRole('progressbar', { name: 'Installing Codex' })
-    act(() => { host.progress({ agent: 'codex', percent: 42, line: 'Downloading' }) })
-    expect(bar).toHaveAttribute('aria-valuenow', '42')
-    expect(screen.getByText('Downloading')).toBeInTheDocument()
-    act(() => { host.finish({ version: '0.9.2' }) })
-    const rows = within(screen.getByRole('list', { name: 'Agents' }))
-    await waitFor(() => { expect(rows.getByText('v0.9.2 · OpenAI’s coding agent')).toBeInTheDocument() })
-    expect(rows.queryByRole('button', { name: 'Install Codex' })).not.toBeInTheDocument()
+    await toStyle(user)
+    const views = screen.getByRole('radiogroup', { name: 'Sessions open as' })
+    expect(within(views).getByRole('radio', { name: /Chat/ })).toBeChecked()
+    expect(within(views).getByRole('radio', { name: /Terminal/ })).not.toBeChecked()
   })
 
-  it('lists every supported agent and offers no Install for one the app cannot install', async () => {
+  it('shows each theme on the app as it is slid to, by the arrows and by the buttons', async () => {
     const user = userEvent.setup()
-    setup()
-    await toAgents(user)
-    const rows = within(screen.getByRole('list', { name: 'Agents' }))
-    expect(rows.getAllByRole('listitem')).toHaveLength(5)
-    const cursor = rows.getByText('Cursor').closest('li')
-    expect(cursor).toHaveTextContent('Not installable here')
-    expect(rows.queryByRole('button', { name: 'Install Cursor' })).not.toBeInTheDocument()
-    expect(host.command).not.toHaveBeenCalledWith('cursor-agent')
+    const props = setup()
+    await toStyle(user)
+    const themes = screen.getByRole('radiogroup', { name: 'Theme' })
+    expect(within(themes).getAllByRole('radio')).toHaveLength(SAME_KIND.length)
+    await user.keyboard('{ArrowRight}')
+    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(NEXT_THEME?.name)
+    expect(within(themes).getByRole('radio', { name: themeCaption(NEXT_THEME ?? { name: '', light: false }) })).toBeChecked()
+    await user.click(screen.getByRole('button', { name: 'Previous theme' }))
+    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(START_THEME)
+    await user.click(screen.getByRole('button', { name: 'Previous theme' }))
+    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(SAME_KIND[SAME_KIND.length - 1]?.name)
   })
 
-  it('shows a failed install as something that needs you, in plain words, and tries again', async () => {
+  it('asks dark or light first, and the carousel then holds only that kind', async () => {
     const user = userEvent.setup()
-    host.install.mockRejectedValueOnce(new Error('could not resolve host registry.npmjs.org'))
-    setup()
-    await toAgents(user)
-    await user.click(screen.getByRole('button', { name: 'Install Codex' }))
-    await user.click(await screen.findByRole('button', { name: 'Run it' }))
-    expect(await screen.findByText('Codex did not install')).toBeInTheDocument()
-    expect(screen.getByText('The network could not be reached. Check the connection and try again.')).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Try again' }))
-    expect(await screen.findByText('install-codex --yes')).toBeInTheDocument()
+    const props = setup()
+    await toStyle(user)
+    const kind = THEMES[0]?.light === true ? 'Dark' : 'Light'
+    await user.click(screen.getByRole('radio', { name: kind }))
+    const picked = THEMES.find((theme) => theme.name === (props.onPreviewTheme.mock.calls.at(-1)?.[0] as string))
+    expect(picked?.light).toBe(kind === 'Light')
+    const themes = screen.getByRole('radiogroup', { name: 'Theme' })
+    expect(within(themes).getAllByRole('radio')).toHaveLength(THEMES.filter((theme) => theme.light === (kind === 'Light')).length)
   })
 
-  it('installs all the missing agents after showing every command', async () => {
+  it('ends by handing over the folder, the view and the theme slid to', async () => {
     const user = userEvent.setup()
-    host.install.mockResolvedValue({ version: null })
-    setup()
-    await toAgents(user)
-    await user.click(screen.getByRole('button', { name: 'Install all 3' }))
-    await waitFor(() => { expect(screen.getAllByText(/install-.* --yes/)).toHaveLength(3) })
-    expect(host.install).not.toHaveBeenCalled()
-    await user.click(screen.getByRole('button', { name: 'Run all 3' }))
-    await waitFor(() => { expect(host.install).toHaveBeenCalledTimes(3) })
+    const props = setup()
+    await toWindow(user)
+    await within(screen.getByRole('group', { name: 'Projects folder' })).findByText(`${HOME}/code`)
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { name: /yours/ })
+    await user.click(screen.getByRole('radio', { name: /Terminal/ }))
+    await user.click(screen.getByRole('button', { name: 'Next theme' }))
+    await user.click(screen.getByRole('button', { name: 'Open a project' }))
+    const mode = NEXT_THEME?.light === true ? { themeMode: 'light', lightTheme: NEXT_THEME.name } : { themeMode: 'dark', darkTheme: NEXT_THEME?.name }
+    expect(props.onFinish).toHaveBeenCalledWith({ startFolder: `${HOME}/code`, openSessionsIn: 'terminal', ...mode }, `${HOME}/code`)
+    expect(props.onSkip).not.toHaveBeenCalled()
+  })
+
+  it('leaves the theme settings alone when no theme was slid to', async () => {
+    const user = userEvent.setup()
+    const props = setup({ startFolder: '/work' })
+    await toStyle(user)
+    await user.keyboard('{Enter}')
+    expect(props.onFinish).toHaveBeenCalledWith({ startFolder: '/work', openSessionsIn: 'chat' }, '/work')
   })
 })
 
-describe('Onboarding veil', () => {
-  it('blurs the whole window with a veil of its own that holds no content', () => {
-    setup()
-    const veil = document.querySelector('.mx-onb-veil')
-    expect(veil).not.toBeNull()
-    expect(veil?.childElementCount).toBe(0)
-    expect(screen.getByRole('dialog', { name: 'Set up Maiker' })).toHaveClass('mx-onb')
-  })
-
-  it('keeps Skip setup in its own slot, after the steps', () => {
-    setup()
-    const bar = screen.getByRole('navigation', { name: 'Setup progress' })
-    expect(bar.lastElementChild).toBe(within(bar).getByRole('button', { name: 'Skip setup' }))
-  })
-})
-
-describe('Onboarding opening', () => {
-  afterEach(() => { vi.useRealTimers() })
-
-  it('draws the mark first and skips to the window on Enter, Esc or Space', async () => {
+describe('skipping', () => {
+  it('ends on Esc from the window and saves nothing', async () => {
     const user = userEvent.setup()
-    setup({ reducedMotion: false })
-    expect(screen.queryByRole('heading', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
-    await user.keyboard(' ')
-    expect(await screen.findByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
+    const props = setup()
+    await toWindow(user)
+    await user.keyboard('{Escape}')
+    expect(props.onSkip).toHaveBeenCalledOnce()
+    expect(props.onFinish).not.toHaveBeenCalled()
   })
 
-  it('opens the window by itself once the drawing is over', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true })
-    setup({ reducedMotion: false })
-    expect(screen.queryByRole('heading', { name: 'Welcome to Maiker' })).not.toBeInTheDocument()
-    await act(async () => { await vi.advanceTimersByTimeAsync(2400) })
-    expect(screen.getByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
+  it('ends on Skip from the second screen without saving the theme slid to', async () => {
+    const user = userEvent.setup()
+    const props = setup()
+    await toWindow(user)
+    await user.keyboard('{Enter}')
+    await screen.findByRole('heading', { name: /yours/ })
+    await user.click(screen.getByRole('button', { name: 'Next theme' }))
+    await user.click(screen.getByRole('button', { name: 'Skip' }))
+    expect(props.onSkip).toHaveBeenCalledOnce()
+    expect(props.onFinish).not.toHaveBeenCalled()
   })
 
-  it('goes straight to the window under reduced motion', () => {
-    setup({ reducedMotion: true })
-    expect(screen.getByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
+  it('takes its preview off the window when it goes away', () => {
+    const props = setup()
+    props.onPreviewTheme.mockClear()
+    props.unmount()
+    expect(props.onPreviewTheme).toHaveBeenLastCalledWith(null)
   })
 })

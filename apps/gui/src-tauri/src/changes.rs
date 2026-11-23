@@ -1,5 +1,6 @@
 //! What the side panel's Changes tab does to a session's checkout: commit what changed, sync
-//! with the remote, and open a pull request for the branch. On this computer each runs git (and
+//! with the remote, open a pull request for the branch, and discard one file's changes (by the
+//! rules of `maitty_shared::discard`, the same a daemon follows). On this computer each runs git (and
 //! GitHub's `gh`) as programs with their arguments, off the UI thread; for a session on another
 //! machine that machine's daemon is asked to (`on_machine`). Only when the user presses the button.
 
@@ -117,6 +118,38 @@ fn sync(folder: &Path, action: SyncAction) -> Result<String, String> {
     }
 }
 
+/// This computer's git, each run stopped at a limit, and its disk: what a discard runs against here.
+struct Here;
+
+impl maitty_shared::discard::Checkout for Here {
+    fn git(&self, folder: &Path, args: &[&str]) -> Result<String, String> {
+        run_program("git", folder, args, Duration::from_secs(maitty_shared::discard::DISCARD_LIMIT_SECS))
+    }
+
+    fn on_disk(&self, path: &Path) -> maitty_shared::discard::OnDisk {
+        use maitty_shared::discard::OnDisk;
+        // `symlink_metadata` does not follow a link, so a link is seen as one wherever it points.
+        match std::fs::symlink_metadata(path) {
+            Err(_) => OnDisk::Missing,
+            Ok(found) if found.file_type().is_symlink() => OnDisk::Link,
+            Ok(found) if found.is_dir() => OnDisk::Folder,
+            Ok(_) => OnDisk::File,
+        }
+    }
+
+    fn remove_file(&self, path: &Path) -> Result<(), String> {
+        std::fs::remove_file(path).map_err(|error| format!("could not delete the file: {error}"))
+    }
+}
+
+/// Discards the uncommitted changes of the one file `path` in `folder`'s checkout; answers a line
+/// saying what was done, or one saying why nothing was.
+fn discard_file(folder: &Path, path: &str) -> Result<String, String> {
+    maitty_shared::discard::discard_file(&Here, folder, path)
+        .map(|done| done.to_string())
+        .map_err(|why| why.to_string())
+}
+
 /// Has the daemon of another machine do `request` to the checkout its pane `term` is in. The
 /// line it answers, already cleaned and checked against what was asked, or its line saying why not.
 async fn on_machine(
@@ -182,6 +215,29 @@ pub async fn git_commit_all(
         .map_err(|error| error.to_string())?
 }
 
+/// Discards the uncommitted changes of one file, `path` from the top of the repository: in
+/// `folder`'s checkout on this computer, or in the one pane `term` is in on another machine, where
+/// that machine's daemon does it by the same rules. A file that is new is removed for good.
+#[tauri::command]
+pub async fn git_discard_file(
+    wire: tauri::State<'_, crate::terminal_stream::Wire>,
+    machine: Option<u16>,
+    folder: String,
+    path: String,
+    term: Option<u32>,
+) -> Result<String, String> {
+    if crate::routing::is_remote(machine) {
+        let term = term.ok_or("This session has no terminal on its machine to say which checkout is meant")?;
+        let daemon = wire.discard_daemon(machine)?;
+        return maitty_desktop_client::discard_file(term, path, daemon)
+            .await
+            .map_err(|error| format!("{error:#}"));
+    }
+    tauri::async_runtime::spawn_blocking(move || discard_file(Path::new(&folder), &path))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
 /// Pushes a branch and opens a pull request for it: `folder`'s on this computer, or that of the
 /// checkout pane `term` is in on another machine, with that machine's `gh`. Answers its address.
 #[tauri::command]
@@ -216,6 +272,9 @@ mod tests {
         git(&folder, &["config", "user.email", "test@example.invalid"]);
         git(&folder, &["config", "user.name", "Test"]);
         git(&folder, &["config", "commit.gpgsign", "false"]);
+        // Windows runners set `core.autocrlf`, which writes restored files back with CRLF; the
+        // tests compare bytes, so the repository keeps what was written.
+        git(&folder, &["config", "core.autocrlf", "false"]);
         std::fs::write(folder.join("a.txt"), "one\n").expect("a file");
         git(&folder, &["add", "-A"]);
         git(&folder, &["commit", "-q", "-m", "start"]);
@@ -255,6 +314,39 @@ mod tests {
             assert!(commit_all(&folder, "m", Some(&[bad.to_string()])).is_err(), "{bad}");
         }
         assert_eq!(commit_all(&folder, "m", Some(&[])), Err("pick at least one file to commit".into()));
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_discard_puts_an_edited_file_back_and_removes_a_new_one() {
+        let folder = repository("discard");
+        std::fs::write(folder.join("a.txt"), "edited\n").expect("a change");
+        std::fs::write(folder.join("new file.txt"), "new\n").expect("a new file");
+        std::fs::write(folder.join("staged.txt"), "staged\n").expect("a new file");
+        git(&folder, &["add", "--", "staged.txt"]);
+        std::fs::write(folder.join("kept.txt"), "kept\n").expect("a new file");
+
+        for path in ["a.txt", "new file.txt", "staged.txt"] {
+            let done = discard_file(&folder, path).expect(path);
+            assert!(done.contains(path) && !done.contains('\n'), "{done}");
+        }
+        assert_eq!(std::fs::read_to_string(folder.join("a.txt")).expect("the file"), "one\n");
+        assert_eq!(git(&folder, &["status", "--porcelain"]).trim(), "?? kept.txt", "only the named files were touched");
+        let _ = std::fs::remove_dir_all(&folder);
+    }
+
+    #[test]
+    fn a_discard_refuses_what_is_not_one_changed_file_of_the_checkout() {
+        let folder = repository("discard-refuse");
+        std::fs::create_dir_all(folder.join("sub")).expect("a folder");
+        std::fs::write(folder.join("sub/inner.txt"), "inner\n").expect("a new file");
+        let before = git(&folder, &["status", "--porcelain", "--untracked-files=all"]);
+        for bad in ["../x", "/etc/passwd", "C:\\Windows\\win.ini", "sub\\inner.txt", ".git/config", "-A", "", "sub", "a.txt"] {
+            let why = discard_file(&folder, bad).expect_err(bad);
+            assert!(!why.is_empty() && !why.contains('\n'), "{bad:?}: {why}");
+        }
+        assert_eq!(git(&folder, &["status", "--porcelain", "--untracked-files=all"]), before);
+        assert!(folder.join(".git/config").is_file());
         let _ = std::fs::remove_dir_all(&folder);
     }
 

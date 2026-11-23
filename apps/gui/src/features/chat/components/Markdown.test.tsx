@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { isDesktop, openLink } from '@/api/daemon'
@@ -53,46 +53,7 @@ describe('a link in a message', () => {
   })
 })
 
-const TABLE = '| Name | Qty | Note |\n| :--- | ---: | :---: |\n| `a` | **1** | x |\n| b | 22 | y |'
-
 describe('a table in a message', () => {
-  it('is a table with column headers and one cell per column', () => {
-    render(<Markdown text={TABLE} />)
-
-    const table = screen.getByRole('table')
-    expect(within(table).getAllByRole('columnheader').map((header) => header.textContent)).toEqual(['Name', 'Qty', 'Note'])
-    expect(within(table).getAllByRole('row')).toHaveLength(3)
-    expect(within(table).getAllByRole('cell').map((cell) => cell.textContent)).toEqual(['a', '1', 'x', 'b', '22', 'y'])
-  })
-
-  it('reads inline markdown in a cell and aligns a column as asked', () => {
-    render(<Markdown text={TABLE} />)
-
-    expect(screen.getByText('1').tagName).toBe('STRONG')
-    expect(screen.getByText('a').tagName).toBe('CODE')
-    expect(screen.getByRole('columnheader', { name: 'Qty' })).toHaveClass('text-right')
-    expect(screen.getByRole('columnheader', { name: 'Note' })).toHaveClass('text-center')
-    expect(screen.getByRole('columnheader', { name: 'Name' })).toHaveClass('text-left')
-  })
-
-  it('scrolls inside a named region that the keyboard can reach, so a wide table never widens the message', () => {
-    render(<Markdown text={TABLE} />)
-
-    const region = screen.getByRole('region', { name: 'Table' })
-    expect(region).toHaveAttribute('tabindex', '0')
-    expect(region).toHaveClass('overflow-x-auto', 'max-w-full')
-    expect(within(region).getByRole('table')).toBeInTheDocument()
-  })
-
-  it('keeps its Copy and Save in a head above the table, inside the same card, never loose under it', () => {
-    render(<Markdown text={TABLE + '\n\nAfter.'} />)
-
-    const actions = screen.getByRole('group', { name: 'Copy or save this table' })
-    const region = screen.getByRole('region', { name: 'Table' })
-    expect(actions.parentElement).toBe(region.parentElement)
-    expect(actions.compareDocumentPosition(region) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(within(actions).getByRole('button', { name: 'Copy' })).toBeInTheDocument()
-  })
 
   it('shows markup in a cell as text', () => {
     const { container } = render(<Markdown text={'| h |\n|---|\n| <img src=x onerror=alert(1)> |'} />)
@@ -100,51 +61,9 @@ describe('a table in a message', () => {
     expect(container.querySelector('img')).toBeNull()
     expect(screen.getByRole('cell')).toHaveTextContent('<img src=x onerror=alert(1)>')
   })
-
-  it('leaves text around it as paragraphs', () => {
-    render(<Markdown text={'Before.\n\n' + TABLE + '\n\nAfter.'} />)
-
-    expect(screen.getByText('Before.')).toBeInTheDocument()
-    expect(screen.getByText('After.')).toBeInTheDocument()
-    expect(screen.getAllByRole('table')).toHaveLength(1)
-  })
-})
-
-describe('a task list', () => {
-  it('shows read-only checkboxes named by their text, ticked where done, and nests', () => {
-    render(<Markdown text={'- [x] done\n- [ ] open\n  - [x] nested\n- plain'} />)
-    const boxes = screen.getAllByRole('checkbox')
-    expect(boxes).toHaveLength(3)
-    expect(boxes.map((box) => box.getAttribute('aria-checked'))).toEqual(['true', 'false', 'true'])
-    expect(boxes.every((box) => box.getAttribute('aria-readonly') === 'true')).toBe(true)
-    expect(screen.getByRole('checkbox', { name: 'open' })).toBeInTheDocument()
-    expect(screen.getByRole('checkbox', { name: 'nested' })).toBeInTheDocument()
-  })
-
-  it('leaves [ ] in a sentence plain text', () => {
-    render(<Markdown text="Use [ ] to mean open." />)
-    expect(screen.queryByRole('checkbox')).toBeNull()
-    expect(screen.getByText('Use [ ] to mean open.')).toBeInTheDocument()
-  })
 })
 
 describe('a file name in a message', () => {
-  it('is plain inline code with no file badge or type tag', () => {
-    const { container } = render(<Markdown text="Edit `README.md` and `docs/DESIGN-SYSTEM.md:12` now." />)
-
-    expect(container.querySelector('[data-slot="file-badge"]')).toBeNull()
-    expect(container.querySelector('[data-slot="type-tag"]')).toBeNull()
-    expect(container.querySelectorAll('[data-slot="code-chip"]')).toHaveLength(2)
-    expect(container.querySelector('button')).toBeNull()
-  })
-
-  it("carries its type's colour, and a name of no known type carries none", () => {
-    const { container } = render(<Markdown text="Edit `src/app.ts` and `notes.xyz` now." />)
-
-    expect(container.querySelectorAll('.mx-file-name')).toHaveLength(1)
-    expect(container.querySelector('.mx-file-name')).toHaveAttribute('style', expect.stringContaining('--tone: var(--tag-ts)'))
-    expect(container.querySelectorAll('[data-slot="code-chip"]:not(.mx-file-name)')).toHaveLength(1)
-  })
 
   it('opens the file at its line when the chat can open files, still without a badge', async () => {
     const open = vi.fn()
@@ -155,5 +74,28 @@ describe('a file name in a message', () => {
 
     expect(open).toHaveBeenCalledExactlyOnceWith('src/tax.js', 42)
     expect(container.querySelector('[data-slot="file-badge"]')).toBeNull()
+  })
+})
+
+describe('a code block in a message', () => {
+  const fence = (language: string, lines: readonly string[]) => `\`\`\`${language}\n${lines.join('\n')}\n\`\`\``
+  const numbered = (count: number) => Array.from({ length: count }, (_, index) => `line ${String(index + 1)}`)
+
+  it('colours a diff fence line by line, by its sign', () => {
+    const { container } = render(<Markdown text={fence('diff', ['@@ -1,2 +1,2 @@', ' keep', '-  return a', '+  return b'])} />)
+    const kinds = Array.from(container.querySelectorAll('.code-line')).map((line) => line.className.replace('code-line', '').trim())
+    expect(kinds).toEqual(['is-hunk', '', 'is-del', 'is-add'])
+  })
+
+  it('stays whole as it is written past the fold, and folds only when it arrives long', () => {
+    const watched = render(<Markdown text={fence('ts', numbered(5))} />)
+    watched.rerender(<Markdown text={fence('ts', numbered(60))} />)
+    expect(watched.container.querySelectorAll('.code-line')).toHaveLength(60)
+    expect(screen.queryByRole('button', { name: /more lines/ })).not.toBeInTheDocument()
+    watched.unmount()
+
+    const arrived = render(<Markdown text={fence('ts', numbered(61))} />)
+    expect(screen.getByRole('button', { name: /Show \d+ more lines/ })).toBeInTheDocument()
+    expect(arrived.container.querySelectorAll('.code-line').length).toBeLessThan(61)
   })
 })

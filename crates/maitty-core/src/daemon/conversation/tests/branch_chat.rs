@@ -3,20 +3,7 @@
 
 use super::*;
 use crate::protocol::{ClientMsg, Command, Query, Reply};
-
-/// Opening a workspace starts a pane, which writes launchers to the data folder: point it at a
-/// scratch one, with the same value the other daemon tests use so the two cannot disagree.
-fn own_data_folder() {
-    static ONCE: std::sync::Once = std::sync::Once::new();
-    ONCE.call_once(|| {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-test-data-{}"),
-            std::process::id()
-        ));
-        // SAFETY: the first thing a daemon test does, before its panes read the environment.
-        unsafe { std::env::set_var("XDG_DATA_HOME", dir) };
-    });
-}
+use crate::test_support::own_data_folder;
 
 /// Makes the fixture's `repo` folder a git repository the daemon is showing, and returns it.
 fn shown_repo(session: &mut TestSession) -> PathBuf {

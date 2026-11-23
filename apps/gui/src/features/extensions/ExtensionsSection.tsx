@@ -1,8 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AGENT_LABELS, confirmAdd, loadExtensions, removeExtension, setPluginEnabled, type AddPreview, type ExtensionFailure, type ExtensionResult, type ExtTarget, type Extension } from '@/api/extensions'
+import { Trash2 } from 'lucide-react'
+import { IconButton } from '@/components/ui/icon-button'
 import { Switch } from '@/components/ui/switch'
-import { Card, Row } from '@/features/settings/components/DesktopSettings'
+import { Card, FoldedCard, Row } from '@/features/settings/components/DesktopSettings'
 import { errorMessage } from '@/lib/error-message'
 import { AddCards, FailureLine } from './AddCards'
 import { AddDialog } from './AddDialog'
@@ -44,8 +46,19 @@ function ItemRow({ item, busy, onToggle, onRemove }: { item: Extension; busy: bo
   return (
     <Row label={item.name} detail={detailLine(item)}>
       {switchable && <Switch checked={item.enabled === true} disabled={busy} aria-label={`${item.enabled === true ? 'Turn off' : 'Turn on'} ${item.name}`} onCheckedChange={onToggle} />}
-      <button type="button" className="mx-scard-button is-danger" disabled={busy} aria-label={`Remove ${item.name}`} onClick={onRemove}>Remove</button>
+      <IconButton className="mx-icon-danger" label={`Remove ${item.name}`} tip="Remove" disabled={busy} onClick={onRemove}><Trash2 aria-hidden="true" /></IconButton>
     </Row>
+  )
+}
+
+/** The two things only an agent's own terminal does, folded to its title so the page stays short. */
+function TerminalCard() {
+  return (
+    <FoldedCard title="Needs a terminal">
+      {TERMINAL_ONLY.map((each) => (
+        <Row key={each.title} label={each.title} detail={each.words}>{each.command !== null ? <code>{each.command}</code> : <span />}</Row>
+      ))}
+    </FoldedCard>
   )
 }
 
@@ -133,11 +146,7 @@ export function ExtensionsSection({ projects }: { projects: readonly ExtensionPr
 
       <AddCards folder={folder} onPreview={(preview) => { setFailure(null); setDialog({ at: 'add', preview }) }} />
 
-      <Card title="Needs a terminal">
-        {TERMINAL_ONLY.map((each) => (
-          <Row key={each.title} label={each.title} detail={each.words}>{each.command !== null ? <code>{each.command}</code> : <span />}</Row>
-        ))}
-      </Card>
+      <TerminalCard />
 
       {dialog?.at === 'remove' && (
         <ConfirmDialog title={`Remove ${dialog.item.name}?`} confirmLabel={`Remove this ${KIND_ONE[dialog.item.kind]}`} danger onCancel={() => { setDialog(null) }} onConfirm={() => finish(() => removeExtension(targetOf(dialog.item, folder)))}>

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { UserInputQuestion } from '../chatEvents'
 import { approvalEvent } from '../eventFixtures'
-import { ApprovalCard } from './ApprovalCard'
+import { ApprovalTray } from './QuestionTray'
 import { UserInputForm } from './UserInputForm'
 
 afterEach(cleanup)
@@ -60,16 +60,10 @@ describe('the approval card for a user-input request', () => {
 
   it('shows the form, and answers by the request id', async () => {
     const answerInput = vi.fn()
-    render(<ApprovalCard event={event} actions={{ answer: vi.fn(), answerInput, busy: false }} step={null} onGoToStep={null} />)
+    render(<ApprovalTray event={event} actions={{ answer: vi.fn(), answerInput, busy: false }} />)
     const user = userEvent.setup()
     await user.type(screen.getByRole('textbox', { name: 'What is the ticket?' }), 'MAITTY-9')
     await user.click(screen.getByRole('button', { name: 'Send answer' }))
     expect(answerInput).toHaveBeenCalledWith(5, { q2: ['MAITTY-9'] })
-  })
-
-  it('points to the terminal only where there is nothing to answer with', () => {
-    render(<ApprovalCard event={event} actions={null} step={null} onGoToStep={null} />)
-    expect(screen.getByText(/can take it/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Send answer' })).not.toBeInTheDocument()
   })
 })

@@ -1,0 +1,68 @@
+{
+  "steps": [
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [],
+      "history_complete": "Complete",
+      "moment": "created",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Idle"
+    },
+    {
+      "answered_requests": [],
+      "error": null,
+      "history": [
+        {
+          "completed_at_ms": "<time>",
+          "content": "TurnStatus",
+          "source": {
+            "conversation": 1,
+            "item": "",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "User",
+              "text": "hello fake Claude"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "<id 2>",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        },
+        {
+          "completed_at_ms": "<time>",
+          "content": {
+            "Message": {
+              "role": "Assistant",
+              "text": "fake reply"
+            }
+          },
+          "source": {
+            "conversation": 1,
+            "item": "fake-message",
+            "turn": "<id 1>"
+          },
+          "started_at_ms": "<time>",
+          "state": "Completed"
+        }
+      ],
+      "history_complete": "Complete",
+      "moment": "the turn ended",
+      "open_requests": [],
+      "recovery": "Running",
+      "status": "Done"
+    }
+  ]
+}

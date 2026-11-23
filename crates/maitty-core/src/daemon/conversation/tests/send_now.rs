@@ -362,6 +362,7 @@ async fn a_claude_chat_has_its_turn_interrupted_and_the_message_sent_as_the_next
         std::fs::write(executable.with_extension("scenario"), "interrupt-any").unwrap();
         let messages = executable.with_extension("messages");
         let claude = crate::conversation::LaunchSettings {
+            agent: None,
             provider: crate::conversation::Provider::Claude,
             executable,
             config_root,
@@ -478,4 +479,32 @@ async fn a_message_sent_out_of_turn_is_still_answered_as_sent_after_others_are_d
     .catch_unwind()
     .await;
     finish(session, outcome).await;
+}
+
+/// What the conversation's summary says its provider can do.
+fn reported(session: &TestSession, id: ConversationId) -> crate::conversation::capabilities::Capabilities {
+    let summaries = session.daemon.conversation_summaries();
+    let summary = summaries.iter().find(|summary| summary.id == id).unwrap();
+    summary.capabilities.clone().expect("a chat reports what its provider can do")
+}
+
+#[tokio::test]
+async fn a_chat_reports_steering_only_for_a_codex_that_takes_it() {
+    use crate::conversation::capabilities::Verified;
+    let mut steering = conversation_fixture("conversation-cancel").await;
+    let mut plain = conversation_fixture("conversation-cancel").await;
+    let outcome = AssertUnwindSafe(async {
+        let (with, _) = started_with_steering(&mut steering).await;
+        let (without, _) = create(&mut plain).await;
+
+        let (with, without) = (reported(&steering, with), reported(&plain, without));
+
+        assert!(with.steer && !without.steer);
+        assert!(with.resume && without.resume);
+        assert_eq!((with.verified, without.verified), (Verified::Pinned, Verified::Pinned));
+    })
+    .catch_unwind()
+    .await;
+    plain.cleanup().await;
+    finish(steering, outcome).await;
 }

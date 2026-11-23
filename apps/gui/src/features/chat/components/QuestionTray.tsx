@@ -2,8 +2,10 @@ import { useId, useState, type KeyboardEvent } from 'react'
 import { Button } from '@/components/ui/button'
 import { toast } from '@/lib/toast'
 import type { AskedQuestion, PermissionAsk } from '@/data/preview'
-import type { ApprovalDecision, ApprovalEvent } from '../chatEvents'
-import { ANSWER_KEY, formQuestions, ownAnswerText, type AskChoice, type FormAnswer } from '../permissionAsk'
+import type { ApprovalEvent } from '../chatEvents'
+import { formQuestions, ownAnswerText, type AskChoice, type FormAnswer } from '../permissionAsk'
+import { approvalRows, HELPERS_ROWS, ownChoiceIndex, promptRows, REMEMBER_ROW, type ApprovalRowId, type HelpersChoice, type PromptRowId } from '../answerRows'
+import { AnswerList } from './AnswerList'
 import { alwaysAllowChoices } from '../alwaysAllow'
 import type { AskedPlan } from '../planApproval'
 import { PLAN_TOOL, planMenuChoices } from '../planApproval'
@@ -32,19 +34,6 @@ const TITLE: Record<ApprovalEvent['approvalKind'], string> = {
   UserInput: 'Needs your input',
 }
 
-type Answer = Exclude<ApprovalDecision, 'Cancel'>
-
-const ANSWER_LABEL: Record<Answer, string> = { Accept: 'Yes once', AcceptForSession: 'This session', Decline: 'No' }
-
-/** One answer: the main one ("Yes once") in the needs colour, the others soft, each with the key that also gives it. */
-function AnswerButton({ decision, busy, onAnswer }: { decision: Answer; busy: boolean; onAnswer: () => void }) {
-  return (
-    <Button variant={decision === 'Accept' ? 'needs' : 'soft'} keyHint={ANSWER_KEY[decision]} disabled={busy} aria-keyshortcuts={ANSWER_KEY[decision]} onClick={onAnswer}>
-      {ANSWER_LABEL[decision]}
-    </Button>
-  )
-}
-
 const RUN = (send: () => Promise<void>, setBusy: (busy: boolean) => void) => {
   setBusy(true)
   send()
@@ -65,7 +54,7 @@ export function ScreenMenuTray({ agent, menu, send }: { agent: string; menu: Scr
       label={`${agentLabel(agent)} is asking`}
       title={`${agentLabel(agent)} is asking`}
       foot={menu.options.map((option, index) => (
-        <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'soft'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
+        <Button key={`${String(index)}-${option}`} variant={index === 0 ? 'needs' : 'ghost'} disabled={busy} onClick={() => { pick(index) }}>{option}</Button>
       ))}
     >
       {menu.question !== '' && <p className="mx-waiting-text is-pre">{menu.question}</p>}
@@ -87,8 +76,8 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
       aside={agent}
       foot={(
         <>
-          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.declineKeys), setBusy) }}>Don’t trust</Button>
-          <Button variant="soft" disabled={busy} onClick={() => { RUN(() => send(trust.trustKeys), setBusy) }}>Trust this folder</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => { RUN(() => send(trust.declineKeys), setBusy) }}>Don’t trust</Button>
+          <Button variant="ghost" disabled={busy} onClick={() => { RUN(() => send(trust.trustKeys), setBusy) }}>Trust this folder</Button>
         </>
       )}
     >
@@ -97,6 +86,38 @@ export function TrustFolderTray({ agent, trust, send }: { agent: string; trust: 
       <p className="mx-waiting-text">
         Trusting it lets {agentLabel(agent)} read and change the files there, and run commands, hooks and tools that the folder asks for. Trust it only if you know where it came from. Don’t trust closes {agent} without opening the folder.
       </p>
+    </WaitingCard>
+  )
+}
+
+/** What a session wants to start helpers for, and the way to answer. */
+export type HelperAsk = {
+  readonly tasks: readonly string[]
+  readonly answer: (choice: HelpersChoice) => void
+}
+
+/**
+ * A session asking to start helpers (ADR 0016), in the stack over the message box: the tasks, one numbered line each,
+ * what a helper gets, and the answers. Nothing starts until the person answers. The request names no agent per task,
+ * so none is drawn: the head says who asks.
+ */
+export function HelpersTray({ ask, online, agent }: { ask: HelperAsk; online: boolean; agent?: string }) {
+  const count = ask.tasks.length
+  return (
+    <WaitingCard
+      label="Wants to start helpers"
+      title={`Wants to start ${String(count)} helper${count === 1 ? '' : 's'}`}
+      aside={agent === undefined ? undefined : agentLabel(agent)}
+      flush
+      answers={<AnswerList label="Answers" rows={HELPERS_ROWS} disabled={!online} onPick={ask.answer} />}
+    >
+      <ol className="mx-waiting-tasks">
+        {ask.tasks.map((task, index) => (
+          // A task can be asked twice in one request, so its place is part of its key.
+          <li key={`${String(index)}-${task}`}><span className="mx-waiting-task-number" aria-hidden="true">{index + 1}</span><span className="mx-waiting-task-text">{task}</span></li>
+        ))}
+      </ol>
+      <p className="mx-waiting-tasks-note">Each gets its own worktree and branch. They work at the same time.</p>
     </WaitingCard>
   )
 }
@@ -112,7 +133,6 @@ function RequestDetail({ event }: { event: ApprovalEvent }) {
 
 /** A request the daemon holds for a chat it runs: answered by its id, never by typing. */
 export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; actions: ApprovalActions | null; agent?: string }) {
-  const answerable = event.choices.filter((choice): choice is Answer => choice !== 'Cancel')
   const reason = event.reason !== null && event.reason !== '' ? <p className="mx-waiting-text">{event.reason}</p> : null
   const label = `Approval: ${TITLE[event.approvalKind]}`
   if (event.approvalKind === 'UserInput') {
@@ -125,26 +145,20 @@ export function ApprovalTray({ event, actions, agent }: { event: ApprovalEvent; 
       </WaitingCard>
     )
   }
-  const main = actions !== null && answerable.includes('Accept') ? () => { actions.answer(event.requestId, 'Accept') } : undefined
   const hasCommand = event.command !== null && event.command !== ''
+  const pick = (id: ApprovalRowId) => {
+    if (actions === null) return
+    if (id === REMEMBER_ROW) actions.remember?.(event.requestId)
+    else actions.answer(event.requestId, id)
+  }
   return (
     <WaitingCard
       label={label}
       title={event.approvalKind === 'FileChange' && event.changes.length > 0 ? `Wants to change ${String(event.changes.length)} ${event.changes.length === 1 ? 'file' : 'files'}` : TITLE[event.approvalKind]}
       aside={agent === undefined ? undefined : agentLabel(agent)}
       flush={hasCommand && reason === null}
-      onEnter={main}
-      foot={actions === null ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : (
-        <>
-          {answerable.map((choice) => <AnswerButton key={choice} decision={choice} busy={actions.busy} onAnswer={() => { actions.answer(event.requestId, choice) }} />)}
-          <span className="mx-spacer" />
-          {event.canRemember && actions.remember !== undefined && (
-            <Button variant="ghost" size="sm" disabled={actions.busy} title="Allows this exact command in this project from now on, without asking" onClick={() => { actions.remember?.(event.requestId) }}>
-              Always in this project
-            </Button>
-          )}
-        </>
-      )}
+      answers={actions === null ? undefined : <AnswerList label="Answers" rows={approvalRows(event, actions.remember !== undefined)} disabled={actions.busy} onPick={pick} />}
+      foot={actions === null ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : undefined}
     >
       {reason}
       <RequestDetail event={event} />
@@ -167,7 +181,7 @@ export function ChoiceMenuTray({ label, title, aside, menu, send, sendKeys, read
       aside={aside}
       foot={(
         <>
-          <Button variant="soft" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
+          <Button variant="ghost" disabled={busy} title="Esc in the terminal: closes the question without choosing" onClick={() => { RUN(() => sendKeys(KEY_ESCAPE), setBusy) }}>Cancel</Button>
           <span className="mx-spacer" />
           <Button variant="ghost" size="sm" aria-expanded={terminal} onClick={() => { setTerminal((now) => !now) }}>{terminal ? 'Hide terminal' : 'Show terminal'}</Button>
         </>
@@ -398,7 +412,7 @@ function PlanTray({ label, plan, asking, send, readScreen }: { label: string; pl
       aside="Plan mode"
       foot={press === undefined
         ? (send === undefined ? <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span> : null)
-        : <Button variant="soft" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
+        : <Button variant="ghost" keyHint="n" aria-keyshortcuts="n" disabled={busy} title="Esc in the terminal: Claude stays in plan mode" onClick={() => { run(() => press(KEY_ESCAPE)) }}>Keep planning</Button>}
     >
       <PlanBody plan={plan} />
       {press !== undefined && (
@@ -474,25 +488,20 @@ export function PromptTray({ agent, ask, online, answer, pick, pickAll, answerOw
     )
   }
 
+  const pickRow = (id: PromptRowId) => {
+    if (!canAnswer) return
+    const own = ownChoiceIndex(id)
+    if (own !== null) { if (pick !== undefined) run(() => pick(own)) }
+    else run(() => answer(id === 'Accept' ? 'approve' : 'deny'))
+  }
   return (
     <WaitingCard
       label={label}
       title={title}
       aside={agent}
       flush={detail !== null && !isQuestion}
-      onEnter={canAnswer ? () => { run(() => answer('approve')) } : undefined}
-      foot={canAnswer ? (
-        <>
-          <AnswerButton decision="Accept" busy={busy} onAnswer={() => { run(() => answer('approve')) }} />
-          <AnswerButton decision="Decline" busy={busy} onAnswer={() => { run(() => answer('deny')) }} />
-          {pick !== undefined && always.length > 0 && <span className="mx-spacer" />}
-          {pick !== undefined && always.map((choice) => (
-            <Button key={choice.index} variant="ghost" size="sm" disabled={busy} title="Claude's own choice, in its words. Claude keeps it; Maiker adds no rule." onClick={() => { run(() => pick(choice.index)) }}>
-              {choice.label}
-            </Button>
-          ))}
-        </>
-      ) : <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span>}
+      answers={canAnswer ? <AnswerList label="Answers" rows={promptRows(pick === undefined ? [] : always)} disabled={busy} onPick={pickRow} /> : undefined}
+      foot={canAnswer ? undefined : <span className="mx-waiting-note">Only the agent's terminal can take this answer.</span>}
     >
       {shownDetail}
     </WaitingCard>

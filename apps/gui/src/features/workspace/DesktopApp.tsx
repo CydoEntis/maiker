@@ -1,8 +1,9 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { rememberGround } from '@/data/bootGround'
 import { APP_NAME } from '@/brand'
 import { Toaster } from '@/components/ui/toaster'
-import { KeyOverridesContext, ShortcutViewContext } from '@/features/shortcuts/platform'
+import { KeyOverridesContext } from '@/features/shortcuts/platform'
+import { Splash } from '@/features/welcome/Splash'
 import { ReducedMotionContext } from './components/motion'
 import { useWorkspaceState } from './useWorkspaceState'
 import { WorkspaceContext } from './workspaceContext'
@@ -26,15 +27,16 @@ import '@/features/chat/chat.css'
 
 export function DesktopApp() {
   const workspace = useWorkspaceState()
-  const { shortcutView, reducedMotion, setRoot, narrow, rootStyle, theme, preferences, machineSaid } = workspace
+  const { reducedMotion, setRoot, narrow, rootStyle, theme, preferences, machineSaid, sessionsQuery, welcomeOpen } = workspace
   // The next start opens on this theme's ground, not a flash of another colour.
-  useEffect(() => { rememberGround(theme.tokens.bg) }, [theme.tokens.bg])
+  useEffect(() => { rememberGround(theme.roles.t0) }, [theme.roles.t0])
+  // The first run draws the mark in its own welcome, so the splash is only for the starts after it.
+  const [splash] = useState(() => !welcomeOpen)
   useCloseGuard()
   return (
     <WorkspaceContext.Provider value={workspace}>
     <ReducedMotionContext.Provider value={reducedMotion}>
     <KeyOverridesContext.Provider value={preferences.keyOverrides}>
-    <ShortcutViewContext.Provider value={shortcutView}>
         <div ref={setRoot} className={`mx-app${narrow ? ' is-narrow' : ''}`} style={rootStyle} data-motion={reducedMotion ? 'reduced' : 'full'} data-theme-kind={theme.light ? 'light' : 'dark'} data-side={preferences.sidebarSide}>
           <AppTitleBar />
           <div className="mx-window" role="application" aria-label={APP_NAME}>
@@ -46,11 +48,11 @@ export function DesktopApp() {
             <WorkspaceDialogs />
             <WindowServiceStatus />
           </div>
-          <WorkspaceStatusBar />
+          {preferences.statusBar && <WorkspaceStatusBar />}
           <Toaster />
+          {splash && <Splash ready={!sessionsQuery.isPending} reducedMotion={reducedMotion} />}
           <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">{machineSaid}</div>
         </div>
-    </ShortcutViewContext.Provider>
     </KeyOverridesContext.Provider>
     </ReducedMotionContext.Provider>
     </WorkspaceContext.Provider>

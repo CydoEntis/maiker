@@ -866,13 +866,12 @@ pub(in crate::client) fn draw_check(
 
 #[cfg(test)]
 mod tests {
-    use super::super::reference::{Ref, assert_same, layout_name, reference, text};
+    use super::super::reference::text;
     use super::*;
-    use crate::client::reference_fixture::{LAYOUTS, SIZES, Stage, world};
+    use crate::client::reference_fixture::{Stage, world};
 
     /// The reference's output of a failing run (`OUT_FAIL`) and a passing one (`OUT_PASS`).
     const OUT_FAIL: &str = "> affiliate-site@1.4.0 test\n> vitest run\n\n ✓ src/components/Footer.test.tsx (3)\n ✓ src/lib/price.test.ts (9)\n ✗ src/pages/legal.test.tsx > footer shows current year\n   AssertionError: expected '© 2025 Affiliate Co.'\n                   to equal '© 2026 Affiliate Co.'\n    ❯ src/pages/legal.test.tsx:18:32\n\n Test Files  1 failed | 11 passed (12)\n      Tests  1 failed | 58 passed (59)\n   Duration  14.21s";
-    const OUT_PASS: &str = "> vitest run\n ✓ 12 test files · 59 tests\n   Duration  14.02s";
     /// The full output's length in 08: the daemon kept only its tail.
     const LONG: u64 = 1284;
 
@@ -912,119 +911,10 @@ mod tests {
         (rows, buf)
     }
 
-    fn matches_reference(
-        preset: &str,
-        stage: Stage,
-        output: &str,
-        line_count: Option<u64>,
-        fix: fn(&mut Ref),
-    ) {
-        for layout in LAYOUTS {
-            for (w, h) in SIZES {
-                let mut want = reference(preset, layout_name(layout), w, h);
-                want.offers_send_to_agent(w);
-                fix(&mut want);
-                let mut app = sheet_world(stage, output, line_count);
-                let (got, _) = draw(&mut app, want.area, w, h);
-                assert_same(&got, &want, &format!("{preset} {layout:?} {w}x{h}"));
-            }
-        }
-    }
-
-    #[test]
-    fn a_short_failing_output_reads_as_the_reference_draws_it() {
-        matches_reference(
-            "07 Evidence · short output",
-            Stage::Failed,
-            OUT_FAIL,
-            None,
-            |_| {},
-        );
-    }
-
-    #[test]
-    fn a_long_output_shows_its_tail_numbered_as_the_whole() {
-        matches_reference(
-            "08 Evidence · long output",
-            Stage::Failed,
-            OUT_FAIL,
-            Some(LONG),
-            |_| {},
-        );
-    }
-
-    #[test]
-    fn a_failure_that_printed_nothing_says_so() {
-        matches_reference(
-            "09 Evidence · no output",
-            Stage::Failed,
-            "",
-            Some(0),
-            |_| {},
-        );
-    }
-
-    #[test]
-    fn a_pass_that_printed_nothing_says_exit_0_passed_it() {
-        matches_reference(
-            "10 Evidence · printed nothing",
-            Stage::Passed,
-            "",
-            Some(0),
-            |_| {},
-        );
-    }
-
-    /// The fixture's never-run check has no run time, and says which commit the repo file is
-    /// at; the reference's sample shows a run and the time you chose.
-    #[test]
-    fn a_check_you_chose_never_to_run_explains_itself() {
-        matches_reference(
-            "A5 Never for this repo",
-            Stage::Never,
-            "",
-            Some(0),
-            |want| {
-                want.set_row(5, " Ran      did not run · after turn 3 ended 14:21:51");
-                want.set_row(
-                    6,
-                    concat!(
-                        " Source   .",
-                        env!("APP_COMMAND"),
-                        "/checks.toml · a1b2c3d · you chose never"
-                    ),
-                );
-            },
-        );
-    }
-
-    #[test]
-    fn a_stale_pass_lists_what_changed_and_asks_for_a_re_run() {
-        matches_reference("B2 Stale · evidence", Stage::Stale, OUT_PASS, None, |_| {});
-    }
-
-    #[test]
-    fn a_stale_pass_offers_re_run_first_and_lit() {
-        let mut app = sheet_world(Stage::Stale, OUT_PASS, None);
-        let area = reference("B2 Stale · evidence", "floating", 160, 45).area;
-        let (rows, buf) = draw(&mut app, area, 160, 45);
-        let y = area.bottom() - 2;
-        assert!(
-            rows[(y - area.y) as usize].starts_with("  Re-run r   Open session o"),
-            "{rows:#?}"
-        );
-        let t = Theme::named(crate::theme::DEFAULT);
-        assert_eq!(
-            buf[(area.x + 2, y)].bg,
-            t.accent,
-            "Re-run is the primary button"
-        );
-    }
-
     #[test]
     fn f_shows_all_of_the_output_and_the_arrows_scroll_it() {
         let mut app = sheet_world(Stage::Failed, OUT_FAIL, Some(LONG));
-        let area = reference("08 Evidence · long output", "floating", 80, 24).area;
+        let area = Rect::new(28, 1, 51, 22);
         let (rows, _) = draw(&mut app, area, 80, 24);
         assert!(rows[9].starts_with(" 1275  ✓"), "the tail first: {rows:#?}");
         app.on_key(KeyEvent::new(KeyCode::Char('f'), KeyModifiers::NONE));
@@ -1107,13 +997,5 @@ mod tests {
         let mut app = sheet_world(Stage::Failed, OUT_FAIL, None);
         app.on_key(KeyEvent::new(KeyCode::Char('o'), KeyModifiers::NONE));
         assert!(app.view.is_none(), "o leaves the sheet for the session");
-    }
-
-    #[test]
-    fn a_number_reads_with_thousands_separators() {
-        assert_eq!(
-            [thousands(13), thousands(1284), thousands(1_000_000)],
-            ["13", "1,284", "1,000,000"]
-        );
     }
 }

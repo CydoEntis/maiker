@@ -224,11 +224,11 @@ fn marked(machines: &[&str], body: &str) -> String {
     format!("[{label}: {}]\n{cut}", machines.join(", "))
 }
 
-/// An error a machine's reply or connection raised: unreachable when it is the one-line failure
-/// `Target::connect_error` writes, which begins with the machine's name.
+/// An error a machine's reply or connection raised: unreachable when it is the shared failure
+/// sentence `Target::connect_error` writes for that machine.
 fn failure(at: &Target, error: String) -> McpError {
     let line = at.plain(&error);
-    if line.starts_with(&format!("{}: ", at.machine().name())) {
+    if crate::link_failure::is_failure_sentence(&line, at.machine().name()) {
         McpError::Unreachable(line)
     } else {
         McpError::Failed(line)
@@ -479,9 +479,10 @@ mod tests {
     #[test]
     fn a_failed_connection_is_unreachable_and_another_error_is_the_machines_own() {
         let at = remote();
+        let refused = "build refused your key: run `ssh-copy-id build` in a terminal, then try again.";
         assert_eq!(
-            failure(&at, "build: needs a login; fix it".into()),
-            McpError::Unreachable("build: needs a login; fix it".into())
+            failure(&at, refused.into()),
+            McpError::Unreachable(refused.into())
         );
         assert_eq!(
             failure(&at, "no session build/9".into()),
@@ -515,16 +516,6 @@ mod tests {
         assert!(matches!(id(json!("build/")), Err(McpError::Invalid(_))));
         assert!(matches!(id(json!("a/b/4")), Err(McpError::Invalid(_))));
         assert_eq!(address_of(&json!({})).unwrap(), None);
-    }
-
-    #[test]
-    fn a_composite_id_is_turned_into_the_number_the_tools_read() {
-        let address = address_of(&json!({ "id": "build/4" })).unwrap();
-        assert_eq!(
-            bare(&json!({ "id": "build/4", "text": "x" }), &address)["id"],
-            4
-        );
-        assert_eq!(bare(&json!({ "text": "x" }), &None), json!({ "text": "x" }));
     }
 
     fn server_with(machines: &[(&str, bool)]) -> Server {

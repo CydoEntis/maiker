@@ -11,8 +11,9 @@ a pane (0003). Each provider speaks its own protocol.
 ## Decision
 
 - Codex (`app-server`) and Claude Code (headless `stream-json`) each live in their own adapter
-  crate behind the daemon's provider contract. Adapters are built with the daemon; there is no
-  plugin ABI or runtime download.
+  crate behind the daemon's provider contract, whose shape is
+  [0018](0018-one-provider-contract-with-no-io.md). Adapters are built with the daemon; there is
+  no plugin ABI or runtime download.
 - Maiker launches the official CLI with the user's own sign-in. It offers no login screen and
   does not handle OAuth tokens.
 - Permission posture is the provider's. Maiker only chooses the setting and never widens a
@@ -32,7 +33,8 @@ a pane (0003). Each provider speaks its own protocol.
   command, written the same, in that project without asking. It covers command requests only: never
   a file change, a permission grant or a question. Only a human client can make it; a pane or
   structured client is refused. A rule widens nothing the person has not already said yes to.
-- Report only provider capabilities that were verified against a pinned version.
+- A capability is reported as verified only when it was checked against a pinned version of the
+  provider. Each adapter states its own, and the daemon sends them with the conversation.
 
 ## Alternatives considered
 

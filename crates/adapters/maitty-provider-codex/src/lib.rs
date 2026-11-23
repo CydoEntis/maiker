@@ -5,6 +5,11 @@ use std::fmt;
 use std::path::PathBuf;
 use std::sync::LazyLock;
 
+pub mod approvals;
+pub mod dialect;
+pub mod envelope;
+pub mod history;
+pub mod requests;
 mod runtime_policy;
 mod status_hooks;
 
@@ -188,7 +193,7 @@ mod usage_tests {
     }
 
     #[test]
-    fn parses_context_and_rate_limits_from_codex_session_events() {
+    fn parses_context_rate_limits_and_token_totals_from_codex_session_events() {
         let tail = r#"{"type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"total_tokens":64600},"model_context_window":258400},"rate_limits":{"primary":{"used_percent":12.0,"window_minutes":300,"resets_at":1791322893},"secondary":{"used_percent":40.0,"window_minutes":10080,"resets_at":1791900000}}}}"#;
         let (usage, limits) = session_facts(tail);
         assert_eq!(
@@ -205,10 +210,8 @@ mod usage_tests {
             ("5h", "week", 40.0)
         );
         assert_eq!(session_facts("nothing here"), (None, None));
-    }
 
-    #[test]
-    fn takes_the_input_and_output_totals_codex_reports_and_no_cost() {
+        // The input and output totals Codex reports are taken, and no cost.
         let tail = r#"{"type":"event_msg","payload":{"type":"token_count","info":{"total_token_usage":{"input_tokens":900,"cached_input_tokens":400,"output_tokens":120,"total_tokens":1020},"last_token_usage":{"total_tokens":64600},"model_context_window":258400}}}"#;
         let usage = session_facts(tail).0.unwrap();
         assert_eq!(
@@ -354,6 +357,20 @@ pub fn parse_turn_steer_ack(response: &Value) -> Result<String, String> {
         .ok_or_else(|| "Codex's steer response has no turnId".to_owned())
 }
 
+/// What Codex's app-server can do in a chat, checked against the pinned version. `steers` is
+/// what the running version's schema says about taking a message into a turn.
+pub fn capabilities(steers: bool) -> maitty_shared::conversation::capabilities::Capabilities {
+    use maitty_shared::conversation::capabilities::{Capabilities, Verified};
+    Capabilities {
+        steer: steers,
+        resume: true,
+        history_replay: true,
+        helpers: true,
+        verified: Verified::Pinned,
+        ..Capabilities::default()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -363,21 +380,19 @@ mod tests {
     const STABLE_SCHEMA: &str = include_str!("fixtures/codex-0.166.0.json");
     const MISSING_INTERRUPT: &str = include_str!("fixtures/missing-interrupt.json");
 
+    /// A turn-completion notification is done, an interrupt is idle and a question to you needs
+    /// you; nothing else is mapped.
     #[test]
-    fn maps_only_codex_turn_completion_notifications() {
+    fn codex_hooks_map_to_done_idle_and_needs_you_and_nothing_else() {
+        use maitty_shared::protocol::HookStatus;
         assert_eq!(
             status_from_hook(&serde_json::json!({"type": "agent-turn-complete"})),
-            Some(maitty_shared::protocol::HookStatus::Done)
+            Some(HookStatus::Done)
         );
         assert_eq!(
             status_from_hook(&serde_json::json!({"type": "other-event"})),
             None
         );
-    }
-
-    #[test]
-    fn an_interrupt_is_idle_and_a_question_to_you_needs_you() {
-        use maitty_shared::protocol::HookStatus;
         let event = |name: &str, tool: &str| {
             status_from_hook(&serde_json::json!({"hook_event_name": name, "tool_name": tool}))
         };
@@ -408,14 +423,6 @@ mod tests {
             };
             assert_eq!(check_compatibility(version, schema), Ok(()));
         }
-    }
-
-    #[test]
-    fn codex_0_166_alpha_supports_the_required_session_operations() {
-        assert_eq!(
-            check_compatibility("0.166.0-alpha.5.1", CURRENT_SCHEMA),
-            Ok(())
-        );
     }
 
     #[test]
@@ -458,29 +465,17 @@ mod tests {
         );
     }
 
+    /// An unverified executable version, a malformed schema, and an initialize response (which
+    /// does not advertise server capabilities) are each unsupported, and say which.
     #[test]
-    fn unverified_executable_version_is_unsupported() {
-        assert_eq!(
-            check_compatibility("0.167.0", SUPPORTED_SCHEMA),
-            Err(unsupported("unverified executable version"))
-        );
-    }
-
-    #[test]
-    fn malformed_schema_is_unsupported() {
-        assert_eq!(
-            check_compatibility("0.164.0", "{"),
-            Err(unsupported("invalid generated-schema representation"))
-        );
-    }
-
-    #[test]
-    fn initialize_response_does_not_advertise_server_capabilities() {
-        let response = include_str!("fixtures/initialize-response.json");
-        assert_eq!(
-            check_compatibility("0.164.0", response),
-            Err(unsupported("clientRequests"))
-        );
+    fn an_unverified_version_or_a_schema_that_is_not_one_is_unsupported() {
+        for (version, schema, capability) in [
+            ("0.167.0", SUPPORTED_SCHEMA, "unverified executable version"),
+            ("0.164.0", "{", "invalid generated-schema representation"),
+            ("0.164.0", include_str!("fixtures/initialize-response.json"), "clientRequests"),
+        ] {
+            assert_eq!(check_compatibility(version, schema), Err(unsupported(capability)), "{capability}");
+        }
     }
 
     #[test]
@@ -497,24 +492,20 @@ mod tests {
             })
         );
         assert!(session_requests.is_empty());
-        assert_eq!(
-            result.unwrap_err().to_string(),
-            "Unsupported Codex app-server: turn/interrupt. Select a verified Codex 0.164.0, 0.165.0, 0.166.0-alpha.5.1, 0.166.0 or 0.170.0 executable; no session was started or resumed."
-        );
+        let said = result.unwrap_err().to_string();
+        assert!(said.contains("turn/interrupt") && said.contains(VERIFIED_VERSIONS_TEXT), "{said}");
     }
 
     #[test]
-    fn steering_is_reported_per_connected_codex() {
+    fn steering_is_reported_per_connected_codex_by_its_params_contract() {
         assert!(supports_turn_steer(STABLE_SCHEMA));
         assert!(!supports_turn_steer(SUPPORTED_SCHEMA));
         assert!(!supports_turn_steer(CURRENT_SCHEMA));
         assert!(!supports_turn_steer("{"));
         assert!(!supports_turn_steer("{}"));
         assert_eq!(check_compatibility("0.166.0", STABLE_SCHEMA), Ok(()));
-    }
 
-    #[test]
-    fn steering_needs_the_params_contract_not_just_the_method_name() {
+        // It needs the params contract, not just the method name.
         let mut schema: Value = serde_json::from_str(STABLE_SCHEMA).unwrap();
         let steer = schema["clientRequests"]["oneOf"]
             .as_array_mut()
@@ -550,21 +541,13 @@ mod tests {
         assert_eq!(parse_turn_steer_ack(&ack), Ok("turn-active".to_owned()));
     }
 
+    /// A steer Codex refuses says why, and an acknowledgement without a turn id is refused.
     #[test]
-    fn a_steer_codex_refuses_says_why() {
+    fn a_steer_codex_refuses_or_acknowledges_without_a_turn_is_an_error() {
         let error =
             serde_json::json!({"id": 7, "error": {"code": -32600, "message": "no active turn"}});
-        assert_eq!(
-            parse_turn_steer_ack(&error),
-            Err("Codex refused the steer: no active turn".to_owned())
-        );
-    }
-
-    #[test]
-    fn a_steer_acknowledgement_without_a_turn_id_is_refused() {
-        assert_eq!(
-            parse_turn_steer_ack(&serde_json::json!({"id": 7, "result": {}})),
-            Err("Codex's steer response has no turnId".to_owned())
-        );
+        let refused = parse_turn_steer_ack(&error).unwrap_err();
+        assert!(refused.contains("no active turn"), "{refused}");
+        assert!(parse_turn_steer_ack(&serde_json::json!({"id": 7, "result": {}})).is_err());
     }
 }

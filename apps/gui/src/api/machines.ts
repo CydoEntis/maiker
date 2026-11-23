@@ -40,15 +40,42 @@ export function terminalSessionId(term: number, machineName: string | null = nul
   return machineName === null ? `t${String(term)}` : `${machineName}/t${String(term)}`
 }
 
+/**
+ * A chat session of another machine: `build/c12` is conversation 12 on build. This computer's chat is its bare
+ * number, as it always was. The name, not the machine's number, is in it, so a saved layout survives a restart.
+ */
+const REMOTE_CHAT_ID = /^([A-Za-z0-9][A-Za-z0-9._-]*)\/c(\d+)$/
+
+/** The id of the chat session that is conversation `conversation` on the machine named `machineName`. */
+export function remoteChatId(conversation: number, machineName: string): string {
+  return `${machineName}/c${String(conversation)}`
+}
+
+/** Where a chat session lives: its machine, and its conversation's number on that machine. */
+export type ChatAddress = { machine: number; conversation: number }
+
+/**
+ * Where a chat session id points: this computer for a bare number, another machine for `build/c12`. Null for
+ * anything else (a terminal session). Throws for a machine the host has not told the window about this run.
+ */
+export function chatAddressOf(sessionId: string): ChatAddress | null {
+  if (/^\d+$/.test(sessionId)) return { machine: LOCAL_MACHINE, conversation: Number(sessionId) }
+  const match = REMOTE_CHAT_ID.exec(sessionId)
+  if (match?.[1] === undefined || match[2] === undefined) return null
+  const machine = idsByName.get(match[1].toLowerCase())
+  if (machine === undefined) throw new Error(`${match[1]} is not one of this computer's machines`)
+  return { machine, conversation: Number(match[2]) }
+}
+
 /** The pane number of a terminal session id of any machine; null for anything else (a chat's number). */
 export function terminalOf(sessionId: string): number | null {
   const match = SESSION_ID.exec(sessionId)
   return match?.[2] === undefined ? null : Number(match[2])
 }
 
-/** The name of the machine a session id belongs to; null for this computer or a chat. */
+/** The name of the machine a session id belongs to, a terminal's or a chat's; null for this computer. */
 export function machineNameOf(sessionId: string): string | null {
-  return SESSION_ID.exec(sessionId)?.[1] ?? null
+  return SESSION_ID.exec(sessionId)?.[1] ?? REMOTE_CHAT_ID.exec(sessionId)?.[1] ?? null
 }
 
 /**
@@ -77,6 +104,8 @@ export function machineArgs(address: SessionAddress): { machine?: number } {
 export function addressOf(sessionId: string): SessionAddress | null {
   const address = parseSessionId(sessionId)
   if (address !== null) return address
+  // Another machine's chat is no terminal session, whatever machine it names.
+  if (REMOTE_CHAT_ID.test(sessionId)) return null
   const name = machineNameOf(sessionId)
   if (name !== null) throw new Error(`${name} is not one of this computer's machines`)
   return null
@@ -85,12 +114,19 @@ export function addressOf(sessionId: string): SessionAddress | null {
 export const MACHINE_KINDS = ['connecting', 'connected', 'reconnecting', 'needs-login', 'needs-update', 'unreachable', 'refused'] as const
 export type MachineKind = (typeof MACHINE_KINDS)[number]
 
+/** Which failure a machine has, as the host names it (`FailureClass::kind` in crates/maitty-machines): buttons are picked by it, never by the words. */
+export const FAILURE_KINDS = ['key-refused', 'needs-person', 'host-key-changed', 'host-key-unknown', 'update', 'update-here', 'install', 'install-failed', 'not-running', 'unreachable', 'refusing-connections', 'refused'] as const
+export type FailureKind = (typeof FAILURE_KINDS)[number]
+
 const MachineStateSchema = z.object({
   machine: z.number().int().nonnegative(),
   name: z.string(),
   state: z.enum(MACHINE_KINDS),
-  /** What a person has to do, when one has to. */
+  /** The failure as one sentence that names the machine and gives the fix, worded by the host so both apps say the same; null when nothing failed. */
   why: z.string().nullable(),
+  failure: z.enum(FAILURE_KINDS).nullish(),
+  /** The one command `why` asks for, for a Copy button. */
+  fix_command: z.string().nullish(),
   /** On needs-login: ssh's own last line, why it could not log in. */
   said: z.string().nullable().optional(),
   /** On needs-login: the line to run in a terminal to log in by hand. */
@@ -193,6 +229,16 @@ export async function updateMachine(name: string, install: boolean, whenIdle: bo
   return z.string().parse(await invoke('update_machine', { name, install, whenIdle }))
 }
 
+/**
+ * Stop the service on a machine whose old service refused to restart after an update, ending every session it runs, so
+ * the next connection starts the new version there. Only after the person confirmed it. Resolves with what the far side
+ * said; rejects with the real reason.
+ */
+export async function restartMachineService(name: string): Promise<string> {
+  if (!isTauri()) throw new Error('Restarting a machine needs the desktop app.')
+  return z.string().parse(await invoke('restart_machine_service', { name }))
+}
+
 const PERCENT_MAX = 100
 const UpdateProgressSchema = z.object({ name: z.string(), percent: z.number().int().min(0).max(PERCENT_MAX) })
 export type UpdateProgress = z.infer<typeof UpdateProgressSchema>
@@ -248,12 +294,34 @@ const AddedSchema = z.discriminatedUnion('outcome', [
     key: z.string().nullish(),
     /** Set when the app was missing and `installHelper` asked for it to be installed as part of adding. */
     helper_install: z.object({ installed: z.boolean(), said: z.string() }).nullish(),
+    /** What is still wrong there, as the host's one sentence; null once the app answered. */
+    message: z.string().nullish(),
   }),
-  z.object({ outcome: z.literal('login'), name: z.string(), target: z.string(), said: z.string(), command: z.string().nullable() }),
+  z.object({
+    outcome: z.literal('login'),
+    name: z.string(),
+    target: z.string(),
+    said: z.string(),
+    /** Why ssh could not log in and what to do, as the host's one sentence. */
+    message: z.string(),
+    failure: z.enum(FAILURE_KINDS),
+    /** The command `message` asks for, for a Copy button. */
+    fix_command: z.string().nullable(),
+    command: z.string().nullable(),
+  }),
+  /** Nothing was written: ssh could not reach the machine, or its host key changed. */
+  z.object({
+    outcome: z.literal('failed'),
+    /** The host's one sentence for what failed and the fix. */
+    message: z.string(),
+    failure: z.enum(FAILURE_KINDS),
+    /** The command `message` asks for, for a Copy button. */
+    fix_command: z.string().nullable(),
+  }),
   z.object({ outcome: z.literal('needs-name') }),
   z.object({ outcome: z.literal('cancelled') }),
 ])
-/** What adding a machine came to. A machine that could not be added rejects with the words to show. */
+/** What adding a machine came to. A request the host refuses before looking (a bad target, a taken name) rejects with the words to show. */
 export type Added = z.infer<typeof AddedSchema>
 
 /** What an add may also say: a private key file for ssh to sign in with (checked to exist, never read), and whether to install the helper when it is missing. */
@@ -261,8 +329,8 @@ export type AddMachineOptions = { keyFile?: string | null; installHelper?: boole
 
 /**
  * Look at `target` over ssh without asking anyone anything and, when it holds up, add it and start
- * dialling it. `name` is only needed when none can be made from the target. Call `inspectNewHost`
- * first so a host this computer has never seen is trusted before anything is written.
+ * dialling it. `name` is only needed when none can be made from the target. A host key ssh has not
+ * seen is recorded by ssh itself; a changed one is `failed`, and nothing is added.
  */
 export async function addMachine(target: string, name?: string, port?: number, options: AddMachineOptions = {}): Promise<Added> {
   if (!isTauri()) throw new Error('Machines can only be added in the desktop app')
@@ -275,36 +343,6 @@ export async function addMachine(target: string, name?: string, port?: number, o
       installHelper: options.installHelper ?? false,
     }),
   )
-}
-
-const HostKeySchema = z.discriminatedUnion('status', [
-  z.object({ status: z.literal('unknown'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
-  z.object({ status: z.literal('trusted'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string() }),
-  z.object({ status: z.literal('changed'), host: z.string(), port: z.number(), key_type: z.string(), fingerprint: z.string(), known_fingerprint: z.string() }),
-])
-/** The host key a machine offers and where this computer stands on it. */
-export type HostKeyReport = z.infer<typeof HostKeySchema>
-
-/** Fetch the host key a machine offers and compare it with known_hosts. Rejects with the reason when it cannot be fetched. */
-export async function inspectHostKey(name: string): Promise<HostKeyReport> {
-  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
-  return HostKeySchema.parse(await invoke<unknown>('inspect_host_key', { name }))
-}
-
-/** `inspectHostKey` for a host that is not a machine yet: nothing is written, so Cancel leaves nothing behind. Rejects with the reason when the key cannot be fetched. */
-export async function inspectNewHost(target: string, port?: number): Promise<HostKeyReport> {
-  if (!isTauri()) throw new Error('Host keys can only be looked at in the desktop app')
-  return HostKeySchema.parse(await invoke<unknown>('inspect_new_host', { target, port: port ?? null }))
-}
-
-/** `trustHostKey` for a host that is not a machine yet: the fingerprint shown is added to known_hosts only when it is still that key and is new. */
-export async function trustNewHost(target: string, fingerprint: string, port?: number): Promise<void> {
-  if (isTauri()) await invoke('trust_new_host', { target, fingerprint, port: port ?? null })
-}
-
-/** Add the key whose fingerprint was shown to known_hosts; the machine is dialled again. The host refuses a key that changed or no longer matches. */
-export async function trustHostKey(name: string, fingerprint: string): Promise<void> {
-  if (isTauri()) await invoke('trust_host_key', { name, fingerprint })
 }
 
 /** Open ssh in a session on this computer for a machine that needs a login, so its prompts can be answered. */

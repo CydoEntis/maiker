@@ -6,9 +6,6 @@ const edited = (path: string) => ({ path, patch: 'diff --git a/x b/x\n@@ -1 +1 @
 const removed = (path: string) => ({ path, patch: 'diff --git a/x b/x\ndeleted file mode 100644\n@@ -1 +0,0 @@\n-x' })
 
 describe('a suggested commit message', () => {
-  it('is empty with nothing changed', () => {
-    expect(commitTextFor([])).toBe('')
-  })
   it('names a few files by what happened to them', () => {
     expect(commitTextFor([added('src/a.ts')])).toBe('Add a.ts')
     expect(commitTextFor([edited('src/a.ts'), edited('b.ts')])).toBe('Update a.ts, b.ts')

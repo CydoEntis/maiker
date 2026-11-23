@@ -10,42 +10,91 @@ use tokio::sync::mpsc;
 
 const RUNTIME_COMMAND_QUEUE: usize = 8;
 
+/// What the daemon asks of a conversation's provider, in no provider's own words.
 pub(super) enum Rpc {
-    Start {
-        params: Value,
+    /// Take up a conversation: a new one, or exactly `session`.
+    Open {
+        settings: Box<crate::conversation::LaunchSettings>,
+        session: Option<String>,
     },
-    Resume {
-        params: Value,
+    /// Read a page of the conversation as the provider saved it.
+    ReadHistory {
+        session: String,
+        cursor: Option<String>,
+        limit: usize,
     },
-    Turns {
-        params: Value,
-    },
+    /// Start a turn. `message` is the daemon's own name for this message.
     Send {
-        params: Value,
+        session: String,
+        text: String,
+        message: String,
+        choice: crate::conversation::TurnChoice,
     },
     Interrupt {
-        params: Value,
+        session: String,
+        turn: String,
     },
-    /// Adds a message to the turn that is running: Codex's `turn/steer`.
+    /// Adds a message to the turn that is running.
     Steer {
-        params: Value,
+        session: String,
+        turn: String,
+        text: String,
     },
+    /// Answers an approval. `permissions` is the profile a permission request asked for.
     Answer {
-        request_id: RequestId,
-        response: Value,
+        request: crate::conversation::ProviderRequestId,
+        decision: crate::conversation::ApprovalDecision,
+        permissions: Option<Value>,
+    },
+    /// Answers the questions a provider asked a person, by question.
+    AnswerInput {
+        request: crate::conversation::ProviderRequestId,
+        answers: BTreeMap<String, Vec<String>>,
     },
 }
+
+/// What the Codex app-server is sent for a command.
+enum CodexCall {
+    Request(&'static str, Value),
+    Response(RequestId, Value),
+}
+
 impl Rpc {
-    fn parts(self) -> Option<(&'static str, Value)> {
-        match self {
-            Self::Start { params } => Some(("thread/start", params)),
-            Self::Resume { params } => Some(("thread/resume", params)),
-            Self::Turns { params } => Some(("thread/turns/list", params)),
-            Self::Send { params } => Some(("turn/start", params)),
-            Self::Interrupt { params } => Some(("turn/interrupt", params)),
-            Self::Steer { params } => Some(("turn/steer", params)),
-            Self::Answer { .. } => None,
-        }
+    fn codex(self) -> Result<CodexCall> {
+        use maitty_provider_codex::requests;
+        Ok(match self {
+            Self::Open { settings, session: None } => {
+                CodexCall::Request("thread/start", requests::thread_start_params(&settings))
+            }
+            Self::Open { settings, session: Some(session) } => {
+                CodexCall::Request("thread/resume", requests::thread_resume_params(&settings, &session))
+            }
+            Self::ReadHistory { session, cursor, limit } => CodexCall::Request(
+                "thread/turns/list",
+                requests::turns_list_params(&session, cursor.as_deref(), limit),
+            ),
+            Self::Send { session, text, message, choice } => CodexCall::Request(
+                "turn/start",
+                requests::turn_start_params(&session, &text, &message, &choice),
+            ),
+            Self::Interrupt { session, turn } => {
+                CodexCall::Request("turn/interrupt", requests::turn_interrupt_params(&session, &turn))
+            }
+            Self::Steer { session, turn, text } => {
+                let mut request = maitty_provider_codex::turn_steer_request(0, &session, &turn, &text);
+                CodexCall::Request("turn/steer", request["params"].take())
+            }
+            Self::Answer { request, decision, permissions: None } => {
+                CodexCall::Response(request.into(), requests::decision_response(decision))
+            }
+            Self::Answer { request, decision, permissions } => CodexCall::Response(
+                request.into(),
+                requests::permission_response(decision, permissions.as_ref())?,
+            ),
+            Self::AnswerInput { request, answers } => {
+                CodexCall::Response(request.into(), requests::user_input_response(answers))
+            }
+        })
     }
 }
 pub(super) struct Command {
@@ -69,6 +118,17 @@ pub(super) fn test_owner(conversation: ConversationId, generation: u64) -> Owner
     }
 }
 
+/// The identity a test starts `owner`'s runtime with.
+#[cfg(test)]
+pub(super) fn test_identity_of(owner: Owner) -> crate::protocol::StructuredIdentity {
+    crate::protocol::StructuredIdentity {
+        conversation: owner.conversation,
+        generation: owner.generation,
+        connection: owner.connection,
+        token: "fixture-runtime-secret".into(),
+    }
+}
+
 pub(crate) struct Event {
     pub(super) owner: Owner,
     pub(super) payload: Payload,
@@ -89,6 +149,8 @@ pub(in crate::daemon) enum Payload {
         method: String,
         params: Value,
     },
+    /// What an adapter that speaks the provider contract reported, already read.
+    Event(maitty_provider::ProviderEvent),
     Terminated {
         failure: Option<String>,
         reaped: bool,
@@ -339,9 +401,30 @@ async fn run(
             return;
         }
     };
-    if launch.provider() == crate::conversation::Provider::Claude {
-        super::claude::run(launch, owner, events, stop, requests).await;
-        return;
+    use crate::daemon::providers::{ProcessModel, adapter};
+    // `validate` refused a provider with no chat runtime, so the server model is what is left.
+    let process = adapter(launch.provider())
+        .structured
+        .as_ref()
+        .map_or(ProcessModel::Server, |structured| structured.process);
+    match process {
+        ProcessModel::PerMessage => {
+            super::claude::run(launch, owner, identity, events, stop, requests).await;
+            return;
+        }
+        ProcessModel::Dialect => {
+            let (_, executable, cwd) = launch.paths();
+            let (executable, cwd) = (executable.to_path_buf(), cwd.to_path_buf());
+            // ACP is the only dialect run this way so far.
+            let dialect = maitty_provider_acp::AcpDialect::new(maitty_provider_acp::Settings {
+                arguments: launch.arguments,
+                cwd: cwd.clone(),
+            });
+            let host = super::dialect_runtime::Host { executable, cwd, environment: launch.environment };
+            super::dialect_runtime::run(Box::new(dialect), host, owner, events, stop, requests).await;
+            return;
+        }
+        ProcessModel::Server => {}
     }
     let connected = launch.connect(&identity).await;
     let mut connection = match connected {
@@ -382,15 +465,12 @@ async fn run(
                     let command = command.ok_or_else(|| anyhow::anyhow!("Codex command sender closed"))?;
                     if pending.len() >= RUNTIME_COMMAND_QUEUE { bail!("Too many pending Codex requests"); }
                     next_id = next_id.checked_add(1).ok_or_else(|| anyhow::anyhow!("Codex request identity exhausted"))?;
-                    let (method, mut params) = match command.request {
-                        Rpc::Answer {
-                            request_id,
-                            response,
-                        } => {
-                            connection.respond(&request_id, response).await?;
+                    let (method, mut params) = match command.request.codex()? {
+                        CodexCall::Response(request, response) => {
+                            connection.respond(&request, response).await?;
                             continue;
                         }
-                        request => request.parts().ok_or_else(|| anyhow::anyhow!("Invalid Codex runtime command"))?,
+                        CodexCall::Request(method, params) => (method, params),
                     };
                     if matches!(method,"thread/start"|"thread/resume") {
                         let config=params.get_mut("config").and_then(Value::as_object_mut).ok_or_else(||anyhow::anyhow!("Structured launch configuration overrides missing"))?;

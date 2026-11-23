@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react'
+import { HighlightedLine } from '@/components/HighlightedLine'
 import { errorMessage } from '@/lib/error-message'
 import { commentMessage, patchLines, type PatchLine } from './patchLines'
 
@@ -21,17 +22,27 @@ function canComment(line: PatchLine): boolean {
   return line.line !== null
 }
 
-/** The two line numbers of a diff line, drawn by the stylesheet so that copying the diff copies only its text. */
-function Numbers({ line }: { line: PatchLine }) {
-  return <i className="mx-patch-no" data-old={line.oldLine ?? ''} data-new={line.newLine ?? ''} aria-hidden="true" />
+/**
+ * A diff line: its number in the file as it is now (a removed line has none), then its text. The number, and the `+` or
+ * `−` before the text, are drawn by the stylesheet so that copying the diff copies only the code.
+ */
+function Line({ line, path }: { line: PatchLine; path: string }) {
+  const code = line.kind === 'add' || line.kind === 'remove' || (line.kind === 'context' && line.line !== null)
+  return (
+    <>
+      <i className="mx-src-no" data-no={line.newLine ?? ''} aria-hidden="true" />
+      <span className="mx-src-text">{code ? <HighlightedLine line={line.text.slice(1)} path={path} /> : line.text}</span>
+      {'\n'}
+    </>
+  )
 }
 
 /**
- * One file's unified diff, each line coloured by what it did and numbered on both sides. Git's own
- * header lines are left out: the panel already names the file. With `comments`, a click on a line
- * opens a box to tell the agent about it.
+ * One file's unified diff, each line tinted by what it did, numbered, and coloured as the file's own
+ * language. Git's own header lines are left out: the pane already names the file. With `comments`, a
+ * click on a line opens a box to tell the agent about it.
  */
-export function PatchView({ patch, comments }: { patch: string; comments?: PatchComments }) {
+export function PatchView({ patch, path, comments }: { patch: string; /** The file the diff is of, which decides its syntax colours. */ path: string; comments?: PatchComments | undefined }) {
   const [open, setOpen] = useState<number | null>(null)
   const [draft, setDraft] = useState('')
   const [sending, setSending] = useState(false)
@@ -61,26 +72,26 @@ export function PatchView({ patch, comments }: { patch: string; comments?: Patch
   }
 
   return (
-    <pre className="mx-patch is-numbered" aria-label="Diff">
+    <pre className="mx-src is-diff" tabIndex={0} aria-label="Diff">
       {lines.map((line, index) => {
         // The first hunk's header only says where the file starts; a later one marks a gap in it.
         if (index <= firstHunk) return null
-        if (line.kind === 'hunk') return <span key={index} className="mx-patch-gap" aria-hidden="true" />
+        if (line.kind === 'hunk') return <span key={index} className="mx-src-gap" aria-hidden="true" />
         const commentable = comments !== undefined && canComment(line)
         return (
           <Fragment key={index}>
             {commentable ? (
               <span
-                className={`mx-patch-line is-${line.kind} is-commentable`}
+                className={`mx-src-line is-${line.kind} is-commentable`}
                 data-line={line.line ?? ''}
                 role="button"
                 tabIndex={0}
                 title="Click to comment"
                 onClick={() => { openAt(index) }}
                 onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openAt(index) } }}
-              ><Numbers line={line} />{line.text}{'\n'}</span>
+              ><Line line={line} path={path} /></span>
             ) : (
-              <span className={`mx-patch-line is-${line.kind}`} data-line={line.line ?? ''}><Numbers line={line} />{line.text}{'\n'}</span>
+              <span className={`mx-src-line is-${line.kind}`} data-line={line.line ?? ''}><Line line={line} path={path} /></span>
             )}
             {sent.filter((comment) => comment.index === index).map((comment, at) => (
               <span key={at} className="mx-patch-sent"><b>You → {comments?.agent}</b>{comment.text} <i>· sent to {comments?.agent}</i></span>

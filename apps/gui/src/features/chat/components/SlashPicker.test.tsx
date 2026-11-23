@@ -76,17 +76,6 @@ describe('the agent\'s commands in the message box', () => {
     expect(offered()).toEqual(['/clearStart a new conversation', '/compactKeep a summary of the conversation', '/developer:prOpen a pull request', '/model [model]Pick the model'])
   })
 
-  it('narrows the list as a name is typed, and finds a plugin\'s command by its own name', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, '/c')
-    expect(offered()).toEqual(['/clearStart a new conversation', '/compactKeep a summary of the conversation'])
-
-    await user.clear(box)
-    await user.type(box, '/pr')
-    expect(offered()).toEqual(['/developer:prOpen a pull request'])
-  })
-
   it('moves through the list with the arrows and completes the one they are on with Tab, sending nothing', async () => {
     const { user, box } = await open()
 
@@ -152,31 +141,30 @@ describe('the agent\'s commands in the message box', () => {
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/compact', '\r'])
   })
 
-  it('offers the commands only the terminal runs to an agent that has one, and shows the terminal when one is run', async () => {
+  // ADR 0020: a chat never shows a terminal, so a command whose menu only the terminal draws is not typed into one.
+  it('offers the commands only the terminal runs to an agent that has one, and types nothing when one is run', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
-    const onShowTerminal = vi.fn()
-    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, onShowTerminal })
+    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto })
 
     await user.type(box, '/perm')
     expect(offered()).toEqual(['/permissionsterminalManage allow and deny tool permission rules'])
     await user.keyboard('{Enter}')
 
-    expect(onShowTerminal).toHaveBeenCalledOnce()
     await settle(1000)
-    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/permissions', '\r'])
+    expect(typeInto).not.toHaveBeenCalled()
+    expect(fake.submitMessage).not.toHaveBeenCalled()
     expect(box).toHaveValue('')
   })
 
-  it('runs a terminal-only command typed out with what it takes in the terminal, as the answer is only drawn there', async () => {
+  it('types nothing for a terminal-only command typed out with what it takes, as its answer is only drawn there', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
-    const onShowTerminal = vi.fn()
-    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, onShowTerminal })
+    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto })
 
     await user.type(box, '/btw which file is that?{Enter}')
 
-    expect(onShowTerminal).toHaveBeenCalledOnce()
     await settle(1000)
-    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/btw which file is that?', '\r'])
+    expect(typeInto).not.toHaveBeenCalled()
+    expect(fake.submitMessage).not.toHaveBeenCalled()
     expect(box).toHaveValue('')
   })
 
@@ -260,14 +248,6 @@ describe('the agent\'s commands in the message box', () => {
     const { user, box } = await open()
 
     await user.type(box, '$cl')
-
-    expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
-  })
-
-  it('offers nothing in a box that is not a command: a path in a sentence, or a slash after a space', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, 'look at /tmp')
 
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument()
   })

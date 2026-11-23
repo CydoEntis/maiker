@@ -44,11 +44,13 @@ export function withAgentTerminal(known: AgentTerminals, agentId: string, termin
  * lists. A terminal whose agent is gone is not in here, so it is listed as a session of its own and is
  * never lost.
  */
-export function liveAgentTerminals(known: AgentTerminals, existing: ReadonlySet<string>): AgentTerminals {
+export function liveAgentTerminals(known: AgentTerminals, existing: ReadonlySet<string>, runsAgent: (id: string) => boolean = () => false): AgentTerminals {
   const live = new Map<string, readonly string[]>()
   for (const [agentId, terminalIds] of known) {
     if (!existing.has(agentId)) continue
-    const here = terminalIds.filter((id) => existing.has(id))
+    // A record can outlive the pane it named: a restarted daemon hands the number to another one. A pane an agent
+    // runs in is never a terminal this window opened, so it is never hidden as one nor ended with the session.
+    const here = terminalIds.filter((id) => existing.has(id) && !runsAgent(id))
     if (here.length > 0) live.set(agentId, here)
   }
   return live
@@ -57,4 +59,11 @@ export function liveAgentTerminals(known: AgentTerminals, existing: ReadonlySet<
 /** Every terminal that is some agent's, for leaving them out of the session list. */
 export function ownedTerminalIds(live: AgentTerminals): ReadonlySet<string> {
   return new Set([...live.values()].flat())
+}
+
+/** The terminals of `a` and of `b` together, by agent: the shells that are a session's own, wherever they are shown. */
+export function withTerminals(a: AgentTerminals, b: AgentTerminals): AgentTerminals {
+  const all = new Map(a)
+  for (const [agentId, ids] of b) all.set(agentId, [...(all.get(agentId) ?? []), ...ids.filter((id) => !(all.get(agentId) ?? []).includes(id))])
+  return all
 }

@@ -10,21 +10,21 @@ import { DesktopSettings, type DesktopSettingsSection } from '@/features/setting
 import type { SettingsPreferences } from '@/features/settings/preferences'
 import { CommandPalette } from '@/features/workspace/components/CommandPalette'
 import { NewChatPage } from '@/features/workspace/components/NewChatPage'
-import { PickFolderDialog } from '@/features/workspace/components/PickFolderDialog'
+import { OpenProjectPalette, type PaletteStart } from '@/features/open-project/OpenProjectPalette'
+import type { PaletteMachine } from '@/features/open-project/openPalette'
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import type { PaletteItem } from '@/features/workspace/model/palette'
-import { withLook, type Corners } from '@/features/workspace/theme/corners'
+import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
 import { ErrorsGallery } from './ErrorsGallery'
-import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleHostKey, sampleInspect, sampleProgress, sampleSessions } from './machinesSample'
-import { AddMachineDialog } from '@/features/workspace/components/AddMachineDialog'
+import { SAMPLE_HEADS, SAMPLE_HOSTS, sampleAdd, sampleProgress, sampleSessions } from './machinesSample'
 import { Onboarding } from '@/features/welcome/Onboarding'
 import { galleryParams } from './galleryParams'
 
 /*
- * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night&corners=rounded`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), picker, picker-empty, picker-loading, palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -81,9 +81,9 @@ function DockBox({ what }: { what: string }) {
   )
 }
 
-const PREFS = { exportFolder: '', accent: 'teal', spinner: 'braille', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notifyError: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
+const PREFS = { exportFolder: '', spinner: 'braille', restoreLayout: true, statusBar: true, reduceMotion: false, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Light', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} } as unknown as SettingsPreferences
 const CLIENT = new QueryClient()
-const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, hostKey: { inspect: sampleHostKey, trust: () => Promise.resolve() }, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, inspect: sampleInspect, trust: () => Promise.resolve(), onProgress: sampleProgress, open: SAME } }
+const SETTINGS_MACHINES = { known: true, list: SAMPLE_HEADS, sessionsOn: sampleSessions, onRetry: SAME, onRemove: () => Promise.resolve(true), onGrant: SAME, onUpdate: () => Promise.resolve(), onCheckActivity: () => Promise.resolve({ sessions: 3, busy: 1, current: false }), onCopyCommand: SAME, onOpenLogin: SAME, onRename: SAME, add: { loadHosts: () => Promise.resolve(SAMPLE_HOSTS), onAdd: sampleAdd, onCancel: SAME, onProgress: sampleProgress, open: SAME } }
 
 function Settings({ section }: { section: DesktopSettingsSection }) {
   const [prefs, setPrefs] = useState(PREFS)
@@ -95,8 +95,7 @@ function Settings({ section }: { section: DesktopSettingsSection }) {
   )
 }
 
-/** How long the scripted picker waits for the dialog to read its folder, and then for the field to open. */
-const PICKER_READ_MS = 400
+/** How long a scripted page waits for a field to open. */
 const FIELD_OPEN_MS = 150
 
 /** Sets the value of a React-controlled input the way typing does. */
@@ -105,68 +104,68 @@ function typeInto(input: HTMLInputElement, text: string) {
   input.dispatchEvent(new Event('input', { bubbles: true }))
 }
 
-/** For the new-folder states: opens the field, and types a bad name or a good one, once the page has read its folder. */
-function ScriptedPicker({ what, children }: { what: string; children: ReactNode }) {
-  useEffect(() => {
-    if (!what.startsWith('picker-new') && what !== 'picker-denied') return undefined
-    const timer = window.setTimeout(() => {
-      document.querySelector<HTMLButtonElement>('.mx-fp-new-button')?.click()
-      window.setTimeout(() => {
-        const field = document.querySelector<HTMLInputElement>('.mx-fp-new input')
-        if (field === null) return
-        if (what === 'picker-new-bad') { typeInto(field, 'my/folder'); field.form?.requestSubmit() }
-        if (what === 'picker-new-exists') { typeInto(field, 'NOTES'); field.form?.requestSubmit() }
-        if (what === 'picker-denied') { typeInto(field, 'fresh'); field.form?.requestSubmit() }
-        if (what === 'picker-new-typed') typeInto(field, 'my-new-project')
-      }, FIELD_OPEN_MS)
-    }, PICKER_READ_MS)
-    return () => { window.clearTimeout(timer) }
-  }, [what])
-  return children
+const PALETTE_MACHINES: readonly PaletteMachine[] = [
+  { machine: 0, name: null, label: 'This computer', address: null, ready: true, why: null, start: '/home/dev' },
+  { machine: 1, name: 'devbox', label: 'devbox', address: 'cydo@10.0.4.7', ready: true, why: null, start: '~' },
+  { machine: 2, name: 'build-01', label: 'build-01', address: 'ci@build-01', ready: false, why: 'build-01 did not answer on port 22.', start: '~' },
+]
+const PALETTE_STARTS: Readonly<Record<string, PaletteStart>> = {
+  'open-browse': { kind: 'folder', machine: 0 }, 'open-remote': { kind: 'folder', machine: 1 }, 'open-offline': { kind: 'folder', machine: 2 },
+  'open-loading': { kind: 'folder', machine: 1 }, 'open-empty': { kind: 'folder', machine: 0 }, 'open-url': { kind: 'url' }, 'open-pick': { kind: 'folder', machine: 1 },
+}
+const CLOSED = [{ agent: 'claude', session: 'a', cwd: '/home/dev/old-portfolio', branch: 'main', title: null, at: 0, folder_present: true, worktree: null, repo: null }]
+
+/** The Open a project palette on mock machines: `open` is its first level, `open-…` one of its other states. */
+function PaletteShown({ what }: { what: string }) {
+  const listing = what === 'open-empty' ? { ...LISTING, entries: [] } : LISTING
+  const services = {
+    list: what === 'open-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(listing),
+    create: () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' }),
+    closed: () => Promise.resolve(CLOSED),
+    chooseSystemFolder: () => Promise.resolve(null),
+  }
+  return <OpenProjectPalette mode={what === 'open-pick' ? 'pick' : 'open'} start={PALETTE_STARTS[what] ?? { kind: 'sources' }} machines={PALETTE_MACHINES} localOs="linux" home="/home/dev" opened={[{ machineName: null, folder: '/home/dev/acme-store' }]} onTake={() => NEVER()} onClose={SAME} services={services} />
 }
 
-/** For the Add a remote machine states: types an address or clicks a host of the SSH config once the dialog is up, as a person would. */
+/** For the palette's New machine states: types an address and presses Enter, or clicks a host of the SSH config, once the palette is up, as a person would. */
 function ScriptedAdd({ what, children }: { what: string; children: ReactNode }) {
   useEffect(() => {
-    const click = (name: string) => { document.querySelector<HTMLButtonElement>(`button[aria-label="Connect to ${name}"]`)?.click() }
+    const click = (name: string) => { Array.from(document.querySelectorAll<HTMLElement>('[role="option"]')).find((option) => option.textContent.startsWith(name))?.click() }
     const type = (text: string) => {
-      const field = document.querySelector<HTMLInputElement>('input[aria-label="Address"]')
+      const field = document.querySelector<HTMLInputElement>('input[role="combobox"]')
       if (field === null) return
       typeInto(field, text)
-      field.form?.requestSubmit()
+      // Enter is read against what the field held when it was last drawn, so it waits for the text to land.
+      window.setTimeout(() => { field.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })) }, FIELD_OPEN_MS)
     }
     const timer = window.setTimeout(() => {
       if (what === 'add-error') type('dev@10.0.4')
+      if (what === 'add-done') type('ubuntu@40.160.103.45')
       if (what === 'add-no-answer') type('cydo@10.9.9.9')
-      if (what === 'add-trust') click('linkables-vps')
-      if (what === 'add-helper') click('homelab')
-      if (what === 'add-name') click('server-15')
+      if (what === 'add-busy') click('homelab')
+      if (what === 'add-key') click('server-15')
+      if (what === 'add-host-key') click('pi')
     }, STATE_READ_MS)
     return () => { window.clearTimeout(timer) }
   }, [what])
   return children
 }
 
-const STYLE_STEP = 3
-const FIRST_STEP_MS = 2600
-const STEP_GAP_MS = 400
-const ONBOARDING_ANSWERS = ['In an editor', 'Get a clear summary', 'Readable diffs']
+/** How long the mark draws before the window is up, with room to spare. */
+const WINDOW_UP_MS = 1900
+const STYLE_SCREEN = 2
 
-/** The first-run setup at a step (0 is the opening mark, 1 to 5 the steps): clicks through as a person would, answering the questions on the way. */
+/** The first run at a stage (0 is the mark drawing, 1 the setup screen, 2 the style screen): continues as a person would. */
 function OnboardingShown({ step }: { step: number }) {
   const [root] = useState(() => document.querySelector<HTMLElement>('.mx-app'))
   useEffect(() => {
-    const press = (text: string) => { Array.from(document.querySelectorAll<HTMLElement>('button, [role="radio"]')).find((node) => node.textContent.includes(text))?.click() }
-    const timers: number[] = []
-    for (let at = 1; at < step; at += 1) {
-      timers.push(window.setTimeout(() => {
-        if (at === STYLE_STEP) for (const answer of ONBOARDING_ANSWERS) press(answer)
-        press(at === STYLE_STEP ? 'See my recommendation' : 'Continue')
-      }, FIRST_STEP_MS + at * STEP_GAP_MS))
-    }
-    return () => { for (const timer of timers) window.clearTimeout(timer) }
+    if (step < STYLE_SCREEN) return undefined
+    const timer = window.setTimeout(() => {
+      Array.from(document.querySelectorAll<HTMLElement>('button')).find((node) => node.textContent.includes('Continue'))?.click()
+    }, WINDOW_UP_MS)
+    return () => { window.clearTimeout(timer) }
   }, [step])
-  return <Onboarding home="C:\Users\cstin\code" startFolder="" validateFolder={() => Promise.resolve(true)} onChooseFolder={() => Promise.resolve(null)} onApply={SAME} reducedMotion={false} portalContainer={root} onClose={SAME} />
+  return <Onboarding home="C:\Users\cstin" startFolder="" onChooseFolder={() => Promise.resolve(null)} theme="Maiker Dark" onPreviewTheme={SAME} reducedMotion={false} portalContainer={root} onFinish={SAME} onSkip={SAME} />
 }
 
 const FAILED_START = 'The agent could not be started in that worktree: the branch name is already taken by another worktree on this computer, so nothing was created and your checkout was left as it was.'
@@ -197,16 +196,11 @@ function Show({ what }: { what: string }): ReactNode {
   const long = what === 'new-long'
   if (what === 'new' || what.startsWith('new-')) {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
-    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} /></div></ScriptedNew>
+    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} looseFolder="/home/you" /></div></ScriptedNew>
   }
-  if (what.startsWith('picker')) {
-    const listing = what === 'picker-old' ? { ...LISTING, can_create: false } : what === 'picker-empty' ? { ...LISTING, entries: [] } : LISTING
-    const list = what === 'picker-loading' ? () => NEVER<typeof LISTING>() : () => Promise.resolve(listing)
-    const create = what === 'picker-denied' ? () => Promise.resolve({ kind: 'failed' as const, reason: 'You do not have permission to make a folder here.' }) : () => Promise.resolve({ kind: 'created' as const, path: '/home/dev/new' })
-    return <ScriptedPicker what={what}><PickFolderDialog machines={[{ machine: 0, label: 'this computer', ready: true, word: null }, { machine: 1, label: 'devbox', ready: true, word: null }, { machine: 2, label: 'build-01', ready: false, word: 'asleep' }]} machine={1} list={list} create={create} onPick={() => undefined} onCancel={() => undefined} /></ScriptedPicker>
-  }
+  if (what === 'open' || what.startsWith('open-')) return <PaletteShown what={what} />
   if (what === 'add' || what.startsWith('add-')) {
-    return <ScriptedAdd what={what}><AddMachineDialog machines={SETTINGS_MACHINES} onClose={SAME} facts={{ system: 'Ubuntu 24.04 · 8 cores', agents: ['Claude Code', 'Codex'] }} appVersion="0.46.0" /></ScriptedAdd>
+    return <ScriptedAdd what={what}><OpenProjectPalette mode="open" start={{ kind: 'machine' }} machines={PALETTE_MACHINES} localOs="linux" home="/home/dev" opened={[]} onTake={() => NEVER()} onClose={SAME} adding={SETTINGS_MACHINES} /></ScriptedAdd>
   }
   if (what.startsWith('onboarding')) return <OnboardingShown step={Number(what.split('-')[1] ?? 0)} />
   if (what.startsWith('dock') || what.startsWith('box')) return <DockBox what={what} />
@@ -217,9 +211,9 @@ function Show({ what }: { what: string }): ReactNode {
   return null
 }
 
-/** One dialog over an empty window, in the theme and corners the hash asks for. */
+/** One dialog over an empty window, in the theme the hash asks for. */
 export function DialogsGallery() {
-  const { theme: themeName, corners } = galleryParams(window.location.hash)
+  const { theme: themeName } = galleryParams(window.location.hash)
   const what = new URLSearchParams(window.location.hash.slice(window.location.hash.indexOf('?') + 1)).get('show') ?? 'new'
   const theme = withLook(findTheme(themeName))
   const style = themeStyle(theme)
@@ -227,10 +221,9 @@ export function DialogsGallery() {
   const [root, setRoot] = useState<HTMLDivElement | null>(null)
   useEffect(() => {
     const root = document.documentElement
-    root.dataset.corners = corners satisfies Corners
     for (const [name, value] of Object.entries(style)) if (name.startsWith('--')) root.style.setProperty(name, value)
     root.style.colorScheme = theme.light ? 'light' : 'dark'
-  }, [corners, style, theme.light])
+  }, [style, theme.light])
   return (
     <div ref={setRoot} className="mx-app" data-theme-kind={theme.light ? 'light' : 'dark'} style={{ ...style, position: 'fixed', inset: 0, background: 'var(--bg)', color: 'var(--fg)', fontFamily: 'var(--ui)' }}>
       {root !== null && <Show what={what} />}

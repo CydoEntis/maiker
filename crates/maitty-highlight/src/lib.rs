@@ -195,9 +195,10 @@ mod tests {
     }
 
     #[test]
-    fn typescript_and_toml_which_plain_syntect_lacks_are_covered() {
+    fn typescript_toml_and_dockerfile_which_plain_syntect_lacks_are_covered() {
         assert!(highlight("app.tsx", "const x: number = 1;\n").is_some());
         assert!(highlight("Cargo.toml", "[package]\nname = \"x\"\n").is_some());
+        assert!(highlight("Dockerfile", "FROM rust\n").is_some(), "found by its name");
     }
 
     #[test]
@@ -230,10 +231,5 @@ mod tests {
         let lines = highlight("a.rs", &source).unwrap();
         assert_eq!(lines[0][0].kind, Kind::Plain);
         assert!(kinds(&lines[1]).contains(&("fn", Kind::Keyword)));
-    }
-
-    #[test]
-    fn dockerfile_is_found_by_its_name() {
-        assert!(highlight("Dockerfile", "FROM rust\n").is_some());
     }
 }

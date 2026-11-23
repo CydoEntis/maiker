@@ -152,3 +152,12 @@ export function hasAbility(agent: ChatAgent, ability: StructuredAbility): agent 
 export function runsMidTurn(agent: string | null | undefined, text: string): boolean {
   return isSlashLine(text) && abilitiesOf(agent).midTurnCommands.includes(text.slice(1).split(/\s/, 1)[0] ?? '')
 }
+
+/**
+ * Whether Send now goes into the turn that is running, instead of stopping it. The daemon reports it for each chat it
+ * runs, since it depends on the agent's version; with no report (an older daemon, a chat that follows a terminal) no
+ * agent is known to, so the turn is said to be interrupted.
+ */
+export function steersIntoTurn(reported: boolean | undefined): boolean {
+  return reported ?? false
+}

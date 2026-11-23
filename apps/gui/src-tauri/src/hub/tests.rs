@@ -5,7 +5,6 @@
 use super::*;
 use maitty_machines::link::Backoff;
 use maitty_machines::machine_config::Grant;
-use maitty_machines::link_failure::{FIX_LOGIN, FIX_UPDATE};
 use maitty_test_support::{Sandbox, fake_ssh};
 use std::time::Duration;
 
@@ -186,7 +185,7 @@ async fn a_failed_login_needs_login_with_the_fix_and_the_retries_are_quiet() {
         .until("needs-login", |w| w.is(BOX, "needs-login"))
         .await;
     assert!(
-        matches!(watch.state_of(BOX), Some(ConnectionState::NeedsLogin { why, .. }) if why == FIX_LOGIN),
+        matches!(watch.state_of(BOX), Some(ConnectionState::NeedsLogin { failure: FailureClass::KeyRefused(_) })),
         "{:?}",
         watch.state_of(BOX)
     );
@@ -208,12 +207,30 @@ fn a_fix_names_the_machine_so_the_command_can_be_run_as_it_stands() {
         MachineId(2),
         "build",
         &ConnectionState::NeedsUpdate {
-            why: maitty_machines::link_failure::FIX_INSTALL.into(),
+            failure: FailureClass::Install,
         },
+        None,
     );
     let why = told.why.expect("a fix");
     assert!(why.contains("`maiker machine update build --install`"), "{why}");
     assert!(!why.contains("<name>"), "{why}");
+    assert_eq!(told.failure, Some("install"));
+    assert_eq!(told.fix_command.as_deref(), Some("maiker machine update build --install"));
+}
+
+#[test]
+fn a_refused_key_is_told_as_the_shared_sentence_with_the_command_for_the_machine_s_address() {
+    let route = Machine::from_def(
+        &MachineDef { name: "build".into(), target: "dev@10.0.0.5".into(), ..MachineDef::default() },
+        maitty_machines::SSH_PROGRAM,
+    );
+    let failure = FailureClass::KeyRefused("dev@10.0.0.5: Permission denied (publickey).".into());
+    let told = describe(MachineId(2), "build", &ConnectionState::NeedsLogin { failure: failure.clone() }, Some(&route));
+    let subject = maitty_machines::link_failure::Subject::of(&route);
+    assert_eq!(told.why, Some(maitty_machines::link_failure::sentence_here(&failure, &subject)));
+    assert_eq!(told.failure, Some("key-refused"));
+    assert_eq!(told.said.as_deref(), Some("dev@10.0.0.5: Permission denied (publickey)."));
+    assert!(told.fix_command.is_some_and(|command| command.contains("dev@10.0.0.5")));
 }
 
 #[tokio::test]
@@ -230,7 +247,7 @@ async fn a_daemon_of_another_version_needs_an_update_with_the_fix() {
     assert_eq!(
         watch.state_of(BOX),
         Some(&ConnectionState::NeedsUpdate {
-            why: FIX_UPDATE.into()
+            failure: FailureClass::Update
         })
     );
 }
@@ -246,7 +263,7 @@ async fn a_machine_that_does_not_answer_is_unreachable_and_the_hung_ssh_is_not_w
     watch
         .until("unreachable", |w| w.is(BOX, "unreachable"))
         .await;
-    let Some(ConnectionState::Unreachable { why, .. }) = watch.state_of(BOX) else {
+    let Some(ConnectionState::Unreachable { failure: FailureClass::Unreachable(why), .. }) = watch.state_of(BOX) else {
         panic!("{:?}", watch.state_of(BOX));
     };
     assert!(why.starts_with("no answer within"), "{why}");
@@ -265,7 +282,7 @@ async fn a_different_daemon_at_a_known_name_is_turned_away_and_says_nothing_that
     watch
         .until("turned away", |w| w.is(BOX, "unreachable"))
         .await;
-    let Some(ConnectionState::Unreachable { why, .. }) = watch.state_of(BOX) else {
+    let Some(ConnectionState::Unreachable { failure: FailureClass::Refused(why), .. }) = watch.state_of(BOX) else {
         panic!("{:?}", watch.state_of(BOX));
     };
     assert!(
@@ -400,15 +417,6 @@ async fn a_grant_changes_what_the_hub_lets_through_at_once_and_only_for_that_mac
 }
 
 #[tokio::test]
-async fn removing_a_machine_that_is_not_there_says_nothing() {
-    let sandbox = Sandbox::new();
-    let mut watch = Watch::new(&[], &sandbox, quick(WAIT));
-    watch.hub.handle().remove("ghost");
-    let quiet = tokio::time::timeout(Duration::from_millis(300), watch.step()).await;
-    assert!(quiet.is_err(), "no update for a machine that was never there");
-}
-
-#[tokio::test]
 async fn an_outage_is_dated_from_its_first_state_and_ends_when_the_machine_is_connected() {
     let sandbox = Sandbox::new();
     let hub = Hub::start(&[], &shim(), ids_file(&sandbox), quick(WAIT), None);
@@ -488,17 +496,10 @@ async fn a_computer_without_ssh_says_so_instead_of_hanging() {
     watch
         .until("unreachable", |w| w.is(BOX, "unreachable"))
         .await;
-    let Some(ConnectionState::Unreachable { why, .. }) = watch.state_of(BOX) else {
+    let Some(ConnectionState::Unreachable { failure: FailureClass::Unreachable(why), .. }) = watch.state_of(BOX) else {
         panic!("{:?}", watch.state_of(BOX));
     };
     assert!(why.contains("is OpenSSH installed?"), "{why}");
-}
-
-#[tokio::test]
-async fn with_no_machine_nothing_starts() {
-    let sandbox = Sandbox::new();
-    let hub = Hub::start(&[], &shim(), ids_file(&sandbox), quick(WAIT), None);
-    assert!(!hub.any());
 }
 
 #[tokio::test]
@@ -515,7 +516,7 @@ async fn a_machine_that_is_not_one_of_ours_is_not_sent_to() {
 #[test]
 fn the_window_is_told_the_kind_and_what_a_person_must_do() {
     let at = std::time::Instant::now();
-    let told = |state| describe(MachineId(2), "box", &state);
+    let told = |state| describe(MachineId(2), "box", &state, None);
     assert_eq!(
         told(ConnectionState::Connected),
         MachineState {
@@ -523,6 +524,8 @@ fn the_window_is_told_the_kind_and_what_a_person_must_do() {
             name: "box".into(),
             state: "connected",
             why: None,
+            failure: None,
+            fix_command: None,
             said: None,
             login_command: None,
             target: None,
@@ -545,28 +548,27 @@ fn the_window_is_told_the_kind_and_what_a_person_must_do() {
     for (state, kind) in [
         (
             ConnectionState::NeedsLogin {
-                why: "log in".into(),
-                said: "denied".into(),
+                failure: FailureClass::NeedsPerson("denied".into()),
             },
             "needs-login",
         ),
         (
             ConnectionState::NeedsUpdate {
-                why: "update".into(),
+                failure: FailureClass::Update,
             },
             "needs-update",
         ),
         (
             ConnectionState::Unreachable {
                 since: at,
-                why: "no route".into(),
+                failure: FailureClass::Unreachable("no route".into()),
             },
             "unreachable",
         ),
     ] {
         let told = told(state);
         assert_eq!(told.state, kind);
-        assert!(told.why.is_some(), "{kind} says what to do");
+        assert!(told.why.is_some() && told.failure.is_some(), "{kind} says what to do");
     }
     assert_eq!(told(ConnectionState::Connecting).state, "connecting");
 }

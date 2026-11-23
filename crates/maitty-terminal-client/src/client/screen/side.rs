@@ -47,6 +47,35 @@ const FILTER: &str = "≡";
 const UPDATE_SQUARE: &str = "▪";
 const UPDATE_DOT: &str = "•";
 
+/// The mark before the name of the session that started a helper, on the helper's place line.
+const STARTED_BY: &str = "↳";
+/// The most of a starter's name a helper's place line keeps, so the place after it stays readable.
+const STARTER_NAME_MAX: usize = 14;
+/// The least room a session's name keeps when its helpers are counted beside it; with less, the count is shortened
+/// to `+2`, and then left out.
+const NAME_MIN_BESIDE_HELPERS: usize = 10;
+
+/// The helpers a session's agent started and that are still listed.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub(super) struct Helpers {
+    pub total: usize,
+    /// How many of them wait on you.
+    pub needs: usize,
+}
+
+impl Helpers {
+    /// The count as a row writes it in `room` columns: `2 helpers`, `+2` when that leaves the name too little, or
+    /// nothing when even that does.
+    fn note(self, room: usize) -> Option<String> {
+        if self.total == 0 {
+            return None;
+        }
+        let long = format!("{} helper{}", self.total, if self.total == 1 { "" } else { "s" });
+        let short = format!("+{}", self.total);
+        [long, short].into_iter().find(|note| room >= note.width() + 1 + NAME_MIN_BESIDE_HELPERS)
+    }
+}
+
 /// A subagent as its parent's row lists it.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct SubRow {
@@ -79,6 +108,10 @@ pub(super) struct SideRow {
     pub agent: bool,
     pub process: String,
     pub machine: String,
+    /// The session whose agent started this one, by name, while that session is still in its machine's list.
+    pub starter: Option<String>,
+    /// The helpers its own agent started.
+    pub helpers: Helpers,
     pub subs: Vec<SubRow>,
     /// Its finished subagents not in `subs`, shown as one "N done" line under the open session.
     pub subs_done: usize,
@@ -274,6 +307,8 @@ fn side_rows(app: &App, model: &[Proj]) -> Vec<SideRow> {
                 agent: s.is_agent,
                 process: info.map_or(String::new(), |i| i.process.clone()),
                 machine: app.machine_label_of(s.key.machine),
+                starter: None,
+                helpers: Helpers::default(),
                 subs,
                 subs_done,
                 subs_open,
@@ -286,7 +321,51 @@ fn side_rows(app: &App, model: &[Proj]) -> Vec<SideRow> {
         })
         .collect();
     rows.sort_by_key(|r| (!r.agent, r.order, r.key));
+    mark_helpers(app, &mut rows);
     rows
+}
+
+/// Who started whom: each helper's starter by name, and each starter's count of helpers. A session is a helper only
+/// while the pane that started it is still in its machine's list, the rule `App::is_helper` alerts by.
+fn mark_helpers(app: &App, rows: &mut [SideRow]) {
+    /// A pane that started a helper, or the row of the chat that did (ADR 0016).
+    enum By {
+        Pane(ClientTerm),
+        Chat(ClientSession),
+    }
+    let starters: Vec<Option<By>> = rows
+        .iter()
+        .map(|row| {
+            let term = row.term?;
+            let info = app.term_info(term)?;
+            if let Some(chat) = info.started_by_chat {
+                // A chat that is no longer listed started nothing that is still its.
+                let key = ClientSession::on(term.machine, SessionKey::Conversation(chat));
+                return rows.iter().any(|row| row.key == key).then_some(By::Chat(key));
+            }
+            let by = ClientTerm { machine: term.machine, term: info.started_by? };
+            app.term_info(by).map(|_| By::Pane(by))
+        })
+        .collect();
+    for (helper, by) in starters.into_iter().enumerate() {
+        let Some(by) = by else { continue };
+        let needs = rows[helper].state == State::Needs;
+        let starter = rows.iter_mut().find(|row| match &by {
+            By::Pane(term) => row.term == Some(*term),
+            By::Chat(key) => row.key == *key,
+        });
+        let name = match (starter, &by) {
+            (Some(starter), _) => {
+                starter.helpers.total += 1;
+                starter.helpers.needs += usize::from(needs);
+                starter.name.clone()
+            }
+            // A starter that is put away has no row, and is still named.
+            (None, By::Pane(term)) => display_name(app.term_info(*term), &format!("session {}", term.term)),
+            (None, By::Chat(_)) => continue,
+        };
+        rows[helper].starter = Some(name);
+    }
 }
 
 /// How the rows within a group are ordered (`Saved.side_sort`).
@@ -934,8 +1013,17 @@ fn draw_session(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &SideRow,
     } else {
         base.fg(t.text)
     };
-    let room = end.saturating_sub(r.x + NAME_X + age_w + 1) as usize;
-    match typing_name(app, row) {
+    let mut room = end.saturating_sub(r.x + NAME_X + age_w + 1) as usize;
+    let typing = typing_name(app, row);
+    // A name being typed keeps the whole line.
+    if let Some(note) = row.helpers.note(room).filter(|_| typing.is_none()) {
+        let note_w = note.width() as u16;
+        let colour = if row.helpers.needs > 0 { t.blocked } else { t.muted };
+        let right = end.saturating_sub(if age_w > 0 { age_w + 1 } else { 0 });
+        put(buf, right.saturating_sub(note_w), y, &[seg(note, base.fg(colour))], right);
+        room = room.saturating_sub(note_w as usize + 1);
+    }
+    match typing {
         Some(typed) => {
             let shown = tail(&typed, room.saturating_sub(1));
             put(buf, r.x + NAME_X, y, &[seg(format!("{shown}{CURSOR}"), base.fg(t.strong).add_modifier(Modifier::BOLD))], end)
@@ -960,7 +1048,11 @@ fn draw_session(app: &mut App, buf: &mut Buffer, r: Rect, y: u16, row: &SideRow,
         place.push_str(" · ");
         place.push_str(&row.machine);
     }
-    let mut line = vec![seg(place, base.fg(t.muted))];
+    let mut line = Vec::new();
+    if let Some(starter) = &row.starter {
+        line.push(seg(format!("{STARTED_BY} {}  ", truncate(starter, STARTER_NAME_MAX)), base.fg(t.muted)));
+    }
+    line.push(seg(place, base.fg(t.muted)));
     let limited = row.limited_until.map(|at| seg(limited_note(at, super::now_secs()), base.fg(t.blocked)));
     let pr = row.pr.as_ref().map(|(text, tone)| seg(text.clone(), base.fg(pr_colour(*tone, t))));
     for note in limited.into_iter().chain(pr) {
@@ -1092,6 +1184,8 @@ mod tests {
             agent: true,
             process: "claude".into(),
             machine: "devbox".into(),
+            starter: None,
+            helpers: Helpers::default(),
             subs: Vec::new(),
             subs_done: 0,
             subs_open: false,

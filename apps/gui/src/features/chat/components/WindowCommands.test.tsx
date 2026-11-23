@@ -103,19 +103,6 @@ describe('the commands the window answers itself', () => {
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 
-  it('opens the Extensions page for the commands that open a menu of plugins, skills, servers and hooks, and sends nothing', async () => {
-    const actions = windowActions()
-    const { user, box } = await open({ windowActions: actions })
-
-    await user.type(box, '/skills{Escape}{Enter}')
-    await user.type(box, '/hooks{Escape}{Enter}')
-
-    expect(actions.openSettings).toHaveBeenCalledTimes(2)
-    expect(actions.openSettings).toHaveBeenNthCalledWith(1, 'extensions')
-    expect(actions.openSettings).toHaveBeenNthCalledWith(2, 'extensions')
-    expect(fake.submitMessage).not.toHaveBeenCalled()
-  })
-
   it('lists every command for /help, right in the box', async () => {
     const { user, box } = await open({ windowActions: windowActions() })
 
@@ -152,14 +139,12 @@ describe('the commands the window answers itself', () => {
 
   it('types /exit into the terminal once confirmed, where Claude Code quits', async () => {
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
-    const onShowTerminal = vi.fn()
-    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, onShowTerminal, windowActions: windowActions() })
+    const { user, box } = await open({ link: { conversation: FAKE_CONVERSATION, generation: 1, readOnly: true }, typeInto, windowActions: windowActions() })
 
     await user.type(box, '/exit{Escape}{Enter}')
     expect(typeInto).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'End session' }))
 
-    expect(onShowTerminal).toHaveBeenCalledOnce()
     await settle(1000)
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/exit', '\r'])
   })
@@ -215,25 +200,6 @@ describe('the commands the window answers itself', () => {
     expect(within(screen.getByRole('region', { name: 'Side question' })).getByRole('alert')).toHaveTextContent('Claude Code took too long to answer')
   })
 
-  it('sends a reporting command typed with something after it as typed, since that changes something', async () => {
-    const { user, box } = await open({ windowActions: windowActions() })
-
-    await user.type(box, '/goal tests pass{Escape}{Enter}')
-
-    expect(fake.sideAnswer).not.toHaveBeenCalled()
-    expect(fake.submitMessage).toHaveBeenCalledExactlyOnceWith({ id: String(FAKE_CONVERSATION), generation: 1 }, 1, '/goal tests pass')
-  })
-
-  it('shows where the phone app is for /mobile, which Claude Code draws as a QR code', async () => {
-    const { user, box } = await open({ windowActions: windowActions() })
-
-    await user.type(box, '/mobile{Escape}{Enter}')
-
-    const card = screen.getByRole('region', { name: 'Claude on your phone' })
-    expect(within(card).getByRole('button', { name: 'claude.ai/mobile' })).toHaveAttribute('title', 'https://claude.ai/mobile (click to open in your browser)')
-    expect(fake.sideAnswer).not.toHaveBeenCalled()
-  })
-
   it('renames the session in Maiker too for /rename with a name, and still sends it so Claude Code agrees', async () => {
     const actions = windowActions()
     const { user, box } = await open({ windowActions: actions })
@@ -274,16 +240,6 @@ describe('the commands the window answers itself', () => {
     await user.type(box, '/copy{Escape}{Enter}')
 
     expect(fake.copyText).toHaveBeenCalledExactlyOnceWith('Here is the fix.')
-    expect(fake.submitMessage).not.toHaveBeenCalled()
-  })
-
-  it('lists the memory files for /memory, with the project\'s own file named so it opens', async () => {
-    const { user, box } = await open({ windowActions: windowActions() })
-
-    await user.type(box, '/memory{Escape}{Enter}')
-
-    const card = screen.getByRole('region', { name: 'Memory' })
-    expect(card).toHaveTextContent('CLAUDE.md')
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 

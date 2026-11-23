@@ -19,8 +19,12 @@ pub(crate) enum Isolation {
 
 #[derive(Subcommand)]
 pub(crate) enum Cmd {
-    /// Create a thread, resume --session exactly, or reconnect --conversation.
+    /// Create a thread, resume --session exactly, reconnect --conversation, or start the
+    /// config's --acp agent in --cwd.
     Start {
+        /// An `[[agents]]` entry with `acp = true`, by name. The service picks its program.
+        #[arg(long, requires = "cwd", conflicts_with_all = ["conversation", "session", "executable", "config_root", "model", "model_provider", "approval", "sandbox"])]
+        acp: Option<String>,
         #[arg(long, conflicts_with = "session")]
         conversation: Option<u64>,
         #[arg(long, requires = "conversation")]
@@ -68,7 +72,12 @@ pub(crate) enum Cmd {
 
 pub(crate) fn run(cmd: Cmd) -> Result<()> {
     let msg = match cmd {
+        Cmd::Start { acp: Some(agent), cwd, .. } => {
+            let target = acp_target(agent, cwd.unwrap_or_default())?;
+            ClientMsg::Command(Command::ConversationStart { target, branch: None })
+        }
         Cmd::Start {
+            acp: None,
             conversation,
             generation,
             session,
@@ -98,6 +107,7 @@ pub(crate) fn run(cmd: Cmd) -> Result<()> {
                 }
             } else {
                 let settings = LaunchSettings {
+                    agent: None,
                     provider: crate::conversation::Provider::Codex,
                     executable: executable.ok_or_else(|| {
                         anyhow::anyhow!("--executable is required for a new binding")
@@ -172,4 +182,39 @@ pub(crate) fn run(cmd: Cmd) -> Result<()> {
     };
     println!("{text}");
     Ok(())
+}
+
+/// A start of the config's ACP agent `agent` in `cwd`. The name and the folder are checked
+/// here so a mistake is told before anything is asked of the service.
+fn acp_target(agent: String, cwd: PathBuf) -> Result<StartTarget> {
+    if !crate::conversation::acp_agent_name(&agent) {
+        bail!("--acp takes an agent's name from the config: lowercase letters, digits, `-` or `_`");
+    }
+    if !cwd.is_absolute() {
+        bail!("--cwd must be an absolute path");
+    }
+    Ok(StartTarget::Acp { agent, cwd })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn an_acp_start_names_the_agent_and_the_folder_and_nothing_else() {
+        let folder = std::env::temp_dir();
+
+        let target = acp_target("opencode".into(), folder.clone()).unwrap();
+
+        assert_eq!(target, StartTarget::Acp { agent: "opencode".into(), cwd: folder });
+    }
+
+    #[test]
+    fn an_acp_start_refuses_a_name_that_is_no_agents_and_a_relative_folder() {
+        let bad_name = acp_target("Open Code".into(), std::env::temp_dir());
+        let relative = acp_target("opencode".into(), PathBuf::from("project"));
+
+        assert!(bad_name.unwrap_err().to_string().contains("--acp takes"));
+        assert!(relative.unwrap_err().to_string().contains("absolute"));
+    }
 }

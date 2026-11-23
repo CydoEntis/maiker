@@ -7,10 +7,15 @@
 //! accepted only for a request the daemon holds. "Always in this project" is kept in
 //! `helper-projects.json` in the app's data folder, never in the repo, so an agent that can
 //! write the repo cannot grant itself helpers.
+//!
+//! A chat asks the same way (ADR 0016): the request is made only by a start from a connection
+//! that authenticated as the chat's current runtime, it is held on the conversation, and
+//! `AnswerChatHelpers` answers it, from you alone.
 
 use super::{Daemon, approvals::write_atomic};
 use crate::brand::APP_COMMAND;
 use crate::config::same_path;
+use crate::conversation::ConversationId;
 use crate::protocol::{HelperChoice, TermId};
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -19,6 +24,9 @@ use std::path::{Path, PathBuf};
 const FILE_NAME: &str = "helper-projects.json";
 /// Longest task shown on the row and in the popover.
 const TASK_CHARS: usize = 160;
+/// Longest name a helper is given from its task: a row shows less, and the whole task is its
+/// agent's to report as the prompt it was given.
+const TITLE_CHARS: usize = 80;
 /// Most tasks one request lists; more are counted by the ones already there.
 const MOST_TASKS: usize = 12;
 
@@ -75,7 +83,31 @@ fn remember(file: &Path, project: &Path) -> Result<()> {
     Ok(())
 }
 
-/// What one session has been asked and told about helpers. Lives and dies with the pane.
+/// Whose agent starts a helper: a pane's, or a chat's.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Starter {
+    Pane(TermId),
+    Chat(ConversationId),
+}
+
+impl Starter {
+    pub fn pane(self) -> Option<TermId> {
+        match self {
+            Starter::Pane(term) => Some(term),
+            Starter::Chat(_) => None,
+        }
+    }
+
+    pub fn chat(self) -> Option<ConversationId> {
+        match self {
+            Starter::Chat(id) => Some(id),
+            Starter::Pane(_) => None,
+        }
+    }
+}
+
+/// What one session has been asked and told about helpers. Lives and dies with the pane, or
+/// with the daemon's state for the chat.
 #[derive(Debug, Clone, Default)]
 pub struct HelperState {
     /// The tasks it wants helpers for and is waiting on you for; empty: not asking.
@@ -98,6 +130,36 @@ pub fn task_label(cmd: Option<&str>, branch: Option<&str>) -> String {
         .unwrap_or_else(|| "a shell".to_string());
     let one_line = label.split_whitespace().collect::<Vec<_>>().join(" ");
     one_line.chars().take(TASK_CHARS).collect()
+}
+
+/// What a helper is called, from the command that starts it: the first line of the task quoted at
+/// its end, cut on a word boundary to `TITLE_CHARS` with `…` after it. None when the command quotes
+/// no task, so a helper started bare is named by its agent's own first prompt instead.
+pub fn task_title(cmd: &str) -> Option<String> {
+    let task = quoted_tail(cmd.trim())?;
+    let line = task.lines().map(str::trim).find(|l| !l.is_empty())?;
+    let words: Vec<&str> = line.split_whitespace().collect();
+    let whole = words.join(" ");
+    if whole.chars().count() <= TITLE_CHARS {
+        return Some(whole);
+    }
+    let mut cut = String::new();
+    for word in &words {
+        let wider = cut.chars().count() + usize::from(!cut.is_empty()) + word.chars().count();
+        if wider > TITLE_CHARS {
+            break;
+        }
+        if !cut.is_empty() {
+            cut.push(' ');
+        }
+        cut.push_str(word);
+    }
+    // One word longer than the whole title has no boundary to cut on.
+    if cut.is_empty() {
+        cut = whole.chars().take(TITLE_CHARS).collect();
+    }
+    cut.push('…');
+    Some(cut)
 }
 
 /// The text of a trailing `'quoted'` or `"quoted"` word (a shell-quoted prompt), unescaped.
@@ -134,6 +196,25 @@ fn quoted_tail(cmd: &str) -> Option<String> {
 }
 
 impl Daemon {
+    /// Name helper `term`, just started with `cmd`, after the task it was given (`task_title`). The
+    /// name is its first prompt, which `TermInfo.name` falls back to, and the task is also what it
+    /// is on (`summary`), which the desktop app titles a row by: an agent given its task on its
+    /// command line need never report that as a prompt, and its row would read "New session".
+    /// Its own reports replace both as usual.
+    pub(super) fn name_after_task(&mut self, term: TermId, cmd: Option<&str>) {
+        let Some(title) = cmd
+            .filter(|cmd| self.agent_in_cmd(cmd).is_some())
+            .and_then(task_title)
+        else {
+            return;
+        };
+        if let Some(t) = self.terms.get_mut(&term) {
+            t.first_prompt = title.clone();
+            t.summary = title;
+            self.dirty = true;
+        }
+    }
+
     /// The project a session works in: its repo's main checkout, else its folder.
     fn helper_project(&self, term: TermId) -> Option<PathBuf> {
         self.terms.get(&term).map(|t| {
@@ -143,11 +224,37 @@ impl Daemon {
         })
     }
 
+    /// The project a chat works in: its repo's main checkout, else its folder.
+    fn chat_helper_project(&self, id: ConversationId) -> Option<PathBuf> {
+        let record = self.conversations.iter().find(|c| c.id == id)?;
+        let folder = record.binding.worktree.as_deref().unwrap_or(&record.binding.cwd);
+        Some(crate::gitfs::head(folder).map_or_else(|| folder.to_path_buf(), |h| h.main_root))
+    }
+
+    fn starter_project(&self, by: Starter) -> Option<PathBuf> {
+        match by {
+            Starter::Pane(term) => self.helper_project(term),
+            Starter::Chat(id) => self.chat_helper_project(id),
+        }
+    }
+
+    fn helper_state_mut(&mut self, by: Starter) -> Option<&mut HelperState> {
+        match by {
+            Starter::Pane(term) => self.terms.get_mut(&term).map(|t| &mut t.helpers),
+            Starter::Chat(id) => self
+                .conversation_states
+                .get_mut(&id)
+                .map(|state| &mut state.helper_consent),
+        }
+    }
+
     /// Whether session `by` may start a helper for `task` now. An error says why not, and is
     /// what the agent reads: a refusal to do it alone, or that you have been asked.
-    pub(super) fn may_start_helper(&mut self, by: TermId, task: &str) -> Result<()> {
+    pub(super) fn may_start_helper(&mut self, by: Starter, task: &str) -> Result<()> {
         // A person's shell is not an agent asking for help.
-        if self.terms.get(&by).is_none_or(|t| t.agent.is_none()) {
+        if let Starter::Pane(term) = by
+            && self.terms.get(&term).is_none_or(|t| t.agent.is_none())
+        {
             return Ok(());
         }
         match self.cfg.sessions.helpers.as_str() {
@@ -157,49 +264,64 @@ impl Daemon {
             ),
             _ => {}
         }
-        let project = self.helper_project(by).unwrap_or_default();
+        let project = self.starter_project(by).unwrap_or_default();
         let remembered = self.helper_projects.allows(&project);
-        let Some(t) = self.terms.get_mut(&by) else {
-            return Ok(());
+        let Some(helpers) = self.helper_state_mut(by) else {
+            // A chat the daemon holds no state for has nothing to hold the request on: nobody
+            // could be asked, so nothing starts.
+            return match by {
+                Starter::Pane(_) => Ok(()),
+                Starter::Chat(_) => {
+                    anyhow::bail!("This chat cannot start helpers now. Do the work yourself.")
+                }
+            };
         };
-        if t.helpers.refused {
+        if helpers.refused {
             anyhow::bail!("The user said no helpers for this session. Do the work yourself.");
         }
-        if t.helpers.allowed || remembered {
+        if helpers.allowed || remembered {
             return Ok(());
         }
-        let first = t.helpers.asked.is_empty();
-        if !t.helpers.asked.iter().any(|a| a == task) && t.helpers.asked.len() < MOST_TASKS {
-            t.helpers.asked.push(task.to_string());
+        let first = helpers.asked.is_empty();
+        if !helpers.asked.iter().any(|a| a == task) && helpers.asked.len() < MOST_TASKS {
+            helpers.asked.push(task.to_string());
         }
-        let n = t.helpers.asked.len();
+        let n = helpers.asked.len();
         self.dirty = true;
-        self.needs_you(by);
-        if first {
-            self.announce(by, crate::protocol::Status::Blocked);
+        match by {
+            Starter::Pane(term) => {
+                self.needs_you(term);
+                if first {
+                    self.announce(term, crate::protocol::Status::Blocked);
+                }
+            }
+            // A chat is announced by its window, from the status its summary now reads (ADR
+            // 0003, *Alerts*); the list going out says it.
+            Starter::Chat(_) => {}
         }
         anyhow::bail!(
-            "Starting helpers needs the user's OK. Their {APP_COMMAND} row now says it wants to start {n} helper{}. Call {APP_COMMAND}_start for every helper you want so they all show, then try again later; don't start them another way.",
+            "{}. Their {APP_COMMAND} row now says it wants to start {n} helper{}. Call {APP_COMMAND}_start for every helper you want so they all show, then try again later; don't start them another way.",
+            crate::protocol::HELPERS_AWAIT_OK,
             if n == 1 { "" } else { "s" }
         )
     }
 
-    /// Your answer to session `term`'s request to start helpers. Only while it asks.
-    pub(super) fn answer_helpers(&mut self, term: TermId, choice: HelperChoice) -> Result<()> {
-        let project = self.helper_project(term);
-        let t = self
-            .terms
-            .get_mut(&term)
-            .ok_or_else(|| anyhow::anyhow!("no pane {term}"))?;
-        if t.helpers.asked.is_empty() {
+    /// Your answer to a session's request to start helpers. Only while it asks.
+    pub(super) fn answer_helpers(&mut self, by: Starter, choice: HelperChoice) -> Result<()> {
+        let project = self.starter_project(by);
+        let helpers = self.helper_state_mut(by).ok_or_else(|| match by {
+            Starter::Pane(term) => anyhow::anyhow!("no pane {term}"),
+            Starter::Chat(id) => anyhow::anyhow!("no chat {}", id.0),
+        })?;
+        if helpers.asked.is_empty() {
             anyhow::bail!("that session isn't asking to start helpers");
         }
-        t.helpers.asked.clear();
+        helpers.asked.clear();
         match choice {
-            HelperChoice::Allow => t.helpers.allowed = true,
-            HelperChoice::No => t.helpers.refused = true,
+            HelperChoice::Allow => helpers.allowed = true,
+            HelperChoice::No => helpers.refused = true,
             HelperChoice::Always => {
-                t.helpers.allowed = true;
+                helpers.allowed = true;
                 if let Some(project) = project {
                     self.helper_projects.add(&project);
                     let file = self.helper_projects_file.clone();
@@ -223,7 +345,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_task_is_the_quoted_prompt_at_the_end_of_the_command() {
+    fn a_task_is_the_quoted_prompt_at_the_end_of_the_command_else_the_command_branch_or_a_shell() {
         assert_eq!(
             task_label(Some("claude 'fix the login bug'"), None),
             "fix the login bug"
@@ -246,10 +368,7 @@ mod tests {
             "a b c",
             "one line"
         );
-    }
-
-    #[test]
-    fn without_a_quoted_prompt_the_branch_then_the_command_then_a_shell() {
+        // Without a quoted prompt: the command, then the branch, then a shell.
         assert_eq!(task_label(Some("lazygit"), Some("feat-x")), "lazygit");
         assert_eq!(task_label(None, Some("feat-x")), "feat-x");
         assert_eq!(task_label(None, None), "a shell");
@@ -264,6 +383,41 @@ mod tests {
                 .count(),
             TASK_CHARS
         );
+    }
+
+    #[test]
+    fn a_helper_is_named_by_the_first_line_of_its_task_cut_on_a_word() {
+        assert_eq!(
+            task_title("claude 'Fix the login bug'").as_deref(),
+            Some("Fix the login bug")
+        );
+        assert_eq!(
+            task_title("claude --dangerously-skip-permissions 'it'\\''s  late'").as_deref(),
+            Some("it's late"),
+            "unquoted, one space between words"
+        );
+        assert_eq!(
+            task_title("codex \"\n\n  Port the footer\nthen run the tests\"").as_deref(),
+            Some("Port the footer"),
+            "the first line that says something"
+        );
+        let long = format!("claude '{}'", "word ".repeat(40));
+        let title = task_title(&long).unwrap();
+        assert!(title.ends_with("word…"), "{title}");
+        assert!(title.chars().count() <= TITLE_CHARS + 1, "{title}");
+        let one_word = format!("claude '{}'", "x".repeat(200));
+        assert_eq!(
+            task_title(&one_word).unwrap().chars().count(),
+            TITLE_CHARS + 1,
+            "a word longer than a title is cut where it must be"
+        );
+        assert_eq!(task_title("claude"), None, "no task, no name");
+        assert_eq!(
+            task_title("claude '  \n '"),
+            None,
+            "an empty task names nothing"
+        );
+        assert_eq!(task_title("claude '"), None, "an unclosed quote is no task");
     }
 
     #[test]

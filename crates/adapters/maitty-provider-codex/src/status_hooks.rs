@@ -296,7 +296,7 @@ trusted_hash = 'sha256:abc'
     }
 
     #[test]
-    fn uninstall_removes_only_maitty_handlers_and_leaves_other_hooks() {
+    fn uninstall_removes_only_maitty_handlers_and_leaves_other_hooks_and_documents_untouched() {
         let installed = update_status_hooks(
             "[[hooks.SessionStart]]\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = '\"/bin/maiker\" hook codex --status same'\n[[hooks.SessionStart.hooks]]\ntype = 'command'\ncommand = 'my-hook'\n",
             options("/bin/maiker", true, false),
@@ -305,10 +305,7 @@ trusted_hash = 'sha256:abc'
         .unwrap();
         assert!(!installed.contains("/bin/maiker"));
         assert!(installed.contains("my-hook"));
-    }
-
-    #[test]
-    fn uninstall_without_hooks_leaves_the_document_untouched() {
+        // Without hooks, the document is left untouched.
         assert_eq!(
             update_status_hooks("model = 'gpt'\n", options("/bin/maiker", true, false)).unwrap(),
             None

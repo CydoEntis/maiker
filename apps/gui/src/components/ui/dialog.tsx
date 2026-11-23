@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import { XIcon } from "lucide-react"
 
 function Dialog({
@@ -39,7 +40,7 @@ function DialogOverlay({
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
       className={cn(
-        "fixed inset-0 isolate z-50 bg-black/10 duration-100 supports-backdrop-filter:backdrop-blur-xs data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
+        "fixed inset-0 isolate z-50 bg-(--scrim) duration-100 data-open:animate-in data-open:fade-in-0 data-closed:animate-out data-closed:fade-out-0",
         className
       )}
       {...props}
@@ -61,12 +62,14 @@ function DialogContent({
   unstyled?: boolean
   /** The scrim's class in unstyled mode. */
   overlayClassName?: string
-  /** Where the dialog mounts: the themed window root, so it reads the theme's tokens (default: the body). */
+  /** Where the dialog mounts (default: the themed window root, `.mx-app`). The theme's colours and the dialog material
+   * are scoped to that root, so a dialog mounted on the body has no background and its text sits on whatever is behind. */
   container?: HTMLElement | null
 }) {
+  const root = container ?? document.querySelector<HTMLElement>('.mx-app')
   if (unstyled) {
     return (
-      <DialogPortal container={container}>
+      <DialogPortal container={root}>
         <DialogPrimitive.Overlay data-slot="dialog-overlay" className={overlayClassName}>
           <DialogPrimitive.Content data-slot="dialog-content" className={className} {...props}>{children}</DialogPrimitive.Content>
         </DialogPrimitive.Overlay>
@@ -74,12 +77,12 @@ function DialogContent({
     )
   }
   return (
-    <DialogPortal container={container}>
+    <DialogPortal container={root}>
       <DialogOverlay />
       <DialogPrimitive.Content
         data-slot="dialog-content"
         className={cn(
-          "mx-pop fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl bg-popover p-4 text-sm text-popover-foreground ring-1 ring-foreground/10 duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
+          "mx-pop fixed top-1/2 left-1/2 z-50 grid w-full max-w-[calc(100%-2rem)] -translate-x-1/2 -translate-y-1/2 gap-4 rounded-2xl p-4 text-sm text-(--fg) duration-100 outline-none sm:max-w-sm data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95 data-closed:animate-out data-closed:fade-out-0 data-closed:zoom-out-95",
           className
         )}
         {...props}
@@ -87,15 +90,7 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close data-slot="dialog-close" asChild>
-            <Button
-              variant="ghost"
-              className="absolute top-2 right-2"
-              size="icon"
-            >
-              <XIcon
-              />
-              <span className="sr-only">Close</span>
-            </Button>
+            <IconButton label="Close" className="absolute top-2 right-2"><XIcon /></IconButton>
           </DialogPrimitive.Close>
         )}
       </DialogPrimitive.Content>
@@ -133,7 +128,7 @@ function DialogFooter({
       {children}
       {showCloseButton && (
         <DialogPrimitive.Close asChild>
-          <Button variant="soft">Close</Button>
+          <Button variant="ghost">Close</Button>
         </DialogPrimitive.Close>
       )}
     </div>

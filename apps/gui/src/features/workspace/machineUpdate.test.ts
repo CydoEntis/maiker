@@ -12,7 +12,7 @@ describe('installing or updating a machine', () => {
   it('passes --install for a machine with none, says it is running, then how it ended, and dials it again', async () => {
     vi.mocked(updateMachine).mockResolvedValue('box: maiker 0.67.0 installed to ~/.local/bin/maiker')
     const onDone = vi.fn()
-    await runMachineUpdate('box', 'install', false, onDone)
+    await runMachineUpdate('box', 'install', false, { onDone, onRestartAnyway: vi.fn() })
     expect(updateMachine).toHaveBeenCalledWith('box', true, false)
     expect(toasts.progress).toHaveBeenCalledWith('Installing Maiker on box…')
     expect(toasts.success).toHaveBeenCalledWith('box: maiker 0.67.0 installed to ~/.local/bin/maiker', { id: 'toast-1' })
@@ -21,7 +21,7 @@ describe('installing or updating a machine', () => {
 
   it('replaces another version without --install, and keeps the daemon note it gave', async () => {
     vi.mocked(updateMachine).mockResolvedValue('box: maiker 0.67.0 is already up to date\nnote: could not ask the Maiker service (x); running sessions are untouched')
-    await runMachineUpdate('box', 'update', true, vi.fn())
+    await runMachineUpdate('box', 'update', true, { onDone: vi.fn(), onRestartAnyway: vi.fn() })
     expect(updateMachine).toHaveBeenCalledWith('box', false, true)
     expect(toasts.success).toHaveBeenCalledWith('box: maiker 0.67.0 is already up to date', { id: 'toast-1', description: 'note: could not ask the Maiker service (x); running sessions are untouched' })
   })
@@ -33,8 +33,19 @@ describe('installing or updating a machine', () => {
   ])('says why it did not, for %s, and does not dial it again', async (_case, said, shown) => {
     vi.mocked(updateMachine).mockRejectedValue(said)
     const onDone = vi.fn()
-    await runMachineUpdate('box', 'update', false, onDone)
+    await runMachineUpdate('box', 'update', false, { onDone, onRestartAnyway: vi.fn() })
     expect(toasts.error).toHaveBeenCalledWith('Could not update Maiker on box', { id: 'toast-1', description: shown })
     expect(onDone).not.toHaveBeenCalled()
+  })
+
+  it('offers Restart anyway, with the sessions it would end, when the old service refused to restart', async () => {
+    vi.mocked(updateMachine).mockRejectedValue('The service on box was not restarted (4 open session(s); it keeps them), so it still runs the old Maiker and this app cannot connect to it.')
+    const onRestartAnyway = vi.fn()
+    await runMachineUpdate('box', 'update', false, { onDone: vi.fn(), onRestartAnyway })
+    const shown = toasts.error.mock.calls[0]?.[1] as { action: { label: string; onClick: () => void }; duration: number }
+    expect(shown.action.label).toBe('Restart anyway…')
+    expect(shown.duration).toBe(Infinity)
+    shown.action.onClick()
+    expect(onRestartAnyway).toHaveBeenCalledWith(4)
   })
 })

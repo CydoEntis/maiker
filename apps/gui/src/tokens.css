@@ -1,39 +1,34 @@
 /*
- * The desktop design's tokens (MAITTY-374). Components read these role names, never a theme colour or a raw value:
- * the theme (`theme/themes.ts`) sets the colours underneath, and `data-corners` on the root sets the corners, so every
- * theme and both corner styles are a swap of tokens only. Like `material.css`, this file may read the theme's solid
- * surface colours; nothing else does (`material.test.ts`). The `--card`, `--done` and `--sh-pop` roles are set in
- * `index.css` and `workspace.css`.
+ * The tokens a component reads beside the theme's roles. The theme (`themeStyle` in `theme/themes.ts`) sets the design's
+ * roles inline on the root: `--t0` to `--t3`, `--float-bg`, `--well`, `--fg` `--fg2` `--muted` `--dim`, `--ink` (an
+ * `r,g,b` triple: a hairline or hover fill is `rgba(var(--ink), .08)`), `--needs` `--working` `--ok` `--danger` (a tint is
+ * `color-mix(in srgb, var(--needs) 14%, transparent)`), the seven `--sy-*` syntax colours and `--shk`, the shadow
+ * strength. This file names what is built on them, so every theme is a swap of tokens only. Like `material.css`, this
+ * file may read the theme's solid surface colours; nothing else does (`material.test.ts`). The `--card`, `--done` and `--sh-pop` roles are set in `index.css`
+ * and `workspace.css`.
  */
 .mx-app {
   /* Surfaces */
   --bubble: var(--sel);
-  /* Status: amber-family needs is each theme's own warn, and means needs you and nothing else. */
-  --needs: var(--warn);
+  /* Status: `--needs` (the theme's own) means needs you and nothing else. */
   --on-needs: var(--on-warn);
   --err: var(--danger);
   /* A warning that blocks nothing (context almost full, back online with chats interrupted): the meters' second-quarter
      yellow, which every theme sets apart from needs you and failed. */
   --caution: var(--m-mid);
-  /* Focus is one thing everywhere: a 1px underline along the bottom edge of the control, drawn inside it so nothing grows or
-     moves (design rule 10; `focusStyle.test.ts`). `--focus-line` is the accent as it reads on the ground (`--accent-text`: the
+  /* Focus is one thing everywhere: a 1px edge around the whole control, drawn inside it and on its own corners, so nothing
+     grows or moves and a rounded row is never half underlined (design rule 10; `focusStyle.test.ts`). `--focus-line` is the accent as it reads on the ground (`--accent-text`: the
      brass darkened on a light ground, where the plain accent is 1.8:1); a theme that still fell under 3:1 would be pointed
      at `--fg` here, never given a rule of its own. A bordered control keeps its own border and lists it first. */
   --focus-line: var(--accent-text);
   /* The message box and a found line take the same colour: focus is the theme's accent, never a fixed blue. */
   --focus: var(--focus-line);
-  --focus-underline: inset 0 -1px 0 var(--focus-line);
+  --focus-edge: inset 0 0 0 1px var(--focus-line);
   /* A text field is the exception: the whole 1px edge takes the focus colour (a real border turns `border-color`; a field that
      draws its edge in `box-shadow` uses `--field-focus-edge`), never an underline, ring or glow (`material.css`, `focusStyle.test.ts`). */
   --field-focus: var(--focus-line);
   --field-focus-edge: inset 0 0 0 1px var(--field-focus);
   --link: var(--ansi-blue);
-  /* Code */
-  --code-kw: var(--ansi-mag);
-  --code-str: var(--ok);
-  --code-fn: var(--ansi-blue);
-  --code-num: var(--working);
-  --code-com: var(--dim);
   /* File-type tags have their own tone, never the needs colour: each common type its own, so a list of files reads at a glance. */
   --tag-ts: var(--ansi-blue);
   --tag-tsx: var(--working);
@@ -53,9 +48,16 @@
 
   /* Spacing */
   --s1: 2px; --s2: 4px; --s3: 6px; --s4: 8px; --s5: 12px; --s6: 16px; --s7: 20px; --s8: 24px; --s9: 32px;
+  /* The window frame: the cards sit this far from the window's sides and foot, a little closer to the title bar, and
+     this far from each other. Every gap between two cards reads the one value, so a drag handle fits any of them. */
+  --frame-edge: 8px;
+  --frame-top: 4px;
+  --frame-gap: 6px;
+  /* The panes of one session's split tree sit this far apart, on the window's ground. */
+  --split-gap: 8px;
 
   /* Type */
-  /* `--ui` and `--mono` are the look's two fonts (`theme/corners.ts`). */
+  /* `--ui` and `--mono` are the look's two fonts (`theme/look.ts`). */
   --text-h1: 650 22px/1.3 var(--ui);
   --text-h2: 650 18px/1.3 var(--ui);
   --text-h3: 650 16px/1.3 var(--ui);
@@ -67,12 +69,12 @@
   --text-tag: 600 10.5px/1 var(--mono);
   --text-code: 400 12.5px/1.65 var(--mono);
 
-  /* Corners: square by default; Rounded is 6px on controls and 10px on panels, dialogs and menus. */
-  --r-control: 0px;
-  --r-panel: 0px;
-  --r-badge: 0px;
+  /* Corners: 6px on controls and 10px on panels, dialogs and menus. */
+  --r-control: 6px;
+  --r-panel: 10px;
+  --r-badge: 3px;
   /* The setup window and the Add a remote machine dialog: larger than a panel, as the handoff draws them. */
-  --r-dialog: 0px;
+  --r-dialog: 14px;
 
   /* Shadow: a waiting card rises from the message box; menus and toasts use `--sh-pop`; cards in the feed have none. */
   --sh-rise: 0 -6px 18px rgba(var(--sd), calc(.42 * var(--sk)));
@@ -84,5 +86,4 @@
   --t-spin: 900ms;
   --ease: cubic-bezier(.2, .8, .2, 1);
 }
-:root[data-corners="rounded"] .mx-app { --r-control: 6px; --r-panel: 10px; --r-badge: 3px; --r-dialog: 14px; }
 :root[data-reduced-motion="true"] .mx-app { --t-fast: 0ms; --t-base: 0ms; --t-slow: 0ms; }

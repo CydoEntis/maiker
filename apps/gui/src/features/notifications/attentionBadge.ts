@@ -3,7 +3,7 @@ import type { SessionView } from '@/features/workspace/model/session'
 
 const APP_NAME = 'Maiker'
 
-/** How many sessions wait on the person: those the sidebar lists under Needs you (asking, stopped, held by a limit). */
+/** How many sessions wait on the person: those the sidebar lists under Needs you. */
 export function needingYou(sessions: readonly SessionView[]): number {
   return sessions.filter((session) => sectionOf(session) === 'needs').length
 }

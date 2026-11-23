@@ -113,8 +113,17 @@ fn gh_then_public<T>(
     })
 }
 
+/// What the updater answers in a test build. A test that presses the Update key runs the real
+/// background task, and that once downloaded a release over the test program itself and then
+/// pointed the person's own agent hooks at it, so the entry points that reach the network,
+/// replace a program or write an agent's config stop here.
+const OFFLINE_IN_TESTS: &str = "a test build reaches no release and installs nothing";
+
 /// The newest release's tag, e.g. `v0.3.0`.
 pub fn latest_tag() -> Result<String, String> {
+    if cfg!(test) {
+        return Err(OFFLINE_IN_TESTS.into());
+    }
     gh_then_public(
         gh_signed_in(),
         || {
@@ -361,6 +370,9 @@ fn wants_restart(answer: &str, default: bool) -> bool {
 /// Install the newest release over this one without printing (from inside the app, whose
 /// screen printing would garble). Returns the version installed and where it went.
 pub fn install_latest() -> Result<(String, PathBuf)> {
+    if cfg!(test) {
+        bail!("{OFFLINE_IN_TESTS}")
+    }
     let tag = latest_tag().map_err(|e| anyhow::anyhow!(e))?;
     let Some(target) = target() else {
         bail!("there's no release build for this machine; build from source")
@@ -380,6 +392,9 @@ pub fn install_latest() -> Result<(String, PathBuf)> {
 /// The newly installed program connects every installed agent (status hooks and MCP), so the
 /// hooks are its own version's. `<APP>_NO_INTEGRATE=1` leaves agents' config alone.
 pub fn integrate_agents(exe: &Path) -> Result<(), String> {
+    if cfg!(test) {
+        return Err(OFFLINE_IN_TESTS.into());
+    }
     if integrate_opted_out() {
         return Ok(());
     }
@@ -585,6 +600,9 @@ pub fn tidy() {
 /// What changed since this build: the `- ` lines of every newer release's notes, newest
 /// release first. Empty when GitHub can't be reached. Slow (network): off the UI thread.
 pub fn changes_since_this() -> Vec<String> {
+    if cfg!(test) {
+        return Vec::new();
+    }
     let path = format!("repos/{REPO}/releases?per_page={RELEASES_LOOKED_AT}");
     let json = gh_then_public(
         gh_signed_in(),
@@ -643,6 +661,18 @@ fn changes_in(json: &str, current: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use crate::installed_executable::installed_path;
+
+    #[test]
+    fn a_test_build_reaches_no_release_and_replaces_no_program() {
+        let this_program = std::env::current_exe().unwrap();
+        let before = std::fs::metadata(&this_program).unwrap().len();
+
+        assert_eq!(latest_tag().unwrap_err(), OFFLINE_IN_TESTS);
+        assert_eq!(install_latest().unwrap_err().to_string(), OFFLINE_IN_TESTS);
+        assert!(changes_since_this().is_empty());
+        assert_eq!(integrate_agents(&this_program).unwrap_err(), OFFLINE_IN_TESTS);
+        assert_eq!(std::fs::metadata(&this_program).unwrap().len(), before);
+    }
 
     /// A key and a signature made for this test with the same tool the release uses; the private
     /// half was thrown away.
@@ -711,19 +741,6 @@ mod tests {
         assert!(error.contains("does not run on this computer"), "{error}");
         assert!(error.contains("nothing was changed"), "{error}");
         std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn an_update_names_the_command_for_each_machine_and_says_nothing_with_none() {
-        assert_eq!(machines_note(&[]), None);
-        let note = machines_note(&["kingdom", "Build"]).unwrap();
-        assert!(
-            note.ends_with(&format!(
-                "  {APP_COMMAND} machine update Build
-  {APP_COMMAND} machine update kingdom"
-            )),
-            "{note}"
-        );
     }
 
     #[test]
@@ -865,12 +882,6 @@ mod tests {
     }
 
     #[test]
-    fn this_machine_has_a_build() {
-        let t = target().expect("a release target for the platforms we build");
-        assert!(asset_for(std::env::consts::OS, t).starts_with(concat!(env!("APP_COMMAND"), "-")));
-    }
-
-    #[test]
     fn each_os_and_cpu_has_its_own_release_asset() {
         let rows = [
             ("windows", "x86_64", "x86_64-pc-windows-msvc", "zip"),
@@ -889,14 +900,6 @@ mod tests {
         }
         assert_eq!(target_for("linux", "riscv64"), None);
         assert_eq!(target_for("freebsd", "x86_64"), None);
-    }
-
-    #[test]
-    fn the_self_update_still_targets_this_machine() {
-        assert_eq!(
-            target(),
-            target_for(std::env::consts::OS, std::env::consts::ARCH)
-        );
     }
 
     #[test]

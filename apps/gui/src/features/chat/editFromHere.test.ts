@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildAttachmentMessage, parseAttachmentMessage } from './attachmentMessage'
 import type { ChatEvent } from './chatEvents'
-import { confirmBody, restoreNote, stripRestoreNote, turnSpanOf, withRestoreNote } from './editFromHere'
+import { restoreNote, stripRestoreNote, turnSpanOf, withRestoreNote } from './editFromHere'
 import { messageEvent } from './eventFixtures'
 
 const turnEnd = (turnId: string, timed: boolean): ChatEvent => ({ kind: 'turn', id: `turn:${turnId}`, turnId, outcome: 'completed', startedAtMs: 1_000, endedAtMs: 9_000, timed })
@@ -69,18 +69,5 @@ describe('the turn a message started', () => {
   it('has no span while it runs or when its times are not the daemon\'s', () => {
     expect(turnSpanOf([messageEvent('u1', 'user', 'Fix it')], 't1')).toBeNull()
     expect(turnSpanOf([turnEnd('t1', false)], 't1')).toBeNull()
-  })
-})
-
-describe('the confirm before a restore', () => {
-  it('says how many files change, that what is there is kept, and that the conversation is not rewound', () => {
-    const body = confirmBody(2, 'claude', false)
-    expect(body).toContain('2 files change back')
-    expect(body).toContain('"before a restore" snapshot')
-    expect(body).toContain("Claude's conversation is not rewound")
-  })
-
-  it('says where a draft already in the box goes', () => {
-    expect(confirmBody(1, 'codex', true)).toContain('above what you have typed')
   })
 })

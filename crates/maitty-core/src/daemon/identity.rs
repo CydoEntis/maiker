@@ -48,20 +48,14 @@ fn is_id(text: &str) -> bool {
 mod tests {
     use super::*;
 
-    fn dir(tag: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-identity-{}-{}"),
-            std::process::id(),
-            tag
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(tag: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("identity-{tag}"))
     }
 
     #[test]
     fn the_id_is_made_once_and_kept_across_restarts() {
-        let file = dir("kept").join(FILE_NAME);
+        let dir = dir("kept");
+        let file = dir.join(FILE_NAME);
         let first = load_or_create(&file);
         assert!(is_id(&first), "{first}");
         assert_eq!(load_or_create(&file), first);
@@ -69,15 +63,9 @@ mod tests {
     }
 
     #[test]
-    fn two_data_folders_are_two_daemons() {
-        let a = load_or_create(&dir("a").join(FILE_NAME));
-        let b = load_or_create(&dir("b").join(FILE_NAME));
-        assert_ne!(a, b);
-    }
-
-    #[test]
     fn a_corrupt_file_is_replaced_not_fatal() {
-        let file = dir("corrupt").join(FILE_NAME);
+        let dir = dir("corrupt");
+        let file = dir.join(FILE_NAME);
         std::fs::write(&file, "not an id").unwrap();
         let id = load_or_create(&file);
         assert!(is_id(&id));

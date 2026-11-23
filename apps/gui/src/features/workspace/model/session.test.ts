@@ -1,12 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, rowName, statusText, tildePath, toSessionView, truncatePrompt } from './session'
-import { formatAgo, formatElapsed, markSeen, trackSessions } from './tracking'
-import { folderExists, resolveStartFolder } from './startFolder'
+import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, tildePath, toSessionView, truncatePrompt } from './session'
+import { markSeen, trackSessions } from './tracking'
+import { resolveStartFolder } from './startFolder'
 
 vi.mock('@/api/daemon', () => ({
   terminalOf: (id: string) => Number(id.slice(1)),
-  suggestProjectFolders: (typed: string) => Promise.resolve(typed === '/home/casey/code' ? ['/home/casey/code/', '/home/casey/codex/'] : typed === 'C:\\dev\\maiker' ? ['C:\\dev\\maiker\\'] : []),
 }))
 
 const HOME = '/home/casey'
@@ -72,23 +71,9 @@ describe('session view', () => {
     expect(processName(null, '')).toBe('shell')
   })
 
-  it('says each status in words on the row', () => {
-    const view = (status: Conversation['status'], extra: Partial<Conversation> = {}) => statusText(toSessionView(conversation(1, HOME, { status, ...extra }), HOME))
-    expect(view('working')).toBe('working')
-    expect(view('needs-you')).toBe('needs you')
-    expect(view('done')).toBe('done')
-    expect(view('idle')).toBe('idle')
-    expect(view('unknown', { lastKnownStatus: 'working' })).toBe('last seen working')
-  })
-
   it('lists sessions in creation order whatever their status, and a pin changes nothing', () => {
     const sessions = [conversation(3, HOME, { status: 'needs-you' }), conversation(1, HOME, { status: 'done', pinned: true }), conversation(2, HOME, { status: 'working' })].map((item) => toSessionView(item, HOME))
     expect(inCreationOrder(sessions).map((session) => session.id)).toEqual(['t1', 't2', 't3'])
-  })
-
-  it('names a row after the name you gave it, else the program', () => {
-    expect(rowName(toSessionView(conversation(1, HOME, { agent: 'claude' }), HOME))).toBe('claude')
-    expect(rowName(toSessionView(conversation(1, HOME, { title: 'Growth Tests', named: true }), HOME))).toBe('Growth Tests')
   })
 
   it('badges the folder by the repo root when there is one, else the shell folder', () => {
@@ -157,14 +142,6 @@ describe('session tracking', () => {
     const offline = trackSessions(first.tracks, view('unknown'), new Set(), 9)
     expect(offline.tracks.get('t1')).toBe(first.tracks.get('t1'))
   })
-
-  it('formats elapsed and relative times as the rows show them', () => {
-    expect(formatElapsed(102_000)).toBe('1:42')
-    expect(formatAgo(30_000)).toBe('now')
-    expect(formatAgo(42 * 60_000)).toBe('42m')
-    expect(formatAgo(3 * 3_600_000)).toBe('3h')
-    expect(formatAgo(2 * 86_400_000)).toBe('2d')
-  })
 })
 
 describe('start folder', () => {
@@ -174,15 +151,6 @@ describe('start folder', () => {
     expect(resolveStartFolder('~/code', HOME)).toBe(`${HOME}/code`)
     expect(resolveStartFolder('~\\dev', 'C:\\Users\\casey')).toBe('C:\\Users\\casey\\dev')
     expect(resolveStartFolder('/srv', HOME)).toBe('/srv')
-  })
-
-  it('accepts a folder only when the desktop shell finds it', async () => {
-    await expect(folderExists('/home/casey/code')).resolves.toBe(true)
-    await expect(folderExists('/home/casey/code/')).resolves.toBe(true)
-    await expect(folderExists('/home/casey/cod')).resolves.toBe(false)
-    await expect(folderExists('C:\\dev\\maiker')).resolves.toBe(true)
-    await expect(folderExists('')).resolves.toBe(true)
-    await expect(folderExists('/')).resolves.toBe(true)
   })
 
   it('strips markup an agent quotes and collapses whitespace in a quoted line', () => {
@@ -215,7 +183,6 @@ describe('a session stopped by its plan limit', () => {
     const view = toSessionView(held('idle', RESUME / 1000), HOME, NOW)
     expect(view.status).toBe('limited')
     expect(view.resumeAt).toBe(RESUME)
-    expect(statusText(view, NOW)).toBe('limited until 14:05')
     expect(toSessionView(held('done', RESUME / 1000), HOME, NOW).status).toBe('limited')
   })
 

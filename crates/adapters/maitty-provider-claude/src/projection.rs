@@ -1,13 +1,10 @@
 use crate::{OutputFrame, bounded_content_text};
 use anyhow::{Context, Result, bail};
+use maitty_provider::tool_input::{bound_input, command_label};
+use maitty_provider::{Item, ProviderEvent};
+use maitty_shared::conversation::history::{Content, ItemState, Role};
 use serde_json::Value;
 use std::collections::{BTreeMap, BTreeSet};
-#[derive(Debug, PartialEq)]
-pub enum ProjectedEvent {
-    Notification { method: String, params: Value },
-    Acknowledged { result: Value },
-    ControlRequest { request_id: String, request: Value },
-}
 
 struct ProjectedTool {
     id: String,
@@ -27,6 +24,8 @@ pub struct TurnProjector {
     /// When this turn began (Unix ms). Claude reports no times, so the daemon-side clock stands in.
     started_at_ms: u64,
     acknowledged: bool,
+    /// The message was a slash command Claude answered without replaying it.
+    command_unreplayed: bool,
     /// Claude acknowledged an interrupt of this turn, so an error result is the stop, not a failure.
     interrupted: bool,
     active_message_id: Option<String>,
@@ -50,6 +49,7 @@ impl TurnProjector {
             user_item_id,
             started_at_ms: now_ms(),
             acknowledged: false,
+            command_unreplayed: false,
             interrupted: false,
             active_message_id: None,
             assistant_text: BTreeMap::new(),
@@ -66,34 +66,50 @@ impl TurnProjector {
 
     /// Records that Claude acknowledged an interrupt of this turn. Claude then ends the turn with an
     /// error result (`error_during_execution`, seen on Claude Code 2.1.325 and 2.1.327), which is the
-    /// person's stop: it is reported as `interrupted`, as Codex reports one, not as a failure.
+    /// person's stop: it is reported as interrupted, not as a failure.
     pub fn interrupt_acknowledged(&mut self) {
         self.interrupted = true;
     }
 
-    pub fn project(&mut self, frame: OutputFrame) -> Result<Vec<ProjectedEvent>> {
+    /// Whether Claude's answer stands in for the replay of this message. Claude runs a slash
+    /// command itself and, in a resumed session, answers without replaying it (seen on Claude Code
+    /// 2.1.330), so the answer is the only proof it took the message. Any other message must be
+    /// replayed before it counts as delivered.
+    pub fn takes_answer_as_receipt(&self) -> bool {
+        !self.acknowledged && self.submitted_text.trim_start().starts_with('/')
+    }
+
+    /// The turn's start, the person's message and the delivery receipt, once Claude has shown it
+    /// took the message.
+    fn receipt(&mut self, text: String) -> Vec<ProviderEvent> {
+        self.acknowledged = true;
+        let message = Content::Message { role: Role::User, text };
+        vec![
+            ProviderEvent::TurnStarted {
+                turn: self.turn_id.clone(),
+                started_at_ms: Some(whole_seconds(self.started_at_ms)),
+            },
+            self.started(self.user_item_id.clone(), message.clone()),
+            self.ended(self.user_item_id.clone(), message, ItemState::Completed),
+            ProviderEvent::Delivered { turn: self.turn_id.clone() },
+        ]
+    }
+
+    /// What one line of Claude's output says about the turn, in the order it happened.
+    pub fn project(&mut self, frame: OutputFrame) -> Result<Vec<ProviderEvent>> {
         let mut events = Vec::new();
+        let answers = matches!(frame, OutputFrame::MessageStarted { .. } | OutputFrame::Result { .. });
+        if answers && self.takes_answer_as_receipt() {
+            self.command_unreplayed = true;
+            events.extend(self.receipt(self.submitted_text.clone()));
+        }
         match frame {
             OutputFrame::UserReplay { text } if !self.acknowledged => {
                 anyhow::ensure!(
                     text == self.submitted_text,
                     "Claude replayed a different user message"
                 );
-                events.push(self.notification(
-                    "turn/started",
-                    serde_json::json!({"turn":{"id":self.turn_id,"status":"inProgress"}}),
-                ));
-                let user = serde_json::json!({
-                    "id": self.user_item_id,
-                    "type": "userMessage",
-                    "content": [{"type":"text","text":text}]
-                });
-                events.push(self.notification("item/started", serde_json::json!({"item":user})));
-                events.push(self.notification("item/completed", serde_json::json!({"item":user})));
-                events.push(ProjectedEvent::Acknowledged {
-                    result: serde_json::json!({"turn":{"id":self.turn_id,"status":"inProgress","items":[]}}),
-                });
-                self.acknowledged = true;
+                events.extend(self.receipt(text));
             }
             OutputFrame::UserReplay { .. } => {}
             OutputFrame::MessageStarted { message_id, .. } => {
@@ -105,19 +121,17 @@ impl TurnProjector {
                     .clone()
                     .context("Claude text arrived outside a message")?;
                 if self.started_messages.insert(message_id.clone()) {
-                    events.push(self.notification(
-                        "item/started",
-                        serde_json::json!({"item":{"id":message_id,"type":"agentMessage","text":""}}),
-                    ));
+                    events.push(self.started(message_id.clone(), answer(String::new())));
                 }
                 self.assistant_text
                     .entry(message_id.clone())
                     .or_default()
                     .push_str(&text);
-                events.push(self.notification(
-                    "item/agentMessage/delta",
-                    serde_json::json!({"itemId":message_id,"delta":text}),
-                ));
+                events.push(ProviderEvent::TextDelta {
+                    turn: self.turn_id.clone(),
+                    item: message_id,
+                    text,
+                });
             }
             OutputFrame::ToolUse {
                 block_index,
@@ -173,16 +187,7 @@ impl TurnProjector {
                         .unwrap_or_else(|| {
                             format!("{} {}", tool.name, bounded_content_text(Some(&input)))
                         });
-                    let item = serde_json::json!({
-                        "id":tool.id,
-                        "type":"commandExecution",
-                        "command":tool.command,
-                        "input":tool.input,
-                        "status":"inProgress",
-                        "aggregatedOutput":""
-                    });
-                    events
-                        .push(self.notification("item/started", serde_json::json!({"item":item})));
+                    events.push(self.started(tool.id.clone(), tool.step(String::new())));
                     self.tools_by_id.insert(tool.id.clone(), tool);
                 }
             }
@@ -192,27 +197,16 @@ impl TurnProjector {
                         .tools_by_id
                         .remove(&result.id)
                         .context("Claude returned a result for an unknown tool call")?;
-                    let item = serde_json::json!({
-                        "id":result.id,
-                        "type":"commandExecution",
-                        "command":tool.command,
-                        "input":tool.input,
-                        "status":if result.is_error {"failed"} else {"completed"},
-                        "aggregatedOutput":result.output
-                    });
-                    events.push(
-                        self.notification("item/completed", serde_json::json!({"item":item})),
-                    );
+                    let state = if result.is_error {
+                        ItemState::Failed
+                    } else {
+                        ItemState::Completed
+                    };
+                    events.push(self.ended(result.id, tool.step(result.output), state));
                 }
             }
-            OutputFrame::ControlRequest {
-                request_id,
-                request,
-            } => {
-                events.push(ProjectedEvent::ControlRequest {
-                    request_id,
-                    request,
-                });
+            OutputFrame::ControlRequest { .. } => {
+                bail!("Claude control request reached the turn projection")
             }
             OutputFrame::Result {
                 session_id,
@@ -223,25 +217,34 @@ impl TurnProjector {
                     session_id == self.thread_id,
                     "Claude returned a different session identity"
                 );
+                // A command Claude ran itself streams no message: what it printed is only here.
+                if self.command_unreplayed && self.started_messages.is_empty() && !is_error
+                    && let Some(output) = result.as_ref().filter(|text| !text.is_empty())
+                {
+                    let id = format!("{}-command-output", self.turn_id);
+                    events.push(self.started(id.clone(), answer(String::new())));
+                    events.push(self.ended(id, answer(output.clone()), ItemState::Completed));
+                }
                 for (message_id, streamed_text) in std::mem::take(&mut self.assistant_text) {
                     let text = result
                         .as_ref()
                         .filter(|text| !text.is_empty())
-                        .unwrap_or(&streamed_text);
-                    events.push(self.notification(
-                        "item/completed",
-                        serde_json::json!({"item":{"id":message_id,"type":"agentMessage","text":text}}),
-                    ));
+                        .unwrap_or(&streamed_text)
+                        .clone();
+                    events.push(self.ended(message_id, answer(text), ItemState::Completed));
                 }
-                let status = match (is_error, self.interrupted) {
-                    (true, true) => "interrupted",
-                    (true, false) => "failed",
-                    (false, _) => "completed",
+                let state = match (is_error, self.interrupted) {
+                    (true, true) => ItemState::Interrupted,
+                    (true, false) => ItemState::Failed,
+                    (false, _) => ItemState::Completed,
                 };
-                events.push(self.notification(
-                    "turn/completed",
-                    serde_json::json!({"turn":{"id":self.turn_id,"status":status}}),
-                ));
+                events.push(ProviderEvent::TurnCompleted {
+                    turn: self.turn_id.clone(),
+                    state,
+                    error: None,
+                    started_at_ms: Some(whole_seconds(self.started_at_ms)),
+                    completed_at_ms: Some(whole_seconds(now_ms())),
+                });
             }
             OutputFrame::Initialized { .. }
             | OutputFrame::ControlResponse { .. }
@@ -250,31 +253,51 @@ impl TurnProjector {
         Ok(events)
     }
 
-    fn notification(&self, method: &str, mut params: Value) -> ProjectedEvent {
-        params["threadId"] = Value::String(self.thread_id.clone());
-        match method {
-            "turn/started" | "turn/completed" => {
-                // Codex reports a turn's times in whole seconds; keep the same shape.
-                params["turn"]["startedAt"] = (self.started_at_ms / 1000).into();
-                if method == "turn/completed" {
-                    params["turn"]["completedAt"] = (now_ms() / 1000).into();
-                }
-            }
-            "item/started" => {
-                params["turnId"] = Value::String(self.turn_id.clone());
-                params["startedAtMs"] = now_ms().into();
-            }
-            "item/completed" => {
-                params["turnId"] = Value::String(self.turn_id.clone());
-                params["completedAtMs"] = now_ms().into();
-            }
-            _ => params["turnId"] = Value::String(self.turn_id.clone()),
-        }
-        ProjectedEvent::Notification {
-            method: method.into(),
-            params,
+    fn started(&self, id: String, content: Content) -> ProviderEvent {
+        ProviderEvent::Item(Item {
+            turn: self.turn_id.clone(),
+            id,
+            content,
+            state: ItemState::Running,
+            started_at_ms: Some(now_ms()),
+            completed_at_ms: None,
+        })
+    }
+
+    fn ended(&self, id: String, content: Content, state: ItemState) -> ProviderEvent {
+        ProviderEvent::Item(Item {
+            turn: self.turn_id.clone(),
+            id,
+            content,
+            state,
+            started_at_ms: None,
+            completed_at_ms: Some(now_ms()),
+        })
+    }
+}
+
+impl ProjectedTool {
+    /// The tool call as a step of the turn, with what it has printed so far.
+    fn step(&self, output: String) -> Content {
+        Content::Tool {
+            kind: TOOL_STEP.into(),
+            label: command_label(Some(&self.command)),
+            output,
+            input: bound_input(&self.input),
+            exit_code: None,
+            duration_ms: None,
         }
     }
+}
+
+fn answer(text: String) -> Content {
+    Content::Message { role: Role::Assistant, text }
+}
+
+/// A turn's times are kept in whole seconds, as every provider's saved history reports them, so
+/// a turn reads the same live and after it is read back.
+fn whole_seconds(ms: u64) -> u64 {
+    ms / 1000 * 1000
 }
 
 fn now_ms() -> u64 {
@@ -287,6 +310,8 @@ fn now_ms() -> u64 {
 
 pub const MAX_PENDING_TOOLS: usize = 64;
 const MAX_TOOL_INPUT_BYTES: usize = 64 * 1024;
+/// The kind every tool call is kept under: the history shows a tool call as a command step.
+const TOOL_STEP: &str = "commandExecution";
 
 #[cfg(test)]
 mod tests {
@@ -300,6 +325,63 @@ mod tests {
             "show status".into(),
             "user-1".into(),
         )
+    }
+
+    fn command(text: &str) -> TurnProjector {
+        TurnProjector::new("session-1".into(), "turn-1".into(), text.into(), "user-1".into())
+    }
+
+    #[test]
+    fn a_slash_command_claude_ran_itself_is_delivered_by_its_answer_and_shows_what_it_printed() {
+        let mut projector = command("/cost");
+
+        let events = projector.project(result(false, Some("14% of the week used"))).unwrap();
+
+        assert!(matches!(events.first(), Some(ProviderEvent::TurnStarted { turn, .. }) if turn == "turn-1"));
+        assert!(matches!(&item(&events[2]).content, Content::Message { role: Role::User, text } if text == "/cost"));
+        assert_eq!(events[3], ProviderEvent::Delivered { turn: "turn-1".into() });
+        let printed = item(&events[5]);
+        assert!(matches!(&printed.content, Content::Message { role: Role::Assistant, text } if text == "14% of the week used"));
+        assert!(matches!(events.last(), Some(ProviderEvent::TurnCompleted { state: ItemState::Completed, .. })));
+    }
+
+    #[test]
+    fn a_slash_command_claude_answers_as_a_message_is_delivered_when_the_answer_starts() {
+        let mut projector = command("/bw");
+
+        let events = projector
+            .project(OutputFrame::MessageStarted { message_id: "message-1".into(), model: "model".into() })
+            .unwrap();
+
+        assert_eq!(events.last(), Some(&ProviderEvent::Delivered { turn: "turn-1".into() }));
+        assert!(projector.acknowledged());
+        assert!(!projector.takes_answer_as_receipt());
+    }
+
+    #[test]
+    fn an_ordinary_message_is_never_delivered_by_an_answer_alone() {
+        let mut projector = projector();
+
+        let events = projector.project(result(false, Some("done"))).unwrap();
+
+        assert!(!projector.takes_answer_as_receipt());
+        assert!(!projector.acknowledged());
+        assert!(!events.iter().any(|event| matches!(event, ProviderEvent::Delivered { .. })));
+    }
+
+    fn result(is_error: bool, text: Option<&str>) -> OutputFrame {
+        OutputFrame::Result {
+            session_id: "session-1".into(),
+            is_error,
+            result: text.map(str::to_owned),
+        }
+    }
+
+    fn item(event: &ProviderEvent) -> &Item {
+        let ProviderEvent::Item(item) = event else {
+            panic!("{event:?}");
+        };
+        item
     }
 
     #[test]
@@ -319,13 +401,14 @@ mod tests {
                 text: "show status".into(),
             })
             .unwrap();
-        assert!(
-            matches!(events.first(), Some(ProjectedEvent::Notification { method, .. }) if method == "turn/started")
-        );
-        assert!(
-            matches!(events.last(), Some(ProjectedEvent::Acknowledged { result }) if result["turn"]["id"] == "turn-1")
-        );
+        assert!(matches!(events.first(), Some(ProviderEvent::TurnStarted { turn, .. }) if turn == "turn-1"));
+        assert_eq!(events.last(), Some(&ProviderEvent::Delivered { turn: "turn-1".into() }));
         assert!(projector.acknowledged());
+        // The submitted message enters the turn as the person's own.
+        let message = Content::Message { role: Role::User, text: "show status".into() };
+        assert_eq!((&item(&events[1]).content, &item(&events[1]).state), (&message, &ItemState::Running));
+        assert_eq!((&item(&events[2]).content, &item(&events[2]).state), (&message, &ItemState::Completed));
+        assert_eq!(item(&events[2]).id, "user-1");
         assert!(
             projector
                 .project(OutputFrame::UserReplay {
@@ -333,43 +416,6 @@ mod tests {
                 })
                 .unwrap()
                 .is_empty()
-        );
-    }
-
-    #[test]
-    fn projects_streamed_assistant_text_into_history_notifications() {
-        let mut projector = projector();
-        projector
-            .project(OutputFrame::MessageStarted {
-                message_id: "message-1".into(),
-                model: "claude-sonnet".into(),
-            })
-            .unwrap();
-        let started = projector
-            .project(OutputFrame::TextDelta {
-                block_index: 0,
-                text: "hello".into(),
-            })
-            .unwrap();
-        assert!(
-            matches!(started.first(), Some(ProjectedEvent::Notification { method, .. }) if method == "item/started")
-        );
-        assert!(
-            matches!(started.last(), Some(ProjectedEvent::Notification { method, params }) if method == "item/agentMessage/delta" && params["delta"] == "hello")
-        );
-
-        let completed = projector
-            .project(OutputFrame::Result {
-                session_id: "session-1".into(),
-                is_error: false,
-                result: Some("hello".into()),
-            })
-            .unwrap();
-        assert!(
-            matches!(completed.first(), Some(ProjectedEvent::Notification { method, params }) if method == "item/completed" && params["item"]["text"] == "hello")
-        );
-        assert!(
-            matches!(completed.last(), Some(ProjectedEvent::Notification { method, params }) if method == "turn/completed" && params["turn"]["status"] == "completed")
         );
     }
 
@@ -396,9 +442,10 @@ mod tests {
         let started = projector
             .project(OutputFrame::ContentBlockEnded { block_index: 2 })
             .unwrap();
-        assert!(
-            matches!(started.as_slice(), [ProjectedEvent::Notification { method, params }] if method == "item/started" && params["item"]["command"] == "pwd")
-        );
+        assert!(matches!(
+            started.as_slice(),
+            [ProviderEvent::Item(Item { content: Content::Tool { label, .. }, state: ItemState::Running, .. })] if label == "pwd"
+        ));
 
         let completed = projector
             .project(OutputFrame::ToolResults(vec![crate::ToolResult {
@@ -407,9 +454,10 @@ mod tests {
                 is_error: false,
             }]))
             .unwrap();
-        assert!(
-            matches!(completed.as_slice(), [ProjectedEvent::Notification { method, params }] if method == "item/completed" && params["item"]["aggregatedOutput"] == "done")
-        );
+        assert!(matches!(
+            completed.as_slice(),
+            [ProviderEvent::Item(Item { content: Content::Tool { output, .. }, state: ItemState::Completed, .. })] if output == "done"
+        ));
     }
 
     #[test]
@@ -429,7 +477,7 @@ mod tests {
                 partial_json: r#"{"todos":[{"content":"ship","status":"pending"}]}"#.into(),
             })
             .unwrap();
-        let todos = json!({"todos":[{"content":"ship","status":"pending"}]});
+        let todos = Some(json!({"todos":[{"content":"ship","status":"pending"}]}));
         let started = projector
             .project(OutputFrame::ContentBlockEnded { block_index: 0 })
             .unwrap();
@@ -440,16 +488,30 @@ mod tests {
                 is_error: false,
             }]))
             .unwrap();
-        let [ProjectedEvent::Notification { params: begin, .. }] = started.as_slice() else {
-            panic!("one start event");
+        let (begin, end) = (item(&started[0]), item(&completed[0]));
+        let input = |item: &Item| match &item.content {
+            Content::Tool { input, .. } => input.clone(),
+            other => panic!("{other:?}"),
         };
-        let [ProjectedEvent::Notification { params: end, .. }] = completed.as_slice() else {
-            panic!("one completion event");
-        };
-        assert_eq!(begin["item"]["input"], todos);
-        assert_eq!(end["item"]["input"], todos);
-        assert!(begin["startedAtMs"].as_u64().unwrap() > 0);
-        assert!(end["completedAtMs"].as_u64().unwrap() >= begin["startedAtMs"].as_u64().unwrap());
+        assert_eq!(input(begin), todos);
+        assert_eq!(input(end), todos);
+        assert!(begin.started_at_ms.unwrap() > 0);
+        assert!(end.completed_at_ms.unwrap() >= begin.started_at_ms.unwrap());
+    }
+
+    #[test]
+    fn a_failed_tool_call_is_a_failed_step() {
+        let mut projector = projector();
+        projector
+            .project(OutputFrame::ToolUse { block_index: 0, id: "tool-1".into(), name: "Bash".into(), input: json!({"command":"false"}) })
+            .unwrap();
+        projector.project(OutputFrame::ContentBlockEnded { block_index: 0 }).unwrap();
+
+        let completed = projector
+            .project(OutputFrame::ToolResults(vec![crate::ToolResult { id: "tool-1".into(), output: "no".into(), is_error: true }]))
+            .unwrap();
+
+        assert_eq!(item(&completed[0]).state, ItemState::Failed);
     }
 
     #[test]
@@ -459,45 +521,40 @@ mod tests {
             if interrupted {
                 projector.interrupt_acknowledged();
             }
-            let events = projector
-                .project(OutputFrame::Result {
-                    session_id: "session-1".into(),
-                    is_error,
-                    result: None,
-                })
-                .unwrap();
-            let Some(ProjectedEvent::Notification { params, .. }) = events.last() else {
+            let events = projector.project(result(is_error, None)).unwrap();
+            let Some(ProviderEvent::TurnCompleted { state, .. }) = events.last() else {
                 panic!("turn completion");
             };
-            params["turn"]["status"].clone()
+            state.clone()
         };
-        assert_eq!(status(true, true), "interrupted");
-        assert_eq!(status(false, true), "failed", "an error nobody asked for is a failure");
-        assert_eq!(status(true, false), "completed", "a turn that ended before the stop is complete");
+        assert_eq!(status(true, true), ItemState::Interrupted);
+        assert_eq!(status(false, true), ItemState::Failed, "an error nobody asked for is a failure");
+        assert_eq!(status(true, false), ItemState::Completed, "a turn that ended before the stop is complete");
     }
 
     #[test]
-    fn turn_events_carry_the_turn_times_in_seconds() {
+    fn turn_events_carry_the_turn_times_in_whole_seconds() {
         let mut projector = projector();
         let started = projector
             .project(OutputFrame::UserReplay {
                 text: "show status".into(),
             })
             .unwrap();
-        let ProjectedEvent::Notification { params, .. } = &started[0] else {
+        let ProviderEvent::TurnStarted { started_at_ms: Some(began), .. } = &started[0] else {
             panic!("turn start");
         };
-        assert!(params["turn"]["startedAt"].as_u64().unwrap() > 0);
-        let finished = projector
-            .project(OutputFrame::Result {
-                session_id: "session-1".into(),
-                is_error: false,
-                result: None,
-            })
-            .unwrap();
-        let Some(ProjectedEvent::Notification { params, .. }) = finished.last() else {
+        let finished = projector.project(result(false, None)).unwrap();
+        let Some(ProviderEvent::TurnCompleted { started_at_ms: Some(start), completed_at_ms: Some(end), .. }) = finished.last() else {
             panic!("turn completion");
         };
-        assert!(params["turn"]["completedAt"].as_u64().unwrap() >= params["turn"]["startedAt"].as_u64().unwrap());
+        assert!(*began > 0 && began % 1000 == 0 && end % 1000 == 0);
+        assert!((start, end >= start) == (began, true));
+    }
+
+    #[test]
+    fn a_control_request_never_reaches_the_projection() {
+        let request = OutputFrame::ControlRequest { request_id: "request-1".into(), request: json!({}) };
+
+        assert!(projector().project(request).is_err());
     }
 }

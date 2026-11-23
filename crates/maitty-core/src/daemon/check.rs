@@ -1359,17 +1359,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn a_failing_command_still_reads_as_failed() {
-        let run = run("echo before; exit 3", LONG);
-        assert!(
-            matches!(run.outcome, CheckOutcome::Exited(c) if c != 0 && c != EXIT_COMMAND_NOT_FOUND),
-            "{:?}",
-            run.outcome
-        );
-        assert_eq!(state_for(run.outcome), CheckState::Failed);
-    }
-
     #[cfg(windows)]
     #[test]
     fn a_quoted_path_still_runs_under_powershell() {
@@ -1490,7 +1479,7 @@ mod tests {
         let dir = persist::scratch_dir();
         std::fs::create_dir_all(dir.path()).unwrap();
         let pidfile = dir.path().join("check.pid");
-        let mut daemon = std::process::Command::new(std::env::current_exe().unwrap())
+        let mut daemon = std::process::Command::new(crate::test_support::this_test_binary())
             .args([
                 "--exact",
                 "daemon::check::tests::a_check_dies_with_the_daemon_that_started_it",

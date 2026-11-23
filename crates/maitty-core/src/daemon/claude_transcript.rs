@@ -60,31 +60,21 @@ mod tests {
     }
 
     #[test]
-    fn the_slug_replaces_every_non_alphanumeric_character() {
+    fn the_path_is_in_the_projects_folder_under_a_slug_that_replaces_every_non_alphanumeric_character() {
         assert_eq!(folder_slug(Path::new(r"C:\dev\x-y")), "C--dev-x-y");
         assert_eq!(folder_slug(Path::new("/home/me/my.app")), "-home-me-my-app");
-    }
-
-    #[test]
-    fn the_path_is_in_the_projects_folder_of_the_config_dir() {
         let path = claude_transcript_path(Path::new("/cfg"), Path::new("/home/me/app"), "abc");
         assert_eq!(path, Path::new("/cfg").join("projects").join("-home-me-app").join("abc.jsonl"));
     }
 
     #[test]
-    fn a_saved_transcript_keeps_the_resume() {
-        let dir = scratch_dir();
-        let folder = Path::new("/work/app");
-        keep(dir.path(), folder, "abc-1");
-        assert!(has_conversation(Some(dir.path()), Some(folder), "abc-1"));
-    }
-
-    #[test]
-    fn a_session_with_no_transcript_has_no_conversation() {
+    fn a_saved_transcript_keeps_the_resume_and_a_session_without_one_has_no_conversation() {
         let dir = scratch_dir();
         let folder = Path::new("/work/app");
         keep(dir.path(), folder, "other");
         assert!(!has_conversation(Some(dir.path()), Some(folder), "abc-1"));
+        keep(dir.path(), folder, "abc-1");
+        assert!(has_conversation(Some(dir.path()), Some(folder), "abc-1"));
     }
 
     #[test]

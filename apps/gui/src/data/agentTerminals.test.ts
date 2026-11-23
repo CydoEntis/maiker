@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withAgentTerminal, writeAgentTerminals } from './agentTerminals'
+import { liveAgentTerminals, ownedTerminalIds, readAgentTerminals, withAgentTerminal, withTerminals, writeAgentTerminals } from './agentTerminals'
 
 beforeEach(() => { localStorage.clear() })
 
@@ -20,6 +20,16 @@ describe('agent terminals', () => {
     const known = new Map([['a1', ['t2']], ['gone', ['t9']]])
     const live = liveAgentTerminals(known, new Set(['a1', 't2', 't9']))
     expect([...ownedTerminalIds(live)]).toEqual(['t2'])
+  })
+
+  it('never counts a pane an agent runs in as a terminal, so a record a restarted daemon made stale hides no agent', () => {
+    const live = liveAgentTerminals(new Map([['a1', ['t2', 't3']]]), new Set(['a1', 't2', 't3']), (id) => id === 't3')
+    expect([...live.entries()]).toEqual([['a1', ['t2']]])
+  })
+
+  it('puts an agent’s panel terminals and its splits together as its own', () => {
+    const all = withTerminals(new Map([['a1', ['t2']]]), new Map([['a1', ['t3']], ['a2', ['t4']]]))
+    expect([...all.entries()]).toEqual([['a1', ['t2', 't3']], ['a2', ['t4']]])
   })
 
   it('remembers them between runs, and reads nothing from a value that is not a list of ids', () => {

@@ -4,23 +4,19 @@ import { installUndoRedo } from '@/features/editing/undoRedo'
 import { DesktopApp } from '@/features/workspace/DesktopApp'
 import { isGalleryHash } from '@/features/gallery/galleryParams'
 
-// The browser preview (the older chat screens in App.tsx) is its own chunk: the desktop window
-// never downloads or parses it.
-const PreviewApp = lazy(() => import('./App.tsx'))
-// The primitives gallery (`#gallery`) is its own chunk too, for checking the shared components against the design.
+// The galleries are their own chunks, for checking the shared components against the design: the desktop window never
+// downloads or parses them.
 const DialogsGallery = lazy(() => import('./features/gallery/DialogsGallery.tsx').then((module) => ({ default: module.DialogsGallery })))
 const Gallery = lazy(() => import('./features/gallery/Gallery.tsx').then((module) => ({ default: module.Gallery })))
 
-/** The desktop window, or the browser preview outside the desktop app. */
+/**
+ * The desktop window, or a gallery: `#dialogs`, `#gallery`, and the primitives gallery outside the desktop app (a
+ * browser on `pnpm dev`), where there is no daemon to show.
+ */
 export function Root() {
-  // Here and not in either screen: this is the one component both the desktop window and the preview render.
+  // Here and not in the window: the galleries' text fields take the same undo and redo.
   useEffect(() => installUndoRedo(document, navigator.userAgent), [])
   if (window.location.hash.startsWith('#dialogs')) return <Suspense fallback={null}><DialogsGallery /></Suspense>
-  if (isGalleryHash(window.location.hash)) return <Suspense fallback={null}><Gallery /></Suspense>
-  if (isDesktop()) return <DesktopApp />
-  return (
-    <Suspense fallback={null}>
-      <PreviewApp />
-    </Suspense>
-  )
+  if (isGalleryHash(window.location.hash) || !isDesktop()) return <Suspense fallback={null}><Gallery /></Suspense>
+  return <DesktopApp />
 }

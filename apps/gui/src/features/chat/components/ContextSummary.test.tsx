@@ -1,9 +1,7 @@
-import { cleanup, render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
+import { cleanup } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import { buildRows } from '../chatRows'
 import { projectConversation } from '../projection'
-import { ContextSummary } from './ContextSummary'
 
 afterEach(cleanup)
 
@@ -21,17 +19,5 @@ describe("the agent's summary of the earlier conversation", () => {
     const rows = buildRows(projectConversation('claude', [command('c1'), command('c2'), summary, command('c3')], [], NOW), false)
 
     expect(rows.map((row) => row.kind)).toEqual(['work', 'summary', 'step'])
-  })
-
-  it('is one line until opened, then the summary as formatted text', async () => {
-    render(<ContextSummary text={SUMMARY} />)
-
-    const toggle = screen.getByRole('button', { name: 'Earlier conversation summarised to make room', expanded: false })
-    expect(screen.queryByText('What changed')).toBeNull()
-    await userEvent.click(toggle)
-    expect(screen.getByRole('heading', { name: 'What changed' })).toBeInTheDocument()
-    expect(screen.getAllByRole('listitem').map((item) => item.textContent)).toEqual(['The restart fix', 'The folder browser'])
-    await userEvent.click(toggle)
-    expect(screen.queryByText('What changed')).toBeNull()
   })
 })

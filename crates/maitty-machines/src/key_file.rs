@@ -50,9 +50,8 @@ fn expand(input: &str, home: Option<&Path>) -> PathBuf {
 mod tests {
     use super::*;
 
-    fn sandbox(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!("key-file-{label}-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&dir);
+    fn sandbox(label: &str) -> maitty_test_support::TempFolder {
+        let dir = maitty_test_support::TempFolder::new(&format!("key-file-{label}"));
         std::fs::create_dir_all(dir.join(".ssh")).unwrap();
         dir
     }

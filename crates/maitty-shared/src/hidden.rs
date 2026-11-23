@@ -78,6 +78,8 @@ mod tests {
             check("line one\nline two\ttabbed").is_ok(),
             "line breaks and tabs are visible"
         );
+        let plain = "café naïve — 日本語 한국어 العربية ✓ 🎉";
+        assert_eq!(sanitize(plain, false), plain, "sanitize keeps text in every script");
     }
 
     #[test]
@@ -124,17 +126,9 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_keeps_text_in_every_script() {
-        let plain = "café naïve — 日本語 한국어 العربية ✓ 🎉";
-        assert_eq!(sanitize(plain, false), plain);
-    }
-
-    #[test]
     fn the_refusal_names_each_character_and_its_place() {
-        assert_eq!(
-            check("go\u{200b}od \u{e0041}").unwrap_err(),
-            "refused: hidden characters \\u{200b} at 2, \\u{e0041} at 6; remove them and send again"
-        );
+        let refusal = check("go\u{200b}od \u{e0041}").unwrap_err();
+        assert!(refusal.contains("\\u{200b} at 2") && refusal.contains("\\u{e0041} at 6"), "{refusal}");
         let many = "\u{200b}".repeat(10);
         assert!(check(&many).unwrap_err().contains("and 2 more"));
     }

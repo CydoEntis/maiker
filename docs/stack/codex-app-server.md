@@ -162,6 +162,13 @@ field validation and live handoff remain later phase-32 work.
 
 ## Project-specific: transport foundation
 
+The app-server wire format is the Codex adapter's (`maitty-provider-codex`: `envelope.rs`,
+`requests.rs`, `approvals.rs`, `history.rs`), and `CodexDialect` implements the provider contract
+from the open connection on ([ADR 0018](../adr/0018-one-provider-contract-with-no-io.md)). The
+daemon asks in typed commands (`runtime::Rpc`) and `Rpc::codex` builds each request through the
+adapter. The preflight, handshake and process below stay in the daemon's own Codex loop
+(`runtime.rs`), which the generic dialect runner has not replaced.
+
 `daemon/conversation/transport.rs` preflights the exact selected executable with
 `--version` and `app-server generate-json-schema --out` in an isolated temporary
 Codex home. It normalizes generated `ClientRequest.json` and `ServerRequest.json`

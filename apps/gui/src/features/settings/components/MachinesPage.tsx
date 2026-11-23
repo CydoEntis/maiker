@@ -1,4 +1,5 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
 import { exportDaemonLog, openDaemonLog } from '@/api/daemon'
@@ -8,7 +9,7 @@ import { matching, nameOf, ordered, rowOf, SEARCH_AFTER, updatable, UPDATE_ALL_F
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row as SettingsRow, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
-import { MachinePage } from './MachinePage'
+import { MachineFold } from './MachineFold'
 import { Since } from './Since'
 import { StateMark, StatusBlock } from './StatusBlock'
 import { UpdateAsk } from './UpdateAsk'
@@ -17,7 +18,7 @@ import { useUpdateFlow, type UpdateFlow } from './useUpdateFlow'
 /** How long "Retrying…" shows before the row's own state is trusted again. */
 const RETRY_BUSY_MS = 6000
 
-type View = { kind: 'list' } | { kind: 'machine'; key: string } | { kind: 'this' }
+type View = 'list' | 'this'
 
 const BUTTON_WORDS: Record<Exclude<RowAction, 'retry'>, string> = { fix: 'Fix', update: 'Update', install: 'Install' }
 
@@ -28,40 +29,32 @@ type Props = {
   appVersion: string | null
 }
 
-/** Settings › Remote machines: the list, a machine's page, or this computer's details, one at a time. Add machine opens the Add a remote machine dialog. */
+/** Settings › Remote machines: the list (each machine one row, its settings folded under More) or this computer's details. Add machine opens the palette's New machine level. */
 export function MachinesPage({ daemon, machines, github, appVersion }: Props) {
-  const [view, setView] = useState<View>({ kind: 'list' })
-  // The machine the person last opened, so the list marks it when they come back.
-  const [opened, setOpened] = useState<string | null>(null)
+  const [view, setView] = useState<View>('list')
   const search = useContext(SettingsSearch)
   const flow = useUpdateFlow(machines.onUpdate, machines.onCheckActivity)
   const countOf = (head: MachineHead) => machines.sessionsOn?.(head.machine) ?? null
 
   // Search results hold only cards with rows: this computer's are the ones that are always there.
   if (search !== null) return <ThisComputer daemon={daemon} github={github} />
-  const back = () => { setView({ kind: 'list' }) }
-  if (view.kind === 'this') {
+  if (view === 'this') {
     return (
       <div className="mx-rm-page">
-        <button type="button" className="mx-rm-back" onClick={back}>All machines</button>
+        <button type="button" className="mx-rm-back" onClick={() => { setView('list') }}>All machines</button>
         <ThisComputer daemon={daemon} github={github} />
       </div>
     )
-  }
-  const picked = view.kind === 'machine' ? machines.list.find((head) => head.key === view.key) ?? null : null
-  if (picked !== null) {
-    return <MachinePage key={picked.key} head={picked} sessions={countOf(picked)} machines={machines} flow={flow} appVersion={appVersion} onBack={back} onRemoved={back} />
   }
   return (
     <MachineList
       machines={machines}
       flow={flow}
       countOf={countOf}
-      opened={opened}
+      appVersion={appVersion}
       localLine={localLineOf(daemon, machines, appVersion)}
-      onOpen={(head) => { setOpened(head.key); setView({ kind: 'machine', key: head.key }) }}
       onAdd={machines.add.open}
-      onThisComputer={() => { setView({ kind: 'this' }) }}
+      onThisComputer={() => { setView('this') }}
     />
   )
 }
@@ -76,15 +69,17 @@ type ListProps = {
   machines: MachinesInfo
   flow: UpdateFlow
   countOf: (head: MachineHead) => number | null
-  opened: string | null
+  appVersion: string | null
   localLine: string
-  onOpen: (head: MachineHead) => void
   onAdd: () => void
   onThisComputer: () => void
 }
 
-function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd, onThisComputer }: ListProps) {
+function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, onThisComputer }: ListProps) {
   const [query, setQuery] = useState('')
+  // One fold open at a time, and one Remove question, by the machine's key.
+  const [unfolded, setUnfolded] = useState<string | null>(null)
+  const [removing, setRemoving] = useState<string | null>(null)
   const [retrying, setRetrying] = useState<ReadonlySet<string>>(new Set())
   const [askingAll, setAskingAll] = useState(false)
   const timers = useRef(new Set<number>())
@@ -105,7 +100,7 @@ function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd
   }
 
   const act = (head: MachineHead, action: RowAction) => {
-    if (action === 'fix') onOpen(head)
+    if (action === 'fix') setUnfolded(head.key)
     else if (action === 'retry') retry(head.label)
     else flow.ask(head)
   }
@@ -137,9 +132,20 @@ function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd
         <div role="list" className="mx-rm-list">
           {shown.map((head) => {
             const busy = flow.running.has(head.label) ? (head.updateAction === 'install' ? 'Installing…' : 'Updating…') : flow.checking === head.label ? 'Checking…' : retrying.has(head.label) ? 'Retrying…' : null
+            const open = unfolded === head.key
             return (
-              <MachineRowView key={head.key} head={head} row={rowOf(head, countOf(head))} current={opened === head.key} busy={busy} onOpen={() => { onOpen(head) }} onAction={(action) => { act(head, action) }}>
+              <MachineRowView
+                key={head.key}
+                head={head}
+                row={rowOf(head, countOf(head))}
+                open={open}
+                busy={busy}
+                onFold={() => { setUnfolded(open ? null : head.key) }}
+                onAction={(action) => { act(head, action) }}
+              >
                 {flow.asking?.name === head.label && <UpdateAsk flow={flow} />}
+                {open && <MachineFold head={head} sessions={countOf(head)} machines={machines} appVersion={appVersion} onRemove={() => { setRemoving(head.key) }} />}
+                {removing === head.key && <RemoveAsk name={head.label} onRemove={() => { setRemoving(null); void machines.onRemove(head.label) }} onCancel={() => { setRemoving(null) }} />}
               </MachineRowView>
             )
           })}
@@ -148,9 +154,11 @@ function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd
       )}
       <div className="mx-rm-local">
         <StateMark glyph="●" tone="ok" />
-        <span>This computer</span>
-        <span className="mono mx-rm-localline">{localLine}</span>
-        <button type="button" className="mx-rm-text" onClick={onThisComputer}>Details</button>
+        <span className="mx-rm-who">
+          <span className="mx-rm-name">This computer</span>
+          <span className="mx-rm-addr mono">{localLine}</span>
+        </span>
+        <button type="button" className="mx-rm-out" onClick={onThisComputer}>Details</button>
       </div>
     </section>
   )
@@ -159,31 +167,50 @@ function MachineList({ machines, flow, countOf, opened, localLine, onOpen, onAdd
 type RowProps = {
   head: MachineHead
   row: MachineRow
-  current: boolean
+  /** Its More fold is open. */
+  open: boolean
   busy: string | null
-  onOpen: () => void
+  onFold: () => void
   onAction: (action: RowAction) => void
   children?: ReactNode
 }
 
-/** One line per machine: what matters now, and at most one fix. Clicking the row opens the machine's page. */
-function MachineRowView({ head, row, current, busy, onOpen, onAction, children }: RowProps) {
+/**
+ * One row per machine: its mark, its name over its address, what matters now, at most one fix, and a caret that unfolds
+ * its settings (Remove is there, at the foot). Clicking the row folds it too.
+ */
+function MachineRowView({ head, row, open, busy, onFold, onAction, children }: RowProps) {
   const name = nameOf(head)
   return (
-    <div role="listitem" className="mx-rm-item" aria-current={current ? 'true' : undefined}>
-      <div className={`mx-rm-row${current ? ' is-current' : ''}`} onClick={onOpen}>
+    <div role="listitem" className="mx-rm-item" aria-label={name}>
+      <div className="mx-rm-row" onClick={onFold}>
         <StateMark glyph={row.glyph} tone={row.tone} />
-        <button type="button" className="mx-rm-name" onClick={(event) => { event.stopPropagation(); onOpen() }}>{name}</button>
-        <span className="mx-rm-addr mono">{head.target ?? ''}</span>
+        <span className="mx-rm-who">
+          <span className="mx-rm-name">{name}</span>
+          {head.target !== null && <span className="mx-rm-addr mono" title={head.target}>{head.target}</span>}
+        </span>
         <span className={`mx-rm-line is-${row.tone}`}>{row.line}{row.showsSince && head.downSince !== null && <> · <Since at={head.downSince} /></>}</span>
         <span className="mx-rm-act">
           {busy !== null
             ? <span className="mx-rm-busy">{busy}</span>
             : row.action !== null && <button type="button" className="mx-rm-out" aria-label={`${row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]} ${name}`} onClick={(event) => { event.stopPropagation(); onAction(row.action as RowAction) }}>{row.action === 'retry' ? 'Retry' : BUTTON_WORDS[row.action]}</button>}
         </span>
+        <button type="button" className={`mx-rm-fold-toggle${open ? ' is-open' : ''}`} aria-expanded={open} aria-label={`More about ${name}`} title={open ? 'Less' : 'More'} onClick={(event) => { event.stopPropagation(); onFold() }}>
+          <ChevronDown aria-hidden="true" />
+        </button>
       </div>
       {children}
     </div>
+  )
+}
+
+/** Remove asks in place first and says what stays: the machine leaves the list, nothing on it is touched. */
+function RemoveAsk({ name, onRemove, onCancel }: { name: string; onRemove: () => void; onCancel: () => void }) {
+  return (
+    <StatusBlock tone="needs" lead={`Remove ${name}?`} more={`Its sessions stop showing here. Nothing on ${name} is deleted.`}>
+      <button type="button" className="mx-rm-remove" aria-label={`Remove ${name}`} onClick={onRemove}>Remove</button>
+      <button type="button" className="mx-rm-text" onClick={onCancel}>Cancel</button>
+    </StatusBlock>
   )
 }
 

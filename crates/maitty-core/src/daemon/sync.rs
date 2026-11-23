@@ -1,5 +1,6 @@
 //! What a person's client may have done to the checkout a pane is in (`Query::Git`): fetch, pull,
-//! push, commit (`commit.rs`) and open a pull request (`pull_request.rs`). Nothing here merges, rebases or forces: a pull only
+//! push, commit (`commit.rs`) and open a pull request (`pull_request.rs`); discarding one file's
+//! changes is a question of its own (`discard.rs`). Nothing here merges, rebases or forces: a pull only
 //! fast-forwards. git is given no way to ask a question, so it fails when it would need a
 //! password, and the whole request is stopped at its deadline. Each function blocks, so it runs
 //! off the event loop.
@@ -89,6 +90,11 @@ impl<'a> Git<'a> {
         self.folder
     }
 
+    /// git in another folder, until the same deadline.
+    pub(super) fn in_folder<'b>(&self, folder: &'b Path) -> Git<'b> {
+        Git { folder, deadline: self.deadline, limit: self.limit }
+    }
+
     /// How long is left before the deadline, for a program that is not git.
     pub(super) fn time_left(&self) -> Duration {
         self.deadline.saturating_duration_since(Instant::now())
@@ -153,6 +159,9 @@ pub(super) mod fixtures {
         git(&folder, &["config", "user.email", "test@example.invalid"]);
         git(&folder, &["config", "user.name", "Test"]);
         git(&folder, &["config", "commit.gpgsign", "false"]);
+        // Windows runners set `core.autocrlf`, which writes restored files back with CRLF; the
+        // tests compare bytes, so the repository keeps what was written.
+        git(&folder, &["config", "core.autocrlf", "false"]);
         commit(&folder, "a.txt", "start");
         folder
     }
@@ -217,17 +226,13 @@ mod tests {
     }
 
     #[test]
-    fn a_checkout_on_no_branch_is_neither_pulled_nor_pushed() {
+    fn a_checkout_on_no_branch_or_with_no_upstream_is_neither_pulled_nor_pushed() {
         let dir = crate::daemon::persist::scratch_dir();
         let (mine, _other) = shared(dir.path());
         git(&mine, &["checkout", "-q", "--detach"]);
         assert_eq!(sync(&mine, &GitRequest::Pull, LIMIT), Err("this checkout is on no branch, so there is nothing to pull".into()));
         assert_eq!(sync(&mine, &GitRequest::Push, LIMIT), Err("this checkout is on no branch, so there is nothing to push".into()));
-    }
 
-    #[test]
-    fn a_branch_with_no_upstream_says_so() {
-        let dir = crate::daemon::persist::scratch_dir();
         let alone = repository(dir.path(), "alone");
         assert_eq!(sync(&alone, &GitRequest::Pull, LIMIT), Err("main has no upstream to pull from".into()));
         assert_eq!(
@@ -249,6 +254,12 @@ mod tests {
     fn a_request_out_of_time_is_stopped_and_says_so() {
         let dir = crate::daemon::persist::scratch_dir();
         let alone = repository(dir.path(), "alone");
+        // A fetch with nothing to fetch can end before its time is first checked. This remote's
+        // upload-pack waits for input git never sends, so the fetch is still running when time is
+        // up however fast the machine is; stopping git closes that input and ends it too.
+        let remote = repository(dir.path(), "remote");
+        git(&alone, &["remote", "add", "origin", remote.to_str().expect("a path")]);
+        git(&alone, &["config", "remote.origin.uploadpack", "git hash-object --stdin"]);
         assert_eq!(sync(&alone, &GitRequest::Fetch, Duration::ZERO), Err("git was stopped after 0 seconds".into()));
     }
 }

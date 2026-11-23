@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { addressOf, forgetMachines, machineArgs, machineNameOf, parseSessionId, registerMachine, terminalOf, terminalSessionId, unregisterMachine } from './machines'
+import { addressOf, chatAddressOf, forgetMachines, machineArgs, machineNameOf, parseSessionId, registerMachine, remoteChatId, terminalOf, terminalSessionId, unregisterMachine } from './machines'
 
 afterEach(() => { forgetMachines() })
 
@@ -45,6 +45,27 @@ describe('session ids', () => {
   it('names the machine to the host only for another machine', () => {
     expect(machineArgs({ machine: 0, machineName: null, term: 1 })).toEqual({})
     expect(machineArgs({ machine: 4, machineName: 'build', term: 1 })).toEqual({ machine: 4 })
+  })
+})
+
+describe('a chat session of another machine', () => {
+  it('is named by the machine and its conversation, and is no terminal session', () => {
+    forgetMachines()
+    registerMachine('build', 3)
+
+    expect(remoteChatId(12, 'build')).toBe('build/c12')
+    expect(machineNameOf('build/c12')).toBe('build')
+    expect(terminalOf('build/c12')).toBeNull()
+    expect(addressOf('build/c12')).toBeNull()
+    expect(chatAddressOf('build/c12')).toEqual({ machine: 3, conversation: 12 })
+    expect(chatAddressOf('12')).toEqual({ machine: 0, conversation: 12 })
+    expect(chatAddressOf('t12')).toBeNull()
+  })
+
+  it('cannot be reached on a machine this window was not told of', () => {
+    forgetMachines()
+
+    expect(() => chatAddressOf('build/c12')).toThrow('build is not one of this computer\'s machines')
   })
 })
 

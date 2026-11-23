@@ -16,8 +16,10 @@ maitty-agent-detection = { path = "../maitty-agent-detection" }
 maitty-ipc-transport = { path = "../maitty-ipc-transport" }
 maitty-machines = { path = "../maitty-machines" }
 maitty-settings = { path = "../maitty-settings" }
+maitty-provider = { path = "../adapters/maitty-provider" }
 maitty-provider-codex = { path = "../adapters/maitty-provider-codex" }
 maitty-provider-claude = { path = "../adapters/maitty-provider-claude" }
+maitty-provider-acp = { path = "../adapters/maitty-provider-acp" }
 anyhow = "1"
 bytes = "1"
 directories = "6"
@@ -45,6 +47,7 @@ vt100 = "0.16"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["fs"] }
+maitty-test-support = { path = "../maitty-test-support" }
 ratatui = "0.30"
 
 [target.'cfg(windows)'.dependencies]

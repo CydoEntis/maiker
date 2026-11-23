@@ -1,25 +1,44 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Panel } from '@/components/ui/panel'
+import { toast } from '@/lib/toast'
+import { LOCAL_MACHINE } from '@/api/machines'
+import { projectOfSession } from '../model/startProject'
+import { projectName } from '../model/sidebarTree'
 import { useInstalledAgents } from '../model/newChatHost'
+import { PullRequestsWindow } from './PullRequestsWindow'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
+import { ADD_MACHINE, PROJECT_FROM_SOURCES, projectRequestFor } from '../useOpenProject'
+import { useProjectActions } from '../useProjectActions'
 
 const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, startMenu, setStartMenu, startAgent, newTerminal, chatView, setSettingsSection, setAddMachineOpen, fixMachine, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, openInSplit, copyPathOf, copyText, showChangesOf, markDone, bringBack, unsnooze, setGetFileId, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, setRecentOpen, setSpecialistsId, sessionMap, setWorktreeFrom } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject, pullRequests, focusedSession } = useWorkspace()
+  // The session whose project's pull requests are open in their own window; null while it is closed.
+  const [pullsOf, setPullsOf] = useState<string | null>(null)
+  const pullsSession = pullsOf === null ? undefined : sessionMap.get(pullsOf)
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
+  const projectActionsFor = useProjectActions()
   const installedAgents = useInstalledAgents()
-  const start = {
-    installedAgents,
-    onAgent: startAgent,
+  // A session's own New worktree can move its chat into the new worktree, which only this computer's can; another
+  // machine's session lends its repository, as it does to its project's heading.
+  const newWorktreeFrom = (id: string) => {
+    const from = sessionMap.get(id)
+    if (from === undefined) return
+    if (from.machine === LOCAL_MACHINE) setWorktreeFrom(from)
+    else setProjectWorktreeFrom(from)
+  }
+  const openWorktreeOf = (id: string) => {
+    const from = sessionMap.get(id)
+    const placed = projectOfSession(openedProjects.machines, id)
+    if (from !== undefined && placed !== null) setOpenWorktreeFor({ machine: from.machine, project: placed.project, name: projectName(placed) })
   }
 
   // The sidebar, as the docked column or the 60px rail, or the full one inside the overlay of a narrow window.
-  // Two sidebars can be on screen (the rail and its drawer); the window's open + menu belongs to the one in front.
-  const renderSidebar = (mode: 'docked' | 'rail', afterPick: () => void, onToggle: () => void, holdsStartMenu: boolean) => (
+  const renderSidebar = (mode: 'docked' | 'rail', afterPick: () => void, onToggle: () => void) => (
     <Sidebar
       sessions={sidebarSessions}
       listed={sessionsListed}
@@ -31,9 +50,12 @@ export function WorkspaceSidebars() {
       portalContainer={root}
       onToggleRail={onToggle}
       side={preferences.sidebarSide}
-      order={preferences.sidebarOrder}
-      grouping={preferences.sidebarGroup}
-      onGrouping={(sidebarGroup) => { setPreferences((current) => ({ ...current, sidebarGroup })) }}
+      projects={openedProjects.machines}
+      selectedProject={openedProjects.selected}
+      opened={openedProjects.opened}
+      sort={preferences.sidebarSort}
+      onSort={(sort) => { setPreferences((current) => ({ ...current, sidebarSort: sort })) }}
+      installedAgents={installedAgents}
       onSearch={() => { afterPick(); setPaletteOpen(true) }}
       width={sidebarWidth}
       onResize={setLiveSidebarWidth}
@@ -42,30 +64,32 @@ export function WorkspaceSidebars() {
         setLiveSidebarWidth(null)
       }}
       onHoverSession={warmChat}
-      startMenu={holdsStartMenu ? startMenu : null}
-      onStartMenu={setStartMenu}
-      start={{ ...start, onAgent: (program, machine) => { afterPick(); start.onAgent(program, machine) } }}
-      onNewShell={chatView ? undefined : (machine) => { afterPick(); newTerminal(machine) }}
-      onAddMachine={() => { afterPick(); setAddMachineOpen(true) }}
+      onAddMachine={() => { afterPick(); setOpenProject(ADD_MACHINE) }}
+      onOpenProject={(machine) => { afterPick(); setOpenProject(machine === null ? PROJECT_FROM_SOURCES : projectRequestFor(machine)) }}
+      projectActions={projectActionsFor(afterPick)}
       onMachineSettings={() => { afterPick(); setSettingsSection('machines') }}
-      onFixMachine={(head) => { afterPick(); if (head.name !== null) fixMachine(head.name) }}
+      onRetryMachine={retryNamed}
+      onSignInMachine={(machine, name) => { afterPick(); openLoginNamed(machine, name) }}
+      onCopyCommand={copyCommand}
       onRenameMachine={setRenamingMachine}
       onUpdateMachine={(name, action) => { afterPick(); setUpdateAsk({ name, action }) }}
       onShowSession={(id) => { afterPick(); showSessionById(id) }}
       onRenameSession={setRenameId}
-      onSplitSession={(id, direction) => { afterPick(); openInSplit(id, direction) }}
+      onSaveSessionName={saveName}
       onCopyPath={copyPathOf}
-      onCopyText={copyText}
-      onShowChanges={(id) => { afterPick(); showChangesOf(id) }}
-      onMarkDone={markDone}
-      onBringBack={bringBack}
-      onUnsnooze={unsnooze}
-      onGetFile={setGetFileId}
-      onSpecialists={setSpecialistsId}
-      onNewWorktree={(id) => { afterPick(); const from = sessionMap.get(id); if (from !== undefined) setWorktreeFrom(from) }}
+      onNewWorktree={(id) => { afterPick(); newWorktreeFrom(id) }}
+      onOpenWorktree={(id) => { afterPick(); openWorktreeOf(id) }}
       onEndSession={endSession}
-      onOpenSettings={() => { afterPick(); setSettingsSection('appearance') }}
-      onRecentSessions={() => { afterPick(); setRecentOpen(true) }}
+      onOpenSettings={() => { afterPick(); setSettingsSection('general') }}
+      pullRequests={{
+        needYou: pullRequests.needsYou,
+        onOpen: () => {
+          afterPick()
+          // The list is a project's, found through the session in front, so with none there is no project to list.
+          if (focusedSession === undefined) toast.info('Open a session to see its project’s pull requests')
+          else setPullsOf(focusedSession.id)
+        },
+      }}
       updateProgress={updateProgress}
     />
   )
@@ -73,12 +97,13 @@ export function WorkspaceSidebars() {
   return (
     <>
       {/* Hidden, the sidebar leaves no rail: the pane header's Show sidebar button brings it back. */}
-      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar, !drawerShown)}
+      {!focusMode && sidebarMode !== 'hidden' && renderSidebar(sidebarMode, noop, toggleSidebar)}
             {!focusMode && drawerShown && (
               <Panel label="Sessions" onClose={() => { setDrawerOpen(false) }} scrimClassName="mx-drawer-scrim" className="mx-drawer">
-                {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) }, true)}
+                {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) })}
               </Panel>
             )}
+      {pullsSession !== undefined && <PullRequestsWindow session={pullsSession} onClose={() => { setPullsOf(null) }} />}
     </>
   )
 }

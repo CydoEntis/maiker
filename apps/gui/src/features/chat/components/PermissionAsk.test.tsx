@@ -71,14 +71,6 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(refuse.typeInto).toHaveBeenCalledExactlyOnceWith('\x1b')
   })
 
-  it('shows the terminal\'s own menu and keys for a Codex prompt the daemon did not mark answerable', async () => {
-    const { typeInto } = await open('Blocked', { ...WRITE_ASK, answerable: false }, 'codex')
-
-    expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
-    expect(typeInto).not.toHaveBeenCalled()
-  })
-
   it('refuses with Esc', async () => {
     const { typeInto, user } = await open('Blocked', WRITE_ASK)
 
@@ -87,26 +79,10 @@ describe('the chat of an agent stopped on a permission prompt', () => {
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('\x1b')
   })
 
-  it('points the composer at the card, which holds the answer', async () => {
-    await open('Blocked', WRITE_ASK)
-
-    expect(screen.getByRole('textbox', { name: 'Message Claude' })).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
-  })
-
   it('offers no allow button for a prompt whose answer key is not known, only the keys to answer it in the terminal', async () => {
     const { typeInto } = await open('Blocked', { ...WRITE_ASK, answerable: false })
 
     expect(screen.getByText('Wants to use Write')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
-    expect(typeInto).not.toHaveBeenCalled()
-  })
-
-  it('shows a question with its choices as a question, with no allow button that would pick for you', async () => {
-    const { typeInto } = await open('Blocked', { tool: 'AskUserQuestion', detail: 'Which database? 1 SQLite · 2 Postgres', answerable: false })
-
-    expect(screen.getByText('Claude has a question for you')).toBeInTheDocument()
-    expect(screen.getByText('Which database? 1 SQLite · 2 Postgres')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /^Yes once/ })).not.toBeInTheDocument()
     expect(screen.getByRole('group', { name: "Keys for the agent's terminal" })).toBeInTheDocument()
     expect(typeInto).not.toHaveBeenCalled()
@@ -319,13 +295,15 @@ describe("Claude's own \"don't ask again\" choice", () => {
     expect(typeInto).toHaveBeenCalledExactlyOnceWith('2')
   })
 
-  it('is not picked by its number, and Enter still means only the first choice, Yes once', async () => {
-    const { typeInto } = await openWith(BASH_ASK, MENU)
+  it('is not picked by its number or a letter, and the card opens with the keys on Yes once', async () => {
+    const { typeInto, user } = await openWith(BASH_ASK, MENU)
     const card = screen.getByRole('region', { name: 'Claude needs your permission' })
 
     fireEvent.keyDown(card, { key: '2' })
+    fireEvent.keyDown(card, { key: 'a' })
     expect(typeInto).not.toHaveBeenCalled()
-    fireEvent.keyDown(card, { key: 'Enter' })
+    expect(within(card).getByRole('button', { name: 'Yes once' })).toHaveFocus()
+    await user.keyboard('{Enter}')
     expect(typeInto).toHaveBeenCalledExactlyOnceWith(ANSWER_KEYS.approve)
   })
 

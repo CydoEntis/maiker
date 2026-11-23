@@ -43,6 +43,16 @@ pub enum WindowStyle {
     Glass,
 }
 
+/// What happens when an agent wants helpers (`sessions.helpers`).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum HelpersMay {
+    #[default]
+    Ask,
+    Always,
+    Never,
+}
+
 /// `as_str` gives the word each enum has in config.toml.
 macro_rules! words {
     ($ty:ident { $($variant:ident => $word:literal),+ }) => {
@@ -57,6 +67,10 @@ words!(NewSessionView { Chat => "chat", Terminal => "terminal" });
 words!(SidebarSide { Left => "left", Right => "right" });
 words!(Appearance { Dark => "dark", Light => "light" });
 words!(WindowStyle { Flat => "flat", Glass => "glass" });
+words!(HelpersMay { Ask => "ask", Always => "always", Never => "never" });
+
+/// `sessions.helpers_at_once` when the daemon did not say: the limit a config that sets none has.
+pub const HELPERS_AT_ONCE_UNSAID: u8 = 4;
 
 /// The longest theme name, agent name or start folder a setting may hold.
 pub const SETTING_TEXT_MAX_BYTES: usize = 4096;
@@ -86,10 +100,23 @@ pub struct SharedSettings {
     /// daemon, which reads as on, its default.
     #[serde(default = "on")]
     pub update_machines: bool,
+    /// `sessions.helpers`: whether an agent may start helpers. Absent from a daemon before
+    /// `protocol::HELPER_SETTINGS_SINCE`, which reads as asking, the default.
+    #[serde(default)]
+    pub helpers: HelpersMay,
+    /// `sessions.helpers_at_once`: how many helpers one session has working at once; more wait
+    /// for a free slot. Absent from a daemon before `protocol::HELPER_SETTINGS_SINCE`, which reads
+    /// as the default.
+    #[serde(default = "helpers_at_once_unsaid")]
+    pub helpers_at_once: u8,
 }
 
 fn on() -> bool {
     true
+}
+
+fn helpers_at_once_unsaid() -> u8 {
+    HELPERS_AT_ONCE_UNSAID
 }
 
 /// Which shared setting `Command::SetSetting` changes.
@@ -106,10 +133,15 @@ pub enum SettingKey {
     ReduceMotion,
     WindowStyle,
     /// Takes `SettingValue::List`: the agents to switch off; the rest are switched on.
-    /// Sent only to a daemon from `BYPASS_SETTING_SINCE` on.
     BypassOff,
-    /// Takes `SettingValue::Bool`. Sent only to a daemon from `UPDATE_MACHINES_SINCE` on.
+    /// Takes `SettingValue::Bool`.
     UpdateMachines,
+    /// Takes `SettingValue::Text`: `ask`, `always` or `never`. Read since
+    /// `protocol::HELPER_SETTINGS_SINCE`.
+    Helpers,
+    /// Takes `SettingValue::Text`: one of the limits Settings offers (`2`, `4`, `8`). Read since
+    /// `protocol::HELPER_SETTINGS_SINCE`.
+    HelpersAtOnce,
 }
 
 /// The new value; it must be the kind the key takes or the daemon refuses it.

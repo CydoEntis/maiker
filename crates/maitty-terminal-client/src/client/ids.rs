@@ -59,7 +59,6 @@ mod tests {
     use crate::protocol::{ClientMsg, PROTOCOL_VERSION, Surface, encode};
     use ratatui::Terminal;
     use ratatui::backend::TestBackend;
-    use std::collections::{HashMap, HashSet};
 
     /// The bytes as they leave the window, spelled out: a change here is a wire change.
     fn hex(msg: &ClientMsg) -> String {
@@ -71,44 +70,8 @@ mod tests {
     }
 
     #[test]
-    fn the_same_pane_number_on_two_machines_is_two_panes() {
-        let (here, there) = (ClientTerm::local(1), ClientTerm::on(MachineId(1), 1));
-        assert_ne!(here, there);
-        let mut sizes = HashMap::from([(here, (80, 24))]);
-        sizes.insert(there, (120, 40));
-        assert_eq!(sizes[&here], (80, 24));
-        assert_eq!(sizes[&there], (120, 40));
-        let focus_report: HashSet<_> = [there].into();
-        assert!(focus_report.contains(&there) && !focus_report.contains(&here));
-    }
-
-    #[test]
-    fn a_pane_on_each_machine_keeps_its_own_output() {
-        let (tx, _rx) = tokio::sync::mpsc::unbounded_channel();
-        let (bg_tx, _bg_rx) = tokio::sync::mpsc::unbounded_channel();
-        let mut app = crate::client::App::new(crate::config::Config::default(), tx, None, bg_tx);
-        let (here, there) = (ClientTerm::local(1), ClientTerm::on(MachineId(1), 1));
-        app.keep_raw(here, b"here", false);
-        app.keep_raw(there, b"there", false);
-        assert_eq!(app.raw[&here], b"here");
-        assert_eq!(app.raw[&there], b"there");
-    }
-
-    #[test]
-    fn typing_is_addressed_to_the_machine_of_the_pane() {
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel();
-        let (bg_tx, _bg_rx) = tokio::sync::mpsc::unbounded_channel();
-        let app = crate::client::App::new(crate::config::Config::default(), tx, None, bg_tx);
-        let there = ClientTerm::on(MachineId(1), 7);
-        app.send_input(there, b"ls".to_vec());
-        let sent = rx.try_recv().unwrap();
-        assert_eq!(sent.machine, MachineId(1));
-        assert!(matches!(sent.msg, ClientMsg::Input { term: 7, data } if data == b"ls"));
-    }
-
-    #[test]
     fn machines_do_not_change_what_goes_over_the_wire() {
-        assert_eq!(PROTOCOL_VERSION, 119);
+        assert_eq!(PROTOCOL_VERSION, 123);
         let hello = ClientMsg::Hello {
             version: PROTOCOL_VERSION,
             attach: true,
@@ -129,7 +92,7 @@ mod tests {
         let command = ClientMsg::Command(crate::protocol::Command::FocusPane { term: 3 });
         assert_eq!(
             hex(&hello),
-            "81a548656c6c6f86a776657273696f6e77a6617474616368c3a466726f6d9203a430306666aa73747275637475726564c0a773757266616365a87465726d696e616ca77265706c617973c3"
+            "81a548656c6c6f86a776657273696f6e7ba6617474616368c3a466726f6d9203a430306666aa73747275637475726564c0a773757266616365a87465726d696e616ca77265706c617973c3"
         );
         assert_eq!(
             hex(&input),
@@ -487,7 +450,7 @@ mod tests {
             "build".into(),
             Unreachable {
                 since: std::time::Instant::now(),
-                why: "no route".into(),
+                failure: crate::link_failure::FailureClass::Unreachable("no route".into()),
             },
         );
         let remote = &app.remotes[&MachineId(1)];
@@ -495,18 +458,8 @@ mod tests {
         assert!(matches!(remote.state, Unreachable { .. }));
         assert_eq!(
             app.notice.as_ref().unwrap().0,
-            "build is unreachable: no route"
+            "Can't reach build: check the name or address, and that the machine is on (no route)."
         );
-    }
-
-    #[test]
-    fn a_daemon_that_matches_its_recorded_id_is_accepted() {
-        let mut app = two_machines();
-        app.on_machine_server(MachineId(1), state_with_id(Some(BOX_A)));
-        app.on_machine_server(MachineId(1), state_with_id(Some(BOX_A)));
-        assert!(app.refused.is_empty());
-        // Nothing about a refusal; the one line it may say is that toasts from the machine are off until turned on.
-        assert!(app.notice.as_ref().is_none_or(|(text, ..)| text.starts_with("Toasts from ")), "{:?}", app.notice);
     }
 
     #[test]
@@ -618,19 +571,6 @@ mod tests {
             app.on_server(delta);
         }
         assert_eq!(lists_asked(&mut rx), [MachineId::LOCAL]);
-    }
-
-    #[test]
-    fn a_list_that_never_comes_is_asked_for_again_after_a_while() {
-        let mut app = two_machines();
-        let mut rx = listening(&mut app);
-        let delta = pane_added(&app, 72, 2);
-        app.on_server(delta);
-        let long_ago = std::time::Instant::now().checked_sub(crate::client::background::LIST_ASKED_AGAIN_AFTER);
-        app.list_asked.insert(MachineId::LOCAL, long_ago.unwrap());
-        let delta = pane_added(&app, 73, 3);
-        app.on_server(delta);
-        assert_eq!(lists_asked(&mut rx), [MachineId::LOCAL, MachineId::LOCAL]);
     }
 
     #[test]

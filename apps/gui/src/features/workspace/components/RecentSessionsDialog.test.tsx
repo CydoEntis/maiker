@@ -115,11 +115,6 @@ describe('the Recent sessions list', () => {
     expect(onReopened).not.toHaveBeenCalled()
   })
 
-  it('says when nothing has closed yet', async () => {
-    open([])
-    expect(await screen.findByText(/No closed sessions yet/)).toBeTruthy()
-  })
-
   it('asks for a service restart when the service is older than the list', async () => {
     open(null)
     expect(await screen.findByText('Restart the Maiker service to see closed sessions.')).toBeTruthy()

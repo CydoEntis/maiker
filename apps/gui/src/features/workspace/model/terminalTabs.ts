@@ -13,6 +13,21 @@ export const MAX_SPLITS = 4
 /** Where a new shell goes: beside `beside`, to its right or under it. */
 export type SplitPlace = { beside: string; down: boolean }
 
+/**
+ * Where a new terminal of a session is shown: a split beside one in the drawer, a tab of its own in the drawer, or a tab
+ * of the side panel that does not come to the front. Left out, it is a side-panel tab in front.
+ */
+export type TerminalPlace = SplitPlace | 'drawer' | 'behind'
+
+/**
+ * What a session's terminal is called, by where it comes in the order they were opened (`ids`): "Terminal", then
+ * "Terminal 2". The name stays with the terminal when it moves between the side panel and the drawer.
+ */
+export function terminalName(ids: readonly string[], id: string): string {
+  const at = ids.indexOf(id)
+  return at <= 0 ? 'Terminal' : `Terminal ${String(at + 1)}`
+}
+
 export function splitCount(tab: TerminalTab): number {
   return tab.reduce((total, column) => total + column.length, 0)
 }

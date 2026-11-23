@@ -10,7 +10,7 @@ import { forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
 import { COMMAND_SUBMIT_GAP_MS } from '../useChatComposer'
 import { ChatSession } from './ChatSession'
 
-const fake = vi.hoisted(() => ({ current: null as null | { read: (cursor: never) => Promise<unknown> } }))
+const fake = vi.hoisted(() => ({ current: null as null | { read: (cursor: never) => Promise<unknown> }, screen: '> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n' }))
 
 vi.mock('@/api/daemon', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/api/daemon')>()),
@@ -18,11 +18,12 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
     if (fake.current === null) throw new Error('no fake daemon')
     return fake.current.read(cursor as never)
   },
-  loadTerminalScreen: () => Promise.resolve('> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n'),
+  loadTerminalScreen: () => Promise.resolve(fake.screen),
   loadAgentModels: () => Promise.resolve([{ id: 'claude-opus-5-5', label: 'Opus 5.5', blurb: 'The most capable' }, { id: 'claude-sonnet-5-5', label: 'Sonnet 5.5', blurb: 'Fast' }]),
 }))
 
 beforeEach(() => {
+  fake.screen = '> hi\n\n  dev · Sonnet 5.5\n  ⏵⏵ accept edits on (shift+tab to cycle)\n'
   vi.useFakeTimers({ shouldAdvanceTime: true })
   forgetChatFeeds()
   forgetComposers()
@@ -62,18 +63,22 @@ function WithPaneQueue({ agent, typeInto }: { agent: 'claude' | 'codex'; typeInt
   )
 }
 
+/** Longer than the pause before the screen is read for Claude Code's switch-model question. */
+const SWITCH_READ_MS = 1000
+
 describe('changing the mode, the model and the reasoning of a chat that follows the terminal', () => {
-  it('moves the agent to the mode picked from the dropdown, with its own Shift+Tab', async () => {
+
+  it('says yes for the person when Claude Code asks whether to switch the model they picked', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const typeInto = open('claude')
     await settle(IDLE_POLL_MS)
+    fake.screen = '> /model opus\n\nSwitch model?\n\n  1 Yes, switch to Opus 5.5\n  2 No, go back\n'
 
-    await user.click(screen.getByRole('button', { name: /^Permission mode: .* Pick another/ }))
-    await user.click(await screen.findByRole('menuitemradio', { name: /Accept edits/ }))
-    await settle(1000)
-    // The fake screen already shows "accept edits", so no key is needed; the chip shows it.
-    expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: /^Permission mode: Accept edits/ })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await user.click(await screen.findByRole('radio', { name: /Opus 5.5/ }))
+    await settle(COMMAND_SUBMIT_GAP_MS + SWITCH_READ_MS)
+
+    expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r', '1'])
   })
 
   it('sends /model and /effort when a model and a reasoning level are picked', async () => {
@@ -88,7 +93,11 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto.mock.calls.map(([text]) => text)).toEqual(['/model claude-opus-5-5', '\r'])
     // The chip shows the picked model at once.
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning/ })).toHaveTextContent('Opus')
-    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    // The pick is made, so the menu goes; the reasoning is a pick of its own.
+    expect(screen.queryByRole('radiogroup', { name: 'Reasoning' })).not.toBeInTheDocument()
+    await settle(SWITCH_READ_MS)
+    await user.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await user.click(within(await screen.findByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(typeInto.mock.calls.map(([text]) => text).slice(2)).toEqual(['/effort high', '\r'])
   })
@@ -148,7 +157,8 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     const model = screen.getByRole('button', { name: /^Agent, model and reasoning/ })
     expect(model).toHaveAttribute('aria-disabled', 'true')
-    expect(model).toHaveAttribute('title', 'Claude is working. You can change the model and effort when it finishes, or after Esc.')
+    // The reason is in the button's name, so it is read out and not only shown on hover.
+    expect(model).toHaveAccessibleName(/when Claude finishes/)
     await user.click(model)
     expect(screen.queryByRole('radio', { name: /^Opus 5\.5/ })).not.toBeInTheDocument()
     await settle(COMMAND_SUBMIT_GAP_MS * 2)
@@ -169,7 +179,7 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
 
     // Picked here: shown at once, and the agent's files then say the same.
     await user.click(button())
-    await user.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    await user.click(within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: /^High/ }))
     await settle(COMMAND_SUBMIT_GAP_MS)
     expect(button()).toHaveAccessibleName(/· High/)
     rerender(chat('high'))
@@ -225,19 +235,6 @@ describe('changing the mode, the model and the reasoning of a chat that follows 
     expect(typeInto).toHaveBeenLastCalledWith('\x1b[B')
     await user.click(within(card).getByRole('button', { name: 'Close' }))
     expect(typeInto).toHaveBeenLastCalledWith('\x1b')
-    expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
-  })
-
-  it('does not open Codex\'s model menu while it works, and says why', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const typeInto = open('codex', 'Working')
-    await settle(IDLE_POLL_MS)
-
-    const label = screen.getByRole('button', { name: /^Model: .* Open its menu/ })
-    expect(label).toHaveAttribute('aria-disabled', 'true')
-    expect(label).toHaveAttribute('title', expect.stringMatching(/working/))
-    await user.click(label)
-    expect(typeInto).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'Codex model menu' })).not.toBeInTheDocument()
   })
 })

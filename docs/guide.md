@@ -116,9 +116,11 @@ start 4 helpers`. Press Enter on the row (or click the line) to see the tasks, t
 **1** Allow, **2** Always in this project, **3** No, do it alone, or Esc to decide later.
 Their permission prompts come to your Inbox, and nothing merges.
 
-Settings › Sessions sets the rest: **Sessions may start helpers** (`ask`, `always` or
-`never`; `never` refuses with a clear error to the agent) and **Helpers at once** (2, 3 or 4
-per session; an extra one is told to wait). "Always in this project" is kept in
+Settings › Sessions sets the rest (in the desktop app, Settings › Helpers):
+**Sessions may start helpers** (`ask`, `always` or `never`; `never` refuses with a clear error
+to the agent) and **Helpers at once** (2, 4 or 8 per session, 4 unless you change it). A helper
+past the limit still gets its row at once, reads working with "waiting for a free slot", and
+starts when one of its lead's helpers finishes; raising the limit starts the waiting ones. "Always in this project" is kept in
 `helper-projects.json` in Maiker's data folder, not in the repo, so an agent cannot give itself
 helpers. An older `[mcp] helpers_at_once` in `config.toml` still counts until `[sessions]
 helpers_at_once` is set. The commander and `[team]` jobs are gone; an old `config.toml` that
@@ -283,11 +285,15 @@ on another day) beside it, and **Unsnooze** on hover and in its menu. **Bring ba
 itself when its time comes, and at once when the session needs you: you cannot snooze one that needs you now. A snooze
 lasts at most a week and is kept by the daemon, so every window sees it.
 
-### Undo close
+### Closing a session
 
-A closed session is not gone at once. It leaves the list but keeps running for 6 seconds, and **Undo** brings it back. In the desktop app, click **Undo** in the toast, or press
-`Cmd+Z` on macOS and `Ctrl+Shift+Z` elsewhere. In the terminal app, press the leader (`Ctrl+Space`), then `Ctrl+Z`, while the banner
-shows. After 6 seconds the process ends. Putting away has the same 6-second Undo; it ends nothing, so Undo only lists it again.
+The desktop app asks before it closes a session or a terminal, and says what stops and what stays on disk. Tick **Don't ask
+again** and that kind of close goes straight through from then on. There is no Undo there: a closed chat can be opened again
+from Recent sessions.
+
+In the terminal app a closed session is not gone at once. It leaves the list but keeps running for 6 seconds, and **Undo** brings
+it back: press the leader (`Ctrl+Space`), then `Ctrl+Z`, while the banner shows. After 6 seconds the process ends. Putting away
+has the same 6-second Undo in both apps; it ends nothing, so Undo only lists it again.
 
 ## Follow-ups and snapshots
 
@@ -445,6 +451,14 @@ maiker conversation send --conversation 1 --generation 1 --operation 1 "Review t
 maiker conversation read --conversation 1 --limit 128
 ```
 
+An agent with no adapter of its own runs over ACP. Name it in the config (`[[agents]]` with
+`acp = true`, see `config.example.toml`), then start it by that name; the service picks the
+program:
+
+```powershell
+maiker conversation start --acp opencode --cwd C:\project
+```
+
 Commands print JSON. Start returns `conversation` and `generation`; use those
 values for send. Increment `--operation` for each new prompt. Repeating an
 acknowledged operation with identical text returns its receipt without sending
@@ -495,9 +509,11 @@ Closing the window, or losing the connection, never stops anything over there.
 
 Leader `w` (or `Machines` in the command palette) lists the computers maiker reaches over ssh and
 adds more. Pick a host from your `~/.ssh/config` and press Enter: if ssh logs in on its own (a key, an
-agent, a known host) the machine is added and connecting in that one step. If ssh needs you (a password, a
-code, a host key you have not accepted) it opens in a popup, you answer, and the machine connects when the
-popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
+agent) the machine is added and connecting in that one step: one line says *Connecting to <name>…*, then the
+dialog lists the machine, chosen. When something fails, one sentence under the field says what and how to fix
+it (such as the `ssh-copy-id` to run), and Enter tries again. A machine ssh has not seen before has its host
+key recorded by ssh with no question; one whose key changed is refused and not added. If ssh needs you (a
+password, a code) it opens in a popup, you answer, and the machine connects when the popup closes. You can also type `user@host`. Windows has no ssh agent to remember a password, so use keys or
 the agent there.
 
 Each machine in the dialog shows how it stands; when it is down the reason and what to do about it are written
@@ -587,7 +603,8 @@ A machine you add only needs the `maiker` program. There is no desktop app on it
   `maiker machine update <name> --install` does this over ssh for you, so you do not need to log in and
   install it by hand. A Windows machine cannot be the remote yet.
 - **A way in.** ssh must get in without asking you anything: a key (or your ssh agent) for that user. Run plain
-  `ssh <target>` once first, so its host key is known and you can see that it works.
+  `ssh <target>` once first to see that it works. Maiker records a new machine's host key the first time it
+  connects (unless your ssh config says otherwise) and refuses one that changed.
 - **maiker where ssh finds it.** Maiker looks in `~/.local/bin` (where it installs itself) first, then on the
   PATH ssh gives it. Only a copy kept somewhere else needs `remote_cmd` set to its full path.
 - **A version close enough.** This computer, the machine and any desktop app talk when their versions are the
@@ -777,7 +794,16 @@ check:
 ```
 
 A machine ssh cannot log in to gets one ✕ line with the fix, then `skipped: not reachable` and the ssh options.
-A version that differs says `maiker machine update <name>`; a daemon on another protocol says the same. The
+Every ✕ line ends with the same sentence the Machines list shows. A version or protocol that differs gives both
+numbers first, then the fix for the side that is behind:
+
+```
+ ✕ maiker version         0.58.1 there, 0.60.0 here. build runs an older Maiker: run `maiker machine update build`, then try again.
+```
+
+The ssh options line ends with `StrictHostKeyChecking=accept-new` when maiker adds it for that machine (a host key
+ssh has not seen is recorded on the first connection); when your own ssh setup says how to treat host keys, or
+your ssh is older than OpenSSH 7.6, it is left out and ssh does as it always has. The
 login PATH line shows where the machine's login shell finds maiker (the program, never the whole PATH) and
 notes when your `remote_cmd` is something else. Each machine has about 30 seconds in all, so one that never
 answers does not hold up the rest. The section is not printed when there are no machines.
@@ -812,12 +838,17 @@ its own. An Inbox row from another machine says `· on build`.
 - **Retry** dials a machine now and lets a refused one be looked at again.
 - **Remove** asks first, then takes the machine out of the list and out of `config.local.toml`. Its sessions
   keep running on it and the layout you saved is kept.
-- **Add a machine** lists the hosts in `~/.ssh/config` that are not machines yet, or takes `user@host`. The
-  desktop app first looks at the machine over ssh without asking anything (12 seconds at most; *Cancel* ends
-  it) and adds it only when ssh could reach it. If ssh needs you to type a password or accept a host key, the
-  machine is added and ssh opens in a session named `ssh <name>`; the machine connects when that session
-  closes. On Windows use ssh keys or an agent: password prompts work in that session but are not remembered.
-  A machine whose app is missing or old is added too; its header then says `not installed` or `needs update`.
+- **Add a machine** is one field and an **Add** button: type `user@host`, an address or a name from
+  `~/.ssh/config` (its hosts are offered as you type, and a click adds one). If `ssh <name>` works in a
+  terminal, it works here. A spinner says *Connecting to <name>…* while the desktop app looks at the machine
+  over ssh without asking anything (12 seconds at most; *Cancel* ends it) and puts Maiker on it when it is
+  missing; then the dialog closes and the machine is in the sidebar. A new host key is recorded by ssh without a
+  question; a machine whose key changed is not added, nor one whose new key your own ssh config won't let ssh
+record (the sentence then gives the `ssh` line to run once in a terminal to accept it). When something fails, one sentence says what and how to
+  fix it, with the command to copy (such as `ssh-copy-id`) and **Try again**. If ssh needs you to type a
+  password or a code, **Sign in in a terminal** opens ssh in a session named `ssh <name>`; the machine
+  connects once you have signed in. On Windows use ssh keys or an agent: password prompts work in that session
+  but are not remembered. A machine whose Maiker is older is added too; its header then offers the update.
 
 A machine with no maiker says `not installed` under its header in the sidebar, with an **Install** button; one
 with another version says `needs update`, with an **Update** button. Its right-click menu has the same as
@@ -831,7 +862,7 @@ could not get in, the machine has a newer maiker than this app, which is never d
 Windows machine, which cannot be a remote yet). After a success the machine is dialled again. The exact command
 is still shown with a **Copy command** button, to run in a terminal instead.
 
-Each machine on that page has two switches. **Copy to your clipboard** (what that machine's sessions ask to
+Each machine there has two switches (in the desktop app, under the machine's **More**). **Copy to your clipboard** (what that machine's sessions ask to
 copy is put on your clipboard) is on until you turn it off. **Notifications** (its notices, and a notice when
 its sessions need you or finish, each starting with `[name]`) is off until you turn it on. They are written to
 the machine's entry in `config.local.toml`, as `clipboard = false` and `notices = true`. The desktop app plays
@@ -845,7 +876,7 @@ pick the folder it goes inside, and the chat opens on the new folder. The side p
 works for a session on another machine too: it lists the changed files and their diffs, read from that
 machine. You can commit there too: tick the files, write the message, and **Commit**, **Pull** / **Push** /
 **Fetch** and **Create PR** all run on that machine, with its git name and its GitHub sign-in (a pull only
-fast-forwards; Create PR needs `gh` signed in there, see Settings › GitHub). The panel's Files, Branches, History and References tabs say they are
+fast-forwards; Create PR needs `gh` signed in there, see Settings › GitHub). The panel's Files lists that machine's folders and opens only its Markdown documents; References is
 local-only. If that machine is signed in to
 GitHub, the dialog also lists your repositories there: search, pick an owner, and click one to fill in its
 address. It works for this computer and for

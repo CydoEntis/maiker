@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { invoke, isTauri } from '@tauri-apps/api/core'
-import type { Conversation } from '@/data/preview'
-import { closeChatSession, conversationsFromSnapshot, startChatSession } from './daemon'
+import { answerHelpers, conversationsFromSnapshot, resumeChatSession, startChatSession } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -12,7 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 describe('chat sessions', () => {
   beforeEach(() => {
     vi.mocked(isTauri).mockReturnValue(true)
-    vi.mocked(invoke).mockReset().mockImplementation((command) => Promise.resolve(command === 'start_chat_session' ? { id: 44, generation: 1 } : null))
+    vi.mocked(invoke).mockReset().mockImplementation((command) => Promise.resolve(command === 'start_chat_session' || command === 'resume_chat_session' ? { id: 44, generation: 1 } : null))
   })
 
   const summary = (extra: Record<string, unknown> = {}) => ({
@@ -24,11 +23,21 @@ describe('chat sessions', () => {
   it('starts a chat session that asks first, unless full access is requested', async () => {
     await expect(startChatSession('/work/app', 'claude')).resolves.toEqual({ id: 44, generation: 1 })
     await startChatSession('/work/app', 'codex', 'agent/x')
-    await startChatSession('/work/app', 'claude', null, true)
+    await startChatSession('/work/app', 'claude', null, 'full-access')
+    await startChatSession('/work/app', 'codex', null, 'read-only')
     expect(vi.mocked(invoke).mock.calls).toEqual([
-      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, fullAccess: false }],
-      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: 'agent/x', fullAccess: false }],
-      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, fullAccess: true }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, permissions: 'workspace-write' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: 'agent/x', permissions: 'workspace-write' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Claude', branch: null, permissions: 'full-access' }],
+      ['start_chat_session', { cwd: '/work/app', provider: 'Codex', branch: null, permissions: 'read-only' }],
+    ])
+  })
+
+  it('opens a saved conversation as a chat by the name its agent gave it', async () => {
+    await expect(resumeChatSession('/work/app', 'codex', 'saved-1', 'read-only')).resolves.toEqual({ id: 44, generation: 1 })
+
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['resume_chat_session', { cwd: '/work/app', provider: 'Codex', session: 'saved-1', permissions: 'read-only' }],
     ])
   })
 
@@ -59,21 +68,54 @@ describe('chat sessions', () => {
     expect(listed[0]?.chat).toEqual({ conversation: 9, generation: 1, readOnly: true })
   })
 
+  it('keeps the pane that started a session as that session\'s id, on this computer and on another machine, and none from an older daemon', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const terms = { '7': term(7), '8': term(8, { started_by: 7 }) }
+    const here = conversationsFromSnapshot({ terms, workspaces: [], conversations: [] })
+    expect(here.map((item) => [item.id, item.details?.startedBy])).toEqual([['t7', null], ['t8', 't7']])
+    const there = conversationsFromSnapshot({ terms, workspaces: [], conversations: [] }, { id: 4, name: 'build' })
+    expect(there.map((item) => [item.id, item.details?.startedBy])).toEqual([['build/t7', null], ['build/t8', 'build/t7']])
+  })
+
+  it('lists what a chat asked to start helpers for, names the chat on a helper it started, and reads neither from an older daemon', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const asking = summary({ helper_ask: ['Review the diff', 'Write the tests'] })
+    const [chat, helper, stranger] = conversationsFromSnapshot({ terms: { '8': term(8, { started_by_chat: 44 }), '9': term(9, { started_by_chat: 404 }) }, workspaces: [], conversations: [asking] })
+    expect(chat?.details?.helperAsk).toEqual(['Review the diff', 'Write the tests'])
+    expect([helper?.id, helper?.details?.startedBy]).toEqual(['t8', '44'])
+    // A chat this list does not hold started nothing that can be shown as its helper.
+    expect(stranger?.details?.startedBy).toBeNull()
+    const [older] = conversationsFromSnapshot(snapshot([summary()]))
+    expect(older?.details?.helperAsk).toEqual([])
+  })
+
+  it('gives a chat the time its status changed, and none from an older daemon', () => {
+    const [chat] = conversationsFromSnapshot(snapshot([summary({ status_since: 1_780_000_000 })]))
+    expect(chat?.details?.since).toBe(1_780_000_000)
+    const [older] = conversationsFromSnapshot(snapshot([summary()]))
+    expect(older?.details?.since).toBe(0)
+  })
+
+  it('names the pane of a chat that has one as the starter of that chat\'s helper', () => {
+    const term = (id: number, extra: Record<string, unknown> = {}) => ({ id, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null, ...extra })
+    const followed = summary({ id: 9, execution: 'Native', native_term: 7 })
+    const listed = conversationsFromSnapshot({ terms: { '7': term(7), '8': term(8, { started_by_chat: 9 }) }, workspaces: [], conversations: [followed] })
+    expect(listed.map((item) => [item.id, item.details?.startedBy])).toEqual([['t7', null], ['t8', 't7']])
+  })
+
+  it('answers a chat\'s helper request as the chat, and a pane\'s as the pane', async () => {
+    await answerHelpers({ id: '44' }, 'always')
+    await answerHelpers({ id: 't7' }, 'no')
+    expect(vi.mocked(invoke).mock.calls).toEqual([
+      ['answer_chat_helpers', { id: 44, choice: 'always' }],
+      ['answer_helpers', expect.objectContaining({ term: 7, choice: 'no' })],
+    ])
+  })
+
   it('reads a summary from before the repository and branch were named', () => {
     const old = Object.fromEntries(Object.entries(summary()).filter(([key]) => key !== 'root' && key !== 'branch'))
     const [chat] = conversationsFromSnapshot(snapshot([old]))
     expect(chat).toMatchObject({ folder: '/work/app-trees/agent-x', repo: null })
   })
 
-  it('closing a chat session stops its agent first, then puts it away; a failed stop puts nothing away', async () => {
-    const [chat] = conversationsFromSnapshot(snapshot([summary()]))
-    await closeChatSession(chat as Conversation)
-    expect(vi.mocked(invoke).mock.calls).toEqual([
-      ['end_conversation', { id: 44, generation: 1 }],
-      ['archive_conversation', { id: 44, archived: true }],
-    ])
-    vi.mocked(invoke).mockReset().mockRejectedValue('Conversation has a pending operation')
-    await expect(closeChatSession(chat as Conversation)).rejects.toThrow()
-    expect(vi.mocked(invoke).mock.calls.map((call) => call[0])).toEqual(['end_conversation'])
-  })
 })

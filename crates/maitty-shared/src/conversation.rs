@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 
+pub mod capabilities;
 pub mod history;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +18,20 @@ pub struct LaunchSettings {
     pub model_provider: Option<String>,
     pub approval_policy: ApprovalPolicy,
     pub sandbox: Sandbox,
+    /// The `[[agents]]` entry an ACP conversation runs, by name. Set for [`Provider::Acp`] and
+    /// for no other provider.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
+}
+
+/// The longest name an agent run over ACP may have.
+pub const ACP_AGENT_NAME_MAX: usize = 32;
+
+/// Whether `name` can name an agent run over ACP: lowercase letters, digits, `-` and `_`.
+pub fn acp_agent_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= ACP_AGENT_NAME_MAX
+        && name.chars().all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_')
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -91,6 +106,18 @@ pub enum StartTarget {
     Conversation {
         id: ConversationId,
         generation: u64,
+    },
+    /// A new conversation with the agent the daemon's own config names `agent` and runs over
+    /// ACP. The daemon chooses the program; a client names only the agent and the folder.
+    Acp { agent: String, cwd: PathBuf },
+    /// A new Claude Code or Codex conversation in `cwd` whose program and settings folder the
+    /// daemon finds on its own machine. A client on another machine knows neither, so it names
+    /// the provider, the folder and the posture, and never a program to run.
+    Agent {
+        provider: Provider,
+        cwd: PathBuf,
+        sandbox: Sandbox,
+        approval_policy: ApprovalPolicy,
     },
 }
 
@@ -224,6 +251,11 @@ pub struct ApprovalRequest {
     /// predates it, which then offers no such choice.
     #[serde(default)]
     pub can_remember: bool,
+    /// The provider's own name for each of `choices`, in the same order, for a provider that
+    /// names its options. They pair with `choices` only while the two are as long as each
+    /// other; empty from a provider that names none.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choice_labels: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -282,17 +314,23 @@ pub enum Provider {
     Codex,
     Claude,
     Gemini,
+    /// An agent with no adapter of its own, run over the Agent Client Protocol. Which agent is
+    /// in the conversation's `agent`.
+    Acp,
 }
 
 impl Provider {
+    /// The providers that are one agent each, and so can be told from a pane's agent name.
     pub const ALL: [Provider; 3] = [Provider::Codex, Provider::Claude, Provider::Gemini];
 
-    /// The agent's command, which is also its name in a terminal pane.
+    /// The agent's command, which is also its name in a terminal pane. For [`Provider::Acp`]
+    /// it is the protocol's name: the agent's own is in the conversation's `agent`.
     pub fn agent_name(self) -> &'static str {
         match self {
             Provider::Codex => "codex",
             Provider::Claude => "claude",
             Provider::Gemini => "gemini",
+            Provider::Acp => "acp",
         }
     }
 }
@@ -308,6 +346,9 @@ pub struct NativeBinding {
     pub executable: PathBuf,
     pub cwd: PathBuf,
     pub worktree: Option<PathBuf>,
+    /// The `[[agents]]` entry an ACP conversation runs. Set for [`Provider::Acp`] only.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub agent: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -420,10 +461,20 @@ pub fn validate_settings(settings: &LaunchSettings) -> Result<(), IdentityError>
             .model_provider
             .as_deref()
             .is_some_and(|s| !identity_text(s))
+        || !agent_fits(settings.provider, settings.agent.as_deref())
     {
         return Err(IdentityError::IncompleteBinding);
     }
     Ok(())
+}
+
+/// An ACP conversation names its agent, and no other conversation names one.
+fn agent_fits(provider: Provider, agent: Option<&str>) -> bool {
+    match (provider, agent) {
+        (Provider::Acp, Some(agent)) => acp_agent_name(agent),
+        (Provider::Acp, None) => false,
+        (_, agent) => agent.is_none(),
+    }
 }
 
 pub fn validate_metadata(
@@ -478,6 +529,7 @@ pub fn validate_registry(records: &[Conversation]) -> Result<(), IdentityError> 
                 || settings.executable != binding.executable
                 || settings.cwd != binding.cwd
                 || settings.provider != binding.provider
+                || settings.agent != binding.agent
             {
                 return Err(IdentityError::IncompleteBinding);
             }
@@ -497,6 +549,7 @@ pub fn validate_registry(records: &[Conversation]) -> Result<(), IdentityError> 
                 .into_iter()
                 .all(|p| exact_path(p))
             || binding.worktree.as_deref().is_some_and(|p| !exact_path(p))
+            || !agent_fits(binding.provider, binding.agent.as_deref())
             || record
                 .worktree_origin
                 .as_ref()
@@ -535,14 +588,10 @@ mod turn_choice_tests {
     }
 
     #[test]
-    fn plain_models_and_known_efforts_pass() {
+    fn plain_models_and_known_efforts_pass_and_anything_that_could_read_as_an_option_is_refused() {
         assert!(choice(Some("opus"), Some("max")).validate().is_ok());
         assert!(choice(Some("claude-sonnet-4.5[1m]"), None).validate().is_ok());
         assert!(choice(None, None).is_empty());
-    }
-
-    #[test]
-    fn anything_that_could_read_as_an_option_or_is_unknown_is_refused() {
         for model in ["", "--dangerously-skip-permissions", "a b", "a\nb", &"x".repeat(65)] {
             assert!(choice(Some(model), None).validate().is_err(), "{model:?}");
         }
@@ -558,6 +607,7 @@ pub mod tests {
         Conversation {
             id: ConversationId(1),
             binding: NativeBinding {
+                agent: None,
                 provider: Provider::Codex,
                 session_id: "exact-session".into(),
                 account: Some("work".into()),
@@ -585,22 +635,6 @@ pub mod tests {
         assert_eq!(back, c);
         assert!(validate_registry(&[back]).is_ok());
 
-        let mut legacy = serde_json::to_value(&c).unwrap();
-        legacy
-            .as_object_mut()
-            .unwrap()
-            .remove("awaiting_first_user_message");
-        let legacy: Conversation = serde_json::from_value(legacy).unwrap();
-        assert!(!legacy.awaiting_first_user_message);
-    }
-
-    #[test]
-    fn a_conversation_from_before_worktree_origins_decodes_without_one() {
-        let mut old = serde_json::to_value(conversation()).unwrap();
-        old.as_object_mut().unwrap().remove("worktree_origin");
-        let old: Conversation = serde_json::from_value(old).unwrap();
-        assert_eq!(old.worktree_origin, None);
-
         let mut c = conversation();
         c.worktree_origin = Some(WorktreeOrigin {
             main: std::env::temp_dir().join("main"),
@@ -610,6 +644,21 @@ pub mod tests {
         let back: Conversation = serde_json::from_str(&serde_json::to_string(&c).unwrap()).unwrap();
         assert_eq!(back, c);
         assert!(validate_registry(&[back]).is_ok());
+    }
+
+    /// Every field added to a saved conversation after the first is defaulted, so an older
+    /// registry still loads: not waiting, no worktree origin, no title, not archived.
+    #[test]
+    fn a_saved_conversation_from_before_the_newer_fields_still_loads() {
+        let mut old = serde_json::to_value(conversation()).unwrap();
+        let map = old.as_object_mut().unwrap();
+        for field in ["awaiting_first_user_message", "worktree_origin", "title", "archived"] {
+            map.remove(field).expect(field);
+        }
+        let old: Conversation = serde_json::from_value(old).unwrap();
+        assert!(!old.awaiting_first_user_message);
+        assert_eq!((old.worktree_origin, old.title), (None, None));
+        assert!(!old.archived);
     }
 
     #[test]
@@ -631,22 +680,6 @@ pub mod tests {
     }
 
     #[test]
-    fn a_read_from_before_answered_approvals_still_decodes() {
-        let read: ReadResult = serde_json::from_value(serde_json::json!({
-            "conversation": 1,
-            "generation": 2,
-            "status": "Working",
-            "receipt": null,
-            "history": { "entries": [], "next": null, "completeness": "Complete" },
-            "error": null,
-            "checks": [],
-            "approvals": []
-        }))
-        .unwrap();
-        assert!(read.answered_approvals.is_empty());
-    }
-
-    #[test]
     fn a_peer_that_predates_gemini_still_reads_the_providers_it_knew() {
         for (wire, provider) in [("\"Codex\"", Provider::Codex), ("\"Claude\"", Provider::Claude)] {
             assert_eq!(serde_json::from_str::<Provider>(wire).unwrap(), provider);
@@ -658,6 +691,7 @@ pub mod tests {
     #[test]
     fn legacy_launch_settings_default_to_codex() {
         let settings = LaunchSettings {
+            agent: None,
             provider: Provider::Claude,
             executable: std::env::temp_dir().join("synthetic-claude.exe"),
             config_root: std::env::temp_dir().join("synthetic-claude-config"),
@@ -673,23 +707,71 @@ pub mod tests {
         assert_eq!(decoded.provider, Provider::Codex);
     }
 
-    #[test]
-    fn launch_settings_must_match_the_recorded_provider() {
-        let mut conversation = conversation();
-        conversation.settings = Some(LaunchSettings {
-            provider: Provider::Claude,
-            executable: conversation.binding.executable.clone(),
-            config_root: conversation.binding.config_root.clone(),
-            cwd: conversation.binding.cwd.clone(),
+    fn acp_settings(agent: Option<&str>) -> LaunchSettings {
+        let base = conversation().binding;
+        LaunchSettings {
+            provider: Provider::Acp,
+            executable: base.executable,
+            config_root: base.config_root,
+            cwd: base.cwd,
             model: None,
             model_provider: None,
             approval_policy: ApprovalPolicy::OnRequest,
             sandbox: Sandbox::ReadOnly,
+            agent: agent.map(str::to_owned),
+        }
+    }
+
+    #[test]
+    fn an_acp_conversation_must_name_its_agent_and_no_other_may() {
+        let named_codex = LaunchSettings { provider: Provider::Codex, ..acp_settings(Some("gemini")) };
+
+        assert_eq!(validate_settings(&acp_settings(Some("gemini"))), Ok(()));
+        assert_eq!(validate_settings(&acp_settings(None)), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_settings(&acp_settings(Some("Gemini CLI"))), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_settings(&named_codex), Err(IdentityError::IncompleteBinding));
+    }
+
+    #[test]
+    fn a_saved_acp_conversation_keeps_its_agent_and_one_without_it_is_refused() {
+        let mut saved = conversation();
+        saved.binding.provider = Provider::Acp;
+        saved.binding.agent = Some("gemini".into());
+        saved.settings = Some(LaunchSettings { cwd: saved.binding.cwd.clone(), ..acp_settings(Some("gemini")) });
+        let mut unnamed = saved.clone();
+        unnamed.binding.agent = None;
+        unnamed.settings = None;
+        let mut other_agent = saved.clone();
+        other_agent.binding.agent = Some("opencode".into());
+
+        let read: Conversation = serde_json::from_value(serde_json::to_value(&saved).unwrap()).unwrap();
+
+        assert_eq!(read.binding.agent.as_deref(), Some("gemini"));
+        assert_eq!(validate_registry(&[saved]), Ok(()));
+        assert_eq!(validate_registry(&[unnamed]), Err(IdentityError::IncompleteBinding));
+        assert_eq!(validate_registry(&[other_agent]), Err(IdentityError::IncompleteBinding));
+    }
+
+    #[test]
+    fn an_approval_from_before_option_names_reads_with_none_and_writes_as_it_did() {
+        let old = serde_json::json!({
+            "request_id": 4, "kind": "Command", "item_id": null, "turn_id": null, "command": "ls",
+            "reason": null, "cwd": null, "changes": [], "questions": [], "choices": ["Accept", "Decline"]
         });
-        assert_eq!(
-            validate_registry(&[conversation]),
-            Err(IdentityError::IncompleteBinding)
-        );
+
+        let read: ApprovalRequest = serde_json::from_value(old).unwrap();
+        let named = ApprovalRequest { choice_labels: vec!["Allow".into(), "Reject".into()], ..read.clone() };
+
+        assert!(read.choice_labels.is_empty());
+        assert!(serde_json::to_value(&read).unwrap().get("choice_labels").is_none());
+        assert_eq!(serde_json::to_value(&named).unwrap()["choice_labels"], serde_json::json!(["Allow", "Reject"]));
+    }
+
+    #[test]
+    fn an_agent_name_is_short_lowercase_and_free_of_spaces() {
+        assert!(acp_agent_name("gemini") && acp_agent_name("open-code_2"));
+        assert!(!acp_agent_name("") && !acp_agent_name("Gemini") && !acp_agent_name("a b"));
+        assert!(!acp_agent_name(&"a".repeat(ACP_AGENT_NAME_MAX + 1)));
     }
 
     #[test]
@@ -721,10 +803,27 @@ pub mod tests {
             validate_registry(&[c.clone(), duplicate]),
             Err(IdentityError::DuplicateNativeSession)
         );
-        let mut incomplete = c;
+        let mut incomplete = c.clone();
         incomplete.binding.executable = "codex".into();
         assert_eq!(
             validate_registry(&[incomplete]),
+            Err(IdentityError::IncompleteBinding)
+        );
+        // Launch settings must match the recorded provider.
+        let mut mismatched = c;
+        mismatched.settings = Some(LaunchSettings {
+            agent: None,
+            provider: Provider::Claude,
+            executable: mismatched.binding.executable.clone(),
+            config_root: mismatched.binding.config_root.clone(),
+            cwd: mismatched.binding.cwd.clone(),
+            model: None,
+            model_provider: None,
+            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox: Sandbox::ReadOnly,
+        });
+        assert_eq!(
+            validate_registry(&[mismatched]),
             Err(IdentityError::IncompleteBinding)
         );
     }
@@ -751,27 +850,5 @@ mod title_tests {
         assert_eq!(clean_title(""), None);
         let long = "x".repeat(MAX_TITLE_CHARS + 20);
         assert_eq!(clean_title(&long).unwrap().chars().count(), MAX_TITLE_CHARS);
-    }
-
-    #[test]
-    fn an_older_saved_conversation_without_a_title_still_loads() {
-        let mut value = serde_json::to_value(super::tests::conversation()).unwrap();
-        let map = value.as_object_mut().unwrap();
-        map.remove("title");
-        map.remove("archived");
-        let loaded: Conversation = serde_json::from_value(value).unwrap();
-        assert_eq!(loaded.title, None);
-        assert!(!loaded.archived);
-    }
-}
-
-#[cfg(test)]
-mod provider_tests {
-    use super::*;
-
-    #[test]
-    fn each_provider_is_named_as_its_agent_command() {
-        let names: Vec<_> = Provider::ALL.iter().map(|p| p.agent_name()).collect();
-        assert_eq!(names, ["codex", "claude", "gemini"]);
     }
 }

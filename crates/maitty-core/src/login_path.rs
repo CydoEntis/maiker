@@ -265,14 +265,6 @@ mod tests {
     }
 
     #[test]
-    fn posix_shells_print_path_between_the_markers() {
-        assert_eq!(
-            script(Family::Posix),
-            format!("printf '%s%s%s\\n' {START_MARKER} \"$PATH\" {END_MARKER}")
-        );
-    }
-
-    #[test]
     fn fish_joins_its_path_list_with_colons() {
         assert_eq!(
             script(Family::Fish),
@@ -294,60 +286,36 @@ mod tests {
     }
 
     #[test]
-    fn text_before_and_after_the_markers_is_ignored() {
-        let printed = format!(
-            "Welcome back!\nlast login: today\n{}motd: bye\n",
-            output("/usr/bin:/opt/tools")
-        );
-        assert_eq!(
-            parse_output(&printed),
-            Some(paths(&["/usr/bin", "/opt/tools"]))
-        );
-    }
-
-    #[test]
-    fn banner_without_a_final_newline_shares_the_marker_line() {
-        let printed = format!("banner{}", output("/usr/bin"));
-        assert_eq!(parse_output(&printed), Some(paths(&["/usr/bin"])));
-    }
-
-    #[test]
-    fn entries_with_spaces_dollars_and_quotes_stay_literal() {
+    fn the_path_is_read_literally_between_the_last_markers_and_anything_else_is_a_failure() {
         let weird = "/opt/my tools/bin:/home/a$b/\"q\":/it's/'x'";
-        assert_eq!(
-            parse_output(&output(weird)),
-            Some(paths(&[
-                "/opt/my tools/bin",
-                "/home/a$b/\"q\"",
-                "/it's/'x'"
-            ]))
-        );
-    }
-
-    #[test]
-    fn duplicate_and_empty_entries_are_dropped_in_order() {
-        assert_eq!(
-            parse_output(&output(":/b::/a:/b:/a:")),
-            Some(paths(&["/b", "/a"]))
-        );
-    }
-
-    #[test]
-    fn output_without_markers_is_a_failure() {
-        assert_eq!(parse_output("just a banner\n/usr/bin:/bin\n"), None);
-        assert_eq!(parse_output(&format!("{START_MARKER}/usr/bin")), None);
-    }
-
-    #[test]
-    fn an_empty_path_is_a_failure() {
-        assert_eq!(parse_output(&output("")), None);
-        assert_eq!(parse_output(&output("::")), None);
-    }
-
-    #[test]
-    fn the_last_start_marker_wins() {
-        let printed = format!("{START_MARKER}/trace {END_MARKER}\n{}", output("/real"));
-        assert_eq!(parse_output(&printed), Some(paths(&["/real"])));
+        let cases: [(String, Option<Vec<PathBuf>>); 9] = [
+            (
+                format!(
+                    "Welcome back!\nlast login: today\n{}motd: bye\n",
+                    output("/usr/bin:/opt/tools")
+                ),
+                Some(paths(&["/usr/bin", "/opt/tools"])),
+            ),
+            // A banner without a final newline shares the marker line.
+            (format!("banner{}", output("/usr/bin")), Some(paths(&["/usr/bin"]))),
+            (
+                output(weird),
+                Some(paths(&["/opt/my tools/bin", "/home/a$b/\"q\"", "/it's/'x'"])),
+            ),
+            // Duplicate and empty entries are dropped, in order.
+            (output(":/b::/a:/b:/a:"), Some(paths(&["/b", "/a"]))),
+            (
+                format!("{START_MARKER}/trace {END_MARKER}\n{}", output("/real")),
+                Some(paths(&["/real"])),
+            ),
+            ("just a banner\n/usr/bin:/bin\n".into(), None),
+            (format!("{START_MARKER}/usr/bin"), None),
+            (output(""), None),
+            (output("::"), None),
+        ];
+        for (printed, want) in cases {
+            assert_eq!(parse_output(&printed), want, "{printed:?}");
+        }
     }
 
     #[test]
@@ -357,10 +325,6 @@ mod tests {
             merge(paths(&["/login", "/opt/my tools"]), Some(&current)),
             paths(&["/login", "/opt/my tools", "/bin", "/usr/local/bin"])
         );
-    }
-
-    #[test]
-    fn merge_without_a_current_path_is_the_login_path() {
         assert_eq!(merge(paths(&["/a", "/b"]), None), paths(&["/a", "/b"]));
     }
 
@@ -482,17 +446,6 @@ mod unix_tests {
     }
 
     #[test]
-    fn bash_login_profile_that_prints_text_adds_a_path_with_spaces() {
-        let Some(bash) = shell_on_path("bash") else {
-            return;
-        };
-        let home = Home::new();
-        let dir = home.tool_dir();
-        home.write(".bash_profile", &profile_adding(&dir));
-        assert_profile_dir_leads(resolve_in(&home, Some(&bash), "/usr/bin", TIMEOUT), &dir);
-    }
-
-    #[test]
     fn zsh_reads_zprofile_and_zshrc() {
         let Some(zsh) = shell_on_path("zsh") else {
             return;
@@ -543,7 +496,7 @@ mod unix_tests {
     }
 
     #[test]
-    fn a_login_only_agent_is_found_by_the_executable_lookup() {
+    fn a_bash_login_profile_that_prints_text_adds_a_path_with_spaces_the_executable_lookup_finds() {
         let Some(bash) = shell_on_path("bash") else {
             return;
         };
@@ -551,6 +504,7 @@ mod unix_tests {
         let dir = home.tool_dir();
         home.write(".bash_profile", &profile_adding(&dir));
         let path = resolve_in(&home, Some(&bash), "/usr/bin", TIMEOUT);
+        assert_profile_dir_leads(path.clone(), &dir);
         let expected = std::fs::canonicalize(dir.join("tool")).unwrap();
         let without =
             crate::proc::resolve_executable_in(Path::new("tool"), Some(OsStr::new("/usr/bin")));

@@ -109,6 +109,7 @@ impl Daemon {
                                 state.approvals.len(),
                                 state.answered_approvals.len(),
                                 state.cancelling.is_some(),
+                                state.helper_consent.asked.len(),
                             )
                         }),
                         self.conversation_queues.get(&id).map(|queue| queue.len()),

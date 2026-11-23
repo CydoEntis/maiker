@@ -15,7 +15,7 @@ import { messageEvent } from '@/features/chat/eventFixtures'
 
 const ASKED = 'Before I start, a few questions:\n\n1. Which branch should this target?\n2. Should I keep the old endpoint?\n3. Any naming preference?\n4. Do you want the migration in this change or a separate one?\n5. When the old endpoint is finally removed, should the mobile team get a deprecation notice first, and how long should the overlap with the new orders endpoint last before it goes?'
 const NOTHING = () => undefined
-const ITEM: ChatItemContext = { agent: 'claude', workingSince: null, approval: null, root: null, openDiff: NOTHING, goToStep: null, waitingStep: null }
+const ITEM: ChatItemContext = { agent: 'claude', workingSince: null, root: null, openDiff: NOTHING, goToStep: null, waitingStep: null }
 const ACTIONS: ChatActions = { quote: NOTHING, jump: NOTHING, reply: NOTHING, retry: NOTHING, canReply: true }
 const asked = askablesOf(ASKED)
 const REPLY = buildQuoteMessage([

@@ -248,17 +248,6 @@ fn failure_text(result: Result<Outcome, Failure>) -> String {
 }
 
 #[test]
-fn an_install_reports_each_stage_it_finishes_in_order() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    let mut person = Person::absent();
-    run(&remote, AT_HOME, INSTALL, &new_build(&remote), &mut person).unwrap();
-    assert!(person.progress.len() >= 4, "{:?}", person.progress);
-    assert!(person.progress.windows(2).all(|pair| pair[0] < pair[1]), "{:?}", person.progress);
-    assert!(person.progress.iter().all(|percent| *percent < 100));
-}
-
-#[test]
 fn a_missing_app_is_installed_with_the_flag_and_runs_afterwards() {
     needs_sh!();
     let remote = Remote::new(LINUX);
@@ -365,46 +354,50 @@ fn a_person_is_asked_and_a_no_changes_nothing() {
 }
 
 #[test]
-fn wait_installs_then_asks_the_far_daemon_to_restart_when_idle() {
+fn each_restart_flag_asks_the_far_daemon_its_own_way_after_the_install() {
     needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let flags = Flags {
-        wait: true,
-        ..YES
-    };
-    let mut person = Person::absent();
-    run(&remote, AT_HOME, flags, &new_build(&remote), &mut person).unwrap();
-    assert!(person.heard("waiting until no session is open"), "{:?}", person.said);
-    assert!(
-        person.heard("still had sessions open after half an hour; its daemon was left running"),
-        "{:?}",
-        person.said
-    );
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle"),
-        "{commands:?}"
-    );
-}
-
-#[test]
-fn agents_idle_installs_then_asks_the_far_daemon_to_restart_once_no_agent_works() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let flags = Flags {
-        agents_idle: true,
-        ..YES
-    };
-    let mut person = Person::absent();
-    run(&remote, AT_HOME, flags, &new_build(&remote), &mut person).unwrap();
-    assert!(person.heard("waiting until no agent is working or waiting"), "{:?}", person.said);
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle --agents-idle"),
-        "{commands:?}"
-    );
+    let wait = Flags { wait: true, ..YES };
+    let agents_idle = Flags { agents_idle: true, ..YES };
+    let restart = Flags { restart: true, ..YES };
+    // (flags, version already there, how the last command ends, what is said, whether a build is sent)
+    let cases: [(Flags, &str, &str, &[&str], bool); 4] = [
+        (
+            wait,
+            "0.1.0",
+            "restart-if-idle",
+            &[
+                "waiting until no session is open",
+                "still had sessions open after half an hour; its daemon was left running",
+            ],
+            true,
+        ),
+        (
+            agents_idle,
+            "0.1.0",
+            "restart-if-idle --agents-idle",
+            &["waiting until no agent is working or waiting"],
+            true,
+        ),
+        (restart, "0.1.0", "restart-if-idle --now", &[], true),
+        (restart, APP_VERSION, "restart-if-idle --now", &[], false),
+    ];
+    for (flags, version, ending, heard, uploads) in cases {
+        let remote = Remote::new(LINUX);
+        remote.install(".local/bin/maiker", version);
+        let mut person = Person::absent();
+        run(&remote, AT_HOME, flags, &new_build(&remote), &mut person).unwrap();
+        let commands = remote.commands();
+        assert!(
+            commands.last().unwrap().ends_with(ending),
+            "{flags:?} {version}: {commands:?}"
+        );
+        for part in heard {
+            assert!(person.heard(part), "{flags:?}: {:?}", person.said);
+        }
+        if !uploads {
+            assert!(!remote.uploaded(), "{version}: {commands:?}");
+        }
+    }
 }
 
 #[test]
@@ -609,23 +602,6 @@ fn put_sends_a_file_and_a_folder_and_says_where_each_landed() {
     }
 }
 
-#[test]
-fn restart_asks_the_far_daemon_to_restart_even_with_sessions_open() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let flags = Flags {
-        restart: true,
-        ..YES
-    };
-    run(&remote, AT_HOME, flags, &new_build(&remote), &mut Person::absent()).unwrap();
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle --now"),
-        "{commands:?}"
-    );
-}
-
 /// A build whose daemon-restart reply is the far side's own: it leaves a daemon with open
 /// sessions alone, and restarts it when told `--now`.
 fn busy_daemon_build(remote: &Remote) -> File {
@@ -650,63 +626,43 @@ esac
 }
 
 #[test]
-fn a_daemon_left_running_by_open_sessions_is_restarted_when_the_person_agrees() {
+fn a_daemon_left_running_by_open_sessions_is_restarted_only_when_the_person_agrees() {
     needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let mut person = Person::absent();
-    person.answer = Some(true);
-    run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle --now"),
-        "{commands:?}"
-    );
-    assert!(person.heard("daemon: restarted"), "{:?}", person.said);
-    assert_eq!(person.asked.len(), 1, "{:?}", person.asked);
+    // (the person's answer, None when nobody is there; how the last command ends; what is said;
+    // how many questions were asked)
+    let cases: [(Option<bool>, &str, &str, usize); 3] = [
+        (Some(true), "restart-if-idle --now", "daemon: restarted", 1),
+        (Some(false), "restart-if-idle", "click Update on box", 1),
+        (None, "restart-if-idle", "click Update on box", 0),
+    ];
+    for (answer, ending, heard, asked) in cases {
+        let remote = Remote::new(LINUX);
+        remote.install(".local/bin/maiker", "0.1.0");
+        let mut person = Person::absent();
+        person.answer = answer;
+        run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
+        let commands = remote.commands();
+        assert!(
+            commands.last().unwrap().ends_with(ending),
+            "{answer:?}: {commands:?}"
+        );
+        assert!(person.heard(heard), "{answer:?}: {:?}", person.said);
+        assert_eq!(person.asked.len(), asked, "{answer:?}: {:?}", person.asked);
+    }
 }
 
 #[test]
-fn a_daemon_left_running_stays_untouched_when_the_person_declines_and_the_way_out_is_said() {
+fn the_app_there_is_called_current_only_when_it_is_this_version() {
     needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let mut person = Person::absent();
-    person.answer = Some(false);
-    run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle"),
-        "{commands:?}"
-    );
-    assert!(person.heard("click Update on box"), "{:?}", person.said);
-}
-
-#[test]
-fn a_daemon_left_running_with_nobody_to_ask_says_the_way_out_without_restarting() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    let mut person = Person::absent();
-    run(&remote, AT_HOME, YES, &busy_daemon_build(&remote), &mut person).unwrap();
-    assert!(person.asked.is_empty());
-    assert!(person.heard("click Update on box"), "{:?}", person.said);
-}
-
-#[test]
-fn the_window_is_told_when_the_app_there_is_already_this_version() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", APP_VERSION);
-    assert!(installed_is_current(&remote.machine(AT_HOME), "box"));
-}
-
-#[test]
-fn an_older_app_there_is_not_called_current() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", "0.1.0");
-    assert!(!installed_is_current(&remote.machine(AT_HOME), "box"));
+    for (version, current) in [(APP_VERSION, true), ("0.1.0", false)] {
+        let remote = Remote::new(LINUX);
+        remote.install(".local/bin/maiker", version);
+        assert_eq!(
+            installed_is_current(&remote.machine(AT_HOME), "box"),
+            current,
+            "{version}"
+        );
+    }
 }
 
 #[test]
@@ -789,24 +745,6 @@ fn a_matching_app_still_asks_a_stale_far_daemon_to_restart() {
         "{commands:?}"
     );
     assert!(person.heard("daemon:"), "{:?}", person.said);
-}
-
-#[test]
-fn restart_with_a_matching_app_restarts_the_far_daemon_even_with_sessions_open() {
-    needs_sh!();
-    let remote = Remote::new(LINUX);
-    remote.install(".local/bin/maiker", APP_VERSION);
-    let flags = Flags {
-        restart: true,
-        ..YES
-    };
-    run(&remote, AT_HOME, flags, &new_build(&remote), &mut Person::absent()).unwrap();
-    let commands = remote.commands();
-    assert!(
-        commands.last().unwrap().ends_with("restart-if-idle --now"),
-        "{commands:?}"
-    );
-    assert!(!remote.uploaded());
 }
 
 #[test]

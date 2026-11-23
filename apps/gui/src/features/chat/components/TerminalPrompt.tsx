@@ -96,7 +96,7 @@ export function TerminalPrompt({ readScreen, sendKeys }: Props) {
         : <p className="mx-waiting-note is-padded">The question is in the terminal.</p>}
       <div className="mx-waiting-foot is-keys" role="group" aria-label="Keys for the agent's terminal">
         {KEYS.map((key) => (
-          <Button key={key.name} variant="soft" size="sm" className="mx-terminal-key" aria-label={key.name} disabled={busy} onClick={() => { press(key.keys) }}>{key.label}</Button>
+          <Button key={key.name} variant="ghost" size="sm" className="mx-terminal-key" aria-label={key.name} disabled={busy} onClick={() => { press(key.keys) }}>{key.label}</Button>
         ))}
       </div>
     </>

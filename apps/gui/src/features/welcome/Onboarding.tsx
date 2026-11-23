@@ -1,191 +1,159 @@
 import { useEffect, useRef, useState, type KeyboardEvent } from 'react'
+import { FolderOpen } from 'lucide-react'
 import { Dialog as DialogPrimitive } from 'radix-ui'
 import { Dialog, DialogPortal, DialogTitle } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { MaikerMark } from '@/components/ui/maiker-mark'
-import { StepBar } from '@/components/ui/step-bar'
 import { APP_NAME } from '@/brand'
-import { errorMessage } from '@/lib/error-message'
 import type { PaneView } from '@/features/workspace/model/chatView'
 import { useInstalledAgents } from '@/features/workspace/model/newChatHost'
-import { AgentsStep } from './AgentsStep'
-import { OnboardingMark, OPENING_MS } from './OnboardingMark'
-import { ReviewStep, type ReviewRow } from './ReviewStep'
-import { StyleStep } from './StyleStep'
-import { ViewStep } from './ViewStep'
-import { WelcomeStep } from './WelcomeStep'
-import { agentLabel, nextLabel, recommendView, SETUP_AGENTS, SETUP_STEPS, STEP_AGENTS, STEP_REVIEW, STEP_STYLE, STEP_VIEW, STEP_WELCOME, viewName, type StyleAnswers } from './setup'
+import { DEFAULT_LIGHT_THEME, DEFAULT_THEME, findTheme, THEMES } from '@/features/workspace/theme/themes'
+import { IntroMark, INTRO_MS, INTRO_STILL_MS } from './IntroMark'
+import { SetupScreen } from './SetupScreen'
+import { StyleScreen } from './StyleScreen'
+import { backFrom, continueFrom, keyStep, SCREENS, settingsFromSetup, skipFrom, stepTheme, type KeyTarget, type SetupSettings, type Stage, type Step } from './setup'
 import { useAgentInstalls } from './useAgentInstalls'
-import { useHomeSuggestions } from './useHomeSuggestions'
+import { useProjectsFolder } from './useProjectsFolder'
 import './onboarding.css'
-
-/** What Get started applies. */
-export type SetupChoices = { startFolder: string; openSessionsIn: PaneView }
 
 type Props = {
   /** This computer's home folder, spelled out; empty until it is known. */
   home: string
-  /** The saved start folder; empty means the home folder. */
+  /** The saved projects folder; empty means the home folder. */
   startFolder: string
-  validateFolder: (path: string) => Promise<boolean>
   /** Opens the system's folder picker; the path picked, or null when cancelled. */
   onChooseFolder: (current: string) => Promise<string | null>
-  /** Saves what Get started chose. Skipping saves nothing. */
-  onApply: (choices: SetupChoices) => void
+  /** The theme the window is in, by name: where the carousel starts. */
+  theme: string
+  /** Shows a theme on the whole window without saving it; null goes back to the saved one. */
+  onPreviewTheme: (name: string | null) => void
   reducedMotion: boolean
   /** The themed window root the setup mounts in, so it reads the theme's tokens. */
   portalContainer: HTMLElement | null
-  /** The setup is over, by Get started or Skip setup. It opens nothing after it: the person starts a session when they choose to. */
-  onClose: () => void
+  /** The last button: what to save, and the projects folder to open the palette in. */
+  onFinish: (settings: SetupSettings, folder: string) => void
+  /** Skip or Esc: nothing is saved. */
+  onSkip: () => void
 }
 
-const LAST_STEP = SETUP_STEPS.length - 1
+/** The themes of one kind, by name, in the carousel's order: the setup asks dark or light first, then slides through those. */
+const themeNamesOf = (light: boolean): string[] => THEMES.filter((entry) => entry.light === light).map((entry) => entry.name)
+const HEADING_ID = 'mx-onb-h'
 
-/** The first-run setup: the mark draws, then five steps in a window over the blurred app. */
-export function Onboarding({ home, startFolder, validateFolder, onChooseFolder, onApply, reducedMotion, portalContainer, onClose }: Props) {
-  const [phase, setPhase] = useState<'draw' | 'window'>(reducedMotion ? 'window' : 'draw')
-  const [step, setStep] = useState(STEP_WELCOME)
-  const [back, setBack] = useState(false)
-  const [typed, setTyped] = useState<string | null>(null)
-  const [missing, setMissing] = useState(false)
-  const [checking, setChecking] = useState(false)
-  const [note, setNote] = useState('')
-  const [answers, setAnswers] = useState<StyleAnswers>({})
-  const [picked, setPicked] = useState<PaneView | null>(null)
-  const installed = useInstalledAgents()
+/** What a key landed on, for `keyStep`. A radio is not an action: Enter never picks one, so there it continues. */
+function keyTargetOf(target: HTMLElement): KeyTarget {
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return 'field'
+  if (target.closest('[data-slot="radio-group"]') !== null) return 'choice'
+  return target.tagName === 'BUTTON' ? 'action' : 'other'
+}
+
+/**
+ * The first run: the mark draws itself over the blurred app while the scans start, then one window of two screens,
+ * setup and style. It ends in the Open a project palette (`onFinish`) or by Skip (`onSkip`).
+ */
+export function Onboarding({ home, startFolder, onChooseFolder, theme, onPreviewTheme, reducedMotion, portalContainer, onFinish, onSkip }: Props) {
+  const [stage, setStage] = useState<Stage>('intro')
+  const [view, setView] = useState<PaneView>('chat')
+  const [slid, setSlid] = useState<string | null>(null)
+  // Both scans and the installer are mounted with the drawing, so they run while it draws.
+  const found = useInstalledAgents()
   const installs = useAgentInstalls()
+  const folder = useProjectsFolder(home, startFolder.trim(), onChooseFolder)
   const heading = useRef<HTMLHeadingElement>(null)
-  const scroller = useRef<HTMLDivElement>(null)
-  const nextRef = useRef<() => void>(() => undefined)
-
-  const path = typed ?? (startFolder.trim() === '' ? home : startFolder)
-  const suggestions = useHomeSuggestions(home, startFolder.trim())
-  const recommended = recommendView(answers)
-  const view = picked ?? recommended
-  const isHere = (program: string) => program in installs.done || (installed?.includes(program) ?? false)
-  const geminiInstalled = isHere('gemini')
+  const shownTheme = slid ?? theme
+  const light = THEMES.find((entry) => entry.name === shownTheme)?.light ?? false
 
   useEffect(() => {
-    if (phase !== 'draw') return undefined
-    const timer = setTimeout(() => { setPhase('window') }, OPENING_MS)
+    if (stage !== 'intro') return undefined
+    const timer = setTimeout(() => { setStage('setup') }, reducedMotion ? INTRO_STILL_MS : INTRO_MS)
     return () => { clearTimeout(timer) }
-  }, [phase])
+  }, [stage, reducedMotion])
 
+  // The heading, not the first button, so Enter reads as "continue" and a screen reader starts at the top of each screen.
   useEffect(() => {
-    if (phase !== 'window') return
-    heading.current?.focus({ preventScroll: true })
-    if (scroller.current) scroller.current.scrollTop = 0
-  }, [step, phase])
+    if (stage !== 'intro') heading.current?.focus({ preventScroll: true })
+  }, [stage])
 
-  const go = (to: number) => {
-    if (to < 0 || to > LAST_STEP) return
-    setBack(to < step)
-    setStep(to)
-  }
+  // A preview never outlives the setup, however it goes away.
+  useEffect(() => () => { onPreviewTheme(null) }, [onPreviewTheme])
 
-  const leaveWelcome = async () => {
-    const wanted = path.trim()
-    if (wanted !== '') {
-      setChecking(true)
-      const exists = await validateFolder(wanted).catch(() => false)
-      setChecking(false)
-      if (!exists) { setMissing(true); return }
-    }
-    go(STEP_AGENTS)
-  }
+  const slideTo = (name: string) => { setSlid(name); onPreviewTheme(name) }
+  // Picking the other kind starts its carousel at that kind's own default theme.
+  const pickKind = (wantLight: boolean) => { if (wantLight !== light) slideTo(wantLight ? DEFAULT_LIGHT_THEME : DEFAULT_THEME) }
 
-  const finish = () => {
-    const wanted = path.trim()
-    onApply({ startFolder: wanted === home ? '' : wanted, openSessionsIn: view })
-    onClose()
-  }
-
-  const next = () => {
-    if (checking) return
-    if (step === STEP_WELCOME) void leaveWelcome()
-    else if (step === STEP_REVIEW) finish()
-    else go(step + 1)
-  }
-  useEffect(() => { nextRef.current = next })
-
-  const browse = () => {
-    onChooseFolder(path).then(
-      (chosen) => { if (chosen !== null) { setTyped(chosen); setMissing(false); setNote('') } },
-      (error: unknown) => { setNote(errorMessage(error, 'Could not open the folder picker')) },
-    )
+  const take = (step: Step) => {
+    if ('stage' in step) { setStage(step.stage); return }
+    if (step.end === 'skip') { onSkip(); return }
+    const path = folder.path === '' ? home : folder.path
+    onFinish(settingsFromSetup({ folder: path, home, view, theme: slid === null ? null : findTheme(slid) }), path)
   }
 
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-    if (phase === 'draw') {
-      if (event.key === 'Enter' || event.key === 'Escape' || event.key === ' ') { event.preventDefault(); setPhase('window') }
+    // A menu of the window is drawn outside it, and its keys are its own.
+    if (!event.currentTarget.contains(event.target as Node)) return
+    if (stage === 'intro') {
+      // Esc reaches `onEscapeKeyDown`, which does the same.
+      if (event.key !== 'Escape') { event.preventDefault(); setStage('setup') }
       return
     }
-    const target = event.target as HTMLElement
-    if (event.key === 'Escape' && step > STEP_WELCOME) { event.preventDefault(); go(step - 1); return }
-    if (event.key !== 'Enter' || target.tagName === 'INPUT') return
-    // A radio button swallows Enter itself; here it picks, and the person continues with the button.
-    if (target.getAttribute('role') === 'radio') { event.preventDefault(); target.click(); return }
-    if (target.tagName === 'BUTTON') return
+    const step = keyStep(stage, event.key, keyTargetOf(event.target as HTMLElement))
+    if (step === null) return
     event.preventDefault()
-    nextRef.current()
+    if (step.kind === 'continue') take(continueFrom(stage))
+    else slideTo(stepTheme(themeNamesOf(light), shownTheme, step.by))
   }
 
-  const hereNames = SETUP_AGENTS.filter((agent) => isHere(agent.program)).map((agent) => agent.label)
-  const installing = Object.values(installs.states).filter((state) => state.phase === 'running').length
-  const review: ReviewRow[] = [
-    { key: 'home', label: 'Home directory', value: path.trim() === '' ? 'Your user folder' : path.trim(), mono: true, onChange: () => { go(STEP_WELCOME) } },
-    { key: 'agents', label: 'Agents', value: `${hereNames.length === 0 ? 'None yet' : hereNames.join(', ')}${installing > 0 ? ` (+${String(installing)} installing)` : ''}`, onChange: () => { go(STEP_AGENTS) } },
-    { key: 'view', label: 'Sessions open in', value: `${viewName(view)}${geminiInstalled && view === 'chat' ? ` (${agentLabel('gemini')} in Terminal)` : ''}`, onChange: () => { go(STEP_VIEW) } },
-  ]
+  const screen = SCREENS.indexOf(stage === 'style' ? 'style' : 'setup')
+  const progress = `Step ${String(screen + 1)} of ${String(SCREENS.length)}`
 
   return (
     <Dialog open>
       <DialogPortal container={portalContainer}>
         <DialogPrimitive.Overlay data-slot="onboarding-veil" className="mx-onb-veil" />
         <DialogPrimitive.Content
-        data-slot="dialog-content"
-        className="mx-onb"
-        data-reduce={reducedMotion}
-        aria-describedby={undefined}
-        onKeyDown={onKeyDown}
-        // Esc steps back (see onKeyDown) and a click outside does nothing: only Skip setup or the last step ends the setup.
-        onEscapeKeyDown={(event) => { event.preventDefault() }}
-        onInteractOutside={(event) => { event.preventDefault() }}
-        // The heading, not the first button, so Enter reads as "continue" and a screen reader starts at the top.
-        onOpenAutoFocus={(event) => { if (phase === 'window') { event.preventDefault(); heading.current?.focus({ preventScroll: true }) } }}
-      >
-        <DialogTitle className="mx-onb-sr">Set up {APP_NAME}</DialogTitle>
-        {phase === 'draw' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press Enter to skip.</div>}
-        {!reducedMotion && <OnboardingMark gone={phase === 'window'} />}
-        {phase === 'window' && (
-          <div className="mx-onb-window flex max-h-[calc(100%-48px)] w-[680px] max-w-[calc(100%-32px)] flex-col overflow-hidden rounded-(--r-dialog) border border-(--line) bg-(--main) shadow-(--pop-sh)">
-            <div className="mx-onb-sr" aria-live="polite">{`Step ${String(step + 1)} of ${String(SETUP_STEPS.length)}: ${SETUP_STEPS[step] ?? ''}`}</div>
-            <div className="flex h-[52px] flex-none items-center gap-4 border-b border-(--line) px-5">
-              <MaikerMark width={26} height={20} />
-              <StepBar className="min-w-0 flex-1" label="Setup progress" steps={SETUP_STEPS} current={step} onSelect={go} skip={{ label: 'Skip setup', onSkip: onClose }} />
+          data-slot="dialog-content"
+          className="mx-onb"
+          data-reduce={reducedMotion}
+          data-stage={stage}
+          aria-describedby={undefined}
+          onKeyDown={onKeyDown}
+          onPointerDown={() => { if (stage === 'intro') setStage('setup') }}
+          // Esc is the window's Skip, and a click outside does nothing: only Skip or the last button ends the setup.
+          onEscapeKeyDown={(event) => { event.preventDefault(); take(skipFrom(stage)) }}
+          onInteractOutside={(event) => { event.preventDefault() }}
+        >
+          <DialogTitle className="mx-onb-sr">Set up {APP_NAME}</DialogTitle>
+          {stage === 'intro' && <div className="mx-onb-sr" role="status">Opening {APP_NAME}. Press any key to skip.</div>}
+          <IntroMark gone={stage !== 'intro'} />
+          {stage !== 'intro' && (
+            <div className="mx-onb-window">
+              <div className="mx-onb-sr" aria-live="polite">{progress}</div>
+              <div className="mx-onb-head">
+                <MaikerMark width={24} height={19} decorative />
+                <span className="mx-onb-dots" role="img" aria-label={progress}>
+                  {SCREENS.map((name, index) => <i key={name} data-at={index === screen ? 'now' : index < screen ? 'done' : 'todo'} />)}
+                </span>
+                <span className="flex-1" />
+                <Button variant="ghost" size="md" className="font-normal text-(--dim)" onClick={onSkip}>Skip</Button>
+              </div>
+              <div className="mx-onb-body">
+                <section key={stage} aria-labelledby={HEADING_ID} className="mx-onb-screen" data-screen={stage}>
+                  {stage === 'setup'
+                    ? <SetupScreen headingId={HEADING_ID} headingRef={heading} folder={folder} found={found} installs={installs} portalContainer={portalContainer} />
+                    : <StyleScreen headingId={HEADING_ID} headingRef={heading} view={view} onView={setView} theme={shownTheme} onTheme={slideTo} light={light} onLight={pickKind} names={themeNamesOf(light)} />}
+                </section>
+              </div>
+              <div className="mx-onb-foot">
+                {stage === 'style' && <Button variant="ghost" size="lg" onClick={() => { setStage(backFrom(stage)) }}>Back</Button>}
+                <span className="flex-1" />
+                {/* The key that presses it sits inside, after the word, as every button with a key draws it. */}
+                <Button variant="primary" size="xl" keyHint="⏎" aria-label={stage === 'style' ? 'Open a project' : 'Continue'} onClick={() => { take(continueFrom(stage)) }}>
+                  {stage === 'style' && <FolderOpen aria-hidden="true" />}
+                  {stage === 'style' ? 'Open' : 'Continue'}
+                </Button>
+              </div>
             </div>
-            <div ref={scroller} className="min-h-0 flex-1 overflow-y-auto">
-              <section key={step} data-back={back} aria-labelledby="mx-onb-h" className="mx-onb-screen flex flex-col gap-[18px] px-7 pt-[26px] pb-2">
-                {step === STEP_WELCOME && (
-                  <WelcomeStep
-                    headingRef={heading}
-                    home={{ path, onPath: (value) => { setTyped(value); setMissing(false) }, missing, note, suggestions, onBrowse: browse, onEnter: next }}
-                  />
-                )}
-                {step === STEP_AGENTS && <AgentsStep headingRef={heading} installed={installed} states={installs.states} done={installs.done} actions={installs} />}
-                {step === STEP_STYLE && <StyleStep headingRef={heading} answers={answers} onAnswer={(question, value) => { setAnswers((current) => ({ ...current, [question]: value })); setPicked(null) }} />}
-                {step === STEP_VIEW && <ViewStep headingRef={heading} answers={answers} recommended={recommended} chosen={view} onChoose={setPicked} geminiInstalled={geminiInstalled} />}
-                {step === STEP_REVIEW && <ReviewStep headingRef={heading} rows={review} />}
-              </section>
-            </div>
-            <div className="flex flex-none items-center gap-2 border-t border-(--line) px-5 pt-3.5 pb-4">
-              <Button variant="ghost" size="lg" className={step === STEP_WELCOME ? 'invisible' : ''} tabIndex={step === STEP_WELCOME ? -1 : 0} onClick={() => { go(step - 1) }}>Back</Button>
-              <span className="flex-1" />
-              <span className="flex items-center gap-1.5 text-[11.5px] text-(--dim)"><kbd className="rounded-(--r-badge) px-1 font-(family-name:--mono) text-[10.5px] shadow-[inset_0_0_0_1px_var(--line2)]">Enter</kbd>{step === STEP_REVIEW ? 'to start' : 'to continue'}</span>
-              <Button variant="solid" size="xl" disabled={checking} aria-disabled={checking} onClick={next}>{nextLabel(step, answers)}</Button>
-            </div>
-          </div>
-        )}
+          )}
         </DialogPrimitive.Content>
       </DialogPortal>
     </Dialog>

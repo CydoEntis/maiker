@@ -2,7 +2,7 @@ import { type Dispatch, type SetStateAction, useCallback, useState } from 'react
 import { toast } from '@/lib/toast'
 import { guardLocal } from '@/lib/localOnly'
 import { isChatSession } from './model/chatSession'
-import type { InspectView } from '@/features/inspect/InspectPanel'
+import type { RepoSurfaceKind, SingleSurfaceKind } from '@/features/inspect/panelTabs'
 import type { TurnSpan } from '@/features/inspect/turnRange'
 import { focusPane, type Layout } from './model/layout'
 import type { SessionView } from './model/session'
@@ -35,16 +35,14 @@ function panelRefusal(session: SessionView | undefined): string | null {
 }
 
 /** Opens and closes the side panel. For a session of another machine it shows that machine's changes; one with no pane to ask is told so instead. */
-export function useInspectActions({ focusedSession, setInspectOpen, setInspectView, setTurnDiff, sessionMap, showSessionById, inspectOpen, inspectView, focusedId, setLayout }: {
+export function useInspectActions({ focusedSession, setInspectOpen, openSurface, setTurnDiff, sessionMap, showSessionById, setLayout }: {
   focusedSession: SessionView | undefined
   setInspectOpen: Dispatch<SetStateAction<boolean>>
-  setInspectView: Dispatch<SetStateAction<InspectView>>
+  /** Opens the side panel on one of a session's surfaces. */
+  openSurface: (sessionId: string, kind: SingleSurfaceKind) => void
   setTurnDiff: Dispatch<SetStateAction<TurnDiff | null>>
   sessionMap: Map<string, SessionView>
   showSessionById: (sessionId: string) => void
-  inspectOpen: boolean
-  inspectView: InspectView
-  focusedId: string | null
   setLayout: Dispatch<SetStateAction<Layout>>
 }) {
   const inspectRefusal = panelRefusal(focusedSession)
@@ -61,31 +59,44 @@ export function useInspectActions({ focusedSession, setInspectOpen, setInspectVi
     }
     bringForward()
     setTurnDiff(turn === undefined ? null : { sessionId, turn })
-    setInspectView('changes')
-    setInspectOpen(true)
-  }, [sessionMap, setInspectOpen, setInspectView, setTurnDiff])
+    openSurface(sessionId, 'changes')
+  }, [sessionMap, openSurface, setTurnDiff])
   // A chat's edit block or changes row: its own pane takes the focus, so a helper agent's chat open there stays open.
   const showChanges = useCallback((paneId: string, sessionId: string, _file?: string, turn?: TurnSpan | null) => {
     openChanges(sessionId, () => { setLayout((current) => focusPane(current, paneId)) }, turn)
   }, [openChanges, setLayout])
-  // A session menu's Show changes: the session may be out of sight, so it is brought to the front.
-  const showChangesOf = useCallback((sessionId: string) => { openChanges(sessionId, () => { showSessionById(sessionId) }) }, [openChanges, showSessionById])
-  // The pane takes the focus and the panel shows for it, on `view` when one is asked for; `open` false closes it.
-  const showPanel = useCallback((paneId: string, sessionId: string, view: InspectView | undefined, open: (showing: boolean) => boolean) => {
+  // A project's Show files: one of its sessions comes to the front, since the files are read through a session.
+  const showFilesOf = useCallback((sessionId: string) => {
     const refusal = panelRefusal(sessionMap.get(sessionId))
     if (refusal !== null) {
       toast.info(refusal)
       return
     }
-    const showing = inspectOpen && focusedId === sessionId && (view === undefined || inspectView === view)
+    showSessionById(sessionId)
+    setTurnDiff(null)
+    openSurface(sessionId, 'files')
+  }, [sessionMap, showSessionById, setTurnDiff, openSurface])
+  // The pane takes the focus and the panel shows the surface `view` for it. A chat command such as /diff only ever opens it:
+  // typing it twice must not hide what it asked for.
+  const openPanel = useCallback((paneId: string, sessionId: string, view: RepoSurfaceKind) => {
+    const refusal = panelRefusal(sessionMap.get(sessionId))
+    if (refusal !== null) {
+      toast.info(refusal)
+      return
+    }
     setLayout((current) => focusPane(current, paneId))
     setTurnDiff(null)
-    if (view !== undefined) setInspectView(view)
-    setInspectOpen(open(showing))
-  }, [sessionMap, inspectOpen, inspectView, focusedId, setLayout, setInspectView, setInspectOpen, setTurnDiff])
-  // A pane's side-panel button closes the panel when it already showed that.
-  const togglePanel = useCallback((paneId: string, sessionId: string, view?: InspectView) => { showPanel(paneId, sessionId, view, (showing) => !showing) }, [showPanel])
-  // A chat command such as /diff only ever opens it: typing it twice must not hide what it asked for.
-  const openPanel = useCallback((paneId: string, sessionId: string, view: InspectView) => { showPanel(paneId, sessionId, view, () => true) }, [showPanel])
-  return { toggleInspect, inspectRefusal, showChangesOf, showChanges, togglePanel, openPanel }
+    openSurface(sessionId, view)
+  }, [sessionMap, setLayout, openSurface, setTurnDiff])
+  // The focused session's panel on one surface, for the command palette: the title bar's button only shows and hides it.
+  const showPanelView = useCallback((view: SingleSurfaceKind) => {
+    if (focusedSession === undefined) return
+    if (inspectRefusal !== null) {
+      toast.info(inspectRefusal)
+      return
+    }
+    setTurnDiff(null)
+    openSurface(focusedSession.id, view)
+  }, [focusedSession, inspectRefusal, setTurnDiff, openSurface])
+  return { toggleInspect, inspectRefusal, showFilesOf, showChanges, openPanel, showPanelView }
 }

@@ -1,24 +1,96 @@
-/* The first-run setup: a veil over the app that blurs it (the one blur in the app, see DESIGN), the Maiker mark drawing itself, then a centred window. Role tokens only. */
+/* The first run: a veil over the app that blurs it (the one blur in the app, see DESIGN), the Maiker mark drawing itself, then one window of two screens. Role tokens only. */
 /* The veil is its own childless layer, apart from the content: a backdrop filter on a parent whose children animate or sit on their own
    layers blurs only in bands (the strips above and below the window). The content layer above it carries no filter. */
-.mx-onb-veil { position: fixed; inset: 0; z-index: 81; background: color-mix(in srgb, var(--bg) 55%, transparent); backdrop-filter: blur(16px); }
+/* Dark enough, in every theme, that the window stands clear of the app behind it. */
+.mx-onb-veil { position: fixed; inset: 0; z-index: 81; background: color-mix(in srgb, var(--t0) 45%, rgba(0, 0, 0, .62)); backdrop-filter: blur(16px); }
 .mx-onb { position: fixed; inset: 0; z-index: 82; display: grid; place-items: center; color: var(--fg); font-size: 13px; overflow: hidden; outline: none; }
 .mx-onb-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
-/* The mark: stroke in the text colour draws, then the fill fades in (fill-opacity, never a colour-mix on fill), then it rises away. */
-.mx-onb-mark { position: absolute; width: 168px; height: 130px; stroke: var(--fg); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; fill: none; transition: opacity var(--t-base) var(--ease), transform var(--t-base) var(--ease); }
-.mx-onb-mark path { fill: var(--fg); fill-opacity: 0; stroke-dasharray: 320; stroke-dashoffset: 320; animation: mx-onb-draw 1.3s cubic-bezier(.6, 0, .3, 1) forwards, mx-onb-fill .5s ease-out 1.45s forwards; }
-.mx-onb-mark path:nth-child(2) { animation-delay: .22s, 1.55s; }
-.mx-onb-mark path:nth-child(3) { animation-delay: .44s, 1.65s; }
+/* The mark: the stroke in the text colour draws, then the fill fades in (fill-opacity, never a colour-mix on fill: that crashed Chromium), then it
+   rises away. Each animation runs once and ends, so nothing is left running under the window. */
+.mx-onb-mark { position: absolute; width: 168px; height: 130px; stroke: var(--fg); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; fill: none; transition: opacity var(--t-slow) var(--ease), transform var(--t-slow) var(--ease); }
+.mx-onb-mark path { fill: var(--fg); fill-opacity: 0; stroke-dasharray: 320; stroke-dashoffset: 320; animation: mx-onb-draw .85s cubic-bezier(.6, 0, .3, 1) forwards, mx-onb-fill .35s ease-out .95s forwards; }
+.mx-onb-mark path:nth-child(2) { animation-delay: .12s, 1s; }
+.mx-onb-mark path:nth-child(3) { animation-delay: .24s, 1.05s; }
 .mx-onb-mark[data-gone="true"] { opacity: 0; transform: translateY(-200px) scale(.25); pointer-events: none; }
 @keyframes mx-onb-draw { to { stroke-dashoffset: 0; } }
-@keyframes mx-onb-fill { to { fill-opacity: 1; } }
+@keyframes mx-onb-fill { to { fill-opacity: .92; } }
 
-.mx-onb-window { animation: mx-onb-rise .45s cubic-bezier(.2, .8, .2, 1); }
-.mx-onb-screen { animation: mx-onb-in .2s ease-out; }
-.mx-onb-screen[data-back="true"] { --dx: -10px; }
-@keyframes mx-onb-rise { from { opacity: 0; transform: translateY(18px); } }
-@keyframes mx-onb-in { from { opacity: 0; transform: translateX(var(--dx, 10px)); } }
+/* The window: one fixed size for both screens, so the header and the foot never move between them. */
+.mx-onb-window { position: relative; display: flex; flex-direction: column; width: 680px; max-width: calc(100% - 32px); height: 680px; max-height: calc(100% - 64px); overflow: hidden; border-radius: var(--r-dialog); background: var(--float-bg); border: 1px solid rgba(var(--ink), .14); box-shadow: 0 0 0 1px rgba(0, 0, 0, .25), 0 28px 80px rgba(0, 0, 0, calc(.6 * var(--shk))); animation: mx-onb-rise .45s cubic-bezier(.2, .8, .2, 1); }
+.mx-onb-head { flex: none; display: flex; align-items: center; gap: 14px; height: 52px; padding: 0 14px 0 20px; border-bottom: 1px solid var(--float-line); }
+.mx-onb-body { flex: 1; min-height: 0; overflow-y: auto; padding: 26px 28px 8px; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.mx-onb-foot { flex: none; display: flex; align-items: center; gap: 12px; padding: 14px 20px 16px; }
+.mx-onb-kbd { padding: 1px 5px; border-radius: var(--r-badge); font: 500 10.5px var(--mono); color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line2); }
+.mx-onb-screen { display: flex; flex-direction: column; gap: 12px; animation: mx-onb-in .25s ease-out; }
+.mx-onb-screen[data-screen="style"] { gap: 14px; }
+@keyframes mx-onb-rise { from { opacity: 0; transform: translateY(14px) scale(.98); } }
+@keyframes mx-onb-in { from { opacity: 0; transform: translateX(10px); } }
 
+/* The dots: one per screen in the header, one per theme under the carousel. The one in view is a short bar. */
+.mx-onb-dots { display: flex; align-items: center; gap: 6px; }
+.mx-onb-dots i { width: 6px; height: 6px; border-radius: 999px; background: rgba(var(--ink), .16); transition: width var(--t-base) var(--ease), background-color var(--t-base) var(--ease); }
+.mx-onb-dots i[data-at="now"] { width: 18px; background: var(--fg); }
+.mx-onb-dots i[data-at="done"] { background: rgba(var(--ink), .4); }
+
+.mx-onb-title { margin: 0; font: 600 22px/1.25 var(--ui); letter-spacing: -.01em; outline: none; }
+.mx-onb-lead { margin: -8px 0 0; font-size: 14px; line-height: 1.6; color: var(--muted); }
+.mx-onb-label { display: flex; flex-direction: column; gap: 3px; margin-bottom: -4px; }
+.mx-onb-label.is-row { flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; }
+.mx-onb-card { display: flex; flex-direction: column; border-radius: var(--r-panel); background: rgba(var(--ink), .03); box-shadow: inset 0 0 0 1px var(--float-line); }
+.mx-onb-tile { flex: none; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: rgba(var(--ink), .06); color: var(--fg2); }
+.mx-onb-tag { padding: 2px 8px; border-radius: var(--r-control); font: 400 11.5px var(--mono); color: var(--muted); background: rgba(var(--ink), .06); }
+
+/* The agent list: one row each, the name and what it is on one line, the version or Install at the right; an install's command and its bar go under the row. */
+.mx-onb-group { padding: 10px 0 0; font-size: 11.5px; font-weight: 600; color: var(--dim); }
+.mx-onb-agent { display: flex; flex-wrap: wrap; align-items: center; gap: 0 12px; min-height: 37px; padding: 3px 0; border-top: 1px solid var(--float-line); }
+.mx-onb-agent:first-child { border-top: 0; }
+.mx-onb-agent-text { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 10px; }
+.mx-onb-agent-command { flex-basis: 100%; margin: 2px 0 4px 38px; padding: 5px 9px; border-radius: var(--r-control); background: var(--m-well); font: 400 11.5px/1.5 var(--mono); color: var(--fg); overflow-wrap: anywhere; box-shadow: inset 0 0 0 1px var(--float-line); }
+.mx-onb-agent-bar { flex-basis: 100%; height: 3px; margin: 2px 0 3px; }
+
+/* A picture of a view inside its card: a small window with a title strip, so it reads at once as a terminal or a chat. */
+.mx-onb-preview { display: flex; flex-direction: column; height: 104px; overflow: hidden; border-radius: var(--r-control); background: var(--main); box-shadow: inset 0 0 0 1px var(--line2), 0 4px 12px rgba(0, 0, 0, calc(.25 * var(--shk))); }
+.mx-onb-preview-bar { flex: none; display: flex; align-items: center; gap: 4px; height: 20px; padding: 0 8px; border-bottom: 1px solid var(--line); font: 500 10px var(--ui); color: var(--dim); }
+.mx-onb-preview-bar i { width: 6px; height: 6px; border-radius: 50%; background: rgba(var(--ink), .18); }
+.mx-onb-preview-bar span { margin-left: 6px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mx-onb-preview-body { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 7px 10px; }
+.mx-onb-preview.is-terminal .mx-onb-preview-body { background: var(--term, var(--main)); }
+.mx-onb-preview-box { margin-top: auto; height: 18px; display: flex; align-items: center; padding: 0 7px; border-radius: var(--r-badge); box-shadow: inset 0 0 0 1px var(--line2); color: var(--dim); }
+
+/* The theme carousel. The cards are clipped, not scrolled (`overflow: clip` makes no scroller), and fade out at both sides. */
+.mx-onb-themes { position: relative; flex: 1; height: 150px; overflow: clip; mask-image: linear-gradient(90deg, transparent, black 14%, black 86%, transparent); }
+.mx-onb-track { position: absolute; left: 50%; top: 4px; display: flex; gap: 14px; transition: transform var(--t-slow) var(--ease); }
+.mx-onb-theme { flex: none; display: flex; flex-direction: column; width: 232px; height: 142px; padding: 0; overflow: hidden; border-radius: var(--r-panel); background: var(--c-ground); box-shadow: 0 0 0 1px var(--line2); transform: scale(.86); opacity: .45; outline: none; transition: transform var(--t-slow) var(--ease), opacity var(--t-slow) var(--ease); }
+.mx-onb-theme[data-state="checked"] { transform: none; opacity: 1; }
+.mx-onb-theme:focus-visible { box-shadow: var(--focus-edge); }
+
+/* A tiny Maiker in the card's own theme (`--c-*`, set on the card from that theme's roles). */
+.mx-mini-bar { flex: none; display: flex; align-items: center; gap: 6px; height: 16px; padding: 0 7px; }
+.mx-mini-logo { width: 7px; height: 6px; background: var(--c-fg); }
+.mx-mini-word { width: 26px; height: 3px; background: var(--c-muted); opacity: .7; }
+.mx-mini-body { flex: 1; min-height: 0; display: flex; gap: 4px; padding: 0 5px 5px; }
+.mx-mini-side { width: 31%; display: flex; flex-direction: column; gap: 4px; padding: 5px 4px; }
+.mx-mini-group { display: block; width: 40%; height: 3px; margin: 3px 3px 1px; background: var(--c-muted); opacity: .55; }
+.mx-mini-row { display: flex; align-items: center; gap: 4px; height: 12px; padding: 0 4px; border-radius: var(--r-badge); }
+.mx-mini-row b { flex: 1; height: 3px; background: var(--c-fg); opacity: .8; }
+.mx-mini-row u { width: 6px; height: 6px; border-radius: 50%; }
+.mx-mini-row[data-k="sel"] { background: var(--c-sel); }
+.mx-mini-row[data-k="needs"] u { background: var(--c-needs); }
+.mx-mini-row[data-k="ok"] u { background: var(--c-ok); }
+.mx-mini-row[data-k="idle"] b { opacity: .35; }
+.mx-mini-main { flex: 1; display: flex; flex-direction: column; gap: 5px; padding: 8px 9px; border-radius: var(--r-control); background: var(--c-card); box-shadow: 0 0 0 1px rgba(var(--c-ink), .08); }
+.mx-mini-said { align-self: flex-end; width: 46%; height: 11px; border-radius: var(--r-badge); background: var(--c-sel); }
+.mx-mini-text { display: block; height: 3px; background: var(--c-fg); opacity: .55; }
+.mx-mini-needs { display: flex; align-items: center; height: 14px; margin-top: 2px; padding: 0 5px; border-radius: var(--r-badge); background: color-mix(in srgb, var(--c-needs) 16%, transparent); }
+.mx-mini-needs b { width: 40%; height: 3px; background: var(--c-needs); }
+.mx-mini-box { display: flex; align-items: center; height: 20px; margin-top: auto; padding: 0 6px; border-radius: var(--r-badge); background: var(--c-box); box-shadow: 0 0 0 1px rgba(var(--c-ink), .08); }
+.mx-mini-box b { width: 30%; height: 3px; background: var(--c-muted); opacity: .6; }
+
+/* Reduced motion: the mark is there whole and nothing rises or slides in. The transitions read the motion tokens, which are zero then. */
 .mx-onb[data-reduce="true"] :is(.mx-onb-window, .mx-onb-screen) { animation: none; }
-@media (prefers-reduced-motion: reduce) { .mx-onb :is(.mx-onb-window, .mx-onb-screen) { animation: none; } .mx-onb-mark path { animation-duration: .01s; animation-delay: 0s; } }
+.mx-onb[data-reduce="true"] .mx-onb-mark path { animation: none; fill-opacity: .92; stroke-dashoffset: 0; }
+@media (prefers-reduced-motion: reduce) {
+  .mx-onb :is(.mx-onb-window, .mx-onb-screen) { animation: none; }
+  .mx-onb .mx-onb-mark path { animation: none; fill-opacity: .92; stroke-dashoffset: 0; }
+}

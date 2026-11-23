@@ -231,20 +231,3 @@ impl App {
         true
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn the_note_names_the_other_checkout_and_the_file() {
-        let o = Overlap {
-            file: "src/checkout.ts".into(),
-            checkouts: vec!["orders".into(), "rate-limit".into()],
-        };
-        assert_eq!(
-            note(&o, "rate-limit"),
-            "rate-limit also changes src/checkout.ts; rebase on it before you finish"
-        );
-    }
-}

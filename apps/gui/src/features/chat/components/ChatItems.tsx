@@ -20,7 +20,7 @@ import { QuoteStub } from './QuoteStubs'
 import { withoutPasteTags } from '../messagePreview'
 import { AgentsCard } from './AgentsCard'
 import { SentAttachments } from './Attachments'
-import { ApprovalCard, type ApprovalActions } from './ApprovalCard'
+import { ApprovalCard } from './ApprovalCard'
 import { compactionOf, type Compaction } from '../compaction'
 import { ContextSummary } from './ContextSummary'
 import { InlineMarkdown, Markdown } from './Markdown'
@@ -49,7 +49,6 @@ function Frame({ children }: { children: ReactNode }) {
 export type ChatItemContext = {
   agent: ChatAgent
   workingSince: number | null
-  approval: ApprovalActions | null
   /** The session's folder, so file names are shown relative to it. */
   root: string | null
   /**
@@ -105,7 +104,7 @@ function sameRow(a: ChatRow, b: ChatRow): boolean {
 }
 
 function sameProps(a: RowProps, b: RowProps): boolean {
-  return a.agent === b.agent && a.workingSince === b.workingSince && a.approval === b.approval && a.root === b.root && a.openDiff === b.openDiff && a.goToStep === b.goToStep && a.waitingStep === b.waitingStep && a.editFromHere === b.editFromHere && sameRow(a.row, b.row)
+  return a.agent === b.agent && a.workingSince === b.workingSince && a.root === b.root && a.openDiff === b.openDiff && a.goToStep === b.goToStep && a.waitingStep === b.waitingStep && a.editFromHere === b.editFromHere && sameRow(a.row, b.row)
 }
 
 /**
@@ -212,7 +211,7 @@ function SaidText({ text: sent, rowKey }: { text: string; rowKey: string }) {
 }
 
 /** One row of the list. Memoised: a streamed update re-renders only the rows whose events changed. */
-export const ChatItem = memo(function ChatItem({ row, agent, workingSince, approval, root, openDiff, goToStep, waitingStep, editFromHere = null }: RowProps) {
+export const ChatItem = memo(function ChatItem({ row, agent, workingSince, root, openDiff, goToStep, waitingStep, editFromHere = null }: RowProps) {
   const canQuote = useContext(ChatActionsContext) !== null
   switch (row.kind) {
     case 'user': {
@@ -260,7 +259,7 @@ export const ChatItem = memo(function ChatItem({ row, agent, workingSince, appro
     case 'agents':
       return <Frame><AgentsCard agents={row.events} rowKey={row.key} /></Frame>
     case 'approval':
-      return <Frame><ApprovalCard event={row.event} actions={approval} step={row.step} onGoToStep={goToStep} /></Frame>
+      return <Frame><ApprovalCard event={row.event} step={row.step} onGoToStep={goToStep} /></Frame>
     case 'divider':
       return <TurnFooter row={row} clock={clock} />
     case 'changes': {

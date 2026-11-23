@@ -1,16 +1,11 @@
 //! What is kept for a chat message, what is refused, and what a hostile name comes to.
 
 use super::*;
-use std::sync::atomic::{AtomicU32, Ordering};
 
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n\0\0\0\rIHDRrest-of-the-image";
 
 fn folder(label: &str) -> PathBuf {
-    static NEXT: AtomicU32 = AtomicU32::new(0);
-    let n = NEXT.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!("attachment-{label}-{}-{n}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("make a test folder");
-    dir
+    maitty_test_support::TempFolder::new(&format!("attachment-{label}")).until_test_ends()
 }
 
 fn write(dir: &Path, name: &str, bytes: &[u8]) -> PathBuf {

@@ -5,7 +5,7 @@ export function markClosed(ids: Iterable<string>): void {
   for (const id of ids) closed.add(id)
 }
 
-/** A closed session that Undo brings back is listed again. */
+/** A close that did not happen: the session is listed again. */
 export function unmarkClosed(ids: Iterable<string>): void {
   for (const id of ids) closed.delete(id)
 }

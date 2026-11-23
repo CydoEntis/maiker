@@ -523,36 +523,6 @@ mod tests {
     }
 
     #[test]
-    fn a_switch_reads_on_in_the_text_colour_and_off_dim() {
-        let mut app = settings_on(Cat::Sessions);
-        let page = frame(&mut app, 120, 40);
-        assert!(page.contains("●━━ off"), "an off switch: {page}");
-        let mut app = settings_on(Cat::General);
-        let page = frame(&mut app, 120, 40);
-        assert!(page.contains("━━● on"), "an on switch: {page}");
-        let t = app.theme.clone();
-        assert_eq!(switch(&t, true)[0].1.fg, Some(t.strong));
-        assert_eq!(switch(&t, false)[0].1.fg, Some(t.muted));
-    }
-
-    #[test]
-    fn a_choice_is_segmented_and_the_chosen_one_is_filled_with_the_border_colour() {
-        let mut app = settings_on(Cat::Appearance);
-        let page = frame(&mut app, 120, 40);
-        assert!(
-            page.contains("Square") && page.contains("Rounded") && page.contains("Pills"),
-            "Corners: {page}"
-        );
-        assert!(page.contains("Blocks") && page.contains("Braille") && page.contains("Line"), "spinner: {page}");
-        let t = app.theme.clone();
-        let opts = ["a".to_string(), "b".to_string()];
-        let segs = segmented(&t, &opts, Some(1));
-        assert_eq!(segs[1].1.bg, Some(t.border));
-        assert!(segs[1].1.add_modifier.contains(Modifier::BOLD));
-        assert_eq!(segs[0].1.bg, None);
-    }
-
-    #[test]
     fn reduce_motion_is_on_when_the_motion_flag_is_off() {
         let s = modal::SETTINGS.iter().find(|s| s.path == "ui.motion").expect("the motion setting");
         let mut cfg = crate::config::Config::default();

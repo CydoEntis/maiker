@@ -1,26 +1,7 @@
 import { describe, expect, it } from 'vitest'
-import { modeFromScreen, modeLabel, modeShortLabel, modelLabel } from './chatMeta'
-
-describe('modeShortLabel', () => {
-  it('shortens Bypass permissions for the box and leaves other names whole', () => {
-    expect(modeShortLabel('Bypass permissions')).toBe('Bypass')
-    expect(modeShortLabel('Ask before edits')).toBe('Ask before edits')
-    expect(modeShortLabel(null)).toBeNull()
-  })
-})
+import { asksToSwitchModel, modeFromScreen, modelLabel } from './chatMeta'
 
 describe('the mode and model in plain words', () => {
-  it('names Claude\'s permission modes', () => {
-    expect(modeLabel('auto')).toBe('Auto')
-    expect(modeLabel('acceptEdits')).toBe('Accept edits')
-    expect(modeLabel('bypassPermissions')).toBe('Bypass permissions')
-    expect(modeLabel('plan')).toBe('Plan mode')
-  })
-
-  it('shows a mode it does not know as it was written, and nothing for none', () => {
-    expect(modeLabel('futureMode')).toBe('futureMode')
-    expect(modeLabel(null)).toBeNull()
-  })
 
   it('names a model by family and version, with or without a date', () => {
     expect(modelLabel('claude-sonnet-5-5')).toBe('sonnet 5.5')
@@ -47,5 +28,20 @@ describe('reading the permission mode from the agent\'s screen', () => {
   it('is the default mode when the footer shows none, and unknown on an empty screen', () => {
     expect(modeFromScreen(screen('? for shortcuts'))).toBe('default')
     expect(modeFromScreen('  \n')).toBeNull()
+  })
+})
+
+describe('Claude Code asking to switch the model', () => {
+  const ask = ['> /model opus', '', 'Switch model?', 'Your next response will be slower and use more tokens', '', '  1 Yes, switch to Opus 5.5', '  2 No, go back'].join('\n')
+
+  it('is read from the last lines of the screen', () => {
+    expect(asksToSwitchModel(ask)).toBe(true)
+    expect(asksToSwitchModel(`${'older line\n'.repeat(40)}${ask}`)).toBe(true)
+  })
+
+  it('is not read from a screen where it has scrolled away, or one that only says the words', () => {
+    expect(asksToSwitchModel(`${ask}\n${'later line\n'.repeat(40)}`)).toBe(false)
+    expect(asksToSwitchModel('Set model to Haiku 5.5')).toBe(false)
+    expect(asksToSwitchModel('Switch model? is a question Claude asks')).toBe(false)
   })
 })

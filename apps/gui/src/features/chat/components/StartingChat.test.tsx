@@ -2,7 +2,7 @@ import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { NO_EVENTS_HINT_AFTER_MS } from '@/features/workspace/model/chatView'
-import { forgetFirstMessages, heldFirstMessage, holdStartChoice, takeCarriedDraft } from '../firstMessage'
+import { forgetFirstMessages, heldFirstMessage, takeCarriedDraft } from '../firstMessage'
 import { StartingChat } from './StartingChat'
 
 const attach = vi.hoisted(() => ({ attachLocalFile: vi.fn(), chooseFilesToAttach: vi.fn() }))
@@ -17,8 +17,7 @@ vi.mock('@/api/daemon', async (importOriginal) => ({
 beforeEach(() => { forgetFirstMessages() })
 afterEach(() => { cleanup(); vi.useRealTimers() })
 
-const noop = () => undefined
-const open = () => render(<StartingChat agent="codex" sessionId="s1" onShowLog={noop} />)
+const open = () => render(<StartingChat agent="codex" sessionId="s1" />)
 
 describe('the chat of a session that is still starting', () => {
   it('restarts the agent after connecting it, so it loads the hooks', async () => {
@@ -33,24 +32,13 @@ describe('the chat of a session that is still starting', () => {
     expect(daemon.connectAgent).toHaveBeenCalledWith('codex')
   })
 
-  it('says so, and offers the terminal, when it has waited long and the hooks never reported in', () => {
-    vi.useFakeTimers()
-    open()
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note')).toHaveTextContent(/status hooks are not connected/)
-    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Connect Codex' })).toBeInTheDocument()
-    expect(screen.getByText(/No conversation to show yet/)).toBeInTheDocument()
-    expect(screen.queryByText(/Type below: it is sent as soon as/)).not.toBeInTheDocument()
-  })
-
   it('names the settings file whose hooks are wrong and repairs that folder, not the app\'s own', async () => {
     daemon.connectAgent.mockResolvedValue(undefined)
     daemon.reloadAgentOnDaemon.mockResolvedValue(undefined)
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const problem = { file: '/srv/agents/claude-home/settings.json', why: 'its hooks run another program (/old/path/program)', repaired: false }
-    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked={false} hookProblem={problem} />)
+    render(<StartingChat agent="claude" sessionId="s1" hooked={false} hookProblem={problem} />)
     act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
     expect(screen.getByRole('note')).toHaveTextContent('/srv/agents/claude-home/settings.json')
     await user.click(screen.getByRole('button', { name: 'Repair Claude hooks' }))
@@ -64,44 +52,12 @@ describe('the chat of a session that is still starting', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true })
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const problem = { file: '/home/me/.claude-work/settings.json', why: 'x; now fixed', repaired: true }
-    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked={false} hookProblem={problem} />)
+    render(<StartingChat agent="claude" sessionId="s1" hooked={false} hookProblem={problem} />)
     act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
     expect(screen.getByRole('note')).toHaveTextContent(/only loads them when it starts/)
     await user.click(screen.getByRole('button', { name: 'Restart Claude' }))
     await vi.waitFor(() => { expect(daemon.reloadAgentOnDaemon).toHaveBeenCalledWith({ id: 's1' }) })
     expect(daemon.connectAgent).not.toHaveBeenCalled()
-  })
-
-  it('does not blame the hooks when they have reported in but the conversation was not found', () => {
-    vi.useFakeTimers()
-    render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} hooked />)
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note')).toHaveTextContent(/is reporting in, but Maiker has not found its conversation/)
-    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Connect claude' })).not.toBeInTheDocument()
-  })
-
-  it('shows a calm empty chat the moment the session exists, never a blank screen or a raw terminal', () => {
-    open()
-    const card = screen.getByRole('status')
-    expect(card).toHaveTextContent('What are we building today?')
-    expect(document.querySelector('.mx-terminal, .xterm')).toBeNull()
-  })
-
-  it('is there at once, with a message box for the agent that was chosen', () => {
-    open()
-    expect(screen.getByText('What are we building today?')).toBeInTheDocument()
-    expect(screen.queryByText('Starting codex…')).not.toBeInTheDocument()
-    expect(screen.getByRole('textbox', { name: 'Message Codex' })).toBeEnabled()
-    expect(screen.queryByRole('note')).not.toBeInTheDocument()
-  })
-
-  it('draws the Codex permission button while Codex starts, greyed, so it is already there when the chat takes over', () => {
-    holdStartChoice('s1', { model: 'default', reasoning: 'default', mode: 'codexReadOnly' })
-    render(<StartingChat agent="codex" sessionId="s1" onShowLog={noop} typeInto={() => Promise.resolve()} />)
-
-    const button = screen.getByRole('button', { name: /^Permission mode: Read only\. Codex is starting/ })
-    expect(button).toHaveAttribute('aria-disabled', 'true')
   })
 
   it('holds a file attached now with the message, and shows it as a chip, not as the block that names it', async () => {
@@ -139,29 +95,19 @@ describe('the chat of a session that is still starting', () => {
     expect(takeCarriedDraft('s1')).toBe('half a thou')
   })
 
-  it('draws no chips for an agent whose model and mode cannot be changed from the box', () => {
-    open()
-    expect(screen.queryByRole('button', { name: /^Agent, model and reasoning/ })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /^Permission mode/ })).not.toBeInTheDocument()
-  })
-
-  it('draws the agent name where its model will be said, so that is never added later', () => {
-    open()
-    expect(document.querySelector('.mx-model-button.is-static')).toHaveTextContent('Codex')
-  })
-
   it('says the agent is waiting in the terminal at once when the daemon says it needs you, without blaming the hooks', () => {
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" onShowLog={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" />)
     expect(screen.getByRole('note')).toHaveTextContent(/waiting for you in the terminal.*trust this folder/)
     expect(screen.queryByRole('button', { name: /^Connect/ })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Show terminal log' })).toBeInTheDocument()
+    expect(screen.getByRole('note')).toHaveTextContent(/Switch to the Terminal view in Settings to answer it/)
+    expect(screen.queryByRole('button', { name: 'Show terminal log' })).not.toBeInTheDocument()
   })
 
   it('shows a question on the agent’s screen with its choices, and answers it by moving the cursor and pressing Enter', async () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = 'Quick safety check: do you trust this folder?\n❯ 1. No, exit\n2. Yes, I trust this folder'
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} />)
     expect(screen.getByText(/do you trust this folder/)).toBeInTheDocument()
     // The question sits over the message box, as every other one does, and is the only notice: it can be answered here.
     expect(screen.getByRole('region', { name: 'Claude is asking' }).closest('.mx-composer')).not.toBeNull()
@@ -174,7 +120,7 @@ describe('the chat of a session that is still starting', () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = 'Accessing workspace:\n\n/home/vox/app\n\nQuick safety check: do you trust this folder?\n\n❯ 1. No, exit\n2. Yes, I trust this folder'
-    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
+    render(<StartingChat agent="claude" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} />)
     const card = screen.getByRole('region', { name: 'Trust this folder?' })
     expect(card).toHaveTextContent('/home/vox/app')
     expect(card).toHaveTextContent(/run commands/)
@@ -190,16 +136,9 @@ describe('the chat of a session that is still starting', () => {
     const user = userEvent.setup()
     const typeInto = vi.fn<(text: string) => Promise<void>>().mockResolvedValue(undefined)
     const asking = '> You are in /home/vox/app\n\nDo you trust the contents of this directory?\n\n1. Yes, continue\n2. No, quit'
-    render(<StartingChat agent="codex" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} onShowLog={noop} />)
+    render(<StartingChat agent="codex" sessionId="s1" paneStatus="needs" asking={asking} typeInto={typeInto} />)
     await user.click(screen.getByRole('button', { name: 'Don’t trust' }))
     expect(typeInto.mock.calls.map(([keys]) => keys)).toEqual([String.fromCharCode(27) + '[B', String.fromCharCode(13)])
-  })
-
-  it('floats the hooks hint over the conversation, so it moves nothing when it comes or goes', () => {
-    vi.useFakeTimers()
-    open()
-    act(() => { vi.advanceTimersByTime(NO_EVENTS_HINT_AFTER_MS) })
-    expect(screen.getByRole('note').closest('.mx-chat')).toHaveClass('is-starting')
   })
 
   it('suggests the hooks only when it is still empty after a while', () => {
@@ -213,17 +152,7 @@ describe('the chat of a session that is still starting', () => {
 })
 
 describe('the chips of a Claude chat that is still starting', () => {
-  const openClaude = () => render(<StartingChat agent="claude" sessionId="s1" onShowLog={noop} />)
-
-  it('draws the model, effort and mode that were picked, greyed out, where the real chat will have them', () => {
-    holdStartChoice('s1', { model: 'opus', reasoning: 'high', mode: 'plan' })
-    openClaude()
-
-    const model = screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · Opus · High/ })
-    expect(model).toHaveAttribute('aria-disabled', 'true')
-    expect(model).toHaveAttribute('title', expect.stringMatching(/starting/))
-    expect(screen.getByRole('button', { name: /^Permission mode: Plan/ })).toHaveAttribute('aria-disabled', 'true')
-  })
+  const openClaude = () => render(<StartingChat agent="claude" sessionId="s1" />)
 
   it('opens no picker while it is locked', async () => {
     const user = userEvent.setup()

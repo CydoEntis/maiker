@@ -76,10 +76,3 @@ const QUIET_TOOLS: ReadonlySet<string> = new Set(['Read', 'Grep', 'Glob', 'LS', 
 export function isQuietRun(steps: readonly WorkStep[]): boolean {
   return steps.every((step) => step.kind === 'tool' && step.status === 'completed' && QUIET_TOOLS.has(step.name))
 }
-
-/** How long the run took by the daemon's own times, first start to last finish; null when it gave none. */
-export function workDurationMs(steps: readonly WorkStep[]): number | null {
-  const started = steps[0]?.timing.startedAtMs ?? null
-  const ended = steps.at(-1)?.timing.completedAtMs ?? null
-  return started === null || ended === null || ended < started ? null : ended - started
-}

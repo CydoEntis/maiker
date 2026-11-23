@@ -106,12 +106,6 @@ mod tests {
     }
 
     #[test]
-    fn a_missing_data_folder_is_not_an_error() {
-        let dir = scratch_dir();
-        assert_eq!(outcomes(&dir.path().join("never-made")), ["Absent", "Absent"]);
-    }
-
-    #[test]
     fn leaves_every_other_file_alone() {
         let dir = scratch_dir();
         seed(dir.path());

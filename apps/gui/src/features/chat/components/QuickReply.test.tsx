@@ -69,13 +69,6 @@ describe('replying to questions asked in plain text', () => {
     expect(screen.getByRole('button', { name: /3 questions/ })).toHaveTextContent('Reply to each')
   })
 
-  it('offers only its own Reply for a single question', async () => {
-    await open((daemon) => { daemon.upsert(daemon.message('t1', 'a1', 'Assistant', 'Done.\n\nWhich of these two layouts do you prefer?')) })
-
-    expect(screen.getByRole('button', { name: 'Reply to this question' })).toBeInTheDocument()
-    expect(screen.queryByText(/Reply to each/)).not.toBeInTheDocument()
-  })
-
   it('offers nothing while the message is still being written', async () => {
     await open((daemon) => { daemon.upsert(daemon.message('t1', 'a1', 'Assistant', ASKED, 'InProgress')) })
 
@@ -280,21 +273,5 @@ describe('quotes', () => {
 
     await act(async () => { await vi.advanceTimersByTimeAsync(1250) })
     expect(source).not.toHaveClass('is-flash')
-  })
-
-  it('goes there without marking it when motion is reduced', async () => {
-    const { user } = await open(asked, true)
-
-    await user.click(screen.getByRole('button', { name: /Quoted from Claude/ }))
-    await act(async () => { await vi.advanceTimersByTimeAsync(50) })
-
-    expect(document.querySelector('.is-flash')).toBeNull()
-  })
-
-  it('leaves text that only looks like a quote as it is', async () => {
-    await open((daemon) => { daemon.upsert(daemon.message('t1', 'u1', 'User', 'hello\n> Quote from Claude:\n> not a quote')) })
-
-    expect(screen.queryByRole('button', { name: /Quoted from/ })).not.toBeInTheDocument()
-    expect(screen.getByText(/not a quote/)).toBeInTheDocument()
   })
 })

@@ -253,25 +253,14 @@ mod tests {
     }
 
     #[test]
-    fn the_first_dial_may_start_the_daemon() {
-        let base = attached();
-        assert_eq!(MayStart::FIRST.machine_for_dial(&base), base.starting());
-    }
-
-    #[test]
-    fn a_redial_after_a_lost_line_only_attaches() {
+    fn the_first_dial_or_a_retry_may_start_the_daemon_and_a_redial_after_a_lost_line_only_attaches() {
         let base = attached();
         let mut may_start = MayStart::FIRST;
+        assert_eq!(may_start.machine_for_dial(&base), base.starting());
         may_start.line_ended();
         assert_eq!(may_start.machine_for_dial(&base), base);
-    }
-
-    #[test]
-    fn a_retry_may_start_the_daemon_again() {
-        let base = attached();
-        let mut may_start = MayStart::FIRST;
-        may_start.line_ended();
         may_start.retried();
         assert_eq!(may_start.machine_for_dial(&base), base.starting());
     }
+
 }

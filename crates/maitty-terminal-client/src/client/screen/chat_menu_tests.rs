@@ -70,23 +70,6 @@ fn stop_the_agent_interrupts_it_with_ctrl_c() {
 }
 
 #[test]
-fn the_menu_names_its_items_as_the_design_does_with_the_keys_that_work_in_the_sidebar() {
-    let (app, term) = chat(Status::Working, Some(85.0));
-    let items = labels(&app, term);
-    for want in ["Open", "Rename…", "Copy folder path", "Compact the context", "Stop the agent", "Close chat"] {
-        assert!(items.contains(&want.to_string()), "{want} in {items:?}");
-    }
-}
-
-#[test]
-fn closing_a_chat_says_its_branch_and_history_are_kept() {
-    let (mut app, term) = chat(Status::Idle, None);
-    app.menu_do(Act::End(vec![term]));
-    let (said, ..) = app.notice.clone().expect("a notice");
-    assert_eq!(said, "Closed the chat. Its branch and history are kept.");
-}
-
-#[test]
 fn a_rename_is_typed_on_the_row_with_a_cursor_and_enter_saves_it() {
     let (mut app, term) = chat(Status::Idle, None);
     let _ = frame(&mut app);

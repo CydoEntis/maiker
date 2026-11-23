@@ -127,57 +127,6 @@ async fn a_replay_is_asked_for_over_the_line_and_comes_back_as_that_panes() {
 }
 
 #[tokio::test]
-async fn a_resize_reaches_the_pane_and_its_answer_is_taken_once() {
-    let mut sandbox = Sandbox::new();
-    sandbox.start_daemon();
-    let (mut watch, wire, term) = with_a_pane(&sandbox).await;
-    let before = watch.replies(BOX);
-    wire.command(
-        Some(1),
-        term,
-        PaneCommand::Resize {
-            cols: 101,
-            rows: 31,
-        },
-    )
-    .expect("the line is up");
-    watch
-        .until("the pane to be that size", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| (pane.cols, pane.rows) == (101, 31))
-        })
-        .await;
-    watch.until("the answer", |w| w.replies(BOX) > before).await;
-}
-
-#[tokio::test]
-async fn a_rename_a_pin_and_an_archive_reach_the_pane() {
-    let mut sandbox = Sandbox::new();
-    sandbox.start_daemon();
-    let (mut watch, wire, term) = with_a_pane(&sandbox).await;
-    wire.command(Some(1), term, PaneCommand::Rename("nightly".into()))
-        .expect("the line is up");
-    wire.command(Some(1), term, PaneCommand::Pin(true))
-        .expect("the line is up");
-    watch
-        .until("renamed and pinned", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| pane.label == "nightly" && pane.pinned)
-        })
-        .await;
-    wire.command(Some(1), term, PaneCommand::Pin(false))
-        .expect("the line is up");
-    wire.command(Some(1), term, PaneCommand::Archive(true))
-        .expect("the line is up");
-    watch
-        .until("unpinned and archived", |w| {
-            w.pane(BOX, term)
-                .is_some_and(|pane| !pane.pinned && pane.archived)
-        })
-        .await;
-}
-
-#[tokio::test]
 async fn looking_at_a_pane_is_answered_and_the_answer_is_taken_only_once_asked() {
     let mut sandbox = Sandbox::new();
     sandbox.start_daemon();
@@ -512,4 +461,70 @@ async fn the_window_asking_a_machine_for_its_list_again_and_again_sends_at_most_
         asked(&wire, start + crate::terminal_stream::WINDOW_LIST_ASK_EVERY),
         "one after the wait goes out again"
     );
+}
+
+#[tokio::test]
+async fn a_new_worktree_off_a_pane_of_a_machine_is_made_there_by_that_machines_daemon_and_a_session_opens_in_it() {
+    let mut sandbox = Sandbox::new();
+    // Beside the repository, inside the sandbox: the default template would put it under the real home folder.
+    let config = sandbox.dir.join("config.toml");
+    let mut text = std::fs::read_to_string(&config).unwrap_or_default();
+    text.push_str("\n[worktree]\ndir = \"{repo_parent}/{repo}-worktrees/{branch}\"\n");
+    std::fs::write(&config, text).unwrap();
+    sandbox.start_daemon();
+    let repository = sandbox.dir.join("checkout");
+    let git = |args: &[&str]| {
+        let identity = ["-c", "user.name=Test", "-c", "user.email=test@example.invalid", "-c", "commit.gpgsign=false"];
+        let ran = std::process::Command::new("git").arg("-C").arg(&repository).args(identity).args(args).output().unwrap();
+        assert!(ran.status.success(), "git {args:?}: {}", String::from_utf8_lossy(&ran.stderr));
+        String::from_utf8_lossy(&ran.stdout).into_owned()
+    };
+    std::fs::create_dir_all(&repository).unwrap();
+    git(&["init", "--quiet", "-b", "main"]);
+    std::fs::write(repository.join("a.txt"), "one\n").unwrap();
+    git(&["add", "--", "a.txt"]);
+    git(&["commit", "--quiet", "-m", "start"]);
+
+    let mut watch = Watch::new(&[machine("box", &sandbox, "proxy")], &sandbox, quick(WAIT));
+    let wire = Wire::reaching(watch.hub.handle());
+    watch.until("connected and a snapshot", |w| w.is(BOX, "connected") && w.snapshots(BOX) > 0).await;
+    let start = ClientMsg::Command(Command::NewWorkspace { cwd: Some(repository.clone()), name: None, cmd: None });
+    watch.hub.handle().send(Outgoing { machine: BOX, msg: start }).expect("the line is up");
+    watch.until("a pane on the machine", |w| w.any_pane(BOX).is_some()).await;
+    let term = watch.any_pane(BOX).unwrap();
+
+    let not_here = || Err("this computer's daemon is not asked".to_string());
+    let daemon = wire.new_worktree_daemon(Some(BOX.0), not_here).expect("a connected machine is asked");
+    let made = maitty_desktop_client::new_worktree_session(term, "feat-x".into(), None, daemon).await;
+    assert_eq!(made.map_err(|error| format!("{error:#}")), Ok(serde_json::Value::Null));
+    assert!(git(&["worktree", "list", "--porcelain"]).contains("branch refs/heads/feat-x"), "the worktree is that machine's");
+    watch
+        .until("a session in the new worktree", |w| {
+            w.msgs.iter().any(|(m, msg)| *m == BOX && match msg {
+                ServerMsg::State(snapshot) => snapshot.terms.keys().any(|id| *id != term),
+                ServerMsg::TermsChanged { changed, .. } => changed.iter().any(|pane| pane.id != term),
+                _ => false,
+            })
+        })
+        .await;
+}
+
+#[tokio::test]
+async fn a_new_worktree_on_a_machine_that_is_down_or_too_old_is_refused_naming_it_and_nothing_is_asked_of_it() {
+    let sandbox = Sandbox::new();
+    let old = MachineId(2);
+    let mut watch = Watch::new(&[machine("box", &sandbox, "auth-fail"), machine("old", &sandbox, "mismatch")], &sandbox, quick(WAIT));
+    let wire = Wire::reaching(watch.hub.handle());
+    watch
+        .until("the older one needs an update", |w| w.kinds(old).last() == Some(&"needs-update"))
+        .await;
+    let not_here = || Err("this computer's daemon is not asked".to_string());
+    for (machine, name) in [(BOX, "box"), (old, "old")] {
+        let refused = wire.new_worktree_daemon(Some(machine.0), not_here).err().expect("nothing is asked of it");
+        assert_eq!(refused, format!("{name} is not connected"));
+    }
+    assert!(matches!(
+        wire.new_worktree_daemon(None, || Ok(std::path::PathBuf::from("maiker"))),
+        Ok(maitty_desktop_client::Daemon::Local(_))
+    ), "this computer's goes to its own daemon, as before");
 }

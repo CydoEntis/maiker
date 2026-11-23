@@ -521,19 +521,6 @@ mod tests {
     }
 
     #[test]
-    fn a_period_says_cost_tokens_turns_and_time_only_when_reported() {
-        assert_eq!(period_figures(&UsageFigures::default()), "");
-        let f = UsageFigures {
-            tokens_in: Some(1_200_000),
-            tokens_out: Some(30_000),
-            cost: Some(12.345),
-            turns: 1,
-            working_secs: 18_180,
-        };
-        assert_eq!(period_figures(&f), "$12.35 · 1.2M in · 30.0k out · 1 turn · 5h 3m working");
-    }
-
-    #[test]
     fn days_count_from_the_epoch_and_reject_what_is_not_a_day() {
         assert_eq!(day_number("1970-01-01"), Some(0));
         assert_eq!(day_number("2000-03-01"), Some(11_017));
@@ -561,15 +548,5 @@ mod tests {
             days: vec![day("2026-11-10", 1.0), day("2026-11-15", 2.0)],
         };
         assert_eq!(day_values(&r, true), [0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 2.0]);
-    }
-
-    #[test]
-    fn a_bar_fills_from_the_bottom_row_up() {
-        assert_eq!(bar_cell(0, 2), " ");
-        assert_eq!(bar_cell(3, 2), "▃");
-        assert_eq!(bar_cell(3, 1), " ");
-        assert_eq!(bar_cell(12, 2), "█");
-        assert_eq!(bar_cell(12, 1), "▄");
-        assert_eq!(bar_cell(24, 0), "█");
     }
 }

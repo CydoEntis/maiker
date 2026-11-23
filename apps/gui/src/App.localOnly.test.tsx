@@ -3,14 +3,13 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import App from './App'
+import { DesktopApp } from '@/features/workspace/DesktopApp'
 
 const daemon = vi.hoisted(() => ({
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   loadDaemonRestartStatus: vi.fn(),
-  suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
   loadMachines: vi.fn(() => Promise.resolve({ names: ['build'], error: null })),
 }))
 
@@ -27,7 +26,7 @@ const terminal = vi.hoisted(() => ({
 
 const remoteTerm = {
   id: 7, cols: 80, rows: 24, title: 't', process: 'bash', agent: null, status: 'Idle', cwd: '/srv/app', summary: '', name: 'job',
-  label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], subagents: [],
+  label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], startedBy: null, subagents: [],
   conversation_id: null, popup: false, remote: null, root: '/srv/app', top: null, since: 0, asleep: false, win32_input: false,
 }
 
@@ -80,7 +79,7 @@ async function openRemotePane() {
   // A plain shell is a session of its own only in the Terminal view.
   window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><DesktopApp /></QueryClientProvider>)
   const user = userEvent.setup()
   // The only session there is runs on build, so the first row of the list is its row.
   const item = (await within(await screen.findByRole('navigation', { name: 'Sessions' })).findAllByRole('listitem'))[0]
@@ -98,41 +97,22 @@ describe('a pane of another machine and the features that need its files', () =>
     terminal.pasted.length = 0
     daemon.defaultSessionFolder.mockResolvedValue('/home/casey')
     daemon.loadConversations.mockResolvedValue([])
-    daemon.suggestProjectFolders.mockResolvedValue([])
-  })
-
-  it('adds a remote machine in a small dialog from the sidebar, not in Settings', async () => {
-    const user = userEvent.setup()
-    window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
-    render(<QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}><App /></QueryClientProvider>)
-
-    await user.click(await screen.findByRole('button', { name: /Add machine|Remote machine/ }))
-
-    const dialog = await screen.findByRole('dialog', { name: 'Add a remote machine' })
-    expect(within(dialog).getByRole('textbox', { name: 'Address' })).toBeInTheDocument()
-    expect(screen.queryByRole('heading', { name: 'Settings' })).not.toBeInTheDocument()
-    await user.keyboard('{Escape}')
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Add a remote machine' })).not.toBeInTheDocument() })
-  })
-
-  it('shows Changes and Files in the header of the session in front, and none of the four views in its ⋯ menu', async () => {
-    const user = await openRemotePane()
-    expect(screen.queryByRole('navigation', { name: 'Tools' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Changes' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Files' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await screen.findByRole('menuitem', { name: /^Split right/ })
-    for (const name of ['Changes', 'Files', 'History', 'Checks']) expect(screen.queryByRole('menuitem', { name: new RegExp(`^${name}`) })).toBeNull()
   })
 
   it('opens the side panel on the machine\'s changes and lists its files for markdown (ADR 0014)', async () => {
     const user = await openRemotePane()
-    await user.click(screen.getByRole('button', { name: 'Changes' }))
+    await user.click(screen.getByRole('button', { name: 'Side panel' }))
     const panel = within(await screen.findByRole('complementary', { name: 'Side panel' }))
-    expect(panel.getByRole('heading', { name: 'Changes' })).toBeInTheDocument()
+    // A terminal is this computer's to start, so the machine's session is offered the surfaces that only read.
+    const picker = within(panel.getByRole('group', { name: 'Open a surface' }))
+    expect(picker.queryByRole('button', { name: /Terminal/ })).toBeNull()
+    await user.click(picker.getByRole('button', { name: /Changes/ }))
+    expect(await panel.findByRole('tab', { name: 'Changes', selected: true })).toBeInTheDocument()
     expect(screen.queryByText(REFUSAL('Inspect'))).toBeNull()
-    await user.click(screen.getByRole('button', { name: 'Files' }))
+    await user.click(screen.getByRole('button', { name: /Commands/ }))
+    await user.type(within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox'), 'Show files{Enter}')
     // Files is no longer refused: it lists the machine's folders and opens its markdown documents.
+    expect(await panel.findByRole('tab', { name: 'Files', selected: true })).toBeInTheDocument()
     expect(await panel.findByRole('navigation', { name: 'Files' })).toBeInTheDocument()
     expect(panel.queryByText(REFUSAL('Files'))).toBeNull()
   })

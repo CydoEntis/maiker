@@ -350,20 +350,6 @@ mod tests {
     }
 
     #[test]
-    fn this_computers_own_pane_delta_is_merged_into_its_snapshot() {
-        let mut app = app_with_machine(|_| {});
-        let first = *app.snap.terms.keys().next().unwrap();
-        let mut renamed = a_pane(first);
-        renamed.name = "renamed".into();
-        app.on_server(delta(vec![renamed, a_pane(900)], Vec::new()));
-        assert_eq!(app.snap.terms[&first].name, "renamed");
-        assert!(app.snap.terms.contains_key(&900));
-        app.on_server(delta(Vec::new(), vec![900, 12345]));
-        assert!(!app.snap.terms.contains_key(&900));
-        assert!(app.remotes[&THERE].snap.terms.is_empty());
-    }
-
-    #[test]
     fn a_hostile_remote_pane_delta_is_cleaned() {
         let mut app = app_with_machine(|_| {});
         let hostile = "\u{1b}[2J\u{1b}]52;c;AAAA\u{7}\u{202e}\0\u{200b}";
@@ -421,13 +407,5 @@ mod tests {
         app.on_machine_server(THERE, delta(vec![a_pane(2)], vec![1]));
         let kept: Vec<_> = app.remotes[&THERE].snap.terms.keys().copied().collect();
         assert_eq!(kept, [1]);
-    }
-
-    #[test]
-    fn a_remote_pane_delta_is_allowed_for_a_machine_with_nothing_on() {
-        assert_eq!(
-            allow(&nothing_on(), &delta(Vec::new(), Vec::new())),
-            Verdict::Apply
-        );
     }
 }

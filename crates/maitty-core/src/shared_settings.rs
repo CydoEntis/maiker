@@ -4,8 +4,13 @@
 //! typed route to it for the desktop app (`Command::SetSetting`). The value is checked before
 //! the file is opened, so a refused change leaves it untouched.
 
-use crate::config::{Config, NEW_AGENTS, bypass_agents, edit_config_at, validate_spinner};
-use crate::settings_view::{SETTING_TEXT_MAX_BYTES, SettingKey, SettingValue, SharedSettings};
+use crate::config::{
+    Config, HELPERS_AT_ONCE, HELPERS_MAY, NEW_AGENTS, bypass_agents, edit_config_at,
+    validate_spinner,
+};
+use crate::settings_view::{
+    HelpersMay, SETTING_TEXT_MAX_BYTES, SettingKey, SettingValue, SharedSettings,
+};
 use anyhow::{Context, Result};
 use std::path::Path;
 
@@ -38,7 +43,23 @@ pub fn read(cfg: &Config) -> SharedSettings {
             .map(|agent| agent.to_string())
             .collect(),
         update_machines: cfg.updates.machines,
+        helpers: match cfg.sessions.helpers.as_str() {
+            "always" => HelpersMay::Always,
+            "never" => HelpersMay::Never,
+            _ => HelpersMay::Ask,
+        },
+        helpers_at_once: u8::try_from(cfg.helpers_at_once()).unwrap_or(u8::MAX),
     }
+}
+
+/// `word` when it is one of `offered`. An error names the setting and what it takes.
+fn one_of<'a>(setting: &str, word: &'a str, offered: &[&str]) -> Result<&'a str> {
+    anyhow::ensure!(
+        offered.contains(&word),
+        "{setting} is \"{word}\"; use one of: {}",
+        offered.join(", ")
+    );
+    Ok(word)
 }
 
 /// Where one setting lives in config.toml, and what to write there.
@@ -132,6 +153,14 @@ fn plan_one(key: SettingKey, value: SettingValue) -> Result<Edit> {
             edit(&["ui", "start_dir"], dir)
         }
         (SettingKey::UpdateMachines, V::Bool(on)) => edit(&["updates", "machines"], on),
+        (SettingKey::Helpers, V::Text(may)) => edit(
+            &["sessions", "helpers"],
+            one_of("when an agent wants helpers", &may, HELPERS_MAY)?,
+        ),
+        (SettingKey::HelpersAtOnce, V::Text(limit)) => edit(
+            &["sessions", "helpers_at_once"],
+            one_of("helpers working at once", &limit, HELPERS_AT_ONCE)?,
+        ),
         (SettingKey::ReduceMotion, V::Bool(reduce)) => Edit {
             aliases: &["reduce_motion"],
             ..edit(&["ui", "motion"], !reduce)
@@ -290,15 +319,21 @@ mod tests {
     }
 
     #[test]
-    fn remote_machines_update_themselves_unless_switched_off() {
-        let dir = dir("update-machines");
+    fn the_helper_settings_are_written_as_their_words_and_read_back() {
+        let dir = dir("helpers");
         let file = dir.join("config.toml");
         std::fs::write(&file, FIXTURE).unwrap();
-        assert!(read(&load(&file)).update_machines, "on by default");
-        apply_to(&file, SettingKey::UpdateMachines, SettingValue::Bool(false)).unwrap();
+        let unset = read(&load(&file));
+        assert_eq!((unset.helpers, unset.helpers_at_once), (HelpersMay::Ask, 4));
+        apply_to(&file, SettingKey::Helpers, SettingValue::Text("never".into())).unwrap();
+        apply_to(&file, SettingKey::HelpersAtOnce, SettingValue::Text("8".into())).unwrap();
         let text = std::fs::read_to_string(&file).unwrap();
-        assert!(text.contains("[updates]\nmachines = false\n"), "{text}");
-        assert!(!read(&load(&file)).update_machines);
+        assert!(text.starts_with(FIXTURE), "the rest of the file is kept: {text}");
+        let set = read(&load(&file));
+        assert_eq!((set.helpers, set.helpers_at_once), (HelpersMay::Never, 8));
+        // A limit saved before the choices changed reads as the one that replaced it.
+        std::fs::write(&file, "[sessions]\nhelpers_at_once = \"3\"\n").unwrap();
+        assert_eq!(read(&load(&file)).helpers_at_once, 4);
         std::fs::remove_dir_all(dir).unwrap();
     }
 
@@ -390,6 +425,12 @@ mod tests {
             ),
             (SettingKey::StartDir, SettingValue::Text("a\nb".into())),
             (SettingKey::StartDir, SettingValue::Text("x".repeat(5000))),
+            (SettingKey::Helpers, SettingValue::Text("sometimes".into())),
+            (SettingKey::Helpers, SettingValue::Text("ask; rm -rf".into())),
+            // A limit Settings does not offer, the one it used to among them.
+            (SettingKey::HelpersAtOnce, SettingValue::Text("3".into())),
+            (SettingKey::HelpersAtOnce, SettingValue::Text("64".into())),
+            (SettingKey::HelpersAtOnce, SettingValue::Bool(true)),
             // The wrong kind of value for the key.
             (SettingKey::ReduceMotion, SettingValue::Text("yes".into())),
             (

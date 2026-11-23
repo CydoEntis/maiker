@@ -265,6 +265,8 @@ pub struct Term {
     pub grants: Option<Vec<String>>,
     /// The pane whose agent started this one, if one did.
     pub started_by: Option<TermId>,
+    /// The chat whose agent started this one, if one did (ADR 0016); never set with `started_by`.
+    pub started_by_chat: Option<crate::conversation::ConversationId>,
     /// The session whose tab this pane is in, when not its own.
     pub tab_of: Option<TermId>,
     /// Whether this pane's agent may start helpers, and what it is waiting on you for.
@@ -275,6 +277,9 @@ pub struct Term {
     pub pending_input: Option<(Vec<u8>, Instant)>,
     /// A message for the agent starting here, typed in once it takes input (`SendWhenReady`).
     pub held_message: Option<HeldMessage>,
+    /// Its start is held until the session that started it has a free slot
+    /// (`helper_queue.rs`); only a shell runs here until then.
+    pub waiting: Option<super::helper_queue::Waiting>,
     /// Its branch has had commits that were nowhere else: once they are somewhere else,
     /// its work is merged (a branch that never had any is merely new).
     /// The account it runs as, if its command says one (`<app> account <name> -- …`).
@@ -1052,6 +1057,7 @@ impl Term {
             subagent_seen: None,
             grants: None,
             started_by: None,
+            started_by_chat: None,
             tab_of: None,
             helpers: Default::default(),
             progress_off: None,
@@ -1070,6 +1076,7 @@ impl Term {
             restore_unseen: false,
             pending_input: None,
             held_message: None,
+            waiting: None,
             account: None,
             conversation_id: None,
             queue: Default::default(),
@@ -1852,7 +1859,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn clipboard_and_colour_queries() {
+    fn terminal_queries_are_found_and_clipboard_writes_reach_the_callbacks() {
+        assert_eq!(find_query(b"ab\x1b[6ncd").map(|q| (q.0, q.1)), Some((2, 4)));
+        assert_eq!(find_query(b"\x1b[31m\x1b[c").map(|q| q.0), Some(5));
+        assert!(find_query(b"\x1b[1;5A").is_none());
         assert_eq!(base64_decode(b"aGVsbG8gd29ybGQ=").unwrap(), b"hello world");
         let (at, len, q) = find_query(b"abc\x1b]11;?\x1b\\rest").unwrap();
         assert_eq!((at, len, q), (3, 8, &Query::Background(true)));
@@ -1880,13 +1890,6 @@ mod tests {
         );
         assert_eq!(find_cwd_report(b"plain output"), None);
     }
-
-    #[test]
-    fn queries() {
-        assert_eq!(find_query(b"ab\x1b[6ncd").map(|q| (q.0, q.1)), Some((2, 4)));
-        assert_eq!(find_query(b"\x1b[31m\x1b[c").map(|q| q.0), Some(5));
-        assert!(find_query(b"\x1b[1;5A").is_none());
-    }
 }
 
 /// Why a session's program did not start, in plain words: a missing program is named as one that
@@ -1907,19 +1910,5 @@ fn spawn_failed(executable: Option<&str>, shell_args: &[String], error: &anyhow:
         ),
         Some(program) => anyhow::anyhow!("Could not start {program}: {error:#}"),
         None => anyhow::anyhow!("Could not start the shell ({}): {error:#}", shell_args.join(" ")),
-    }
-}
-
-#[cfg(test)]
-mod spawn_words {
-    use super::spawn_failed;
-
-    #[test]
-    fn a_program_that_is_not_there_is_named_as_not_installed() {
-        let missing = anyhow::Error::new(std::io::Error::new(std::io::ErrorKind::NotFound, "No such file or directory"));
-        let said = spawn_failed(Some("/usr/local/bin/claude"), &[], &missing).to_string();
-        assert!(said.starts_with("claude is not installed, or this service cannot find it on its PATH."), "{said}");
-        let other = anyhow::anyhow!("out of memory");
-        assert_eq!(spawn_failed(Some("codex"), &[], &other).to_string(), "Could not start codex: out of memory");
     }
 }

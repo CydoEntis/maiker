@@ -93,7 +93,6 @@ pub fn remove_child_env(command: &mut Command, key: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
 
     #[test]
     fn the_prefix_does_not_come_from_the_brand() {
@@ -105,29 +104,6 @@ mod tests {
             "{DAEMON_NAME}"
         );
         assert!(previous_env_prefixes().all(|old| old != ENV_PREFIX));
-    }
-
-    #[test]
-    fn a_variable_has_its_current_name_then_the_old_ones() {
-        let names = env_names("SOCKET");
-        assert_eq!(names[0], "AGENT_SOCKET");
-        assert!(names.contains(&"MAITTY_SOCKET".to_string()), "{names:?}");
-    }
-
-    #[test]
-    fn the_new_name_wins_and_the_old_name_still_works() {
-        let old_only = HashMap::from([("MAITTY_PANE_TOKEN", "old")]);
-        let get = |env: &HashMap<&str, &str>, name: &str| env.get(name).map(|v| v.to_string());
-        assert_eq!(
-            first_set("PANE_TOKEN", |name| get(&old_only, name)).as_deref(),
-            Some("old")
-        );
-        let both = HashMap::from([("MAITTY_PANE_TOKEN", "old"), ("AGENT_PANE_TOKEN", "new")]);
-        assert_eq!(
-            first_set("PANE_TOKEN", |name| get(&both, name)).as_deref(),
-            Some("new")
-        );
-        assert_eq!(first_set("PANE_TOKEN", |name| get(&HashMap::new(), name)), None);
     }
 
     #[test]

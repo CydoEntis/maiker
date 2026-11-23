@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { hostProblem, portOf, targetOf, userOf, userProblem } from './machineTarget'
+import { hostProblem, portOf, targetOf, userProblem } from './machineTarget'
 
 describe('the parts of a machine destination', () => {
-  it('puts user and host together as the config keeps them, and takes the user back out', () => {
+  it('puts user and host together as the config keeps them', () => {
     expect(targetOf('dev', '100.78.214.15')).toBe('dev@100.78.214.15')
     expect(targetOf('', 'kingdom')).toBe('kingdom')
-    expect(userOf('dev@100.78.214.15')).toBe('dev')
-    expect(userOf('100.78.214.15')).toBe('')
   })
 
   it('refuses what ssh would read as an option or a shell word', () => {

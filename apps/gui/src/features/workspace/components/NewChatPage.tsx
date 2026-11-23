@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuShortcut, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { buildAttachmentMessage } from '@/features/chat/attachmentMessage'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
@@ -10,6 +9,8 @@ import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat
 import { AGENT_LABEL } from '@/features/chat/modelName'
 import { BYPASS_MODE, CODEX_FULL_MODE, DANGER_MODES, modeLabel, START_MODE } from '@/features/chat/chatMeta'
 import { Composer, type ComposerFacts } from '@/features/chat/components/Composer'
+import { FolderChip } from '@/features/chat/place/FolderChip'
+import { MachineChip } from '@/features/chat/place/MachineChip'
 import type { SessionPlace } from '@/features/chat/components/SessionBar'
 import type { ChatComposer } from '@/features/chat/useChatComposer'
 import type { PlacePicking } from '@/features/chat/place/picking'
@@ -25,11 +26,16 @@ import { readLastWho, rememberWho } from '../model/lastWho'
 import { discardDraft, parkDraft, parkedDraft } from '../model/newSessionDraft'
 import { FolderMark, Icon } from './glyphs'
 import { type ChipItem } from './NewChatMenus'
-import { PaneHeadId } from './PaneHeadId'
+import { NEW_SESSION } from '../model/sidebar'
+import { Tag } from '@/components/ui/tag'
+import { machineLabel } from '@/data/machineNicknames'
+import { loadAcpAgents } from '@/api/acpAgents'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import type { PickedFolder } from '../model/folderPick'
 import { CopyDetails, FeedbackButton, InlineNote } from '@/components/ui/feedback'
 import { copyText } from '@/lib/clipboard'
+import { AcpAgentsDialog, type OtherAgent } from './AcpAgentsDialog'
+import { IconButton } from '@/components/ui/icon-button'
 
 /** The branch a session starts on when it is not the folder's current one: switch to it, or work in a new worktree of it. */
 export type BranchChoice = { name: string; create: boolean; worktree: boolean }
@@ -40,10 +46,16 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean }
  * `bypass` is this session's Bypass Permissions choice over Settings, and `name` a name for it; without one the first
  * message names the session.
  */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; name?: string; bypass?: boolean | undefined }
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0021); the model, effort and mode are then its own. */ acp?: string; name?: string; bypass?: boolean | undefined }
 
 /** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
-export type NewChatSeed = { folder: string; message: string; agent?: ChatAgent }
+export type NewChatSeed = {
+  folder: string
+  message: string
+  agent?: ChatAgent
+  /** Start with Own worktree on: a project's New worktree, asked where no session is open to make one from. */
+  worktree?: boolean
+}
 
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
 export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
@@ -82,7 +94,7 @@ type Props = {
    * mode: Claude on Bypass permissions, Codex on Full access. The page shows it and More options changes it for one session.
    */
   bypassOff?: readonly ChatAgent[]
-  /** Opens the folder picker on that machine and answers with the folder chosen (and the machine it is on), or null when it is cancelled. Null when there is none. */
+  /** Opens the palette's folder browser on that machine and answers with the folder chosen (and the machine it is on), or null when it is cancelled. Null when there is none. */
   pickFolder: ((machine: number) => Promise<PickedFolder | null>) | null
   /** Brings a repository onto this machine. Without it the project list has no clone rows. */
   cloner?: RepoCloner | null
@@ -102,6 +114,10 @@ type Props = {
   seed?: NewChatSeed | null
   /** Before the where chips: a control the window puts there (Show sidebar, while the sidebar is hidden). */
   leading?: ReactNode
+  /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0021). */
+  otherAgents?: boolean
+  /** Where a session with no project runs on this machine (Settings' start folder); without it there is no such choice. */
+  looseFolder?: string
 }
 
 /** The key the first message's files are kept under: no conversation exists yet, and a real one is never negative. */
@@ -114,7 +130,7 @@ const NO_BUSY_HERE: ReadonlyMap<string, string> = new Map()
 /** No agent switched off: every one starts on its skip-permissions mode. */
 const NONE_OFF: readonly ChatAgent[] = []
 const FIRST_CHOICE: AgentChoice = { model: DEFAULT_PICK, reasoning: START_REASONING }
-/** Said under the agent when Gemini is picked: it has no chat events, so it opens in its terminal. */
+/** Said under the agent when Gemini is picked in the Terminal view: it has no chat events, so it stays a terminal. In the Chat view it runs over ACP. */
 const GEMINI_TERMINAL_LINE = 'Gemini has no chat view yet, so this session opens in its terminal.'
 
 /** Where the session works: in the checkout, a worktree of its own, or `auto`: a worktree only when another session is on that branch here. */
@@ -138,17 +154,17 @@ const refused = (): Promise<boolean> => Promise.resolve(false)
 
 /**
  * The New session draft: a chat that has not been sent yet, in the main area, never a dialog. It is the pane a started chat
- * has, drawn from the same parts: the pane header (status mark and the folder's path), an empty conversation that asks
- * "What are we building today?", the one message box (`Composer`: agent, model and effort, permission mode, attach and send
- * inside it) and under it the one place row (`SessionBar`): machine, folder, branch and sync. Before the first message
- * those chips choose instead of show: the machine's menu picks another computer, the folder's opens a recent project,
+ * has, drawn from the same parts: the chat pane's header (`project / New session` and ×, which discards the draft), an
+ * empty conversation that asks "What are we building today?", the one chat box (`Composer`: agent, model and reasoning
+ * level, permission mode, attach and send inside it) and under it the chips row (`SessionBar`): machine, folder, branch
+ * and sync. Before the first message those chips choose instead of show: the machine's menu picks another computer, the folder's opens a recent project,
  * a folder or a clone (a pasted GitHub link becomes a Clone row), the branch's picks, names or makes a worktree. Nothing
  * starts before Enter; then the session starts with all of it and this same view shows the Starting card until the window
  * swaps in the session's pane in one update. It is always an agent session (ADR 0003); Settings says which view it opens
  * in. Ctrl+Enter (⌘Enter on macOS) starts from anywhere, Ctrl+Shift+Enter starts it in the background and keeps the draft
  * for the next one, Esc discards it. A plain shell is "New terminal", not here.
  */
-export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, leading }: Props) {
+export function NewChatPage({ machines, machine, projects, busy: busyBranches = NO_BUSY, defaultAgent, bypassOff = NONE_OFF, pickFolder, cloner = null, onOpenProject, onStart, onWarm, onOtherMachine, onAddMachine, onCancel, onAgentChange, seed = null, otherAgents = false, leading, looseFolder }: Props) {
   // On another machine the session is the agent started in a shell there: this computer's extra models, branches and installed agents say nothing of it.
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
@@ -175,7 +191,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   // What was sent while the start runs, so the Starting card shows it where the box was.
   const [sent, setSent] = useState<string | null>(null)
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
-  const [workIn, setWorkIn] = useState<WorkIn>('auto')
+  const [workIn, setWorkIn] = useState<WorkIn>(seed?.worktree === true ? 'tree' : 'auto')
   const [starting, setStarting] = useState(false)
   const [error, setError] = useState<ExplainedError | null>(null)
   // A clone started from the project list's own row; the clone window has its own state.
@@ -228,7 +244,24 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     return treeMode && suggested !== null ? { name: suggested, create: true, worktree: true } : null
   }, [explicit, treeMode, suggested])
   const isInstalled = (id: string) => (installed === null ? chatAgentOf(id) !== null : installed.includes(id))
-  const agentMissing = !remote && !isInstalled(agent)
+  // Another agent, run over ACP in place of the one picked: only for a chat on this computer.
+  const [other, setOther] = useState<OtherAgent | null>(null)
+  const [othersOpen, setOthersOpen] = useState(false)
+  const acp = otherAgents && !remote ? other : null
+  // The ACP agents that are ready to run here, for the picker's rail; read again once the Other agents dialog (which installs and removes them) closes.
+  const [readyOthers, setReadyOthers] = useState<readonly OtherAgent[]>([])
+  useEffect(() => {
+    if (!otherAgents || remote || othersOpen) return undefined
+    let live = true
+    loadAcpAgents().then(
+      (agents) => { if (live) setReadyOthers(agents.filter((candidate) => candidate.source === 'config' || candidate.installed !== null).map(({ id, name }) => ({ id, name }))) },
+      (error: unknown) => { console.warn('Could not list the agents that run over ACP', error) },
+    )
+    return () => { live = false }
+  }, [otherAgents, remote, othersOpen])
+  // The one picked is on the rail even before the list has been read again.
+  const railOthers = acp === null || readyOthers.some((candidate) => candidate.id === acp.id) ? readyOthers : [...readyOthers, acp]
+  const agentMissing = !remote && acp === null && !isInstalled(agent)
 
   // The message box takes the keys when the draft opens, and again after a start that did not go through.
   useEffect(() => { if (!starting) focusBox() }, [folder, starting])
@@ -252,7 +285,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   useWarmAgent(onWarm, warmSpec, starting || background.pending > 0)
   const requestFor = (task: string): NewChatRequest => ({
     folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), bypass,
-    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null,
+    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null, ...(acp === null ? {} : { acp: acp.id }),
   })
   const empty = message.trim() === '' && attachments.length === 0
   // Why the box cannot start anything now, said in its own place; typing stays open.
@@ -477,7 +510,10 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const facts: ComposerFacts = {
     mode: modeLabel(mode), modeDanger: bypass, modeKey: mode, model: null,
     modes: abilities.permissionModes?.modes ?? GEMINI_MODES, modeAgent: agent, onPickMode: setMode, bypassAllowed: true,
-    agentChips: { locked: null, start: choice, remote, onChange: changeChoice, onAgent: pickAgent },
+    agentChips: {
+      locked: null, start: choice, remote, onChange: changeChoice, onAgent: pickAgent, installed: remote ? null : installed,
+      ...(otherAgents && !remote ? { others: { list: railOthers, current: acp?.id ?? null, onPick: (id: string | null) => { setOther(id === null ? null : railOthers.find((candidate) => candidate.id === id) ?? null) } } } : {}),
+    },
   }
   const composer: ChatComposer = {
     draft: message, setDraft: setMessage, attachments, attach, readOnly: false, attachable: !remote,
@@ -486,27 +522,54 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     error: null, sendText: refused, sendReply: refused, echo: null,
   }
   const notes = (
+    <>
     <StartNotes error={error} treeLine={treeLine} syncNote={syncNote} onUpdate={updateFirst} onUseWorktree={() => { setWorkIn('tree') }} onFix={() => { setBranchOpen(true) }} background={background} onPutBack={putBack} agentMissing={agentMissing ? agent : null} onSetUp={() => { void openAgentDocs(agent).catch((failure: unknown) => { setError(explainError(failure, 'Could not open the setup page')) }) }}
-      machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }} geminiLine={agent === 'gemini'}
+      machineDown={targetDown === null ? null : { label: targetLabel, why: targetDown }} geminiLine={agent === 'gemini' && !otherAgents}
       clone={cloning} onUseFolder={(path) => { setCloning(null); openFolder(path) }} onDismissClone={() => { setCloning(null) }}
       onPickAnotherFolder={cloner === null || cloning === null ? undefined : () => { const again = cloning; setCloning(null); openCloneWindow({ start: 'link', address: again.address, parent: again.parent }) }}
       onOpenGitHubSettings={cloner?.onOpenGitHubSettings} />
+    {otherAgents && !remote && (acp === null ? (
+      <p className="mx-nsd-note">
+        {'Want another agent? '}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOthersOpen(true) }}>Other agents…</button>
+      </p>
+    ) : (
+      <p className="mx-nsd-note" role="status">
+        {`This session starts ${acp.name} over ACP, with its own model and permission settings. `}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOthersOpen(true) }}>Change</button>
+        {' '}
+        <button type="button" className="mx-text-button" disabled={starting} onClick={() => { setOther(null) }}>{`Use ${AGENT_LABEL[agent]} instead`}</button>
+      </p>
+    ))}
+    {othersOpen && <AcpAgentsDialog onPick={(picked) => { setOther(picked); setOthersOpen(false) }} onCancel={() => { setOthersOpen(false) }} />}
+    </>
   )
-  const status = starting ? 'working' : 'idle'
   return (
     <section ref={page} className="mx-newchat" aria-label="New session" onKeyDown={onKeyDown}>
       <header className="mx-pane-head">
         {leading}
-        <div className="mx-pane-id">
-          <PaneHeadId session={{ status, process: agent, machineName: remote ? targetLabel : null, cwd: folder === '' ? 'No folder chosen yet' : folder }} />
-        </div>
-        {onCancel !== undefined && <DraftMenu disabled={starting} onDiscard={discard} />}
-        <span className="mx-pane-status" data-status={status} aria-hidden="true" />
+        {remote && <Tag className="mx-pane-machine">{machineLabel(targetLabel)}</Tag>}
+        <span className="mx-pane-title" title={folder === '' ? 'No folder chosen yet' : folder}>
+          <span className="mx-pane-project">{folderName}</span><span className="mx-pane-slash" aria-hidden="true">/</span>
+          <span className="mx-pane-name">{NEW_SESSION}</span>
+        </span>
+        {onCancel !== undefined && <IconButton label="Discard draft" tip="Discard draft (Esc)" disabled={starting} onClick={discard}><Icon name="close" /></IconButton>}
       </header>
       <div className="mx-newchat-body">
         <div className="mx-chat is-starting">
           {sent === null ? (
-            <div className="mx-chat-empty"><h1 className="mx-chat-hello">What are we building today?</h1></div>
+            // The question and where the session runs, over the box and centred with it: the machine and the project are the
+            // two choices a new session most often needs changed, so they are large here and not only in the row under the box.
+            <div className="mx-nc-hero">
+              <h1 className="mx-chat-hello">{folder === '' || folder === looseFolder ? 'What are we building today?' : `What should we build in ${folderName}?`}</h1>
+              <div className="mx-nc-hero-where">
+                <MachineChip machine={picking.machine} hero />
+                <FolderChip folder={folder} text={folder === '' ? 'Choose a project' : folder === looseFolder ? 'No project' : folderName} machine={machine} projects={[]} onNewSessionIn={openFolder} picking={picking.folder} hero />
+                {looseFolder !== undefined && looseFolder !== '' && folder !== looseFolder && (
+                  <button type="button" className="mx-nc-hero-loose" disabled={starting} title={`Runs in ${looseFolder}`} onClick={() => { openFolder(looseFolder) }}>or start without a project</button>
+                )}
+              </div>
+            </div>
           ) : (
             // The same rows the session's chat draws until its agent reports in, so the swap to the real pane changes nothing the eye sees.
             <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto" role="status">
@@ -518,22 +581,6 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
         </div>
       </div>
     </section>
-  )
-}
-
-/** The header's ⋯, as a started pane has it: the one way out of the draft besides Esc. */
-function DraftMenu({ disabled, onDiscard }: { disabled: boolean; onDiscard: () => void }) {
-  return (
-    <span className="mx-pane-controls">
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button type="button" className="mx-pane-control mx-pane-more" aria-label="More pane actions" title="More pane actions" disabled={disabled}><Icon name="more" /></button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="end" container={document.querySelector<HTMLElement>('.mx-app')} aria-label="Draft" className="text-fg">
-          <DropdownMenuItem onSelect={onDiscard}>Discard draft<DropdownMenuShortcut>Esc</DropdownMenuShortcut></DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-    </span>
   )
 }
 

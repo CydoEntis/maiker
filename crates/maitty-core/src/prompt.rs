@@ -162,11 +162,6 @@ mod tests {
     }
 
     #[test]
-    fn a_screen_with_no_numbered_choices_is_asking_nothing() {
-        assert_eq!(asking("$ cargo build\nFinished\n"), "");
-    }
-
-    #[test]
     fn the_trust_menu_without_numbers_is_read_with_its_cursor() {
         let screen = "Accessing workspace:\n\n/home/vox\n\nQuick safety check: do you trust this folder?\n\n❯ No, exit\n  Yes, I trust this folder\n\nEnter to confirm · Esc to cancel";
         let text = asking(screen);

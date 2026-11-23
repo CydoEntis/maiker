@@ -369,7 +369,12 @@ pub(in crate::client) fn draw(app: &mut App, f: &mut Frame, area: Rect, t: &Them
         Mode::Compose(c) if c.inbox.is_none() => {
             draw_compose_pop(app, f.buffer_mut(), above, g.side, &c, t)
         }
-        Mode::Helpers { term, .. } => draw_helpers_pop(app, f.buffer_mut(), above, g.side, term, t),
+        Mode::Helpers { term, .. } => {
+            draw_helpers_pop(app, f.buffer_mut(), above, g.side, helpers_ask::Asker::Pane(term), t)
+        }
+        Mode::ChatHelpers { chat, .. } => {
+            draw_helpers_pop(app, f.buffer_mut(), above, g.side, helpers_ask::Asker::Chat(chat), t)
+        }
         Mode::Secret { term, .. } => draw_secret_pop(app, f.buffer_mut(), above, g.side, term, t),
         _ => {}
     }
@@ -1067,15 +1072,10 @@ mod tests {
     use ratatui::layout::Rect;
 
     #[test]
-    fn toast_has_no_drawable_rectangle_while_sliding_in_from_beyond_the_right_edge() {
-        assert_eq!(toast_rect(Rect::new(0, 0, 80, 24), 40, 4, 1.0), None);
-    }
-
-    #[test]
-    fn toast_settles_inside_the_screen() {
-        assert_eq!(
-            toast_rect(Rect::new(0, 0, 80, 24), 40, 4, 0.0),
-            Some(Rect::new(38, 15, 40, 4))
-        );
+    fn a_toast_is_drawn_only_inside_the_screen_while_it_slides_in() {
+        let screen = Rect::new(0, 0, 80, 24);
+        for (slide, want) in [(1.0, None), (0.0, Some(Rect::new(38, 15, 40, 4)))] {
+            assert_eq!(toast_rect(screen, 40, 4, slide), want, "slide {slide}");
+        }
     }
 }

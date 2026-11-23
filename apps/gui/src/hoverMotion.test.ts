@@ -59,7 +59,7 @@ describe('hover, focus and press motion', () => {
   // which is what the switch moves, and the skip link, which is off screen until it has focus.
   it('never moves or scales a control for hover, focus or press', () => {
     expect(
-      offenders(({ selector, body }) => STATE.test(selector) && /(translate|scale)/.test(body), [/mx-switch\[aria-checked="true"\] \.mx-switch-knob/, /settings-row input\[type="checkbox"\]:checked::before/, /skip-link:focus-visible/]),
+      offenders(({ selector, body }) => STATE.test(selector) && /(translate|scale)/.test(body), [/mx-switch\[aria-checked="true"\] \.mx-switch-knob/, /settings-row input\[type="checkbox"\]:checked::before/]),
     ).toEqual([])
   })
 
@@ -77,7 +77,6 @@ describe('hover, focus and press motion', () => {
       const subject = (selector.split(/[\s>+~]+/).pop() ?? '').match(/\.[\w-]+/g) ?? []
       return !subject.some((name) => faded.has(name) || baseline.includes(name))
     })
-    // The legacy preview's buttons are covered by the baseline's `button`.
-    expect(missing.filter(({ where }) => !where.startsWith('./App.css')).map(({ where, selector }) => `${where} ${selector}`)).toEqual([])
+    expect(missing.map(({ where, selector }) => `${where} ${selector}`)).toEqual([])
   })
 })

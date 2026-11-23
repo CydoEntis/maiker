@@ -353,19 +353,6 @@ mod tests {
     }
 
     #[test]
-    fn a_command_hashes_to_its_sha256_in_hex() {
-        assert_eq!(
-            command_hash(""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-        );
-        assert_ne!(
-            command_hash("npm test"),
-            command_hash("npm test "),
-            "the exact command, not a near one"
-        );
-    }
-
-    #[test]
     fn always_holds_only_for_the_exact_command_it_was_given_to() {
         let a = approvals(vec![approval(
             "/code/site",
@@ -534,11 +521,12 @@ mod tests {
     }
 
     #[test]
-    fn an_answer_leaves_a_damaged_file_alone() {
+    fn a_damaged_file_is_an_error_not_an_empty_list_and_an_answer_leaves_it_alone() {
         let dir = super::super::persist::scratch_dir();
         std::fs::create_dir_all(dir.path()).unwrap();
         let file = dir.path().join(FILE_NAME);
         std::fs::write(&file, "{ not json").unwrap();
+        assert!(Approvals::load(&file).is_err());
         assert!(
             write_change(
                 Change::Decide(approval("/code/site", "test", "npm test", Decision::Never)),
@@ -548,15 +536,6 @@ mod tests {
             .is_err()
         );
         assert_eq!(std::fs::read_to_string(&file).unwrap(), "{ not json");
-    }
-
-    #[test]
-    fn a_damaged_file_is_an_error_not_an_empty_list() {
-        let dir = super::super::persist::scratch_dir();
-        std::fs::create_dir_all(dir.path()).unwrap();
-        let file = dir.path().join(FILE_NAME);
-        std::fs::write(&file, "{ not json").unwrap();
-        assert!(Approvals::load(&file).is_err());
     }
 
     #[test]

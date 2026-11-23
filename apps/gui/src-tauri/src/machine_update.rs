@@ -42,18 +42,83 @@ fn arguments(name: &str, install: bool, when_idle: bool) -> Vec<String> {
     arguments
 }
 
+/// How `machine update` passes on the far side's answer to the restart it asked for (`restart_daemon` in the CLI).
+const DAEMON_PREFIX: &str = "daemon: ";
+/// How that answer starts when the old service was left running (the CLI's `LEFT_RUNNING`; the two must agree).
+const LEFT_RUNNING: &str = "left running";
+
 fn last_line(text: &str) -> Option<&str> {
     text.lines().rev().map(str::trim).find(|line| !line.is_empty())
 }
 
-/// What to tell the person after a success: the result line, and the daemon's own note when it
-/// left the daemon running (so a restart that did not happen is never hidden).
+/// The far side's answer to the restart, without its prefix; `None` when it was not asked or said nothing.
+fn daemon_answer(stderr: &str) -> Option<&str> {
+    stderr.lines().rev().map(str::trim).find_map(|line| line.strip_prefix(DAEMON_PREFIX))
+}
+
+/// What to tell the person after a success: the result line, then what the daemon said to the restart and any note,
+/// so a restart that did not happen is never hidden.
 fn summary(stdout: &str, stderr: &str) -> String {
-    let result = last_line(stdout).unwrap_or("Updated.");
-    match stderr.lines().rev().map(str::trim).find(|line| line.starts_with("note:")) {
-        Some(note) => format!("{result}\n{note}"),
-        None => result.to_string(),
+    let mut said = vec![last_line(stdout).unwrap_or("Updated.").to_string()];
+    said.extend(daemon_answer(stderr).map(str::to_string));
+    said.extend(stderr.lines().rev().map(str::trim).find(|line| line.starts_with("note:")).map(str::to_string));
+    said.join("\n")
+}
+
+/// A restart asked for now that the far side refused: the binary may be new, but the old service still runs, and an
+/// app that speaks a newer protocol cannot connect to it. The command itself exits 0, so this is the one place that
+/// can tell the person it did not work and what would.
+fn refused_restart(name: &str, stderr: &str) -> Option<String> {
+    let answer = daemon_answer(stderr)?;
+    let why = answer.strip_prefix(LEFT_RUNNING)?.trim_start_matches(':').trim();
+    Some(format!(
+        "{NOT_RESTARTED_LEAD}{name}{NOT_RESTARTED} ({why}), so it still runs the old Maiker and this app cannot connect to it. \
+         Its open sessions are not saved where the new version can bring them back, so Maiker did not end them on its own. \
+         Restart it anyway to end them and connect (or run `maiker kill-server` on {name})."
+    ))
+}
+
+/// How a refused restart reads, which the window looks for to offer "Restart anyway" (`isRefusedRestart` in
+/// `machineUpdate.ts`; the two must agree).
+const NOT_RESTARTED_LEAD: &str = "The service on ";
+const NOT_RESTARTED: &str = " was not restarted";
+
+/// How long the far side has to stop its service: a stop by process waits for it to go.
+const STOP_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// Stop the service on `name` and end every session it runs, so the next connection starts the version installed there.
+/// The far side's own app does it (`kill-server`), which stops a service too old to be asked by its process. Only the
+/// window's confirmed "Restart anyway" calls this.
+fn stop_service(machines: &[maitty_machines::MachineDef], name: &str) -> Result<String, String> {
+    let def = machines
+        .iter()
+        .find(|def| def.name.eq_ignore_ascii_case(name))
+        .ok_or_else(|| format!("{name} is not one of this computer's machines"))?;
+    let ssh = [maitty_machines::SSH_PROGRAM.to_owned()];
+    let argv = maitty_machines::Machine::from_def_via(def, &ssh)
+        .stop_server_argv()
+        .map_err(|error| format!("Could not restart the service on {name}: {error:#}"))?;
+    let ran = maitty_machines::ssh_run::run(&argv, None, STOP_LIMIT)?;
+    if ran.code == Some(0) {
+        return Ok(last_line(&ran.stdout).unwrap_or("stopped").to_string());
     }
+    let why = last_line(&ran.stderr).or_else(|| last_line(&ran.stdout)).unwrap_or("it did not say why");
+    Err(format!("Could not restart the service on {name}: {why}"))
+}
+
+/// The window's "Restart anyway" for a machine whose old service refused to restart: stop it there, off the UI thread.
+#[tauri::command]
+pub async fn restart_machine_service(
+    machines: tauri::State<'_, crate::machines::Machines>,
+    name: String,
+) -> Result<String, String> {
+    if !valid_name(&name) {
+        return Err("That is not a machine name.".into());
+    }
+    let defs = machines.0.machines.clone();
+    tauri::async_runtime::spawn_blocking(move || stop_service(&defs, &name))
+        .await
+        .map_err(|error| format!("The restart stopped unexpectedly: {error}"))?
 }
 
 fn run(
@@ -117,6 +182,9 @@ fn run(
         .join()
         .map_err(|_| "The update's output could not be read.".to_string())?;
     if status.success() {
+        if !when_idle && let Some(refused) = refused_restart(name, &stderr) {
+            return Err(refused);
+        }
         return Ok(summary(&stdout, &stderr));
     }
     Err(last_line(&stderr)
@@ -222,7 +290,13 @@ pub async fn update_machine(
 
 #[cfg(test)]
 mod tests {
-    use super::{Activity, arguments, parse_activity, parse_progress, summary, valid_name};
+    use super::{Activity, arguments, parse_activity, parse_progress, refused_restart, stop_service, summary, valid_name};
+
+    #[test]
+    fn restarting_anyway_names_only_a_machine_this_computer_knows() {
+        let said = stop_service(&[], "box").unwrap_err();
+        assert_eq!(said, "box is not one of this computer's machines");
+    }
 
     #[test]
     fn a_name_that_could_be_an_option_is_refused() {
@@ -272,6 +346,26 @@ mod tests {
         assert!(said.starts_with("box: maiker 1.0.0 installed"));
         assert!(said.contains("note: could not ask the daemon"));
         assert_eq!(summary("", ""), "Updated.");
+    }
+
+    #[test]
+    fn the_daemon_answer_to_the_restart_is_reported_with_the_result() {
+        let said = summary(
+            "box: maiker 1.0.0 is already up to date\n",
+            "restarting the daemon on box…\ndaemon: restarted: sessions were saved and come back with the new version\n",
+        );
+        assert_eq!(said, "box: maiker 1.0.0 is already up to date\nrestarted: sessions were saved and come back with the new version");
+    }
+
+    #[test]
+    fn a_restart_the_far_side_refused_is_a_failure_that_says_what_to_do() {
+        let stderr = "restarting the daemon on box…\ndaemon: left running: 4 open session(s); it keeps them\n";
+        let refused = refused_restart("box", stderr).expect("a refusal");
+        assert!(refused.starts_with("The service on box was not restarted (4 open session(s); it keeps them)"));
+        assert!(refused.contains("Restart it anyway"));
+        assert!(refused.contains("`maiker kill-server` on box"));
+        assert_eq!(refused_restart("box", "daemon: restarted: no session was open\n"), None);
+        assert_eq!(refused_restart("box", "note: could not ask the daemon (x)\n"), None);
     }
 
     #[test]

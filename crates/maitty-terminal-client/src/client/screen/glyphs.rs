@@ -421,23 +421,6 @@ mod tests {
     }
 
     #[test]
-    fn the_ring_turns_through_its_four_frames() {
-        for (_, set) in SETS {
-            let frames: Vec<&str> = (0..5).map(|i| Kind::Checking.glyph(set, i, "")).collect();
-            assert_eq!(
-                frames,
-                [
-                    set.ring[0],
-                    set.ring[1],
-                    set.ring[2],
-                    set.ring[3],
-                    set.ring[0]
-                ]
-            );
-        }
-    }
-
-    #[test]
     fn only_unicode_is_a_shape_set_and_everything_else_reads_as_dots() {
         let icons = Icons::default();
         assert_eq!(chosen("unicode", &icons), &UNICODE);

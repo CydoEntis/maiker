@@ -21,13 +21,13 @@
   --panel-out: .22s cubic-bezier(.4, 0, .7, .2);
   /* The agents' mark colours, defined once; `.mx-app-icon` reads them (below) so every mark is coloured the same wherever it is drawn. */
   --agent-claude: #D97757;
-  --agent-codex: #10A37F;
+  --agent-codex: var(--fg);
   --agent-gemini: #3186FF;
   --agent-opencode: #A78BFA;
   --agent-deepseek: #4D6BFE;
-  /* The look (`theme/corners.ts`) sets --ui and --mono inline; these are the fallbacks. */
-  --ui: "Geist Variable", Geist, system-ui, sans-serif;
-  --mono: "Geist Mono Variable", "Geist Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
+  /* The look (`theme/look.ts`) sets --ui and --mono inline; these are the fallbacks. */
+  --ui: "Inter Variable", Inter, system-ui, sans-serif;
+  --mono: "JetBrains Mono Variable", "JetBrains Mono", ui-monospace, "Cascadia Code", Consolas, monospace;
   position: fixed;
   inset: 0;
   display: flex;
@@ -63,10 +63,13 @@
   :where(.mx-app) button { font: inherit; color: inherit; background: none; border: 0; margin: 0; padding: 0; cursor: pointer; text-align: inherit; }
   :where(.mx-app) button:disabled { cursor: default; }
 }
+/* Anything that does something when clicked shows the pointer, whatever its own rule or a library's class says: a menu
+   row, an option, a tab, a switch. Disabled controls keep the arrow (or the button's not-allowed). */
+.mx-app :is(button, a[href], summary, select, label:has(> input), [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"], [role="option"], [role="tab"], [role="switch"], [role="checkbox"], [role="radio"]):not(:disabled, [aria-disabled="true"], [data-disabled]) { cursor: pointer; }
 /* Focus is a 1px accent underline on buttons, fields, rows and menu items, never a ring (design rule 10; docs/UI.md). A field
    whose input sits in a wrapper draws it on the wrapper and lists the input here. The message box is the one exception: its
    whole border turns accent (the terminal's own focus is the pane's line, not a box). */
-.mx-app :focus-visible { outline: none; box-shadow: var(--focus-underline); }
+.mx-app :focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-app :is(.xterm-helper-textarea, .mx-box-text):focus-visible { box-shadow: none; }
 
 /* One fade for every state a control can take (hover, focus, picked, pressed): the colours and the opacity move over
@@ -76,10 +79,10 @@
   button, a, summary, label, input, select, textarea, [role="button"], [role="menuitem"], [role="menuitemradio"], [role="menuitemcheckbox"],
   [role="option"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"],
   .mx-step-row, .mx-waiting-step, .mx-slash-row, .mx-pm-mode, .mx-agents-head, .mx-changes-row,
-  .mx-chip, .mx-chip-row, .mx-section-head, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-fp-row, .mx-fp-machine-row,
-  .mx-grp-project, .mx-settings-update-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
-  .mx-rm-row, .mx-rm-host, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
-  .mx-crumb, .mx-rail-bar, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-mm-model, .mx-dialog-close
+  .mx-chip, .mx-chip-row, .mx-ctx-item, .mx-tdock-tab, .mx-nsd-token, .mx-op-row, .mx-op-choice,
+  .mx-scard-meta-button, .mx-getfile-row, .mx-palette-row, .mx-upd-button,
+  .mx-rm-row, .mx-inspect-row, .mx-file-chip, .mx-model-button, .mx-changes-branch,
+  .mx-crumb, .mx-palette-mark, .mx-option, .mx-theme-card, .mx-dialog-close
 ) {
   transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease), border-color var(--t-fast) var(--ease), opacity var(--t-fast) var(--ease);
 }
@@ -119,11 +122,11 @@
   box-shadow: var(--sh);
   transition: width var(--panel-in), background-color var(--t-slow) var(--ease);
 }
-.mx-drawer-scrim { position: absolute; inset: 0; z-index: 54; background: rgba(0, 0, 0, .45); animation: v7scrim .2s ease-out; }
+.mx-drawer-scrim { position: absolute; inset: 0; z-index: 54; background: var(--scrim); animation: v7scrim .2s ease-out; }
 .mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: mx-panel-from-left var(--panel-in); }
 .mx-drawer .mx-sidebar { margin: 8px; max-width: calc(100vw - 48px); }
 
-.mx-sidebar.is-rail { width: 52px; }
+.mx-sidebar.is-rail { width: 56px; }
 /* While the edge is dragged the width follows the pointer with no easing. */
 .mx-sidebar.is-resizing { transition: none; }
 .mx-sidebar-expanded { flex: 1; min-height: 0; min-width: var(--sidebar-w, 264px); display: flex; flex-direction: column; animation: v7fade .24s ease-out; }
@@ -131,55 +134,20 @@
 /* Header starters are plain icons: no resting chrome, a quiet fill on hover. */
 .mx-chevron { flex: none; transition: transform var(--t-base) var(--ease); }
 
-/* A fixed width and layout containment keep a frame change inside the glyph: the row is not laid out
-   again 6 times a second. The clock writes the frame straight into the element (lib/spinner-clock.ts). */
+/* A fixed width and layout containment keep the turning mark inside its own box, so the row around it
+   is not laid out again while it turns. */
 .mx-spin { display: inline-block; inline-size: 1ch; text-align: center; contain: layout style paint; will-change: transform; font-family: var(--mono); font-size: 12px; color: var(--accent-text); flex: none; }
-.mx-spin.is-wide { inline-size: 2ch; }
-/* Web spinners (components/WebSpinner.tsx): inline SVG in the text colour, 1em square, each in its own
-   paint-contained layer. Only transform and opacity move. They hold still under Reduce motion (the
-   rule near the end of this file) and while the window is hidden or in the background. */
-.mx-wspin { display: inline-block; inline-size: 1em; block-size: 1em; flex: none; contain: paint; will-change: transform; vertical-align: -.125em; }
-.mx-wspin svg { display: block; inline-size: 100%; block-size: 100%; }
-.mx-wspin[data-kind="circle"] svg { animation: mx-wspin-turn .8s linear infinite; }
-.mx-wspin[data-kind="spokes"] svg { animation: mx-wspin-turn .9s steps(8) infinite; }
-.mx-wspin-dot { transform-box: fill-box; transform-origin: center; animation: mx-wspin-dot 1s ease-in-out infinite; }
-.mx-wspin-dot:nth-child(2) { animation-delay: .16s; }
-.mx-wspin-dot:nth-child(3) { animation-delay: .32s; }
-.mx-wspin-bar { transform-box: fill-box; transform-origin: 50% 100%; animation: mx-wspin-bar .9s ease-in-out infinite; }
-.mx-wspin-bar:nth-child(2) { animation-delay: .15s; }
-.mx-wspin-bar:nth-child(3) { animation-delay: .3s; }
-.mx-wspin-ring { transform-box: fill-box; transform-origin: center; animation: mx-wspin-ping 1.3s ease-out infinite; }
-.mx-wspin.is-still svg, .mx-wspin.is-still svg * { animation: none; }
-:root[data-window="inactive"] .mx-wspin svg, :root[data-window="inactive"] .mx-wspin svg * { animation-play-state: paused; }
-@keyframes mx-wspin-turn { to { transform: rotate(360deg); } }
-@keyframes mx-wspin-dot { 0%, 100% { transform: scale(.5); opacity: .35; } 50% { transform: scale(1); opacity: 1; } }
-@keyframes mx-wspin-bar { 0%, 100% { transform: scaleY(.35); } 50% { transform: scaleY(1); } }
-@keyframes mx-wspin-ping { from { transform: scale(.35); opacity: 1; } to { transform: scale(1); opacity: 0; } }
-
-.mx-empty-note { padding: 6px 10px; font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
-
-/* Rail: the collapsed sidebar (Sidebar.tsx, Rail), the design's 52px strip: three 32px buttons, then a 30px row per chat holding only
-   its status icon, in the full list's order, a 20px divider between groups, update and Settings at the foot. */
-.mx-rail { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: center; animation: v7fade .18s ease-out; }
-.mx-rail-top { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0; }
-.mx-rail-rule { flex: none; width: 28px; height: 1px; background: var(--line); }
-.mx-rail-list { flex: 1; min-height: 0; width: 100%; overflow-y: auto; overflow-x: hidden; display: flex; flex-direction: column; align-items: center; padding: 6px 0 12px; }
-.mx-rail-sep { flex: none; width: 20px; height: 1px; margin: 6px 0; background: var(--line); }
-.mx-rail-item { position: relative; flex: none; width: 100%; }
-.mx-rail-bar { position: absolute; left: 0; top: 7px; bottom: 7px; width: 2px; z-index: 1; background: transparent; }
-.mx-rail-item.is-selected .mx-rail-bar { background: var(--fg); }
-.mx-rail-bottom { flex: none; width: 100%; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 0 10px; border-top: 1px solid var(--line); }
 
 /* App icons and status badges */
 .mx-app-icon { display: flex; align-items: center; justify-content: center; flex: none; font-family: var(--mono); font-weight: 600; letter-spacing: -.04em; box-shadow: var(--c-tile-ring); transition: transform var(--t-base) var(--ease); }
 .mx-app-icon.is-dimmed { opacity: .5; }
-.mx-app-icon.size-28 { width: 28px; height: 28px; border-radius: 8px; font-size: 12px; }
-.mx-app-icon.size-26 { width: 26px; height: 26px; border-radius: 7px; font-size: 11.5px; }
-.mx-app-icon.size-24 { width: 24px; height: 24px; border-radius: 7px; font-size: 11px; }
-.mx-app-icon.size-22 { width: 22px; height: 22px; border-radius: 6px; font-size: 10px; }
-.mx-app-icon.size-14 { width: 14px; height: 14px; border-radius: 4px; font-size: 6.5px; }
-.mx-app-icon.size-18 { width: 18px; height: 18px; border-radius: 5px; font-size: 8.5px; }
-.mx-app-icon.size-20 { width: 20px; height: 20px; border-radius: 6px; font-size: 9px; }
+.mx-app-icon.size-28 { width: 28px; height: 28px; border-radius: var(--r-control); font-size: 12px; }
+.mx-app-icon.size-26 { width: 26px; height: 26px; border-radius: var(--r-control); font-size: 11.5px; }
+.mx-app-icon.size-24 { width: 24px; height: 24px; border-radius: var(--r-control); font-size: 11px; }
+.mx-app-icon.size-22 { width: 22px; height: 22px; border-radius: var(--r-control); font-size: 10px; }
+.mx-app-icon.size-14 { width: 14px; height: 14px; border-radius: var(--r-badge); font-size: 6.5px; }
+.mx-app-icon.size-18 { width: 18px; height: 18px; border-radius: var(--r-badge); font-size: 8.5px; }
+.mx-app-icon.size-20 { width: 20px; height: 20px; border-radius: var(--r-control); font-size: 9px; }
 /* Claude's mark is a 16x10 pixel grid: drawn at exactly one screen pixel to a grid pixel, so its squares stay square. Fitting it to a 14px box scaled it by 0.875 and left uneven pixels. */
 .mx-app-icon.is-claude:is(.size-14, .size-18, .size-20) svg { width: 16px; height: 10px; flex: none; overflow: visible; }
 /* A mark is a flat glyph with no tile: each agent's own colour, the dim colour for a shell. The colour never changes with a hover or focus on the row around it. */
@@ -191,59 +159,93 @@
 .mx-app-icon.is-deepseek { --mark: var(--agent-deepseek); }
 .mx-app-icon.is-shell { color: var(--dim); }
 
-:root[data-window="inactive"] :is(.mx-status-icon, .mx-status-light *, .mx-mach-spin, .mx-upd-bar span, .mx-upd-bar span::after) { animation-play-state: paused; }
+:root[data-window="inactive"] :is(.mx-status-light, .mx-mach-spin, .mx-upd-bar span, .mx-upd-bar span::after) { animation-play-state: paused; }
 
 /* With a single pane the workspace's own border takes the focus; with several, the focused pane does. Never both. */
 .mx-app[data-side="right"] .mx-sidebar { margin: 12px 12px 12px 0; }
 /* A name edited where it is shown: on a sidebar row's title line and on a tab. */
-.mx-inline-name { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 0; background: transparent; box-shadow: var(--focus-underline); font: inherit; color: var(--fg); }
+.mx-inline-name { all: unset; box-sizing: border-box; flex: 1; min-width: 0; height: 22px; padding: 0 6px; border-radius: 0; background: transparent; box-shadow: var(--focus-edge); font: inherit; color: var(--fg); }
 .mx-inline-name::placeholder { color: var(--dim); }
 
 .mx-text-button.is-armed { color: var(--warn); }
 
-/* Empty state */
+/* Before the first list: the one line saying the service is being asked. */
 .mx-empty { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 32px; }
 .mx-empty-column { width: 100%; max-width: 440px; display: flex; flex-direction: column; gap: 18px; animation: v7fade .3s ease-out; }
-.mx-empty-tile { width: 40px; height: 40px; border-radius: 11px; background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
+.mx-empty-tile { width: 40px; height: 40px; border-radius: var(--r-panel); background: var(--accent-soft); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
 .mx-empty-copy { display: flex; flex-direction: column; gap: 8px; }
 .mx-empty h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.015em; }
 .mx-empty p { margin: 0; font-size: 14px; line-height: 1.6; color: var(--fg2); text-wrap: pretty; }
-.mx-empty p .mono { font-size: 13px; color: var(--fg); }
-.mx-empty-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-.mx-primary { height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-radius: 9px; background: var(--accent); color: var(--on-accent); font-size: 13.5px; font-weight: 500; white-space: nowrap; }
+
+/* The empty state: nothing in the main area. One centred column, no card of its own. */
+.mx-es { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: auto; outline: none; }
+.mx-es-column { width: 100%; max-width: 460px; box-sizing: border-box; display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px; animation: v7fade .3s ease-out; }
+.mx-es-logo { display: flex; margin-bottom: 18px; color: var(--fg); opacity: .16; }
+.mx-es h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; letter-spacing: -.01em; color: var(--fg); }
+.mx-es p { margin: 0; }
+.mx-es-where { display: inline-flex; align-items: center; flex-wrap: wrap; justify-content: center; gap: 6px; font-size: 13.5px; color: var(--muted); }
+.mx-es-project { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; height: 28px; padding: 0 6px 0 5px; border-radius: var(--r-control); font-size: 13.5px; font-weight: 500; color: var(--fg); background: rgba(var(--ink), .06); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-es-project:hover, .mx-es-project[aria-expanded="true"] { background: rgba(var(--ink), .1); }
+.mx-es-project .mx-sb-badge { margin: 0; }
+.mx-es-chevron { flex: none; width: 13px; height: 13px; color: var(--dim); }
+.mx-es-agents { width: 100%; display: flex; flex-direction: column; gap: 4px; margin: 22px 0 16px; }
+.mx-es-agent { display: grid; grid-template-columns: 22px 1fr auto; align-items: center; column-gap: 10px; height: 44px; padding: 0 10px 0 12px; border-radius: var(--r-panel); text-align: left; background: var(--m-card); box-shadow: inset 0 0 0 1px var(--m-card-line); }
+.mx-es-agent:not(:disabled):hover, .mx-es-agent:focus-visible { background: rgba(var(--ink), .06); box-shadow: inset 0 0 0 1px rgba(var(--ink), .1); }
+.mx-es-agent:disabled { opacity: .55; cursor: not-allowed; }
+.mx-es-agent .mx-app-icon { justify-self: center; }
+.mx-es-agent-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 500; color: var(--fg); }
+.mx-es-key { min-width: 20px; height: 20px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; border-radius: var(--r-badge); font: 500 11px var(--ui); color: var(--fg2); background: rgba(var(--ink), .08); white-space: nowrap; }
+.mx-es-none { margin: 18px 0 12px; font-size: 12.5px; color: var(--muted); }
+.mx-es-agents + .mx-es-none { margin-top: 0; }
+.mx-es-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.mx-es-where + .mx-es-links { margin-top: 18px; }
+.mx-es-links button { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted); }
+.mx-es-links button:hover { color: var(--fg); background: rgba(var(--ink), .05); }
+.mx-es .mx-es-fine { margin-top: 26px; font-size: 12px; color: var(--dim); }
+.mx-primary { height: 36px; padding: 0 16px; display: flex; align-items: center; gap: 10px; border-radius: var(--r-control); background: var(--accent); color: var(--on-accent); font-size: 13.5px; font-weight: 500; white-space: nowrap; }
 .mx-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 90%, #fff); }
 .mx-primary:not(:disabled):active { background: color-mix(in srgb, var(--accent) 80%, var(--bg)); }
 .mx-primary:disabled { opacity: .55; }
-.mx-quiet { height: 36px; padding: 0 12px; display: flex; align-items: center; border-radius: 9px; font-size: 13px; color: var(--muted); white-space: nowrap; }
-.mx-quiet:hover { color: var(--fg); background: rgba(var(--hl), calc(.06 * var(--hk))); }
-.mx-empty-note-small { font-size: 12px; color: var(--dim); }
+.mx-quiet { height: 36px; padding: 0 12px; display: flex; align-items: center; border-radius: var(--r-control); font-size: 13px; color: var(--muted); white-space: nowrap; }
+.mx-quiet:hover { background: var(--icon-button-fill); color: var(--fg); }
 
 /* xterm's own stylesheet paints the scroll viewport black. It is taller than the rows by the part of a
    row that does not fit, so on the opaque renderers that remainder showed as a black bar along the pane's bottom edge. */
 /* With the WebGL renderer the terminal is see-through and the card shows behind the text. The DOM
    renderer keeps the theme's opaque terminal ground, so a row repaint never blends through the card. */
 
+/* The pull requests in a window of their own over the app: Settings' scrim and frame, one column. */
+.mx-pulls-window { width: 100%; max-width: 760px; height: 100%; max-height: 620px; display: flex; flex-direction: column; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: mx-dialog-in .16s ease-out; }
+.mx-pulls-window-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 10px; height: 52px; padding: 0 12px 0 20px; }
+.mx-pulls-window-head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+.mx-pulls-window-body { flex: 1; min-height: 0; overflow-y: auto; padding: 0 12px 12px; }
+
 /* Settings */
-.mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: rgba(3, 5, 8, .62); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
-.mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-panel); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
-.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 16px 10px 18px; border-right: 1px solid var(--line); overflow-y: auto; background: var(--m-well); }
+.mx-settings-scrim { position: fixed; inset: 0; z-index: 40; background: var(--scrim); display: flex; align-items: center; justify-content: center; padding: 24px; animation: v7scrim .2s ease-out; }
+.mx-settings { width: 100%; max-width: 880px; height: 100%; max-height: 620px; display: flex; border-radius: var(--r-dialog); background: var(--m-pane); border: 1px solid var(--line2); box-shadow: var(--sh-pop); overflow: hidden; animation: v8pane .18s var(--ease-out); }
+.mx-settings-nav { width: 212px; flex: none; display: flex; flex-direction: column; padding: 18px 10px 0; overflow-y: auto; background: transparent; }
 .mx-app.is-narrow .mx-settings-nav { width: 176px; }
-.mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 8px; }
-.mx-settings-search { display: flex; align-items: center; gap: 7px; height: 28px; margin: 0 2px 17px; padding: 0 8px; border-radius: var(--r-control); background: var(--main); box-shadow: inset 0 0 0 1px var(--line2); color: var(--dim); }
+.mx-settings-nav-title { font-size: 14px; font-weight: 600; padding: 0 10px 10px; }
+/* A flat field: the theme's field tone and no edge until it has focus (material.css › field focus). */
+.mx-settings-search { flex: none; display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 2px 14px; padding: 0 8px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
 .mx-settings-search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--fg); font: inherit; font-size: 12.5px; }
 .mx-settings-search input::placeholder { color: var(--dim); }
-.mx-settings-nav-group { display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
+.mx-settings-nav-group { flex: none; display: flex; flex-direction: column; gap: 1px; padding-bottom: 12px; }
 .mx-settings-nav-label { height: 24px; display: flex; align-items: center; padding: 0 10px; font-size: 10.5px; font-weight: 600; letter-spacing: .09em; color: var(--dim); }
 .mx-settings-nav-item { height: 32px; display: flex; align-items: center; gap: 10px; padding: 0 8px 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-settings-nav-item:hover { color: var(--fg); background: var(--m-hover); }
-.mx-settings-nav-item.is-current { background: var(--m-raise); color: var(--fg); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-settings-nav-item.is-current:focus-visible { box-shadow: inset 0 0 0 1px var(--line), var(--focus-underline); }
+.mx-settings-nav-item:hover { color: var(--fg); background: rgba(var(--ink), .035); }
+/* The sidebar's selected row (sidebar.css). */
+.mx-settings-nav-item.is-current, .mx-settings-nav-item.is-current:hover { background: var(--c-sel-bg); color: var(--fg); box-shadow: none; }
+.mx-settings-nav-item.is-current:focus-visible { box-shadow: var(--focus-edge); }
 /* The nav icon: a plain glyph in its section's tint, with no tile behind it. */
 .mx-settings-nav-text { flex: 1; white-space: nowrap; }
-.mx-settings-nav-icon { flex: none; color: var(--fg2); }
+.mx-settings-nav-icon { flex: none; color: currentColor; opacity: .85; }
 .mx-settings-nav-spacer { flex: 1; min-height: 12px; }
 /* The update box sits at the foot of the nav, pinned while the nav scrolls. */
-.mx-settings-update { position: sticky; bottom: -18px; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: 0 -10px -18px; padding: 12px 14px 16px; background: var(--m-well); border-top: 1px solid var(--line); }
+.mx-settings-update { position: sticky; bottom: 0; z-index: 1; display: flex; flex-direction: column; gap: 8px; margin: auto -10px 0; padding: 12px 14px 16px; background: var(--m-pane); border-top: 1px solid var(--line); }
+/* Nothing to report: one quiet line under the nav, the version and a small Check word, with no card of its own. */
+.mx-settings-update.is-quiet { padding: 10px 14px 12px; background: transparent; }
+.mx-settings-update.is-quiet .mx-settings-update-word { font-weight: 400; color: var(--muted); font-size: 12px; white-space: nowrap; }
 .mx-settings-update-line { display: flex; align-items: center; gap: 8px; }
 .mx-settings-update-dot { width: 7px; height: 7px; flex: none; border-radius: 50%; background: var(--dim); }
 .mx-settings-update-dot.is-ok { background: var(--ok); }
@@ -252,14 +254,13 @@
 .mx-settings-update-word { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 500; color: var(--fg); }
 .mx-settings-update-now { font-family: var(--mono); font-size: 11px; color: var(--dim); }
 .mx-settings-update-note { font-size: 11.5px; line-height: 1.45; color: var(--dim); overflow-wrap: anywhere; }
-.mx-settings-update-button { display: flex; align-items: center; justify-content: center; height: 28px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg2); box-shadow: inset 0 0 0 1px var(--line2); }
-.mx-settings-update-button:hover { background: var(--m-hover); color: var(--fg); }
-.mx-settings-update-button.is-primary { font-weight: 600; color: var(--on-accent); background: var(--accent); box-shadow: none; }
-.mx-settings-update-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 90%, #fff); color: var(--on-accent); }
-.mx-settings-nav-key { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+/* The look is the settings pages' own button (`.mx-scard-button`); only its width is the nav's. */
+.mx-settings-update-button { width: 100%; text-align: center; }
 .mx-settings-body { flex: 1; min-width: 0; display: flex; flex-direction: column; position: relative; }
 .mx-settings-close { width: 30px; height: 30px; border-radius: var(--r-control); color: var(--muted); }
 .mx-settings-scroll { flex: 1; min-height: 0; overflow-y: auto; padding: 20px 28px 28px; scroll-behavior: smooth; }
+.mx-settings-saved { flex: none; display: inline-flex; align-items: center; gap: 5px; min-width: 52px; justify-content: flex-end; font-size: 12px; color: var(--ok); }
+.mx-settings-saved:not(:empty) { animation: v7scrim var(--t-fast) var(--ease); }
 .mx-settings-header { flex: none; min-height: 67px; display: flex; align-items: center; gap: 16px; padding: 16px 14px 12px 28px; border-bottom: 1px solid var(--line); background: var(--m-pane); }
 .mx-settings-heading { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0; animation: v7fade .22s ease-out; }
 .mx-settings-heading h2 { margin: 0; font-size: 18px; line-height: 1.2; font-weight: 600; letter-spacing: -.01em; }
@@ -278,22 +279,25 @@
 .mx-scard.is-filtered:not(:has([data-search-hit])) { display: none; }
 .mx-settings-none { margin: 0; font-size: 13px; color: var(--dim); }
 .mx-scard-meta { font-size: 12px; color: var(--dim); }
+.mx-scard-meta-button { height: 22px; padding: 0 6px; margin-right: -6px; border-radius: var(--r-control); font-size: 12px; color: var(--fg2); }
+.mx-scard-meta-button:hover { background: var(--m-hover); color: var(--fg); }
 /* What a card holds that is not a row of label and control: a folder field, the terminal's text controls. */
 .mx-scard-body { padding: 0 0 14px; }
 .mx-folder-cd { font-size: 12.5px; color: var(--dim); }
 .mx-folder-path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
-.mx-scard-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--line); }
+.mx-scard-row { display: flex; align-items: center; gap: 16px; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); }
 .mx-scard-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-scard-text > :first-child { font-size: 13px; color: var(--fg); }
 .mx-scard-text > :last-child:not(:first-child) { font-size: 12px; line-height: 1.45; color: var(--muted); text-wrap: pretty; }
 .mx-scard-value { font-family: var(--mono); font-size: 11.5px; color: var(--fg2); }
-.mx-scard-foot { padding: 12px 0 0; border-top: 1px solid var(--line); font-size: 12px; line-height: 1.5; color: var(--dim); text-wrap: pretty; }
+.mx-scard-foot { padding: 12px 0 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12px; line-height: 1.5; color: var(--dim); text-wrap: pretty; }
 .mx-scard-foot.is-row { display: flex; align-items: center; gap: 10px; padding: 12px 0 0; }
-.mx-switch { width: 26px; height: 14px; border-radius: var(--r-control); background: transparent; box-shadow: inset 0 0 0 1px var(--line2); position: relative; flex: none; transition: background-color var(--t-fast) var(--ease); }
-.mx-switch[aria-checked="true"] { background: color-mix(in srgb, var(--fg) 22%, transparent); box-shadow: inset 0 0 0 1px var(--fg2); }
-.mx-switch-knob { position: absolute; top: 3px; left: 2px; width: 8px; height: 8px; border-radius: var(--r-badge); background: var(--dim); transition: transform var(--t-base) var(--ease), background-color var(--t-fast) var(--ease); }
-.mx-switch[aria-checked="true"] .mx-switch-knob { transform: translateX(12px); background: var(--fg); }
-.mx-switch:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+/* A pill with a round knob; the track's tone says on or off, with no edge. */
+.mx-switch { width: 30px; height: 16px; border-radius: 999px; background: rgba(var(--ink), .1); position: relative; flex: none; transition: background-color var(--t-fast) var(--ease); }
+.mx-switch[aria-checked="true"] { background: color-mix(in srgb, var(--fg) 30%, transparent); }
+.mx-switch-knob { position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--dim); transition: transform var(--t-base) var(--ease), background-color var(--t-fast) var(--ease); }
+.mx-switch[aria-checked="true"] .mx-switch-knob { transform: translateX(14px); background: var(--fg); }
+.mx-switch:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 .mx-switch:disabled { cursor: default; opacity: .45; }
 .mx-switch:disabled .mx-switch-knob { background: var(--dim); }
 /* The segmented control, as the design draws it (Chat | Terminal): a 28px frame on --well with a 1px --line edge and 2px of
@@ -303,34 +307,32 @@
 .mx-folder-field input, .mx-search-field input { all: unset; flex: 1; min-width: 0; color: var(--fg); }
 .mx-folder-field input { font-family: var(--mono); font-size: 13px; }
 /* The field draws the underline for the input inside it. */
-.mx-preview { padding: 12px 14px; border-radius: 10px; background: var(--term); box-shadow: inset 0 0 0 1px var(--pane-line); font-family: var(--mono); line-height: 1.6; }
-.mx-search-field { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: 8px; background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
+.mx-search-field { flex: 1; min-width: 0; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--dim); }
 .mx-search-field input { font-size: 12.5px; }
 .mx-picker { position: relative; flex: none; transition: opacity var(--t-fast) var(--ease); }
 .mx-picker.is-dimmed { opacity: .62; }
 .mx-picker-button { width: 250px; max-width: 100%; height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 10px 0 7px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); text-align: left; transition: box-shadow var(--t-fast) var(--ease); }
 .mx-picker-button:hover, .mx-picker-button.is-open { box-shadow: inset 0 0 0 1px var(--muted); }
-.mx-picker-button:focus-visible { box-shadow: inset 0 0 0 1px var(--muted), var(--focus-underline); }
+.mx-picker-button:focus-visible { box-shadow: var(--focus-edge); }
 .mx-picker-button .mx-swatch { width: 28px; height: 28px; }
 .mx-picker-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .mx-picker-chevron { flex: none; color: var(--dim); transition: transform var(--t-base) var(--ease); }
 .mx-picker-button.is-open .mx-picker-chevron { transform: rotate(180deg); }
-.mx-picker-menu { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: 12px; background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 16px 44px rgba(0, 0, 0, .5); animation: v7fade .14s ease-out; }
+.mx-picker-menu { width: 300px; display: flex; flex-direction: column; gap: 6px; padding: 8px; border-radius: var(--r-panel); background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 16px 44px rgba(0, 0, 0, .5); animation: v7fade .14s ease-out; }
 .mx-picker-list { max-height: 280px; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
 .mx-picker-list .mx-theme-card { width: 100%; text-align: left; }
 .mx-picker-list .mx-swatch { width: 34px; height: 24px; }
 .mx-picker-empty { padding: 14px 6px; font-size: 12.5px; color: var(--dim); }
 .mx-picker-foot { padding: 2px 4px 0; font-size: 11px; color: var(--dim); }
-.mx-theme-card { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 9px; }
+.mx-theme-card { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: var(--r-control); }
 .mx-theme-card:not([aria-checked="true"]):hover { background: rgba(var(--hl), calc(.055 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); }
 .mx-theme-card[aria-checked="true"] { box-shadow: inset 0 0 0 1px var(--accent-line); }
-.mx-theme-card[aria-checked="true"]:focus-visible { box-shadow: inset 0 0 0 1px var(--accent-line), var(--focus-underline); }
-.mx-swatch { width: 46px; height: 32px; flex: none; border-radius: 7px; box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .22); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px; }
+.mx-theme-card[aria-checked="true"]:focus-visible { box-shadow: var(--focus-edge); }
+.mx-swatch { width: 46px; height: 32px; flex: none; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px rgba(127, 127, 127, .22); display: flex; flex-direction: column; justify-content: center; gap: 4px; padding: 0 6px; }
 .mx-swatch span { display: flex; gap: 3px; }
-.mx-swatch i { height: 3px; border-radius: 2px; display: block; }
+.mx-swatch i { height: 3px; border-radius: var(--r-badge); display: block; }
 .mx-theme-name { font-size: 12.5px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-theme-sub { font-size: 11px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-hotkey { font-family: var(--mono); font-size: 11.5px; color: var(--fg); padding: 3px 8px; border-radius: 6px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); white-space: pre; }
 .mx-hotkey-row { padding: 10px 0; font-size: 13px; }
 .mx-hotkey-row > span:first-child { flex: 1; color: var(--fg); }
 /* The row wraps only to put a refusal under it; the actions keep one width so the keycaps line up. */
@@ -338,18 +340,8 @@
 .mx-hotkey-row .mx-text-button { height: 24px; padding: 0 9px; font-size: 12px; }
 .mx-hotkey-actions { display: flex; justify-content: flex-end; gap: 6px; min-width: 128px; }
 .mx-hotkey-fixed { font-size: 11.5px; color: var(--dim); line-height: 24px; }
-.mx-key-capture { height: 26px; padding: 0 10px; border-radius: 6px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--accent); color: var(--fg2); font-size: 12px; outline: none; }
+.mx-key-capture { height: 26px; padding: 0 10px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--accent); color: var(--fg2); font-size: 12px; outline: none; }
 .mx-hotkey-refusal { flex-basis: 100%; margin: 0; font-size: 12px; color: var(--needs); text-align: right; }
-
-/* Context menu for a session row, portalled into the app so it reads the theme. */
-.mx-menu { z-index: 50; min-width: 180px; padding: 4px; border-radius: 10px; background: var(--m-raise); border: 1px solid var(--line2); box-shadow: 0 12px 40px rgba(0, 0, 0, .45); color: var(--fg); font-size: 12.5px; }
-.mx-menu-item { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 8px; border-radius: 7px; outline: none; cursor: default; user-select: none; }
-.mx-menu-item[data-highlighted] { background: var(--m-sel); }
-.mx-menu-item.is-danger { color: var(--danger); }
-.mx-menu-item.is-armed { background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
-.mx-menu-item.is-armed:focus-visible { box-shadow: inset 0 0 0 1px var(--danger-line), var(--focus-underline); }
-.mx-menu-item[data-disabled] { opacity: .4; }
-.mx-menu-sep { height: 1px; margin: 4px 2px; background: var(--line2); }
 
 /* Reduce motion (the setting or the system's) stops slides, lifts and pulses; spinners
    show one frame. */
@@ -364,33 +356,27 @@
 .mx-sidebar-resizer:hover::after, .mx-sidebar-resizer:focus-visible::after, .mx-sidebar.is-resizing .mx-sidebar-resizer::after { background: var(--accent-line); }
 .mx-sidebar-resizer:focus-visible { outline: none; }
 
-.mx-text-button { height: 28px; padding: 0 12px; border-radius: var(--r-control); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); color: var(--fg2); font-size: 12.5px; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-text-button:not(:disabled):hover { background: var(--m-sel); color: var(--fg); }
+/* The plain-markup buttons look as `Button` does: a quiet one is the ghost (text until hovered), `.is-primary` the accent. */
+.mx-text-button { height: 28px; padding: 0 12px; border-radius: var(--r-control); background: transparent; color: var(--fg2); font-size: 12.5px; font-weight: 500; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-text-button:not(:disabled):hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-text-button:disabled { opacity: .4; }
 
 /* Naming a session. */
-.mx-check { display: flex; flex-direction: column; gap: 4px; padding: 10px 0; border-bottom: 1px solid var(--pane-line); }
-.mx-check-head { display: flex; justify-content: space-between; gap: 10px; }
-.mx-check-head span, .mx-check small { color: var(--muted); font-size: 12px; }
-.mx-check.is-bad .mx-check-head span { color: var(--danger); }
-.mx-check.is-good .mx-check-head span { color: var(--ok); }
-.mx-check-command { font-family: var(--mono); font-size: 11.5px; color: var(--dim); overflow-wrap: anywhere; }
-.mx-check-actions, .mx-check-reason { display: flex; flex-wrap: wrap; gap: 6px; }
-.mx-check-reason input { flex: 1; min-width: 160px; }
-.mx-check-output { max-height: 240px; overflow: auto; margin: 0; padding: 8px; font-family: var(--mono); font-size: 11px; background: var(--m-well); border-radius: 8px; white-space: pre-wrap; }
-.mx-files-editor { width: 100%; min-height: 320px; box-sizing: border-box; resize: vertical; white-space: pre; overflow: auto; color: inherit; background: transparent; border: 0; outline: 0; }
-.mx-secret-form { display: flex; gap: 6px; align-items: center; }
-.mx-secret-form input { min-width: 180px; }
+/* A terminal session's request, answered in a dialog outside its pane (`OutsideAskDialogs.tsx`) on the shared dialog float. */
+.mx-outside-ask-tasks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; max-height: 40vh; overflow-y: auto; font-size: 13px; color: var(--fg); }
+.mx-outside-ask-tasks li { padding: 6px 10px; border-radius: var(--r-control); background: var(--m-well); overflow-wrap: anywhere; }
+.mx-outside-ask .mx-rename-actions { flex-wrap: wrap; }
 .mx-text-button.is-danger { color: var(--danger); }
-/* A small dialog is a float like the New session dialog: the page colour, a hairline, 14px at most, the shared shadow. */
-.mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }
+/* A small dialog is the float of material.css with the dialog corner; it sets no fill, edge or shadow of its own. */
+.mx-rename { position: relative; width: 100%; max-width: 420px; padding: 20px; border-radius: var(--r-dialog); display: flex; flex-direction: column; gap: 10px; animation: mx-dialog-in .16s ease-out; }
 .mx-folder-row { display: flex; gap: 8px; align-items: center; }
-.mx-folder-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: 9px; border: 1px solid var(--pane-line); background: var(--well, var(--m-raise)); color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; }
+.mx-folder-row input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border-radius: var(--r-control); border: 1px solid transparent; background: var(--c-field-bg); box-shadow: var(--c-field-sh); color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; }
 .mx-folder-row input.is-missing { border-color: var(--danger-line, var(--danger)); box-shadow: 0 0 0 3px var(--danger-soft, transparent); }
 .mx-rename h2 { margin: 0; font-size: 15px; font-weight: 600; color: var(--fg); }
 .mx-rename p { margin: 0; font-size: 12.5px; color: var(--muted); }
-.mx-rename input:not([data-bare]) { height: 38px; padding: 0 12px; border-radius: var(--r-control); background: var(--m-well); border: 1px solid var(--line); color: var(--fg); font-size: 14px; outline: none; }
-.mx-rename select { height: 38px; padding: 0 10px; border-radius: var(--r-control); background: var(--m-well); border: 1px solid var(--line); color: var(--fg); font-size: 14px; outline: none; }
+/* Every field: the field tone inside its hairline (`--c-field-*`); in a float that is the well. */
+.mx-rename input:not([data-bare]) { height: 38px; padding: 0 12px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); border: 1px solid transparent; color: var(--fg); font-size: 14px; outline: none; }
+.mx-rename select { height: 38px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); border: 1px solid transparent; color: var(--fg); font-size: 14px; outline: none; }
 .mx-rename-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
 .mx-rename:focus-visible { outline: none; }
 .mx-rename.mx-getfile { max-width: 560px; }
@@ -398,57 +384,56 @@
 .mx-clone-into { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .mx-clone-into input { flex: 1; min-width: 0; }
 /* A folder rule's preview (GitRuleDialog): each git config file, then the lines that go in it. */
-.mx-git-rule-preview { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow: auto; padding: 10px 12px; border-radius: 10px; background: var(--m-well); border: 1px solid var(--pane-line); }
+.mx-git-rule-preview { display: flex; flex-direction: column; gap: 8px; max-height: 220px; overflow: auto; padding: 10px 12px; border-radius: var(--r-panel); background: var(--m-well); border: 1px solid var(--pane-line); }
 .mx-git-rule-preview span { display: block; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
 .mx-git-rule-preview pre { margin: 2px 0 0; font-family: var(--mono); font-size: 12px; color: var(--fg); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-getfile-where code { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; font-family: var(--mono, monospace); font-size: 12.5px; color: var(--muted); }
-.mx-getfile-list { display: flex; flex-direction: column; max-height: 260px; min-height: 96px; overflow-y: auto; border: 1px solid var(--pane-line); border-radius: 10px; background: var(--m-well); padding: 4px; }
+.mx-getfile-list { display: flex; flex-direction: column; max-height: 260px; min-height: 96px; overflow-y: auto; border: 1px solid var(--pane-line); border-radius: var(--r-panel); background: var(--m-well); padding: 4px; }
 .mx-getfile-list p { margin: 8px; }
 /* flex: none, or a long list squeezes its rows (overflow: hidden lets them shrink) to slivers of text. */
 .mx-getfile-row { flex: none; display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-getfile-row.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 .mx-rename.mx-recent { max-width: 560px; }
-/* Add a remote machine: a header, a scrolling body and a foot, as tall as what it holds and 80px from the top of the window (the scrim's 24px plus this margin), as the handoff draws it. */
-.mx-rename.mx-addmachine { width: 600px; max-width: calc(100vw - 32px); max-height: calc(100vh - 112px); margin-block: 56px auto; padding: 0; gap: 0; overflow: hidden; border-radius: var(--r-dialog); border-color: var(--line); }
-.mx-rename.mx-addmachine > form { display: flex; flex: 1; flex-direction: column; min-height: 0; }
+.mx-rename.mx-modal.mx-recent { width: 560px; }
+/* The worktree's branch mark on a small tile, as a file or an agent has one. */
+.mx-recent-mark { flex: none; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: rgba(var(--ink), .06); color: var(--fg2); }
 .mx-recent-list { list-style: none; margin: 0; display: flex; flex-direction: column; max-height: 360px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); padding: 4px; }
-.mx-recent-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: 7px; background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
+.mx-recent-row { width: 100%; display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); text-align: left; cursor: pointer; }
 .mx-recent-row:hover:not([aria-disabled="true"]), .mx-recent-row:focus-visible { background: var(--m-hover); outline: none; }
-.mx-recent-row:focus-visible { box-shadow: var(--focus-underline); }
+.mx-recent-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-recent-row[aria-disabled="true"] { cursor: not-allowed; color: var(--muted); }
 .mx-recent-text { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+/* A row of the Other agents list: text, then its own buttons; the row itself is not one. */
+.mx-acp-row { display: flex; align-items: flex-start; gap: 10px; padding: 6px 10px; }
+.mx-acp-row small { color: var(--muted); }
 .mx-recent-title, .mx-recent-where { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-recent-title { font-size: 13.5px; }
 .mx-recent-where { font-size: 12px; color: var(--muted); }
 .mx-recent-when { flex: none; font-size: 11.5px; color: var(--dim); }
 .mx-text-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
-.mx-text-button.is-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 90%, #fff); color: var(--on-accent); }
+.mx-text-button.is-primary:not(:disabled):hover { background: color-mix(in oklab, var(--accent) 90%, white); color: var(--on-accent); }
 
 /* Hotkeys as keycaps */
 .mx-keys { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
 .mx-chord { display: inline-flex; align-items: center; gap: 4px; }
 .mx-or { font-size: 11px; color: var(--dim); }
 /* Flat like every other surface: a solid cap and a hairline, its thicker bottom edge the only thing that says "key". */
-.mx-keycap { min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border-radius: 6px; background: var(--m-raise); border: 1px solid var(--line2); border-bottom-width: 2px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); line-height: 1; }
+.mx-keycap { min-width: 24px; height: 24px; box-sizing: border-box; padding: 0 7px; display: inline-flex; align-items: center; justify-content: center; border-radius: var(--r-control); background: var(--m-raise); border: 1px solid var(--line2); border-bottom-width: 2px; font-family: var(--mono); font-size: 11.5px; font-weight: 500; color: var(--fg); line-height: 1; }
 .mx-keycap.is-symbol {  font-size: 13px; font-weight: 400; }
-
-/* Resizing columns: the 10px gap between them is the handle. The negative margin cancels the two flex gaps
-   around it, so the handle takes the gap's width whatever --pg is (0 under Tiled). */
-.mx-app.is-narrow .mx-col-handle { display: none; }
 
 /* A Settings row whose control sits under its label */
 .mx-scard-row.is-stacked { flex-direction: column; align-items: stretch; gap: 8px; }
 
 /* Command palette */
-.mx-palette-scrim { position: absolute; inset: 0; z-index: 60; background: rgba(0, 0, 0, .58); animation: v7scrim .2s ease-out; }
-.mx-palette { position: absolute; top: 14vh; left: 50%; width: min(600px, calc(100% - 40px)); max-height: min(520px, 72vh); transform: translateX(-50%); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); overflow: hidden; animation: mx-palette-in .16s ease-out; }
+.mx-palette-scrim { position: absolute; inset: 0; z-index: 60; background: var(--scrim); animation: v7scrim .2s ease-out; }
+.mx-palette { position: absolute; top: 14vh; left: 50%; width: min(600px, calc(100% - 40px)); max-height: min(520px, 72vh); transform: translateX(-50%); display: flex; flex-direction: column; border-radius: var(--r-dialog); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); overflow: hidden; animation: mx-palette-in .16s ease-out; }
 @keyframes mx-palette-in { from { opacity: 0; transform: translateX(-50%) scale(.96); } to { opacity: 1; transform: translateX(-50%); } }
 .mx-palette-input { flex: none; height: 48px; display: flex; align-items: center; gap: 10px; padding: 0 14px; border-bottom: 1px solid var(--line); color: var(--dim); }
 .mx-palette-input input { flex: 1; min-width: 0; background: transparent; border: 0; outline: none; font: inherit; font-size: 15px; color: var(--fg); }
 .mx-palette-list { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 6px; display: flex; flex-direction: column; gap: 0; }
 .mx-palette-row { flex: none; height: 36px; display: flex; align-items: center; gap: 10px; padding: 0 10px; border-radius: var(--r-control); font-size: 13px; color: var(--fg); cursor: pointer; }
-.mx-palette-row.is-selected { background: var(--m-sel); }
+.mx-palette-row.is-selected { background: var(--c-sel-bg); }
 .mx-palette-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-palette-detail { color: var(--dim); font: 400 11.5px var(--mono); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-palette-mark { flex: none; width: 16px; height: 16px; display: grid; place-items: center; color: var(--muted); }
@@ -473,26 +458,27 @@
 .mx-menu-caps { padding: 6px 10px 4px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--dim); }
 
 /* The sidebar's and the rail's icons follow the Sidebar icons setting; pane headers keep their size. */
-.mx-sidebar .mx-app-icon.size-28 { width: calc(28px * var(--icon-scale, 1)); height: calc(28px * var(--icon-scale, 1)); font-size: calc(12px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-24 { width: calc(24px * var(--icon-scale, 1)); height: calc(24px * var(--icon-scale, 1)); font-size: calc(11px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-18 { width: calc(18px * var(--icon-scale, 1)); height: calc(18px * var(--icon-scale, 1)); font-size: calc(8.5px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-20 { width: calc(20px * var(--icon-scale, 1)); height: calc(20px * var(--icon-scale, 1)); font-size: calc(9px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-22 { width: calc(22px * var(--icon-scale, 1)); height: calc(22px * var(--icon-scale, 1)); font-size: calc(10px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-26 { width: calc(26px * var(--icon-scale, 1)); height: calc(26px * var(--icon-scale, 1)); font-size: calc(11.5px * var(--icon-scale, 1)); }
-.mx-sidebar .mx-app-icon.size-14 { width: calc(14px * var(--icon-scale, 1)); height: calc(14px * var(--icon-scale, 1)); font-size: calc(6.5px * var(--icon-scale, 1)); }
+.mx-sidebar .mx-app-icon.size-28 { width: 28px; height: 28px; font-size: 12px; }
+.mx-sidebar .mx-app-icon.size-24 { width: 24px; height: 24px; font-size: 11px; }
+.mx-sidebar .mx-app-icon.size-18 { width: 18px; height: 18px; font-size: 8.5px; }
+.mx-sidebar .mx-app-icon.size-20 { width: 20px; height: 20px; font-size: 9px; }
+.mx-sidebar .mx-app-icon.size-22 { width: 22px; height: 22px; font-size: 10px; }
+.mx-sidebar .mx-app-icon.size-26 { width: 26px; height: 26px; font-size: 11.5px; }
+.mx-sidebar .mx-app-icon.size-14 { width: 14px; height: 14px; font-size: 6.5px; }
 
 .mx-confirm-button.is-ghost { background: transparent; box-shadow: none; color: var(--muted); }
-.mx-confirm-button.is-ghost:hover { background: rgba(var(--hl), calc(.06 * var(--hk))); color: var(--fg); }
+.mx-confirm-button.is-ghost:hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-confirm-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
 .mx-confirm-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); }
 .mx-confirm-button:disabled { opacity: .5; }
-.mx-scard-button { height: 30px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
-.mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: inset 0 0 0 1px var(--line); }
+.mx-scard-button { height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; color: var(--fg2); background: transparent; box-shadow: none; transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-scard-input { flex: 1; min-width: 0; height: 30px; padding: 0 10px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
 .mx-scard-input.is-invalid { box-shadow: inset 0 0 0 1px var(--danger-line); }
-.mx-font-field { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.mx-font-error { font-size: 11.5px; color: var(--danger); }
-.mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--line); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
+.mx-scard-note { margin: 0; padding: 14px 0; border-top: 1px solid var(--s-rule, var(--line)); font-size: 12.5px; line-height: 1.55; color: var(--dim); text-wrap: pretty; }
 .mx-scard-button.is-danger { color: var(--danger); }
+/* A removing action keeps its colour under the pointer and gains the danger tint, never the plain grey of a ghost. */
+.mx-scard-button.is-danger:hover, .mx-icon-danger:hover:not(:disabled) { color: var(--danger); background: var(--danger-soft); }
+.mx-icon-danger { color: var(--muted); }
 /* Under a machine's row on the GitHub page: its accounts, who commits, and its folder rules. */
 .mx-github-details { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 0 16px 14px; font-size: 12.5px; color: var(--fg2); }
 .mx-github-details .mx-menu-caps { padding: 6px 0 0; }
@@ -502,19 +488,16 @@
 .mx-github-details li > span { font-family: var(--mono); font-size: 12px; color: var(--fg); overflow-wrap: anywhere; }
 .mx-github-details li > small { font-size: 11.5px; color: var(--muted); overflow-wrap: anywhere; }
 .mx-scard-button:disabled { opacity: .4; pointer-events: none; }
-.mx-scard-button:hover { background: var(--accent-soft); color: var(--accent-text); box-shadow: inset 0 0 0 1px var(--accent-line); }
+.mx-scard-button:hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-scard-button.is-primary { background: var(--accent); color: var(--on-accent); box-shadow: none; font-weight: 600; }
 .mx-scard-button.is-primary:hover { background: color-mix(in srgb, var(--accent) 88%, #fff); color: var(--on-accent); }
 
-/* Keyboard shortcut overlay. */
-.mx-shortcuts-grid .mx-menu-caps { padding: 0 0 6px; }
-
 /* Hover tooltip for anything with a title. */
-.mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 5px 9px; border-radius: 8px; background: var(--m-raise); border: 1px solid var(--pane-line); box-shadow: 0 10px 28px rgba(0, 0, 0, .4); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
+.mx-tip { z-index: 90; max-width: 260px; display: flex; flex-direction: column; gap: 2px; padding: 6px 10px; border-radius: var(--r-panel); line-height: 1.4; color: var(--fg); pointer-events: none; animation: mx-tip-in .16s ease-out; }
 .mx-tip-line { display: flex; align-items: center; gap: 8px; }
 .mx-tip-name { font-size: 12px; font-weight: 500; }
 .mx-tip-keys { display: inline-flex; gap: 2px; }
-.mx-tip .mx-keycap { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 4px; border-bottom-width: 2px; font-size: 10.5px; }
+.mx-tip .mx-keycap { min-width: 18px; height: 18px; padding: 0 5px; border-radius: var(--r-badge); border-bottom-width: 2px; font-size: 10.5px; }
 .mx-tip-hint { font-size: 11.5px; color: var(--fg2); }
 /* The slide comes from the side the tip is anchored to, through the standalone `translate` so it does not fight the centring transform. */
 @keyframes mx-tip-in { from { opacity: 0; translate: var(--tip-dx, 0) var(--tip-dy, 0); } to { opacity: 1; translate: 0 0; } }
@@ -522,16 +505,13 @@
 @media (prefers-reduced-motion: reduce) { .mx-tip { animation: none; } }
 
 /* Confirm before ending sessions. */
-.mx-confirm-button { height: 32px; padding: 0 14px; border-radius: 9px; font-size: 13px; color: var(--fg2); background: rgba(var(--hl), calc(.05 * var(--hk))); box-shadow: inset 0 0 0 1px var(--pane-line); cursor: pointer; }
-.mx-confirm-button:hover { background: rgba(var(--hl), calc(.09 * var(--hk))); color: var(--fg); }
-.mx-confirm-button:active { background: var(--m-sel); }
+.mx-confirm-button { height: 32px; padding: 0 14px; border-radius: var(--r-control); font-size: 13px; font-weight: 500; color: var(--fg2); background: transparent; box-shadow: none; cursor: pointer; }
+.mx-confirm-button:hover { background: var(--icon-button-fill); color: var(--fg); }
 .mx-confirm-button.is-danger { background: var(--danger); color: var(--on-danger); box-shadow: none; font-weight: 600; }
 .mx-confirm-button.is-danger:hover { background: color-mix(in srgb, var(--danger) 85%, #fff); }
 
 /* Finish: the surfaces' fills, lines and shadows are material.css. What is left here is the rest of Flat: no glow, no resting rings and smaller radii. Accent and warn rings (the
    focused pane, needs-you) and every status colour stay. */
-/* Settings › Appearance › Icons: Grayscale. Neutral app icons in either style; status badges on them keep their colours. */
-:root[data-icons="grayscale"] .mx-app-icon:not(.is-shell) { color: var(--fg2); }
 
 /* A web view without GPU access (no WebGL 2) rasterises in software, where every blur and shadow is paid
    again on each repaint (docs/PERFORMANCE.md). It takes the same rules with cheaper token values: no blur,
@@ -540,12 +520,13 @@
 .mx-app { --pop-sh-flat: 0 0 0 1px var(--line2); }
 .mx-app[data-theme-kind="light"] { --pop-sh-flat: 0 0 0 1px rgba(17, 22, 27, .14); }
 :root[data-gpu="software"] { --float-bleed: 4px; }
-:root[data-gpu="software"] { --pop-sh: 0 0 0 1px var(--line2); --pop-sh-dialog: 0 0 0 1px var(--line2); --pop-sh-menu: 0 0 0 1px var(--line2); }
-:root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-fp-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-restarting) { animation: none; }
+/* The float's shadow is declared beside the theme's roles (material.css), so the cheaper value is set at each of those roots. */
+:root[data-gpu="software"], :root[data-gpu="software"] :is(.mx-app, .app-shell) { --float-sh: 0 0 0 1px var(--line2); }
+:root[data-gpu="software"] :is(.mx-dialog-scrim, .mx-drawer-scrim, .mx-op-scrim, .mx-settings-scrim, .mx-palette-scrim, .mx-restarting) { animation: none; }
 /* A dialog fades in without its scale (a scale repaints the whole dialog at every size), and the palette keeps its centring transform. */
-:root[data-gpu="software"] :is(.mx-fp, .mx-rename) { animation-name: v7scrim; }
+:root[data-gpu="software"] :is(.mx-op, .mx-rename) { animation-name: v7scrim; }
 :root[data-gpu="software"] .mx-palette { animation-name: v7scrim; }
-:root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --pop-sh: 0 0 0 1px rgba(17, 22, 27, .14); --pop-sh-dialog: var(--pop-sh); --pop-sh-menu: var(--pop-sh); }
+:root[data-gpu="software"] .mx-app[data-theme-kind="light"] { --float-sh: 0 0 0 1px rgba(17, 22, 27, .14); }
 
 /* Layout variables, set on the app root so they can use the theme's colours. The layout rules above read these.
    --rk multiplies the larger radii. */
@@ -558,7 +539,7 @@
   --tbar: transparent; --tbar-b: 0;
   /* Surfaces: opaque cards with a hairline and, on dark themes, a faint top highlight; a soft shadow only on
      short-lived popovers. */
-  --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--pop-sh);
+  --card: var(--main); --sh: inset 0 1px 0 rgba(var(--hl), calc(.045 * var(--hk))); --sh-pop: var(--float-sh);
   --sbm: 12px 0 12px 12px; --sbw: 1px; --tba: center; --tl: 4px; --edge: 8px; --tsh: 32px; --tsw: 26px; --ibh: 30px;
 }
 .mx-app[data-theme-kind="light"] { --sh: none; }
@@ -574,9 +555,9 @@
 .mx-upd-button .mx-upd-dot { position: static; flex: none; }
 .mx-upd-button .mx-upd-label { white-space: nowrap; }
 .mx-upd-keyonly { clip: rect(0, 0, 0, 0); clip-path: inset(50%); height: 1px; width: 1px; overflow: hidden; position: absolute; white-space: nowrap; }
-.mx-upd-keyonly:focus-visible { clip: auto; clip-path: none; height: 24px; width: auto; padding: 0 8px; font-size: 12px; background: var(--main); color: var(--fg); box-shadow: var(--focus-underline); z-index: 1; }
+.mx-upd-keyonly:focus-visible { clip: auto; clip-path: none; height: 24px; width: auto; padding: 0 8px; font-size: 12px; background: var(--main); color: var(--fg); box-shadow: var(--focus-edge); z-index: 1; }
 .mx-upd-dot { position: absolute; top: 4px; right: 4px; width: 5px; height: 5px; background: var(--accent); }
-.mx-upd-card { width: 300px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh); color: var(--fg); position: relative; }
+.mx-upd-card { width: 300px; max-width: calc(100vw - 24px); display: flex; flex-direction: column; border-radius: var(--r-panel); background: var(--main); border: 1px solid var(--line2); box-shadow: var(--float-sh); color: var(--fg); position: relative; }
 .mx-upd-head { display: flex; flex-direction: column; gap: 3px; padding: 12px 14px 10px; }
 .mx-upd-title { font-size: 14px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-upd-versions { font: 400 12px var(--mono); color: var(--dim); white-space: nowrap; }
@@ -600,8 +581,6 @@
 @keyframes mx-upd-slide { from { transform: translateX(-100%); } to { transform: translateX(334%); } }
 :root[data-reduced-motion="true"] :is(.mx-upd-bar span, .mx-upd-bar span::after) { animation: none; }
 @media (prefers-reduced-motion: reduce) { :is(.mx-upd-bar span, .mx-upd-bar span::after) { animation: none; } }
-/* Settings › Performance › Overlay: a corner readout that never takes the pointer. */
-.mx-perf-hud { position: absolute; right: 12px; bottom: 36px; z-index: 80; display: flex; gap: 10px; padding: 4px 9px; border-radius: 8px; background: var(--m-raise); box-shadow: inset 0 0 0 1px var(--pane-line); font-family: var(--mono); font-size: 11px; color: var(--fg2); pointer-events: none; white-space: nowrap; }
 .mx-restarting { position: absolute; inset: 0; z-index: 90; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; background: var(--bg); animation: v7scrim .2s ease-out; }
 .mx-restarting strong { font-size: 18px; font-weight: 600; }
 .mx-restarting span { font-size: 13px; color: var(--muted); }
@@ -611,45 +590,19 @@
 .mx-app[data-side="right"] .mx-drawer { left: auto; right: 0; animation-name: mx-panel-from-right; }
 .mx-app[data-side="right"] .mx-sidebar-resizer { right: auto; left: 0; }
 .mx-app[data-side="right"] .mx-sidebar-resizer::after { right: auto; left: 0; }
-
-/* The session hover card. */
-.mx-pos-grid { display: grid; grid-template-columns: repeat(3, 26px); grid-template-rows: repeat(2, 18px); gap: 4px; padding: 4px; border-radius: 8px; background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); }
-.mx-pos-cell { border-radius: 4px; background: rgba(var(--hl), calc(.07 * var(--hk))); cursor: pointer; transition: background-color var(--t-fast) var(--ease); }
-.mx-pos-cell:hover { background: rgba(var(--hl), calc(.16 * var(--hk))); }
-.mx-pos-cell.is-on { background: var(--accent); }
-/* A pane whose session ended keeps its output; this card sits along its bottom. */
-.mx-pane-ended { position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 3; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--m-raise) 94%, transparent); box-shadow: inset 0 0 0 1px var(--line2), 0 10px 28px rgba(0, 0, 0, .35); animation: v7fade .2s var(--ease-out); }
-/* A request that needs an answer sits under the pane's header, clear of the message box, with the needs-you edge. */
-.mx-pane-ended.is-ask { top: 72px; bottom: auto; box-shadow: inset 0 0 0 1px var(--warn-line), var(--sh-pop); }
-.mx-pane-ended.is-ask .mx-pane-ended-text small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-pane-ended-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; font-size: 13px; }
-.mx-pane-ended-text small { font-size: 11.5px; color: var(--dim); }
-.mx-pane-ended-button { height: 28px; padding: 0 12px; border-radius: 8px; font-size: 12.5px; font-weight: 500; color: var(--fg2); background: var(--m-well); box-shadow: inset 0 0 0 1px var(--pane-line); cursor: pointer; }
-.mx-pane-ended-button:hover:not(:disabled) { background: var(--m-sel); color: var(--fg); }
-.mx-pane-ended-button.is-primary { color: var(--on-accent); background: var(--accent); box-shadow: none; font-weight: 600; }
-.mx-pane-ended-button.is-primary:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 88%, #fff); }
-.mx-pane-ended-button:disabled { opacity: .5; cursor: default; }
 .mx-folder-row { display: flex; align-items: center; gap: 8px; }
 .mx-folder-row .mx-folder-field { flex: 1; min-width: 0; }
 
-/* The activity bar (v19 §9): a 48px card on the side opposite the sessions sidebar. The window's row-reverse
-   for a right-hand sidebar puts it on the far left without a rule of its own. */
-.mx-activity { flex: none; align-self: stretch; width: 48px; margin: var(--sbm-activity, var(--pg) var(--pg) var(--pg) 0); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; border-radius: var(--r14); background: var(--card, var(--m-pane)); border: 1px solid var(--pane-line); box-shadow: var(--sh); }
-.mx-app[data-side="right"] .mx-activity { margin: var(--pg) 0 var(--pg) var(--pg); }
-
-/* What a stopped agent asks, above the message box: a question with its choices as rows, or a permission with its buttons. */
-@media (prefers-reduced-motion: reduce) { .mx-ask-choice { transition: none; } }
-
 /* Flat sidebar: one list of two-line rows, a filter field, and a 60px rail. Status is the badge and nothing else
    moves a row, so none of these animates. */
-.mx-app-icon.size-32 { width: 32px; height: 32px; border-radius: 9px; font-size: 13px; }
+.mx-app-icon.size-32 { width: 32px; height: 32px; border-radius: var(--r-control); font-size: 13px; }
 .mx-app[data-side="right"] .mx-drawer { left: auto; right: 0; }
 .mx-palette-input input:focus-visible { outline: none; }
 
 /* The window ground is opaque on every platform, as in the design: a translucent Mica ground showed the desktop through
    a light theme as a dark grey. */
 
-.mx-font-tile { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: 7px; background: var(--c-track-bg); font-size: 13px; color: var(--fg); }
+.mx-font-tile { width: 28px; height: 28px; flex: none; display: grid; place-items: center; border-radius: var(--r-control); background: var(--c-track-bg); font-size: 13px; color: var(--fg); }
 /* A style's tile is a small window in its shape, in the theme in use. */
 
 /* A command approved for a project: the command in mono, its project and date under it. */
@@ -660,14 +613,14 @@
 .mx-specialists-groups { display: flex; flex-direction: column; gap: 12px; overflow-y: auto; min-height: 0; }
 .mx-specialists-groups h3 { font-size: 12px; color: var(--fg2); margin: 0 0 4px; }
 .mx-specialists-groups ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
-.mx-specialist-row { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px; border-radius: 8px; text-align: left; background: none; border: 0; color: inherit; cursor: pointer; }
+.mx-specialist-row { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; padding: 6px 8px; border-radius: var(--r-control); text-align: left; background: none; border: 0; color: inherit; cursor: pointer; }
 .mx-specialist-row:hover, .mx-specialist-row:focus-visible { background: var(--m-hover); }
 .mx-specialist-name { font-weight: 600; overflow-wrap: anywhere; }
 .mx-specialist-tool { font-size: 12px; color: var(--fg2); }
 .mx-specialist-description { grid-column: 1 / -1; font-size: 12px; color: var(--fg2); }
 .mx-specialist-file { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .mx-specialist-file code { overflow-wrap: anywhere; }
-.mx-specialist-file pre { margin: 0; padding: 10px; border-radius: 8px; background: var(--m-well); overflow: auto; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); }
+.mx-specialist-file pre { margin: 0; padding: 10px; border-radius: var(--r-control); background: var(--m-well); overflow: auto; max-height: 50vh; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; font-family: var(--mono); }
 
 /* Settings › Remote machines: this computer, the toolbar, the grid of other machines and the add flow. */
 .mx-mach-meta { display: flex; align-items: center; gap: 6px; font-size: 12px; }
@@ -678,32 +631,40 @@
 .mx-app[data-motion="reduced"] .mx-mach-spin { animation: none; }
 @media (prefers-reduced-motion: reduce) { .mx-mach-spin { animation: none; } }
 
-/* Settings › Remote machines (docs/UI.md): a list with one line per machine, a machine's page, and Add a machine. Colour only
+/* Settings › Remote machines (docs/UI.md): a list with one line per machine, its settings folded under More, and Add a machine. Colour only
    ever says status: green connected, amber needs you, red failed, teal working. The one filled button is the neutral primary,
    filled with the text colour; no button is filled with a status colour or the accent. */
 .mx-rm, .mx-rm-page { display: flex; flex-direction: column; gap: 12px; }
 .mx-rm-hint { margin: 0; font-size: 12px; color: var(--dim); }
-.mx-rm-primary { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--bg); background: var(--fg); }
-.mx-rm-primary:hover:not(:disabled, [aria-disabled="true"]) { background: color-mix(in srgb, var(--fg) 86%, var(--bg)); }
+.mx-rm-primary { flex: none; display: inline-flex; align-items: center; gap: 8px; height: 30px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 600; white-space: nowrap; color: var(--on-accent); background: var(--accent); }
+.mx-rm-primary:hover:not(:disabled, [aria-disabled="true"]) { background: color-mix(in oklab, var(--accent) 90%, white); }
 .mx-rm-primary:disabled, .mx-rm-primary[aria-disabled="true"] { color: var(--dim); background: var(--m-raise); }
 .mx-rm-text { height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 12.5px; color: var(--fg2); }
-.mx-rm-text:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
+.mx-rm-text:hover:not(:disabled) { background: var(--icon-button-fill); color: var(--fg); }
 .mx-rm-text:disabled { color: var(--dim); }
-.mx-rm-out { height: 26px; padding: 0 10px; border-radius: var(--r-control); font-size: 12px; color: var(--fg); border: 1px solid var(--line2); }
-.mx-rm-out:hover { background: var(--m-hover); }
+.mx-rm-out { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; white-space: nowrap; color: var(--fg2); background: transparent; box-shadow: none; transition: background-color var(--t-fast) var(--ease); }
+.mx-rm-out:hover { background: var(--icon-button-fill); color: var(--fg); }
+/* The caret that unfolds a machine's settings: the same 28px square on every row, turning as it opens. */
+.mx-rm-fold-toggle { flex: none; display: grid; place-items: center; width: 28px; height: 28px; border-radius: var(--r-control); color: var(--muted); transition: background-color var(--t-fast) var(--ease), color var(--t-fast) var(--ease); }
+.mx-rm-fold-toggle svg { width: 15px; height: 15px; transition: transform var(--t-base) var(--ease); }
+.mx-rm-fold-toggle:hover { background: var(--icon-button-fill); color: var(--fg); }
+.mx-rm-fold-toggle.is-open svg { transform: rotate(180deg); }
+.mx-rm-danger { flex: none; height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; font-weight: 500; white-space: nowrap; color: var(--danger); box-shadow: inset 0 0 0 1px var(--danger-line); transition: background-color var(--t-fast) var(--ease); }
+.mx-rm-danger:hover { background: var(--danger-soft); }
 
 .mx-rm-head { display: flex; align-items: center; gap: 10px; min-height: 30px; }
 .mx-rm-count { flex: 1; font-size: 12.5px; color: var(--muted); }
-.mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }
+.mx-rm-search { width: 200px; height: 30px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 12.5px; color: var(--fg); }
 .mx-rm-list { border-top: 1px solid var(--line); }
 .mx-rm-item { border-bottom: 1px solid var(--line); }
-.mx-rm-row { display: grid; grid-template-columns: 14px minmax(90px, 140px) minmax(0, 1fr) auto 72px; align-items: center; column-gap: 12px; min-height: 39px; padding: 0 6px; cursor: pointer; }
+.mx-rm-row { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto auto 28px; align-items: center; column-gap: 12px; min-height: 52px; padding: 6px 6px 6px 10px; border-radius: var(--r-control); cursor: pointer; }
+/* A machine's name with its address under it, so neither is cut short to make room for the other. */
+.mx-rm-who { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-rm-row:hover { background: var(--m-hover); }
-.mx-rm-row.is-current { background: var(--m-raise); box-shadow: inset 2px 0 0 var(--fg); }
 .mx-rm-name { min-width: 0; text-align: left; font-size: 13px; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-rm-addr { min-width: 0; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mx-rm-addr { min-width: 0; font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mx-rm-line { font-size: 12.5px; color: var(--fg2); text-align: right; white-space: nowrap; }
-.mx-rm-line.is-needs { color: var(--fg2); }
+.mx-rm-line.is-needs { color: var(--needs); }
 .mx-rm-line.is-quiet { color: var(--dim); }
 .mx-rm-act { display: flex; justify-content: flex-end; }
 .mx-rm-busy { font-size: 12px; color: var(--muted); }
@@ -712,13 +673,11 @@
 .mx-rm-mark[data-shape] { display: inline-flex; align-items: center; justify-content: center; font-size: 0; }
 .mx-rm-mark[data-shape]::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
 .mx-rm-mark[data-shape='○']::before { background: none; box-shadow: inset 0 0 0 1.5px currentColor; }
-:root[data-corners="square"] .mx-rm-mark[data-shape]::before { border-radius: 0; }
 .mx-rm-mark.is-ok, .mx-rm-mark.is-done { color: var(--ok); }
 .mx-rm-mark.is-quiet { color: var(--dim); }
 .mx-rm-mark.is-needs { color: var(--needs); }
 .mx-rm-mark.is-bad { color: var(--danger); }
-.mx-rm-local { display: flex; align-items: center; gap: 10px; padding: 6px; font-size: 12.5px; color: var(--fg); }
-.mx-rm-localline { flex: 1; min-width: 0; font-size: 11.5px; color: var(--dim); }
+.mx-rm-local { display: grid; grid-template-columns: 14px minmax(0, 1fr) auto; align-items: center; column-gap: 12px; min-height: 52px; padding: 6px 6px 6px 10px; }
 .mx-rm-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; padding: 22px 20px; border: 1px dashed var(--line2); border-radius: var(--r-panel); }
 .mx-rm-empty strong { font-size: 14px; color: var(--fg); }
 .mx-rm-empty p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
@@ -742,49 +701,14 @@
 .mx-rm-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
 .mx-rm-actions .mx-rm-raw { flex-basis: 100%; }
 .mx-rm-raw { margin: 0; padding: 8px 10px; background: var(--bg); border-radius: var(--r-control); font-size: 11.5px; color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; }
-
-.mx-rm-crumbs { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--dim); }
-.mx-rm-crumbs button, .mx-rm-back { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; margin-left: -4px; font-size: 12.5px; color: var(--muted); border-radius: var(--r-control); }
-.mx-rm-crumbs button:hover, .mx-rm-back:hover { background: var(--m-hover); color: var(--fg); }
+.mx-rm-back { display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px 0 4px; margin-left: -4px; font-size: 12.5px; color: var(--muted); border-radius: var(--r-control); }
+.mx-rm-back:hover { background: var(--m-hover); color: var(--fg); }
 .mx-rm-back { align-self: flex-start; }
-.mx-rm-here { font-weight: 600; color: var(--fg); }
-.mx-rename .mx-rm-lead-text { margin: 0; font-size: 13.5px; line-height: 1.55; color: var(--muted); }
-.mx-rm-address { display: flex; align-items: center; gap: 8px; }
-.mx-rm-address input { flex: 1; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--m-well); font-size: 13.5px; color: var(--fg); }
-.mx-rm-address input[aria-invalid="true"] { border-color: color-mix(in srgb, var(--danger) 70%, transparent); }
 .mx-rename .mx-rm-error { margin: 0; font-size: 12.5px; color: var(--danger); }
-.mx-rm-label { display: block; font-size: 12px; font-weight: 600; color: var(--dim); }
-/* The SSH config's hosts: one card of rows, each a shortcut that connects. */
-.mx-rm-hostlist { display: flex; flex-direction: column; padding: 0 14px; border-radius: var(--r-panel); background: color-mix(in srgb, var(--fg) 2.5%, transparent); box-shadow: inset 0 0 0 1px var(--line); }
-.mx-rm-host { display: flex; align-items: center; gap: 12px; width: 100%; height: 44px; text-align: left; border-top: 1px solid var(--line); }
-[role="listitem"]:first-child > .mx-rm-host { border-top: 0; }
-.mx-rm-host:hover, .mx-rm-host:focus-visible { background: var(--m-hover); }
-.mx-rm-hostname { flex: none; width: 130px; font-size: 13.5px; font-weight: 600; color: var(--fg); }
-.mx-rm-hostaddr { flex: 1; min-width: 0; font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-rm-hostgo { font-size: 12.5px; color: var(--dim); opacity: 0; transition: opacity var(--t-fast) var(--ease); }
-.mx-rm-host:hover .mx-rm-hostgo, .mx-rm-host:focus-visible .mx-rm-hostgo { opacity: 1; }
-/* A host that is already a machine stays in the list, dimmed, and says so at all times. */
-.mx-rm-host.is-added .mx-rm-hostname, .mx-rm-host.is-added .mx-rm-hostaddr { color: var(--dim); }
-.mx-rm-host.is-added .mx-rm-hostgo { opacity: 1; color: var(--muted); }
 
-.mx-rm-title { margin: 0; font-size: 16px; font-weight: 600; color: var(--fg); }
-.mx-rm-status { border-top: 1px solid var(--line); }
-.mx-rm-rows { border-top: 1px solid var(--line); }
-.mx-rm-prow { display: flex; align-items: center; gap: 16px; min-height: 46px; border-bottom: 1px solid var(--line); font-size: 13px; color: var(--fg); }
-.mx-rm-prow > label, .mx-rm-prow > .mx-rm-k { flex: 0 0 120px; }
-.mx-rm-value { flex: 1; min-width: 0; color: var(--fg2); overflow-wrap: anywhere; }
-.mx-rm-value.mono { font-size: 12px; }
-.mx-rm-nameinput { flex: 1; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--m-well); font-size: 13px; color: var(--fg); }
-.mx-rm-ptext { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; padding: 6px 0; }
-.mx-rm-ptext > :last-child { font-size: 12px; color: var(--dim); }
-.mx-rm-pbuttons { display: flex; align-items: center; gap: 6px; }
-.mx-rm-quiet { padding: 0; font-size: 12.5px; color: var(--dim); }
-.mx-rm-quiet:hover { color: var(--danger); }
+/* A machine's More fold: plain settings rows under its row, indented past the mark so they read as the machine's. */
+.mx-rm-fold { padding: 0 6px 6px 32px; }
+.mx-rm-foldvalue { font-size: 12.5px; color: var(--fg2); text-align: right; }
+.mx-rm-nameinput { flex: 0 1 220px; min-width: 0; height: 32px; padding: 0 10px; border: 1px solid transparent; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 13px; color: var(--fg); }
 .mx-rm-remove { height: 28px; padding: 0 12px; border-radius: var(--r-control); font-size: 12.5px; color: var(--danger); background: var(--danger-soft); box-shadow: inset 0 0 0 1px var(--danger-line); }
 
-.mx-rm-options { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
-.mx-rm-advanced { padding: 0; font-size: 12.5px; color: var(--dim); }
-.mx-rm-advanced:hover { color: var(--fg); }
-.mx-rm-option { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
-.mx-rm-option-list { display: grid; grid-template-columns: 110px 1fr; gap: 10px; align-self: stretch; }
-.mx-rm-option input { width: 100%; min-width: 0; height: 34px; padding: 0 10px; border: 1px solid var(--line2); border-radius: var(--r-control); background: var(--m-well); font-size: 12.5px; color: var(--fg); }

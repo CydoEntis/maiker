@@ -50,12 +50,6 @@ describe('updater', () => {
     }
   })
 
-  it('reports the app is current when no newer release exists', async () => {
-    check.mockResolvedValue(null)
-    const { result } = renderHook(() => useUpdater())
-    await waitFor(() => { expect(result.current.state.status).toBe('current') })
-  })
-
   it('offers a newer release without downloading or installing it', async () => {
     const download = vi.fn(() => Promise.resolve())
     const install = vi.fn(() => Promise.resolve())

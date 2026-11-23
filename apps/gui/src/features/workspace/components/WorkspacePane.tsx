@@ -1,14 +1,18 @@
 import { OpenSubagentContext, subagentNamed, type OpenSubagent } from '@/features/chat/openSubagent'
 import { movePanes } from './paneTransition'
-import { useCallback, useState } from 'react'
+import { useCallback } from 'react'
 import { TerminalView } from '@/TerminalView'
 import { useTipWithKeys } from '@/features/shortcuts/platform'
 import { useWorkspace } from '../workspaceContext'
 import { toast } from '@/lib/toast'
-import { answerHelpers, dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
+import { dropQueuedFollowUp, isDesktop, queueFollowUp, sendTerminalInput } from '@/api/daemon'
+import { sendHelpersAnswer } from '../useOutsideAsks'
 import { isChatSession } from '../model/chatSession'
-import { carryDraftToTerminal } from '../model/draftCarry'
 import { PaneCard } from './PaneCard'
+import { leafKey } from './dragSession'
+import { SplitPane, SplitPlaceholder } from './SplitPane'
+import { SplitTree } from './SplitTree'
+import { AGENT_LEAF, leavesOf } from '../model/splitTree'
 import { PaneErrorBoundary } from '@/components/PaneErrorBoundary'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { TurnSpan } from '@/features/inspect/turnRange'
@@ -40,16 +44,21 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId , heads, retryNamed, newChatWithSummary , resumeEnded, setWorktreeFrom, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
-  // The session whose terminal log is shown over its chat. The app's view is one setting for every session; this is only
-  // the way to read the log when the chat cannot carry on (it crashed, the agent stopped, it never reports in).
-  const [logOf, setLogOf] = useState<string | null>(null)
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
   const session = paneSessions.get(pane.sessionId)
   if (!session) return null
   const focused = pane.id === shown.focus && !kept
+  // The session's own panes: its agent's, and a shell for each split. One pane is the whole tree.
+  const splits = splitsOf(session)
+  const isSplit = leavesOf(splits.tree).length > 1
+  const splitRefusal = splitRefusalOf(session)
+  const focusLeafOf = (leaf: string) => {
+    setLayout((current) => focusPane(current, pane.id))
+    focusSplit(session.id, leaf)
+  }
   const chat = chatOf(session)
   const chatOnly = isChatSession(session.conversation)
   // Every subagent the session reported, not only those the sidebar lists, so a finished one can still be opened.
@@ -63,13 +72,8 @@ export function WorkspacePane({ shown, pane, kept }: {
     add: (text: string, first: boolean, operation: number) => queueFollowUp(session, text, first, operation),
     drop: (index: number, text: string) => dropQueuedFollowUp(session, index, text),
   }
-  const logShown = !chatOnly && logOf === session.id
-  const view = logShown ? 'terminal' : chat.view
-  const showLog = () => {
-    if (chatOnly) return
-    setLogOf(session.id)
-    void carryDraftToTerminal(session).catch((error: unknown) => { toast.failed('Could not move your message to the terminal', error) })
-  }
+  // A session is shown as the app's view says; no control on it moves it between chat and terminal (ADR 0020).
+  const view = chat.view
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })
   const interrupted = session.interrupted !== null && !dismissedRestores.has(session.id) ? session.interrupted : null
@@ -78,7 +82,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   const problem: ChatProblem | null = head?.down === true && head.name !== null
     ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
     : session.status === 'error' && !session.ended && !isShell(session)
-      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onViewLog: chatOnly ? null : showLog, onRestart: chatOnly ? null : () => { setLogOf(null); restartPane(pane.id) } }
+      ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
       : interrupted !== null
         ? { kind: 'interrupted', agent: interrupted.agent, resume: interrupted.resume, onRestart: () => { resumeInterrupted(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
         : fullPercent !== null && typeInto !== undefined
@@ -97,35 +101,35 @@ export function WorkspacePane({ shown, pane, kept }: {
   const rewindRefusal = guardLocal(session, 'rewind') ?? (rewindTerm === null ? null : sharedFolderRefusalOf(session))
   const fileSearch = fileSearchOf(session, { term: rewindTerm, machineDown: head?.down === true, desktop: isDesktop() })
   const rewind: RewindPlace | undefined = rewindRefusal !== null ? { refusal: rewindRefusal } : rewindTerm !== null ? { term: rewindTerm } : undefined
+  const answerHelperAsk = (choice: 'allow' | 'always' | 'no') => { sendHelpersAnswer(session, choice) }
   // A shell is a terminal already: its menu keeps Clear and Copy folder path in place of New terminal.
   const shell = isShell(session)
-  // The header's branch crumb switches the branch of a session on this computer; elsewhere it only says it.
-  const branchMenu = chatOnly || session.machine !== LOCAL_MACHINE || session.branch === null ? undefined : { folder: session.cwd, onNewWorktree: () => { setWorktreeFrom(session) } }
   const openHelperChat: OpenSubagent = (title, asked) => {
     const found = subagentNamed(session.subagents, title, asked)
     return found === null ? null : () => { showSubagent(session.id, found.id) }
   }
-  return (
+  const agentPane = (
     <PaneCard
       pane={pane}
       index={shown.panes.findIndex((candidate) => candidate.id === pane.id)}
       leading={sidebarMode === 'hidden' && !focusMode && shown.panes[0]?.id === pane.id ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
       session={session}
       paneCount={shown.panes.length}
+      leaf={isSplit ? leafKey(session.id, AGENT_LEAF) : undefined}
+      card={isSplit || shown.panes.length > 1}
+      splitRefusal={splitRefusal}
       broadcast={shown.broadcast === true}
-      focused={focused && !outsidePanes}
+      focused={focused && !outsidePanes && splits.focus === AGENT_LEAF}
       maximized={shown.max === pane.id}
       dropTarget={dropId === pane.id && dragId !== pane.id}
       dragging={dragId === pane.id}
       dropWord={dragId === null ? 'Drop to show it here' : 'Drop to swap'}
       view={view}
-      {...(logShown ? { onHideLog: () => { setLogOf(null) } } : {})}
       chat={view === 'chat' ? (
-        <PaneErrorBoundary key={session.id} what="This chat" fallback={chatOnly ? null : { label: 'Show the terminal log', run: showLog }}>
+        <PaneErrorBoundary key={session.id} what="This chat">
         <OpenSubagentContext.Provider value={openHelperChat}>
         <ChatPane
           availability={chat.availability}
-          hasTerminal={!chatOnly}
           root={session.repoRoot ?? session.cwd}
           onOpenDiff={openDiff}
           onOpenFile={(path, line) => { openPath(session, path, line ?? undefined) }}
@@ -133,6 +137,9 @@ export function WorkspacePane({ shown, pane, kept }: {
           paneQueue={paneQueue}
           ask={session.ask}
           asking={session.asking}
+          helperAsk={session.helperAsk.length > 0 ? { tasks: session.helperAsk, answer: answerHelperAsk } : undefined}
+          secretAsks={session.secretAsk}
+          machine={session.machine}
           sessionId={session.id}
           problem={problem}
           place={placeOf(session)}
@@ -152,7 +159,6 @@ export function WorkspacePane({ shown, pane, kept }: {
           subagents={helpers}
           onBackToMain={() => { setOpenSubagent(null) }}
           windowActions={{ openSettings: setSettingsSection, openPanel: (view) => { openPanel(pane.id, session.id, view) }, openRecent: () => { setRecentOpen(true) }, renameSession: (name) => { saveName(session.id, name) } }}
-          onShowLog={showLog}
           hideSuccessfulTools={preferences.hideSuccessfulTools}
         />
         </OpenSubagentContext.Provider>
@@ -171,7 +177,7 @@ export function WorkspacePane({ shown, pane, kept }: {
           label={`Shell in ${session.cwdLabel}`}
           inputDisabled={!online}
           ended={session.ended}
-          focused={focused && !modalOpen && view === 'terminal' && !dockFocused}
+          focused={focused && splits.focus === AGENT_LEAF && !modalOpen && view === 'terminal' && !dockFocused && !panelFocused}
           paused={kept || view === 'chat'}
           onInput={(data) => { mirrorInput(session.id, data) }}
           onOpenPath={(path, line) => { openPath(session, path, line) }}
@@ -182,19 +188,53 @@ export function WorkspacePane({ shown, pane, kept }: {
           }}
         />
       }
-      onFocus={(paneId) => { setLayout((current) => focusPane(current, paneId)) }}
+      onFocus={() => { focusLeafOf(AGENT_LEAF) }}
       onSplit={(paneId, direction) => {
-        setLayout((current) => focusPane(current, paneId))
-        split(paneId, direction)
+        focusLeafOf(AGENT_LEAF)
+        split(paneId, direction, AGENT_LEAF)
       }}
       onToggleMaximize={(paneId) => { movePanes(() => { setLayout((current) => toggleMaximize(current, paneId)) }) }}
       onClose={closePaneById}
       onClear={() => { void sendTo(session, CLEAR_SCREEN).catch((error: unknown) => { toast.failed('Could not clear the screen', error) }) }}
       onCopyPath={() => { copyPathOf(session.id) }}
       onRename={() => { setRenameId(session.id) }}
-      branchMenu={branchMenu}
       onRestart={restartPane}
-      onAnswerHelpers={(choice) => { void answerHelpers(session.conversation, choice).catch((error: unknown) => { toast.failed('Could not answer the helper request', error) }) }}
+      outsideAsks={{ onHelpers: () => { setOpenAsk({ kind: 'helpers', sessionId: session.id }) }, onSecret: (askId) => { setOpenAsk({ kind: 'secret', sessionId: session.id, askId }) } }}
+    />
+  )
+  return (
+    <SplitTree
+      tree={splits.tree}
+      leafKeyOf={(leaf) => leafKey(session.id, leaf)}
+      dropLeaf={dragLeaf !== null && dropLeaf !== dragLeaf ? dropLeaf : null}
+      onResize={(path, ratio) => { resizeSplit(session.id, path, ratio) }}
+      renderPane={(leaf) => {
+        if (leaf === AGENT_LEAF) return agentPane
+        const shell = sessionMap.get(leaf)
+        // A shell's terminal is built when its session is on screen: one kept mounted out of sight would hold a GPU
+        // context for a pane nobody is looking at, and a browser has few of those.
+        if (kept) return null
+        // A shell just started, or just closed, is not in the list yet or any more: its card stands in its room
+        // meanwhile, so the split glides open around a pane and a close fades a pane out, never an empty gap.
+        if (shell === undefined) return <SplitPlaceholder id={leaf} />
+        return (
+          <SplitPane
+            slotId={pane.id}
+            leaf={leafKey(session.id, leaf)}
+            owner={session}
+            shell={shell}
+            number={splits.numbers[leaf]}
+            focused={focused && !outsidePanes && splits.focus === leaf}
+            splitRefusal={splitRefusal}
+            onFocus={() => { focusLeafOf(leaf) }}
+            onSplit={(direction) => {
+              focusLeafOf(leaf)
+              split(pane.id, direction, leaf)
+            }}
+            onClose={() => { closeSplit(session, leaf) }}
+          />
+        )
+      }}
     />
   )
 }

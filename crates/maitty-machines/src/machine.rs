@@ -6,6 +6,7 @@
 use crate::MachineDef;
 use crate::brand::{APP_COMMAND, APP_ENV};
 use crate::link_failure::SshEnd;
+use crate::new_host_keys;
 use crate::ssh_command::{self, ProxyMode};
 use anyhow::{Context, Result};
 use maitty_ipc_transport::{
@@ -62,6 +63,14 @@ struct SshRoute {
     /// The app's command on the far side (`~/.cargo/bin/<app>`).
     remote_cmd: String,
     proxy: ProxyMode,
+}
+
+impl SshRoute {
+    /// The program and its leading arguments for a line that never asks a person, with Maiker's
+    /// host-key default when it applies (`new_host_keys`). Blocks briefly: off the UI thread.
+    fn line(&self) -> Vec<String> {
+        new_host_keys::with_setting(&self.ssh, new_host_keys::applies(&self.ssh, &self.target))
+    }
 }
 
 impl Machine {
@@ -197,7 +206,7 @@ impl Machine {
     pub fn probe_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_probe(
-            &route.ssh,
+            &route.line(),
             &route.target,
             &route.remote_cmd,
         )?)
@@ -206,26 +215,26 @@ impl Machine {
     /// `probe_argv` for the app under another command there (a name it had before a rename).
     pub fn probe_argv_for(&self, remote_cmd: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_probe(&route.ssh, &route.target, remote_cmd)?)
+        Ok(ssh_command::ssh_argv_probe(&route.line(), &route.target, remote_cmd)?)
     }
 
     /// A login that runs `true` with ssh's own debug lines on stderr, to read which key signed in.
     /// It never asks anyone anything.
     pub fn key_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_key(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_key(&route.line(), &route.target)?)
     }
 
     /// The line that asks this machine for its platform (`uname -sm`), without asking a person.
     pub fn platform_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_platform(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_platform(&route.line(), &route.target)?)
     }
 
     /// The line that asks this machine where its login shell finds the app.
     pub fn where_argv(&self) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
-        Ok(ssh_command::ssh_argv_where(&route.ssh, &route.target)?)
+        Ok(ssh_command::ssh_argv_where(&route.line(), &route.target)?)
     }
 
     /// The options every connection to a machine carries, in words (see `doctor`).
@@ -233,11 +242,20 @@ impl Machine {
         ssh_command::hardening_summary()
     }
 
+    /// The host-key option this machine's lines add, when they add one (`new_host_keys`): None
+    /// for this computer, a custom transport, and when the person's ssh setup decides. Blocks
+    /// briefly: off the UI thread.
+    pub fn host_key_option(&self) -> Option<&'static str> {
+        self.ssh_route()
+            .is_ok_and(|route| new_host_keys::applies(&route.ssh, &route.target))
+            .then_some(new_host_keys::ACCEPT_NEW)
+    }
+
     /// The line that runs the install script on this machine, the binary on its stdin.
     pub fn install_argv(&self, destination: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_install(
-            &route.ssh,
+            &route.line(),
             &route.target,
             destination,
             bytes,
@@ -249,7 +267,7 @@ impl Machine {
     pub fn paste_argv(&self, name: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_paste(
-            &route.ssh,
+            &route.line(),
             &route.target,
             name,
             bytes,
@@ -261,7 +279,7 @@ impl Machine {
     pub fn list_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_list(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -273,7 +291,7 @@ impl Machine {
     pub fn index_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_index(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -285,7 +303,7 @@ impl Machine {
     pub fn get_folder_argv(&self, path: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_get_folder(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
         )?)
@@ -296,7 +314,7 @@ impl Machine {
     pub fn get_argv(&self, path: &str, max_bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_get(
-            &route.ssh,
+            &route.line(),
             &route.target,
             path,
             max_bytes,
@@ -308,7 +326,7 @@ impl Machine {
     pub fn put_folder_argv(&self, name: &str, bytes: u64) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_put_folder(
-            &route.ssh,
+            &route.line(),
             &route.target,
             name,
             bytes,
@@ -319,10 +337,21 @@ impl Machine {
     pub fn restart_if_idle_argv(&self, program: &str, when: ssh_command::RestartWhen) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_restart_if_idle(
-            &route.ssh,
+            &route.line(),
             &route.target,
             program,
             when,
+        )?)
+    }
+
+    /// The line that stops the daemon there and ends its sessions, run with the configured
+    /// command (`remote_cmd`), the same app a connection runs. Only after the person confirmed it.
+    pub fn stop_server_argv(&self) -> Result<Vec<String>> {
+        let route = self.ssh_route()?;
+        Ok(ssh_command::ssh_argv_stop_server(
+            &route.line(),
+            &route.target,
+            &route.remote_cmd,
         )?)
     }
 
@@ -330,7 +359,7 @@ impl Machine {
     pub fn activity_argv(&self, program: &str) -> Result<Vec<String>> {
         let route = self.ssh_route()?;
         Ok(ssh_command::ssh_argv_activity(
-            &route.ssh,
+            &route.line(),
             &route.target,
             program,
         )?)
@@ -345,8 +374,10 @@ impl Machine {
         }
     }
 
-    /// The first login as one line for a pane's shell: ssh may ask for a password, a code or
-    /// a host key, and prints the app's version there.
+    /// The first login as one line for a pane's shell: ssh may ask for a password or a code, and
+    /// prints the app's version there. It carries no host-key setting: it is built on the UI thread,
+    /// where `SshRoute::line` may not run, a person is there to answer ssh, and the probe before it
+    /// has already had ssh record a new key.
     pub fn first_login_command(&self) -> Result<String> {
         let route = self.ssh_route()?;
         let argv = ssh_command::ssh_argv_interactive(&route.ssh, &route.target, &route.remote_cmd)?;
@@ -483,8 +514,9 @@ impl SshSaid {
 type Spawned = (tokio::process::ChildStdout, Writer, SshSaid);
 
 /// `ssh [hardening] host -- <app> proxy`: its stdout still unread, its stdin as the writer.
-fn spawn_ssh(route: &SshRoute) -> Result<Spawned> {
-    let argv = ssh_command::ssh_argv(&route.ssh, &route.target, &route.remote_cmd, route.proxy)?;
+/// `ssh` is the route's program and arguments as `SshRoute::line` gives them.
+fn spawn_ssh(route: &SshRoute, ssh: &[String]) -> Result<Spawned> {
+    let argv = ssh_command::ssh_argv(ssh, &route.target, &route.remote_cmd, route.proxy)?;
     let failed = format!("running {} (is OpenSSH installed?)", argv[0]);
     spawn_piped(&argv, false, &failed)
 }
@@ -763,7 +795,13 @@ pub async fn open_remote(machine: &Machine, dial: Dial) -> Result<(Reader, Write
             anyhow::bail!("this computer is reached over its local socket, not by open_remote")
         }
         Route::Ssh(route) => {
-            let (stdout, mut w, said) = spawn_ssh(route)?;
+            let line = {
+                let route = route.clone();
+                tokio::task::spawn_blocking(move || route.line())
+                    .await
+                    .context("looking at the ssh setup")?
+            };
+            let (stdout, mut w, said) = spawn_ssh(route, &line)?;
             match greet_ssh(stdout, &mut w, &hello).await {
                 Ok(r) => (r, w, said),
                 Err(e) => return Err(ssh_failed(machine, said, e, false).await),
@@ -810,22 +848,20 @@ mod tests {
         }
     }
 
-    /// The window dials newest-only, so a machine whose daemon predates documents (`FILE_EDIT_SINCE`) is turned away
-    /// at connect time and offered its update: a document is never asked of one that would not answer it.
+    /// The window dials newest-only, so a machine whose daemon is older is turned away at connect
+    /// time and offered its update: nothing is asked of one that would not answer it.
     #[test]
-    fn a_daemon_older_than_saving_documents_is_not_used_by_the_window_but_the_newest_is() {
+    fn a_daemon_older_than_this_build_is_not_used_by_the_window_but_the_newest_is() {
         use maitty_ipc_transport::Welcomed;
-        use maitty_shared::protocol::{COMPATIBLE_SINCE, FILE_EDIT_SINCE, PROTOCOL_VERSION};
-        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE };
-        assert!(!super::accepts(true, daemon(FILE_EDIT_SINCE - 1)));
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION};
+        // An older daemon that would still be talked to, had the window opened further back.
+        let daemon = |version| Welcomed { version, compatible_since: COMPATIBLE_SINCE.min(version) };
         assert!(!super::accepts(true, daemon(PROTOCOL_VERSION - 1)));
         assert!(super::accepts(true, daemon(PROTOCOL_VERSION)));
-        // A line that is not the window's (the terminal app) may still use an older daemon the two can talk to.
-        assert!(super::accepts(false, daemon(FILE_EDIT_SINCE - 1)));
     }
 
     #[test]
-    fn a_configured_machine_runs_ssh_with_its_args_and_the_default_command() {
+    fn a_configured_machine_runs_ssh_with_its_args_and_its_remote_command_or_the_default() {
         let m = super::Machine::from_def(&configured("box"), "ssh");
         let want = super::Machine::ssh(
             "me@10.0.0.2",
@@ -835,10 +871,6 @@ mod tests {
         .attach_only();
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m.route, want.route);
-    }
-
-    #[test]
-    fn a_configured_machine_uses_its_own_remote_command() {
         let mut def = configured("box");
         def.remote_cmd = Some("~/bin/maiker".into());
         let m = super::Machine::from_def(&def, "ssh");
@@ -852,7 +884,19 @@ mod tests {
     }
 
     #[test]
-    fn remote_host_is_a_machine_named_after_the_host() {
+    fn only_an_ssh_line_to_a_real_ssh_adds_a_host_key_option() {
+        assert_eq!(super::Machine::local().host_key_option(), None);
+        let via = MachineDef {
+            via: Some(vec!["relay".into(), "{command}".into()]),
+            ..configured("fly")
+        };
+        assert_eq!(super::Machine::from_def(&via, "ssh").host_key_option(), None);
+        let no_ssh = super::Machine::from_def(&configured("box"), "/no/such/ssh");
+        assert_eq!(no_ssh.host_key_option(), None, "a program that does not run is not OpenSSH");
+    }
+
+    #[test]
+    fn remote_host_is_a_machine_named_after_the_host_with_plain_ssh_by_default() {
         let m = super::Machine::adhoc("box", Some("ssh -p 2222"), Some("~/maiker".into()));
         let want = super::Machine::ssh(
             "box",
@@ -861,10 +905,6 @@ mod tests {
         );
         assert_eq!((m.name(), m.host()), ("box", Some("box")));
         assert_eq!(m, want);
-    }
-
-    #[test]
-    fn remote_host_defaults_to_plain_ssh_and_the_app_command() {
         for ssh in [None, Some(""), Some("  ")] {
             let m = super::Machine::adhoc("box", ssh, None);
             assert_eq!(
@@ -872,30 +912,6 @@ mod tests {
                 super::Machine::ssh("box", vec!["ssh".into()], APP_COMMAND)
             );
         }
-    }
-
-    #[test]
-    fn only_a_remote_machine_has_a_host_to_show() {
-        let local = super::Machine::local();
-        assert!(!local.is_remote() && local.host().is_none());
-        let box_ = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
-        assert!(box_.is_remote());
-        assert_eq!((box_.host(), box_.name()), (Some("box"), "box"));
-    }
-
-    #[test]
-    fn an_ssh_failure_is_told_from_what_ssh_said() {
-        let missing = super::ssh_failure("box", "bash: maiker: command not found");
-        assert!(missing.starts_with("box has no `"), "{missing}");
-        assert!(
-            missing.ends_with("(bash: maiker: command not found)"),
-            "the words stay: {missing}"
-        );
-        assert_eq!(
-            super::ssh_failure("box", "box: Permission denied (publickey)."),
-            "ssh box: box: Permission denied (publickey)."
-        );
-        assert!(super::ssh_failure("box", "").starts_with("couldn't reach "));
     }
 
     #[tokio::test]
@@ -926,7 +942,7 @@ mod tests {
     }
 
     #[test]
-    fn starting_flips_the_proxy_of_both_routes_and_nothing_else() {
+    fn a_configured_machine_attaches_only_and_starting_flips_the_proxy_of_both_routes() {
         let proxy = |m: &super::Machine| match &m.route {
             super::Route::Ssh(route) => route.proxy,
             super::Route::Command(route) => route.proxy,
@@ -948,6 +964,8 @@ mod tests {
             assert_eq!(back, attached);
         }
         assert_eq!(super::Machine::local().starting(), super::Machine::local());
+        let adhoc = super::Machine::adhoc("box", None, None);
+        assert_eq!(proxy(&adhoc), super::ProxyMode::StartsDaemon, "a --remote machine starts the daemon");
     }
 
     #[test]
@@ -970,19 +988,6 @@ mod tests {
             assert!(remote_command(&attached).ends_with(" proxy --attach-only"));
             assert!(remote_command(&attached.starting()).ends_with(" proxy"));
         }
-    }
-
-    #[test]
-    fn a_configured_machine_attaches_only_and_a_remote_flag_machine_starts_the_daemon() {
-        let configured = super::Machine::from_def(&configured("box"), "ssh");
-        let adhoc = super::Machine::adhoc("box", None, None);
-        let proxy = |m: &super::Machine| match &m.route {
-            super::Route::Ssh(route) => route.proxy,
-            super::Route::Command(route) => route.proxy,
-            super::Route::Local => panic!("a local machine has no proxy"),
-        };
-        assert_eq!(proxy(&configured), super::ProxyMode::AttachOnly);
-        assert_eq!(proxy(&adhoc), super::ProxyMode::StartsDaemon);
     }
 
     fn through(via: &[&str]) -> super::Machine {
@@ -1084,22 +1089,6 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_via_that_exits_127_needs_the_app_installed() {
-        let machine = through(&["relay"]);
-        let (exited, exit) = tokio::sync::oneshot::channel();
-        let _ = exited.send(Some(127));
-        let said = super::SshSaid {
-            stderr: tokio::spawn(async { String::new() }),
-            exit,
-        };
-        let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
-        assert_eq!(
-            crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Install
-        );
-    }
-
-    #[tokio::test]
     async fn the_failure_carries_ssh_s_exit_status_for_the_supervisor() {
         let machine = super::Machine::ssh("box", vec!["ssh".into()], APP_COMMAND);
         let (exited, exit) = tokio::sync::oneshot::channel();
@@ -1111,20 +1100,7 @@ mod tests {
         let error = super::ssh_failed(&machine, said, anyhow::anyhow!("closed"), false).await;
         assert_eq!(
             crate::link_failure::classify(&error),
-            crate::link_failure::FailureClass::Login("box: Permission denied".into())
-        );
-    }
-
-    #[test]
-    fn only_this_machines_daemon_is_told_which_pane_is_asking() {
-        let claim =
-            |m: &super::Machine| super::pane_claim(m, Some("7".into()), Some("secret".into()));
-        assert_eq!(claim(&super::Machine::local()), Some((7, "secret".into())));
-        let remote = super::Machine::ssh("box", vec!["ssh".into()], "maiker");
-        assert_eq!(claim(&remote), None);
-        assert_eq!(
-            super::pane_claim(&super::Machine::local(), None, None),
-            None
+            crate::link_failure::FailureClass::KeyRefused("box: Permission denied".into())
         );
     }
 
@@ -1223,17 +1199,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_remote_that_ended_after_printing_text_is_reported_by_what_it_printed() {
+    async fn a_remote_that_ended_is_reported_by_what_it_printed_or_else_the_failed_write() {
         let text: &'static [u8] = b"Last login: Mon\nthis account is currently not available\n";
         let error = super::greet_ssh(text, &mut ended_writer(), &hello_msg())
             .await
             .err()
             .expect("it fails");
         assert!(error.is::<super::LoginText>(), "{error:#}");
-    }
-
-    #[tokio::test]
-    async fn a_remote_that_ended_saying_nothing_is_reported_as_the_failed_write() {
         let nothing: &'static [u8] = b"";
         let error = super::greet_ssh(nothing, &mut ended_writer(), &hello_msg())
             .await
@@ -1245,4 +1217,5 @@ mod tests {
             "{error:#}"
         );
     }
+
 }

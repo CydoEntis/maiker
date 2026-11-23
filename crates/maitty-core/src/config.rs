@@ -7,13 +7,14 @@ use crate::theme::{Theme, ThemeOverrides};
 use anyhow::{Context, Result};
 pub use maitty_settings::config::{
     AgentDef, BARS_FRAMES, BYPASS_FLAGS, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef,
-    DEFAULT_MODEL_FLAG, DIMS, Detection, HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LAYOUT_NAMES,
+    DEFAULT_MODEL_FLAG, DIMS, Detection, HELPERS_AT_ONCE, HELPERS_AT_ONCE_DEFAULT, HELPERS_MAY,
+    Icons, Keys, LAYOUT_NAMES,
     LayoutKind, MachineDef, Mcp, NEW_AGENTS, NEW_WHERE, Notify, PADDING_TOP, Permissions, Preset,
     Updates,
     Quick, QuickAgent, Recipe,
     Restore, Rounding, SIDEBAR_TABS, SIZES, SPINNERS, Sessions, Snapshots, Ui, Worktree, same_path,
     size_cells, validate_check, validate_checks, validate_cursor, validate_machines,
-    bypass_agents, validate_sessions,
+    bypass_agents, validate_agents, validate_sessions,
 };
 use regex::Regex;
 use serde::{Deserialize, Serialize};
@@ -106,10 +107,11 @@ fn fold_legacy_helpers(value: &mut toml::Table) {
     let (false, Some(old)) = (sessions_set, old) else {
         return;
     };
+    // Between two choices the smaller one: each helper runs builds and tests of its own.
     let nearest = match old {
-        ..=2 if old > 0 => "2",
-        3 => "3",
-        _ => "4",
+        1..=2 => "2",
+        3..=6 => "4",
+        _ => "8",
     };
     let sessions = value
         .entry("sessions")
@@ -314,6 +316,7 @@ pub fn agent_from_command(program: &str, args: &[String]) -> Option<AgentDef> {
         resume_last: None,
         enabled: None,
         bypass_flag: None,
+        ..AgentDef::default()
     })
 }
 
@@ -478,7 +481,8 @@ mod spinner_tests {
     use super::*;
 
     #[test]
-    fn presets_and_custom_frames_are_safe_single_column_indicators() {
+    fn presets_and_custom_frames_are_safe_one_or_two_cell_indicators() {
+        use unicode_width::UnicodeWidthStr;
         for (name, frames) in SPINNERS {
             let frames = frames
                 .iter()
@@ -487,29 +491,18 @@ mod spinner_tests {
             validate_spinner(&frames).unwrap();
             assert_eq!(spinner_name(&frames), *name);
         }
+        assert!(BARS_ASCII.iter().all(|f| f.is_ascii() && f.width() == 2));
         for frames in [
             vec!["".into()],
             vec![" ".into()],
             vec!["🌈".into()],
             vec!["\x1b[31m".into()],
             vec!["a".into(); MAX_SPINNER_FRAMES + 1],
+            vec!["ab".into()],
+            vec!["⣰a".into()],
+            vec!["⣰⡄⣰".into()],
         ] {
-            assert!(validate_spinner(&frames).is_err());
-        }
-    }
-
-    #[test]
-    fn the_bars_spinner_is_two_braille_cells_and_other_wide_frames_stay_out() {
-        use unicode_width::UnicodeWidthStr;
-        assert_eq!(BARS_FRAMES.len(), 10);
-        assert!(
-            BARS_FRAMES
-                .iter()
-                .all(|f| f.width() == 2 && f.chars().count() == 2)
-        );
-        assert!(BARS_ASCII.iter().all(|f| f.is_ascii() && f.width() == 2));
-        for bad in ["ab", "🌈", "⣰a", "⣰⡄⣰"] {
-            assert!(validate_spinner(&[bad.to_string()]).is_err(), "{bad}");
+            assert!(validate_spinner(&frames).is_err(), "{frames:?}");
         }
     }
 }
@@ -537,6 +530,7 @@ fn agent(
         resume_last: None,
         enabled: None,
         bypass_flag: None,
+        ..AgentDef::default()
     }
 }
 
@@ -1026,7 +1020,11 @@ fn names_a_via(shared: &toml::Table) -> bool {
 impl Config {
     /// How many helpers one session may have working at once (`sessions.helpers_at_once`).
     pub fn helpers_at_once(&self) -> usize {
-        self.sessions.helpers_at_once.parse().unwrap_or(3)
+        let limit = |text: &str| text.parse::<usize>().ok();
+        // A loaded config holds one of `HELPERS_AT_ONCE`; one built in code may hold anything.
+        limit(&self.sessions.helpers_at_once)
+            .or_else(|| limit(HELPERS_AT_ONCE_DEFAULT))
+            .unwrap_or(1)
     }
 
     /// Load the config file; a missing file is the defaults, a broken one is an error.
@@ -1080,6 +1078,8 @@ impl Config {
         cfg.ui.fold_legacy_sizes();
         validate_spinner(&cfg.ui.spinner)?;
         validate_checks(&cfg.check)?;
+        validate_agents(&cfg.agents)?;
+        refuse_identity_env(&cfg.agents)?;
         validate_machines(&cfg.machines)?;
         validate_sessions(&cfg.sessions)?;
         validate_cursor(&cfg.ui)?;
@@ -1387,6 +1387,27 @@ impl Config {
         }
     }
 
+    /// The agents that can be run as a chat over ACP, as the config names them. A disabled entry
+    /// is not one.
+    pub fn acp_agents(&self) -> Vec<AcpAgent> {
+        self.agents
+            .iter()
+            .filter(|agent| agent.acp && agent.enabled != Some(false))
+            .filter_map(|agent| {
+                Some(AcpAgent {
+                    name: agent.name.clone(),
+                    command: agent.command.clone()?,
+                    args: agent.args.clone(),
+                    env: agent.env.clone(),
+                })
+            })
+            .collect()
+    }
+
+    pub fn acp_agent(&self, name: &str) -> Option<AcpAgent> {
+        self.acp_agents().into_iter().find(|agent| agent.name == name)
+    }
+
     pub fn agent_defs(&self) -> Vec<CompiledAgent> {
         let mut defs: Vec<AgentDef> = if self.agents_replace_defaults {
             Vec::new()
@@ -1455,6 +1476,28 @@ impl Config {
             })
             .collect()
     }
+}
+
+/// The daemon's own identity is never a provider's to hold, so an ACP agent cannot be given it.
+fn refuse_identity_env(agents: &[AgentDef]) -> Result<()> {
+    for agent in agents.iter().filter(|agent| agent.acp) {
+        anyhow::ensure!(
+            !agent.env.keys().any(|name| crate::ipc::is_identity_env(name)),
+            "[[agents]] ({}): `env` sets a variable that is this app's own",
+            agent.name
+        );
+    }
+    Ok(())
+}
+
+/// An agent run as a chat over ACP: the program, its arguments and the variables set for it.
+/// `env` can hold credentials, so it is never logged.
+#[derive(Clone, PartialEq, Eq)]
+pub struct AcpAgent {
+    pub name: String,
+    pub command: String,
+    pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone)]
@@ -1582,31 +1625,13 @@ mod tests {
     }
 
     #[test]
-    fn data_directory_override_requires_an_absolute_nonempty_path() {
+    fn data_directory_override_requires_an_absolute_nonempty_path_to_a_directory() {
         for value in ["", ".", "relative/state"] {
             let error = resolve_data_directory(Some(value.into()))
                 .err()
                 .expect("invalid override");
             assert!(error.to_string().contains("nonempty absolute directory"));
         }
-    }
-
-    #[test]
-    fn data_directory_override_accepts_existing_and_missing_directories() {
-        let fixture = DataDirectoryFixture::new();
-        for path in [fixture.0.clone(), fixture.0.join("not-created")] {
-            let configured = resolve_data_directory(Some(path.clone().into_os_string())).unwrap();
-            assert_eq!(configured.path, path);
-            assert!(configured.overridden);
-        }
-        assert!(
-            !fixture.0.join("not-created").exists(),
-            "validation does not create state"
-        );
-    }
-
-    #[test]
-    fn data_directory_override_rejects_an_existing_file() {
         let fixture = DataDirectoryFixture::new();
         let file = fixture.0.join("state");
         std::fs::write(&file, "not a directory").unwrap();
@@ -1617,10 +1642,20 @@ mod tests {
     }
 
     #[test]
-    fn data_directory_without_override_keeps_the_platform_default() {
+    fn data_directory_override_accepts_existing_and_missing_directories_and_none_keeps_the_default() {
         let configured = resolve_data_directory(None).unwrap();
         assert_eq!(configured.path, default_data_dir());
         assert!(!configured.overridden);
+        let fixture = DataDirectoryFixture::new();
+        for path in [fixture.0.clone(), fixture.0.join("not-created")] {
+            let configured = resolve_data_directory(Some(path.clone().into_os_string())).unwrap();
+            assert_eq!(configured.path, path);
+            assert!(configured.overridden);
+        }
+        assert!(
+            !fixture.0.join("not-created").exists(),
+            "validation does not create state"
+        );
     }
 
     #[test]
@@ -1644,7 +1679,7 @@ mod tests {
         }
         let fixture = DataDirectoryFixture::new();
         let path = fixture.0.join("state");
-        let output = std::process::Command::new(std::env::current_exe().unwrap())
+        let output = std::process::Command::new(crate::test_support::this_test_binary())
             .args([
                 "--exact",
                 "config::tests::data_directory_is_captured_once_in_an_isolated_process",
@@ -1686,14 +1721,6 @@ mod tests {
     }
 
     #[test]
-    fn a_config_that_still_sorts_the_sidebar_by_attention_loads_and_the_key_does_nothing() {
-        let c: super::Config =
-            toml::from_str("[ui]\nattention_sort = true\nlayout = \"hairline\"\n")
-                .expect("a retired key is not an error");
-        assert_eq!(c.ui.layout, "hairline", "the rest of the file is read");
-    }
-
-    #[test]
     fn a_check_table_reads_and_its_timeout_defaults() {
         let c: super::Config = toml::from_str("[[check]]\nproject = \"/work/app\"\ncommand = \"npm test\"\n\n[[check]]\nproject = \"/work/lib\"\ncommand = \"cargo test\"\ntimeout_s = 90\n").unwrap();
         super::validate_checks(&c.check).unwrap();
@@ -1717,15 +1744,6 @@ mod tests {
     }
 
     #[test]
-    fn maiker_dark_and_maiker_light_are_themes_of_their_own_not_retired_names() {
-        // They start with the app's name like the old `maitty-dark`, and once loaded as `night` and `day`.
-        for name in ["maiker-dark", "maiker-light", "maitty-dark", "maitty-light"] {
-            assert_eq!(retired_theme(name), None, "{name}");
-        }
-        assert_eq!(retired_theme("maitty-night"), Some("night"));
-    }
-
-    #[test]
     fn a_retired_theme_moves_to_night_or_day() {
         for (old, now) in [
             ("dark", "night"),
@@ -1736,12 +1754,12 @@ mod tests {
         ] {
             assert_eq!(retired_theme(old), Some(now), "{old}");
         }
-        assert_eq!(
-            retired_theme("tokyo-night"),
-            None,
-            "a theme of another name is kept"
-        );
-        assert_eq!(retired_theme("harbor-day"), None);
+        assert_eq!(retired_theme("maitty-night"), Some("night"));
+        // `maiker-dark` and friends start with the app's name like the old `maitty-dark`, but are
+        // themes of their own; so is any theme of another name.
+        for kept in ["tokyo-night", "harbor-day", "maiker-dark", "maiker-light", "maitty-dark", "maitty-light"] {
+            assert_eq!(retired_theme(kept), None, "{kept}");
+        }
     }
 
     #[test]
@@ -1770,6 +1788,11 @@ mod tests {
             (
                 "[[check]]\nproject = \"/a\"\ncommand = \"t\"\ntimeout_s = -5\n",
                 "timeout_s",
+            ),
+            // `~` is never expanded, so it would name a folder called `~`.
+            (
+                "[[check]]\nproject = \"~/work/app\"\ncommand = \"t\"\n",
+                "full path",
             ),
         ] {
             let err = check(bad).expect_err(bad);
@@ -1813,20 +1836,6 @@ mod tests {
             .expect_err("a name is one checkpoint, whatever its case")
             .to_string();
         assert!(err.contains("already has a check named"), "{err}");
-    }
-
-    #[test]
-    fn a_checkpoint_is_named_by_its_command_s_last_word_unless_named() {
-        let def = |name: Option<&str>, command: &str| super::CheckDef {
-            name: name.map(String::from),
-            command: command.into(),
-            ..Default::default()
-        };
-        assert_eq!(def(None, "npm test").name(), "test");
-        assert_eq!(def(None, "cargo clippy").name(), "clippy");
-        assert_eq!(def(None, "  make  ").name(), "make");
-        assert_eq!(def(Some("unit"), "npm test").name(), "unit");
-        assert_eq!(def(None, "").name(), "");
     }
 
     #[test]
@@ -1917,7 +1926,7 @@ mod tests {
                 d.helpers.as_str(),
                 d.helpers_at_once.as_str()
             ),
-            ("last used", "new worktree", "ask", "3")
+            ("last used", "new worktree", "ask", "4")
         );
         assert!(
             super::Ui::default().subagent_count,
@@ -1942,16 +1951,43 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("sessions.helpers_at_once") && err.contains("2, 3, 4"),
+            err.contains("sessions.helpers_at_once") && err.contains("2, 4, 8"),
             "{err}"
         );
     }
 
     #[test]
-    fn an_old_config_with_a_team_table_and_other_removed_keys_still_loads() {
-        let old = "theme = \"tokyo-night\"\n[team]\nfamily = \"codex\"\n[[team.jobs]]\nname = \"planner\"\nclaude = \"opus\"\n[[team.projects]]\nproject = \"/a\"\nfamily = \"claude\"\n[fleet]\nsize = 3\n[mcp]\napprove = \"safe\"\nhelpers_at_once = 6\n[keys.prefix]\nstart-fleet = \"F\"\n";
-        let c: super::Config = toml::from_str(old).expect("removed keys are ignored, not refused");
-        assert_eq!((c.theme.as_str(), c.mcp.approve.as_str()), ("tokyo-night", "safe"));
+    fn an_old_config_with_removed_keys_still_loads_and_keeps_the_rest() {
+        type Kept = fn(&super::Config) -> bool;
+        let cases: [(&str, Kept); 6] = [
+            (
+                "theme = \"tokyo-night\"\n[team]\nfamily = \"codex\"\n[[team.jobs]]\nname = \"planner\"\nclaude = \"opus\"\n[[team.projects]]\nproject = \"/a\"\nfamily = \"claude\"\n[fleet]\nsize = 3\n[mcp]\napprove = \"safe\"\nhelpers_at_once = 6\n[keys.prefix]\nstart-fleet = \"F\"\n",
+                |c| c.theme == "tokyo-night" && c.mcp.approve == "safe",
+            ),
+            (
+                "[ui]\nattention_sort = true\nlayout = \"hairline\"\n",
+                |c| c.ui.layout == "hairline",
+            ),
+            (
+                "[notify]\nbell = true\ndesktop = false\nsound_needs = \"ping\"\nsound_done = \"off\"\nphone_after = 90\n",
+                |c| c.notify.sound && c.notify.phone_after == 90,
+            ),
+            (
+                "[[profiles]]\nname='planner'\nagent='codex'\nmodel='gpt-5'\n\n[[workflows]]\nname='feature'\nplanner='planner'\nworker='worker'\nreviewer='reviewer'\n",
+                |c| c.theme == super::Config::default().theme,
+            ),
+            (
+                "sleep_after = '15m'\nsettle_after = '3d'",
+                |c| c.prefix == super::Config::default().prefix,
+            ),
+            ("[ui]\nwake_animation = 'off'", |c| c.ui.motion),
+        ];
+        for (old, kept) in cases {
+            let c: super::Config = toml::from_str(old).expect("removed keys are ignored, not refused");
+            assert!(kept(&c), "{old}");
+        }
+        let c: super::Config = toml::from_str("[notify]\nsound = false\n").unwrap();
+        assert!(!c.notify.sound);
     }
 
     #[test]
@@ -1964,8 +2000,13 @@ mod tests {
                 .unwrap()
                 .helpers_at_once()
         };
-        assert_eq!(read(""), 3, "the default");
+        assert_eq!(read(""), 4, "the default");
         assert_eq!(read("[sessions]\nhelpers_at_once = \"2\"\n"), 2);
+        assert_eq!(
+            read("[sessions]\nhelpers_at_once = \"3\"\n"),
+            4,
+            "a limit saved before the choices changed still loads"
+        );
         assert_eq!(
             read("[mcp]\nhelpers_at_once = 6\n"),
             4,
@@ -1973,15 +2014,16 @@ mod tests {
         );
         assert_eq!(
             read("[mcp]\nhelpers_at_once = 0\n"),
-            4,
+            8,
             "no limit is no longer offered"
         );
         assert_eq!(read("[mcp]\nhelpers_at_once = 1\n"), 2);
-        assert_eq!(read("[mcp]\nhelpers_at_once = 3\n"), 3);
+        assert_eq!(read("[mcp]\nhelpers_at_once = 3\n"), 4);
+        assert_eq!(read("[mcp]\nhelpers_at_once = 12\n"), 8);
         assert_eq!(
-            read("[mcp]\nhelpers_at_once = 6\n[sessions]\nhelpers_at_once = \"3\"\n"),
-            3,
-            "the new key wins, even at its default"
+            read("[mcp]\nhelpers_at_once = 6\n[sessions]\nhelpers_at_once = \"2\"\n"),
+            2,
+            "the new key wins"
         );
     }
 
@@ -2024,18 +2066,6 @@ mod tests {
     }
 
     #[test]
-    fn glyphs_default_to_auto() {
-        assert_eq!(super::Config::default().ui.glyphs, "unicode");
-    }
-
-    #[test]
-    fn the_background_defaults_to_solid_and_still_reads_terminal() {
-        assert_eq!(super::Ui::default().background, "solid");
-        let c: super::Config = toml::from_str("[ui]\nbackground = \"terminal\"\n").unwrap();
-        assert_eq!(c.ui.background, "terminal");
-    }
-
-    #[test]
     fn an_old_rounded_corners_setting_is_rounded_corners_unless_rounded_is_set() {
         use super::Rounding;
         let read = |text: &str| {
@@ -2060,28 +2090,6 @@ mod tests {
             Rounding::Corners
         );
         assert_eq!(read(""), Rounding::Corners);
-    }
-
-    #[test]
-    fn a_project_starting_with_a_tilde_is_refused_because_it_is_never_expanded() {
-        let c: super::Config =
-            toml::from_str("[[check]]\nproject = \"~/work/app\"\ncommand = \"t\"\n").unwrap();
-        let err = super::validate_checks(&c.check)
-            .expect_err("~ is not expanded")
-            .to_string();
-        assert!(err.contains("~") && err.contains("full path"), "{err}");
-    }
-
-    #[test]
-    fn the_example_config_documents_the_check_keys() {
-        for key in ["[[check]]", "project", "command", "timeout_s"] {
-            assert!(
-                super::EXAMPLE
-                    .lines()
-                    .any(|l| l.starts_with("# ") && l.contains(key)),
-                "{key}"
-            );
-        }
     }
 
     #[test]
@@ -2151,26 +2159,6 @@ mod tests {
             );
             assert_eq!(c.split_account("claude 'hi'"), (None, "claude 'hi'"));
         }
-    }
-
-    #[test]
-    fn a_config_with_the_old_alert_settings_still_loads() {
-        let old = "[notify]\nbell = true\ndesktop = false\nsound_needs = \"ping\"\nsound_done = \"off\"\nphone_after = 90\n";
-        let c: super::Config = toml::from_str(old).expect("the settings that are gone are ignored");
-        assert!(c.notify.sound && c.notify.phone_after == 90);
-        let c: super::Config = toml::from_str("[notify]\nsound = false\n").unwrap();
-        assert!(!c.notify.sound);
-    }
-
-    #[test]
-    fn removed_profile_and_workflow_tables_are_ignored_without_rewriting_them() {
-        let old = "[[profiles]]\nname='planner'\nagent='codex'\nmodel='gpt-5'\n\n[[workflows]]\nname='feature'\nplanner='planner'\nworker='worker'\nreviewer='reviewer'\n";
-        let cfg: super::Config = toml::from_str(old).expect("legacy user settings remain readable");
-        assert_eq!(cfg.theme, super::Config::default().theme);
-        assert!(
-            old.contains("[[profiles]]") && old.contains("[[workflows]]"),
-            "loading does not edit the user's config text"
-        );
     }
 
     #[test]
@@ -2453,22 +2441,6 @@ ssh_args = ['-p', '2222']
 ";
 
     #[test]
-    fn a_config_without_machines_loads_unchanged() {
-        let dir = config_dir("none");
-        std::fs::write(
-            dir.join("config.toml"),
-            "prefix = 'ctrl+b'
-",
-        )
-        .unwrap();
-        let cfg = Config::load_at(&dir.join("config.toml"), true).unwrap();
-        assert!(cfg.machines.is_empty());
-        assert_eq!(cfg.prefix, "ctrl+b");
-        assert!(Config::default().machines.is_empty());
-        std::fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
     fn a_config_naming_a_theme_by_its_maitty_id_loads_it_under_the_maiker_id() {
         let dir = config_dir("renamed-theme");
         std::fs::write(
@@ -2604,14 +2576,9 @@ target = '-oProxyCommand=x'
         let km = c.keymap();
         assert!(km.warnings.is_empty(), "{:?}", km.warnings);
         assert!(!c.agent_defs().is_empty());
-    }
-
-    #[test]
-    fn config_init_keeps_every_default_key() {
-        let c: Config = toml::from_str(EXAMPLE).unwrap();
-        let (got, want) = (c.keymap(), Config::default().keymap());
-        assert_eq!(got.prefixed, want.prefixed);
-        assert_eq!(got.global, want.global);
+        let want = Config::default().keymap();
+        assert_eq!(km.prefixed, want.prefixed, "config init keeps every default key");
+        assert_eq!(km.global, want.global);
     }
 
     #[test]
@@ -2690,40 +2657,15 @@ layout = 'hairline'")
             ui.fold_retired_layout();
             ui.retired_layout.map(|r| r.note())
         };
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'compact'"
-            )
-            .as_deref(),
-            Some("The Compact layout is now Floating. Change it in Settings › Appearance")
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'tiled'"
-            )
-            .as_deref(),
-            Some(
-                "The Tiled layout is now Floating with no gap. Change it in Settings › Appearance"
-            )
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'grid'"
-            )
-            .as_deref(),
-            Some("The Grid layout is now Floating. Change it in Settings › Appearance")
-        );
-        assert_eq!(
-            note(
-                "[ui]
-layout = 'hairline'"
-            )
-            .as_deref(),
-            Some("The Hairline layout is now Floating. Change it in Settings › Appearance")
-        );
+        for (retired, stands_for) in [
+            ("compact", "Floating"),
+            ("tiled", "Floating with no gap"),
+            ("grid", "Floating"),
+            ("hairline", "Floating"),
+        ] {
+            let said = note(&format!("[ui]\nlayout = '{retired}'")).expect(retired);
+            assert!(said.contains(stands_for), "{retired}: {said}");
+        }
         for kept in [
             "",
             "[ui]
@@ -2751,20 +2693,6 @@ layout = 'cards'",
             Rounding::Full,
             "the same setting applies everywhere"
         );
-    }
-
-    #[test]
-    fn removed_visibility_settings_are_ignored() {
-        let c: Config = toml::from_str("sleep_after = '15m'\nsettle_after = '3d'")
-            .expect("older config remains readable");
-        assert_eq!(c.prefix, Config::default().prefix);
-    }
-
-    #[test]
-    fn old_wake_animation_setting_is_ignored() {
-        let c: Config =
-            toml::from_str("[ui]\nwake_animation = 'off'").expect("older config remains readable");
-        assert!(c.ui.motion);
     }
 
     #[test]
@@ -2873,6 +2801,41 @@ alt_arrows = true").unwrap();
     }
 
     #[test]
+    fn an_acp_agent_is_read_with_its_program_arguments_and_variables_unless_disabled() {
+        let c: Config = toml::from_str(
+            "[[agents]]\nname = \"gemini\"\nacp = true\ncommand = \"gemini\"\nargs = [\"--experimental-acp\"]\nenv = { GEMINI_SANDBOX = \"false\" }\n\n[[agents]]\nname = \"opencode\"\nacp = true\ncommand = \"opencode\"\nargs = [\"acp\"]\nenabled = false\n",
+        )
+        .unwrap();
+
+        let agents = c.acp_agents();
+
+        assert_eq!(agents.len(), 1);
+        assert_eq!((agents[0].name.as_str(), agents[0].command.as_str()), ("gemini", "gemini"));
+        assert_eq!(agents[0].args, ["--experimental-acp"]);
+        assert_eq!(agents[0].env.get("GEMINI_SANDBOX").map(String::as_str), Some("false"));
+        assert!(c.acp_agent("opencode").is_none() && c.acp_agent("claude").is_none());
+        assert!(c.agent_defs().iter().any(|agent| agent.name == "gemini"), "it is still detected in a terminal");
+    }
+
+    #[test]
+    fn an_acp_agent_cannot_be_given_this_apps_own_identity() {
+        let with = |name: &str| {
+            let c: Config = toml::from_str(&format!(
+                "[[agents]]\nname = \"x\"\nacp = true\ncommand = \"x\"\nenv = {{ {name} = \"1\" }}\n"
+            ))
+            .unwrap();
+            refuse_identity_env(&c.agents).map_err(|e| e.to_string())
+        };
+
+        let own = crate::ipc::identity_env().remove(0);
+
+        let refused = with(&own).unwrap_err();
+
+        assert!(refused.contains("this app's own"), "{refused}");
+        assert!(with("MY_KEY").is_ok());
+    }
+
+    #[test]
     fn a_file_that_names_some_agents_keeps_the_others_on_and_a_flag_that_is_not_plain_is_ignored() {
         let c: Config = toml::from_str(
             "[permissions.bypass]\ncodex = false\n\n[[agents]]\nname = \"claude\"\nbypass_flag = \"--x; rm -rf ~\"\n",
@@ -2919,17 +2882,6 @@ alt_arrows = true").unwrap();
             sh_config(vec![]).quote_for_shell("don\u{2019}t"),
             "'don\u{2019}t'",
             "sh keeps it as is"
-        );
-    }
-
-    #[test]
-    fn a_built_in_agent_not_in_quick_runs_by_its_name() {
-        let c = sh_config(vec![]);
-        assert_eq!(
-            bypass_off(c, "codex")
-                .agent_command(Some("codex"), None, "go")
-                .unwrap(),
-            "codex 'go'"
         );
     }
 

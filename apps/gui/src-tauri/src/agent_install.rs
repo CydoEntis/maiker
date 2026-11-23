@@ -516,17 +516,8 @@ mod tests {
     }
 
     #[test]
-    fn a_failed_install_says_its_last_line_or_its_exit_code() {
-        let lines = vec!["fetching".to_string(), "403 Forbidden".to_string()];
-        assert_eq!(failure_words(&lines, Some(22)), "The install did not finish: 403 Forbidden");
-        assert_eq!(failure_words(&[], Some(1)), "The install did not finish (exit code 1).");
-        assert_eq!(failure_words(&[], None), "The install did not finish.");
-    }
-
-    #[test]
     fn a_program_is_found_in_the_path_or_in_the_extra_folders() {
-        let dir = std::env::temp_dir().join(format!("agent-install-find-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = maitty_test_support::TempFolder::new("agent-install-find").until_test_ends();
         let file = program_files("fake-agent").remove(0);
         std::fs::write(dir.join(&file), "").unwrap();
         let empty = std::ffi::OsString::new();

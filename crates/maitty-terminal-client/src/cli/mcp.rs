@@ -20,8 +20,27 @@ use crate::prompt::prompt_on;
 use crate::protocol::*;
 use anyhow::Result;
 use serde_json::{Value, json};
+use std::time::Duration;
 use std::io::{BufRead, Write};
 use std::path::{Path, PathBuf};
+
+/// The workspace a worktree request names when the service has none open. The service does not
+/// read it for a request that names its repo; one too old to know that refuses the request.
+const NO_WORKSPACE: WsId = 0;
+/// How long a start waits for the person to answer a request to start helpers before it tells
+/// the agent to try again later. Claude Code lets a tool call run this long; the other agents
+/// end a call after 30 to 60 seconds, so theirs must answer well inside that.
+const ASK_WAIT_CLAUDE: Duration = Duration::from_secs(600);
+const ASK_WAIT_OTHER: Duration = Duration::from_secs(20);
+const ASK_POLL: Duration = Duration::from_secs(1);
+
+fn ask_wait_for(client: &str) -> Duration {
+    if client.to_ascii_lowercase().contains("claude") {
+        ASK_WAIT_CLAUDE
+    } else {
+        ASK_WAIT_OTHER
+    }
+}
 
 fn norm(p: &Path) -> String {
     p.to_string_lossy()
@@ -75,6 +94,8 @@ pub(crate) struct Server {
     root: PathBuf,
     me: Option<TermId>,
     reach: Reach,
+    /// How long a start waits on the person's answer; zero until the agent has said who it is.
+    ask_wait: std::cell::Cell<Duration>,
 }
 
 fn text(s: impl Into<String>) -> Value {
@@ -208,6 +229,7 @@ impl Server {
             root,
             me,
             reach,
+            ask_wait: std::cell::Cell::new(Duration::ZERO),
         }
     }
 
@@ -680,24 +702,27 @@ impl Server {
             .and_then(Value::as_bool)
             .unwrap_or(true)
             && crate::gitfs::head(&self.root).is_some();
+        // A second helper for the same task gets its own branch, and the reply names that one.
         let branch = slug(prompt);
+        let branch = if before
+            .terms
+            .values()
+            .any(|t| t.branch.as_deref() == Some(branch.as_str()))
+        {
+            format!("{branch}-{}", had.len())
+        } else {
+            branch
+        };
         let c = if worktree {
+            // With only chats open there is no workspace. The service reads `from`, not `ws`,
+            // when the repo is named, so the helper's worktree needs none.
             let ws = before
                 .active_ws
                 .or_else(|| before.workspaces.first().map(|w| w.id))
-                .ok_or(concat!(env!("APP_COMMAND"), " has nothing open"))?;
-            let branch = if before
-                .terms
-                .values()
-                .any(|t| t.branch.as_deref() == Some(branch.as_str()))
-            {
-                format!("{branch}-{}", had.len())
-            } else {
-                branch.clone()
-            };
+                .unwrap_or(NO_WORKSPACE);
             Command::NewWorktree {
                 ws,
-                branch,
+                branch: branch.clone(),
                 base: None,
                 cmd: Some(cmd),
                 split: None,
@@ -712,7 +737,22 @@ impl Server {
                 cmd: Some(cmd),
             }
         };
-        cli::block_on(cli::request(ClientMsg::Command(c))).map_err(|e| format!("{e:#}"))?;
+        // While the person has not answered, the service refuses and holds the request on the
+        // session. Asking again is how the answer is found: the agent's call stays open on the
+        // prompt instead of failing before anyone could click.
+        let asked = std::time::Instant::now();
+        loop {
+            let refusal = match cli::block_on(cli::request(ClientMsg::Command(c.clone()))) {
+                Ok(_) => break,
+                Err(e) => format!("{e:#}"),
+            };
+            if !refusal.contains(HELPERS_AWAIT_OK)
+                || asked.elapsed() >= self.ask_wait.get()
+            {
+                return Err(refusal);
+            }
+            std::thread::sleep(ASK_POLL);
+        }
         // Wait for it to appear, then give the user back the session they were on.
         for _ in 0..60 {
             std::thread::sleep(std::time::Duration::from_millis(250));
@@ -724,7 +764,10 @@ impl Server {
                     })));
                 }
                 let place = if worktree {
-                    format!("its own worktree ({branch})")
+                    // Two helpers started at once ask for the same name; the service settles
+                    // it, so the session's own branch is the one to report.
+                    let made = now.terms.get(&new).and_then(|t| t.branch.clone());
+                    format!("its own worktree ({})", made.unwrap_or(branch))
                 } else {
                     self.root.display().to_string()
                 };
@@ -839,12 +882,16 @@ pub fn run() -> Result<()> {
         let method = msg.get("method").and_then(Value::as_str).unwrap_or("");
         let params = msg.get("params").cloned().unwrap_or(Value::Null);
         let reply = match method {
-            "initialize" => Ok(json!({
+            "initialize" => {
+                let client = params.pointer("/clientInfo/name").and_then(Value::as_str);
+                server.ask_wait.set(ask_wait_for(client.unwrap_or_default()));
+                Ok(json!({
                 "protocolVersion": params.get("protocolVersion").cloned().unwrap_or(json!("2025-06-18")),
                 "capabilities": { "tools": {} },
                 "serverInfo": { "name": env!("APP_COMMAND"), "version": env!("APP_VERSION") },
                 "instructions": concat!(env!("APP_COMMAND"), " runs your user's coding agents side by side. Use ", env!("APP_COMMAND"), "_list/read/send/start for helpers. Before UI, front-end or design work, call ", env!("APP_COMMAND"), "_references and open the images it lists: they are the user's reference screenshots and designs for this project. Don't answer prompts unless the user allows it; when you do, pass ", env!("APP_COMMAND"), "_answer the prompt id ", env!("APP_COMMAND"), "_list gave you.")
-            })),
+                }))
+            }
             "ping" => Ok(json!({})),
             "tools/list" => Ok(json!({ "tools": tools() })),
             "tools/call" => {
@@ -1064,6 +1111,16 @@ mod tests {
         (base, mine, other)
     }
 
+    /// Where the temp folder sits inside a git repo, both projects are that one repo and there is
+    /// nothing to keep apart, so the test says it skipped rather than passing unseen.
+    fn one_project(mine: &Path) -> bool {
+        let inside = crate::gitfs::head(mine).is_some();
+        if inside {
+            eprintln!("skipped: the temp folder is inside a git repo, so both projects are one");
+        }
+        inside
+    }
+
     fn refs_server(root: &Path, scope: &str) -> Server {
         let mut cfg = crate::config::Config::default();
         cfg.mcp.scope = scope.into();
@@ -1073,69 +1130,72 @@ mod tests {
     #[test]
     fn references_list_the_callers_project() {
         let (base, mine, _) = two_projects("mine");
-        // Skip where the temp folder sits inside a repo: then both are one project.
-        if crate::gitfs::head(&mine).is_none() {
-            let out = refs_server(&mine, "project")
-                .references(&json!({}))
-                .unwrap();
-            let v: Value = serde_json::from_str(&out).unwrap();
-            let rows = v["references"].as_array().unwrap();
-            assert_eq!(rows.len(), 1);
-            assert_eq!(rows[0]["name"], "home.png");
-            assert_eq!(rows[0]["kind"], "image");
-            assert!(
-                Path::new(rows[0]["path"].as_str().unwrap()).is_absolute(),
-                "an absolute path to open"
-            );
-            let empty = refs_server(&base, "project")
-                .references(&json!({}))
-                .unwrap();
-            assert!(empty.starts_with("No references"), "{empty}");
+        if one_project(&mine) {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
         }
+        let out = refs_server(&mine, "project")
+            .references(&json!({}))
+            .unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        let rows = v["references"].as_array().unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0]["name"], "home.png");
+        assert_eq!(rows[0]["kind"], "image");
+        assert!(
+            Path::new(rows[0]["path"].as_str().unwrap()).is_absolute(),
+            "an absolute path to open"
+        );
+        let empty = refs_server(&base, "project")
+            .references(&json!({}))
+            .unwrap();
+        assert!(empty.starts_with("No references"), "{empty}");
         let _ = std::fs::remove_dir_all(&base);
     }
 
     #[test]
     fn references_never_reach_another_project() {
         let (base, mine, other) = two_projects("scope");
-        if crate::gitfs::head(&mine).is_none() {
-            let server = refs_server(&mine, "project");
-            let up = mine.join("..").join("other");
-            for path in [
-                other.to_string_lossy().into_owned(),
-                up.to_string_lossy().into_owned(),
-            ] {
-                let err = server.references(&json!({ "path": path })).unwrap_err();
-                assert!(err.contains("another project"), "{err}");
-            }
-            let ghost = base.join("no-such-folder");
-            let err = server.references(&json!({ "path": ghost })).unwrap_err();
-            assert!(
-                err.contains("another project"),
-                "refused by its words, not by probing it: {err}"
-            );
-            for unc in [r"\\server\share", r"\\?\UNC\server\share", "//server/share"] {
-                let err = server.references(&json!({ "path": unc })).unwrap_err();
-                assert!(err.contains("network"), "{unc}: {err}");
-            }
-            assert!(
-                server.references(&json!({ "path": 3 })).is_err(),
-                "a path is a string"
-            );
-            assert!(server.references(&json!({ "path": "" })).is_err());
-            assert!(server.references(&json!({ "path": "a\0b" })).is_err());
-            let inside = server
-                .references(&json!({ "path": crate::references::folder(&mine) }))
-                .unwrap();
-            assert!(
-                inside.contains("home.png") && !inside.contains("theirs.png"),
-                "{inside}"
-            );
-            let all = refs_server(&mine, "all")
-                .references(&json!({ "path": other }))
-                .unwrap();
-            assert!(all.contains("theirs.png"), "scope all reaches it: {all}");
+        if one_project(&mine) {
+            let _ = std::fs::remove_dir_all(&base);
+            return;
         }
+        let server = refs_server(&mine, "project");
+        let up = mine.join("..").join("other");
+        for path in [
+            other.to_string_lossy().into_owned(),
+            up.to_string_lossy().into_owned(),
+        ] {
+            let err = server.references(&json!({ "path": path })).unwrap_err();
+            assert!(err.contains("another project"), "{err}");
+        }
+        let ghost = base.join("no-such-folder");
+        let err = server.references(&json!({ "path": ghost })).unwrap_err();
+        assert!(
+            err.contains("another project"),
+            "refused by its words, not by probing it: {err}"
+        );
+        for unc in [r"\\server\share", r"\\?\UNC\server\share", "//server/share"] {
+            let err = server.references(&json!({ "path": unc })).unwrap_err();
+            assert!(err.contains("network"), "{unc}: {err}");
+        }
+        assert!(
+            server.references(&json!({ "path": 3 })).is_err(),
+            "a path is a string"
+        );
+        assert!(server.references(&json!({ "path": "" })).is_err());
+        assert!(server.references(&json!({ "path": "a\0b" })).is_err());
+        let inside = server
+            .references(&json!({ "path": crate::references::folder(&mine) }))
+            .unwrap();
+        assert!(
+            inside.contains("home.png") && !inside.contains("theirs.png"),
+            "{inside}"
+        );
+        let all = refs_server(&mine, "all")
+            .references(&json!({ "path": other }))
+            .unwrap();
+        assert!(all.contains("theirs.png"), "scope all reaches it: {all}");
         let _ = std::fs::remove_dir_all(&base);
     }
 

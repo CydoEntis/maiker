@@ -1,33 +1,8 @@
-/* ---- The M loader: a wait that fills a view. The left leg, the fold and the right leg trace on their own beats, fill, fade and start over (2.4s). ---- */
-.mx-mloader { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-size: 12.5px; color: var(--muted); }
-.mx-mtrace path { --mk-fill: color-mix(in srgb, var(--fg) 14%, transparent); stroke: var(--fg2); stroke-width: 4; stroke-dasharray: 320; stroke-dashoffset: 320; fill: transparent; animation: mx-trace-m 2.4s cubic-bezier(.6, 0, .3, 1) infinite; }
-.mx-mtrace .mx-mk-a { animation-delay: 0s; }
-.mx-mtrace .mx-mk-c { animation-delay: .25s; }
-.mx-mtrace .mx-mk-b { animation-delay: .5s; }
-@keyframes mx-trace-m {
-  0% { stroke-dashoffset: 320; fill: transparent; }
-  45% { stroke-dashoffset: 0; fill: transparent; }
-  60% { fill: var(--mk-fill); }
-  85% { stroke-dashoffset: 0; fill: var(--mk-fill); opacity: 1; }
-  100% { stroke-dashoffset: 0; opacity: 0; }
-}
-/* A hidden window does not draw the loader. */
-:root[data-window="inactive"] .mx-mtrace path { animation-play-state: paused; }
-@media (prefers-reduced-motion: reduce) { .mx-mtrace path { animation: none; stroke-dashoffset: 0; } }
-:root[data-reduced-motion="true"] .mx-mtrace path { animation: none; stroke-dashoffset: 0; }
-
 /* ---- Dialogs in the new language: a scrim, a 14px float with the shared dialog shadow, the focus underline ---- */
 @keyframes mx-dialog-in { from { opacity: 0; transform: scale(.96); } to { opacity: 1; transform: none; } }
 /* A list grows from the corner of the button that opened it: Radix names that corner, and it is the origin of the scale. */
 @keyframes mx-list-in { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
-.mx-fp-scrim { position: fixed; inset: 0; z-index: 90; display: flex; justify-content: center; padding: 24px; background: rgba(0, 0, 0, .5); animation: v7scrim .15s ease-out; }
-.mx-fp-scrim { align-items: flex-start; padding-top: max(48px, 14vh); }
-.mx-fp { position: relative; display: flex; flex-direction: column; box-sizing: border-box; background: var(--main); border: 1px solid var(--line2); box-shadow: var(--pop-sh-dialog); color: var(--fg); animation: mx-dialog-in .16s ease-out; }
-.mx-fp { width: min(580px, calc(100vw - 48px)); max-height: calc(100vh - 96px); }
-.mx-fp:focus-visible { outline: none; }
-.mx-nsd-grow { flex: 1; min-width: 6px; }
 .mx-nsd-dot { flex: none; width: 7px; height: 7px; background: var(--ok); }
-.mx-nsd-dot.is-asleep { background: var(--warn); }
 
 /* A branch name is the longest of the three and the one read last, so it gives up room first and the project keeps most of its name. Its width is its own and not its text's: the name changes with Own worktree, and nothing in the header may move for that. */
 
@@ -40,22 +15,9 @@
 .mx-rename .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
 .mx-rename .mx-app-icon.size-20 { width: 16px; height: 16px; }
 .mx-rename .mx-app-icon svg { width: 100%; height: 100%; }
-/* The model and effort button, in the design's terms: a bordered 28px button with the model, a dim effort and a chevron. */
-.mx-model-line { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; }
-/* The dropdown's menu: a small head over each of its three parts, an agent's mark flat beside its name, the efforts as the one segmented control. */
-.mx-mm-head { margin: 0; padding: 8px 14px 4px; font-size: 11px; font-weight: 600; color: var(--dim); }
-.mx-mm-agent-list { padding-bottom: 2px; }
-.mx-mm-agent-list .mx-app-icon { width: 14px; height: 14px; background: none; box-shadow: none; border-radius: 0; }
-.mx-mm-agent-list .mx-app-icon svg { width: 100%; height: 100%; }
-.mx-mm-reasoning { padding: 0 8px 8px; border-top: 1px solid var(--line); }
-.mx-mm-reasoning .mx-mm-head { padding-left: 6px; }
-.mx-nsd-start { height: 28px; margin-left: 4px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: var(--nsd-start-w); padding: 0 13px; border: 1px solid var(--fg); background: var(--fg); font-size: 12.5px; font-weight: 600; color: var(--bg); white-space: nowrap; }
-.mx-nsd-start:not(:disabled):hover { background: color-mix(in srgb, var(--fg) 90%, var(--bg)); border-color: color-mix(in srgb, var(--fg) 90%, var(--bg)); }
-.mx-nsd-start:disabled { opacity: .45; }
-.mx-nsd-start-key { font: 400 11px var(--mono); opacity: .7; }
 
 /* A list opened from inside a dialog sits over the dialog's scrim (90) and the dialog (91), not under them. */
-:is(.mx-chip-menu, .mx-mm, .mx-fp-machines) { z-index: 95; }
+:is(.mx-chip-menu, .mx-mp) { z-index: 95; }
 /* A token's list: a head with its name and what it is on, a search field, rows with a dot, a sub line and a meta word, an action footer. */
 .mx-chip-menu.is-token { gap: 0; padding: 0; max-height: 380px; transform-origin: var(--radix-popover-content-transform-origin); animation: mx-list-in .16s cubic-bezier(.2, .8, .2, 1); }
 .mx-token-head { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 10px; border-bottom: 1px solid var(--line); font-size: 12px; color: var(--dim); }
@@ -80,79 +42,17 @@
 .mx-chip-menu .mx-chip-footer .mx-nc-menu-foot { display: flex; flex-direction: column; gap: 2px; }
 
 /* Open a folder on <machine>. */
-.mx-fp-head { position: relative; flex: none; display: flex; align-items: center; gap: 6px; height: 46px; padding: 0 6px 0 14px; }
-.mx-fp-title { font-size: 13.5px; font-weight: 600; color: var(--fg); white-space: nowrap; }
-.mx-fp-machine { min-width: 0; height: 28px; display: inline-flex; align-items: center; gap: 7px; padding: 0 8px; font-size: 13.5px; font-weight: 600; color: var(--fg); }
-.mx-fp-machine:hover { background: var(--m-hover); }
-.mx-fp-machine[data-state="open"] { background: var(--m-sel); }
-.mx-fp-machines { width: 270px; display: flex; flex-direction: column; padding: 4px; transform-origin: var(--radix-popover-content-transform-origin); animation: mx-list-in .16s cubic-bezier(.2, .8, .2, 1); }
-.mx-fp-machine-row { height: 40px; display: flex; align-items: center; gap: 10px; padding: 0 8px; text-align: left; font-size: 13px; color: var(--fg); }
-.mx-fp-machine-row:hover { background: var(--m-hover); }
-.mx-fp-machine-row.is-selected { background: var(--m-sel); }
-.mx-fp-machine-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-machine-word { flex: none; font-size: 11.5px; color: var(--dim); }
-.mx-fp-machine-word.is-asleep { color: var(--warn); }
-.mx-fp-find { flex: none; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px 6px; }
-.mx-fp-field { display: flex; align-items: center; height: 34px; padding: 0 0 0 10px; gap: 8px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
-.mx-fp-field input { flex: 1; min-width: 0; height: 100%; padding: 0 10px 0 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
-.mx-fp-path { display: flex; align-items: center; gap: 2px; min-width: 0; height: 24px; }
-.mx-fp-up { flex: none; width: 24px; height: 24px; margin-right: 2px; display: flex; align-items: center; justify-content: center; color: var(--fg2); }
-.mx-fp-up:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
-.mx-fp-up:disabled { opacity: .35; }
-.mx-fp-crumbs { min-width: 0; display: flex; align-items: center; overflow: hidden; font: 400 12px var(--mono); }
-.mx-fp-crumb-part { display: inline-flex; align-items: center; min-width: 0; }
-.mx-fp-crumb-sep { flex: none; padding: 0 1px; color: var(--dim); }
-.mx-fp-crumb { flex: 0 1 auto; min-width: 0; height: 22px; padding: 0 4px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mx-fp-crumb[aria-current="page"] { color: var(--fg); }
-.mx-fp-crumb:hover { background: var(--m-hover); color: var(--fg); }
 /* New folder: a quiet text button at the end of the path, and a field at the top of the list; hover and focus only change colour and the underline, never size. */
-.mx-fp-path .mx-fp-crumbs { flex: 1 1 auto; }
-.mx-fp-new-button { flex: none; height: 24px; margin-left: auto; padding: 0 8px; display: inline-flex; align-items: center; gap: 6px; font-size: 11.5px; color: var(--fg2); white-space: nowrap; }
-.mx-fp-new-button:hover:not(:disabled) { background: var(--m-hover); color: var(--fg); }
-.mx-fp-new-button:disabled { opacity: .45; }
-.mx-fp-new { margin: 0 0 4px; background: var(--m-well); box-shadow: inset 0 -1px 0 var(--line2); color: var(--dim); }
-.mx-fp-new-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; column-gap: 10px; padding: 0 8px; }
-.mx-fp-new input { min-width: 0; height: 34px; padding: 0; border: 0; outline: none; background: transparent; font: 400 13px var(--mono); color: var(--fg); }
-.mx-fp-new input:disabled { opacity: .6; }
-.mx-fp-new-hint { font-size: 11px; color: var(--dim); white-space: nowrap; }
-.mx-fp-new-why { grid-column: 1 / -1; padding: 0 0 7px 24px; }
-.mx-fp-new-why .mx-field-error { margin: 0; }
-@media (max-width: 420px) { .mx-fp-new-hint { display: none; } }
-.mx-fp-list { position: relative; flex: none; height: 300px; overflow-y: auto; padding: 0 6px 6px; }
-.mx-fp-loading { position: absolute; inset: 0; }
-.mx-fp-row { height: 30px; display: flex; align-items: center; gap: 10px; padding: 0 2px 0 8px; cursor: default; color: var(--fg2); }
-.mx-fp-row > svg { flex: none; color: var(--dim); }
-.mx-fp-row:hover { background: var(--m-hover); }
-.mx-fp-row.is-selected { background: var(--m-sel); color: var(--fg); }
-.mx-fp-row.is-selected > svg { color: var(--fg2); }
-.mx-fp-row.is-hidden:not(.is-selected) { color: var(--muted); }
-.mx-fp-row-name { flex: 1; min-width: 0; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-branch { flex: 0 1 auto; min-width: 0; max-width: 46%; display: inline-flex; align-items: center; gap: 4px; font: 400 11px var(--mono); color: var(--dim); }
-.mx-fp-branch > svg { flex: none; }
-.mx-fp-branch-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-enter { flex: none; width: 26px; height: 26px; display: flex; align-items: center; justify-content: center; color: var(--dim); }
-.mx-fp-enter:hover { background: var(--m-hover); color: var(--fg); }
-.mx-fp-go { width: 100%; min-height: 32px; display: flex; align-items: center; gap: 9px; padding: 0 8px; text-align: left; background: var(--m-sel); font-size: 12.5px; color: var(--fg2); }
-.mx-fp-go > span:first-child { flex: none; font: 600 12px var(--mono); color: var(--dim); }
-.mx-fp-go > span:last-child { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-fp-none { margin: 0; padding: 32px 16px; text-align: center; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
-.mx-fp-note { flex: none; margin: 0; padding: 0 14px 6px; font-size: 11.5px; color: var(--dim); }
-.mx-fp-foot { flex: none; display: flex; align-items: center; gap: 8px; min-height: 50px; padding: 0 10px 0 8px; border-top: 1px solid var(--line); }
-.mx-fp-cancel { flex: none; height: 30px; padding: 0 12px; font-size: 12.5px; color: var(--fg2); }
-.mx-fp-cancel:hover { background: var(--m-hover); color: var(--fg); }
-.mx-nsd-start.mx-fp-use { height: 30px; max-width: 240px; margin-left: 0; padding: 0 13px; }
-.mx-fp-use-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 
 /* The dialog's own box takes focus (so Esc and Tab have a place to start), and it is no field: it keeps its shadow, with no underline. */
-.mx-app :is(.mx-rename, .mx-fp, .mx-palette):focus-visible { box-shadow: var(--pop-sh-dialog); }
+.mx-app :is(.mx-rename, .mx-op, .mx-palette):focus-visible { box-shadow: var(--float-sh); }
 
 /* Focus is an underline: 2px in the accent, on the buttons and fields of these dialogs. The message box has none: the design draws no focus on it. */
-:is(.mx-fp, .mx-fp-machines, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-underline); }
-.mx-nsd-start:focus-visible { box-shadow: var(--focus-underline); }
+:is(.mx-op, .mx-chip-menu.is-token) :is(button, [role="option"], [role="radio"], [role="switch"]):focus-visible { outline: none; box-shadow: var(--focus-edge); }
 @media (prefers-reduced-motion: reduce) {
-  .mx-fp, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename { animation: none; }
+  .mx-op, .mx-op-scrim, .mx-chip-menu.is-token, .mx-palette, .mx-rename { animation: none; }
 }
-:root[data-reduced-motion="true"] :is(.mx-fp, .mx-fp-scrim, .mx-chip-menu.is-token, .mx-fp-machines, .mx-palette, .mx-rename) { animation: none; }
+:root[data-reduced-motion="true"] :is(.mx-op, .mx-op-scrim, .mx-chip-menu.is-token, .mx-palette, .mx-rename) { animation: none; }
 
 /* A chip that cannot be used says why in its tooltip: dimmed, not hidden, and no hover. */
 /* Where the chat works (This folder, New worktree): a token like the others, so its two-line choices open from it. */
@@ -161,8 +61,6 @@
 .mx-nsd-sync > span { min-width: 0; }
 .mx-nsd-sync .mx-text-button { flex: none; margin-left: auto; }
 .mx-nsd-sync-name { font: 500 12px var(--mono); color: var(--fg2); }
-.mx-chip-menu.is-token .mx-nc-behind { font-size: 11.5px; color: var(--dim); }
-.mx-chip-menu.is-token .mx-chip-row .mx-nc-in-use + .mx-nc-behind::before { content: '\00b7'; margin-right: 6px; }
 /* The reason a typed name is refused, under the search box. */
 .mx-chip-refused { flex: none; display: flex; gap: 6px; margin: 0; padding: 4px 16px; font-size: 12px; line-height: 1.4; color: var(--danger); }
 .mx-nsd-foot-hint { margin: 0; padding: 4px 8px 2px; font-size: 11.5px; color: var(--dim); }
@@ -170,12 +68,27 @@
 /* ---- The New session draft: a chat pane in the main area, not a dialog ---- */
 /* It sits over the panes, so it stays opaque. Inside it is a started chat's pane: `.mx-pane-head`, then the chat with its box. */
 .mx-newchat { position: absolute; inset: 0; z-index: 20; display: flex; flex-direction: column; background: var(--main); }
-/* The header is `.mx-pane-head`: a dashed draft mark, the name, and at the right that nothing is started. */
+/* The header is the chat pane's (`.mx-pane-head`): `project / New session` and the × that discards the draft, over the same hairline. */
 /* The body centres the question, where it runs and the box as one block; while it starts the card takes the top and the box stays low. */
 /* The chips of the box's foot: the agent keeps the room it needs, the rest sit beside it. */
 .mx-newchat-body { position: relative; flex: 1; min-height: 0; display: flex; flex-direction: column; font-family: var(--ui); line-height: normal; }
 /* The question, centred in the empty conversation above the box. */
 .mx-chat-hello { margin: 0; font-size: clamp(20px, 2.2vw, 24px); font-weight: 600; line-height: 1.25; letter-spacing: -.015em; color: var(--fg); }
+/* An empty draft: the question, where it runs and the box as one block in the middle of the pane, a little above centre. */
+.mx-chat.is-starting:has(> .mx-nc-hero) { justify-content: center; padding-bottom: 8vh; }
+.mx-nc-hero { flex: none; display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 0 24px 22px; text-align: center; }
+.mx-nc-hero .mx-chat-hello { font-size: clamp(24px, 2.6vw, 32px); font-weight: 500; letter-spacing: -.02em; }
+.mx-nc-hero-where { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; max-width: 100%; }
+/* The two big chips: a real control ground and hairline, so where the session runs is plain at a glance. */
+.mx-place-chip.is-hero { height: 32px; max-width: 320px; gap: 7px; padding: 0 10px 0 11px; border-radius: var(--r-control); font-size: 13.5px; font-weight: 500; color: var(--fg); background: var(--c-field-bg); box-shadow: var(--c-field-sh); }
+button.mx-place-chip.is-hero:hover, button.mx-place-chip.is-hero[data-state="open"] { background: var(--m-hover); color: var(--fg); }
+.mx-place-chip.is-hero.is-down { color: var(--warn); }
+.mx-place-chip.is-hero svg:last-child { color: var(--dim); }
+.mx-nc-hero-loose { height: 32px; padding: 0 8px; border: 0; border-radius: var(--r-control); background: none; font: inherit; font-size: 13px; color: var(--muted); text-decoration: underline; text-decoration-color: var(--line2); text-underline-offset: 3px; transition: color var(--t-fast) var(--ease); }
+.mx-nc-hero-loose:hover:not(:disabled) { color: var(--fg); text-decoration-color: currentColor; }
+.mx-nc-hero-loose:focus-visible { outline: none; box-shadow: var(--focus-edge); }
+/* The big chips say the machine and the project, so the row under the box keeps only the branch and sync while they show. */
+.mx-chat.is-starting:has(> .mx-nc-hero) .mx-session-bar :is(.mx-place-chip.is-machine, .mx-place-chip.is-folder) { display: none; }
 /* What the start needs said (a machine that is down, a clone, a refused start) sits above the box, as wide as it. */
 .mx-composer-column > .mx-nsd-note { align-self: stretch; padding: 0 4px 8px; }
 /* The branch menu's own-worktree switch, under its list. */

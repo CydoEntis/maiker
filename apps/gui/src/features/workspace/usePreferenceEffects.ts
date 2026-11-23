@@ -1,11 +1,13 @@
 import { useEffect } from 'react'
+import { setInterfaceZoom } from '@/api/interfaceZoom'
 import { toast } from '@/lib/toast'
 import { type SettingsPreferences, writeSettingsPreferences } from '@/features/settings/preferences'
 import { markGpu } from '@/lib/gpu'
 import { isWindowShown, subscribeWindowActivity } from '@/lib/window-activity'
-import { setSpinnerStyle } from '@/lib/spinner-clock'
 
-/** Saves the settings and marks them on the page, where the stylesheet reads them. */
+const PERCENT = 100
+
+/** Saves the settings and marks them on the page, where the stylesheet reads them, and sizes the window. */
 export function usePreferenceEffects({ preferences, reducedMotion }: {
   preferences: SettingsPreferences
   reducedMotion: boolean
@@ -16,12 +18,19 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     } catch (error) {
       toast.failed('Could not save settings', error)
     }
-    setSpinnerStyle(preferences.spinner)
   }, [preferences])
+
+  useEffect(() => {
+    setInterfaceZoom(preferences.interfaceSize / PERCENT).catch((error: unknown) => { toast.failed('Could not change the interface size', error) })
+  }, [preferences.interfaceSize])
 
   useEffect(() => {
     document.documentElement.dataset.reducedMotion = String(reducedMotion)
   }, [reducedMotion])
+
+  useEffect(() => {
+    document.documentElement.dataset.fileColours = preferences.colourFileNames ? 'on' : 'off'
+  }, [preferences.colourFileNames])
 
   useEffect(() => { markGpu() }, [])
 
@@ -32,17 +41,4 @@ export function usePreferenceEffects({ preferences, reducedMotion }: {
     mark()
     return subscribeWindowActivity(mark)
   }, [])
-
-  useEffect(() => {
-    // One flat look; the corners are the only shape choice (`tokens.css` reads `data-corners`).
-    document.documentElement.dataset.corners = preferences.corners
-  }, [preferences.corners])
-
-  useEffect(() => {
-    document.documentElement.dataset.icons = preferences.iconColor
-  }, [preferences.iconColor])
-
-  useEffect(() => {
-    document.documentElement.dataset.toasts = preferences.toastPosition
-  }, [preferences.toastPosition])
 }

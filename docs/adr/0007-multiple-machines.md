@@ -1,6 +1,6 @@
 # 0007. Multiple machines: one connection per machine, held by the client
 
-- **Status:** Accepted; the rule that nothing which reads a disk works on another machine is amended for markdown documents by [0014](0014-markdown-documents-on-other-machines.md)
+- **Status:** Accepted; the rule that nothing which reads a disk works on another machine is amended for markdown documents by [0014](0014-markdown-documents-on-other-machines.md); how a machine is reached and added (your own ssh setup, a new host key trusted once) is amended by [0017](0017-remote-machines-rely-on-your-ssh-setup.md)
 - **Date:** 2026-11-06
 
 ## Context
@@ -30,8 +30,10 @@ People run agents on more than one computer and want one window over all of them
   `tar` (no library). One pulled here is unpacked only after its listing is checked: plain files and
   folders only, nothing outside its one top folder, no name this computer cannot store safely. One
   sent from here is unpacked in the machine's private cache folder.
-- **A remote daemon is untrusted.** Its clipboard writes, notices and sounds are off unless that
-  machine opts in. Every string it supplies is cleaned before display. Only the line after a
+- **A remote daemon is untrusted.** Its notices and sounds are off unless that machine opts in.
+  Its clipboard writes are on for a machine you added (copying on a remote machine and pasting
+  here is the point of adding it) until its entry says `clipboard = false`, cut to 64 KiB, and
+  each copy says which machine made it. Every string it supplies is cleaned before display. Only the line after a
   marker, and only an absolute path, is taken from a script's output.
 - **Updating a machine replaces its daemon.** `maiker machine update <name>` installs the new file
   and restarts the far daemon so the two ends match. Without `--restart` it restarts only an idle
@@ -54,9 +56,19 @@ People run agents on more than one computer and want one window over all of them
   attach only). Nothing changes on the remote side and `PROTOCOL_VERSION` does not move. What the
   remote supplies is data: cleaned before display, links confirmed, nothing fetched on its own, and
   the remote daemon alone decides its status (0003). Anything that reads a disk (Changes, Files,
-  Find, opening a path) stays local-only, except what [0014](0014-markdown-documents-on-other-machines.md) allows: a folder's listing and markdown documents. One change is asked of that machine: a new chat may start in a new
-  worktree, which its own daemon makes in its checkout (`Command::BranchWorktree`, the same checks as for a local
-  one), answering only the new folder. Its checkout's branch is never switched from here. See [the spec](../features/remote-chat/spec.md).
+  Find, opening a path) stays local-only, except what [0014](0014-markdown-documents-on-other-machines.md) allows: a folder's listing and markdown documents. One change is asked of that machine: a new worktree, which its own daemon makes in its checkout
+  with the same checks as for a local one. A new chat may start in one (`Command::BranchWorktree`, answering only
+  the new folder), and a project heading's New worktree makes one off a pane there (`Command::NewWorktree`,
+  answering only that it was done; the session opened in it arrives in the machine's list). Removing, merging
+  and remaking worktrees stay this computer's. Its checkout's branch is never switched from here. See [the spec](../features/remote-chat/spec.md).
+- **A chat started on another machine (protocol 122).** In the Chat view ([0020](0020-the-chat-view-talks-to-the-agent-directly.md))
+  a session started on another machine is a conversation that machine's own daemon runs, with no terminal behind it.
+  The window cannot know where that machine keeps an agent or its settings, so the start names neither
+  (`StartTarget::Agent`: the provider, the folder and the posture; `StartTarget::Acp`: the agent's name and the
+  folder) and that daemon finds the program. This is the one message the remote side had to learn, so the window
+  moved: both sides must be on 122. The start goes over a request line and only the new conversation's number and
+  generation are taken back (`remote_chat::vet_chat_start`). Such a chat is listed as a session of its machine, named
+  `<machine>/c<number>`, and is named, ended and put away on that machine.
 - A Windows client may reach Linux and macOS remotes. A Windows remote is out.
 
 ## Alternatives considered

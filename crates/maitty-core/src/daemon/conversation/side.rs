@@ -245,7 +245,7 @@ impl crate::daemon::Daemon {
             if !self.shown_to(follower.term, self.surface_of(client)) {
                 return Err(no_such());
             }
-            if follower.provider != crate::conversation::Provider::Claude {
+            if !crate::daemon::providers::adapter(follower.provider).side_questions {
                 return Err(SideAnswer::NotSupported);
             }
             let (session, transcript, model) = follower.side_parts();
@@ -260,7 +260,7 @@ impl crate::daemon::Daemon {
             });
         }
         let record = self.conversations.iter().find(|c| c.id == id).ok_or_else(no_such)?;
-        if record.binding.provider != crate::conversation::Provider::Claude {
+        if !crate::daemon::providers::adapter(record.binding.provider).side_questions {
             return Err(SideAnswer::NotSupported);
         }
         checked(Target {
@@ -403,12 +403,10 @@ mod tests {
     #[cfg(unix)]
     #[tokio::test]
     async fn a_fake_claude_reads_the_ask_on_stdin_and_its_answer_comes_back() {
-        use std::os::unix::fs::PermissionsExt;
         let dir = std::env::temp_dir().join(format!("maitty-side-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let fake = dir.join("claude");
-        std::fs::write(&fake, "#!/bin/sh\nprintf 'args:%s\\n' \"$*\"; printf 'asked:'; cat\n").unwrap();
-        std::fs::set_permissions(&fake, std::fs::Permissions::from_mode(0o755)).unwrap();
+        crate::test_support::write_program(&fake, "#!/bin/sh\nprintf 'args:%s\\n' \"$*\"; printf 'asked:'; cat\n");
         let target = Target { executable: fake.clone(), cwd: dir.clone(), session: SESSION.into(), model: None, config_root: None };
 
         let answer = super::answer(target.clone(), SideAsk::Command(SideCommand::Goal)).await;

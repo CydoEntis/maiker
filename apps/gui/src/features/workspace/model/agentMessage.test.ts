@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { sendTerminalInput, submitMessage } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { agentName, sendAgentMessage, suggestedCommitMessage, takesAgentMessages } from './agentMessage'
+import { sendAgentMessage, suggestedCommitMessage, takesAgentMessages } from './agentMessage'
 import { toSessionView } from './session'
 
 vi.mock('@/api/daemon', () => ({
@@ -44,13 +44,6 @@ describe('a message to an agent from outside its message box', () => {
     const chat = session({ id: '7', execution: 'Structured', chat: { conversation: 7, generation: 2 } }, false)
     await expect(sendAgentMessage(chat, 'hello')).rejects.toThrow('Open the chat once')
     expect(submitMessage).not.toHaveBeenCalled()
-  })
-})
-
-describe('an agent’s name', () => {
-  it('starts with a capital', () => {
-    expect(agentName('claude')).toBe('Claude')
-    expect(agentName('codex')).toBe('Codex')
   })
 })
 

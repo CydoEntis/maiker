@@ -1,49 +1,64 @@
-import { useRef } from 'react'
+import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { EDGE_PX } from './menuPoint'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
+/** A row that can be chosen. */
+export type MenuItem = {
+  label: string
+  /** A mark before the label (an agent's, a terminal's). */
+  icon?: ReactNode
+  /** A key or a word shown dim at the right. */
+  hint?: string
+  /** A key that chooses this row while the menu is open (`1` to `9` for the agents of a New session list). */
+  pick?: string
+  run?: () => void
+  /** Red. */
+  danger?: boolean
+  disabled?: boolean
+  /** Why it is disabled, as its tooltip. */
+  why?: string
+}
+
 /** One row of a menu, a separator line between groups of rows, or a dim heading over a group. */
-export type MenuEntry =
-  | 'separator'
-  | { heading: string }
-  | {
-      label: string
-      /** A key or a word shown dim at the right. */
-      hint?: string
-      run?: () => void
-      /** Red. */
-      danger?: boolean
-      disabled?: boolean
-      /** Why it is disabled, as its tooltip. */
-      why?: string
-    }
+export type MenuEntry = 'separator' | { heading: string } | MenuItem
 
 type Props = {
-  /** What the menu is for (a session's name, a machine), read out to a screen reader; the design's menus draw no heading. */
+  /** What the menu is for (a session's name, a machine), read out to a screen reader. */
   title: string
   at: { x: number; y: number }
   items: readonly MenuEntry[]
+  /** A line over the rows saying where the menu acts (`In shop · This computer`), with its mark. */
+  context?: ReactNode
   /** Where the menu mounts, so it reads the theme's colours. */
   portalContainer: HTMLElement | null
   onClose: () => void
 }
 
-/**
- * A right-click or ⋯ menu, opened at the pointer. It is the shared dropdown menu anchored to an empty point:
- * Radix keeps it inside the window, puts focus on the first item, moves with the arrows, closes on Esc or a
- * click outside, and focus returns to where it was.
- */
 /** The first item takes focus, as a menu opened from the keyboard does, whichever way this one was opened. */
 function focusFirstItem(menu: HTMLDivElement | null): void {
   if (menu === null) return
   queueMicrotask(() => { menu.querySelector<HTMLElement>('[data-radix-collection-item]:not([data-disabled])')?.focus() })
 }
 
-export function MenuPopup({ title, at, items, portalContainer, onClose }: Props) {
+const isItem = (entry: MenuEntry): entry is MenuItem => entry !== 'separator' && !('heading' in entry)
+
+/**
+ * A right-click or button menu, opened at a point. It is the shared dropdown menu anchored to an empty point:
+ * Radix keeps it inside the window, puts focus on the first item, moves with the arrows, closes on Esc or a
+ * click outside, and focus returns to where it was.
+ */
+export function MenuPopup({ title, at, items, context, portalContainer, onClose }: Props) {
   const returnTo = useRef(document.activeElement instanceof HTMLElement ? document.activeElement : null)
-  const choose = (entry: Exclude<MenuEntry, 'separator' | { heading: string }>) => {
+  const choose = (entry: MenuItem) => {
     onClose()
     entry.run?.()
+  }
+  const pickByKey = (event: KeyboardEvent) => {
+    if (event.ctrlKey || event.metaKey || event.altKey) return
+    const picked = items.filter(isItem).find((entry) => entry.pick === event.key && entry.disabled !== true)
+    if (picked === undefined) return
+    event.preventDefault()
+    choose(picked)
   }
   return (
     <DropdownMenu open modal={false} onOpenChange={(open) => { if (!open) onClose() }}>
@@ -59,7 +74,7 @@ export function MenuPopup({ title, at, items, portalContainer, onClose }: Props)
         align="start"
         sideOffset={0}
         collisionPadding={EDGE_PX}
-        className="mx-ctx"
+        className={`mx-ctx${context === undefined ? '' : ' has-context'}`}
         style={{ position: 'static' }}
         ref={focusFirstItem}
         onCloseAutoFocus={(event) => {
@@ -67,10 +82,12 @@ export function MenuPopup({ title, at, items, portalContainer, onClose }: Props)
           if (returnTo.current?.isConnected === true) returnTo.current.focus()
         }}
         onContextMenu={(event) => { event.preventDefault() }}
+        onKeyDown={pickByKey}
       >
+        {context !== undefined && <div className="mx-ctx-context">{context}</div>}
         {items.map((entry, index) => entry === 'separator'
           ? <DropdownMenuSeparator key={`sep-${String(index)}`} className="mx-ctx-sep" />
-          : 'heading' in entry
+          : !isItem(entry)
             ? <DropdownMenuLabel key={`head-${entry.heading}`} className="mx-ctx-heading">{entry.heading}</DropdownMenuLabel>
             : (
             <DropdownMenuItem
@@ -80,6 +97,7 @@ export function MenuPopup({ title, at, items, portalContainer, onClose }: Props)
               title={entry.disabled === true ? entry.why : undefined}
               onSelect={() => { choose(entry) }}
             >
+              {entry.icon !== undefined && <span className="mx-ctx-icon" aria-hidden="true">{entry.icon}</span>}
               <span className="mx-ctx-label">{entry.label}</span>
               {entry.hint !== undefined && <span className="mx-ctx-hint" aria-hidden="true">{entry.hint}</span>}
             </DropdownMenuItem>

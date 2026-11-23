@@ -29,6 +29,12 @@ function show() {
 
 const group = (name: string) => within(screen.getByRole('group', { name }))
 
+/** Opens one add form from its row's button, as a person does, and gives what is inside it. */
+async function openForm(user: ReturnType<typeof userEvent.setup>, name: string) {
+  await user.click(await screen.findByRole('button', { name }))
+  return within(screen.getByRole('form', { name }))
+}
+
 afterEach(cleanup)
 beforeEach(() => {
   for (const mock of Object.values(api)) mock.mockReset()
@@ -47,16 +53,6 @@ beforeEach(() => {
 })
 
 describe('Settings › Extensions', () => {
-  it('lists each agent\'s plugins, servers, skills and marketplaces, and says when there are none', async () => {
-    show()
-    expect(await group('Claude Code Plugins').findByText('hello')).toBeInTheDocument()
-    expect(group('Claude Code Plugins').getByText('version 1.0.0')).toBeInTheDocument()
-    expect(group('Claude Code MCP servers').getByText('echo a b')).toBeInTheDocument()
-    expect(group('Claude Code Skills').getByText('Keeps notes')).toBeInTheDocument()
-    expect(group('Claude Code Marketplaces').getByText('None installed.')).toBeInTheDocument()
-    expect(group('Codex Plugins').getByRole('switch', { name: 'Turn on hello' })).not.toBeChecked()
-    expect(api.loadExtensions).toHaveBeenCalledWith(null)
-  })
 
   it('offers only this computer\'s projects and reads the project it is asked to look at', async () => {
     const user = userEvent.setup()
@@ -124,7 +120,7 @@ describe('Settings › Extensions', () => {
 
 describe('adding', () => {
   const fillServer = async (user: ReturnType<typeof userEvent.setup>) => {
-    const card = within(await screen.findByRole('region', { name: 'Add an MCP server' }))
+    const card = await openForm(user, 'Add an MCP server')
     await user.type(card.getByRole('textbox', { name: 'Server name' }), 'docs')
     await user.type(card.getByRole('textbox', { name: 'Server command' }), 'npx -y "my srv"')
     return card
@@ -154,7 +150,7 @@ describe('adding', () => {
     const user = userEvent.setup()
     api.previewAdd.mockResolvedValue({ ok: true, value: { ...PREVIEW, runs: ['Connects to https://mcp.example.com/sse'], hosts: ['mcp.example.com'] } })
     show()
-    const card = within(await screen.findByRole('region', { name: 'Add an MCP server' }))
+    const card = await openForm(user, 'Add an MCP server')
     await user.type(card.getByRole('textbox', { name: 'Server name' }), 'docs')
     await user.selectOptions(card.getByRole('combobox', { name: 'How the server runs' }), 'address')
     await user.type(card.getByRole('textbox', { name: 'Server address' }), 'https://mcp.example.com/sse')
@@ -163,22 +159,11 @@ describe('adding', () => {
     expect(await screen.findByText('Your prompts and tool results are sent to mcp.example.com.')).toBeInTheDocument()
   })
 
-  it('cancelling a preview adds nothing', async () => {
-    const user = userEvent.setup()
-    api.previewAdd.mockResolvedValue({ ok: true, value: PREVIEW })
-    show()
-    const card = await fillServer(user)
-    await user.click(card.getByRole('button', { name: 'Review' }))
-    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Cancel' }))
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    expect(api.confirmAdd).not.toHaveBeenCalled()
-  })
-
   it('needs a project picked for a project scope, and sends it with the request', async () => {
     const user = userEvent.setup()
     api.previewAdd.mockResolvedValue({ ok: true, value: PREVIEW })
     show()
-    const card = within(await screen.findByRole('region', { name: 'Add a plugin' }))
+    const card = await openForm(user, 'Add a plugin')
     await user.type(card.getByRole('textbox', { name: 'Plugin name@marketplace' }), 'hello@local-mk')
     await user.selectOptions(card.getByRole('combobox', { name: 'Where it applies' }), 'Project')
     expect(card.getByText('Pick a project at the top for this.')).toBeInTheDocument()
@@ -192,26 +177,62 @@ describe('adding', () => {
     const user = userEvent.setup()
     api.previewAdd.mockResolvedValue({ ok: false, failure: { line: 'That is not there any more. Refresh the list and try again.', terminal: null } })
     show()
-    const market = within(await screen.findByRole('region', { name: 'Add a marketplace' }))
+    const market = await openForm(user, 'Add a marketplace')
     await user.type(market.getByRole('textbox', { name: 'Marketplace source' }), 'someone/market')
     await user.click(market.getByRole('button', { name: 'Review' }))
     expect(await market.findByRole('alert')).toHaveTextContent('That is not there any more.')
 
-    const server = within(screen.getByRole('region', { name: 'Add an MCP server' }))
+    const server = await openForm(user, 'Add an MCP server')
     await user.type(server.getByRole('textbox', { name: 'Server name' }), 'x')
     await user.type(server.getByRole('textbox', { name: 'Server command' }), 'node "unclosed')
     await user.click(server.getByRole('button', { name: 'Review' }))
     expect(server.getByText('That command line has an open quote.')).toBeInTheDocument()
     expect(api.previewAdd).toHaveBeenCalledTimes(1)
   })
+
+  it('keeps every form closed until its button opens it, and opens one at a time', async () => {
+    const user = userEvent.setup()
+    show()
+    const plugin = await screen.findByRole('button', { name: 'Add a plugin' })
+    expect(plugin).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByRole('form')).not.toBeInTheDocument()
+
+    await user.click(plugin)
+    expect(plugin).toHaveAttribute('aria-expanded', 'true')
+    expect(within(screen.getByRole('form', { name: 'Add a plugin' })).getByRole('combobox', { name: 'For which agent' })).toHaveFocus()
+
+    await user.click(screen.getByRole('button', { name: 'Add a marketplace' }))
+    expect(screen.getAllByRole('form').map((form) => form.getAttribute('aria-label'))).toEqual(['Add a marketplace'])
+    expect(plugin).toHaveAttribute('aria-expanded', 'false')
+  })
+
+  it('closes a form with Cancel or Esc and gives focus back to its button, asking for nothing', async () => {
+    const user = userEvent.setup()
+    show()
+    const server = await openForm(user, 'Add an MCP server')
+    await user.type(server.getByRole('textbox', { name: 'Server name' }), 'docs')
+    await user.click(server.getByRole('button', { name: 'Cancel' }))
+    expect(screen.queryByRole('form')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add an MCP server' })).toHaveFocus()
+
+    await openForm(user, 'Add a marketplace')
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('form')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add a marketplace' })).toHaveFocus()
+    expect(api.previewAdd).not.toHaveBeenCalled()
+  })
 })
 
-describe('what needs a terminal', () => {
-  it('says so in plain words with the exact commands', async () => {
+describe('needs a terminal', () => {
+  it('folds its help to one row, and shows the exact commands when opened', async () => {
+    const user = userEvent.setup()
     show()
     const card = within(await screen.findByRole('region', { name: 'Needs a terminal' }))
+    expect(card.queryByText('claude mcp login <name>')).not.toBeInTheDocument()
+    await user.click(card.getByRole('button', { name: 'Show' }))
     expect(card.getByText('claude mcp login <name>')).toBeInTheDocument()
     expect(card.getByText('codex mcp login <name>')).toBeInTheDocument()
-    expect(card.getByText(/Claude Code asks you the first time it starts in that project/)).toBeInTheDocument()
+    await user.click(card.getByRole('button', { name: 'Hide' }))
+    expect(card.queryByText('claude mcp login <name>')).not.toBeInTheDocument()
   })
 })

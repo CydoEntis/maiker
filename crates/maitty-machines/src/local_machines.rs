@@ -89,15 +89,8 @@ fn read_machines(file: &Path) -> Result<Vec<MachineDef>> {
 mod tests {
     use super::*;
 
-    fn dir(label: &str) -> PathBuf {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-local-machines-{}-{}"),
-            label,
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
-        dir
+    fn dir(label: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("local-machines-{label}"))
     }
 
     fn list_of(local: &str) -> MachineList {
@@ -109,12 +102,13 @@ mod tests {
     }
 
     #[test]
-    fn no_file_is_no_machines_and_no_error() {
+    fn no_file_or_a_file_without_machines_is_no_machines_and_no_error() {
         let dir = dir("none");
         assert_eq!(
             machines_beside(&dir.join("config.toml")),
             MachineList::default()
         );
+        assert_eq!(list_of("theme = 'night'\n"), MachineList::default());
     }
 
     #[test]
@@ -127,11 +121,6 @@ mod tests {
         assert_eq!(names, ["build", "box"]);
         assert_eq!(list.machines[0].ssh_args, ["-p", "2222"]);
         assert!(!list.machines[0].clipboard && list.machines[1].clipboard);
-    }
-
-    #[test]
-    fn a_file_without_machines_is_no_machines() {
-        assert_eq!(list_of("theme = 'night'\n"), MachineList::default());
     }
 
     #[test]
@@ -150,12 +139,6 @@ mod tests {
         assert!(list.machines.is_empty());
         let error = list.error.expect("a syntax error is reported");
         assert!(error.contains("config.local.toml"), "{error}");
-    }
-
-    #[test]
-    fn a_name_that_is_this_computer_is_refused() {
-        let list = list_of("[[machines]]\nname = 'local'\ntarget = 'x'\n");
-        assert!(list.error.is_some());
     }
 
     #[test]

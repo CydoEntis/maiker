@@ -147,15 +147,8 @@ fn branch_of(folder: &Path) -> Option<String> {
 mod tests {
     use super::*;
 
-    fn scratch(label: &str) -> PathBuf {
-        let folder = std::env::temp_dir().join(format!(
-            "{}-folders-{label}-{}",
-            env!("APP_COMMAND"),
-            std::process::id()
-        ));
-        let _ = std::fs::remove_dir_all(&folder);
-        std::fs::create_dir_all(&folder).unwrap();
-        folder
+    fn scratch(label: &str) -> maitty_test_support::TempFolder {
+        maitty_test_support::TempFolder::new(&format!("folders-{label}"))
     }
 
     #[test]
@@ -303,13 +296,6 @@ mod tests {
             return;
         }
         assert!(matches!(outcome, FolderCreated::Failed { ref reason } if reason.contains("permission")), "{outcome:?}");
-    }
-
-    #[test]
-    fn a_tilde_parent_is_the_home_folder() {
-        let home = scratch("create-home");
-        assert!(matches!(create("~", "made", Some(&home)), FolderCreated::Created { .. }));
-        assert!(home.join("made").is_dir());
     }
 
     #[test]

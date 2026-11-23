@@ -59,17 +59,6 @@ async function open() {
 }
 
 describe('text selected in the chat', () => {
-  it('offers Copy and Quote where the mouse let go, and copies nothing by itself', async () => {
-    const { said } = await open()
-    select(said)
-
-    fireEvent.mouseUp(said)
-
-    expect(screen.getByRole('group', { name: 'Selected text' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Copy' })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Quote' })).toBeInTheDocument()
-    expect(writeText).not.toHaveBeenCalled()
-  })
 
   it('copies the text when Copy is pressed, says so, and puts the bar away', async () => {
     const copied = vi.spyOn(toast, 'success').mockImplementation(() => '')
@@ -121,18 +110,6 @@ describe('text selected in the chat', () => {
     select(said)
     fireEvent.mouseUp(box)
     expect(screen.queryByRole('group', { name: 'Selected text' })).not.toBeInTheDocument()
-  })
-
-  it('draws the bar over everything, outside the chat, kept inside the window', async () => {
-    const { said } = await open()
-    select(said)
-
-    fireEvent.mouseUp(said, { clientX: 2, clientY: 3 })
-
-    const bar = screen.getByRole('group', { name: 'Selected text' })
-    expect(bar.closest('.mx-chat')).toBeNull()
-    expect(bar.style.left).toBe('90px')
-    expect(bar.style.top).toBe('48px')
   })
 
   it('puts the bar away on Esc', async () => {

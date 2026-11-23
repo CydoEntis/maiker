@@ -1,20 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { ageWords, lossOfRemoving, mergeBlock, overlapWords, standingTag, standingTone, standingWords } from './worktreeAdvice'
+import { lossOfRemoving, mergeBlock } from './worktreeAdvice'
 
 const clean = { dirty: 0, branch: 'task', merged: true, last_commit: '3 days ago', inactive_days: null, missing: false }
 
 describe('what a worktree can lose', () => {
-  it('says its state in words', () => {
-    expect(standingWords(clean)).toBe('merged, nothing uncommitted · last commit 3 days ago')
-    expect(standingWords({ ...clean, missing: true })).toBe('its folder is gone')
-    expect(standingWords({ ...clean, merged: false })).toBe('not merged anywhere · last commit 3 days ago')
-    expect(standingWords({ ...clean, dirty: 1, last_commit: '' })).toBe('1 uncommitted change')
-  })
-
-  it('leads with how long an inactive worktree has sat', () => {
-    expect(standingWords({ ...clean, merged: false, inactive_days: 30 })).toBe('inactive 30 days · not merged anywhere · last commit 3 days ago')
-    expect(standingWords({ ...clean, inactive_days: 1 })).toBe('inactive 1 day · merged, nothing uncommitted · last commit 3 days ago')
-  })
 
   it('asks before removing only what would be lost', () => {
     expect(lossOfRemoving(clean)).toBeNull()
@@ -27,24 +16,5 @@ describe('what a worktree can lose', () => {
     expect(mergeBlock({ ...clean, merged: false, dirty: 1 })).toBe('Commit its changes first.')
     expect(mergeBlock(clean)).toBe('Its work is already on another branch.')
     expect(mergeBlock({ ...clean, branch: null, merged: false })).toBe('It is on no branch.')
-  })
-})
-
-describe('a worktree row', () => {
-  it('carries one word for what is on it and one for how long it has been quiet', () => {
-    expect([standingTag(clean), standingTone(clean)]).toEqual(['merged', 'done'])
-    expect([standingTag({ ...clean, merged: false }), standingTone({ ...clean, merged: false })]).toEqual(['unmerged', 'neutral'])
-    expect([standingTag({ ...clean, dirty: 3 }), standingTone({ ...clean, dirty: 3 })]).toEqual(['3 changes', 'working'])
-    expect([standingTag({ ...clean, missing: true }), standingTone({ ...clean, missing: true })]).toEqual(['folder gone', 'err'])
-    expect(ageWords(clean)).toBe('3 days ago')
-    expect(ageWords({ ...clean, inactive_days: 16 })).toBe('inactive 16 days')
-  })
-})
-
-describe('overlap words', () => {
-  it('names the first shared file and counts the rest', () => {
-    expect(overlapWords([])).toBe('')
-    expect(overlapWords([{ file: 'src/checkout.ts', checkouts: ['orders', 'rate-limit'] }])).toBe('orders and rate-limit both changed checkout.ts')
-    expect(overlapWords([{ file: 'a.ts', checkouts: ['x', 'y', 'z'] }, { file: 'b.ts', checkouts: ['x', 'y'] }])).toBe('3 checkouts changed a.ts (and 1 more file)')
   })
 })

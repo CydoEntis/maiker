@@ -1,5 +1,7 @@
 import type { TraySession } from '@/api/tray'
 import { displayName, type SessionView } from './session'
+import type { StatusMarkKind } from '@/lib/statusMark'
+import { sectionOf } from './sidebar'
 
 /** A session's line in the menu: its agent, then its name. A name alone is often only a folder, which says little away from the sidebar. */
 function trayLabel(session: SessionView): string {
@@ -9,8 +11,8 @@ function trayLabel(session: SessionView): string {
 
 /** What the tray menu lists: the sessions that need you, then the ones that finished, each by the name the sidebar shows. */
 export function traySessionsOf(sessions: readonly SessionView[]): { needs: TraySession[]; finished: TraySession[] } {
-  const named = (status: SessionView['status']) =>
-    sessions.filter((session) => session.status === status).map((session) => ({ id: session.id, label: trayLabel(session) }))
+  const named = (section: StatusMarkKind) =>
+    sessions.filter((session) => sectionOf(session) === section).map((session) => ({ id: session.id, label: trayLabel(session) }))
   return { needs: named('needs'), finished: named('done') }
 }
 

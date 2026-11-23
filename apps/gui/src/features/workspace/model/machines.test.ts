@@ -3,7 +3,7 @@ import { conversationsFromSnapshot } from '@/api/daemon'
 import { forgetMachines, parseSessionId, registerMachine, type MachineKind, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import type { Layout } from './layout'
-import { idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
+import { downSentence, LOCAL_HEAD, machineDrops, idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
 import { folderNameOf, toSessionView } from './session'
 
 afterEach(() => { forgetMachines() })
@@ -11,7 +11,7 @@ afterEach(() => { forgetMachines() })
 function term(id: number, cwd: string) {
   return {
     id, cols: 80, rows: 24, title: 't', process: 'bash', agent: null, status: 'Idle', cwd, summary: '', name: 'n',
-    label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], subagents: [],
+    label: '', pinned: false, archived: false, model: '', said: '', branch: null, linked: false, helperAsk: [], startedBy: null, subagents: [],
     conversation_id: null, popup: false, remote: null, root: null, top: null, since: 0, asleep: false, win32_input: false,
   }
 }
@@ -148,17 +148,6 @@ describe('machine chips', () => {
     ['unreachable', 'unreachable', 'bad'],
     ['refused', 'refused', 'bad'],
   ]
-  it.each(words)('%s reads %s and is %s', (kind, word, tone) => {
-    const chip = machineChip(state(1, 'build', kind))
-    expect(chip.word).toBe(word)
-    expect(chip.tone).toBe(tone)
-    expect(chip.glyph).not.toBe('')
-  })
-
-  it('says which dial a reconnect is on', () => {
-    expect(machineChip({ ...state(1, 'build', 'reconnecting'), attempt: 2 }).word).toBe('reconnecting #2')
-    expect(machineChip(state(1, 'build', 'reconnecting')).word).toBe('reconnecting')
-  })
 
   it('never colours a state alone: every kind has its own word, and shapes tell down from up', () => {
     const chips = words.map(([kind]) => machineChip(state(1, 'build', kind)))
@@ -231,21 +220,22 @@ describe('where a new session goes', () => {
 })
 
 describe('the command that fixes a machine that needs an update', () => {
-  it('is the one the fix text names, for a machine that needs an update only', () => {
-    const fix = 'run `maiker machine update build`, then retry'
-    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: fix })).toBe('maiker machine update build')
-    expect(updateCommandOf({ ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build --install` (or set `remote_cmd` to its path), then retry' })).toBe('maiker machine update build --install')
-    expect(updateCommandOf({ ...state(1, 'build', 'unreachable'), why: fix })).toBeNull()
+  const missing = { ...state(1, 'build', 'needs-update'), why: "Maiker isn't installed on build: run `maiker machine update build --install` (Linux and macOS machines only), then try again.", failure: 'install' as const, fix_command: 'maiker machine update build --install' }
+  const other = { ...state(1, 'build', 'needs-update'), why: 'build runs an older Maiker: run `maiker machine update build`, then try again.', failure: 'update' as const, fix_command: 'maiker machine update build' }
+  const newer = { ...state(1, 'build', 'needs-update'), why: "build runs a newer Maiker than this computer: update Maiker here (`maiker update`, or the desktop app's own update), then try again.", failure: 'update-here' as const }
+
+  it('is the one the host gave, for a machine that needs an update only', () => {
+    expect(updateCommandOf(other)).toBe('maiker machine update build')
+    expect(updateCommandOf(missing)).toBe('maiker machine update build --install')
+    expect(updateCommandOf({ ...other, state: 'unreachable' })).toBeNull()
     expect(updateCommandOf(state(1, 'build', 'needs-update'))).toBeNull()
   })
 
-  it('installs on a machine with no app, updates one with another version, and does neither otherwise', () => {
-    const missing = { ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build --install` (or set `remote_cmd` to its path), then retry' }
-    const other = { ...state(1, 'build', 'needs-update'), why: 'run `maiker machine update build`, then retry' }
+  it('installs on a machine with no app, updates one with another version, and does neither otherwise, by the failure the host named', () => {
     expect(updateActionOf(missing)).toBe('install')
     expect(updateActionOf(other)).toBe('update')
     expect(updateActionOf(state(1, 'build', 'needs-update'))).toBe('update')
-    const newer = { ...state(1, 'build', 'needs-update'), why: "it runs a newer maiker than this computer; update maiker on this computer (`maiker update`, or the desktop app's own update), then retry" }
+    expect(updateActionOf({ ...other, why: 'run `maiker machine update build --install`' })).toBe('update')
     expect(updateActionOf(newer)).toBeNull()
     expect(updateCommandOf(newer)).toBeNull()
     expect(machineChip(newer).word).toBe('newer than this app')
@@ -280,10 +270,6 @@ describe('starting a shell from another machine\'s pane', () => {
     expect(remoteStartRefusal(true, 'build-box', 'Restarting this pane')).toBe('Restarting this pane is not available on build-box yet')
   })
 
-  it('names another machine when it has no name yet', () => {
-    expect(remoteStartRefusal(true, null, 'Splitting this pane')).toBe('Splitting this pane is not available on another machine yet')
-  })
-
   it('lets a pane of this computer start a shell', () => {
     expect(remoteStartRefusal(false, null, 'Splitting this pane')).toBeNull()
   })
@@ -296,5 +282,29 @@ describe('machine nicknames', () => {
     expect(machineTitle(heads[1] as MachineHead)).toBe('Builder')
     expect(heads[1]).toMatchObject({ name: 'Build-Box' })
     expect(machineTitle(machineHeads(new Map([[1, { state, conversations: [], heard: true, listedAt: 0 }]]))[1] as MachineHead)).toBe('Build-Box')
+  })
+})
+
+describe('saying that a machine is not connected', () => {
+  const devbox: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
+  const down: MachineHead = { ...devbox, down: true }
+
+  it('says each drop once, at launch too, and says when the machine is back or gone', () => {
+    const first = machineDrops(null, [LOCAL_HEAD, down])
+    expect(first.dropped.map((head) => head.name)).toEqual(['devbox'])
+    const still = machineDrops(first.seen, [LOCAL_HEAD, down])
+    expect([still.dropped, still.back]).toEqual([[], []])
+    expect(machineDrops(still.seen, [LOCAL_HEAD, devbox]).back).toEqual(['devbox'])
+    expect(machineDrops(still.seen, [LOCAL_HEAD]).back).toEqual(['devbox'])
+  })
+
+  it('never says it of this computer', () => {
+    expect(machineDrops(null, [{ ...LOCAL_HEAD, down: true }]).dropped).toEqual([])
+  })
+
+  it('uses the host\'s own sentence when it gave one, and always says something', () => {
+    expect(downSentence({ ...down, why: 'devbox refused the key.' })).toBe('devbox refused the key.')
+    expect(downSentence(down)).not.toBe('')
+    expect(downSentence({ ...down, updateAction: 'install' })).not.toBe(downSentence(down))
   })
 })

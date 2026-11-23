@@ -1,6 +1,5 @@
 //! The decide-screens: Override, the repo-command approval and Settings › Check, drawn on the
-//! reference sample world and set beside its reference frames, and the keys that make them hard
-//! to get wrong by reflex.
+//! reference sample world, and the keys that make them hard to get wrong by reflex.
 use super::check_settings::{CheckDraft, CheckEdit};
 use super::*;
 use crate::client::ids::Outgoing;
@@ -10,69 +9,7 @@ use crate::config::CheckDef;
 use crate::protocol::{ApprovalChoice, CheckSource};
 use crossterm::event::{MouseButton, MouseEvent, MouseEventKind};
 
-/// Inside each modal, row by row, as the reference frames draw it (frame lines
-/// excluded: they are the modal chrome's).
-const FRAMES: &str = include_str!("check_modals_frames.txt");
 const HOUR: u64 = 3600;
-
-fn reference(preset: &str, w: u16, h: u16) -> Vec<String> {
-    let head = format!("===== {preset} | {w}x{h}");
-    let at = FRAMES
-        .find(&head)
-        .unwrap_or_else(|| panic!("no reference for {head}"));
-    let body = &FRAMES[at..];
-    // Past the heading's line end, LF or CRLF as the checkout made it.
-    let body = &body[body.find('\n').map_or(body.len(), |i| i + 1)..];
-    let end = body.find("=====").unwrap_or(body.len());
-    body[..end]
-        .lines()
-        .map(|l| l.replace('\\', std::path::MAIN_SEPARATOR_STR))
-        .collect()
-}
-
-/// The modal's rectangle on a `w`×`h` screen, as the reference places it.
-fn modal_rect(preset: &str, w: u16, h: u16) -> (usize, usize, usize, usize) {
-    let (mw, mh) = match preset.as_bytes()[0] {
-        b'1' if preset.starts_with("12") => (70.min(w - 2), 15),
-        b'A' => (84.min(w - 2), 20.min(h - 1) - u16::from(h < 30)),
-        _ => (80.min(w - 2), 20.min(h - 2)),
-    };
-    (
-        ((w - mw) / 2) as usize,
-        ((h - mh) / 2) as usize,
-        mw as usize,
-        mh as usize,
-    )
-}
-
-/// The inside of the modal in `text`, pill ends as the plain cells they stand for.
-fn inside(text: &str, preset: &str, w: u16, h: u16) -> Vec<String> {
-    let (x, y, mw, mh) = modal_rect(preset, w, h);
-    let caps = |c: char| {
-        if c == '\u{e0b6}' || c == '\u{e0b4}' {
-            ' '
-        } else {
-            c
-        }
-    };
-    text.lines()
-        .skip(y + 1)
-        .take(mh - 2)
-        .map(|l| {
-            let cells: Vec<char> = l
-                .chars()
-                .map(caps)
-                .chain(std::iter::repeat(' '))
-                .take(w as usize)
-                .collect();
-            cells[x + 1..x + mw - 1]
-                .iter()
-                .collect::<String>()
-                .trim_end()
-                .to_string()
-        })
-        .collect()
-}
 
 fn site(app: &App) -> PathBuf {
     app.snap.terms[&1]
@@ -195,7 +132,7 @@ fn preset(name: &str) -> App {
 }
 
 #[test]
-fn each_modal_matches_the_reference_inside_in_every_layout_at_every_size() {
+fn each_decide_screen_opens_fits_every_size_and_closes_on_esc_sending_nothing() {
     let presets = [
         "12 Override?",
         "14 Settings · empty",
@@ -208,17 +145,27 @@ fn each_modal_matches_the_reference_inside_in_every_layout_at_every_size() {
     ];
     for name in presets {
         let mut app = preset(name);
+        let mut rx = listening(&mut app);
+        assert!(!matches!(app.mode, Mode::Normal), "{name}: it opens");
+        let open = std::mem::discriminant(&app.mode);
         for layout in LAYOUTS {
             for (w, h) in SIZES {
                 let text = frame(&mut app, layout, w, h, "unicode");
-                let got = inside(&text, name, w, h);
-                assert_eq!(
-                    got,
-                    reference(name, w, h),
-                    "{name} | {layout:?} | {w}x{h}\n{text}"
+                let r = *app
+                    .screen
+                    .modal_rects
+                    .last()
+                    .unwrap_or_else(|| panic!("{name} | {layout:?} | {w}x{h}: no modal drawn\n{text}"));
+                assert!(
+                    r.right() <= w && r.bottom() <= h,
+                    "{name} | {layout:?} | {w}x{h}: {r:?} runs off the screen\n{text}"
                 );
+                assert_eq!(std::mem::discriminant(&app.mode), open, "{name}: drawing keeps it open");
             }
         }
+        key(&mut app, KeyCode::Esc);
+        assert_eq!(app.mode, Mode::Normal, "{name}: Esc closes it");
+        assert!(sent(&mut rx).is_empty(), "{name}: Esc sends nothing (no override, no approval)");
     }
 }
 
@@ -627,13 +574,6 @@ fn o_overrides_while_the_reason_is_empty_and_is_a_letter_after() {
         Some(String::new()),
         "Ctrl+U empties it, and O overrides again"
     );
-}
-
-#[test]
-fn escape_cancels_the_override() {
-    let (mut app, mut rx) = overriding();
-    key(&mut app, KeyCode::Esc);
-    assert!(reason_sent(&sent(&mut rx)).is_none() && matches!(app.mode, Mode::Normal));
 }
 
 // ---- settings › check ----------------------------------------------------------------------

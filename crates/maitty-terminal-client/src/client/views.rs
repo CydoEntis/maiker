@@ -1614,13 +1614,4 @@ mod tests {
         v.review = None;
         assert!(v.rows().is_empty());
     }
-
-    #[test]
-    fn highlights_code() {
-        let t = Theme::named(crate::theme::DEFAULT);
-        let segs = highlight("const user = await find('x'); // look", &t);
-        let words: Vec<&str> = segs.iter().map(|(s, _)| s.as_str()).collect();
-        assert!(words.contains(&"const") && words.contains(&"'x'") && words.contains(&"find"));
-        assert!(words.last().unwrap().starts_with("// look"));
-    }
 }

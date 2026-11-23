@@ -1,15 +1,8 @@
 use super::*;
 use std::time::Duration;
 
-fn scratch(label: &str) -> PathBuf {
-    let folder = std::env::temp_dir().join(format!(
-        "{}-saved-{label}-{}",
-        env!("APP_COMMAND"),
-        std::process::id()
-    ));
-    let _ = std::fs::remove_dir_all(&folder);
-    std::fs::create_dir_all(&folder).unwrap();
-    folder
+fn scratch(label: &str) -> maitty_test_support::TempFolder {
+    maitty_test_support::TempFolder::new(&format!("saved-{label}"))
 }
 
 fn project() -> PathBuf {
@@ -182,4 +175,26 @@ fn an_id_that_starts_like_a_flag_is_never_listed() {
 
     assert_eq!(listed(list("claude", &app, &both)), [("plain-session".to_string(), "A plain one".to_string())]);
     assert_eq!(listed(list("codex", &app, &both)), [("b7".to_string(), "Plain id".to_string())]);
+}
+
+/// Claude names its folder from the real path it runs in, so asking through another name for the
+/// folder (a link here; a short name like `RUNNER~1` on Windows) still finds what it saved.
+#[cfg(unix)]
+#[test]
+fn claude_finds_a_folders_transcripts_when_asked_through_a_link_to_it() {
+    let scratch = scratch("claude-link");
+    let app = std::fs::canonicalize(&*scratch).unwrap().join("app");
+    std::fs::create_dir_all(&app).unwrap();
+    let link = scratch.join("app-link");
+    std::os::unix::fs::symlink(&app, &link).unwrap();
+    let root = scratch.join("projects");
+    write(
+        &root.join(claude_folder_name(&app)).join("the-session.jsonl"),
+        &[claude_user(&app, serde_json::json!("Fix the login bug"))],
+        5,
+    );
+
+    let found = listed(list("claude", &link, &stores(&root, &root.join("none"))));
+
+    assert_eq!(found, [("the-session".to_owned(), "Fix the login bug".to_owned())]);
 }

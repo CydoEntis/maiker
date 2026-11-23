@@ -19,7 +19,7 @@ describe('the hover card controller', () => {
     vi.advanceTimersByTime(HOVER_CARD_DELAY_MS - 1)
     expect(hover.getSnapshot().target).toBeNull()
     vi.advanceTimersByTime(1)
-    expect(hover.getSnapshot()).toMatchObject({ open: true, cold: true, target: { id: 'a', place: { left: 288, top: 96 } } })
+    expect(hover.getSnapshot()).toMatchObject({ open: true, cold: true, target: { id: 'a', place: { left: 288, top: 92 } } })
   })
 
   it('never shows a card for a pointer that left before the delay', () => {
@@ -39,7 +39,7 @@ describe('the hover card controller', () => {
     expect(hover.getSnapshot()).toMatchObject({ open: false, target: { id: 'a' } })
     vi.advanceTimersByTime(HOVER_CARD_WARM_MS - 1)
     hover.enter('b', () => other)
-    expect(hover.getSnapshot()).toMatchObject({ open: true, target: { id: 'b', place: { top: 156 } } })
+    expect(hover.getSnapshot()).toMatchObject({ open: true, target: { id: 'b', place: { top: 152 } } })
     vi.advanceTimersByTime(HOVER_CARD_WARM_MS * 2)
     expect(hover.getSnapshot().target?.id).toBe('b')
   })

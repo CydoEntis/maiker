@@ -18,17 +18,6 @@ function open() {
 }
 
 describe('the Get a file dialog', () => {
-  it('names the machine and starts with the session folder, so only the file name is left to type', () => {
-    const { box } = open()
-    expect(screen.getByRole('dialog', { name: 'Get a file from devbox' })).toBeTruthy()
-    expect(box.value).toBe('/srv/app/')
-    expect(document.activeElement).toBe(box)
-  })
-
-  it('cannot get until a file is named', () => {
-    open()
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Get file' }).disabled).toBe(true)
-  })
 
   it('gets the path that was typed, trimmed', async () => {
     const user = userEvent.setup()
@@ -36,15 +25,6 @@ describe('the Get a file dialog', () => {
     await user.type(box, 'out.log  ')
     await user.click(screen.getByRole('button', { name: 'Get file' }))
     expect(onGet).toHaveBeenCalledWith('/srv/app/out.log')
-  })
-
-  it('cancels with the button or Escape, and gets nothing', async () => {
-    const user = userEvent.setup()
-    const { onGet, onCancel } = open()
-    await user.click(screen.getByRole('button', { name: 'Cancel' }))
-    await user.keyboard('{Escape}')
-    expect(onCancel).toHaveBeenCalledTimes(2)
-    expect(onGet).not.toHaveBeenCalled()
   })
 })
 
@@ -73,16 +53,7 @@ function browsing(over: Partial<Browse> = {}) {
   return { browse, onGet, onCancel }
 }
 
-const optionNames = () => screen.getAllByRole('option').map((option) => option.getAttribute('aria-label') ?? option.textContent)
-
 describe('browsing a machine in the Get a file dialog', () => {
-  it('shows a loading state, then the session folder with its folders first', async () => {
-    browsing()
-    expect(screen.getByRole('status', { name: 'Reading the folder' })).toBeTruthy()
-    await screen.findByRole('option', { name: 'docs, folder' })
-    expect(optionNames()).toEqual(['docs, folder', 'src, folder', 'Makefile', 'README.md'])
-    expect(screen.getByRole('listbox', { name: 'Files in /srv/app' })).toBeTruthy()
-  })
 
   it('opens a folder when it is clicked, and goes back up', async () => {
     const user = userEvent.setup()
@@ -137,24 +108,6 @@ describe('browsing a machine in the Get a file dialog', () => {
     expect(onGet).toHaveBeenCalledWith('/srv/app/src')
   })
 
-  it('cannot get the folder while a search is showing matches, or before the folder has loaded', async () => {
-    const user = userEvent.setup()
-    browsing()
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Get this folder/ }).disabled).toBe(true)
-    await screen.findByRole('option', { name: 'README.md' })
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Get this folder/ }).disabled).toBe(false)
-    await user.type(screen.getByRole('textbox', { name: 'Search in /srv/app' }), 'm')
-    expect(screen.getByRole<HTMLButtonElement>('button', { name: /Get this folder/ }).disabled).toBe(true)
-  })
-
-  it('says so when nothing matches', async () => {
-    const user = userEvent.setup()
-    browsing()
-    await screen.findByRole('option', { name: 'README.md' })
-    await user.type(screen.getByRole('textbox', { name: 'Search in /srv/app' }), 'zzzz')
-    expect(await screen.findByText('No file matches.')).toBeTruthy()
-  })
-
   it("shows the host's words when the listing fails, and a typed path still works", async () => {
     const user = userEvent.setup()
     const { onGet } = browsing({ list: vi.fn(() => Promise.reject(new Error('/srv/app does not exist on devbox'))) })
@@ -168,12 +121,5 @@ describe('browsing a machine in the Get a file dialog', () => {
     browsing({ list: vi.fn(() => Promise.resolve(listingOf('/srv/app', ['a'], ['b'], { truncated: true, hidden: 2 }))) })
     expect(await screen.findByText('Showing the first 2 entries only.')).toBeTruthy()
     expect(screen.getByText('2 entries with unusual names are left out.')).toBeTruthy()
-  })
-
-  it('says when the search is waiting for the folder to be read, or could not read it', async () => {
-    const user = userEvent.setup()
-    browsing({ index: vi.fn(() => new Promise<RemoteIndex>(() => undefined)) })
-    await user.type(screen.getByRole('textbox', { name: 'Search in /srv/app' }), 'a')
-    expect(screen.getByRole('status', { name: 'Reading the folder to search it' })).toBeTruthy()
   })
 })

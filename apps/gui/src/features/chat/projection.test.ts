@@ -348,6 +348,14 @@ describe('approvals', () => {
     })
   })
 
+  it('carries the agent\'s own words for the choices only when there is one for each', () => {
+    const named = only(project('claude', [], [{ ...claudeApproval, choice_labels: ['Allow once', 'Reject'] }]))
+    const uneven = only(project('claude', [], [{ ...claudeApproval, choice_labels: ['Allow once'] }]))
+
+    expect(named).toMatchObject({ kind: 'approval', choiceLabels: ['Allow once', 'Reject'] })
+    expect(uneven).not.toHaveProperty('choiceLabels')
+  })
+
   it('carries the Codex file preview as a diff', () => {
     const event = only(project('codex', [], [codexApproval]))
     expect(event).toMatchObject({
@@ -355,12 +363,6 @@ describe('approvals', () => {
       itemId: 'file-change-1',
       changes: [{ path: 'src/synthetic.rs', diff: { status: 'available', added: 1, removed: 1 } }],
     })
-  })
-
-  it('marks a request answered when the daemon stops listing it, with the choice unknown', () => {
-    const pending = applyApprovals(createChatProjection('claude'), [claudeApproval])
-    const answered = applyApprovals(pending, [])
-    expect(only(selectChatEvents(answered))).toMatchObject({ resolution: { status: 'answered', answer: 'unknown' } })
   })
 
   it('records the user\'s own answer and keeps it when the daemon later drops the request', () => {

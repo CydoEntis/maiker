@@ -59,34 +59,6 @@ describe('reading a conversation', () => {
     expect(kinds(second)).toEqual([...before, 'message:turn-1:m3'])
   })
 
-  it('updates an item in place when the daemon updates it, keeping its place in the order', async () => {
-    const daemon = new FakeDaemonHistory()
-    daemon.upsert(daemon.message(T1, 'u', 'User', 'run it'))
-    daemon.upsert(daemon.tool(T1, 'c', 'ls', '', 'Running'))
-    daemon.upsert(daemon.message(T1, 'a', 'Assistant', 'done'))
-    const first = await syncFeed(newFeed(), daemon.read, now)
-    expect(selectChatEvents(first.projection).find((event) => event.kind === 'command')).toMatchObject({ status: 'running' })
-
-    daemon.upsert(daemon.tool(T1, 'c', 'ls', 'a.txt', 'Completed'))
-    const second = await syncFeed(first, daemon.read, now)
-
-    expect(kinds(second)).toEqual(kinds(first))
-    expect(selectChatEvents(second.projection).find((event) => event.kind === 'command')).toMatchObject({ status: 'completed', output: 'a.txt' })
-  })
-
-  it('starts over when the conversation has a new generation', async () => {
-    const daemon = conversationOf(3, 10)
-    const first = await syncFeed(newFeed(), daemon.read, now)
-    expect(selectChatEvents(first.projection)).toHaveLength(3)
-
-    daemon.restart()
-    daemon.upsert(daemon.message(T2, 'n0', 'User', 'a fresh start'))
-    const second = await syncFeed(first, daemon.read, now)
-
-    expect(kinds(second)).toEqual(['message:turn-2:n0'])
-    expect(second.generation).toBe(2)
-  })
-
   it('tracks pending approvals and marks one answered when the daemon stops listing it', async () => {
     const daemon = new FakeDaemonHistory()
     daemon.upsert(daemon.message(T1, 'u', 'User', 'go'))

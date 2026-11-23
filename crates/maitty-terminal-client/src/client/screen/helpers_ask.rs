@@ -4,6 +4,9 @@
 //! alone, Esc decides later and the row stays as it is. Enter, y and Space do nothing, so a
 //! stray key cannot hand an agent helpers. The daemon holds the request and takes the answer
 //! only from here (`Command::AnswerHelpers`).
+//!
+//! A chat with no terminal asks the same way (ADR 0016): its row opens the same popover, and the
+//! answer is `Command::AnswerChatHelpers`.
 
 use super::*;
 use crate::protocol::{ClientMsg, HelperChoice};
@@ -12,6 +15,13 @@ const POP_W: u16 = 64;
 /// The most tasks listed; the rest are counted.
 const TASKS_LISTED: usize = 5;
 const NO_REFLEX: &str = "Enter does nothing here. Choose 1, 2 or 3.";
+
+/// Who asks to start helpers: a terminal session, or a chat that has no terminal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(in crate::client) enum Asker {
+    Pane(ClientTerm),
+    Chat(ClientSession),
+}
 
 /// A row's second line while its session asks for helpers.
 pub(in crate::client) fn helpers_line(n: usize) -> String {
@@ -23,6 +33,95 @@ impl App {
     pub(in crate::client) fn helpers_asked(&self, term: ClientTerm) -> bool {
         self.term_info(term)
             .is_some_and(|t| !t.helper_ask.is_empty())
+    }
+
+    fn chat_summary(&self, chat: ClientSession) -> Option<&crate::protocol::ConversationSummary> {
+        let SessionKey::Conversation(id) = chat.key else {
+            return None;
+        };
+        self.snap_of(chat.machine)?.conversations.iter().find(|c| c.id == id)
+    }
+
+    /// Whether chat `chat` has asked to start helpers and waits for you.
+    pub(in crate::client) fn chat_helpers_asked(&self, chat: ClientSession) -> bool {
+        self.chat_summary(chat).is_some_and(|c| !c.helper_ask.is_empty())
+    }
+
+    /// Open the question beside the chat's row; `side`: back to the sidebar after.
+    pub(in crate::client) fn open_chat_helpers(&mut self, chat: ClientSession, side: bool) {
+        if self.chat_helpers_asked(chat) {
+            self.screen.inbox_return = None;
+            self.mode = Mode::ChatHelpers { chat, side };
+        }
+    }
+
+    /// Send your answer for a chat, say what it did, and close the question.
+    pub(in crate::client) fn answer_chat_helpers(&mut self, chat: ClientSession, choice: HelperChoice) {
+        let Mode::ChatHelpers { side, .. } = self.mode else {
+            return;
+        };
+        let (SessionKey::Conversation(conversation), true) = (chat.key, self.chat_helpers_asked(chat)) else {
+            self.helpers_back(side);
+            return;
+        };
+        let ask = ClientMsg::Command(Command::AnswerChatHelpers { conversation, choice });
+        // This computer's service may be older than this window. Another machine's listed the
+        // request, so it reads the answer.
+        if chat.machine == MachineId::LOCAL && ask.introduced_in() > self.local_protocol {
+            self.helpers_back(side);
+            self.notify(
+                concat!("the ", env!("APP_NAME"), " service is older than this window: restart it to answer").into(),
+                true,
+            );
+            return;
+        }
+        let who = self.asker_name(Asker::Chat(chat));
+        self.send(chat.machine, ask);
+        self.helpers_back(side);
+        self.notify(helpers_said(&who, choice), false);
+    }
+
+    pub(in crate::client) fn on_chat_helpers_key(&mut self, chat: ClientSession, side: bool, k: &KeyEvent) {
+        let plain = !k
+            .modifiers
+            .intersects(KeyModifiers::CONTROL | KeyModifiers::ALT);
+        match k.code {
+            KeyCode::Esc => self.helpers_back(side),
+            KeyCode::Char('1') if plain => self.answer_chat_helpers(chat, HelperChoice::Allow),
+            KeyCode::Char('2') if plain => self.answer_chat_helpers(chat, HelperChoice::Always),
+            KeyCode::Char('3') if plain => self.answer_chat_helpers(chat, HelperChoice::No),
+            KeyCode::Enter | KeyCode::Char('y' | ' ') => self.notify(NO_REFLEX.into(), false),
+            _ => {}
+        }
+    }
+
+    /// The asker's name as its row says it.
+    fn asker_name(&self, asker: Asker) -> String {
+        match asker {
+            Asker::Pane(term) => self.session_name(term),
+            Asker::Chat(chat) => self
+                .screen_model()
+                .iter()
+                .flat_map(|p| p.sessions())
+                .find(|s| s.key == chat)
+                .map(|s| s.name.clone())
+                .unwrap_or_default(),
+        }
+    }
+
+    /// The agent that asks and the tasks it wants helpers for; none when it is not asking.
+    fn asker_request(&self, asker: Asker) -> Option<(String, Vec<String>)> {
+        let (agent, tasks) = match asker {
+            Asker::Pane(term) => {
+                let info = self.term_info(term)?;
+                (info.agent.clone().unwrap_or_else(|| "agent".into()), info.helper_ask.clone())
+            }
+            Asker::Chat(chat) => {
+                let summary = self.chat_summary(chat)?;
+                (format!("{:?}", summary.provider).to_lowercase(), summary.helper_ask.clone())
+            }
+        };
+        (!tasks.is_empty()).then_some((agent, tasks))
     }
 
     /// Open the question beside `term`'s row; `side`: back to the sidebar after.
@@ -73,14 +172,7 @@ impl App {
             }),
         );
         self.helpers_back(side);
-        let said = match choice {
-            HelperChoice::Allow => format!("{who} may start helpers"),
-            HelperChoice::Always => {
-                format!("helpers may always start here · {who} is starting them")
-            }
-            HelperChoice::No => format!("{who} will do it alone"),
-        };
-        self.notify(said, false);
+        self.notify(helpers_said(&who, choice), false);
     }
 
     pub(in crate::client) fn on_helpers_key(&mut self, term: ClientTerm, side: bool, k: &KeyEvent) {
@@ -98,28 +190,41 @@ impl App {
     }
 }
 
+/// What the toast says once you answered.
+fn helpers_said(who: &str, choice: HelperChoice) -> String {
+    match choice {
+        HelperChoice::Allow => format!("{who} may start helpers"),
+        HelperChoice::Always => format!("helpers may always start here · {who} is starting them"),
+        HelperChoice::No => format!("{who} will do it alone"),
+    }
+}
+
 pub(in crate::client) fn draw_helpers_pop(
     app: &mut App,
     buf: &mut Buffer,
     screen: Rect,
     side: Rect,
-    term: ClientTerm,
+    asker: Asker,
     t: &Theme,
 ) {
-    let Some(info) = app.term_info(term).cloned() else {
+    let Some((agent, tasks)) = app.asker_request(asker) else {
         return;
     };
-    if info.helper_ask.is_empty() {
-        return;
-    }
+    let row = match asker {
+        Asker::Pane(term) => app.session_key(term),
+        Asker::Chat(chat) => chat,
+    };
+    let answer = |choice: HelperChoice| match asker {
+        Asker::Pane(term) => ScreenHit::HelperAnswer(term, choice),
+        Asker::Chat(chat) => ScreenHit::ChatHelperAnswer(chat, choice),
+    };
     let x0 = side.right() + 1;
     let w = POP_W.min(screen.right().saturating_sub(x0 + 1));
     if w < 30 {
         return;
     }
     let iw = w as usize - 4;
-    let agent = info.agent.clone().unwrap_or_else(|| "agent".into());
-    let n = info.helper_ask.len();
+    let n = tasks.len();
     let intro = wrap(
         &format!(
             "{agent} wants to split this into {n} helper{}, each in its own worktree:",
@@ -136,9 +241,9 @@ pub(in crate::client) fn draw_helpers_pop(
     let h =
         (1 + 1 + intro.len() + listed + usize::from(more > 0) + 1 + note.len() + 1 + 1 + 1) as u16;
 
-    let (r, _) = frame_beside_row(app, buf, screen, side, term, (x0, w, h), t);
+    let (r, _) = frame_beside_row(app, buf, screen, side, row, (x0, w, h), t);
     let card = Style::default().bg(t.card);
-    let name = app.session_name(term);
+    let name = app.asker_name(asker);
     put(
         buf,
         r.x + 2,
@@ -170,7 +275,7 @@ pub(in crate::client) fn draw_helpers_pop(
         put(buf, x, y, &[seg(l.clone(), card.fg(t.text))], right);
         y += 1;
     }
-    for task in info.helper_ask.iter().take(listed) {
+    for task in tasks.iter().take(listed) {
         put(
             buf,
             x,
@@ -202,7 +307,7 @@ pub(in crate::client) fn draw_helpers_pop(
     let project = app
         .screen_model()
         .iter()
-        .find(|p| p.sessions().any(|s| s.native_term == Some(term)))
+        .find(|p| p.sessions().any(|s| s.key == row))
         .map(|p| p.name.clone())
         .unwrap_or_else(|| "this project".into());
     // The full words if the three buttons fit side by side, else shorter ones.
@@ -226,7 +331,7 @@ pub(in crate::client) fn draw_helpers_pop(
         "Allow",
         "1",
         BtnKind::Primary,
-        ScreenHit::HelperAnswer(term, HelperChoice::Allow),
+        answer(HelperChoice::Allow),
         right,
     ) + 1;
     bx = btn(
@@ -237,7 +342,7 @@ pub(in crate::client) fn draw_helpers_pop(
         always,
         "2",
         BtnKind::Normal,
-        ScreenHit::HelperAnswer(term, HelperChoice::Always),
+        answer(HelperChoice::Always),
         right,
     ) + 1;
     btn(
@@ -248,7 +353,7 @@ pub(in crate::client) fn draw_helpers_pop(
         no,
         "3",
         BtnKind::Normal,
-        ScreenHit::HelperAnswer(term, HelperChoice::No),
+        answer(HelperChoice::No),
         right,
     );
 }

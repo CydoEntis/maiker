@@ -3,10 +3,10 @@ import { listen } from '@tauri-apps/api/event'
 import { z } from 'zod'
 import { bytesOf } from './ipcBytes'
 import { CheckSchema } from '@/features/inspect/checks'
-import { assertLocal, localOnlyMessage, type LocalFeature } from '@/lib/localOnly'
-import { LOCAL_MACHINE, addressOf, machineArgs, terminalOf, terminalSessionId } from './machines'
+import { assertLocal, type LocalFeature } from '@/lib/localOnly'
+import { LOCAL_MACHINE, addressOf, chatAddressOf, machineArgs, remoteChatId, terminalOf, terminalSessionId } from './machines'
 import { conversationKey, machineArgOfKey, splitConversationKey } from './conversationKey'
-import { previewConversations, type Conversation, type Message, type SessionStatus } from '@/data/preview'
+import { previewConversations, type Conversation, type SessionStatus } from '@/data/preview'
 
 /** One question of an agent's prompt; `multi` when it takes any number of its choices. */
 const AskQuestionSchema = z.object({ question: z.string(), choices: z.array(z.string()), multi: z.boolean().default(false) })
@@ -30,11 +30,16 @@ function toSubagentDetail(child: SubagentActivity) {
   return { id: child.id, name: child.name, state: child.state, task: child.task, startedAt: child.started_at, updatedAt: child.updated_at, latest: child.latest_activity, result: child.result }
 }
 
+// What the daemon says the chat's provider can do. Only what a control here reads is kept; an unknown shape is no
+// report, never a lost chat.
+const CapabilitiesSchema = z.object({ steer: z.boolean().default(false) })
 const ConversationSummarySchema = z.object({
   id: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
   execution: z.enum(['Native', 'Structured']),
-  provider: z.enum(['Codex', 'Claude']),
+  provider: z.enum(['Codex', 'Claude', 'Acp']),
+  // The `[[agents]]` name of an agent run over ACP; absent for the others and from an older daemon.
+  agent: z.string().nullable().default(null),
   cwd: z.string(),
   worktree: z.string().nullable(),
   state: z.enum(['Stopped', 'Running', 'Transferring', 'RecoveryRequired']),
@@ -47,6 +52,12 @@ const ConversationSummarySchema = z.object({
   branch: z.string().nullable().default(null),
   // The helpers a chat session's provider reported starting (ADR 0010); empty from an older daemon.
   helpers: z.array(SubagentActivitySchema).default([]),
+  // The helpers the chat asked to start and waits on the person for (`ConversationSummary.helper_ask`, ADR 0016); empty from an older daemon.
+  helper_ask: z.array(z.string()).default([]),
+  // Absent from an older daemon and for a conversation it only follows; the window then falls back to what it knows.
+  capabilities: CapabilitiesSchema.nullable().default(null).catch(null),
+  // When its status last changed (unix seconds), for the row's age; absent from an older daemon.
+  status_since: z.number().int().nonnegative().nullable().default(null).catch(null),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -146,6 +157,12 @@ const TerminalSessionSchema = z.object({
   }).default({ context: null, cost: null, tokens: null }),
   // The helpers the session asked to start and waits on the person for, one task each (`TermInfo.helper_ask`).
   helper_ask: z.array(z.string()).default([]),
+  // The pane whose agent started this one (`TermInfo.started_by`); null when a person did, and from an older daemon.
+  started_by: z.number().int().nullable().default(null),
+  // The chat whose agent started this one (`TermInfo.started_by_chat`, ADR 0016); never set with `started_by`.
+  started_by_chat: z.number().int().nonnegative().nullable().default(null),
+  // A helper past its starter's limit whose start the daemon holds (`TermInfo.waiting_for_slot`); it reports it working meanwhile. False from an older daemon.
+  waiting_for_slot: z.boolean().default(false),
   // The agent's subagents as its runtime reports them (`TermInfo.subagent_activity`); times are unix seconds.
   subagent_activity: z.array(SubagentActivitySchema).default([]),
 })
@@ -185,36 +202,6 @@ const HistoryCompletenessSchema = z.union([
   z.enum(['Unknown', 'Loading', 'Complete']),
   z.object({ Incomplete: z.enum(['Disconnected', 'UnsupportedItem', 'InvalidEvent', 'MissingPages', 'RevisionExhausted']) }),
 ])
-const HistoryEntrySchema = z.object({
-  source: z.object({ conversation: z.number().int().nonnegative(), turn: z.string(), item: z.string() }),
-  content: z.union([
-    z.literal('TurnStatus'),
-    z.object({ Message: z.object({ role: z.enum(['User', 'Assistant']), text: z.string() }) }),
-    z.object({
-      Tool: z.object({
-        kind: z.string(),
-        output: z.string(),
-        label: z.string().optional(),
-        input: z.unknown().optional(),
-        exit_code: z.number().int().optional(),
-        duration_ms: z.number().int().nonnegative().optional(),
-      }),
-    }),
-    z.object({ Unsupported: z.object({ kind: z.string() }) }),
-    z.object({ Reasoning: z.object({ text: z.string() }) }),
-  ]),
-  state: z.enum(['Running', 'Completed', 'Failed', 'Interrupted']),
-  started_at_ms: z.number().int().nonnegative().optional(),
-  completed_at_ms: z.number().int().nonnegative().optional(),
-})
-const HistoryPageSchema = z.object({
-  entries: z.array(HistoryEntrySchema),
-  next: HistoryCursorSchema.nullable(),
-  completeness: HistoryCompletenessSchema,
-  // Read from here to get only what changed since this page; the page starts over when `reset`.
-  resume: HistoryCursorSchema.nullable().optional(),
-  reset: z.boolean().optional(),
-})
 const ConversationReceiptSchema = z.object({
   conversation: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
@@ -224,68 +211,13 @@ const ConversationReceiptSchema = z.object({
     z.object({ Acknowledged: z.object({ turn_id: z.string() }) }),
   ]),
 })
-// The daemon held the message because a turn was running (see `ReadResult.queued`).
+// The daemon held the message because a turn was running.
 const QueuedReceiptSchema = z.object({
   conversation: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
   operation: z.number().int().nonnegative(),
 })
 const QueuedMessageSchema = z.object({ operation: z.number().int().nonnegative(), text: z.string() })
-const FileChangePreviewSchema = z.object({ path: z.string(), kind: z.string(), diff: z.string() })
-const UserInputQuestionSchema = z.object({
-  id: z.string(),
-  header: z.string(),
-  question: z.string(),
-  is_other: z.boolean(),
-  is_secret: z.boolean(),
-  options: z.array(z.object({ label: z.string(), description: z.string() })),
-})
-const ApprovalRequestSchema = z.object({
-  request_id: z.union([z.number().int(), z.string()]),
-  kind: z.enum(['Command', 'FileChange', 'Permission', 'UserInput']),
-  // Names the tool step the request is about (Claude: the tool-use id; Codex: the item id).
-  item_id: z.string().nullable().optional(),
-  turn_id: z.string().nullable().optional(),
-  command: z.string().nullable(),
-  reason: z.string().nullable(),
-  cwd: z.string().nullable(),
-  changes: z.array(FileChangePreviewSchema),
-  questions: z.array(UserInputQuestionSchema),
-  permissions: z.unknown().nullable().optional(),
-  choices: z.array(z.enum(['Accept', 'AcceptForSession', 'Decline', 'Cancel'])),
-  can_remember: z.boolean().default(false),
-})
-const ReadResultSchema = z.object({
-  conversation: z.number().int().nonnegative(),
-  generation: z.number().int().nonnegative(),
-  status: StatusSchema,
-  receipt: ConversationReceiptSchema.nullable(),
-  error: z.string().nullable(),
-  cancelling: z.boolean(),
-  history: HistoryPageSchema,
-  checks: z.array(z.unknown()),
-  approvals: z.array(ApprovalRequestSchema),
-  // Messages the daemon holds until the running turn ends; absent from a daemon that predates the queue.
-  queued: z.array(QueuedMessageSchema).default([]),
-  // Approvals a person already answered (most recent last); absent from a daemon that predates it.
-  answered_approvals: z
-    .array(
-      z.object({
-        request: ApprovalRequestSchema,
-        decision: z.enum(['Accept', 'AcceptForSession', 'Decline', 'Cancel']),
-        answered_at_ms: z.number().int().nonnegative().nullable().optional(),
-      }),
-    )
-    .default([]),
-})
-const ConversationDiffSchema = z.object({
-  files: z.array(z.object({ path: z.string(), additions: z.number().int().nonnegative(), deletions: z.number().int().nonnegative(), patch: z.string(), binary: z.boolean() })),
-  additions: z.number().int().nonnegative(),
-  deletions: z.number().int().nonnegative(),
-  total_files: z.number().int().nonnegative(),
-  truncated: z.boolean(),
-})
-const ConversationFileEntrySchema = z.object({ name: z.string(), is_directory: z.boolean() })
 const CreatedConversationSchema = z.object({
   id: z.number().int().nonnegative(),
   generation: z.number().int().nonnegative(),
@@ -309,8 +241,6 @@ const DaemonUpdateStatusSchema = z.object({
 
 type ConversationSummary = z.infer<typeof ConversationSummarySchema>
 type WorkspaceSummary = z.infer<typeof WorkspaceSummarySchema>
-type ReadResult = z.infer<typeof ReadResultSchema>
-type HistoryCompleteness = z.infer<typeof HistoryCompletenessSchema>
 
 export type ConversationReceipt = {
   conversation: number
@@ -319,44 +249,8 @@ export type ConversationReceipt = {
   delivery: 'SubmissionUncertain' | { Acknowledged: { turn_id: string } }
 }
 
-export type ConversationHistory = {
-  generation: number
-  receipt: ConversationReceipt | null
-  messages: Message[]
-  nextOperation: number
-  error: string | null
-  cancelling: boolean
-  completeness: HistoryCompleteness
-}
-
-export type ConversationDiff = {
-  files: Array<{
-    path: string
-    additions: number
-    deletions: number
-    patch: string
-    binary: boolean
-  }>
-  additions: number
-  deletions: number
-  total_files: number
-  truncated: boolean
-}
-
-export type ConversationFileEntry = z.infer<typeof ConversationFileEntrySchema>
-
 export function isDesktop(): boolean {
   return isTauri()
-}
-
-export async function loadCodexExecutablePath(): Promise<string> {
-  if (!isDesktop()) throw new Error('Codex executable lookup is available in the desktop app')
-  return invokeParsed('codex_executable_path', z.string().min(1))
-}
-
-export async function loadClaudeExecutablePath(): Promise<string> {
-  if (!isDesktop()) throw new Error('Claude executable lookup is available in the desktop app')
-  return invokeParsed('claude_executable_path', z.string().min(1))
 }
 
 export async function loadDaemonRestartStatus() {
@@ -397,30 +291,6 @@ export async function openLink(url: string): Promise<void> {
 export async function exportDaemonLog(): Promise<string> {
   if (!isDesktop()) throw new Error('The log is available in the desktop app')
   return invokeParsed('export_daemon_log', z.string(), {})
-}
-
-const ProcessLoadSchema = z.object({
-  pid: z.number().int().nonnegative(),
-  name: z.string(),
-  command: z.string(),
-  cpu: z.number(),
-  memory_bytes: z.number().nonnegative(),
-})
-const ProcessSampleSchema = z.object({
-  cores: z.number().int().positive(),
-  host: ProcessLoadSchema,
-  webview: z.array(ProcessLoadSchema),
-  daemons: z.array(ProcessLoadSchema),
-  terminal_frames_sent: z.number().int().nonnegative(),
-})
-
-export type ProcessLoad = z.infer<typeof ProcessLoadSchema>
-/** The host's, the web view's and the daemons' CPU (percent of one core) and memory. */
-export type ProcessSample = z.infer<typeof ProcessSampleSchema>
-
-export async function loadPerformanceSample(): Promise<ProcessSample> {
-  if (!isDesktop()) throw new Error('Process figures are available in the desktop app')
-  return invokeParsed('performance_sample', ProcessSampleSchema)
 }
 
 const MachineListSchema = z.object({ names: z.array(z.string()), error: z.string().nullable() })
@@ -513,14 +383,30 @@ function conversationsOf(snapshot: DaemonSnapshot, machine?: SnapshotMachine): C
     .filter(isTerminalSession)
   // A conversation that belongs to a pane in this list is that session's chat, not a session of its own.
   const shownPanes = new Set(listed.map((term) => term.id))
+  // The session a chat is listed as: its pane's when it has one in this list, else its own (this computer's chats only).
+  const paneOfChat = new Map(links.flatMap((summary) => (summary.native_term !== null && shownPanes.has(summary.native_term) ? [[summary.id, summary.native_term] as const] : [])))
+  const sessionOfChat = (chat: number | null): string | null => {
+    if (chat === null) return null
+    const pane = paneOfChat.get(chat)
+    if (pane !== undefined) return terminalSessionId(pane, machine?.name ?? null)
+    return machine === undefined && summaries.some((summary) => summary.id === chat) ? String(chat) : null
+  }
   const terminals = listed
-    .map((term) => toTerminalConversation(term, snapshot.workspaces, machine, chatOf.get(term.id), term.agent === null ? undefined : limitsOf.get(term.agent), secretsOf.get(term.id) ?? []))
-  // Another machine's conversations are only the chats of its panes; it has no session list of its own here.
-  if (machine !== undefined) return terminals
+    .map((term) => toTerminalConversation(term, snapshot.workspaces, machine, chatOf.get(term.id), term.agent === null ? undefined : limitsOf.get(term.agent), secretsOf.get(term.id) ?? [], sessionOfChat(term.started_by_chat)))
+  // Another machine lists its panes and the chat sessions its daemon started (ADR 0020). A conversation it
+  // follows in a pane this list does not show stays out: only its own daemon can say what that is.
+  if (machine !== undefined) {
+    return [
+      ...summaries
+        .filter((summary) => summary.execution === 'Structured' && summary.native_term === null && conversationKey(machine.id, summary.id) !== null)
+        .map((conversation) => toConversation(conversation, snapshot.workspaces, machine, limitsOf)),
+      ...terminals,
+    ]
+  }
   return [
     ...summaries
       .filter((summary) => summary.native_term === null || !shownPanes.has(summary.native_term))
-      .map((conversation) => toConversation(conversation, snapshot.workspaces)),
+      .map((conversation) => toConversation(conversation, snapshot.workspaces, undefined, limitsOf)),
     ...terminals,
   ]
 }
@@ -534,13 +420,15 @@ type DaemonSnapshot = z.infer<typeof DaemonSnapshotSchema>
 // arrive between two renders, so a reason is kept past its own list; a new daemon numbers its panes from 1 again,
 // so listing a pane forgets its old reason.
 let localRevision = 0
-const leftWithReason = new Set<string>()
+const leftWithReason = new Map<string, string>()
+// The reasons that say the pane's program is over (`RemovalReason`); one put away or moved elsewhere still runs.
+const ENDED_REASONS: ReadonlySet<string> = new Set(['Closed', 'Exited'])
 
 function noteList(snapshot: DaemonSnapshot, machine?: SnapshotMachine): void {
   if (machine === undefined) localRevision = snapshot.revision
   const idOf = (pane: string) => terminalSessionId(Number(pane), machine?.name ?? null)
   for (const pane of Object.keys(snapshot.terms)) leftWithReason.delete(idOf(pane))
-  for (const pane of Object.keys(snapshot.removed)) leftWithReason.add(idOf(pane))
+  for (const [pane, reason] of Object.entries(snapshot.removed)) leftWithReason.set(idOf(pane), reason)
 }
 
 /** The revision of the last list of this computer's sessions read, 0 when the daemon does not number them. */
@@ -548,6 +436,9 @@ export const localListRevision = (): number => localRevision
 
 /** Whether the session's daemon (this computer's or another machine's) said it left its list, for any reason, and has not listed it since. */
 export const daemonSaidRemoved = (sessionId: string): boolean => leftWithReason.has(sessionId)
+
+/** Whether the session's daemon said it was closed or its program exited: it is over, not put away or moved to another surface. */
+export const daemonSaidEnded = (sessionId: string): boolean => ENDED_REASONS.has(leftWithReason.get(sessionId) ?? '')
 
 // A session that fails to read for one refresh must not vanish from the sidebar and come back
 // 1.5 seconds later, so it keeps its last good state, and the reason is logged once.
@@ -595,116 +486,6 @@ export { terminalOf, terminalSessionId }
 // snapshot. The daemon already leaves out panes another app owns (ADR 0004).
 function isTerminalSession(term: TerminalSession): boolean {
   return term.conversation_id === null && !term.popup
-}
-
-function toolActivityLabel(tool: { kind: string; label?: string | undefined }): string {
-  const label = tool.label?.trim()
-  if (label) return label
-  return tool.kind === 'commandExecution' ? 'Run command' : tool.kind
-}
-
-export async function loadMessages(
-  conversationId: string,
-  provider: Conversation['provider'],
-): Promise<ConversationHistory> {
-  if (!isDesktop() || terminalOf(conversationId) !== null) return { generation: 0, receipt: null, messages: [], nextOperation: 1, error: null, cancelling: false, completeness: 'Complete' }
-
-  const id = Number(conversationId)
-  if (!Number.isSafeInteger(id) || id < 0) throw new Error('Conversation id is invalid')
-
-  let page = await invokeParsed('read_conversation', ReadResultSchema, { id, cursor: null, limit: ReadPageLimit })
-  if (page.conversation !== id) throw new Error('Daemon returned a different conversation')
-  const generation = page.generation
-  const entries = [...page.history.entries]
-  let completeness = page.history.completeness
-  const visitedCursors = new Set<string>()
-  while (page.history.next) {
-    const cursor = page.history.next
-    if (cursor.conversation !== id || cursor.generation !== generation) {
-      throw new Error('Conversation history cursor belongs to a different conversation')
-    }
-    const cursorKey = JSON.stringify(cursor)
-    if (visitedCursors.has(cursorKey)) throw new Error('Conversation history cursor repeated')
-    visitedCursors.add(cursorKey)
-
-    const nextPage = await invokeParsed('read_conversation', ReadResultSchema, {
-      id,
-      cursor,
-      limit: ReadPageLimit,
-    })
-    if (nextPage.conversation !== id || nextPage.generation !== generation) {
-      throw new Error('Conversation changed while its history was being read')
-    }
-    entries.push(...nextPage.history.entries)
-    if (nextPage.history.completeness !== 'Complete') completeness = nextPage.history.completeness
-    page = nextPage
-  }
-
-  const history: ReadResult = { ...page, history: { ...page.history, entries } }
-  const messages = history.history.entries.flatMap((entry): Message[] => {
-    if (entry.content === 'TurnStatus') return []
-    if ('Message' in entry.content) {
-      return [{
-        id: `${entry.source.turn}:${entry.source.item}`,
-        role: entry.content.Message.role === 'User' ? 'user' : 'assistant',
-        content: entry.content.Message.text,
-        time: 'Recent',
-      }]
-    }
-    if ('Tool' in entry.content) {
-      return [{
-        id: `${entry.source.turn}:${entry.source.item}`,
-        role: 'activity',
-        content: toolActivityLabel(entry.content.Tool),
-        detail: entry.content.Tool.output,
-        activityState: entry.state,
-        time: 'Recent',
-      }]
-    }
-    // A reasoning summary has no row yet, so it is shown as nothing.
-    if ('Reasoning' in entry.content) return []
-    return [{
-      id: `${entry.source.turn}:${entry.source.item}`,
-      role: 'activity',
-      content: 'Unsupported provider activity',
-      detail: entry.content.Unsupported.kind,
-      activityState: entry.state,
-      time: 'Recent',
-    }]
-  })
-  messages.push(...history.approvals.map((approval): Message => ({
-    id: `approval:${typeof approval.request_id}:${String(approval.request_id)}`,
-    role: 'approval',
-    content: approval.kind === 'FileChange' ? `${provider} wants to change project files` : approval.kind === 'Permission' ? `${provider} is requesting additional permissions` : approval.kind === 'UserInput' ? `${provider} needs your input` : `${provider} wants to run a command`,
-    detail: approval.command ?? '',
-    time: 'Needs your decision',
-    providerRequestId: approval.request_id,
-    approvalChoices: approval.choices,
-    ...(approval.reason ? { approvalReason: approval.reason } : {}),
-    approvalKind: approval.kind === 'UserInput' ? 'UserInput' : approval.kind,
-    ...(approval.cwd ? { approvalScope: approval.cwd } : {}),
-    ...(approval.changes.length > 0 ? { approvalChanges: approval.changes } : {}),
-    ...(approval.permissions && typeof approval.permissions === 'object' && !Array.isArray(approval.permissions) ? { approvalPermissions: approval.permissions as Record<string, unknown> } : {}),
-    ...(approval.questions.length > 0 ? { userQuestions: approval.questions } : {}),
-  })))
-  if (history.error) {
-    messages.push({
-      id: 'conversation-error',
-      role: 'activity',
-      content: 'Conversation needs attention',
-      detail: history.error,
-      time: 'Now',
-    })
-  }
-  return {
-    generation,
-    receipt: history.receipt,
-    messages,
-    nextOperation: (history.receipt?.operation ?? 0) + 1,
-    error: history.error,
-    cancelling: history.cancelling,
-    completeness,
-  }
 }
 
 // The chat view's read of a conversation: entries and approvals stay raw (`unknown`) because the chat
@@ -799,84 +580,31 @@ export async function readSpecialists(term: number): Promise<SpecialistList> {
   return list
 }
 
-export async function loadConversationDiff(conversation: Conversation): Promise<ConversationDiff> {
-  if (terminalOf(conversation.id) !== null) throw new Error('Changes are shown for chat sessions')
-  if (!isDesktop() || conversation.generation === undefined) {
-    throw new Error('Conversation diff is unavailable')
-  }
-  return invokeParsed('conversation_diff', ConversationDiffSchema, {
-    id: Number(conversation.id),
-    generation: conversation.generation,
-  })
-}
-
-export async function loadConversationFiles(
-  conversation: Conversation,
-  path: string | null,
-): Promise<ConversationFileEntry[]> {
-  if (terminalOf(conversation.id) !== null) throw new Error('Files are shown for chat sessions')
-  if (!isDesktop() || conversation.generation === undefined) {
-    throw new Error('Project files are available in the desktop app')
-  }
-  return invokeParsed('conversation_files', z.array(ConversationFileEntrySchema), {
-    id: Number(conversation.id),
-    generation: conversation.generation,
-    path,
-  })
-}
-
-export async function loadConversationFile(
-  conversation: Conversation,
-  path: string,
-): Promise<string> {
-  if (terminalOf(conversation.id) !== null) throw new Error('Files are shown for chat sessions')
-  if (!isDesktop() || conversation.generation === undefined) {
-    throw new Error('Project files are available in the desktop app')
-  }
-  return invokeParsed('conversation_file', z.string(), {
-    id: Number(conversation.id),
-    generation: conversation.generation,
-    path,
-  })
-}
-
-/**
- * The same three project questions for a session's chat link (the daemon conversation a pane is
- * linked to); `loadConversation*` above take a whole `Conversation`, which a chat link is not.
- */
-export type ConversationTarget = { conversation: number; generation: number }
-
-function requireProjectAccess(target: ConversationTarget): void {
-  if (!isDesktop()) throw new Error('Project files are available in the desktop app')
-  if (!Number.isSafeInteger(target.conversation) || target.conversation < 0) throw new Error('Conversation id is invalid')
-  // The diff and the files are read from this computer's disk, so a chat of another machine has none here.
-  if (splitConversationKey(target.conversation).machine !== LOCAL_MACHINE) throw new Error(localOnlyMessage('files', null))
-}
-
-export async function loadTargetDiff(target: ConversationTarget): Promise<ConversationDiff> {
-  requireProjectAccess(target)
-  return invokeParsed('conversation_diff', ConversationDiffSchema, { id: target.conversation, generation: target.generation })
-}
-
-export async function loadTargetFiles(target: ConversationTarget, path: string | null): Promise<ConversationFileEntry[]> {
-  requireProjectAccess(target)
-  return invokeParsed('conversation_files', z.array(ConversationFileEntrySchema), { id: target.conversation, generation: target.generation, path })
-}
-
-export async function loadTargetFile(target: ConversationTarget, path: string): Promise<string> {
-  requireProjectAccess(target)
-  return invokeParsed('conversation_file', z.string(), { id: target.conversation, generation: target.generation, path })
-}
-
 /** The folder a new session starts in when none is chosen: the home folder. */
 export async function defaultSessionFolder(): Promise<string> {
   if (!isDesktop()) return ''
   return invokeParsed('default_session_folder', z.string())
 }
 
-export async function suggestProjectFolders(typed: string): Promise<string[]> {
-  if (!isDesktop()) return []
-  return invokeParsed('suggest_project_folders', z.array(z.string()), { typed })
+/**
+ * What a host command needs to reach a chat session: its conversation's number on its machine, and the machine
+ * when that is not this computer. The id is a session's (`12`, `build/c12`) or a chat key written as a number.
+ */
+function chatArgs(sessionId: string): { id: number; machine?: number } {
+  const address = chatAddressOf(sessionId)
+  if (address === null) throw new Error('Only a chat session has a conversation')
+  if (address.machine !== LOCAL_MACHINE) return { id: address.conversation, machine: address.machine }
+  return { id: splitConversationKey(address.conversation).id, ...machineArgOfKey(address.conversation) }
+}
+
+/**
+ * The number of a conversation this computer's daemon holds, for a host command that asks only that daemon. Another
+ * machine's chat is refused here: its number would name a different conversation on this computer.
+ */
+function localChatNumber(sessionId: string): number {
+  const { id, machine } = chatArgs(sessionId)
+  if (machine !== undefined) throw new Error('This is asked of a chat on this computer only')
+  return id
 }
 
 /** Questions the host answers by opening its own connection to this computer's daemon cannot be asked of another machine's pane. */
@@ -892,7 +620,7 @@ export async function loadTerminalScreen(conversation: Pick<Conversation, 'id'> 
     return invokeParsed('pane_terminal_screen', z.string(), { term: pane.term })
   }
   return invokeParsed('terminal_screen', z.string(), {
-    id: Number(conversation.id),
+    id: localChatNumber(conversation.id),
     generation: conversation.generation,
   })
 }
@@ -905,7 +633,7 @@ export async function loadTerminalReplay(conversation: Pick<Conversation, 'id'> 
   const reply = pane !== null
     ? await invoke<unknown>('pane_terminal_replay', { term: pane.term })
     : await invoke<unknown>('terminal_replay', {
-      id: Number(conversation.id),
+      id: localChatNumber(conversation.id),
       generation: conversation.generation,
     })
   return bytesOf(reply)
@@ -938,7 +666,7 @@ export async function sendTerminalInput(conversation: Pick<Conversation, 'id'> &
     return
   }
   await invokeParsed('send_terminal_input', z.string(), {
-    id: Number(conversation.id),
+    id: localChatNumber(conversation.id),
     generation: conversation.generation,
     data,
   })
@@ -952,7 +680,7 @@ export async function resizeTerminal(conversation: Pick<Conversation, 'id'> & { 
     return
   }
   await invokeParsed('resize_terminal', NullSchema, {
-    id: Number(conversation.id),
+    id: localChatNumber(conversation.id),
     generation: conversation.generation,
     cols,
     rows,
@@ -972,8 +700,7 @@ export async function submitMessage(conversation: Pick<Conversation, 'id' | 'gen
   // What was picked rides together, so the host command stays within the argument limit; nothing picked sends none.
   const picked = { ...(choice?.model === undefined ? {} : { model: choice.model }), ...(choice?.effort === undefined ? {} : { effort: choice.effort }) }
   return invokeParsed('send_conversation', z.union([ConversationReceiptSchema, QueuedReceiptSchema]), {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     operation,
     text,
@@ -981,25 +708,10 @@ export async function submitMessage(conversation: Pick<Conversation, 'id' | 'gen
   })
 }
 
-export function classifySubmissionFailure(
-  history: Pick<ConversationHistory, 'generation' | 'receipt'>,
-  expectedGeneration: number,
-  operation: number,
-): 'not-delivered' | 'unknown' | 'delivered' {
-  if (history.generation !== expectedGeneration) return 'unknown'
-
-  const receipt = history.receipt
-  if (!receipt) return 'not-delivered'
-  if (receipt.generation !== expectedGeneration || receipt.operation > operation) return 'unknown'
-  if (receipt.operation < operation) return 'not-delivered'
-  return receipt.delivery === 'SubmissionUncertain' ? 'unknown' : 'delivered'
-}
-
 /** Takes a message back out of the daemon's queue before it is sent; it fails when it was already sent. */
 export async function dequeueMessage(conversation: Pick<Conversation, 'id' | 'generation'>, operation: number): Promise<void> {
   await invokeParsed('dequeue_conversation', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     operation,
   })
@@ -1011,8 +723,7 @@ export async function dequeueMessage(conversation: Pick<Conversation, 'id' | 'ge
  */
 export async function sendQueuedMessageNow(conversation: Pick<Conversation, 'id' | 'generation'>, operation: number): Promise<void> {
   await invokeParsed('send_conversation_now', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     operation,
   })
@@ -1020,8 +731,7 @@ export async function sendQueuedMessageNow(conversation: Pick<Conversation, 'id'
 
 export async function approveRequest(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string, decision: 'Accept' | 'AcceptForSession' | 'Decline' | 'Cancel'): Promise<void> {
   await invokeParsed('approve_conversation', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     requestId,
     decision,
@@ -1044,8 +754,7 @@ export async function forgetAllowedCommand(item: Pick<AllowedCommand, 'project' 
 /** Approves a command request and has the daemon remember it for the conversation's project: the same command is then allowed without asking. */
 export async function allowAlways(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string): Promise<void> {
   await invokeParsed('allow_conversation_always', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     requestId,
   })
@@ -1053,8 +762,7 @@ export async function allowAlways(conversation: Pick<Conversation, 'id' | 'gener
 
 export async function answerUserInput(conversation: Pick<Conversation, 'id' | 'generation'>, requestId: number | string, answers: Record<string, string[]>): Promise<void> {
   await invokeParsed('answer_conversation_input', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
     requestId,
     answers,
@@ -1063,24 +771,9 @@ export async function answerUserInput(conversation: Pick<Conversation, 'id' | 'g
 
 export async function cancelTurn(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<void> {
   await invokeParsed('cancel_conversation', NullSchema, {
-    id: splitConversationKey(Number(conversation.id)).id,
-    ...machineArgOfKey(Number(conversation.id)),
+    ...chatArgs(conversation.id),
     generation: conversation.generation,
   })
-}
-
-/** Put a session away from the project lists and tabs, or bring it back. It keeps running: this is a view setting, never a kill. */
-export async function archiveSessionOnDaemon(conversation: Pick<Conversation, 'id'>, archived: boolean): Promise<void> {
-  if (!isDesktop()) return
-  const pane = addressOf(conversation.id)
-  if (pane !== null) await invokeParsed('archive_terminal_session', NullSchema, { term: pane.term, archived, ...machineArgs(pane) })
-}
-
-/** Snooze a session until `until` (unix seconds), or wake it (`null`). It keeps running: the daemon owns the snooze and ends it when its time comes or the session needs you. */
-export async function snoozeSessionOnDaemon(conversation: Pick<Conversation, 'id'>, until: number | null): Promise<void> {
-  if (!isDesktop()) return
-  const pane = addressOf(conversation.id)
-  if (pane !== null) await invokeParsed('snooze_terminal_session', NullSchema, { term: pane.term, until, ...machineArgs(pane) })
 }
 
 /** Restart an agent in place, keeping its name, so it loads hooks it missed. */
@@ -1091,36 +784,31 @@ export async function reloadAgentOnDaemon(conversation: Pick<Conversation, 'id'>
 }
 
 /**
- * Ends a terminal session with a six-second undo window: the daemon hides it at once and closes it
- * for real when the window passes. `undoCloseSession` brings it back while the window is open.
+ * Ends a session. The daemon hides it at once and stops its program a few seconds later (its own undo window, which
+ * the terminal app offers; this window asks before closing instead).
  */
-export async function closeSessionWithUndo(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<void> {
+export async function closeSession(conversation: Pick<Conversation, 'id' | 'generation'>): Promise<void> {
   if (!isDesktop()) return
   const pane = addressOf(conversation.id)
   if (pane !== null) {
     await invokeParsed('close_session_with_undo', NullSchema, { term: pane.term, ...machineArgs(pane) })
     return
   }
-  // A chat: the daemon archives it at once and ends its agent when the window passes.
+  // A chat: the daemon archives it at once and ends its agent when its window passes.
   if (conversation.generation === undefined) throw new Error('Conversation generation is unavailable')
-  await invokeParsed('close_conversation_with_undo', NullSchema, { id: Number(conversation.id), generation: conversation.generation })
-}
-
-export async function undoCloseSession(conversation: Pick<Conversation, 'id'>): Promise<void> {
-  if (!isDesktop()) return
-  const pane = addressOf(conversation.id)
-  if (pane !== null) {
-    await invokeParsed('undo_close_terminal_session', NullSchema, { term: pane.term, ...machineArgs(pane) })
-    return
-  }
-  await invokeParsed('undo_close_conversation', NullSchema, { id: Number(conversation.id) })
+  await invokeParsed('close_conversation_with_undo', NullSchema, { ...chatArgs(conversation.id), generation: conversation.generation })
 }
 
 /** The person's answer to a session that asked to start helpers: this session, every session of its project, or none. */
 export async function answerHelpers(conversation: Pick<Conversation, 'id'>, choice: 'allow' | 'always' | 'no'): Promise<void> {
   if (!isDesktop()) return
   const pane = addressOf(conversation.id)
-  if (pane !== null) await invokeParsed('answer_helpers', NullSchema, { term: pane.term, choice, ...machineArgs(pane) })
+  if (pane !== null) {
+    await invokeParsed('answer_helpers', NullSchema, { term: pane.term, choice, ...machineArgs(pane) })
+    return
+  }
+  // A chat with no pane asks as itself (ADR 0016). Only this computer lists such chats.
+  await invokeParsed('answer_chat_helpers', NullSchema, { id: Number(conversation.id), choice })
 }
 
 /** The user is looking at this pane: a finished agent's "done" becomes idle, as when the terminal app focuses it. */
@@ -1143,67 +831,47 @@ export async function renameConversationOnDaemon(conversation: Pick<Conversation
     await invokeParsed('rename_terminal_session', NullSchema, { term: pane.term, name: title, ...machineArgs(pane) })
     return
   }
-  await invokeParsed('rename_conversation', NullSchema, { id: Number(conversation.id), title })
-}
-
-export async function endConversation(conversation: Conversation): Promise<void> {
-  if (!isDesktop()) throw new Error('Ending a conversation is only available in the desktop app')
-  if (conversation.generation === undefined) throw new Error('Conversation generation is unavailable')
-  await invokeParsed('end_conversation', NullSchema, {
-    id: Number(conversation.id),
-    generation: conversation.generation,
-  })
-}
-
-// Closing a chat only puts it away, but closing a terminal session ends its program, as in the
-// terminal app. A terminal session that has ended is gone, so there is nothing to bring back.
-export async function archiveConversationOnDaemon(conversation: Pick<Conversation, 'id'>, archived: boolean): Promise<void> {
-  const pane = addressOf(conversation.id)
-  if (pane !== null) {
-    if (archived) await invokeParsed('close_terminal_session', NullSchema, { term: pane.term, ...machineArgs(pane) })
-    return
-  }
-  await invokeParsed('archive_conversation', NullSchema, { id: Number(conversation.id), archived })
-}
-
-/**
- * Closing a chat session in the window ends it, as closing a terminal session ends its program: the
- * agent is stopped first (its record stays, so the history can be read) and then the session is put
- * away (ADR 0003). If the agent cannot be stopped nothing is put away, so a session the user believes
- * ended is never left running out of sight.
- */
-export async function closeChatSession(conversation: Conversation): Promise<void> {
-  await endConversation(conversation)
-  await archiveConversationOnDaemon(conversation, true)
+  await invokeParsed('rename_conversation', NullSchema, { ...chatArgs(conversation.id), title })
 }
 
 export type SessionPermissions = 'read-only' | 'workspace-write' | 'full-access'
 
-export async function createConversation(
-  folder: string,
-  provider: 'Codex' | 'Claude',
-  permissions: SessionPermissions,
-): Promise<{ id: number; generation: number }> {
-  return invokeParsed('create_conversation', CreatedConversationSchema, {
+/**
+ * Starts a chat session: a Claude or Codex conversation the daemon owns, in `folder` or, with a
+ * `branch`, in a new checkout of the project at `folder` (ADR 0003). `permissions` is what it may do:
+ * unless one is picked it asks before a tool use the provider does not allow by itself; `full-access`
+ * is the provider's own skip-permissions mode (no sandbox, no prompts; ADR 0005).
+ */
+export async function startChatSession(folder: string, agent: 'claude' | 'codex', branch: string | null = null, permissions: SessionPermissions = 'workspace-write', machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
+  return invokeParsed('start_chat_session', CreatedConversationSchema, {
     cwd: folder,
-    provider,
+    provider: agent === 'claude' ? 'Claude' : 'Codex',
+    branch,
+    permissions,
+    // On another machine its own daemon finds the agent's program and settings folder; this computer names neither.
+    ...(machine === LOCAL_MACHINE ? {} : { machine }),
+  })
+}
+
+/**
+ * Opens a saved Claude Code or Codex conversation of this computer as a chat session: the agent's own session
+ * `session` in `folder`, continued where it stopped, with its earlier messages as the chat's history (ADR 0020).
+ */
+export async function resumeChatSession(folder: string, agent: 'claude' | 'codex', session: string, permissions: SessionPermissions = 'workspace-write'): Promise<{ id: number; generation: number }> {
+  return invokeParsed('resume_chat_session', CreatedConversationSchema, {
+    cwd: folder,
+    provider: agent === 'claude' ? 'Claude' : 'Codex',
+    session,
     permissions,
   })
 }
 
 /**
- * Starts a chat session: a Claude or Codex conversation the daemon owns, in `folder` or, with a
- * `branch`, in a new checkout of the project at `folder` (ADR 0003). It always asks before a tool
- * use the provider does not allow by itself, unless `fullAccess` asks for the provider's own
- * skip-permissions mode (no sandbox, no prompts; ADR 0005 and 0054).
+ * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0020). Only the agent's name is sent: the
+ * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */
-export async function startChatSession(folder: string, agent: 'claude' | 'codex', branch: string | null = null, fullAccess = false): Promise<{ id: number; generation: number }> {
-  return invokeParsed('start_chat_session', CreatedConversationSchema, {
-    cwd: folder,
-    provider: agent === 'claude' ? 'Claude' : 'Codex',
-    branch,
-    fullAccess,
-  })
+export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
+  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
 }
 
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
@@ -1406,20 +1074,7 @@ export async function dropPrewarmedAgent(): Promise<void> {
   await invokeParsed('drop_prewarmed_agent', NullSchema, {})
 }
 
-export async function startTerminalSession(folder: string, provider: 'Codex' | 'Claude'): Promise<void> {
-  await invokeParsed('start_terminal_session', NullSchema, { cwd: folder, provider })
-}
-
-export async function resumeConversation(conversation: Conversation): Promise<{ id: number; generation: number }> {
-  if (!isDesktop()) throw new Error('Conversation recovery is only available in the desktop app')
-  if (conversation.generation === undefined) throw new Error('Conversation generation is unavailable')
-  return invokeParsed('resume_codex_conversation', CreatedConversationSchema, {
-    id: Number(conversation.id),
-    generation: conversation.generation,
-  })
-}
-
-function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, chat?: Conversation['chat'], limits: readonly z.infer<typeof PlanLimitSchema>[] = [], secrets: readonly z.infer<typeof SecretAskSchema>[] = []): Conversation {
+function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, chat?: Conversation['chat'], limits: readonly z.infer<typeof PlanLimitSchema>[] = [], secrets: readonly z.infer<typeof SecretAskSchema>[] = [], startedByChat: string | null = null): Conversation {
   const folder = term.root ?? term.cwd
   const repo = term.root ? (term.root.split(/[\\/]/).filter(Boolean).at(-1) ?? null) : null
   const workspace = workspaces.find((candidate) => candidate.cwd === folder || candidate.cwd === term.cwd)
@@ -1480,18 +1135,27 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       usage: term.usage,
       queued: term.queued,
       ownTurnOver: term.own_turn_over,
+      // The one place the window reads the daemon's flag; every view takes it from `SessionView.waitingForSlot`.
+      waitingForSlot: term.waiting_for_slot,
       pr: term.pr,
       checks: term.checks,
       secretAsk: secrets.map((ask) => ({ id: ask.id, label: ask.label, reason: ask.reason })),
       limits: limits.map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })),
       helperAsk: term.helper_ask,
+      startedBy: term.started_by === null ? startedByChat : terminalSessionId(term.started_by, machine?.name ?? null),
       subagents: term.subagent_activity.map(toSubagentDetail),
     },
     ...(chat ? { chat } : {}),
   }
 }
 
-function toConversation(summary: ConversationSummary, workspaces: WorkspaceSummary[]): Conversation {
+/**
+ * A conversation as a session. `limitsOf` is each agent's plan limits as it last reported them (`Snapshot.limits`): a chat
+ * session carries its agent's, as a terminal session does, so the status bar has them while only chats are open.
+ */
+function toConversation(summary: ConversationSummary, workspaces: WorkspaceSummary[], machine?: SnapshotMachine, limitsOf: ReadonlyMap<string, readonly z.infer<typeof PlanLimitSchema>[]> = new Map()): Conversation {
+  // Another machine's chat is named by a key that holds the machine too (`conversationKey`); the caller lists only those that have one.
+  const key = machine === undefined ? summary.id : (conversationKey(machine.id, summary.id) ?? summary.id)
   const cwd = summary.worktree ?? summary.cwd
   const workspace = workspaces.find((candidate) => candidate.cwd === cwd || candidate.cwd === summary.cwd)
   const status: SessionStatus = summary.state === 'RecoveryRequired'
@@ -1508,18 +1172,24 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
   // (ADR 0003). A followed pane's conversation is read-only and belongs to that pane, so it is not one.
   const chatSession = summary.execution === 'Structured' && summary.native_term === null
   const root = summary.root
+  // A chat over ACP is named by its agent (ADR 0020); the others by their provider.
+  const acp = summary.provider === 'Acp'
+  const agent = acp ? (summary.agent ?? 'agent') : summary.provider.toLowerCase()
+  const provider: Conversation['provider'] = summary.provider === 'Acp' ? (agent === 'claude' ? 'Claude' : 'Codex') : summary.provider
+  const label = acp ? agent.charAt(0).toUpperCase() + agent.slice(1) : summary.provider
 
   return {
-    id: String(summary.id),
+    id: machine === undefined ? String(summary.id) : remoteChatId(summary.id, machine.name),
+    ...(machine === undefined ? {} : { machine: machine.id, machineName: machine.name }),
     generation: summary.generation,
     execution: summary.execution,
-    title: summary.title ?? `${summary.provider} conversation ${String(summary.id)}`,
+    title: summary.title ?? `${label} conversation ${String(summary.id)}`,
     archived: summary.archived,
     named: summary.title !== null,
     project,
     folder: chatSession && root !== null ? root : cwd,
     branch: summary.branch ?? workspace?.git?.branch ?? 'working tree',
-    provider: summary.provider,
+    provider,
     status,
     updated: null,
     model: 'Provider default',
@@ -1533,10 +1203,10 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           cwd,
           checkout: summary.worktree,
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
-          agent: summary.provider.toLowerCase(),
-          process: summary.provider.toLowerCase(),
-          chat: { conversation: summary.id, generation: summary.generation },
-          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, subagents: summary.helpers.map(toSubagentDetail) },
+          agent,
+          process: agent,
+          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
+          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),
   }

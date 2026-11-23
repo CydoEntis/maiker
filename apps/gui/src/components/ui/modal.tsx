@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import { X } from "lucide-react"
 import { DialogTitle } from "@/components/ui/dialog"
-import { IconButton } from "@/components/ui/button"
+import { IconButton } from "@/components/ui/icon-button"
 import "./modal.css"
 
 /**

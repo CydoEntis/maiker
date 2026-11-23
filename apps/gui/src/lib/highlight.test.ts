@@ -14,6 +14,11 @@ describe('highlightLine', () => {
     ])
   })
 
+  it('marks a PascalCase name as a type where the language writes types that way, and leaves constants and other languages alone', () => {
+    expect(highlightLine('const total: Coupon = MAX_ITEMS', 'a.ts').filter((token) => token.kind === 'type')).toEqual([{ text: 'Coupon', kind: 'type' }])
+    expect(highlightLine('fmt.Println(x)', 'a.go').some((token) => token.kind === 'type')).toBe(false)
+  })
+
   it('treats # as a comment only in languages that use it', () => {
     expect(highlightLine('x = 1  # note', 'a.py').at(-1)).toEqual({
       text: '# note',

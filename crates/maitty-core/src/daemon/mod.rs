@@ -19,6 +19,7 @@ mod commit;
 mod commands;
 mod contain;
 mod conversation;
+mod discard;
 mod extensions;
 mod folder_git;
 mod folders;
@@ -26,6 +27,7 @@ mod git;
 mod git_identity;
 mod git_rule;
 mod github;
+mod helper_queue;
 mod helpers;
 pub mod hook_repair;
 mod identity;
@@ -37,8 +39,10 @@ mod pane_terminal;
 mod permission_ask;
 mod persist;
 mod pr;
+mod pr_list;
 #[cfg(unix)]
 mod provider_groups;
+mod providers;
 mod reopen;
 mod pull_request;
 mod repeats;
@@ -147,6 +151,8 @@ pub enum Ev {
     },
     /// A background read of a followed pane's transcript finished (ADR 0003).
     FollowRead(Box<conversation::follow::Done>),
+    /// The transcript of a saved session a chat was opened on has been read, or why it was not.
+    SavedHistory(Box<conversation::follow::Saved>),
     /// A background look at a Claude pane's config folder finished (`hook_repair`).
     HookFolderChecked(Box<hook_repair::Checked>),
     ConversationStorage {
@@ -189,8 +195,8 @@ pub enum Ev {
         branch: String,
         cmd: Option<String>,
         split: Option<TermId>,
-        /// The pane that asked, noted when it asked: its connection is usually gone by now.
-        by: Option<TermId>,
+        /// Whose agent asked, noted when it asked: its connection is usually gone by now.
+        by: Option<helpers::Starter>,
         /// The repo's setup (its on_create hook) has run: open what was asked for.
         set_up: bool,
         result: Result<(PathBuf, String), String>,
@@ -274,6 +280,11 @@ pub enum Ev {
         client: ClientId,
         tag: u64,
         report: crate::protocol::GitHubReport,
+    },
+    /// `gh` listed (or could not list) the open pull requests of the repository `folder` is in.
+    PullRequestsListed {
+        folder: PathBuf,
+        answer: crate::protocol::GitHubAnswer<crate::protocol::ProjectPulls>,
     },
     /// A GitHub list `gh` was asked for off the loop, as the reply to send.
     Answered {
@@ -472,6 +483,8 @@ struct Daemon {
     /// The agents' sign-ins this daemon runs on a window's request.
     sign_ins: agent_sign_in::SignIns,
     prs: pr::Prs,
+    /// Projects' open pull requests, as clients asked for them (`Query::PullRequests`).
+    pr_lists: pr_list::Lists,
     last_secret_files: Instant,
     git_busy: bool,
     /// Lines added and removed against HEAD, by checkout (`git::diff_counts`).
@@ -524,6 +537,9 @@ struct Daemon {
     turns_to_continue: BTreeMap<crate::conversation::ConversationId, u64>,
     turn_continues: conversation::continue_turn::Continues,
     conversation_states: BTreeMap<crate::conversation::ConversationId, conversation::State>,
+    /// Each chat's status as last listed and when it became that (unix seconds), for a row's age.
+    /// Kept apart from `conversation_states` so the many places that set a status need not stamp it.
+    conversation_since: HashMap<crate::conversation::ConversationId, (Status, u64)>,
     /// Conversations whose agent was stopped on purpose, so its exit is not a failure.
     conversation_ending: std::collections::BTreeSet<crate::conversation::ConversationId>,
     /// Chats closed with an undo window, and when each was: ended for real when the window passes.
@@ -586,7 +602,10 @@ struct Daemon {
     next_once: bool,
     /// The pane the next session is started for, when its connection can't say (the
     /// worktree it asked for took a while).
-    next_starter: Option<TermId>,
+    next_starter: Option<helpers::Starter>,
+    /// The session being started now goes into a worktree made for it, so it was let through
+    /// when it was asked for and is not refused now (`helper_queue::must_wait`).
+    starting_in_made_worktree: bool,
     /// The prewarmed agent: (repo, its worktree, its pane), and whether one is being made.
     spare: Option<(PathBuf, PathBuf, TermId)>,
     spare_making: bool,
@@ -969,18 +988,20 @@ impl Daemon {
             && matches!(
                 cmd,
                 Command::ConversationStart { .. }
-                    | Command::NewWorkspace { .. }
                     | Command::NewTab { .. }
                     | Command::NewFleet { .. }
                     | Command::NewShip { .. }
                     | Command::Split { .. }
-                    | Command::NewWorktree { .. }
                     | Command::BranchWorktree { .. }
                     | Command::Popup { .. }
+                    // A helper is an agent on a task. A bare shell is not one, and nothing a chat
+                    // could do with it goes through the helper consent (ADR 0016).
+                    | Command::NewWorkspace { cmd: None, .. }
+                    | Command::NewWorktree { cmd: None, agent: None, .. }
             )
         {
             anyhow::bail!(
-                "Structured runtimes cannot start descendants until conversation-owned helper consent is supported"
+                "A chat may start only helpers: an agent on a task, in a new session or worktree"
             );
         }
         match cmd {
@@ -1257,7 +1278,9 @@ impl Daemon {
                 anyhow::bail!("snoozing a session is yours to do, not a pane's")
             }
             // A session may not let itself (or another) start helpers.
-            Command::AnswerHelpers { .. } if self.client_is_agent(client) => {
+            Command::AnswerHelpers { .. } | Command::AnswerChatHelpers { .. }
+                if self.client_is_agent(client) =>
+            {
                 anyhow::bail!("starting helpers is yours to allow, not a pane's")
             }
             _ if structured => {
@@ -1328,6 +1351,7 @@ impl Daemon {
             secrets: secrets::Secrets::default(),
             sign_ins: agent_sign_in::SignIns::default(),
             prs: pr::Prs::default(),
+            pr_lists: pr_list::Lists::default(),
             last_secret_files: Instant::now(),
             git_busy: false,
             diff_counts: HashMap::new(),
@@ -1362,6 +1386,7 @@ impl Daemon {
             turns_to_continue: BTreeMap::new(),
             turn_continues: conversation::continue_turn::Continues::default(),
             conversation_states: BTreeMap::new(),
+            conversation_since: HashMap::new(),
             conversation_ending: std::collections::BTreeSet::new(),
             conversation_closing: std::collections::BTreeMap::new(),
             chat_allowed: conversation::allowed::Allowed::default(),
@@ -1416,6 +1441,7 @@ impl Daemon {
             last_effort: Instant::now() - Duration::from_secs(3600),
             next_once: false,
             next_starter: None,
+            starting_in_made_worktree: false,
             spare: None,
             spare_making: false,
             warm: None,
@@ -1444,6 +1470,7 @@ impl Daemon {
                     self.finish_closes();
                     self.finish_chat_closes();
                     self.close_ended_agents();
+                    self.start_waiting_helpers();
                     self.expire_warm();
                     self.wake_snoozed(term::unix_now());
                     self.update_statuses();
@@ -1476,6 +1503,7 @@ impl Daemon {
                 }
             }
             self.publish_conversation_news();
+            self.note_conversation_status_times();
             if self.dirty {
                 self.dirty = false;
                 self.sync_scan_roots();
@@ -1992,6 +2020,7 @@ impl Daemon {
                 self.conversation_save_completed(barrier, result);
             }
             Ev::FollowRead(done) => self.follow_read_done(*done),
+            Ev::SavedHistory(saved) => self.saved_history_read(*saved),
             Ev::HookFolderChecked(done) => self.hook_checked(*done),
             Ev::ConversationStorage {
                 id,
@@ -2183,6 +2212,11 @@ impl Daemon {
                     if t.asleep {
                         continue;
                     }
+                    // Only a shell runs in a pane whose start is held; what it will be, and
+                    // that it works, is the hold's to say until it starts.
+                    if t.waiting.is_some() {
+                        continue;
+                    }
                     // A conversation pane's agent and exact session are assigned by the
                     // daemon when it starts the provider. Process-name detection is only a
                     // best-effort status signal; for example Codex can appear as `node`.
@@ -2320,6 +2354,7 @@ impl Daemon {
                 }
                 self.pending_ops -= 1;
                 self.next_starter = by;
+                self.starting_in_made_worktree = true;
                 let as_pane = split.filter(|t| self.terms.contains_key(t));
                 let opened = result.map_err(anyhow::Error::msg).and_then(|(path, repo)| {
                     match as_pane {
@@ -2355,6 +2390,7 @@ impl Daemon {
                     Ok(path)
                 });
                 self.next_starter = None;
+                self.starting_in_made_worktree = false;
                 if let Ok(p) = &opened {
                     self.made_worktrees.push(p.clone());
                     if self.adopted.as_ref().is_some_and(|a| same_path(a, p)) {
@@ -2514,6 +2550,11 @@ impl Daemon {
                 tag,
                 report,
             } => self.send(client, ServerMsg::Reply(Reply::GitHubAccounts { tag, report })),
+            Ev::PullRequestsListed { folder, answer } => {
+                for (client, tag) in self.pr_lists.finished(&folder, &answer, Instant::now()) {
+                    self.send(client, ServerMsg::Reply(Reply::PullRequests { tag, answer: answer.clone() }));
+                }
+            }
             Ev::Answered { client, reply } => self.send(client, ServerMsg::Reply(reply)),
             Ev::SavedConversationsReady { client, tag, found } => {
                 self.send(client, ServerMsg::Reply(Reply::SavedConversations { tag, found }));
@@ -2776,6 +2817,14 @@ impl Daemon {
                 {
                     self.send(client, ServerMsg::Error(format!("{e:#}")));
                     return;
+                }
+                match self.keeps_for_waiting(client, term, &data) {
+                    Ok(true) => return,
+                    Ok(false) => {}
+                    Err(e) => {
+                        self.send(client, ServerMsg::Error(format!("{e:#}")));
+                        return;
+                    }
                 }
                 if self.terms.get(&term).is_some_and(|t| t.asleep) {
                     // Wake it, and hand over what was typed once it's ready.
@@ -3228,7 +3277,7 @@ impl Daemon {
                     {
                         ServerMsg::Error("Only a human client can ask about a folder's branches or the machine".into())
                     }
-                    Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. }
+                    Query::GitHubAccounts { .. } | Query::GitHubRepos { .. } | Query::GitHubOwners { .. } | Query::PullRequests { .. }
                         if self.clients.get(&client).is_some_and(|client| {
                             client.from.is_some() || client.structured.is_some()
                         }) =>
@@ -3321,6 +3370,26 @@ impl Daemon {
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
                         return;
+                    }
+                    Query::PullRequests { folder, fresh, tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let resolved = (folder.len() <= folders::PATH_MAX_BYTES).then(|| folders::resolve(&folder, home.as_deref())).flatten();
+                        let asked = match &resolved {
+                            Some(folder) => self.pr_lists.ask(folder, fresh, (client, tag), Instant::now()),
+                            None => pr_list::Ask::Answer(crate::protocol::GitHubAnswer::Failed("Choose the folder by its full path".into())),
+                        };
+                        match (asked, resolved) {
+                            (pr_list::Ask::Answer(answer), _) => ServerMsg::Reply(Reply::PullRequests { tag, answer }),
+                            (pr_list::Ask::Run, Some(folder)) => {
+                                let tx = self.tx.clone();
+                                tokio::task::spawn_blocking(move || {
+                                    let answer = pr_list::list(&folder);
+                                    let _ = tx.blocking_send(Ev::PullRequestsListed { folder, answer });
+                                });
+                                return;
+                            }
+                            (pr_list::Ask::Wait | pr_list::Ask::Run, _) => return,
+                        }
                     }
                     Query::GitHubOwners { tag } => {
                         let tx = self.tx.clone();
@@ -3508,6 +3577,38 @@ impl Daemon {
                         let tx = self.tx.clone();
                         tokio::task::spawn_blocking(move || {
                             let outcome = sync::answer(&folder, &request);
+                            let reply = Reply::GitDone { tag, outcome };
+                            let _ = tx.blocking_send(Ev::Answered { client, reply });
+                        });
+                        return;
+                    }
+                    Query::DiscardFile { .. }
+                        if self.clients.get(&client).is_some_and(|client| {
+                            client.from.is_some() || client.structured.is_some()
+                        }) =>
+                    {
+                        ServerMsg::Error("Only a human client can discard a file's changes".into())
+                    }
+                    Query::DiscardFile { term, path, tag } => {
+                        let folder = self
+                            .may_use_terminal(client, term)
+                            .and_then(|()| self.may(client, Grant::Write, Some(term)))
+                            .and_then(|()| {
+                                self.terms
+                                    .get(&term)
+                                    .map(|t| t.cwd.clone())
+                                    .ok_or_else(|| anyhow::anyhow!("no pane {term}"))
+                            });
+                        let folder = match folder {
+                            Ok(folder) => folder,
+                            Err(error) => {
+                                self.send(client, ServerMsg::Error(format!("{error:#}")));
+                                return;
+                            }
+                        };
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let outcome = discard::answer(&folder, &path);
                             let reply = Reply::GitDone { tag, outcome };
                             let _ = tx.blocking_send(Ev::Answered { client, reply });
                         });
@@ -3794,10 +3895,12 @@ impl Daemon {
                         timeline: t.timeline.iter().cloned().collect(),
                         subagents: t.subagents.iter().map(|(_, k)| k.clone()).collect(),
                         started_by: t.started_by,
+                        started_by_chat: t.started_by_chat,
                         tab_of: t.tab_of.filter(|o| self.terms.contains_key(o)),
                         helper_ask: t.helpers.asked.clone(),
                         pr: self.pr_of(t),
                         queued: t.queue.iter().cloned().collect(),
+                        waiting_for_slot: helper_queue::waiting_for_slot(t),
                         own_turn_over: t.own_turn_over,
                         subagent_activity: t.subagent_activity.clone(),
                         session: t.session.clone(),
@@ -3889,61 +3992,130 @@ impl Daemon {
         .to_string()
     }
 
-    /// The pane a start comes from, if it comes from one. Only a connection that proved it
-    /// is that pane (its secret) counts: a session can't be hung on a pane by naming it.
-    fn starter(&mut self, client: ClientId) -> Option<TermId> {
-        self.next_starter
-            .take()
-            .or_else(|| self.clients.get(&client).and_then(|c| c.from))
-            .filter(|t| self.terms.contains_key(t))
+    /// Whose agent a start comes from, if it comes from one. Only a connection that proved it
+    /// is that pane (its secret), or that chat's current runtime (its identity), counts: a
+    /// session can't be hung on another by naming it.
+    fn starter(&mut self, client: ClientId) -> Option<helpers::Starter> {
+        use helpers::Starter;
+        let noted = self.next_starter.take();
+        let by = noted.or_else(|| {
+            let client = self.clients.get(&client)?;
+            client.from.map(Starter::Pane).or_else(|| {
+                client
+                    .structured
+                    .filter(|owner| self.structured_current(*owner))
+                    .map(|owner| Starter::Chat(owner.conversation))
+            })
+        })?;
+        match by {
+            Starter::Pane(term) => self.terms.contains_key(&term),
+            Starter::Chat(id) => self.conversations.iter().any(|record| record.id == id),
+        }
+        .then_some(by)
     }
 
-    /// The pane a start comes from, once it may start `task` and there's room for it. A
-    /// session another agent starts is a helper (see `helpers.rs` for who may), and each helper
-    /// runs builds and tests of its own: an agent that starts ten takes the whole machine. Past
-    /// `sessions.helpers_at_once` of its own working at once the start is refused, with what to
-    /// do instead.
-    fn starting(&mut self, client: ClientId, task: &str) -> Result<Option<TermId>> {
-        if self
-            .clients
-            .get(&client)
-            .is_some_and(|client| client.structured.is_some())
-        {
-            anyhow::bail!(
-                "Structured runtimes cannot start descendants until conversation-owned helper consent is supported"
-            );
-        }
+    /// Whose agent a start comes from, once it may start `task`. A session another agent starts
+    /// is a helper (see `helpers.rs` for who may). How many of them work at once is bounded
+    /// where the helper is made: a pane past the limit waits (`holds_start`), a chat is
+    /// refused (`room_for_chat_helper`).
+    fn starting(&mut self, client: ClientId, task: &str) -> Result<Option<helpers::Starter>> {
         // A worktree asked for earlier was let through then: don't strand it now.
         let let_through = self.next_starter.is_some();
         let by = self.starter(client);
+        // A chat's runtime that is no longer the current one starts nothing, and is never read as
+        // a person, who is not asked and not counted.
+        if by.is_none()
+            && !let_through
+            && self
+                .clients
+                .get(&client)
+                .is_some_and(|client| client.structured.is_some())
+        {
+            anyhow::bail!("This chat's runtime is no longer current, so it starts nothing");
+        }
         if let Some(by) = by
             && !let_through
         {
             self.may_start_helper(by, task)?;
-            let most = self.cfg.helpers_at_once();
-            let busy = self.busy_helpers(by, None);
-            if busy >= most {
-                anyhow::bail!(
-                    "{busy} helpers are already working, and {most} at once is the limit (Settings, Sessions). Wait for one to finish, then start this one."
-                );
-            }
         }
         Ok(by)
     }
 
+    /// A chat started as a helper is not held for a slot: past the limit it is refused, with
+    /// what to do instead.
+    fn room_for_chat_helper(&self, by: helpers::Starter) -> Result<()> {
+        let most = self.cfg.helpers_at_once();
+        let busy = self.busy_helpers(by, None);
+        if busy >= most {
+            anyhow::bail!(
+                "{busy} helpers are already working, and {most} at once is the limit (Settings, Sessions). Wait for one to finish, then start this one."
+            );
+        }
+        Ok(())
+    }
+
+    /// Whether a start from `by` in `cwd` is held for a free slot. Each helper runs builds and
+    /// tests of its own, and an agent that starts ten takes the whole machine: past
+    /// `sessions.helpers_at_once` of its starter's working at once, the next one waits
+    /// (`helper_queue.rs`). What a person starts never waits, and a spare worktree about to be
+    /// adopted already runs its agent, so it is never held either.
+    fn holds_start(
+        &self,
+        by: Option<helpers::Starter>,
+        cmd: Option<&str>,
+        cwd: &std::path::Path,
+    ) -> Result<bool> {
+        let adopting = self
+            .adopt
+            .as_ref()
+            .is_some_and(|(dir, term)| same_path(dir, cwd) && self.terms.contains_key(term));
+        match by {
+            Some(by) if !adopting => self.must_wait(by, cmd),
+            _ => Ok(false),
+        }
+    }
+
+    /// Make the pane for a start, note who started it and name a helper after its task. A start
+    /// that `holds` is made as a plain shell, its command kept until a slot frees.
+    fn start_or_hold(
+        &mut self,
+        by: Option<helpers::Starter>,
+        holds: bool,
+        cmd: Option<&str>,
+        cwd: &std::path::Path,
+        cols: u16,
+        rows: u16,
+    ) -> Result<TermId> {
+        let term = self.spawn(cmd.filter(|_| !holds), cwd, cols, rows)?;
+        self.started(term, by);
+        if holds {
+            self.hold_start(term, cmd);
+        } else if by.is_some() {
+            self.name_after_task(term, cmd);
+        }
+        Ok(term)
+    }
+
     fn busy_helpers(
         &self,
-        by: TermId,
+        by: helpers::Starter,
         except: Option<crate::conversation::ConversationId>,
     ) -> usize {
         let native = self
             .terms
             .values()
             .filter(|t| {
-                t.started_by == Some(by)
+                (by.pane().is_some_and(|pane| t.started_by == Some(pane))
+                    || by.chat().is_some_and(|chat| t.started_by_chat == Some(chat)))
+                    // One waiting for a slot reads as working, and holds none.
+                    && t.waiting.is_none()
                     && (t.status == Status::Working || t.born.elapsed() < HELPER_SETTLES)
             })
             .count();
+        // Only a pane starts a chat as its helper; a chat's own starts are sessions.
+        let Some(by) = by.pane() else {
+            return native;
+        };
         native
             + self
                 .conversation_states
@@ -3964,10 +4136,26 @@ impl Daemon {
                 .count()
     }
 
-    /// Note which pane's agent started `term`.
-    fn started(&mut self, term: TermId, by: Option<TermId>) {
+    /// The app a new session belongs to, which is the only app that lists it. A person's start
+    /// belongs to the app they asked from. A helper belongs to the app its starter is in: an
+    /// agent asks through the tool server, which is a terminal client whichever app the agent
+    /// runs in, so going by the asking client would hide a desktop chat's helpers from it.
+    fn owner_of_start(&self, client: ClientId, by: Option<helpers::Starter>) -> Surface {
+        match by {
+            Some(helpers::Starter::Chat(_)) => Surface::Desktop,
+            Some(helpers::Starter::Pane(pane)) => self
+                .terms
+                .get(&pane)
+                .map_or_else(|| self.surface_of(client), |t| t.owner),
+            None => self.surface_of(client),
+        }
+    }
+
+    /// Note whose agent started `term`.
+    fn started(&mut self, term: TermId, by: Option<helpers::Starter>) {
         if let Some(t) = self.terms.get_mut(&term) {
-            t.started_by = by.filter(|b| *b != term);
+            t.started_by = by.and_then(helpers::Starter::pane).filter(|b| *b != term);
+            t.started_by_chat = by.and_then(helpers::Starter::chat);
         }
     }
 
@@ -4265,6 +4453,8 @@ fn home() -> PathBuf {
 #[cfg(test)]
 mod branch_agent_tests;
 #[cfg(test)]
+mod helper_queue_tests;
+#[cfg(test)]
 mod logic_tests;
 #[cfg(test)]
 mod wire_size_tests;
@@ -4280,12 +4470,15 @@ mod tests {
         assert!(client_reads(&msg, msg.introduced_in()));
         assert!(!client_reads(&msg, msg.introduced_in() - 1));
 
-        // A client of the version before clone progress existed waits for the clone's own answer alone.
+        // A message as old as the window goes to every client inside it.
         let progress = ServerMsg::Reply(Reply::CloneProgress { tag: 1, phase: crate::protocol::ClonePhase::Receiving, percent: 1 });
-        assert!(!client_reads(&progress, PROTOCOL_VERSION - 1));
+        assert!(client_reads(&progress, crate::protocol::COMPATIBLE_SINCE));
         assert!(client_reads(&progress, PROTOCOL_VERSION));
-        let cloned = ServerMsg::Reply(Reply::Cloned { tag: 1, outcome: Ok("/x".into()) });
-        assert!(client_reads(&cloned, PROTOCOL_VERSION - 1));
+        // One added since has its own arm: a client from before it is inside the window and is not sent it.
+        let pulls = ServerMsg::Reply(Reply::PullRequests { tag: 1, answer: crate::protocol::GitHubAnswer::NotInstalled });
+        assert!(client_reads(&pulls, crate::protocol::PULL_REQUESTS_SINCE));
+        assert!(!client_reads(&pulls, crate::protocol::PULL_REQUESTS_SINCE - 1));
+        assert!(crate::protocol::speaks_with(crate::protocol::PULL_REQUESTS_SINCE - 1, 0));
 
         let unreadable = crate::protocol::decode::<ClientMsg>(&[0xc1]).unwrap_err();
         assert!(skips_unreadable(PROTOCOL_VERSION + 1, &unreadable));

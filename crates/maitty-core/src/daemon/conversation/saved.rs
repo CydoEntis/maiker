@@ -53,6 +53,7 @@ pub(in crate::daemon) fn list(agent: &str, folder: &Path, stores: &Stores) -> Sa
 }
 
 fn claude(root: &Path, folder: &Path) -> Vec<SavedConversation> {
+    let folder = &real_folder(folder);
     let files = newest_first(jsonl_files(&root.join(claude_folder_name(folder))));
     files
         .into_iter()
@@ -64,6 +65,13 @@ fn claude(root: &Path, folder: &Path) -> Vec<SavedConversation> {
         })
         .take(SAVED_CONVERSATIONS_MAX)
         .collect()
+}
+
+/// The real path of `folder`, which Claude runs in (`transport` resolves it) and so names its
+/// transcripts' folder from and writes as their `cwd`. `folder` can be another name for it: a link,
+/// or a Windows short name (`RUNNER~1`). One that cannot be resolved is kept as given.
+pub(super) fn real_folder(folder: &Path) -> PathBuf {
+    std::fs::canonicalize(folder).map_or_else(|_| folder.to_path_buf(), crate::daemon::clean_path)
 }
 
 /// The folder Claude keeps a working folder's transcripts in: every character but an ASCII letter or

@@ -1,5 +1,3 @@
-/** How the agent is set up, from its own file: the permission mode and the model answering. */
-export type ChatMeta = { readonly mode: string | null; readonly model: string | null }
 
 /** Claude's permission modes in plain words. A mode not listed is shown as it was written. */
 const MODE_WORDS: Readonly<Record<string, string>> = {
@@ -74,6 +72,20 @@ export const CODEX_MODE_COMMAND: Readonly<Record<string, string>> = {
 
 /** What Codex prints when it did not take a `/permissions` command. */
 export const CODEX_MODE_REFUSED = /Unknown permission profile|Usage: \/permissions|Failed to set (?:permission profile|approval policy)/
+
+/**
+ * Claude Code's own question after `/model` mid-conversation ("Switch model? … 1 Yes, switch to Opus 5.5"). Picking the
+ * model in the box is the answer already, so the box answers it rather than leaving a second question in the way.
+ */
+export const MODEL_SWITCH_ASK = /Switch model\?[\s\S]*\b1[.)]?\s+Yes, switch\b/
+
+/** How many of the screen's last lines the switch-model question can take up. */
+const MODEL_ASK_LINES = 16
+
+/** Whether `screen` is waiting on Claude Code's switch-model question: its last lines hold it. */
+export function asksToSwitchModel(screen: string): boolean {
+  return MODEL_SWITCH_ASK.test(screen.split('\n').slice(-MODEL_ASK_LINES).join('\n'))
+}
 
 /** The modes drawn in red: nothing is asked in them. */
 export const DANGER_MODES: readonly string[] = [BYPASS_MODE, CODEX_FULL_MODE]

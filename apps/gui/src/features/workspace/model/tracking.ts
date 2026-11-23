@@ -31,8 +31,6 @@ export function tracksEqual(a: ReadonlyMap<string, SessionTrack>, b: ReadonlyMap
   return true
 }
 
-export const MOVED_HIGHLIGHT_MS = 1600
-
 const ATTENTION: ReadonlySet<SessionStatus> = new Set(['done', 'needs', 'error'])
 /** What a session is when its plan limit ends and nothing else happened to it. */
 const RESTS_AFTER_LIMIT: ReadonlySet<SessionStatus> = new Set(['done', 'idle', 'working'])

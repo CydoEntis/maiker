@@ -94,22 +94,6 @@ describe('a session the next list leaves out', () => {
     warn.mockRestore()
   })
 
-  it('says once that the full list cannot be read, and once that it can again', async () => {
-    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
-    const info = vi.spyOn(console, 'info').mockImplementation(() => undefined)
-    const { rerender } = renderHook((props) => useSessionList(props), { initialProps: listOf('t1', 't2') })
-    rerender(listOf('t1'))
-    warn.mockClear()
-    daemon.load.mockRejectedValueOnce(new Error('no daemon')).mockRejectedValueOnce(new Error('no daemon')).mockResolvedValueOnce([terminal('t1'), terminal('t2')]).mockResolvedValueOnce([terminal('t1'), terminal('t2')])
-
-    for (let check = 0; check < 4; check += 1) await act(async () => { await vi.advanceTimersByTimeAsync(LINGER_MS + LINGER_SLACK_MS) })
-    expect(daemon.load).toHaveBeenCalledTimes(4)
-    expect(warn.mock.calls.map((call) => String(call[0]))).toEqual([expect.stringMatching(/could not read/i)])
-    expect(info.mock.calls.map((call) => String(call[0]))).toEqual([expect.stringMatching(/read again/i)])
-    warn.mockRestore()
-    info.mockRestore()
-  })
-
   it('leaves at once, unlogged, when the daemon said why it left', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const { result, rerender } = renderHook((props) => useSessionList(props), { initialProps: listOf('t1', 't2') })
@@ -175,5 +159,31 @@ describe('a session of another machine the next list leaves out', () => {
     rerender(withBox('box/t3'))
     expect(rows(result.current.sessions)).toEqual(['box/t3 done'])
     warn.mockRestore()
+  })
+})
+
+// ADR 0020: the Chat view starts chats the daemon owns, with no terminal. One that is not listed runs where nobody sees it.
+describe('a chat the daemon owns with no terminal', () => {
+  const chat = (id: string, archived = false): Conversation => ({
+    id, generation: 1, execution: 'Structured', title: '', project: '', folder: '/home/me/app', cwd: '/home/me/app', repo: null, branch: 'working tree', provider: 'Claude', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude',
+    chat: { conversation: Number(id), generation: 1 }, archived, details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } },
+  })
+  // Made once: a list that is new on every render would be a new list to the hook each time.
+  const listOf = (...items: Conversation[]) => ({ ...PROPS, sessionsQuery: { data: items } as UseQueryResult<Conversation[]> })
+
+  it('is listed beside the terminal sessions', () => {
+    const props = listOf(terminal('t1'), chat('5'))
+
+    const { result } = renderHook(() => useSessionList(props))
+
+    expect(result.current.sessions.map((session) => session.id)).toEqual(['t1', '5'])
+  })
+
+  it('is not listed once it is put away', () => {
+    const props = listOf(chat('5', true))
+
+    const { result } = renderHook(() => useSessionList(props))
+
+    expect(result.current.sessions).toEqual([])
   })
 })

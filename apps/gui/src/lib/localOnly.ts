@@ -1,5 +1,4 @@
 import { machineLabel } from '@/data/machineNicknames'
-import { machineNameOf } from '@/api/machines'
 
 /**
  * Features that read or change a pane's files, its repository or this computer's folders. Files
@@ -11,7 +10,6 @@ export const LOCAL_FEATURES = {
   changes: 'Changes',
   find: 'Find',
   branches: 'Branches',
-  history: 'History',
   references: 'References',
   'agent-status': 'Connecting an agent',
   worktrees: 'Worktrees',
@@ -21,7 +19,6 @@ export const LOCAL_FEATURES = {
   'screen-text': 'The screen text',
   replay: 'A fresh replay',
   rewind: 'Edit from here',
-  'check-output': "A check's output",
 } as const
 
 export type LocalFeature = keyof typeof LOCAL_FEATURES
@@ -37,12 +34,6 @@ export function localOnlyMessage(feature: LocalFeature, machineName: string | nu
 export function guardLocal(pane: PaneWhere | null | undefined, feature: LocalFeature): string | null {
   if (pane === null || pane === undefined || pane.machine === 0) return null
   return localOnlyMessage(feature, pane.machineName)
-}
-
-/** The same, for a session id: `build/t12` is on build, `t12` is here. */
-export function guardLocalSession(sessionId: string, feature: LocalFeature): string | null {
-  const name = machineNameOf(sessionId)
-  return name === null ? null : localOnlyMessage(feature, name)
 }
 
 /** Throws the words when `feature` cannot be used on the pane. */

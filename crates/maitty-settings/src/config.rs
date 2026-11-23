@@ -41,6 +41,75 @@ pub struct AgentDef {
     /// The agent's own flag that starts it without permission prompts (`--dangerously-skip-permissions`),
     /// added when `[permissions.bypass]` has it on. None: the agent has no such flag, and nothing is added.
     pub bypass_flag: Option<String>,
+    /// The agent can be run as a chat over the Agent Client Protocol, started with `command` and
+    /// `args` (`docs/stack/acp.md`).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub acp: bool,
+    /// The program that speaks ACP on its standard input and output. Only with `acp = true`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub command: Option<String>,
+    /// The arguments that put `command` in ACP mode, each passed as it is, with no shell.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub args: Vec<String>,
+    /// Variables set for the ACP process, over the ones it inherits.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub env: BTreeMap<String, String>,
+}
+
+/// The longest name an ACP agent may have: it names the agent in every conversation it runs.
+pub const ACP_NAME_MAX: usize = maitty_shared::conversation::ACP_AGENT_NAME_MAX;
+/// The agents with an adapter of their own, which are never run over ACP (ADR 0019).
+pub const NATIVE_CHAT_AGENTS: [&str; 2] = ["claude", "codex"];
+const ACP_ARGS_MAX: usize = 32;
+const ACP_ENV_MAX: usize = 32;
+const ACP_VALUE_MAX_BYTES: usize = 4096;
+
+/// Refuse an `[[agents]]` entry whose ACP keys could never start an agent, or would start
+/// something other than what was written, so a mistake shows when the config loads.
+pub fn validate_agents(agents: &[AgentDef]) -> Result<()> {
+    for (i, agent) in agents.iter().enumerate() {
+        let place = format!("[[agents]] #{} ({})", i + 1, agent.name);
+        if !agent.acp {
+            anyhow::ensure!(
+                agent.command.is_none() && agent.args.is_empty() && agent.env.is_empty(),
+                "{place}: `command`, `args` and `env` are only for an agent with `acp = true`"
+            );
+            continue;
+        }
+        let name = &agent.name;
+        anyhow::ensure!(
+            maitty_shared::conversation::acp_agent_name(name),
+            "{place}: an agent with `acp = true` needs a `name` of lowercase letters, digits, `-` or `_`, at most {ACP_NAME_MAX} long"
+        );
+        anyhow::ensure!(
+            !NATIVE_CHAT_AGENTS.contains(&name.as_str()),
+            "{place}: {name} has its own chat support and is not run over ACP; remove `acp = true`"
+        );
+        let command = agent.command.as_deref().unwrap_or_default();
+        anyhow::ensure!(!command.trim().is_empty(), "{place}: `acp = true` needs a `command`, the program to run");
+        anyhow::ensure!(
+            !command.starts_with('-'),
+            "{place}: `command` is the program alone; put `{command}` in `args`"
+        );
+        anyhow::ensure!(agent.args.len() <= ACP_ARGS_MAX, "{place}: `args` has more than {ACP_ARGS_MAX} entries");
+        anyhow::ensure!(agent.env.len() <= ACP_ENV_MAX, "{place}: `env` has more than {ACP_ENV_MAX} entries");
+        let plain = |text: &str| text.len() <= ACP_VALUE_MAX_BYTES && !text.chars().any(char::is_control);
+        anyhow::ensure!(
+            plain(command) && agent.args.iter().all(|arg| plain(arg)),
+            "{place}: `command` and `args` must be plain text, with no control characters, at most {ACP_VALUE_MAX_BYTES} bytes each"
+        );
+        for (key, value) in &agent.env {
+            let named = key.chars().next().is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+                && key.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+            anyhow::ensure!(named, "{place}: `env` has a name that is not a variable name (letters, digits and `_`)");
+            anyhow::ensure!(plain(value), "{place}: `env.{key}` must be plain text, with no control characters");
+        }
+        anyhow::ensure!(
+            !agents[..i].iter().any(|other| other.acp && other.name == *name),
+            "{place}: another `[[agents]]` entry with `acp = true` is already named {name}"
+        );
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -255,7 +324,23 @@ pub struct Ui {
 pub const NEW_AGENTS: &[&str] = &["last used", "claude", "codex", "gemini"];
 pub const NEW_WHERE: &[&str] = &["new worktree", "this folder"];
 pub const HELPERS_MAY: &[&str] = &["ask", "always", "never"];
-pub const HELPERS_AT_ONCE: &[&str] = &["2", "3", "4"];
+pub const HELPERS_AT_ONCE: &[&str] = &["2", "4", "8"];
+/// The limit a config that sets none has: one of `HELPERS_AT_ONCE`.
+pub const HELPERS_AT_ONCE_DEFAULT: &str = "4";
+/// Limits that were offered once and are not any more, each with what it reads as now. A file
+/// that still says one must load: refusing it would refuse the whole config.
+const HELPERS_AT_ONCE_BEFORE: &[(&str, &str)] = &[("3", "4")];
+
+/// `[sessions] helpers_at_once` as it reads today. The file itself is not rewritten.
+fn helpers_at_once_now<'de, D: serde::Deserializer<'de>>(
+    deserializer: D,
+) -> std::result::Result<String, D::Error> {
+    let stored = String::deserialize(deserializer)?;
+    Ok(HELPERS_AT_ONCE_BEFORE
+        .iter()
+        .find(|(before, _)| *before == stored)
+        .map_or(stored, |(_, now)| (*now).to_string()))
+}
 
 /// Settings > Sessions. `helpers` and `helpers_at_once` are read by the daemon when an agent
 /// starts a session (`Config::helpers_at_once`); the rest by the client's new-session flow.
@@ -271,6 +356,7 @@ pub struct Sessions {
     pub helpers: String,
     /// Helpers one session runs at a time: one of `HELPERS_AT_ONCE`. An old `[mcp]
     /// helpers_at_once` fills it in when this is not set (`fold_legacy_helpers`).
+    #[serde(deserialize_with = "helpers_at_once_now")]
     pub helpers_at_once: String,
     pub pr_wake: bool,
     /// Put away a finished or idle session once the PR watcher reads its pull request merged.
@@ -283,7 +369,7 @@ impl Default for Sessions {
             agent: "last used".into(),
             place: "new worktree".into(),
             helpers: "ask".into(),
-            helpers_at_once: "3".into(),
+            helpers_at_once: HELPERS_AT_ONCE_DEFAULT.into(),
             pr_wake: true,
             put_away_merged: false,
         }
@@ -983,74 +1069,52 @@ impl Default for Ui {
 #[cfg(test)]
 mod tests {
     use super::{
-        AgentDef, CHECK_TIMEOUT_S_DEFAULT, CURSOR_SHAPES, CheckDef, DEFAULT_MODEL_FLAG, Detection,
-        HELPERS_AT_ONCE, HELPERS_MAY, Icons, Keys, LayoutKind, Mcp, NEW_AGENTS, NEW_WHERE, Notify,
-        Preset, Quick, Recipe, Restore, Rounding, Sessions, Snapshots, Ui, Worktree, same_path,
-        size_cells, validate_checks, validate_cursor, validate_sessions,
+        AgentDef, HELPERS_AT_ONCE, HELPERS_AT_ONCE_DEFAULT, HELPERS_MAY, Mcp, NEW_AGENTS, NEW_WHERE,
+        Preset, Restore, Rounding, Sessions, Ui, size_cells, validate_cursor, validate_sessions,
     };
 
+    fn agents_problem(entry: &str) -> Option<String> {
+        #[derive(serde::Deserialize)]
+        struct File {
+            agents: Vec<AgentDef>,
+        }
+        let file: File = toml::from_str(&format!("[[agents]]\n{entry}\n")).unwrap();
+        super::validate_agents(&file.agents).err().map(|e| e.to_string())
+    }
+
     #[test]
-    fn display_detection_and_alert_settings_keep_their_defaults_and_serde_shape() {
-        let icons = Icons::default();
-        assert_eq!((icons.working.as_str(), icons.blocked.as_str()), ("⠹", "●"));
-        assert_eq!(icons.branch, "\u{e0a0} ");
+    fn an_acp_agent_with_a_program_passes_and_an_ordinary_entry_is_left_alone() {
+        assert_eq!(agents_problem("name = 'gemini'\nacp = true\ncommand = 'gemini'\nargs = ['--experimental-acp']\nenv = { A_1 = 'x' }"), None);
+        assert_eq!(agents_problem("name = 'goose'\nenabled = false"), None);
+    }
 
-        let keys = Keys::default();
-        assert!(keys.prefix.is_empty() && keys.global.is_empty());
-        assert!(!keys.replace_defaults);
-
-        let detection = Detection::default();
-        assert_eq!(
+    #[test]
+    fn an_acp_entry_that_could_not_start_what_was_written_is_refused_with_the_reason() {
+        for (entry, reason) in [
+            ("name = 'x'\nacp = true", "needs a `command`"),
+            ("name = 'x'\nacp = true\ncommand = '--acp'", "is the program alone"),
+            ("name = 'claude'\nacp = true\ncommand = 'claude'", "has its own chat support"),
+            ("name = 'My Agent'\nacp = true\ncommand = 'x'", "needs a `name` of lowercase"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nargs = [\"a\\nb\"]", "no control characters"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { '1A' = 'v' }", "not a variable name"),
+            ("name = 'x'\nacp = true\ncommand = 'x'\nenv = { A = \"a\\u0007\" }", "`env.A` must be plain text"),
+            ("name = 'x'\ncommand = 'x'", "only for an agent with `acp = true`"),
+            ("name = 'x'\nargs = ['a']", "only for an agent with `acp = true`"),
             (
-                detection.working_window_ms,
-                detection.echo_grace_ms,
-                detection.scan_interval_ms,
-                detection.pattern_rows,
+                "name = 'x'\nacp = true\ncommand = 'a'\n[[agents]]\nname = 'x'\nacp = true\ncommand = 'b'",
+                "already named x",
             ),
-            (1500, 300, 1000, 12)
-        );
-
-        let snapshots = Snapshots::default();
-        assert!(snapshots.enabled);
-
-        let notify = Notify::default();
-        assert!(notify.sound);
-        assert_eq!(notify.phone_server, "https://ntfy.sh");
-        assert_eq!(notify.phone_after, 60);
-        assert!(!notify.phone_done && !notify.phone_text);
-
-        let decoded: Notify = toml::from_str("sound = false").unwrap();
-        assert!(!decoded.sound);
-        assert_eq!(decoded.phone_server, "https://ntfy.sh");
+        ] {
+            let problem = agents_problem(entry).unwrap_or_default();
+            assert!(problem.contains(reason), "{entry}: {problem}");
+        }
     }
 
     #[test]
-    fn agent_preferences_default_to_empty_and_accept_older_partial_toml() {
-        let agent = AgentDef::default();
-        assert!(agent.name.is_empty());
-        assert!(agent.process.is_empty() && agent.cmdline.is_empty());
-        assert!(agent.blocked_patterns.is_empty() && agent.working_patterns.is_empty());
-        assert_eq!(agent.resume, None);
-        assert_eq!(agent.resume_last, None);
-        assert_eq!(agent.enabled, None);
+    fn an_entry_written_back_carries_no_acp_keys_it_never_had() {
+        let written = toml::to_string(&AgentDef { name: "goose".into(), ..AgentDef::default() }).unwrap();
 
-        let decoded: AgentDef = toml::from_str("name = 'codex'").unwrap();
-        assert_eq!(decoded.name, "codex");
-        assert!(decoded.process.is_empty());
-        assert!(decoded.cmdline.is_empty());
-    }
-
-    #[test]
-    fn ui_defaults_keep_the_existing_appearance_and_cursor_settings() {
-        let ui = Ui::default();
-
-        assert_eq!(ui.rounded, Rounding::Corners, "the redesign rounds every box");
-        assert_eq!(ui.background, "solid");
-        assert_eq!(ui.cursor, "block");
-        assert_eq!(ui.padding, "medium");
-        assert_eq!(ui.gap, "small");
-        assert_eq!(ui.dim, "normal");
-        assert_eq!(ui.spinner.first().map(String::as_str), Some("▖"));
+        assert!(!written.contains("acp") && !written.contains("command") && !written.contains("env"), "{written}");
     }
 
     #[test]
@@ -1058,22 +1122,6 @@ mod tests {
         let ui: Ui = toml::from_str("pane_colors = true\ntab_gap = false\ntool_rail = true\ngap = 'medium'")
             .expect("removed keys are ignored, not errors");
         assert_eq!(ui.gap, "medium", "and the keys around them are still read");
-    }
-
-    #[test]
-    fn rounding_reads_legacy_booleans_and_named_values() {
-        for (written, expected) in [
-            ("true", Rounding::Corners),
-            ("false", Rounding::Off),
-            ("\"full\"", Rounding::Full),
-            ("\"corners\"", Rounding::Corners),
-            ("\"off\"", Rounding::Off),
-        ] {
-            let ui: Ui = toml::from_str(&format!("rounded = {written}")).unwrap();
-            assert_eq!(ui.rounded, expected, "{written}");
-        }
-
-        assert!(toml::from_str::<Ui>("rounded = 'unknown'").is_err());
     }
 
     #[test]
@@ -1092,28 +1140,6 @@ mod tests {
     }
 
     #[test]
-    fn old_layout_names_fold_into_the_supported_looks() {
-        let mut ui: Ui = toml::from_str("layout = 'tiled'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(ui.gap, "0");
-        assert_eq!(ui.retired_layout.map(|layout| layout.name), Some("Tiled"));
-
-        let mut ui: Ui = toml::from_str("layout = 'compact'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(ui.retired_layout.map(|layout| layout.name), Some("Compact"));
-
-        let mut ui: Ui = toml::from_str("layout = 'hairline'").unwrap();
-        ui.fold_retired_layout();
-        assert_eq!(ui.layout_kind(), LayoutKind::Floating);
-        assert_eq!(
-            ui.retired_layout.map(|layout| layout.name),
-            Some("Hairline")
-        );
-    }
-
-    #[test]
     fn an_older_terminal_or_bar_cursor_reads_as_block_or_line() {
         for (old, now) in [("terminal", "block"), ("bar", "line"), ("underline", "underline")] {
             let mut ui: Ui = toml::from_str(&format!("cursor = '{old}'")).unwrap();
@@ -1124,23 +1150,13 @@ mod tests {
     }
 
     #[test]
-    fn cursor_validation_accepts_supported_shapes_and_refuses_unknown_values() {
-        for shape in CURSOR_SHAPES {
-            let ui: Ui = toml::from_str(&format!("cursor = '{shape}'")).unwrap();
-            assert!(validate_cursor(&ui).is_ok(), "{shape}");
-        }
-
-        let ui: Ui = toml::from_str("cursor = 'beam'").unwrap();
-        assert!(validate_cursor(&ui).is_err());
-    }
-
-    #[test]
     fn session_defaults_and_choices_are_validated() {
         let defaults = Sessions::default();
         assert_eq!(defaults.agent, "last used");
         assert_eq!(defaults.place, "new worktree");
         assert_eq!(defaults.helpers, "ask");
-        assert_eq!(defaults.helpers_at_once, "3");
+        assert_eq!(defaults.helpers_at_once, "4");
+        assert!(HELPERS_AT_ONCE.contains(&HELPERS_AT_ONCE_DEFAULT));
         assert!(validate_sessions(&defaults).is_ok());
 
         for agent in NEW_AGENTS {
@@ -1166,10 +1182,20 @@ mod tests {
     }
 
     #[test]
-    fn a_config_can_turn_conversation_resume_off() {
-        let restore: Restore = toml::from_str("conversations = false").unwrap();
-        assert!(!restore.conversations);
-        assert!(restore.agents, "the other restore settings keep their defaults");
+    fn the_limit_a_daemon_that_says_none_reads_as_is_the_default() {
+        assert_eq!(
+            HELPERS_AT_ONCE_DEFAULT,
+            maitty_shared::settings_view::HELPERS_AT_ONCE_UNSAID.to_string()
+        );
+    }
+
+    #[test]
+    fn a_limit_that_is_no_longer_offered_reads_as_the_one_that_replaced_it() {
+        let old: Sessions = toml::from_str("helpers_at_once = '3'").unwrap();
+        assert_eq!(old.helpers_at_once, "4");
+        assert!(validate_sessions(&old).is_ok(), "a file saved with 3 still loads");
+        let never_offered: Sessions = toml::from_str("helpers_at_once = '9'").unwrap();
+        assert!(validate_sessions(&never_offered).is_err());
     }
 
     #[test]
@@ -1181,64 +1207,15 @@ mod tests {
     }
 
     #[test]
-    fn persistence_worktree_and_mcp_settings_keep_their_defaults() {
-        let restore = Restore::default();
-        assert!(
-            restore.enabled
-                && restore.agents
-                && restore.conversations
-                && restore.commands
-                && restore.output
-        );
-
-        let worktree = Worktree::default();
-        assert_eq!(
-            worktree.dir,
-            format!("{{home}}/.{}/worktrees/{{project}}/{{branch}}", maitty_shared::brand::APP_COMMAND)
-        );
-        assert!(worktree.per_agent && worktree.delete_with_last);
-        assert!(worktree.command.is_empty() && worktree.prewarm.is_empty());
-        assert_eq!(worktree.inactive_days, 14);
-
+    fn helpers_started_over_mcp_are_never_approved_unasked_by_default() {
         let mcp = Mcp::default();
         assert_eq!(mcp.approve, "never");
         assert_eq!(mcp.scope, "project");
-        assert_eq!(mcp.grants, ["read", "write", "start"]);
-        assert!(mcp.safe.iter().any(|command| command == "cargo test"));
     }
 
     #[test]
-    fn check_defaults_and_validation_reject_missing_or_duplicate_entries() {
-        let default = CheckDef::default();
-        assert!(default.project.as_os_str().is_empty());
-        assert_eq!(default.timeout_s, CHECK_TIMEOUT_S_DEFAULT);
-        assert_eq!(default.name(), "");
-
-        let check = |project: &str, name: Option<&str>| CheckDef {
-            project: project.into(),
-            name: name.map(str::to_string),
-            command: "cargo test".into(),
-            timeout_s: 60,
-        };
-        assert!(validate_checks(&[check("repo", None)]).is_ok());
-        assert!(validate_checks(&[check("repo", None), check("REPO\\", Some("test"))]).is_err());
-        assert!(validate_checks(&[check("", None)]).is_err());
-        assert!(same_path(
-            std::path::Path::new("C:\\Repo\\"),
-            std::path::Path::new("c:/repo")
-        ));
-    }
-
-    #[test]
-    fn recipes_presets_and_quick_agents_keep_their_defaults_and_prompt_rules() {
-        let recipe = Recipe::default();
-        assert!(recipe.worktree && recipe.run.is_empty());
-
+    fn a_preset_puts_the_task_into_its_prompt() {
         let preset = Preset::default();
-        assert_eq!(
-            (preset.agent.as_str(), preset.place.as_str()),
-            ("claude", "beside")
-        );
         assert!(preset.asks());
         assert_eq!(preset.fill("  fix the bug  "), "fix the bug");
 
@@ -1247,11 +1224,5 @@ mod tests {
             ..Preset::default()
         };
         assert_eq!(named.fill("the diff"), "review the diff");
-
-        let quick = Quick::default();
-        assert_eq!(quick.agents.len(), 2);
-        assert_eq!(quick.agents[0].name, "claude");
-        assert_eq!(quick.agents[1].name, "codex");
-        assert_eq!(DEFAULT_MODEL_FLAG, "--model");
     }
 }

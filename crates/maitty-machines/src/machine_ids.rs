@@ -129,15 +129,13 @@ mod tests {
     }
 
     #[test]
-    fn a_different_id_at_the_name_is_refused_with_what_to_do() {
+    fn a_different_id_at_the_name_is_refused_and_recorded_nowhere() {
         let mut known = MachineIds::default();
         check_daemon_id(&mut known, "box", Some(A)).unwrap();
         let error = check_daemon_id(&mut known, "box", Some(B)).unwrap_err();
         assert_eq!(
-            error.to_string(),
-            "a different machine answers at box (id bbbbbbbb instead of aaaaaaaa). If you \
-             replaced that machine, open Machines, remove it and add it again; otherwise check \
-             the host name and DNS."
+            (error.machine.as_str(), error.recorded_prefix.as_str(), error.seen_prefix.as_deref()),
+            ("box", "aaaaaaaa", Some("bbbbbbbb"))
         );
         assert_eq!(
             check_daemon_id(&mut known, "box", Some(A)),
@@ -147,31 +145,20 @@ mod tests {
     }
 
     #[test]
-    fn an_old_daemon_connects_on_a_machine_never_recorded_and_records_nothing() {
+    fn an_old_daemon_or_an_id_that_is_not_hex_is_unchecked_until_an_id_was_recorded() {
         let mut known = MachineIds::default();
         assert_eq!(
             check_daemon_id(&mut known, "box", None),
             Ok(IdCheck::Unchecked)
         );
-        assert!(known.ids.is_empty());
-    }
-
-    #[test]
-    fn an_old_daemon_answering_after_an_id_was_recorded_is_refused() {
-        let mut known = MachineIds::default();
-        check_daemon_id(&mut known, "box", Some(A)).unwrap();
-        let error = check_daemon_id(&mut known, "box", None).unwrap_err();
-        assert_eq!(error.seen_prefix, None);
-        assert!(error.to_string().contains("id none instead of aaaaaaaa"));
-    }
-
-    #[test]
-    fn an_id_that_is_not_hex_counts_as_no_id() {
-        let mut known = MachineIds::default();
         assert_eq!(
             check_daemon_id(&mut known, "box", Some("\x1b[31mred")),
             Ok(IdCheck::Unchecked)
         );
+        assert!(known.ids.is_empty(), "nothing is recorded");
+        check_daemon_id(&mut known, "box", Some(A)).unwrap();
+        let error = check_daemon_id(&mut known, "box", None).unwrap_err();
+        assert_eq!(error.seen_prefix, None, "then an old daemon answering there is refused");
     }
 
     #[test]
@@ -200,11 +187,7 @@ mod tests {
 
     #[test]
     fn a_corrupt_file_starts_empty() {
-        let dir = std::env::temp_dir().join(format!(
-            concat!(env!("APP_COMMAND"), "-machine-ids-{}"),
-            std::process::id()
-        ));
-        std::fs::create_dir_all(&dir).unwrap();
+        let dir = maitty_test_support::TempFolder::new("machine-ids");
         let file = dir.join(FILE_NAME);
         std::fs::write(&file, "{ not json").unwrap();
         let known: MachineIds = crate::files::read_state(&file);

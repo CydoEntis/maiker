@@ -81,6 +81,13 @@ ratatui's `TestBackend` and assert on the text and cell styles;
 `AGENT_SHOW=1 cargo test <name> -- --nocapture` prints the frames. One test:
 `cargo test <name>`.
 
+Tests run in parallel (the default threads). `scripts/test.sh` (Linux and macOS, arguments go to
+`cargo test`) gives the run a temp folder of its own and fails if the tests left anything in it,
+naming the first 20 leftovers; CI's Linux job runs it. Windows CI still runs one test at a time:
+its machines stall when several tests start ConPTY shells at once. A test's folder is a
+`maitty_test_support::TempFolder`, removed when it drops, or `.until_test_ends()` for a helper
+that hands back a plain path. `TEST_TMP_ROOT` must stay short and outside any git checkout.
+
 ### Agent command lists
 
 The window pins the commands an agent will not list (`terminalCommands.ts`, `codexCommands.ts`, `geminiCommands.ts`), and each file names
@@ -110,10 +117,10 @@ pixls, maiker) with fix-footer's check at one of its stages, on a pinned clock
 
 `client/screen/flat_tests.rs` holds the flat sidebar, the collapsed column, the status glyphs and the
 workspace frames to the v26 TUI design: it draws the sample world at 140×36, 100×30 or 200×40 with a
-`TestBackend` and asserts on rows, glyphs, colours and hit rects (`AGENT_SHOW=1 cargo test <name> --
---nocapture` prints a frame). The sheets' and popovers' insides are held to
-`client/screen/reference.txt` and `client/screen/check_modals_frames.txt`, fixed fixtures; update them by
-hand, in the same change, only when the design itself changes; never to make a failing test pass.
+`TestBackend` and asserts on what a person relies on: the right row, status mark or state, a click
+target, nothing cut or overlapping at small sizes (`AGENT_SHOW=1 cargo test <name> -- --nocapture`
+prints a frame). No test compares a layout with a saved frame; a new test asserts the behaviour, not
+the look (see *what earns a test*).
 
 The website's screenshots are real frames: `client/site_frames.rs` draws made-up app states
 (hero, grid, changes, files, inbox, the four looks, shortcut mode, the splash) in `night` and
@@ -135,6 +142,11 @@ Live checks use a nested
 server: `AGENT_SOCKET=test maiker`, then `maiker send` / `maiker read` against it.
 Tests never touch the user's real config (`AGENT_CONFIG` or in-memory configs).
 
+A test in `maitty-core` that writes or copies a program and then runs it uses `test_support::write_program` or
+`copy_program`, never `std::fs::write` or `std::fs::copy`: a file this process holds open for writing can be
+inherited by a program another test thread starts at that moment, and running the new one then fails with
+"text file busy" on Unix.
+
 A daemon test that finds a pane by its folder names that folder canonically
 (`clean_path(root.canonicalize())`). The pane's shell reports the folder's real name at its first
 prompt, and the temp folder can be spelled another way (an 8.3 name such as `RUNNER~1` on Windows).
@@ -155,6 +167,16 @@ push `{ after, event, payload }` (milliseconds since the last step, `list_sessio
 `sessions-changed`, the raw snapshot) onto an array on `window`, copy it out from the devtools console with
 `copy(JSON.stringify({ source: 'recorded …', steps }))`, and drop the edits. Set `source` to say
 where and when it was recorded, and update the pane numbers the test names for its scenario.
+
+### Chat turn records
+
+`crates/maitty-core/src/daemon/conversation/tests/golden.rs` runs whole turns (a message, tools,
+an approval, a cancel) against the fake Codex and Claude programs and compares what a person
+would see (history, open and answered requests, status) with a saved record in `tests/golden/`.
+The records are what a provider adapter must keep producing while the code behind it changes.
+Clock readings and identities the daemon makes up are replaced by placeholders. When behaviour
+is meant to change, rewrite the records with `GOLDEN_UPDATE=1 cargo test -p maitty-core golden`
+and review the diff like code. Never rewrite one only to make a test pass.
 
 ## Project-specific: testing over ssh (fake-ssh)
 
@@ -180,9 +202,11 @@ killed while the others are never touched.
 | `noise-only` | prints login text and exits, with no marker |
 | `noise-flood` | prints more login text than the client skips (over 64 KiB), with no marker |
 | `old` | behaves as a `proxy` from before the stream marker: the real proxy, minus the marker |
-| `auth-fail` | prints `Permission denied (publickey).` on stderr, exits 255 |
+| `auth-fail` | prints `Permission denied (publickey).` on stderr, exits 255 (a refused key) |
+| `needs-person` | prints `Permission denied (password,keyboard-interactive).` on stderr, exits 255 (a login that needs a person) |
 | `hang` | says nothing and never exits |
-| `mismatch` | answers the handshake with a protocol version one ahead |
+| `mismatch` | answers the handshake with a protocol version older than this build accepts (`COMPATIBLE_SINCE - 1`) |
+| `mismatch-newer` | answers the handshake with a protocol version one ahead (`PROTOCOL_VERSION + 1`) |
 | `exit` | exits 0 at once, before any frame |
 | `unreachable` | prints `ssh: connect to host box port 22: Connection refused` on stderr, exits 255 |
 | `not-installed` | prints `bash: maiker: command not found` on stderr, exits 127 |
@@ -197,7 +221,7 @@ for it as they do for a proxy.
 
 The shim is also a machine's custom transport: put its path first in `via`, with `--mode=` and the rest in
 the later entries, and the remote command arrives as its last argument. The tests that run it
-(`custom_transport` in `apps/tui/tests/fake_ssh.rs`: end to end through a local pipe, noise, no marker,
+(`custom_transport` in `apps/tui/tests/fake_ssh.rs`: end to end through a local pipe, no marker,
 `Permission denied` with 255, exit 127, a hang dropped by a timeout with its process gone, plain pipes, the
 argv the transport is given) are `cfg(unix)`: a transport is unsupported on Windows, so there they only
 compile. Validation, argv construction, classification and the Windows refusal are pure tests that run on
@@ -290,7 +314,9 @@ the interactive line, the machine dialled when the popup pane closes, `needs log
 login still fails), removing (config, supervisor, sidebar, daemon id, saved layout lane, and the remote
 daemon's pane still alive over a second connection), that what a removed machine's daemon or supervisor
 says afterwards does not bring it back (handed to the window directly, with no daemon), and retrying a
-refusal. The frames of the dialog are
+refusal. Its one frame test (`AGENT_SHOW=1 cargo test -p maitty-terminal-client machine_flow -- --nocapture`
+prints it at 80x24 and 100x30) draws an unreachable machine: the typed target stays in the field, nothing
+is added, and no step or `MACHINE ADDED` is drawn. The other frames of the dialog are
 `client/screen/machines_tests.rs` (`AGENT_SHOW=1 cargo test machines_tests -- --nocapture` prints them
 at 80x24, 100x30 and 160x45).
 
@@ -305,17 +331,23 @@ No test drives a real terminal, so look once with a nested server and the shim:
    `AGENT_FAKE_SSH_MAITTY=<path to target/debug/maiker>`, `PATH=<lookat>:$PATH` (PowerShell:
    `$env:NAME = ...`). A machine added in the dialog is reached with plain `ssh`, which is now the
    shim, and the shim runs `maiker proxy` against that same private daemon.
-3. Run `target/debug/maiker`, press the leader, then `w`. Type `box` and Enter: the dialog says
-   `Checking box…`, then the machine appears in *Yours* as `connecting` and then `connected`, and its group
-   is in the sidebar. `<lookat>/config.local.toml` holds one `[[machines]]` entry (`name = "box"`,
+3. Run `target/debug/maiker`, press the leader, then `w`. Type `box` and Enter: the field keeps `box`,
+   one line under it says `Connecting to box…` with the working spinner turning (no steps, no
+   `MACHINE ADDED` screen), then the dialog is back on its list with `box` chosen under `YOUR MACHINES`
+   as `connecting` and then `connected`, the input empty and `Added box. … Connecting.` at its foot,
+   and its group is in the sidebar. `<lookat>/config.local.toml` holds one `[[machines]]` entry (`name = "box"`,
    `target = "box"`) and `config.toml` is untouched.
 4. `Tab`, `x`, Enter removes it: its group leaves the sidebar and the entry leaves the file, and the
    daemon's sessions are still there.
-5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=auth-fail`, start `maiker`, add `box` again. The probe
-   fails with a login, the dialog closes with the toast `ssh needs you to log in: use the popup`, and a popup runs the interactive line
+5. Popup path: quit, set `AGENT_FAKE_SSH_MODE=needs-person`, start `maiker`, add `box` again. The probe
+   fails with a login that needs a person, the dialog closes with the toast `Added box. Sign in in the popup.`
+   and the shared sentence (`box asks for a password or a second code, …`), and a popup runs the interactive line
    (the shim prints `Permission denied` and the popup closes). The machine then shows `needs login`
-   with its fix. Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: the dialog shows
-   ssh's `Connection refused` line. `hang` shows `Checking box…` until `Esc` (or 12 s).
+   with its fix. With `auth-fail` (a refused key) no popup opens: the dialog is back on its list with
+   `box` chosen and says "Added box. box refused your key: run `ssh-copy-id box` in a terminal, then try again."; `r` tries again. With `not-installed` it is added and chosen the same way with the
+   `Maiker isn't installed on box` sentence, and `u install` in the bar once its state says so. Set `AGENT_FAKE_SSH_MODE=unreachable` instead and nothing is added: `box` stays in the field and
+   the shared `Can't reach box` sentence (with ssh's `Connection refused` line) stands right under it in red, where the
+   `user`/`host` line was; typing or Backspace brings that line back. `hang` shows `Connecting to box…` until `Esc` (or 12 s).
 6. With a real host (no shim): leader `w`, pick a host from your `~/.ssh/config`, answer ssh's
    prompts in the popup if it opens one.
 
@@ -323,6 +355,38 @@ No test drives a real terminal, so look once with a nested server and the shim:
 `AGENT_TERM_ID` and `AGENT_PANE_TOKEN` (so a suite run inside a pane does not speak as that
 pane), stops its daemon on drop, and captures output to files, not pipes: a daemon started by
 the command keeps a pipe open on Windows. Copy that pattern for a new remote test.
+
+## Project-specific: what earns a test
+
+A test earns its place when breaking the behaviour it guards would hurt someone and no other test
+would notice. The suite is kept small enough that a design change rewrites a handful of tests, not
+hundreds.
+
+Keep a test that guards:
+
+- an agent's status and the one writer that decides it (ADR 0003);
+- sessions surviving a client closing, crashing or detaching, and the daemon restarting;
+- the protocol: every message's round trip, and which versions talk to each other;
+- security: ssh arguments, host keys, secrets kept out of output, paths from outside;
+- saved data loading, including old shapes, and never being lost;
+- Windows behaviour (paths, short names, pipes, shells);
+- a bug that once shipped, named after the behaviour;
+- anything in *required coverage* below.
+
+Don't keep, and don't write:
+
+- a test that pins wording, a CSS class, a colour or a pixel or cell position, unless the text is a
+  contract another program reads (the wire, a CLI's output, a file format) or the test guards a
+  design token rule (`corners.test.ts`);
+- a second test of a behaviour another test already proves, at another level or through another
+  path; keep the one closest to the user;
+- near-identical cases written out one by one; fold them into one table test;
+- a test of code with no logic of its own: a constructor, a getter, a re-export, a type alias;
+- a test that scripts the order of calls on a mock;
+- a test of a screen, flag or path that no longer exists.
+
+Deleting a test this section rules out is not weakening the suite, as long as the behaviour it
+named is still guarded or is not worth guarding. Say which in the commit.
 
 ## Project-specific: required coverage
 

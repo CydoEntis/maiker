@@ -21,6 +21,8 @@ type Props = {
   onNewSessionIn: (folder: string) => void
   /** Given for a draft: the menu chooses the folder the session will run in, instead of only showing it. */
   picking?: FolderPicking | undefined
+  /** The large chip over an empty draft: a chevron, and the list opens downward. */
+  hero?: boolean
 }
 
 function row(key: string, label: string, onPick: () => void, extra: Partial<ChipItem> = {}): ChipItem {
@@ -28,7 +30,7 @@ function row(key: string, label: string, onPick: () => void, extra: Partial<Chip
 }
 
 /** The row under the box's folder chip: where the session runs, with the ways to copy and show it. The folder of a started session is not changed here; that is chosen before the first message. */
-export function FolderChip({ folder, text, machine, projects, machineName = null, onNewSessionIn, picking }: Props) {
+export function FolderChip({ folder, text, machine, projects, machineName = null, onNewSessionIn, picking, hero = false }: Props) {
   const copy = () => {
     copyText(folder).then(
       () => { toast.success('Path copied') },
@@ -48,11 +50,12 @@ export function FolderChip({ folder, text, machine, projects, machineName = null
   const hereSection = here.length === 0 ? [] : [{ heading: 'This folder', quiet: true, items: here }]
   return (
     <ChipMenu
-      title={folder === '' ? 'Folder' : folder}
+      title={hero ? 'Project' : folder === '' ? 'Folder' : folder}
       summary={text}
-      chevron={false}
+      chevron={hero}
+      side={hero ? 'bottom' : 'top'}
       variant="place"
-      triggerClass="mx-place-chip is-folder"
+      triggerClass={`mx-place-chip is-folder${hero ? ' is-hero' : ''}`}
       width={WIDTH}
       icon={<span className="mx-place-icon"><Icon name="folderPlain" size={13} /></span>}
       label={<span className="mx-place-text">{text}</span>}

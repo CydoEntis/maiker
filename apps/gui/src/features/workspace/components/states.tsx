@@ -1,8 +1,8 @@
 import { useAppearsAfter } from '@/lib/useAppearsAfter'
 import { Icon } from './glyphs'
 
-/** Before the daemon's first list: says it is looking, once the wait is long enough to notice. */
-function LookingForSessions() {
+/** Before the daemon's first list: says it is looking, once the wait is long enough to notice. Nothing is said about sessions until then: some may be running. */
+export function LookingForSessions() {
   const shown = useAppearsAfter()
   return (
     <div className={`mx-empty${shown ? '' : ' invisible'}`} aria-busy="true">
@@ -12,40 +12,6 @@ function LookingForSessions() {
           <h1>Looking for your sessions…</h1>
           <p>Asking the Maiker service what is running.</p>
         </div>
-      </div>
-    </div>
-  )
-}
-
-export function EmptyState({ hasSessions, chatView, listed, startFolderLabel, canStart, onNewSession, onChangeStartFolder }: {
-  hasSessions: boolean
-  /** The app is in the Chat view: a new session is an agent chat, never a plain terminal. */
-  chatView: boolean
-  /** The daemon has sent its first list. Until then nothing is said about sessions: there may be some running. */
-  listed: boolean
-  startFolderLabel: string
-  canStart: boolean
-  onNewSession: () => void
-  onChangeStartFolder: () => void
-}) {
-  if (!listed) return <LookingForSessions />
-  return (
-    <div className="mx-empty">
-      <div className="mx-empty-column">
-        <span className="mx-empty-tile"><Icon name="prompt" /></span>
-        <div className="mx-empty-copy">
-          <h1>{hasSessions ? 'No tab open' : 'No sessions running'}</h1>
-          {hasSessions ? (
-            <p>Your sessions keep running in the sidebar. Pick one to show it here, or start a new one.</p>
-          ) : (
-            <p>A new session starts in <span className="mono">{startFolderLabel}</span>: {chatView ? 'an agent chat' : 'a terminal, or an agent'} like <span className="mono">claude</span> or <span className="mono">codex</span>. It shows up in the sidebar.</p>
-          )}
-        </div>
-        <div className="mx-empty-actions">
-          <button type="button" className="mx-primary" disabled={!canStart} onClick={onNewSession}>New session</button>
-          <button type="button" className="mx-quiet" onClick={onChangeStartFolder}>Change start folder</button>
-        </div>
-        <span className="mx-empty-note-small">Sessions live in the Maiker service. Closing this window never stops them, and the Maiker TUI sees the same sessions.</span>
       </div>
     </div>
   )

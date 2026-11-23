@@ -1,4 +1,3 @@
-import { movePanes } from './components/paneTransition'
 import { type Dispatch, type SetStateAction, useCallback } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { toast } from '@/lib/toast'
@@ -6,32 +5,24 @@ import { renameConversationOnDaemon } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { DesktopSettingsSection, UsageInfo } from '@/features/settings/components/DesktopSettings'
 import type { SettingsPreferences } from '@/features/settings/preferences'
-import { guardLocal } from '@/lib/localOnly'
-import type { InspectView } from '@/features/inspect/InspectPanel'
-import { repoLocate } from '@/features/inspect/api'
-import type { LookAt } from '@/features/inspect/FilesTab'
 import type { OpenSubagent } from './model/subagents'
-import { activeArrangement, type Layout, MAX_PANES, showSession, splitPane } from './model/layout'
+import { type Layout, showSession } from './model/layout'
 import { displayName, type SessionView } from './model/session'
 import { makeId } from './makeId'
 import { copyText as writeClipboard } from '@/lib/clipboard'
 
-/** What a session's row and menu do: show it, rename it, split it, copy its path, open one of its files. */
-export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, layout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection, setLookAt, setInspectView, setInspectOpen }: {
+/** What a session's row and menu do: show it, rename it, copy its path. */
+export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, setLayout, flash, sessionMap, sessions, preferences, setPreferences, setSettingsSection }: {
   setRenameId: Dispatch<SetStateAction<string | null>>
   queryClient: QueryClient
   setOpenSubagent: Dispatch<SetStateAction<OpenSubagent | null>>
   setLayout: Dispatch<SetStateAction<Layout>>
-  layout: Layout
   flash: (text: string) => void
   sessionMap: Map<string, SessionView>
   sessions: SessionView[]
   preferences: SettingsPreferences
   setPreferences: Dispatch<SetStateAction<SettingsPreferences>>
   setSettingsSection: Dispatch<SetStateAction<DesktopSettingsSection | null>>
-  setLookAt: Dispatch<SetStateAction<LookAt | null>>
-  setInspectView: Dispatch<SetStateAction<InspectView>>
-  setInspectOpen: Dispatch<SetStateAction<boolean>>
 }) {
   const saveName = useCallback((sessionId: string, name: string) => {
     setRenameId(null)
@@ -47,24 +38,6 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     setOpenSubagent(null)
     setLayout((current) => showSession(current, sessionId, makeId))
   }, [setLayout, setOpenSubagent])
-
-  // "Open in split": the session joins the layout beside the pane that has focus. One already in it just takes the focus.
-  const openInSplit = useCallback((sessionId: string, direction: 'right' | 'down') => {
-    const showing = activeArrangement(layout)
-    if (!showing) {
-      showSessionById(sessionId)
-      return
-    }
-    if (showing.panes.some((pane) => pane.sessionId === sessionId)) {
-      showSessionById(sessionId)
-      return
-    }
-    if (showing.panes.length >= MAX_PANES) {
-      toast.info(`A window holds ${String(MAX_PANES)} panes at most. Close one to open another beside it.`)
-      return
-    }
-    movePanes(() => { setLayout((current) => splitPane(current, null, direction, sessionId, makeId)) })
-  }, [layout, setLayout, showSessionById])
 
   const copyText = useCallback((text: string, what: string) => {
     writeClipboard(text).then(
@@ -97,22 +70,5 @@ export function useSessionActions({ setRenameId, queryClient, setOpenSubagent, s
     onOpenSession: (id: string) => { setSettingsSection(null); showSessionById(id) },
   }
 
-  // Cmd/Ctrl-click on a file name in a pane's output: find it in that pane's repo, then show it in Inspect.
-  const openPath = useCallback((session: SessionView, path: string, line?: number) => {
-    // Files and Changes look at this computer's own checkouts; a pane of another machine has none here.
-    const refusal = guardLocal(session, 'path-links')
-    if (refusal !== null) {
-      toast.info(refusal)
-      return
-    }
-    void repoLocate(session.pane, path)
-      .then((relative) => {
-        showSessionById(session.id)
-        setLookAt({ path: relative, ...(line === undefined ? {} : { line }), key: Date.now() })
-        setInspectView('files')
-        setInspectOpen(true)
-      })
-      .catch((error: unknown) => { toast.failed('Could not open that file', error) })
-  }, [setInspectOpen, setInspectView, setLookAt, showSessionById])
-  return { showSessionById, openPath, copyPathOf, showSubagent, saveName, openInSplit, copyText, usageInfo }
+  return { showSessionById, copyPathOf, showSubagent, saveName, copyText, usageInfo }
 }

@@ -71,9 +71,41 @@ pub fn port_args(port: Option<u16>) -> Result<Vec<String>, String> {
     }
 }
 
+/// The port a list of ssh arguments sets (`-p 2222` or `-p2222`); None when it sets none.
+pub fn port_in(args: &[String]) -> Option<u16> {
+    let mut words = args.iter();
+    let mut port = None;
+    while let Some(word) = words.next() {
+        let value = match word.strip_prefix("-p") {
+            Some("") => words.next().map(String::as_str),
+            Some(joined) => Some(joined),
+            None => continue,
+        };
+        // ssh takes the first port it is given; a later one is ignored.
+        if port.is_none() {
+            port = value.and_then(|value| value.parse::<u16>().ok());
+        }
+    }
+    port
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_port_becomes_ssh_arguments_and_is_read_back_either_way_it_is_written() {
+        let args = |words: &[&str]| words.iter().map(|w| (*w).to_string()).collect::<Vec<_>>();
+        assert_eq!(port_in(&args(&["-p", "2222"])), Some(2222));
+        assert_eq!(port_in(&args(&["-i", "key", "-p2200"])), Some(2200));
+        assert_eq!(port_in(&args(&["-p", "1", "-p", "2"])), Some(1));
+        assert_eq!(port_in(&args(&["-i", "key"])), None);
+        assert_eq!(port_in(&port_args(Some(2222)).unwrap()), Some(2222));
+        assert_eq!(port_args(None).unwrap(), Vec::<String>::new());
+        assert_eq!(port_args(Some(22)).unwrap(), Vec::<String>::new(), "the default adds none");
+        assert_eq!(port_args(Some(2222)).unwrap(), ["-p", "2222"]);
+        assert!(port_args(Some(0)).is_err());
+    }
 
     #[test]
     fn a_target_is_built_from_its_fields_and_split_back() {
@@ -106,11 +138,4 @@ mod tests {
         assert_eq!(build_target("CORP\\me", "box").unwrap(), "CORP\\me@box");
     }
 
-    #[test]
-    fn a_port_becomes_ssh_arguments_and_the_default_adds_none() {
-        assert_eq!(port_args(None).unwrap(), Vec::<String>::new());
-        assert_eq!(port_args(Some(22)).unwrap(), Vec::<String>::new());
-        assert_eq!(port_args(Some(2222)).unwrap(), ["-p", "2222"]);
-        assert!(port_args(Some(0)).is_err());
-    }
 }

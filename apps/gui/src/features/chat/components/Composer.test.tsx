@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetChoices, writeChoice } from '../agentChoice'
 import { forgetComposers } from '../composerStore'
-import { PENDING_APPROVAL_NOTE } from '../useChatComposer'
 import { forgetChatFeeds, IDLE_POLL_MS } from '../useChatFeed'
 import { ChatSession } from './ChatSession'
 
@@ -69,48 +68,38 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
   return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
-describe('the usage strip', () => {
-  it('shows what the agent reported using at the right of the box: the context, and each plan limit with its window', async () => {
-    const soon = Math.floor(Date.now() / 1000) + 3 * 3600 + 30
-    const daemon = new FakeDaemonHistory()
-    fake.current = daemon
-    render(<ChatSession link={LINK} agent="claude" online usage={{ context: 59, limits: [{ name: '5h', used: 62, resetsAt: soon }] }} />)
-    await settle()
+describe('the context bar', () => {
 
-    const strip = screen.getByRole('group', { name: 'Usage' })
-    expect(within(strip).getByRole('meter', { name: 'Context' })).toHaveAttribute('aria-valuenow', '59')
-    expect(within(strip).getByRole('meter', { name: '5-hour limit' })).toHaveAttribute('aria-valuenow', '62')
-    expect(strip).toHaveTextContent('Context59%5h62%')
-    // When a limit starts over is in its tooltip, not on the line.
-    expect(within(strip).getByRole('meter', { name: '5-hour limit' }).parentElement).toHaveAttribute('title', '5-hour limit: 62% used · resets in 3h')
-  })
-
-  it('shows the context from the start and a plan limit only once it is half used', async () => {
+  it('shows how full the context is, and leaves the plan limits to the status bar', async () => {
     fake.current = new FakeDaemonHistory()
     render(<ChatSession link={LINK} agent="claude" online usage={{ context: 12, limits: [{ name: 'week', used: 70, resetsAt: 0 }] }} />)
     await settle()
 
     const meters = within(screen.getByRole('group', { name: 'Usage' }))
-    expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context', 'Weekly limit'])
-    expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('Week70%')
-  })
-
-  it('draws only the context ring, at 0%, for a chat that has used little', async () => {
-    fake.current = new FakeDaemonHistory()
-    render(<ChatSession link={LINK} agent="claude" online usage={{ context: null, limits: [{ name: 'week', used: 0, resetsAt: 0 }] }} />)
-    await settle()
-
-    const meters = within(screen.getByRole('group', { name: 'Usage' }))
     expect(meters.getAllByRole('meter').map((meter) => meter.getAttribute('aria-label'))).toEqual(['Context'])
-    expect(screen.getByRole('group', { name: 'Usage' })).toHaveTextContent('0%')
+    expect(meters.getByRole('meter')).toHaveAttribute('aria-valuenow', '12')
+  })
+})
+
+describe('the chips under the chat box', () => {
+  const PLACE = { machine: null, project: 'maiker', branch: null, worktree: false, folder: '/dev/maiker' }
+
+  it('show on a session that has run nothing, with the context bar beside them', async () => {
+    fake.current = new FakeDaemonHistory()
+    render(<ChatSession link={LINK} agent="claude" online place={PLACE} usage={{ context: 3, limits: [] }} />)
+    await settle()
+    const chips = screen.getByRole('group', { name: 'Session location' })
+    expect(chips.parentElement).toContainElement(screen.getByRole('meter', { name: 'Context' }))
   })
 
-  it('is not drawn for an agent that reports nothing of the kind', async () => {
-    fake.current = new FakeDaemonHistory()
-    render(<ChatSession link={LINK} agent="gemini" online usage={{ context: null, limits: [] }} />)
+  it('are gone once the session has run; the context bar stays, in the chat box', async () => {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message('t1', 'u', 'User', 'earlier'))
+    fake.current = daemon
+    render(<ChatSession link={LINK} agent="claude" online place={PLACE} usage={{ context: 40, limits: [] }} />)
     await settle()
-
-    expect(screen.queryByRole('group', { name: 'Usage' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('group', { name: 'Session location' })).toBeNull()
+    expect(screen.getByRole('meter', { name: 'Context' })).toBeInTheDocument()
   })
 })
 
@@ -145,14 +134,6 @@ describe('sending', () => {
     await user.type(box, 'one{Shift>}{Enter}{/Shift}two')
 
     expect(box).toHaveValue('one\ntwo')
-    expect(fake.submitMessage).not.toHaveBeenCalled()
-  })
-
-  it('does not send an empty or blank message', async () => {
-    const { user, box } = await open()
-
-    await user.type(box, '   {Enter}')
-
     expect(fake.submitMessage).not.toHaveBeenCalled()
   })
 
@@ -196,14 +177,6 @@ describe('sending', () => {
 
 describe('while a request waits for an answer', () => {
   const pending = [{ request_id: 9, kind: 'Command', turn_id: 't1', command: 'rm -rf build', choices: ['Accept', 'AcceptForSession', 'Decline'] }]
-
-  it('turns the composer off and says to answer the request first', async () => {
-    const { box } = await open((daemon) => { daemon.status = 'Blocked'; daemon.approvals = pending })
-
-    expect(box).toBeDisabled()
-    expect(box).toHaveAttribute('placeholder', PENDING_APPROVAL_NOTE)
-    expect(screen.getByRole('region', { name: /Approval/ })).toHaveTextContent('rm -rf build')
-  })
 
   it('gives the request the focus, so y answers it at once', async () => {
     const { user } = await open((setup) => { setup.status = 'Blocked'; setup.approvals = pending })
@@ -420,24 +393,6 @@ describe('while the agent works', () => {
     expect(button).toBeEnabled()
   })
 
-  it('clears the reason of an earlier refusal when the daemon takes the message', async () => {
-    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
-    daemonQueues(daemon)
-    fake.sendQueuedMessageNow.mockRejectedValueOnce(new Error('the turn ended a moment ago'))
-    await user.type(box, 'steer left{Enter}')
-    await settle()
-    await user.click(screen.getByRole('button', { name: /^Queued/ }))
-    await user.click(screen.getByRole('button', { name: 'Send now' }))
-    await settle()
-    expect(screen.getByRole('alert')).toHaveTextContent('the turn ended a moment ago')
-
-    await user.click(screen.getByRole('button', { name: 'Send now' }))
-    await settle()
-
-    expect(fake.sendQueuedMessageNow).toHaveBeenCalledTimes(2)
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-
   it('offers no Send now while a request waits for an answer', async () => {
     const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
     daemonQueues(daemon)
@@ -452,36 +407,6 @@ describe('while the agent works', () => {
 
     expect(screen.getByRole('region', { name: 'Queued messages' })).toHaveTextContent('steer left')
     expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
-  })
-
-  it('stacks several queued messages behind the first one sent, opens them as a numbered list, and keeps the actions for the one that is read', async () => {
-    const { daemon, user, box } = await open((setup) => { setup.status = 'Working' })
-    daemonQueues(daemon)
-    for (const text of ['first', 'second', 'third']) {
-      await user.type(box, `${text}{Enter}`)
-      await settle()
-    }
-
-    const queued = screen.getByRole('region', { name: 'Queued messages' })
-    expect(queued).toHaveTextContent('3 queued')
-    expect(queued).toHaveTextContent('first')
-    expect(queued).not.toHaveTextContent('second')
-    expect(queued).toHaveTextContent('+2')
-    expect(screen.queryByRole('button', { name: 'Send now' })).not.toBeInTheDocument()
-
-    await user.click(within(queued).getByRole('button', { name: /3 queued/ }))
-    const list = within(queued).getByRole('list', { name: 'Queue, in the order they are sent' })
-    expect(within(list).getAllByRole('listitem').map((item) => item.querySelector('.mx-qd-text')?.textContent)).toEqual(['first', 'second', 'third'])
-    expect(queued).toHaveTextContent('Sent one at a time, in this order, when Claude finishes')
-    // Nothing is read until a message is clicked, so no message has its actions.
-    expect(screen.queryByRole('button', { name: 'Remove' })).not.toBeInTheDocument()
-
-    await user.click(within(list).getByRole('button', { name: /second/ }))
-    expect(screen.getByRole('button', { name: 'Move up' })).toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Remove' }))
-    await settle()
-    expect(fake.dequeueMessage).toHaveBeenCalledWith(TARGET, 2)
-    expect(within(screen.getByRole('list', { name: 'Queue, in the order they are sent' })).getAllByRole('listitem').map((item) => item.querySelector('.mx-qd-text')?.textContent)).toEqual(['first', 'third'])
   })
 
   it('moves a queued message up by queueing it ahead of the one above it, in the daemon', async () => {

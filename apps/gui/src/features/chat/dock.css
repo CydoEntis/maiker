@@ -1,7 +1,5 @@
 /* The dock between the chat and the message box (docs/DESIGN.md, "The dock"): the helpers line and its list, the queue,
-   and the record block a finished helpers line becomes in the chat. Colours are tokens; corners follow the root's
-   `data-corners` (Square is zeroed by material.css), so the
-   only corner rule here is Rounded's. Focus is an accent underline, as everywhere. */
+   and the record block a finished helpers line becomes in the chat. Colours and corners are tokens. Focus is an accent underline, as everywhere. */
 
 @keyframes mxDockGrow { from { opacity: 0; transform: scale(.9); } to { opacity: 1; transform: none; } }
 @keyframes mxDockFade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
@@ -31,7 +29,7 @@
 .mx-dock-chevron.is-down.is-open { transform: rotate(180deg); }
 
 /* The full list opens upward over the chat, growing from the line. */
-.mx-dock-list { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 4; max-height: min(420px, 50vh); overflow-y: auto; background: var(--main); border: 1px solid var(--line2); border-radius: var(--r-panel); box-shadow: var(--pop-sh); transform-origin: bottom center; animation: mxDockGrow .16s cubic-bezier(.2, .8, .2, 1); }
+.mx-dock-list { position: absolute; left: 0; right: 0; bottom: calc(100% + 6px); z-index: 4; max-height: min(420px, 50vh); overflow-y: auto; border-radius: var(--r-panel); transform-origin: bottom center; animation: mxDockGrow .16s cubic-bezier(.2, .8, .2, 1); }
 .mx-dock-list-head { display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 10px 0 12px; border-bottom: 1px solid var(--line); }
 .mx-dock-list-title { font-size: 12.5px; font-weight: 600; color: var(--fg); }
 .mx-dock-counts { flex: 1; min-width: 0; display: flex; gap: 10px; overflow: hidden; font-size: 12px; white-space: nowrap; }
@@ -118,8 +116,8 @@
 .mx-dock-note { margin: 6px 4px 0; font-size: 12px; color: var(--dim); }
 
 /* ---- Focus: the accent underline ---- */
-:is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: var(--focus-underline); }
-.mx-dock-action:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--line2), var(--focus-underline); }
+:is(.mx-dock-line, .mx-dock-row, .mx-qd-single, .mx-qd-item, .mx-qd-top, .mx-qd-head, .mx-qd-clear, .mx-agents-head, .mx-dock-marker):focus-visible { outline: none; box-shadow: var(--focus-edge); }
+.mx-dock-action:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 
 /* ---- Motion off ---- */
 :root[data-reduced-motion="true"] :is(.mx-dock-helpers, .mx-dock-list, .mx-dock-queue, .mx-dock-now-act, .mx-dock-detail, .mx-dock-block, .mx-dock-chevron, .mx-qd-chevron) { animation: none; transition: none; }

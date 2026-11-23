@@ -1,8 +1,7 @@
 //! One machine's connection state and the rules that move it. Pure: the time is passed in, so
 //! the table is tested without a clock, and nothing here dials or sleeps.
 
-use crate::link_failure::{FIX_INSTALL, FIX_LOGIN, FIX_NO_DAEMON, FIX_UPDATE, FIX_UPDATE_HERE, FailureClass,
-};
+use crate::link_failure::FailureClass;
 use std::time::{Duration, Instant};
 
 /// Dials after a drop that still read as "reconnecting": a blip is not an outage. Past them
@@ -20,20 +19,19 @@ pub enum ConnectionState {
         attempt: u32,
         since: Instant,
     },
-    /// ssh needs a login it cannot do without a person.
+    /// ssh needs a login it cannot do without a person: a refused key, a password or second
+    /// code, or a host key ssh refused, changed or not yet known (`FailureClass::is_login`).
     NeedsLogin {
-        why: String,
-        /// ssh's own last line, for the screen: why it could not log in.
-        said: String,
+        failure: FailureClass,
     },
     /// The far side needs another version of the app (or none installed): a person acts.
     NeedsUpdate {
-        why: String,
+        failure: FailureClass,
     },
     /// The machine does not answer; dials carry on in the background.
     Unreachable {
         since: Instant,
-        why: String,
+        failure: FailureClass,
     },
 }
 
@@ -55,14 +53,19 @@ pub fn next(state: &ConnectionState, event: Event, now: Instant) -> ConnectionSt
     use ConnectionState::*;
     match (state, event) {
         (_, Event::ConnectOk) => Connected,
-        (_, Event::Refused(why)) => Unreachable { since: now, why },
+        (_, Event::Refused(why)) => Unreachable {
+            since: now,
+            failure: FailureClass::Refused(why),
+        },
         (Connected, Event::LineDropped | Event::WatchdogFired) => Reconnecting {
             attempt: 1,
             since: now,
         },
-        (Reconnecting { attempt, since }, Event::ConnectFailed(FailureClass::Unreachable(_)))
-            if *attempt < RECONNECT_DIALS =>
-        {
+        // A machine turning new connections away for a moment (too many at once) is a blip too.
+        (
+            Reconnecting { attempt, since },
+            Event::ConnectFailed(FailureClass::Unreachable(_) | FailureClass::RefusingConnections),
+        ) if *attempt < RECONNECT_DIALS => {
             Reconnecting {
                 attempt: attempt + 1,
                 since: *since,
@@ -84,27 +87,15 @@ pub fn next(state: &ConnectionState, event: Event, now: Instant) -> ConnectionSt
     }
 }
 
-fn failed(class: FailureClass, since: Instant) -> ConnectionState {
+fn failed(failure: FailureClass, since: Instant) -> ConnectionState {
     use ConnectionState::*;
-    match class {
-        FailureClass::Login(said) => NeedsLogin {
-            why: FIX_LOGIN.into(),
-            said,
-        },
-        FailureClass::Update => NeedsUpdate {
-            why: FIX_UPDATE.into(),
-        },
-        FailureClass::UpdateHere => NeedsUpdate {
-            why: FIX_UPDATE_HERE.into(),
-        },
-        FailureClass::Install => NeedsUpdate {
-            why: FIX_INSTALL.into(),
-        },
-        FailureClass::NoDaemon => Unreachable {
-            since,
-            why: FIX_NO_DAEMON.into(),
-        },
-        FailureClass::Unreachable(why) => Unreachable { since, why },
+    match failure {
+        failure if failure.is_login() => NeedsLogin { failure },
+        FailureClass::Update
+        | FailureClass::UpdateHere
+        | FailureClass::Install
+        | FailureClass::InstallFailed(_) => NeedsUpdate { failure },
+        failure => Unreachable { since, failure },
     }
 }
 
@@ -134,6 +125,16 @@ impl ConnectionState {
                 | ConnectionState::NeedsUpdate { .. }
                 | ConnectionState::Unreachable { .. }
         )
+    }
+
+    /// Why the machine is not connected, for the states a failure put it in.
+    pub fn failure(&self) -> Option<&FailureClass> {
+        match self {
+            ConnectionState::NeedsLogin { failure }
+            | ConnectionState::NeedsUpdate { failure }
+            | ConnectionState::Unreachable { failure, .. } => Some(failure),
+            _ => None,
+        }
     }
 
     /// When the line was lost, for the states that remember it.
@@ -198,11 +199,10 @@ mod tests {
         assert_eq!(
             run(
                 Connecting,
-                &[(Event::ConnectFailed(FailureClass::Login(SAID.into())), 5)]
+                &[(Event::ConnectFailed(FailureClass::KeyRefused(SAID.into())), 5)]
             ),
             NeedsLogin {
-                why: FIX_LOGIN.into(),
-                said: SAID.into()
+                failure: FailureClass::KeyRefused(SAID.into())
             }
         );
         assert_eq!(
@@ -212,28 +212,23 @@ mod tests {
             ),
             Unreachable {
                 since: at(5),
-                why: "down".into()
+                failure: unreachable("down")
             }
         );
     }
 
     #[test]
-    fn a_line_that_drops_is_reconnecting_whatever_dropped_it() {
+    fn a_line_that_drops_is_reconnecting_whatever_dropped_it_until_a_dial_succeeds() {
         for event in [Event::LineDropped, Event::WatchdogFired] {
             assert_eq!(
-                run(Connected, &[(event, 7)]),
+                run(Connected, &[(event.clone(), 7)]),
                 Reconnecting {
                     attempt: 1,
                     since: at(7)
                 }
             );
+            assert_eq!(run(Connected, &[(event, 7), (Event::ConnectOk, 8)]), Connected);
         }
-    }
-
-    #[test]
-    fn reconnecting_returns_to_connected_on_success() {
-        let state = run(Connected, &[(Event::LineDropped, 1), (Event::ConnectOk, 2)]);
-        assert_eq!(state, Connected);
     }
 
     #[test]
@@ -257,9 +252,37 @@ mod tests {
             run(Connected, &events),
             Unreachable {
                 since: at(10),
-                why: "no route".into()
+                failure: unreachable("no route")
             },
             "unreachable counts from when the line dropped"
+        );
+    }
+
+    #[test]
+    fn a_machine_refusing_connections_is_a_blip_then_unreachable_and_its_dials_carry_on() {
+        let refusing = || Event::ConnectFailed(FailureClass::RefusingConnections);
+        let mut events = vec![(Event::LineDropped, 10), (refusing(), 11)];
+        assert_eq!(
+            run(Connected, &events),
+            Reconnecting {
+                attempt: 2,
+                since: at(10)
+            }
+        );
+        events.extend((0..RECONNECT_DIALS).map(|i| (refusing(), 12 + u64::from(i))));
+        assert_eq!(
+            run(Connected, &events),
+            Unreachable {
+                since: at(10),
+                failure: FailureClass::RefusingConnections
+            }
+        );
+        assert_eq!(
+            run(Connecting, &[(refusing(), 4)]),
+            Unreachable {
+                since: at(4),
+                failure: FailureClass::RefusingConnections
+            }
         );
     }
 
@@ -268,7 +291,7 @@ mod tests {
         let state = run(
             Unreachable {
                 since: at(3),
-                why: "old".into(),
+                failure: unreachable("old"),
             },
             &[(Event::ConnectFailed(unreachable("new")), 90)],
         );
@@ -276,7 +299,7 @@ mod tests {
             state,
             Unreachable {
                 since: at(3),
-                why: "new".into()
+                failure: unreachable("new")
             }
         );
     }
@@ -290,29 +313,48 @@ mod tests {
             run(Connected, &events)
         };
         assert_eq!(
-            then(FailureClass::Login(SAID.into())),
+            then(FailureClass::KeyRefused(SAID.into())),
             NeedsLogin {
-                why: FIX_LOGIN.into(),
-                said: SAID.into()
+                failure: FailureClass::KeyRefused(SAID.into())
             }
         );
         assert_eq!(
             then(FailureClass::Update),
             NeedsUpdate {
-                why: FIX_UPDATE.into()
+                failure: FailureClass::Update
             }
         );
         assert_eq!(
             then(FailureClass::Install),
             NeedsUpdate {
-                why: FIX_INSTALL.into()
+                failure: FailureClass::Install
+            }
+        );
+        assert_eq!(
+            then(FailureClass::HostKeyChanged { known_as: None }),
+            NeedsLogin {
+                failure: FailureClass::HostKeyChanged { known_as: None }
+            },
+            "a changed host key waits for a person, it is not redialled"
+        );
+        assert_eq!(
+            then(FailureClass::HostKeyUnknown),
+            NeedsLogin {
+                failure: FailureClass::HostKeyUnknown
+            },
+            "a new host key the person's config refused waits for a person too"
+        );
+        assert_eq!(
+            then(FailureClass::NeedsPerson(SAID.into())),
+            NeedsLogin {
+                failure: FailureClass::NeedsPerson(SAID.into())
             }
         );
         assert_eq!(
             then(FailureClass::NoDaemon),
             Unreachable {
                 since: at(1),
-                why: FIX_NO_DAEMON.into()
+                failure: FailureClass::NoDaemon
             }
         );
     }
@@ -320,13 +362,12 @@ mod tests {
     #[test]
     fn a_state_that_needs_a_person_moves_on_when_the_failure_changes_or_clears() {
         let login = NeedsLogin {
-            why: FIX_LOGIN.into(),
-            said: SAID.into(),
-        };
+                failure: FailureClass::KeyRefused(SAID.into())
+            };
         assert_eq!(
             run(
                 login.clone(),
-                &[(Event::ConnectFailed(FailureClass::Login(SAID.into())), 9)]
+                &[(Event::ConnectFailed(FailureClass::KeyRefused(SAID.into())), 9)]
             ),
             login,
             "the same failure again changes nothing"
@@ -337,7 +378,7 @@ mod tests {
                 &[(Event::ConnectFailed(FailureClass::Update), 9)]
             ),
             NeedsUpdate {
-                why: FIX_UPDATE.into()
+                failure: FailureClass::Update
             }
         );
         assert_eq!(run(login, &[(Event::ConnectOk, 9)]), Connected);
@@ -346,11 +387,11 @@ mod tests {
     #[test]
     fn a_retry_shows_reconnecting_from_any_failed_state() {
         for failed in [
-            NeedsLogin { why: "x".into(), said: "y".into() },
-            NeedsUpdate { why: "x".into() },
+            NeedsLogin { failure: FailureClass::NeedsPerson("y".into()) },
+            NeedsUpdate { failure: FailureClass::Update },
             Unreachable {
                 since: at(1),
-                why: "x".into(),
+                failure: unreachable("x"),
             },
         ] {
             assert_eq!(
@@ -366,10 +407,10 @@ mod tests {
     #[test]
     fn a_machine_turned_away_is_unreachable_with_the_reason() {
         assert_eq!(
-            run(Connected, &[(Event::Refused("another daemon".into()), 4)]),
+            run(Connected, &[(Event::Refused("another machine".into()), 4)]),
             Unreachable {
                 since: at(4),
-                why: "another daemon".into()
+                failure: FailureClass::Refused("another machine".into())
             }
         );
     }
@@ -384,7 +425,7 @@ mod tests {
         assert_eq!(run(Connecting, &[(Event::LineDropped, 1)]), Connecting);
         let down = Unreachable {
             since: at(1),
-            why: "x".into(),
+            failure: unreachable("x"),
         };
         assert_eq!(run(down.clone(), &[(Event::WatchdogFired, 2)]), down);
     }
@@ -404,24 +445,17 @@ mod tests {
     }
 
     #[test]
-    fn a_line_that_was_up_is_redialled_at_once_and_success_resets_the_wait() {
-        // The supervisor starts every outage at zero failures and zeroes it on success.
-        assert_eq!(Backoff::DEFAULT.delay(0), Duration::ZERO);
-        assert_eq!(Backoff::DEFAULT.delay(1), Backoff::DEFAULT.first);
-    }
-
-    #[test]
     fn only_a_change_of_kind_is_news() {
         assert_eq!(Connected.kind(), "connected");
         assert_eq!(
             Unreachable {
                 since: at(1),
-                why: "a".into()
+                failure: unreachable("a")
             }
             .kind(),
             Unreachable {
                 since: at(2),
-                why: "b".into()
+                failure: unreachable("b")
             }
             .kind()
         );

@@ -139,7 +139,7 @@ mod tests {
     use serde_json::json;
 
     #[test]
-    fn old_tool_history_without_a_label_still_decodes() {
+    fn old_history_without_a_label_or_timestamps_still_decodes() {
         let content: Content = serde_json::from_value(json!({
             "Tool": { "kind": "commandExecution", "output": "completed" }
         }))
@@ -156,6 +156,15 @@ mod tests {
                 duration_ms: None,
             }
         );
+
+        let entry: super::Entry = serde_json::from_value(json!({
+            "source": { "conversation": 1, "turn": "t", "item": "i" },
+            "content": { "Tool": { "kind": "commandExecution", "output": "", "label": "ls" } },
+            "state": "Completed"
+        }))
+        .unwrap();
+        assert_eq!(entry.started_at_ms, None);
+        assert_eq!(entry.completed_at_ms, None);
     }
 
     /// A reasoning item is a new variant: a peer built before it cannot decode one, which is why
@@ -179,19 +188,6 @@ mod tests {
         assert_eq!(serde_json::from_value::<Content>(sent).unwrap(), reasoning);
         let unsupported = json!({ "Unsupported": { "kind": "reasoning" } });
         assert!(serde_json::from_value::<OldContent>(unsupported).is_ok());
-    }
-
-    #[test]
-    fn old_entries_without_timestamps_still_decode() {
-        let entry: super::Entry = serde_json::from_value(json!({
-            "source": { "conversation": 1, "turn": "t", "item": "i" },
-            "content": { "Tool": { "kind": "commandExecution", "output": "", "label": "ls" } },
-            "state": "Completed"
-        }))
-        .unwrap();
-
-        assert_eq!(entry.started_at_ms, None);
-        assert_eq!(entry.completed_at_ms, None);
     }
 
     #[test]

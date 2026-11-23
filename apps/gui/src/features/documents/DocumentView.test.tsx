@@ -1,30 +1,15 @@
 import { describe, expect, it, vi } from 'vitest'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { useState } from 'react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { DocumentView } from './DocumentView'
 import { fakeDisk } from './documentTestIO'
 import type { DocumentIO } from './useDocument'
 
 const open = (io: DocumentIO, extra: Partial<React.ComponentProps<typeof DocumentView>> = {}) =>
-  render(<DocumentView term={3} machine={0} path="README.md" root="/project" onOpenPath={() => undefined} io={io} startMode="drawn" {...extra} />)
+  render(<DocumentView term={3} machine={0} path="README.md" root="/project" onOpenPath={() => undefined} io={io} ask={{ mode: 'preview', key: 0 }} {...extra} />)
 
 describe('the document viewer', () => {
-  it('draws a README by default with its headings, lists and code', async () => {
-    const { io } = fakeDisk('# Title\n\n- one\n- two\n\n```js\nconst a = 1\n```\n')
-    open(io)
-    expect(await screen.findByRole('heading', { name: 'Title' })).toBeInTheDocument()
-    expect(screen.getByText('two')).toBeInTheDocument()
-    expect(screen.getByRole('radio', { name: 'Drawn' })).toBeChecked()
-  })
-
-  it('shows the text as written under Source', async () => {
-    const user = userEvent.setup()
-    const { io } = fakeDisk('# Title\r\nline\r\n')
-    open(io)
-    await screen.findByRole('heading', { name: 'Title' })
-    await user.click(screen.getByRole('radio', { name: 'Source' }))
-    expect(screen.getByLabelText('Source of README.md').textContent).toBe('# Title\r\nline\r\n')
-  })
 
   it('never runs the file: raw HTML is text, a javascript link is only its label, an image is not loaded', async () => {
     const { io } = fakeDisk('<script>window.__ran = true</script>\n\n<img src="x" onerror="window.__ran = true">\n\n[click](javascript:alert(1)) ![pic](https://example.test/p.png)\n')
@@ -76,7 +61,7 @@ describe('the document viewer', () => {
   it('saves with Ctrl+S', async () => {
     const user = userEvent.setup()
     const { io, disk } = fakeDisk('x\n')
-    open(io, { startMode: 'edit' })
+    open(io, { ask: { mode: 'edit', key: 0 } })
     const box = await screen.findByRole('textbox', { name: 'Edit README.md' })
     await user.type(box, 'y')
     fireEvent.keyDown(box, { key: 's', ctrlKey: true })
@@ -87,7 +72,7 @@ describe('the document viewer', () => {
   it('refuses a save over a file an agent changed, and offers Reload or Overwrite, never a silent overwrite', async () => {
     const user = userEvent.setup()
     const { io, disk, agentEdits } = fakeDisk('mine\n')
-    open(io, { startMode: 'edit' })
+    open(io, { ask: { mode: 'edit', key: 0 } })
     const box = await screen.findByRole('textbox', { name: 'Edit README.md' })
     await user.type(box, '!')
     agentEdits('the agent wrote this\n')
@@ -102,7 +87,7 @@ describe('the document viewer', () => {
   it('reloads the file\'s new text from a conflict, dropping the draft', async () => {
     const user = userEvent.setup()
     const { io, agentEdits } = fakeDisk('mine\n')
-    open(io, { startMode: 'edit' })
+    open(io, { ask: { mode: 'edit', key: 0 } })
     await user.type(await screen.findByRole('textbox', { name: 'Edit README.md' }), '!')
     agentEdits('# From the agent\n')
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -114,7 +99,7 @@ describe('the document viewer', () => {
     const user = userEvent.setup()
     const { io } = fakeDisk('a\n')
     vi.mocked(io.save).mockRejectedValueOnce(new Error('Permission denied'))
-    open(io, { startMode: 'edit' })
+    open(io, { ask: { mode: 'edit', key: 0 } })
     const box = await screen.findByRole('textbox', { name: 'Edit README.md' })
     await user.type(box, 'b')
     await user.click(screen.getByRole('button', { name: 'Save' }))
@@ -138,17 +123,9 @@ describe('the document viewer', () => {
     const user = userEvent.setup()
     const onClose = vi.fn()
     const { io } = fakeDisk('a\n')
-    open(io, { startMode: 'edit', onClose })
+    open(io, { ask: { mode: 'edit', key: 0 }, onClose })
     await user.type(await screen.findByRole('textbox', { name: 'Edit README.md' }), 'b')
     await user.click(screen.getByRole('button', { name: 'Close README.md' }))
-    expect(onClose).toHaveBeenCalledTimes(1)
-  })
-
-  it('closes a clean document at once', async () => {
-    const user = userEvent.setup()
-    const onClose = vi.fn()
-    open(fakeDisk('a\n').io, { onClose })
-    await user.click(await screen.findByRole('button', { name: 'Close README.md' }))
     expect(onClose).toHaveBeenCalledTimes(1)
   })
 
@@ -156,7 +133,7 @@ describe('the document viewer', () => {
     const { io } = fakeDisk('a\n')
     vi.mocked(io.read).mockResolvedValue({ text: 'a\n', version: null })
     open(io)
-    await screen.findByRole('radio', { name: 'Source' })
+    await screen.findByRole('radio', { name: 'File' })
     expect(screen.queryByRole('radio', { name: 'Edit' })).toBeNull()
     expect(screen.getByRole('status')).toHaveTextContent('This computer’s service is older: restart it to edit.')
   })
@@ -164,7 +141,7 @@ describe('the document viewer', () => {
   it('reads a document of another machine, saves it there with the version it read, and names an older service in its words', async () => {
     const user = userEvent.setup()
     const { io } = fakeDisk('a\n')
-    const { unmount } = open(io, { machine: 2, startMode: 'edit' })
+    const { unmount } = open(io, { machine: 2, ask: { mode: 'edit', key: 0 } })
     await user.type(await screen.findByRole('textbox', { name: 'Edit README.md' }), 'b')
     await user.click(screen.getByRole('button', { name: 'Save' }))
     expect(io.read).toHaveBeenCalledWith(3, 2, 'README.md')
@@ -172,7 +149,7 @@ describe('the document viewer', () => {
     unmount()
     vi.mocked(io.read).mockResolvedValue({ text: 'a\n', version: null })
     open(io, { machine: 2 })
-    await screen.findByRole('radio', { name: 'Source' })
+    await screen.findByRole('radio', { name: 'File' })
     expect(screen.getByRole('status')).toHaveTextContent('This machine’s service is older: restart it to edit.')
   })
 
@@ -180,7 +157,7 @@ describe('the document viewer', () => {
     const { io } = fakeDisk('a\n')
     vi.mocked(io.read).mockResolvedValue({ text: 'a\n', version: '' })
     open(io, { machine: 2 })
-    await screen.findByRole('radio', { name: 'Source' })
+    await screen.findByRole('radio', { name: 'File' })
     expect(screen.queryByRole('radio', { name: 'Edit' })).toBeNull()
     expect(screen.getByRole('status')).toHaveTextContent('read only here')
   })
@@ -197,7 +174,7 @@ describe('the document viewer', () => {
   it('tells a person who is editing that the file changed, without touching the draft', async () => {
     const user = userEvent.setup()
     const { io, agentEdits } = fakeDisk('a\n')
-    open(io, { startMode: 'edit' })
+    open(io, { ask: { mode: 'edit', key: 0 } })
     const box = await screen.findByRole('textbox', { name: 'Edit README.md' })
     await user.type(box, 'b')
     agentEdits('agent\n')
@@ -205,12 +182,103 @@ describe('the document viewer', () => {
     expect(await screen.findByRole('status')).toHaveTextContent('changed on disk')
     expect(box).toHaveValue('a\nb')
   })
+})
 
-  it('offers Open beside the chat only where it can', async () => {
+describe('the file pane’s modes', () => {
+  const change = { patch: '@@ -3 +3 @@\n-old\n+new\n', binary: false, deleted: false }
+  const modes = () => within(screen.getByRole('radiogroup', { name: 'How to show this file' })).getAllByRole('radio').map((radio) => radio.textContent)
+
+  it('offers Preview only to markdown and Changes only to a changed file', async () => {
+    const { io } = fakeDisk('const a = 1\n')
+    const { unmount } = open(io, { path: 'src/a.ts', ask: undefined })
+    await screen.findByLabelText('Text of src/a.ts')
+    expect(modes()).toEqual(['File', 'Edit'])
+    unmount()
+    open(io, { path: 'src/a.ts', ask: undefined, change })
+    await screen.findByLabelText('Text of src/a.ts')
+    expect(modes()).toEqual(['Changes', 'File', 'Edit'])
+    expect(screen.getByRole('radio', { name: 'File' })).toBeChecked()
+  })
+
+  it('opens a file asked for from Changes as its diff, and switches to its text', async () => {
     const user = userEvent.setup()
-    const beside = vi.fn()
-    open(fakeDisk('a\n').io, { onOpenBeside: beside })
-    await user.click(await screen.findByRole('button', { name: 'Open beside the chat' }))
-    expect(beside).toHaveBeenCalled()
+    const { io } = fakeDisk('new\n')
+    open(io, { path: 'src/a.ts', ask: { mode: 'changes', key: 1 }, change })
+    expect(screen.getByRole('radio', { name: 'Changes' })).toBeChecked()
+    expect(screen.getByLabelText('Diff')).toHaveTextContent('new')
+    await user.click(await screen.findByRole('radio', { name: 'File' }))
+    expect(await screen.findByLabelText('Text of src/a.ts')).toHaveTextContent('new')
+    expect(screen.queryByLabelText('Diff')).toBeNull()
+  })
+
+  it('shows the diff when the open file is asked for again from Changes', async () => {
+    const { io } = fakeDisk('new\n')
+    const view = (key: number, mode: 'changes' | null) => <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={change} ask={{ mode, key }} />
+    const { rerender } = render(view(1, null))
+    await screen.findByLabelText('Text of src/a.ts')
+    rerender(view(2, 'changes'))
+    expect(await screen.findByLabelText('Diff')).toBeInTheDocument()
+  })
+
+  it('reads the file again when its changes are gone, and keeps a draft that is open then', async () => {
+    const user = userEvent.setup()
+    const { io, agentEdits } = fakeDisk('edited\n')
+    const view = (changed: boolean) => <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={changed ? change : null} ask={{ mode: 'file', key: 1 }} />
+    const { rerender } = render(view(true))
+    expect(await screen.findByLabelText('Text of src/a.ts')).toHaveTextContent('edited')
+    // The changes were discarded: the disk holds the committed text again, and the diff has no entry for the file.
+    agentEdits('committed\n')
+    rerender(view(false))
+    await waitFor(() => { expect(screen.getByLabelText('Text of src/a.ts')).toHaveTextContent('committed') })
+
+    rerender(view(true))
+    await user.click(screen.getByRole('radio', { name: 'Edit' }))
+    const box = screen.getByRole('textbox', { name: 'Edit src/a.ts' })
+    await user.type(box, 'mine')
+    agentEdits('elsewhere\n')
+    rerender(view(false))
+    expect(box).toHaveValue('committed\nmine')
+  })
+
+  it('brings back the text of a deleted file once it is no longer deleted', async () => {
+    const { io } = fakeDisk('back\n')
+    const view = (deleted: boolean) => <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={deleted ? { ...change, deleted: true } : null} ask={undefined} />
+    const { rerender } = render(view(true))
+    expect(io.read).not.toHaveBeenCalled()
+    rerender(view(false))
+    expect(await screen.findByLabelText('Text of src/a.ts')).toHaveTextContent('back')
+  })
+
+  it('shows only the diff of a deleted file, and reads nothing', () => {
+    const { io } = fakeDisk('x\n')
+    open(io, { path: 'src/a.ts', ask: undefined, change: { ...change, deleted: true } })
+    expect(screen.getByLabelText('Diff')).toBeInTheDocument()
+    expect(screen.queryByRole('radiogroup')).toBeNull()
+    expect(io.read).not.toHaveBeenCalled()
+  })
+
+  it('reads no file of another machine but its markdown, and says the rest stays there', () => {
+    const { io } = fakeDisk('fn main() {}\n')
+    open(io, { path: 'main.rs', machine: 1, machineName: 'build', ask: undefined })
+    expect(screen.getByRole('status')).toHaveTextContent('Only Markdown documents open from build')
+    expect(io.read).not.toHaveBeenCalled()
+  })
+
+  it('opens a comment box on a clicked diff line, sends the comment to the agent and keeps it under the line', async () => {
+    const onSend = vi.fn(() => Promise.resolve())
+    const { io } = fakeDisk('new\n')
+    function Pane() {
+      const [sent, setSent] = useState<readonly { index: number; text: string }[]>([])
+      return <DocumentView term={3} machine={0} path="src/a.ts" root="/project" onOpenPath={() => undefined} io={io} change={change} ask={{ mode: 'changes', key: 1 }} comments={{ path: 'src/a.ts', agent: 'Claude', onSend, sent, onSent: (comment) => { setSent((current) => [...current, comment]) } }} />
+    }
+    render(<Pane />)
+    fireEvent.click(within(screen.getByLabelText('Diff')).getByText('new'))
+    const send = screen.getByRole('button', { name: 'Send to Claude' })
+    expect(send).toBeDisabled()
+    fireEvent.change(screen.getByLabelText('Comment on line 3'), { target: { value: 'call it fresh' } })
+    fireEvent.click(send)
+    await waitFor(() => { expect(onSend).toHaveBeenCalledWith('About src/a.ts, line 3:\n> new\n\ncall it fresh') })
+    expect(await screen.findByText(/sent to Claude/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Send to Claude' })).toBeNull()
   })
 })

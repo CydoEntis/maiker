@@ -1,0 +1,46 @@
+/* The agent, model and reasoning picker (handoff 5, screenshot 31): a float anchored to the chat box, in three columns:
+   the agent rail, the model list under its search field, and the reasoning levels. The float material (ground,
+   hairline, shadow) is `.mx-pop`'s; a picked row is lifted with an accent edge, never a tick. */
+.mx-pop.mx-mp { width: min(580px, calc(100vw - 32px)); height: min(300px, var(--radix-popover-content-available-height, 300px)); display: grid; grid-template-columns: 46px minmax(0, 1fr) 190px; padding: 0; border-radius: var(--r-panel); overflow: hidden; outline: none; color: var(--fg); }
+.mx-mp-rail { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 0; border-right: 1px solid var(--float-line); }
+.mx-mp-agent { position: relative; width: 32px; height: 32px; border-radius: var(--r-control); display: flex; align-items: center; justify-content: center; opacity: .55; outline: none; }
+.mx-mp-agent:hover, .mx-mp-agent:focus-visible { opacity: 1; background: var(--float-hover); }
+.mx-mp-agent[aria-selected="true"] { opacity: 1; background: var(--icon-button-fill); }
+/* The agent whose models show has a bar at the rail's edge; the agent this session runs has the dot. */
+.mx-mp-agent[aria-selected="true"]::after { content: ''; position: absolute; left: -7px; top: 7px; bottom: 7px; width: 2px; border-radius: var(--r-badge); background: var(--fg); }
+.mx-mp-agent[aria-current="true"]::before { content: ''; position: absolute; right: 3px; bottom: 3px; width: 5px; height: 5px; border-radius: 50%; background: var(--ok); }
+.mx-mp .mx-app-icon { width: 16px; height: 16px; background: none; box-shadow: none; border-radius: 0; }
+.mx-mp .mx-app-icon svg { width: 100%; height: 100%; }
+.mx-mp-mid { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 8px; }
+.mx-mp-search { flex: none; display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 8px; margin-bottom: 4px; border-bottom: 1px solid var(--float-line); color: var(--dim); }
+.mx-mp-search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; box-shadow: none; font: 400 13.5px var(--ui); color: var(--fg); }
+.mx-mp-search input::placeholder { color: var(--dim); }
+/* The field is a row of the float, not a boxed input: its hairline is the only edge, and it stays so with the typing in it. */
+.mx-app .mx-mp-search input:focus-visible { border: 0; box-shadow: none; }
+.mx-mp-note { flex: none; margin: 2px 4px 6px; padding: 7px 9px; border-radius: var(--r-control); font-size: 11.5px; line-height: 1.45; color: var(--muted); background: var(--float-hover); }
+.mx-mp :is(.mx-mp-list, .mx-mp-levels) { display: flex; flex-direction: column; gap: 1px; }
+.mx-mp-list { flex: 0 1 auto; min-height: 0; overflow-y: auto; scrollbar-width: thin; scrollbar-color: var(--line2) transparent; }
+.mx-mp-row { flex: none; display: flex; align-items: center; gap: 10px; height: 34px; padding: 0 8px; border-radius: var(--r-control); font-size: 13.5px; color: var(--fg2); text-align: left; outline: none; }
+.mx-mp-level { flex: none; display: flex; align-items: center; justify-content: space-between; height: 32px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; color: var(--fg2); text-align: left; outline: none; }
+/* The row the pointer is on, the row the arrows are on (`data-lit`, driven from the search field) and a focused row look the same. */
+/* The picked row is left out: it keeps the shared selection fill under the pointer, so hovering it never reads as unpicking it. */
+:is(.mx-mp-row, .mx-mp-level):not(:disabled, [aria-checked="true"]):is(:hover, :focus-visible, [data-lit]) { background: var(--float-hover); color: var(--fg); }
+.mx-pop.mx-mp :is(.mx-mp-row, .mx-mp-level)[aria-checked="true"] { color: var(--fg); background: var(--mp-picked); box-shadow: inset 2px 0 0 var(--accent); }
+/* Three grounds, so the columns read apart: the agent rail and the levels sink below the float, the model list keeps the
+   float's own, and a picked row lifts above whichever column it is in. Mixed from the float, so every theme keeps the steps. */
+.mx-pop.mx-mp { --mp-sunk: color-mix(in srgb, var(--float-bg) 78%, #000); --mp-picked: color-mix(in srgb, var(--float-bg) 86%, rgb(var(--ink))); }
+.mx-mp-rail, .mx-mp-side { background: var(--mp-sunk); }
+.mx-mp-side .mx-mp-level:not(:disabled, [aria-checked="true"]):is(:hover, :focus-visible, [data-lit]) { background: color-mix(in srgb, var(--mp-sunk) 88%, rgb(var(--ink))); }
+:is(.mx-mp-row, .mx-mp-level):disabled { cursor: default; }
+.mx-mp-level:disabled:not([aria-checked="true"]) { opacity: .45; }
+.mx-mp-row-mark { flex: none; display: flex; width: 16px; justify-content: center; }
+.mx-mp-row-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(.mx-mp-row, .mx-mp-level) small { flex: none; font-size: 11px; font-weight: 400; color: var(--dim); }
+.mx-mp-more { flex: none; align-self: flex-start; margin: 4px 8px; font-size: 12.5px; color: var(--dim); outline: none; }
+.mx-mp-more:hover, .mx-mp-more:focus-visible { color: var(--fg); }
+.mx-mp-side { display: flex; flex-direction: column; gap: 1px; min-width: 0; min-height: 0; overflow-y: auto; padding: 8px; border-left: 1px solid var(--float-line); }
+.mx-mp-head { flex: none; margin: 0 0 4px; display: flex; align-items: center; justify-content: space-between; gap: 8px; height: 34px; padding: 0 8px; border-bottom: 1px solid var(--float-line); font-size: 12.5px; color: var(--muted); }
+.mx-mp-head-model { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--dim); }
+.mx-mp-none { margin: 6px 8px; font-size: 12.5px; line-height: 1.5; color: var(--dim); }
+/* A narrow window drops the rail's width from the list, never the reasoning column's words. */
+@media (max-width: 520px) { .mx-pop.mx-mp { grid-template-columns: 46px minmax(0, 1fr) 132px; } }

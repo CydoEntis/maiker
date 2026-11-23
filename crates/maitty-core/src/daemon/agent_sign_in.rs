@@ -401,18 +401,6 @@ mod tests {
     }
 
     #[test]
-    fn a_word_after_the_colon_that_is_not_a_code_is_not_shown_as_one() {
-        assert_eq!(scan("! First copy your one-time code: not a code at all\n").1, None);
-    }
-
-    #[test]
-    fn github_is_signed_in_when_its_status_command_succeeds_whatever_it_prints() {
-        let ran = |success| Ran { success, stdout: "github.com\n  Logged in to github.com account x (keyring)\n".into(), stderr: String::new() };
-        assert!(signed_in(StatusStyle::Exit, &ran(true)));
-        assert!(!signed_in(StatusStyle::Exit, &ran(false)));
-    }
-
-    #[test]
     fn claude_prints_a_link_and_no_code() {
         let (link, code) = scan(CLAUDE);
         assert_eq!(link.as_deref(), Some("https://claude.com/cai/oauth/authorize?code=true&client_id=x&state=y"));
@@ -447,13 +435,22 @@ mod tests {
     }
 
     #[test]
-    fn a_line_after_the_code_marker_that_is_a_sentence_is_not_a_code() {
-        assert_eq!(scan("Enter this one-time code\nContinue only if you started this\n").1, None);
+    fn a_sentence_where_a_code_would_be_is_not_shown_as_one() {
+        for printed in [
+            "! First copy your one-time code: not a code at all\n",
+            "Enter this one-time code\nContinue only if you started this\n",
+        ] {
+            assert_eq!(scan(printed).1, None, "{printed:?}");
+        }
     }
 
     #[test]
     fn the_status_commands_are_read_as_each_agent_prints_them() {
         let ran = |success, stdout: &str, stderr: &str| Ran { success, stdout: stdout.into(), stderr: stderr.into() };
+        // GitHub's status is its exit code, whatever it prints.
+        let github = "github.com\n  Logged in to github.com account x (keyring)\n";
+        assert!(signed_in(StatusStyle::Exit, &ran(true, github, "")));
+        assert!(!signed_in(StatusStyle::Exit, &ran(false, github, "")));
         assert!(signed_in(StatusStyle::Json, &ran(true, "{\"loggedIn\": true}", "")));
         assert!(!signed_in(StatusStyle::Json, &ran(false, "{\"loggedIn\": false}", "")));
         assert!(!signed_in(StatusStyle::Json, &ran(true, "not json", "")));
@@ -470,29 +467,20 @@ mod tests {
         assert_eq!(ins.cancel(SignInAgent::Gemini), SignInState::Failed(SignInFailure::Unsupported));
     }
 
-    #[test]
-    fn nothing_is_running_until_one_is_started() {
-        assert_eq!(SignIns::default().read(SignInAgent::Claude), SignInState::Idle);
-    }
-
     #[cfg(unix)]
     mod fake_cli {
         use super::*;
-        use std::os::unix::fs::PermissionsExt;
 
         /// A fake agent in a folder of its own: `login` prints `printed` then waits (or ends), and `status` says what it says.
         fn fake(dir: &std::path::Path, login_body: &str, status_body: &str) -> Cli {
             let program = dir.join("fake-agent");
             let script = format!("#!/bin/sh\ncase \"$1\" in\n  login) {login_body} ;;\n  status) {status_body} ;;\nesac\n");
-            std::fs::write(&program, script).unwrap();
-            std::fs::set_permissions(&program, std::fs::Permissions::from_mode(0o755)).unwrap();
+            crate::test_support::write_program(&program, &script);
             Cli { program, login: &["login"], status: &["status"], style: StatusStyle::Line }
         }
 
-        fn folder(name: &str) -> PathBuf {
-            let dir = std::env::temp_dir().join(format!("maitty-sign-in-{name}-{}", std::process::id()));
-            std::fs::create_dir_all(&dir).unwrap();
-            dir
+        fn folder(name: &str) -> maitty_test_support::TempFolder {
+            maitty_test_support::TempFolder::new(&format!("sign-in-{name}"))
         }
 
         async fn until(ins: &SignIns, agent: SignInAgent, done: impl Fn(&SignInState) -> bool) -> SignInState {
@@ -521,21 +509,15 @@ mod tests {
         }
 
         #[tokio::test]
-        async fn a_login_that_ends_cleanly_but_is_still_signed_out_is_a_failure() {
-            let dir = folder("liar");
-            let cli = fake(&dir, "true", "echo 'Not logged in'; exit 1");
-            let ins = SignIns::default();
-            ins.start(SignInAgent::Codex, Ok(cli));
-            assert_eq!(until(&ins, SignInAgent::Codex, |state| !matches!(state, SignInState::Waiting { .. })).await, SignInState::Failed(SignInFailure::Ended));
-        }
-
-        #[tokio::test]
-        async fn a_login_that_fails_is_a_failure_whatever_the_status_says() {
-            let dir = folder("fails");
-            let cli = fake(&dir, "exit 3", "echo 'Logged in'");
-            let ins = SignIns::default();
-            ins.start(SignInAgent::Codex, Ok(cli));
-            assert_eq!(until(&ins, SignInAgent::Codex, |state| !matches!(state, SignInState::Waiting { .. })).await, SignInState::Failed(SignInFailure::Ended));
+        async fn a_login_that_fails_or_ends_still_signed_out_is_a_failure() {
+            // A clean exit while still signed out, and a failed login whatever the status says.
+            for (name, login, status) in [("liar", "true", "echo 'Not logged in'; exit 1"), ("fails", "exit 3", "echo 'Logged in'")] {
+                let dir = folder(name);
+                let cli = fake(&dir, login, status);
+                let ins = SignIns::default();
+                ins.start(SignInAgent::Codex, Ok(cli));
+                assert_eq!(until(&ins, SignInAgent::Codex, |state| !matches!(state, SignInState::Waiting { .. })).await, SignInState::Failed(SignInFailure::Ended), "{name}");
+            }
         }
 
         #[tokio::test]

@@ -95,28 +95,27 @@ fn the_apps_name_is_never_written_out() {
     );
 }
 
-/// The installers run on their own (`curl … | sh`), so each names the app once; it must be
-/// the command Cargo.toml builds.
+/// The installers run on their own (`curl … | sh`), so each names the app and the environment
+/// prefix (and the one before it) once; each must be what `Cargo.toml` sets (ADR 0012).
 #[test]
-fn the_installers_install_the_command_cargo_toml_builds() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    let named = |file: &str, prefix: &str| {
-        let text =
-            std::fs::read_to_string(root.join("../../").join(file)).expect("installer readable");
-        text.lines()
+fn the_installers_name_what_cargo_toml_sets() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let old = env!("APP_ENV_PREVIOUS").split(',').next().unwrap_or_default();
+    for (file, prefix, want) in [
+        ("install.sh", "APP=", env!("APP_COMMAND")),
+        ("install.ps1", "$app = ", env!("APP_COMMAND")),
+        ("install.sh", "ENV_PREFIX=", env!("APP_ENV")),
+        ("install.sh", "OLD_ENV_PREFIX=", old),
+        ("install.ps1", "$envPrefix = ", env!("APP_ENV")),
+        ("install.ps1", "$oldEnvPrefix = ", old),
+    ] {
+        let text = std::fs::read_to_string(root.join(file)).expect("installer readable");
+        let named = text
+            .lines()
             .find_map(|l| l.strip_prefix(prefix))
-            .map(|v| v.trim().trim_matches(['"', '\'']).to_string())
-    };
-    assert_eq!(
-        named("install.sh", "APP=").as_deref(),
-        Some(env!("APP_COMMAND")),
-        "install.sh's APP"
-    );
-    assert_eq!(
-        named("install.ps1", "$app = ").as_deref(),
-        Some(env!("APP_COMMAND")),
-        "install.ps1's $app"
-    );
+            .map(|v| v.trim().trim_matches(['"', '\'']).to_string());
+        assert_eq!(named.as_deref(), Some(want), "{file}'s {prefix}");
+    }
 }
 
 #[test]
@@ -193,25 +192,4 @@ fn the_daemon_name_and_the_env_prefixes_are_never_written_out() {
         "read the daemon's name and the env prefixes from maitty_shared::brand, do not write them:\n{}",
         hits.join("\n")
     );
-}
-
-/// The installers run on their own, so each names the environment prefix (and the one before it)
-/// once; both must be what `Cargo.toml` sets (ADR 0012).
-#[test]
-fn the_installers_read_the_environment_prefix_cargo_toml_sets() {
-    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let old = env!("APP_ENV_PREVIOUS").split(',').next().unwrap_or_default();
-    for (file, current, previous) in [
-        ("install.sh", "ENV_PREFIX=", "OLD_ENV_PREFIX="),
-        ("install.ps1", "$envPrefix = ", "$oldEnvPrefix = "),
-    ] {
-        let text = std::fs::read_to_string(root.join(file)).expect("installer readable");
-        let named = |prefix: &str| {
-            text.lines()
-                .find_map(|l| l.strip_prefix(prefix))
-                .map(|v| v.trim().trim_matches(['"', '\'']).to_string())
-        };
-        assert_eq!(named(current).as_deref(), Some(env!("APP_ENV")), "{file}");
-        assert_eq!(named(previous).as_deref(), Some(old), "{file}");
-    }
 }

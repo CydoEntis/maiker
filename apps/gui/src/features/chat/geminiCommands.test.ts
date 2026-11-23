@@ -1,11 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { GEMINI_COMMANDS, GEMINI_COMMANDS_PINNED_FOR, geminiRouteOf, withGeminiRoutes } from './geminiCommands'
+import { GEMINI_COMMANDS, geminiRouteOf, withGeminiRoutes } from './geminiCommands'
 import { matchCommands, namedCommand } from './slashCommands'
 
 describe('GEMINI_COMMANDS', () => {
-  it('names the Gemini CLI release it was written from as x.y.z', () => {
-    expect(GEMINI_COMMANDS_PINNED_FOR).toMatch(/^\d+\.\d+\.\d+$/)
-  })
 
   it('names each command once, with a description, and runs every one in the terminal', () => {
     const names = GEMINI_COMMANDS.flatMap((command) => [command.name, ...command.aliases])

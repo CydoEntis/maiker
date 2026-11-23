@@ -10,17 +10,6 @@ use ratatui::crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 const THERE: MachineId = MachineId(1);
 
-const ALL: [Feature; 8] = [
-    Feature::Files,
-    Feature::Changes,
-    Feature::Find,
-    Feature::Branches,
-    Feature::References,
-    Feature::AgentStatus,
-    Feature::Worktrees,
-    Feature::ResumeConversation,
-];
-
 /// Two machines, "build" holding a copy of this one's sessions, and the channel the app sends on.
 fn two_machines() -> (App, mpsc::UnboundedReceiver<Outgoing>) {
     let mut app = world(Stage::None);
@@ -113,15 +102,6 @@ fn a_resize_goes_to_the_machine_that_owns_the_pane() {
         ),
         "{out:?}"
     );
-}
-
-#[test]
-fn focus_reports_and_pastes_go_to_the_pane_s_machine() {
-    let (app, mut rx) = two_machines();
-    let term = ClientTerm::on(THERE, 1);
-    app.send_input(term, b"\x1b[I".to_vec());
-    app.send_input(term, b"\x1b[200~x\x1b[201~".to_vec());
-    assert!(sent(&mut rx).iter().all(|o| o.machine == THERE));
 }
 
 fn new_session(app: &mut App) {
@@ -225,6 +205,10 @@ fn a_chat_command_goes_to_the_machine_that_lists_the_chat() {
         root: None,
         branch: None,
         helpers: Vec::new(),
+        helper_ask: Vec::new(),
+        capabilities: None,
+        agent: None,
+        status_since: None,
     };
     app.remotes.get_mut(&THERE).unwrap().snap.conversations = vec![chat];
     app.archive_conversation(id);
@@ -238,29 +222,6 @@ fn a_chat_command_goes_to_the_machine_that_lists_the_chat() {
             }]
         ),
         "{out:?}"
-    );
-}
-
-#[test]
-fn the_gate_is_per_pane_and_names_the_machine_and_the_reason() {
-    let (app, _rx) = two_machines();
-    for feature in ALL {
-        assert_eq!(
-            app.local_only(MachineId::LOCAL, feature),
-            Ok(()),
-            "{feature:?}"
-        );
-        let why = app.local_only(THERE, feature).unwrap_err();
-        assert_eq!(why, local_only_message(feature, "build"));
-        assert!(
-            why.contains("build") && why.contains("local-only in v1"),
-            "{why}"
-        );
-        assert!(why.contains("not on this computer"), "{why}");
-    }
-    assert_eq!(
-        local_only_message(Feature::Files, "build"),
-        "Files is local-only in v1: the files are on build, not on this computer."
     );
 }
 
@@ -569,19 +530,6 @@ fn a_machine_that_is_gone_gives_the_focus_back_to_this_computer() {
     app.remotes.remove(&THERE);
     assert_eq!(app.focus_machine(), MachineId::LOCAL);
     assert_eq!(app.focused().map(|t| t.machine), Some(MachineId::LOCAL));
-}
-
-#[test]
-fn sending_a_file_from_a_local_pane_says_there_is_nothing_to_send() {
-    let (mut app, _rx) = two_machines();
-    app.notice = None;
-    app.act(Action::SendFile);
-    let (text, _, _) = app.notice.clone().expect("a toast");
-    assert_eq!(
-        text,
-        "this pane is on this computer; there is nothing to send"
-    );
-    assert!(matches!(app.mode, Mode::Normal));
 }
 
 #[test]

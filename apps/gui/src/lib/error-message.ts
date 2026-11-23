@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { APP_NAME } from '@/brand'
 
 /** The failure's own text, or `fallback` when it has none. Prefer `explainError`, which also says what was being done. */
@@ -33,7 +34,11 @@ function looksRaw(text: string): boolean {
   return /os error \d+/i.test(text) || /^[a-z]/.test(text) || /^(fatal|error):/i.test(text)
 }
 
+/** What a failed check of an answer's shape says instead of the checker's own list of fields, which reads as code. */
+export const UNREADABLE_ANSWER = `The answer came back in a form this version cannot read. Restart the ${APP_NAME} service; if it keeps happening, update ${APP_NAME}.`
+
 function rawText(error: unknown): string {
+  if (error instanceof z.ZodError) return UNREADABLE_ANSWER
   const text = error instanceof Error ? error.message : typeof error === 'string' ? error : ''
   return text.trim()
 }

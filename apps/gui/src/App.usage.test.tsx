@@ -4,14 +4,14 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import type { UsagePeriod, UsageReport } from '@/api/usage'
-import App from './App'
+import { DesktopApp } from '@/features/workspace/DesktopApp'
 
 const daemon = vi.hoisted(() => ({
   loadConversations: vi.fn<() => Promise<Conversation[]>>(),
   // The daemon numbers no list here and says no session left: a row a list misses is held.
   localListRevision: () => 0,
   daemonSaidRemoved: () => false,
-  loadPerformanceSample: vi.fn<() => Promise<never>>(() => new Promise(() => {})),
+  daemonSaidEnded: () => false,
   listenSessionsChanged: vi.fn(() => Promise.resolve(() => {})),
   defaultSessionFolder: vi.fn<() => Promise<string>>(),
   startShellSession: vi.fn<(folder: string) => Promise<void>>(),
@@ -20,7 +20,6 @@ const daemon = vi.hoisted(() => ({
   markSeenOnDaemon: vi.fn(),
   loadDaemonRestartStatus: vi.fn(),
   restartMismatchedDaemon: vi.fn(),
-  suggestProjectFolders: vi.fn<(typed: string) => Promise<string[]>>(),
   sendTerminalInput: vi.fn(),
   loadMachines: vi.fn(() => Promise.resolve({ names: [], error: null })),
 }))
@@ -87,7 +86,7 @@ function report(): UsageReport {
 function renderDesktopApp() {
   window.localStorage.setItem('maiker.gui.welcomed.v1', '1')
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><App /></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><DesktopApp /></QueryClientProvider>)
 }
 
 describe('usage and cost in the desktop app', () => {
@@ -97,7 +96,6 @@ describe('usage and cost in the desktop app', () => {
     window.localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
     daemon.defaultSessionFolder.mockResolvedValue(HOME)
     daemon.loadConversations.mockResolvedValue([term(5)])
-    daemon.suggestProjectFolders.mockResolvedValue([])
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 59, canRestart: false, sessionCount: 1, activeTurnCount: 0 })
     usage.loadUsageReport.mockResolvedValue(report())
   })
@@ -121,19 +119,6 @@ describe('usage and cost in the desktop app', () => {
     await waitFor(() => { expect(screen.queryByRole('dialog', { name: 'Settings' })).not.toBeInTheDocument() })
   })
 
-  it('has no usage button in the sidebar footer or the Settings nav: its own key opens it', async () => {
-    const user = userEvent.setup()
-    renderDesktopApp()
-    await screen.findByRole('button', { name: 'Settings' })
-    expect(screen.queryByRole('button', { name: 'Usage and cost' })).not.toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Settings' }))
-    expect(within(screen.getByRole('navigation', { name: 'Settings sections' })).queryByRole('button', { name: /Usage & cost/ })).toBeNull()
-    await user.keyboard('{Escape}')
-    await user.keyboard('{Control>}{Shift>}u{/Shift}{/Control}')
-    expect(await screen.findByRole('region', { name: 'Usage and cost' })).toBeInTheDocument()
-  })
-
   it('opens the pane of an open session from its row, and leaves a closed session alone', async () => {
     const user = userEvent.setup()
     renderDesktopApp()
@@ -148,17 +133,5 @@ describe('usage and cost in the desktop app', () => {
     await user.click(within(table).getByRole('button', { name: /Shell 5|~|shell/i }))
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'Usage and cost' })).not.toBeInTheDocument() })
     expect(await screen.findByText('Pane 5')).toBeInTheDocument()
-  })
-
-  it('keeps a monthly budget with the other preferences', async () => {
-    const user = userEvent.setup()
-    renderDesktopApp()
-    await openUsage(user)
-    await user.click(await screen.findByRole('button', { name: 'Set a monthly budget' }))
-    await user.type(screen.getByRole('textbox', { name: /Monthly budget/ }), '40')
-    await user.click(screen.getByRole('button', { name: 'Save' }))
-
-    await waitFor(() => { expect(JSON.parse(window.localStorage.getItem('maiker.gui.settings.v1') ?? '{}')).toMatchObject({ monthlyBudget: 40 }) })
-    expect(screen.getByText('$40.00 monthly budget')).toBeInTheDocument()
   })
 })

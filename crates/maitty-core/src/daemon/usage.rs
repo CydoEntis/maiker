@@ -964,37 +964,6 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// Against the Codex sessions on this machine: `cargo test codex_live -- --ignored --nocapture`.
-    #[test]
-    #[ignore]
-    fn codex_live() {
-        let all = codex_recent_sessions();
-        let roots: Vec<&CodexSession> = all.iter().filter(|s| s.parent.is_none()).collect();
-        println!(
-            "{} recent sessions, {} of them yours, {} subagents",
-            all.len(),
-            roots.len(),
-            all.len() - roots.len()
-        );
-        for r in roots.iter().take(5) {
-            let helpers = codex_helpers(r, &read_tail(&r.file, CODEX_TAIL), &all);
-            let under = all
-                .iter()
-                .filter(|s| s.parent.as_deref() == Some(r.id.as_str()))
-                .count();
-            println!(
-                "  {}: {} subagents ever, running now: {:?}",
-                r.cwd
-                    .as_ref()
-                    .and_then(|c| c.file_name())
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_default(),
-                under,
-                helpers.iter().map(|(_, n)| n.as_str()).collect::<Vec<_>>()
-            );
-        }
-    }
-
     #[test]
     fn codex_numbers_come_from_its_session_file() {
         let tail = r#"{"type":"event_msg","payload":{"type":"agent_message"}}

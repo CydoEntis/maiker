@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { CircleAlert, TerminalSquare } from 'lucide-react'
 import { SkeletonLines } from '@/components/ui/skeleton'
 import { toast } from '@/lib/toast'
@@ -109,8 +109,6 @@ export type TerminalLook = {
   lineHeight?: number
   /** xterm's own cursor blink, for the focused pane only. Off unless asked for. */
   cursorBlink?: boolean
-  /** Draw with the DOM renderer even where WebGL 2 exists (Settings › Performance). Read when the view opens. */
-  plainDrawing?: boolean
   screenReader?: boolean
   theme?: ITheme
   /** What a program's bright black background is drawn as; absent, it is the palette's bright black. */
@@ -353,7 +351,7 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
         await terminalFontReady(fontStackFor(lookRef.current.fontFamily ?? ''), fontSizeRef.current)
         if (!stillMounted()) return
 
-        const wantsWebgl = hasWebgl2() && !(lookRef.current.plainDrawing ?? false)
+        const wantsWebgl = hasWebgl2()
         emulator = new TerminalEmulator({
           cursorBlink: (lookRef.current.cursorBlink ?? false) && focusedRef.current && isWindowActive(),
           cursorStyle: lookRef.current.cursorStyle ?? 'block',
@@ -738,9 +736,9 @@ function ConnectedTerminalView({ conversation, fontSize, look, label, inputDisab
   return <div className="terminal-view">
     {connecting && slowAttach && !loadError && <SkeletonLines className="terminal-attaching" label={`Opening ${label}`} lines={ATTACH_SKELETON_LINES} />}
     {loadError && <div className="terminal-input-error" role="status"><p>Could not load the terminal. Check the Maiker service connection and reopen this session.</p></div>}
-    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} />
-    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the Maiker service could not be reached.</p><Button variant="soft" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
-    {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="soft" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
+    <div className={`terminal-screen${connecting && !loadError ? ' is-attaching' : ''}`} ref={terminalHost} role="region" aria-label={label} style={{ '--terminal-ground': (look.theme ?? DEFAULT_THEME).background } as CSSProperties} />
+    {inputFailed && <div className="terminal-input-error" role="status"><p>Input stopped because the Maiker service could not be reached.</p><Button variant="ghost" size="sm" onClick={() => { inputFailedRef.current = false; setInputFailed(false) }}>Try typing again</Button></div>}
+    {resizeError && <div className="terminal-input-error" role="status"><p>{resizeError}</p><Button variant="ghost" size="sm" onClick={() => { refitTerminal.current?.() }}>Retry resize</Button></div>}
   </div>
 }
 

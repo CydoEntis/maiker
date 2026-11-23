@@ -15,20 +15,19 @@
 //! The stream attaches without replays: a pane's replay is asked for over the stream when a view
 //! opens on it (`terminal_history`), so panes nobody looks at cost nothing to carry.
 
-use crate::hub::{Hub, HubHandle, LocalDial, MACHINE_STATE_EVENT, MachineState, Update, describe};
+use crate::hub::{Hub, HubHandle, LocalDial, MACHINE_STATE_EVENT, MachineState, StateWords, Update, describe};
 use crate::routing::{self, machine_of};
 use crate::streams::{Out, Streams};
-use maitty_desktop_client::{FleetCommand, PaneCommand};
+use maitty_desktop_client::PaneCommand;
 use maitty_machines::link::Timing;
 use maitty_machines::machine_config::Grant;
 use maitty_machines::machine_ids::MachineIds;
 use maitty_machines::{MachineDef, MachineId, Outgoing};
 use maitty_shared::agent_commands::AgentCommand;
-use maitty_shared::repositories::RepositoryIndex;
 use maitty_shared::conversation::Provider;
 use maitty_shared::extensions::{ExtError, ExtReply, ExtRequest};
-use maitty_shared::protocol::{ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId};
-use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide, WindowStyle};
+use maitty_shared::protocol::{COMPATIBLE_SINCE, ClientMsg, Command, FolderListing, GitHubAnswer, GitHubRepoList, GitHubReport, Query, SignInAgent, SignInFailure, SignInRequest, SignInState, Snapshot, Status, TermId};
+use maitty_shared::settings_view::{Appearance, NewSessionView, SettingKey, SettingValue, SharedSettings, SidebarSide};
 use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -62,8 +61,6 @@ const REPOSITORY_CLONED_EVENT: &str = "repository-cloned";
 const CLONE_PROGRESS_EVENT: &str = "clone-progress";
 /// What a folder's branches request found or did on a machine: `{machine, tag, state, why, listing, branch}`.
 const FOLDER_GIT_EVENT: &str = "folder-git";
-/// What a machine says it is: `{machine, tag, answer}`, `answer` its `MachineFacts`.
-const MACHINE_FACTS_EVENT: &str = "machine-facts";
 /// Who a machine says is signed in to GitHub there: `{machine, tag, report}`.
 const GITHUB_ACCOUNTS_EVENT: &str = "github-accounts";
 /// The repositories a machine's GitHub account can clone: `{machine, tag, state, why, listed}`.
@@ -74,8 +71,6 @@ const GITHUB_OWNERS_EVENT: &str = "github-owners";
 const MOST_GITHUB_WORD_BYTES: usize = 256;
 /// The slash commands and skills an agent takes on a machine: `{machine, tag, answer}`, `answer` `{Ok}` or `{Err}`.
 const AGENT_COMMANDS_EVENT: &str = "agent-commands";
-/// The git repositories a machine's daemon found: `{machine, tag, answer}`, `answer` a `RepositoryIndex`.
-const REPOSITORIES_EVENT: &str = "repositories";
 /// Longer than any folder a daemon takes.
 const MOST_AGENT_FOLDER_BYTES: usize = 4096;
 /// Where an agent's sign-in stands on this computer: `{machine, tag, agent, state, link, code, failure}`.
@@ -282,6 +277,16 @@ impl Wire {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_side_answer)
     }
 
+    /// Where the start of a chat goes: `daemon`, taking only the new conversation's number and
+    /// generation from another machine.
+    pub fn start_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_chat_start)
+    }
+
     /// Where a request for a branch's worktree goes: `daemon`, taking only the new folder, one
     /// plain absolute path, from another machine.
     pub fn worktree_daemon(
@@ -290,6 +295,17 @@ impl Wire {
         local: impl FnOnce() -> Result<std::path::PathBuf, String>,
     ) -> Result<maitty_desktop_client::Daemon, String> {
         self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_worktree_reply)
+    }
+
+    /// Where a new worktree made off a pane goes (`new_worktree_session`, a project heading's New
+    /// worktree): the daemon that owns the pane, taking from another machine only its list, to find
+    /// the pane's workspace, and the acknowledgement that the worktree was made.
+    pub fn new_worktree_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_chat::vet_new_worktree_reply)
     }
 
     /// Where a question about a pane's repository goes. This computer's daemon answers any of
@@ -337,6 +353,13 @@ impl Wire {
         self.daemon_vetting(machine, not_here, move |reply| maitty_machines::remote_repo::vet_git_reply(&asked, reply))
     }
 
+    /// Where discarding one file's changes in a pane's checkout on another machine is asked: that
+    /// machine's daemon, whose answer is one cleaned line. This computer runs its own git instead.
+    pub fn discard_daemon(&self, machine: Option<u16>) -> Result<maitty_desktop_client::Daemon, String> {
+        let not_here = || Err("This computer's checkouts are not asked of its daemon".to_string());
+        self.daemon_vetting(machine, not_here, maitty_machines::remote_repo::vet_discard_reply)
+    }
+
     /// Where "who commits on this machine" is asked: this computer's daemon, or another machine's,
     /// whose answer is that report and nothing else, cleaned.
     pub fn identities_daemon(
@@ -355,6 +378,16 @@ impl Wire {
         local: impl FnOnce() -> Result<std::path::PathBuf, String>,
     ) -> Result<maitty_desktop_client::Daemon, String> {
         self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_rule_reply)
+    }
+
+    /// Where a question about a project's pull requests goes: `daemon`, taking only a cleaned list of
+    /// pull requests from another machine.
+    pub fn pull_requests_daemon(
+        &self,
+        machine: Option<u16>,
+        local: impl FnOnce() -> Result<std::path::PathBuf, String>,
+    ) -> Result<maitty_desktop_client::Daemon, String> {
+        self.daemon_vetting(machine, local, maitty_machines::remote_policy::vet_pull_requests_reply)
     }
 
     /// `daemon`, with `vet` deciding what another machine's daemon may answer.
@@ -415,12 +448,6 @@ impl Wire {
             MachineId(machine),
             maitty_desktop_client::github_sign_in_message(std::path::PathBuf::from(REMOTE_HOME)),
         )
-    }
-
-    /// A fleet request for another machine's daemon: the machine's line takes it without waiting.
-    /// Refused, naming the machine, when the machine has no line or the request is not valid.
-    pub fn fleet(&self, machine: Option<u16>, command: FleetCommand) -> Result<(), String> {
-        self.send(machine_of(machine), command.message()?)
     }
 
     /// Start a terminal session in `folder` on another machine. The folder is a path there: one
@@ -532,12 +559,6 @@ impl Wire {
         self.send(machine_of(machine), ClientMsg::Query(Query::FolderGit { folder: folder.to_owned(), request, tag }))
     }
 
-    /// Ask a machine's daemon (this computer's when none is named) what it is: system, cores, host name and the
-    /// agents installed. The answer comes back as a `machine-facts` event carrying `tag`.
-    pub fn machine_facts(&self, machine: Option<u16>, tag: u64) -> Result<(), String> {
-        self.send(machine_of(machine), ClientMsg::Query(Query::MachineFacts { tag }))
-    }
-
     /// Ask this computer's daemon to start, stop or read an agent's sign-in. The answer comes back as an
     /// `agent-sign-in` event carrying `tag`. The window sends only which agent and which of the three; the
     /// daemon owns the command and what it prints.
@@ -583,13 +604,6 @@ impl Wire {
         self.send(machine_of(Some(machine)), ClientMsg::Query(Query::AgentCommands { agent, folder: folder.to_owned(), tag }))
     }
 
-    /// Ask a machine's daemon (this computer's when none is named) for the git repositories it found on
-    /// its computer, searching again first when `rescan`. The daemon decides everything; nothing here
-    /// can be a bad request. The answer comes back as a `repositories` event carrying `tag`.
-    pub fn repositories(&self, machine: Option<u16>, rescan: bool, tag: u64) -> Result<(), String> {
-        self.send(machine_of(machine), ClientMsg::Query(Query::Repositories { rescan, tag }))
-    }
-
     /// Ask this computer's daemon to list, add, switch or remove an extension. The daemon checks the request, and an add
     /// runs only with the token its preview gave. The answer comes back as an `extensions` event carrying `tag`.
     pub fn extensions(&self, request: ExtRequest, tag: u64) -> Result<(), String> {
@@ -610,11 +624,14 @@ impl Wire {
 
     /// Ask this computer's daemon to change one shared setting. The daemon checks the value and
     /// tells every client; this window learns of it from the `shared-settings` event.
+    /// A key newer than the oldest daemon in the window is refused here: the line does not wait
+    /// for an answer, and an older daemon would pass over it in silence (`set_newer_shared_setting`).
     pub fn set_shared_setting(&self, key: SettingKey, value: SettingValue) -> Result<(), String> {
-        self.send(
-            MachineId::LOCAL,
-            ClientMsg::Command(Command::SetSetting { key, value }),
-        )
+        let message = ClientMsg::Command(Command::SetSetting { key, value });
+        if message.introduced_in() > COMPATIBLE_SINCE {
+            return Err("That setting is changed with set_newer_shared_setting".to_string());
+        }
+        self.send(MachineId::LOCAL, message)
     }
 
     /// Ask the daemon of `term`'s machine (this computer when none is named) to do `command`.
@@ -636,11 +653,29 @@ fn refusal(handle: &HubHandle, machine: MachineId) -> String {
         return NOT_CONNECTED.to_string();
     }
     match handle.name_of(machine) {
-        Some(name) => format!("{name} is not connected"),
+        Some(name) => not_connected_words(&name, handle.last_said(machine).as_ref()),
         None => format!(
             "Machine {} is not one of this computer's machines",
             machine.0
         ),
+    }
+}
+
+/// Why `name` took nothing, from what its state last said: the sentence a person acts on when
+/// there is one, else what is happening to its line. A state that still says connected means its
+/// line ended a moment ago and the next state is on its way.
+fn not_connected_words(name: &str, said: Option<&StateWords>) -> String {
+    let Some(said) = said else {
+        return format!("{name} is not connected");
+    };
+    if let Some(why) = &said.why {
+        return format!("{name} is not connected. {why}");
+    }
+    match (said.kind, said.attempt) {
+        ("connected", _) => format!("{name}'s line just dropped; it is being made again"),
+        ("reconnecting", Some(attempt)) => format!("{name} is not connected; reconnecting (try {attempt})"),
+        ("connecting" | "reconnecting", _) => format!("{name} is not connected; still connecting"),
+        (kind, _) => format!("{name} is not connected ({kind})"),
     }
 }
 
@@ -722,13 +757,6 @@ pub fn folder_git(
     wire.folder_git(machine, &folder, request, tag)
 }
 
-/// Asks a machine (this computer when `machine` is left out) what it is. The answer arrives as a `machine-facts`
-/// event with the same `tag`.
-#[tauri::command]
-pub fn machine_facts(wire: tauri::State<'_, Wire>, machine: Option<u16>, tag: u64) -> Result<(), String> {
-    wire.machine_facts(machine, tag)
-}
-
 /// Starts, stops or reads an agent's sign-in on this computer. The answer arrives as an `agent-sign-in` event
 /// with the same `tag`.
 #[tauri::command]
@@ -771,14 +799,6 @@ pub fn agent_commands_on(wire: tauri::State<'_, Wire>, machine: u16, agent: Stri
     wire.agent_commands(machine, &agent, &folder, tag)
 }
 
-/// Asks a machine (this computer when `machine` is left out) for the git repositories its daemon found, for
-/// the folder picker; `rescan` makes it search again first. The answer arrives as a `repositories` event with
-/// the same `tag`.
-#[tauri::command]
-pub fn repositories(wire: tauri::State<'_, Wire>, machine: Option<u16>, rescan: bool, tag: u64) -> Result<(), String> {
-    wire.repositories(machine, rescan, tag)
-}
-
 /// Asks the daemon for the shared settings; the answer arrives as a `shared-settings` event.
 #[tauri::command]
 pub fn get_shared_settings(wire: tauri::State<'_, Wire>) -> Result<(), String> {
@@ -787,7 +807,7 @@ pub fn get_shared_settings(wire: tauri::State<'_, Wire>) -> Result<(), String> {
 
 /// Changes one shared setting. `key` is the setting's name in config.toml terms (`default_agent`,
 /// `new_session_view`, `sidebar_side`, `theme_dark`, `theme_light`, `appearance`, `spinner`,
-/// `start_dir`, `reduce_motion`, `window_style`) and `value` the kind it takes; anything else is
+/// `start_dir`, `reduce_motion`) and `value` the kind it takes; anything else is
 /// refused here, and the daemon checks the value again.
 #[tauri::command]
 pub fn set_shared_setting(
@@ -797,6 +817,18 @@ pub fn set_shared_setting(
 ) -> Result<(), String> {
     let (key, value) = setting_from_wire(&key, value)?;
     wire.set_shared_setting(key, value)
+}
+
+/// Changes a shared setting on this computer's daemon, which may be older than this app and not know the key
+/// (`helpers`, `helpers_at_once`). The running daemon's version is read first: one too old is refused in words, since
+/// it would pass over the request without answering. The new value arrives as a `shared-settings` event like any
+/// change.
+#[tauri::command]
+pub async fn set_newer_shared_setting(key: String, value: serde_json::Value) -> Result<(), String> {
+    let (key, value) = setting_from_wire(&key, value)?;
+    maitty_desktop_client::set_newer_shared_setting(key, value)
+        .await
+        .map_err(|error| format!("{error:#}"))
 }
 
 /// The typed setting a name and a JSON value stand for.
@@ -830,10 +862,6 @@ pub(crate) fn setting_from_wire(
             SettingKey::Appearance,
             SettingValue::Appearance(word::<Appearance>(value)?),
         ),
-        "window_style" => (
-            SettingKey::WindowStyle,
-            SettingValue::WindowStyle(word::<WindowStyle>(value)?),
-        ),
         "update_machines" => match value {
             serde_json::Value::Bool(on) => (SettingKey::UpdateMachines, SettingValue::Bool(on)),
             _ => return Err("This setting takes true or false".to_string()),
@@ -844,6 +872,12 @@ pub(crate) fn setting_from_wire(
         },
         "spinner" => (SettingKey::Spinner, SettingValue::List(word::<Vec<String>>(value)?)),
         "bypass_off" => (SettingKey::BypassOff, SettingValue::List(word::<Vec<String>>(value)?)),
+        // Both travel as the word config.toml holds; the daemon checks it against what Settings offers.
+        "helpers" => (SettingKey::Helpers, SettingValue::Text(text(value)?)),
+        "helpers_at_once" => match value.as_u64() {
+            Some(limit) => (SettingKey::HelpersAtOnce, SettingValue::Text(limit.to_string())),
+            None => return Err("This setting takes a whole number".to_string()),
+        },
         _ => return Err("That is not a shared setting".to_string()),
     })
 }
@@ -1012,12 +1046,6 @@ pub enum Reaction {
         tag: u64,
         outcome: Result<maitty_shared::protocol::FolderGitAnswer, String>,
     },
-    /// What a machine says it is, for the window that asked.
-    MachineFacts {
-        machine: MachineId,
-        tag: u64,
-        facts: maitty_shared::protocol::MachineFacts,
-    },
     /// Where this computer's agent sign-in stands, for the window that asked.
     AgentSignIn {
         tag: u64,
@@ -1047,12 +1075,6 @@ pub enum Reaction {
         machine: MachineId,
         tag: u64,
         answer: Result<Vec<AgentCommand>, String>,
-    },
-    /// The git repositories a machine found, for the window that asked.
-    Repositories {
-        machine: MachineId,
-        tag: u64,
-        found: RepositoryIndex,
     },
     /// What a request about extensions did, for the window that asked.
     Extensions {
@@ -1088,7 +1110,8 @@ pub fn react(
             name,
             state,
         } => {
-            let mut told = describe(machine, &name, &state);
+            let route = handle.route(machine);
+            let mut told = describe(machine, &name, &state, route.as_ref());
             // The state machine has no word for it: a refusal reads as unreachable there.
             if handle.is_refused(machine) {
                 told.state = "refused";
@@ -1096,9 +1119,9 @@ pub fn react(
             if told.state == "needs-login" {
                 // A login the person can do: the same line the add flow opens in a session. A route
                 // that cannot make one (a custom transport) leaves the window with the fix text only.
-                told.login_command = handle.route(machine).and_then(|route| route.first_login_command().ok());
+                told.login_command = route.as_ref().and_then(|route| route.first_login_command().ok());
             }
-            told.target = handle.route(machine).and_then(|route| route.target().map(str::to_owned));
+            told.target = route.as_ref().and_then(|route| route.target().map(str::to_owned));
             let opts = handle.opts_of(machine);
             (told.clipboard, told.notices, told.sounds) = (opts.clipboard, opts.notices, opts.sounds);
             told.since = handle.down_since(machine, state.is_connected(), now_ms());
@@ -1106,6 +1129,7 @@ pub fn react(
                 // Typing the machine could not take while it was down, now it can be said.
                 told.unsent = Some(handle.take_unsent(machine)).filter(|n| *n > 0);
             }
+            handle.note_state(machine, StateWords { kind: told.state, why: told.why.clone(), attempt: told.attempt });
             return vec![Reaction::State(told)];
         }
         Update::Removed { machine } => {
@@ -1155,13 +1179,11 @@ fn reactions(handle: &HubHandle, outs: Vec<Out>) -> Vec<Reaction> {
             Out::Cloned { machine, tag, outcome } => Some(Reaction::Cloned { machine, tag, outcome }),
             Out::CloneProgress { machine, tag, phase, percent } => Some(Reaction::CloneProgress { machine, tag, phase, percent }),
             Out::FolderGit { machine, tag, outcome } => Some(Reaction::FolderGit { machine, tag, outcome }),
-            Out::MachineFacts { machine, tag, facts } => Some(Reaction::MachineFacts { machine, tag, facts }),
             Out::AgentSignIn { tag, agent, state } => Some(Reaction::AgentSignIn { tag, agent, state }),
             Out::GitHubAccounts { machine, tag, report } => Some(Reaction::GitHubAccounts { machine, tag, report }),
             Out::GitHubRepos { machine, tag, answer } => Some(Reaction::GitHubRepos { machine, tag, answer }),
             Out::GitHubOwners { machine, tag, answer } => Some(Reaction::GitHubOwners { machine, tag, answer }),
             Out::AgentCommands { machine, tag, answer } => Some(Reaction::AgentCommands { machine, tag, answer }),
-            Out::Repositories { machine, tag, found } => Some(Reaction::Repositories { machine, tag, found }),
             Out::Extensions { machine, tag, answer } => Some(Reaction::Extensions { machine, tag, answer }),
             Out::Sessions { machine, snapshot } => Some(Reaction::Sessions { machine, snapshot }),
             Out::WantReplay { machine, term } => {
@@ -1432,9 +1454,6 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             Reaction::FolderGit { machine, tag, outcome } => {
                 let _ = app.emit(FOLDER_GIT_EVENT, folder_git_out(machine, tag, outcome));
             }
-            Reaction::MachineFacts { machine, tag, facts } => {
-                let _ = app.emit(MACHINE_FACTS_EVENT, TaggedAnswer { machine: machine.0, tag, answer: facts });
-            }
             Reaction::AgentSignIn { tag, agent, state } => {
                 let _ = app.emit(AGENT_SIGN_IN_EVENT, agent_sign_in_answer(tag, agent, state));
             }
@@ -1456,9 +1475,6 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
             }
             Reaction::AgentCommands { machine, tag, answer } => {
                 let _ = app.emit(AGENT_COMMANDS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
-            }
-            Reaction::Repositories { machine, tag, found } => {
-                let _ = app.emit(REPOSITORIES_EVENT, TaggedAnswer { machine: machine.0, tag, answer: found });
             }
             Reaction::Extensions { machine, tag, answer } => {
                 let _ = app.emit(EXTENSIONS_EVENT, TaggedAnswer { machine: machine.0, tag, answer });
@@ -1522,6 +1538,25 @@ fn perform(app: &AppHandle, reactions: Vec<Reaction>) {
 mod tests {
     use super::*;
     use maitty_shared::protocol::ServerMsg;
+    use maitty_shared::settings_view::WindowStyle;
+
+    #[test]
+    fn a_machine_that_takes_nothing_says_why_from_its_last_state() {
+        let said = |kind, why: Option<&str>, attempt| StateWords { kind, why: why.map(str::to_owned), attempt };
+        assert_eq!(not_connected_words("kingdom", None), "kingdom is not connected");
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("unreachable", Some("kingdom does not answer on port 22."), None))),
+            "kingdom is not connected. kingdom does not answer on port 22."
+        );
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("reconnecting", None, Some(3)))),
+            "kingdom is not connected; reconnecting (try 3)"
+        );
+        assert_eq!(
+            not_connected_words("kingdom", Some(&said("connected", None, None))),
+            "kingdom's line just dropped; it is being made again"
+        );
+    }
 
     #[test]
     fn a_github_list_reaches_the_window_as_one_of_four_named_states() {
@@ -1580,6 +1615,8 @@ mod tests {
             name: name.into(),
             state: kind,
             why: None,
+            failure: None,
+            fix_command: None,
             said: None,
             login_command: None,
             target: None,
@@ -1659,8 +1696,8 @@ mod tests {
     fn a_shared_setting_is_typed_by_its_name_and_a_wrong_kind_is_refused() {
         use serde_json::json;
         assert_eq!(
-            setting_from_wire("window_style", json!("flat")).unwrap(),
-            (SettingKey::WindowStyle, SettingValue::WindowStyle(WindowStyle::Flat))
+            setting_from_wire("sidebar_side", json!("right")).unwrap(),
+            (SettingKey::SidebarSide, SettingValue::SidebarSide(SidebarSide::Right))
         );
         assert_eq!(
             setting_from_wire("reduce_motion", json!(true)).unwrap(),
@@ -1678,7 +1715,18 @@ mod tests {
             setting_from_wire("bypass_off", json!(["codex"])).unwrap(),
             (SettingKey::BypassOff, SettingValue::List(vec!["codex".to_string()]))
         );
-        assert!(setting_from_wire("window_style", json!("tiled")).is_err(), "tiled is gone");
+        assert_eq!(
+            setting_from_wire("helpers", json!("never")).unwrap(),
+            (SettingKey::Helpers, SettingValue::Text("never".into()))
+        );
+        assert_eq!(
+            setting_from_wire("helpers_at_once", json!(8)).unwrap(),
+            (SettingKey::HelpersAtOnce, SettingValue::Text("8".into()))
+        );
+        assert!(setting_from_wire("helpers_at_once", json!("8")).is_err());
+        assert!(setting_from_wire("helpers_at_once", json!(2.5)).is_err());
+        assert!(setting_from_wire("sidebar_side", json!("top")).is_err());
+        assert!(setting_from_wire("window_style", json!("flat")).is_err(), "the window has one style");
         assert!(setting_from_wire("reduce_motion", json!("yes")).is_err());
         assert!(setting_from_wire("start_dir", json!(3)).is_err());
         assert!(setting_from_wire("machines", json!("x")).is_err(), "only the shared keys are reachable");
@@ -1699,6 +1747,8 @@ mod tests {
             window_style: WindowStyle::Flat,
             bypass_off: vec![],
             update_machines: true,
+            helpers: maitty_shared::settings_view::HelpersMay::Ask,
+            helpers_at_once: 4,
         };
         let mut streams = Streams::default();
         let now = Instant::now();

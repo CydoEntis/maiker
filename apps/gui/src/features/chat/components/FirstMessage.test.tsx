@@ -6,7 +6,6 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetComposers, updateComposer } from '../composerStore'
 import { carryDraft, entrustFirstMessage, forgetFirstMessages, heldFirstMessage, holdFirstMessage } from '../firstMessage'
 import { PASTE_END, PASTE_START, PASTE_SUBMIT_GAP_MS } from '../useChatComposer'
-import { FAILED_SEND_REUSE_MS } from '../sendOperation'
 import { ACTIVE_POLL_MS, IDLE_POLL_MS, forgetChatFeeds } from '../useChatFeed'
 import { chatFindOf } from '../chatSearch'
 import { ChatSession } from './ChatSession'
@@ -91,15 +90,6 @@ describe('a message typed while the agent was starting', () => {
     expect(typeInto).toHaveBeenCalledTimes(2)
     expect(typeInto).toHaveBeenNthCalledWith(1, `${PASTE_START}hello there${PASTE_END}`)
     expect(typeInto).toHaveBeenNthCalledWith(2, '\r')
-  })
-
-  it('keeps the held message on screen while the history is first read, with no skeleton in between', () => {
-    holdFirstMessage('s1', 'hello there')
-    open('Working')
-
-    // Before anything has been read: the frame the person sees when the real chat takes over from the starting one.
-    expect(screen.getByLabelText('Sending')).toHaveTextContent('hello there')
-    expect(screen.queryByRole('status', { name: 'Reading the conversation' })).not.toBeInTheDocument()
   })
 
   it('brings a half-typed message over into the box', async () => {
@@ -260,16 +250,6 @@ describe('a message written while a terminal agent works', () => {
     expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/btw hi')
   })
 
-  it('queues /compact while the agent works', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const { typeInto } = open('Working')
-    await settle()
-    await user.type(screen.getByRole('textbox', { name: 'Message Claude' }), '/compact{Enter}')
-    await settle(10)
-    expect(typeInto).not.toHaveBeenCalled()
-    expect(screen.getByRole('status', { name: 'The daemon holds' })).toHaveTextContent('/compact')
-  })
-
   it('queues /btw when files are attached, as the message is then a paste and not a command', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     const { typeInto } = open('Working')
@@ -363,31 +343,6 @@ describe('a message written while a terminal agent works', () => {
 
     expect(add).toHaveBeenCalledTimes(2)
     expect(add.mock.calls[1]?.[2]).not.toBe(add.mock.calls[0]?.[2])
-  })
-
-  it('takes a resend after the retry window, or of an edited draft, for a new message', async () => {
-    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
-    const daemon = new FakeDaemonHistory()
-    daemon.status = 'Working'
-    fake.current = daemon
-    const add = vi.fn<(text: string, first: boolean, operation: number) => Promise<void>>()
-      .mockRejectedValue(new Error('the local daemon did not answer within 5 seconds'))
-    render(<ChatSession link={LINK} agent="claude" online typeInto={vi.fn()} paneQueue={{ queued: [], add, drop: () => Promise.resolve() }} sessionId="s1" />)
-    await settle()
-    const box = screen.getByRole('textbox', { name: 'Message Claude' })
-
-    await user.type(box, 'and then add tests{Enter}')
-    await settle(1)
-    act(() => { vi.advanceTimersByTime(FAILED_SEND_REUSE_MS + 1000) })
-    await user.type(box, '{Enter}')
-    await settle(1)
-    await user.clear(box)
-    await user.type(box, 'and then add tests{Enter}')
-    await settle(1)
-
-    const operations = add.mock.calls.map(([, , operation]) => operation)
-    expect(operations).toHaveLength(3)
-    expect(new Set(operations).size).toBe(3)
   })
 
   it('takes one back from the daemon to edit it, without drawing it as sent', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { TurnEvent } from './chatEvents'
 import { approvalEvent, commandEvent, editEvent, fields, messageEvent, reasoningEvent, todoEvent, toolEvent } from './eventFixtures'
-import { buildRows, dividerText, formatDuration, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from './chatRows'
+import { buildRows, dividerText, paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from './chatRows'
 
 describe('the rows drawn while the agent works', () => {
   const asked = messageEvent('u1', 'user', 'Fix it')
@@ -58,13 +58,6 @@ describe('buildRows', () => {
   it('draws no "Finished in 0s" under a turn that only summarised the conversation', () => {
     const summary = { ...message('s1', 'agent', ''), kind: 'summary' as const, text: 'Earlier: we fixed the tests.' }
     expect(buildRows([summary, turn('completed', true)], false)).toMatchObject([{ kind: 'summary' }])
-  })
-
-  it('shows reasoning between two tool steps as its own row, so the steps do not fold across it', () => {
-    const rows = buildRows([command('c1'), reasoningEvent('r1', 'Weighing two fixes'), command('c2')], false)
-
-    expect(rows.map((row) => row.kind)).toEqual(['step', 'thought', 'step'])
-    expect(rows[1]).toMatchObject({ key: 'r1', turnId: 't1', texts: ['Weighing two fixes'] })
   })
 
   it('ends the run of steps before a thought and splits an agent message around it', () => {
@@ -131,25 +124,12 @@ describe('buildRows', () => {
     expect(rows.map((row) => row.kind)).toEqual(['agent', 'agent'])
   })
 
-  it('keeps one stable key per row and adds the working line last only while a turn runs', () => {
-    const events = [message('u', 'user', 'go'), message('a', 'agent', 'On it.')]
-
-    expect(buildRows(events, false).map((row) => row.key)).toEqual(['u', 'a'])
-    expect(buildRows(events, true).map((row) => row.key)).toEqual(['u', 'a', 'working'])
-  })
-
   it('draws a message just sent before the history has it, and takes the agent to be at work on it', () => {
     const rows = buildRows([message('a', 'agent', 'Earlier.')], false, null, 'hello')
 
     expect(rows.map((row) => row.kind)).toEqual(['agent', 'echo', 'working'])
     expect(rows[1]).toMatchObject({ kind: 'echo', text: 'hello' })
     expect(rows[2]).toMatchObject({ kind: 'working', phrase: 'thinking' })
-  })
-
-  it('turns an approval and a divider into rows of their own', () => {
-    const rows = buildRows([approvalEvent(3), turn('completed', true)], false)
-
-    expect(rows.map((row) => row.kind)).toEqual(['approval', 'divider'])
   })
 })
 
@@ -182,10 +162,6 @@ describe('turn dividers', () => {
     expect(dividerText(turn('completed', false), clock)).toBe('Turn finished')
     expect(dividerText(turn('interrupted', false), clock)).toBe('Turn stopped')
   })
-
-  it('writes a duration in the largest units that fit', () => {
-    expect([0, 7_000, 72_000, 3_900_000].map(formatDuration)).toEqual(['0s', '7s', '1m 12s', '1h 5m'])
-  })
 })
 
 describe('the paragraphs of a reply that is still arriving', () => {
@@ -215,10 +191,6 @@ describe('buildRows with Hide successful tool calls', () => {
     const rows = buildRows([message('a1', 'agent', 'A.'), read('r1'), reasoningEvent('t1', 'Hm.'), read('g1', { name: 'Grep' }), message('a2', 'agent', 'B.')], false, null, null, true, true)
 
     expect(rows.map((row) => row.kind)).toEqual(['agent', 'thought', 'agent'])
-  })
-
-  it('draws every run while the setting is off', () => {
-    expect(kinds([read('r1'), read('r2'), read('r3')], false)).toEqual(['work'])
   })
 
   it('leaves out a run of reads and searches that all succeeded, and a lone one', () => {

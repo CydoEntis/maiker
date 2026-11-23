@@ -63,6 +63,7 @@ src/
   references.rs  a project's reference files (`.maiker/references/`): listed, added and removed (the terminal app edits them, the server lists them for the desktop app)
   prompt.rs      the question and numbered choices an agent is stopped on, read off its screen (the MCP answer tool and the inbox card share it)
   output_line.rs  one line of a check's output: made safe to show, and read as pass or failure (the server picks the first failing line, the client colours with the same rule)
+  discard.rs     (in `maitty-shared`) discarding one file's uncommitted changes: the path rules, git's status read into a kind of change, the steps per kind and the typed refusals, against a `Checkout` (git and the disk) the caller gives; `daemon/discard.rs` and the desktop host's `changes.rs` are the two callers (SECURITY "Discarding a file's changes")
   ipc.rs         local sockets and the `proxy` command; opening a connection to another machine (ssh or a custom transport) is `maitty-machines`, which this module re-exports
   remote_paste.rs (now `maitty-machines`' `remote_paste`, re-exported here) sending a pasted image or a file to another machine ([ADR 0007](adr/0007-multiple-machines.md)): the file name, the check of the path the far side prints, the failure words; the script itself is also in `maitty-machines`, as is `remote_send` (the upload) and `ssh_run` (the runner that counts bytes and takes a cancel flag; the desktop app uses them too)
   remote_install.rs installing the app on another machine, as pure rules: the `uname -sm` parser, the installed-version check, the decision table (nothing is installed without a yes), the destination, the install script's exit-code table (the script itself is in `maitty-machines`)
@@ -94,6 +95,7 @@ src/
     identity.rs  the daemon's random id, made on first start and kept in the data folder (daemon-id); sent in every snapshot
     secrets.rs   secrets agents ask you for: the pending requests, and what you typed, held in memory as single-use references (ADR 0006)
     pr.rs        each pane's pull request read through `gh`: the poll, the answer parsed, what changed between two readings, and the message queued for the agent
+    pr_list.rs   a project's open pull requests for a client that asks (`Query::PullRequests`): `gh pr list` in the folder, which of them need the signed-in account, each folder's list kept for a minute
     approvals.rs your Always / Never / Once for repo-supplied check commands (kept in Maiker's data folder, read at start), and the ApproveCheck / ForgetCheckApproval commands
     term.rs      one pane: PTY, input thread, vt100 emulator
     scan.rs, git.rs, persist.rs
@@ -238,7 +240,7 @@ default bindings, key parsing and built-in themes; terminal-specific mouse
 encoding stays in the terminal client. Config loading and filesystem migrations
 are core-owned. `maitty-machines` owns the machine definition (`[[machines]]`) and its
 validation (`maitty-settings` re-exports them from `config`), the ssh line and its hardening
-(`ssh_command.rs`), the failure classes and their fix texts (`link_failure.rs`), the fixed remote
+(`ssh_command.rs`), the failure classes and the one sentence each is said as (`link_failure.rs`: `classify`, `sentence`, `fix_command`; both apps show these and word no failure of their own), the fixed remote
 scripts and the dial to another machine (`machine.rs`), the connection registry (`connections.rs`: one
 bounded reader and writer task per machine, one fair intake, sends routed by machine, a lost connection
 marked and never ending the window), the connection state machine and its supervisors (`link/`: `Links`,
@@ -260,11 +262,34 @@ owned. The `apps/tui` `maiker` package preserves the installed command and re-ex
 the terminal client library for compatibility. Codex compatibility preflight,
 session metadata, usage extraction, effective-config policy, native hook
 configuration projection and completion-event mapping live in
-`maitty-provider-codex`;
+`maitty-provider-codex`, with the app-server wire format: the strict JSON-RPC envelope
+(`envelope.rs`), request parameters and reply checks (`requests.rs`), approval-request reading
+(`approvals.rs`) and item and turn decoding (`history.rs`);
 Claude stream parsing, version checks, session IDs, launch arguments, frame
 limit, hook event definitions, command-group projection and replacement,
 ownership, stale-hook projection, native event mapping and status-line config
-policy live in `maitty-provider-claude`. JSONC configuration editing remains in
+policy live in `maitty-provider-claude`. `maitty-provider` holds the contract an adapter
+implements: the `ProviderDialect` trait, a state machine with no I/O, and the commands, steps
+and events it exchanges with the daemon. It also holds what every adapter needs to make
+provider text safe to show: secret masking (`redact.rs`) and tool-input cleaning
+(`tool_input.rs`). `CodexDialect` (`maitty-provider-codex/src/dialect.rs`) implements the
+contract from the open connection on, and `ClaudeDialect` (`maitty-provider-claude/src/dialect.rs`)
+implements it whole. `AcpDialect` (`maitty-provider-acp`) is the dialect for an agent with no
+adapter of its own ([stack/acp.md](stack/acp.md)). Every provider's events reach one place in the daemon
+(`conversation_reported`, `conversation_asked`), so a turn's status and history are decided the
+same way for every provider.
+
+The daemon names a provider in one file, `daemon/providers.rs`: an `Adapter` per agent holds
+everything that differs (whether and how its chat runs, where its saved history is read from,
+its transcript format and naming, its command list, side questions). Code elsewhere reads a
+field and never compares a `Provider`; a new agent is a new entry. The daemon's commands to a
+provider (`runtime::Rpc`) are in no provider's words. `conversation/dialect_runtime.rs` runs any
+`ProviderDialect`: it owns the process and pipes and carries out the dialect's steps. Codex and
+Claude still run in their own loops (`runtime.rs`, `claude.rs`), which hold what the generic
+runner has not learned: Codex's handshake and version checks, and Claude's process started ahead
+of the next message. Agents run over ACP run on the generic runner. The decision is
+[ADR 0018](adr/0018-one-provider-contract-with-no-io.md).
+JSONC configuration editing remains in
 the terminal client; live process transports and session ownership are in core.
 Completing the package split is tracked by
 [ADR 0004](adr/0004-client-split-and-desktop-host.md).
@@ -321,7 +346,7 @@ crates/
   maitty-machines/                the `[[machines]]` definition and its checks and edits, the ssh line, failure classes, dial, connection registry and link supervisors, the cleaning and policy for what another machine sends, the daemon-id store, the `~/.ssh/config` parser, the reader of this computer's machine list (`local_machines`: `config.local.toml`, as both apps read it), and the atomic state-file helpers (`write_atomic`, `read_state`, which `maitty-core` re-exports), shared by both apps
   maitty-highlight/               syntax highlighting for file previews, shared by both apps (STACK: syntect)
   maitty-test-support/            test-only helpers shared across crates: building and locating the fake-ssh shim, running a command with a time limit
-  adapters/                       Codex, Claude and future provider adapters
+  adapters/                       the provider contract (`maitty-provider`) and the Codex, Claude and ACP adapters
 scripts/                          repository checks, e.g. `check-gui-deps.sh` (the desktop app's dependency rule)
 docs/                             architecture, roadmap and design specs
 ```
@@ -418,10 +443,11 @@ outside Maiker. No provider-specific status adapter is needed.
   `hints()` for the key line.
 
 
-Decisions are the ten in [`adr/`](adr/README.md): the daemon owns every session (0001), the
+Decisions are in [`adr/`](adr/README.md): the daemon owns every session (0001), the
 terminal substrate and wire protocol (0002), status trust (0003), the client split (0004),
 provider adapters (0005), secrets (0006), multiple machines (0007), Windows and the product
-name (0008), and provider-reported usage (0009). Workflows and specialist agents stay
+name (0008), provider-reported usage (0009), the provider contract (0018), and ACP for agents without
+an adapter (0019; rules in [stack/acp.md](stack/acp.md)). Workflows and specialist agents stay
 outside Maiker, which shows them (0010).
 
 ## Project-specific: planned structured conversations
@@ -460,7 +486,7 @@ conversation registry and fences every incoming event by conversation,
 generation and connection identity. Runtime ownership never belongs to a client
 or PTY. Disposal remains pending until the root is reaped; disconnect does not
 dispose it. Synthetic fixtures and real fake-provider child tests live beside it.
-`commands.rs` owns authenticated start/send/read admission, operation receipts,
+`commands.rs` and the topic files in `commands/` own authenticated start/send/read admission, operation receipts,
 durability barriers and native paging. Actors correlate typed requests with exact
 JSON-RPC IDs on the existing connection; closing a client leaves its runtime alive.
 Only an explicit conversation start launches a selected provider.
@@ -475,7 +501,7 @@ they never fabricate a native identity or automatically create another thread.
 Native/structured transfer commands remain later work.
 
 The display-history foundation adds `history.rs` (typed projection and bounded
-reads), `history_provider.rs` (Codex event normalization) and `history_storage.rs`
+reads), `history_provider.rs` (maps the Codex crate's decoded events to history updates) and `history_storage.rs`
 (private immutable pages and atomic manifests) beside the transport. Wire DTOs
 live inward in `maitty-shared::conversation`. No transcript enters the ordinary
 snapshot; attachment content is released on disconnect. See API_PATTERNS and

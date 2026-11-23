@@ -4,7 +4,6 @@ import { FAKE_CONVERSATION, FakeDaemonHistory } from '../fakeDaemonHistory'
 import { forgetChatFeeds } from '../useChatFeed'
 import { forgetComposers, peekComposer } from '../composerStore'
 import { ChatSession } from './ChatSession'
-import { restoreNote } from '../editFromHere'
 
 const fake = vi.hoisted(() => ({
   current: null as null | { read: (cursor: never) => Promise<unknown> },
@@ -180,28 +179,6 @@ describe('Edit from here on a message the person sent', () => {
     expect(fake.restoreSnapshot).not.toHaveBeenCalled()
   })
 
-  it('shows and edits a message sent with a note as the person wrote it', async () => {
-    const daemon = twoTurns()
-    daemon.upsert(daemon.message('t2', 'u2', 'User', `${restoreNote('Add a.txt')}\nAdd b.txt`))
-    await open()
-    expect(screen.queryByText(/\[Note:/)).toBeNull()
-
-    await editFromHere('Add b.txt')
-    await click(confirmButton('Restore 2 files'))
-    expect(box()).toHaveValue('Add b.txt')
-    expect(peekComposer(FAKE_CONVERSATION).note).toBe(restoreNote('Add b.txt'))
-  })
-
-  it('restores nothing when the person cancels', async () => {
-    twoTurns()
-    await open()
-    await editFromHere('Add a.txt')
-    await click(confirmButton('Cancel'))
-
-    expect(fake.restoreSnapshot).not.toHaveBeenCalled()
-    expect(box()).toHaveValue('')
-  })
-
   it('offers no restore when the files a restore would change cannot be counted', async () => {
     twoTurns()
     fake.restoreCount.mockRejectedValue(new Error('git failed'))
@@ -243,14 +220,6 @@ describe('Edit from here on a message the person sent', () => {
     expect(screen.getByRole('menuitem', { name: 'Edit from here' })).toHaveAttribute('aria-disabled', 'true')
     expect(screen.getByText(/local-only in v1/)).toBeInTheDocument()
     expect(fake.repoSnapshots).not.toHaveBeenCalled()
-  })
-
-  it('is greyed out while another session uses the same folder', async () => {
-    twoTurns()
-    await open({ refusal: 'Another session is using this folder' })
-    await openMenu('Add a.txt')
-
-    expect(screen.getByRole('menuitem', { name: 'Edit from here' })).toHaveAccessibleDescription('Another session is using this folder')
   })
 
   it('restores nothing when another session comes to the folder while the person is asked', async () => {

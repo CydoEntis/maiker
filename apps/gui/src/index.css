@@ -4,7 +4,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-:root, :root[data-theme="night"] {
+:root {
   color-scheme: dark;
   font-family: "Geist Variable", "Segoe UI", sans-serif;
   font-synthesis: none;
@@ -72,53 +72,6 @@
   --branch: #A78BFA;
 }
 
-:root[data-theme="abyss"] {
-  --bg: #07111b;
-  --main: #0b1724;
-  --raise: #112131;
-  --hover: #0f1c29;
-  --sel: #162839;
-  --line: #14243a;
-  --line2: #1e3248;
-  --well: #06101a;
-  --term: #050d15;
-}
-
-:root[data-theme="day"] {
-  color-scheme: light;
-  --bg: #eef0ee;
-  --main: #ffffff;
-  --raise: #f5f6f4;
-  --hover: #f0f2f0;
-  --sel: #e7eae8;
-  --line: #e3e6e4;
-  --line2: #d2d7d4;
-  --well: #f2f4f2;
-  --term: #fafbfa;
-  --fg: #12171c;
-  --body: #262d33;
-  --fg2: #3b444c;
-  --muted-text: #58626c;
-  --dim: #646e78;
-  --primary: #0e8f7a;
-  --primary-foreground: #ffffff;
-  --accent-soft: rgb(14 143 122 / 11%);
-  --warn: #9a5b00;
-  --warn-soft: rgb(154 91 0 / 7%);
-  --warn-line: rgb(154 91 0 / 28%);
-  --on-warn: #ffffff;
-  --danger: #c0392f;
-  --danger-soft: rgb(192 57 47 / 7%);
-  --danger-line: rgb(192 57 47 / 30%);
-  --ok: #2f7a4b;
-  --idle: #8a949f;
-}
-
-:root[data-theme="night"][data-accent="blue"], :root[data-theme="abyss"][data-accent="blue"] { --primary: #73b4ff; --accent-soft: rgb(115 180 255 / 11%); }
-:root[data-theme="day"][data-accent="blue"] { --primary: #2563b8; --accent-soft: rgb(37 99 184 / 11%); }
-:root[data-theme="night"][data-accent="violet"], :root[data-theme="abyss"][data-accent="violet"] { --primary: #b8a2ff; --accent-soft: rgb(184 162 255 / 11%); }
-:root[data-theme="day"][data-accent="violet"] { --primary: #6846b8; --accent-soft: rgb(104 70 184 / 11%); }
-
 /* Window-button colours are fixed by the platforms, so they are the same in every theme. */
 :root {
   --caption-close-hover: #c42b1c;
@@ -172,11 +125,12 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
-  --radius-sm: calc(var(--radius) * 0.6);
-  --radius-md: calc(var(--radius) * 0.8);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) * 1.4);
-  --radius-2xl: calc(var(--radius) * 1.8);
+  /* Tailwind's `rounded-*` are the corner tokens (tokens.css); the old sizes are the fallback outside `.mx-app`. */
+  --radius-sm: var(--r-badge, calc(var(--radius) * 0.6));
+  --radius-md: var(--r-control, calc(var(--radius) * 0.8));
+  --radius-lg: var(--r-control, var(--radius));
+  --radius-xl: var(--r-panel, calc(var(--radius) * 1.4));
+  --radius-2xl: var(--r-dialog, calc(var(--radius) * 1.8));
 }
 
 @layer base {
@@ -185,9 +139,10 @@
   body { @apply bg-background text-foreground; margin: 0; }
   button, input, textarea { font: inherit; }
   button { cursor: pointer; }
-  ::selection { background: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--foreground); }
+  /* Selected text takes the theme's accent, like everything else that is picked; the library's teal belonged to no theme. */
+  ::selection { background: color-mix(in srgb, var(--accent, var(--primary)) 32%, transparent); color: var(--fg, var(--foreground)); }
   /* Focus is a 1px underline in the accent, as in the desktop window (design rule 10). */
-  :focus-visible { outline: none; box-shadow: var(--focus-underline, inset 0 -1px 0 var(--ring)); }
+  :focus-visible { outline: none; box-shadow: var(--focus-edge, inset 0 0 0 1px var(--ring)); }
 }
 
 * { scrollbar-color: var(--border) transparent; scrollbar-width: thin; }

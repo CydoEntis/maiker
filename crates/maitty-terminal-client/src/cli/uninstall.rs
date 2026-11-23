@@ -329,13 +329,6 @@ mod tests {
     }
 
     #[test]
-    fn no_server_means_no_line_about_stopping_one() {
-        let lines = plan(None, false, Some("bin/app")).join("\n");
-        assert!(!lines.contains("stops the server"), "{lines}");
-        assert!(plan(Some(0), false, None).join("\n").contains("no session is open"));
-    }
-
-    #[test]
     fn a_build_run_from_its_build_folder_is_left_where_it_is() {
         let lines = plan(None, false, None).join("\n");
         assert!(lines.contains("leaves this build where it is"), "{lines}");

@@ -302,18 +302,6 @@ mod tests {
     }
 
     #[test]
-    fn a_clone_that_works_leaves_the_repository_in_the_new_folder() {
-        let root = crate::daemon::persist::scratch_dir();
-        std::fs::create_dir_all(root.path()).unwrap();
-        let parent = root.path().join("code");
-        std::fs::create_dir_all(&parent).unwrap();
-
-        clone_local(&source(root.path()), &parent, CLONE_LIMIT).unwrap();
-
-        assert_eq!(std::fs::read_to_string(parent.join("widgets").join("README.md")).unwrap(), "hello");
-    }
-
-    #[test]
     fn gits_progress_lines_are_read_as_a_phase_and_a_percentage() {
         let step = |line| progress_of(line);
         assert_eq!(step("Receiving objects:  45% (9/20), 1.2 MiB | 2.0 MiB/s"), Some((ClonePhase::Receiving, 45)));
@@ -336,7 +324,7 @@ mod tests {
     }
 
     #[test]
-    fn a_clone_over_a_transport_reports_how_far_it_has_got() {
+    fn a_clone_over_a_transport_reports_how_far_it_has_got_and_leaves_the_repository() {
         let root = crate::daemon::persist::scratch_dir();
         std::fs::create_dir_all(root.path()).unwrap();
         let origin = source(root.path());
@@ -350,6 +338,7 @@ mod tests {
 
         assert!(steps.contains(&(ClonePhase::Receiving, 100)), "{steps:?}");
         assert!(steps.iter().all(|(_, percent)| *percent <= 100));
+        assert_eq!(std::fs::read_to_string(target.join("README.md")).unwrap(), "hello");
     }
 
     #[test]

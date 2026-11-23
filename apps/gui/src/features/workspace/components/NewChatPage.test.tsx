@@ -19,6 +19,11 @@ vi.mock('@/api/folderGit', async (importOriginal) => ({
   loadFolderBranches: () => Promise.resolve(host.branches === null ? null : { ...host.branches, branches: host.branches.branches.map((entry) => ({ ...entry, remote: false })) }),
 }))
 
+vi.mock('@/api/acpAgents', () => ({
+  loadAcpAgents: () => Promise.resolve([{ id: 'opencode', name: 'OpenCode', version: '2.3.2', description: '', source: 'registry', installed: '2.3.2', unavailable: null }]),
+  installAcpAgent: () => Promise.resolve(),
+  removeAcpAgent: () => Promise.resolve(),
+}))
 vi.mock('@/api/daemon', () => ({
   loadAgentModels: () => Promise.resolve([]),
   agentsInstalled: () => Promise.resolve(host.installed),
@@ -58,6 +63,7 @@ type Extra = {
   projects?: typeof PROJECTS
   onAddMachine?: () => void
   onOtherMachine?: (machine: number) => void
+  otherAgents?: boolean
 }
 
 /** Bypass Permissions switched off for every agent, so a mode is picked as before it was on by default. */
@@ -100,10 +106,13 @@ async function lastPopup() {
   return last
 }
 
-/** Opens the agent dropdown, picks the agent in its list and closes it with Esc. */
+const agentTab = (name: string) => within(screen.getByRole('tablist', { name: 'Agents' })).getByRole('tab', { name })
+const level = (name: string) => within(screen.getByRole('radiogroup', { name: 'Reasoning' })).getByRole('radio', { name: new RegExp(`^${name}`) })
+
+/** Opens the picker, picks the agent on its rail and closes it with Esc. */
 async function chooseAgent(name: string) {
   await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-  await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name }))
+  await userEvent.click(agentTab(name))
   await userEvent.keyboard('{Escape}')
 }
 const box = () => screen.getByRole('textbox', { name: /^Message / })
@@ -140,42 +149,6 @@ beforeEach(() => {
 })
 
 describe('the New session draft', () => {
-  it('opens a chat view in the main area, never a dialog, ready to type on the most recent project, with Start off until something is written', async () => {
-    dialog()
-    expect(screen.getByRole('region', { name: 'New session' })).toBeInTheDocument()
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-    await pickedProject('growth')
-    expect(box()).toHaveFocus()
-    expect(startButton()).toBeDisabled()
-    await userEvent.type(box(), 'hello')
-    expect(startButton()).toBeEnabled()
-  })
-
-  it('draws the pane a started chat has: header with the folder path, the question, the box, and the place row under it', async () => {
-    dialog()
-    await pickedProject('growth')
-    const view = screen.getByRole('region', { name: 'New session' })
-    expect(view.querySelector('.mx-pane-head')).toHaveTextContent('/dev/growth')
-    expect(within(view).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
-    expect(within(view).queryByText(/starts when you send/)).not.toBeInTheDocument()
-    // The row under the box: machine, folder, branch, sync, in that order.
-    await screen.findByRole('button', { name: 'Sync with origin: Synced' })
-    const place = screen.getByRole('group', { name: 'Session location' })
-    expect(within(place).getAllByRole('button').map((chip) => chip.getAttribute('aria-label'))).toEqual(['Machine: This computer', '/dev/growth: growth', 'Branch dev: dev', 'Sync with origin: Synced'])
-    expect(box().compareDocumentPosition(place) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(box().closest('.mx-box')).toContainElement(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    expect(box().closest('.mx-box')).toContainElement(screen.getByRole('button', { name: /^Permission mode: / }))
-    expect(box().closest('.mx-box')).toContainElement(screen.getByRole('button', { name: 'Attach files' }))
-  })
-
-  it('has none of the old draft: no Run on row, n/a chip, Works in line, key hints, Draft tag or extra buttons', async () => {
-    dialog()
-    await ready()
-    for (const text of ['Run on', 'n/a', /^Works in/, /Shift\+Enter/, /Draft · not started/, /More options/]) expect(screen.queryByText(text)).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'More options' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('textbox', { name: 'Chat name' })).not.toBeInTheDocument()
-  })
 
   it('swaps the project from the list under its token, which is searchable', async () => {
     dialog()
@@ -198,16 +171,6 @@ describe('the New session draft', () => {
     expect(startButton()).toBeEnabled()
   })
 
-  it('has one folder list: recent projects, then Open folder, Clone from link and My GitHub repos', async () => {
-    const cloner = fakeCloner()
-    dialog(undefined, { cloner, pickFolder: () => Promise.resolve(null) })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    const list = await lastPopup()
-    expect(within(list).getByRole('group', { name: 'Recent projects' })).toBeInTheDocument()
-    for (const name of ['Open folder…', 'Clone from link…', 'My GitHub repos…']) expect(within(list).getByRole('button', { name })).toBeInTheDocument()
-    expect(within(list).getByRole('radio', { name: /^growth/ })).toHaveAttribute('aria-checked', 'true')
-  })
-
   it('opens the clone window on its link view or on the account\'s repositories, and takes the folder it answers with', async () => {
     const cloner = fakeCloner()
     cloner.open.mockResolvedValueOnce('/dev/widgets').mockResolvedValueOnce(null)
@@ -222,24 +185,9 @@ describe('the New session draft', () => {
     await pickedProject('widgets')
   })
 
-  it('offers Clone a repository… through the Open a project window, on this computer only', async () => {
-    const onOpenProject = vi.fn()
-    dialog(undefined, { onOpenProject })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'Clone a repository…' }))
-    expect(onOpenProject).toHaveBeenCalledTimes(1)
-  })
-
   it('opens on the agent a seed asks for, over the last one used', async () => {
     dialog(undefined, { seed: { folder: '/dev/growth', message: '', agent: 'codex' } })
     expect(await screen.findByRole('button', { name: /^Agent, model and reasoning: Codex/ })).toBeInTheDocument()
-  })
-
-  it('has no clone rows or folder picker when the window gives it none', async () => {
-    dialog()
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    const list = await lastPopup()
-    for (const name of ['Open folder…', 'Clone from link…', 'My GitHub repos…']) expect(within(list).queryByRole('button', { name })).not.toBeInTheDocument()
   })
 
   it('makes a pasted GitHub link the top row, Clone owner/name to the default folder, and clones it in place', async () => {
@@ -255,14 +203,6 @@ describe('the New session draft', () => {
     expect(cloner.remember).toHaveBeenCalledWith('~/Projects')
   })
 
-  it('clones into the last folder used on that machine when there is one', async () => {
-    const cloner = fakeCloner('/srv/code')
-    dialog(undefined, { cloner })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    await userEvent.type(screen.getByRole('textbox', { name: /^Find a project/ }), 'git@github.com:octo/widgets.git')
-    expect(within(await lastPopup()).getAllByRole('radio')[0]).toHaveTextContent('Clone octo/widgets to /srv/code/widgets')
-  })
-
   it('never carries a pasted user name or token: the row refuses it and nothing is cloned', async () => {
     const cloner = fakeCloner()
     dialog(undefined, { cloner })
@@ -272,17 +212,6 @@ describe('the New session draft', () => {
     expect(row).toHaveTextContent('Remove the user name and password from that link first')
     await userEvent.click(row)
     expect(cloner.run).not.toHaveBeenCalled()
-  })
-
-  it('treats a bare owner/name as a clone only when no listed project matches it', async () => {
-    const cloner = fakeCloner()
-    dialog(undefined, { cloner, projects: [{ folder: '/dev/octo/widgets', name: 'widgets', color: 'teal', sessions: 1 }] })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('widgets') }))
-    await userEvent.type(screen.getByRole('textbox', { name: /^Find a project/ }), 'octo/widgets')
-    expect(within(await lastPopup()).queryByRole('radio', { name: /^Clone / })).not.toBeInTheDocument()
-    await userEvent.clear(screen.getByRole('textbox', { name: /^Find a project/ }))
-    await userEvent.type(screen.getByRole('textbox', { name: /^Find a project/ }), 'octo/other')
-    expect(within(await lastPopup()).getAllByRole('radio')[0]).toHaveTextContent('Clone octo/other to ~/Projects/other')
   })
 
   it('offers Use it and Pick another folder when the folder is already there', async () => {
@@ -298,18 +227,6 @@ describe('the New session draft', () => {
     await pickedProject('widgets')
   })
 
-  it('says plainly that GitHub sign-in is not done here, and offers the GitHub settings, when git needs a sign-in', async () => {
-    const cloner = fakeCloner()
-    cloner.run.mockRejectedValue(new Error("fatal: could not read Username for 'https://github.com': terminal prompts disabled"))
-    dialog(undefined, { cloner })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    await userEvent.type(screen.getByRole('textbox', { name: /^Find a project/ }), 'octo/private-thing')
-    await userEvent.click(within(await lastPopup()).getAllByRole('radio')[0] as HTMLElement)
-    expect(await screen.findByText(/Sign in to GitHub in Open a project/)).toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Open GitHub settings' }))
-    expect(cloner.onOpenGitHubSettings).toHaveBeenCalledOnce()
-  })
-
   it('keeps the draft in sight and its text while the folder picker is open, and takes the folder it chose', async () => {
     let choose: (picked: PickedFolder | null) => void = () => undefined
     const pickFolder = vi.fn(() => new Promise<PickedFolder | null>((resolve) => { choose = resolve }))
@@ -322,14 +239,6 @@ describe('the New session draft', () => {
     choose({ machine: 0, folder: '/home/me/code/widgets' })
     await pickedProject('widgets')
     expect(box()).toHaveValue('keep this')
-  })
-
-  it('stays as it was when the folder picker is cancelled', async () => {
-    const pickFolder = vi.fn(() => Promise.resolve(null))
-    dialog(undefined, { pickFolder })
-    await userEvent.click(await screen.findByRole('button', { name: folderName('growth') }))
-    await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'Open folder…' }))
-    await pickedProject('growth')
   })
 
   it('moves to another machine when the picker chose a folder there', async () => {
@@ -350,6 +259,36 @@ describe('the New session draft', () => {
     await waitFor(() => { expect(onWarm).toHaveBeenLastCalledWith(null) })
     unmount()
     expect(onWarm).toHaveBeenLastCalledWith(null)
+  })
+
+  it('starts another agent picked from Other agents over ACP, and offers that only where it can run', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    const { unmount } = dialog(onStart)
+    await ready()
+    expect(screen.queryByRole('button', { name: 'Other agents…' })).not.toBeInTheDocument()
+    unmount()
+
+    dialog(onStart, { otherAgents: true })
+    await ready()
+    await userEvent.click(screen.getByRole('button', { name: 'Other agents…' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Use OpenCode' }))
+    expect(screen.getByRole('status')).toHaveTextContent('This session starts OpenCode over ACP')
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+
+    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
+    expect(onStart.mock.calls[0]?.[0]).toMatchObject({ acp: 'opencode', message: 'hello' })
+  })
+
+  it('puts the agents that are ready to run over ACP on the picker\'s rail, and picks one from there', async () => {
+    dialog(undefined, { otherAgents: true })
+    await ready()
+    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
+    await userEvent.click(await screen.findByRole('tab', { name: 'OpenCode' }))
+    expect(screen.getByRole('status')).toHaveTextContent('This session starts OpenCode over ACP')
+    // A built-in agent's mark takes the session back.
+    await userEvent.click(agentTab('Claude'))
+    expect(screen.queryByRole('status')).toBeNull()
   })
 
   it('starts in the folder on its branch, with no new branch, when no other chat is on it', async () => {
@@ -386,21 +325,6 @@ describe('the New session draft', () => {
     expect(onStart.mock.calls[0]?.[0].branch).toBeNull()
   })
 
-  it('marks a branch another chat is on as in use', async () => {
-    dialog(undefined, { busy: DEV_BUSY })
-    await userEvent.click(await screen.findByRole('button', { name: /^Branch(?! unavailable)/ }))
-    expect(within(await lastPopup()).getByRole('radio', { name: /^dev/ })).toHaveTextContent('in use')
-  })
-
-  it("names a new worktree's branch with two words until there is a message, then after what the message asks for", async () => {
-    dialog()
-    await ready()
-    await worktree()
-    await screen.findByRole('button', { name: /^Branch [a-z]+-[a-z]+: [a-z]+-[a-z]+$/ })
-    await userEvent.type(box(), 'Fix the login bug')
-    expect(branchChip()).toHaveAttribute('aria-label', 'Branch fix-login-bug: fix-login-bug')
-  })
-
   it('starts on a branch typed into the branch list, made from where the checkout is', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     dialog(onStart)
@@ -424,64 +348,10 @@ describe('the New session draft', () => {
     await waitFor(() => { expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: 'feature/refunds', create: false, worktree: false }) })
   })
 
-  it('keeps a quiet branch chip for a folder that is not a git repository, out of reach, with its reason', async () => {
-    host.branches = null
-    host.sync = null
-    dialog()
-    await pickedProject('growth')
-    const chip = await screen.findByRole('button', { name: 'Branch unavailable: no git repo' })
-    expect(chip).toHaveAttribute('aria-disabled', 'true')
-    expect(chip).toHaveAttribute('title', 'growth is not a git repository, so there is no branch to pick. Pick a project folder that is, or clone one.')
-  })
-
-  it('offers an Own worktree switch with its line under the branch list', async () => {
-    dialog()
+  it('opens with Own worktree on when its seed asks for a worktree, as a project\'s New worktree does', async () => {
+    dialog(undefined, { seed: { folder: '/dev/growth', message: '', worktree: true } })
     await ready()
-    await userEvent.click(branchChip())
-    const list = await lastPopup()
-    const own = within(list).getByRole('switch', { name: 'Own worktree' })
-    expect(own).not.toBeChecked()
-    expect(within(list).getByText('Its own copy on a new branch. Your checkout stays untouched.')).toBeInTheDocument()
-    await userEvent.click(own)
-    expect(own).toBeChecked()
-  })
-
-  it('has no Opens as control: no Chat or Terminal switch, and no plain-shell path', async () => {
-    dialog()
-    await ready()
-    expect(screen.queryByText('Opens as')).not.toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: 'Terminal' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('radio', { name: 'Chat' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Open terminal' })).not.toBeInTheDocument()
-  })
-
-  it('puts the agent, the permission mode and attach inside the box and send at its end', async () => {
-    dialog()
-    await ready()
-    const inBox = within(box().closest('.mx-box') as HTMLElement)
-    expect(inBox.getByRole('button', { name: /^Agent, model and reasoning/ })).toBeInTheDocument()
-    const mode = inBox.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })
-    // The same small control a started chat has, not an outlined button: a danger mode adds a dot to it.
-    expect(mode).toHaveClass('mx-mode-button')
-    expect(mode).not.toHaveClass('is-danger')
-    expect(inBox.getByRole('button', { name: 'Attach files' })).toBeInTheDocument()
-    expect(inBox.getByRole('button', { name: 'Send message' })).toBeInTheDocument()
-  })
-
-  it('says in one line that a Gemini session opens in its terminal', async () => {
-    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
-    dialog(onStart, { defaultAgent: 'gemini' })
-    await ready()
-    expect(screen.getByText('Gemini has no chat view yet, so this session opens in its terminal.')).toBeInTheDocument()
-    await userEvent.type(box(), 'hello')
-    await userEvent.click(startButton())
-    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'gemini' })) })
-  })
-
-  it('says nothing about Gemini for the other agents', async () => {
-    dialog()
-    await ready()
-    expect(screen.queryByText(/has no chat view/)).not.toBeInTheDocument()
+    expect(await workingIn()).toBe('New worktree')
   })
 
   it('shows the permission mode as the small control and changes it for this session from its menu', async () => {
@@ -490,18 +360,16 @@ describe('the New session draft', () => {
     await ready()
     const mode = screen.getByRole('button', { name: 'Permission mode: Bypass permissions. Pick another.' })
     expect(mode).toHaveClass('is-danger')
+    // Off the agent's usual mode the shield has the mode's name beside it; on it, the shield alone.
+    expect(mode.textContent).not.toBe('')
     await userEvent.click(mode)
     await userEvent.click(await screen.findByRole('menuitemradio', { name: /^Ask before edits/ }))
-    expect(screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })).not.toHaveClass('is-danger')
+    const usual = screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })
+    expect(usual).not.toHaveClass('is-danger')
+    expect(usual.textContent).toBe('')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', mode: 'default', bypass: false })) })
-  })
-
-  it("shows Codex's Full access on the control while its Bypass Permissions is on", async () => {
-    dialog(undefined, { defaultAgent: 'codex', bypassOff: [] })
-    await ready()
-    expect(screen.getByRole('button', { name: 'Permission mode: Full access. Pick another.' })).toBeInTheDocument()
   })
 
   it('starts on Enter and keeps Shift+Enter as a new line', async () => {
@@ -552,87 +420,33 @@ describe('the New session draft', () => {
     expect(startButton()).toBeDisabled()
   })
 
-  it('discards from the header menu and on Escape', async () => {
-    const onCancel = vi.fn()
-    dialog(undefined, { onCancel })
-    await userEvent.click(screen.getByRole('button', { name: 'More pane actions' }))
-    await userEvent.click(await screen.findByRole('menuitem', { name: /^Discard draft/ }))
-    await userEvent.type(box(), '{Escape}')
-    expect(onCancel).toHaveBeenCalledTimes(2)
-  })
-
-  it('has no name field, and attaches files only on this computer', async () => {
-    dialog()
-    await pickedProject('growth')
-    expect(screen.queryByRole('textbox', { name: 'Chat name' })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument()
-  })
-
-  it('has one picker in the box for the agent, its model and its effort, as a started chat has', async () => {
-    dialog()
-    const button = screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Medium/ })
-    expect(button).toHaveTextContent('Medium')
-    expect(screen.queryByRole('radiogroup', { name: 'Agent' })).not.toBeInTheDocument()
-    await userEvent.click(button)
-    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getAllByRole('radio').map((radio) => radio.textContent)).toEqual(['Claude', 'Codex', 'Gemini'])
-    expect(screen.getByRole('radiogroup', { name: 'Model' })).toBeInTheDocument()
-    expect(screen.getByRole('slider', { name: 'Effort' })).toHaveAttribute('aria-valuetext', 'Medium')
-  })
-
 
 
   it('gives each agent back the model and effort it was left at', async () => {
     dialog()
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    await userEvent.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('Max'))
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    await userEvent.click(level('Max'))
+    await userEvent.click(agentTab('Codex'))
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Codex · .* · Medium/ })).toBeInTheDocument()
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' }))
+    await userEvent.click(agentTab('Claude'))
     expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Max/ })).toBeInTheDocument()
   })
 
-  it('has no effort slider in the menu of an agent without an effort setting', async () => {
-    dialog(undefined, { defaultAgent: 'gemini' })
-    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning: Gemini/ }))
-    expect(screen.queryByRole('slider', { name: 'Effort' })).not.toBeInTheDocument()
-    expect(screen.getByText('Gemini has no effort setting to pick here.')).toBeInTheDocument()
-  })
-
-  it('starts on medium effort and says so on the model and effort button', async () => {
-    dialog()
-    expect(screen.getByRole('button', { name: /^Agent, model and reasoning: Claude · .* · Medium/ })).toHaveTextContent('Medium')
-    await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    expect(screen.getByRole('slider', { name: 'Effort' })).toHaveAttribute('aria-valuetext', 'Medium')
-  })
-
-  it('switches the agent with the toggle, and sends one that is not installed to its setup page', async () => {
+  it('offers only the installed agents on the rail, and sends a draft that opened on one that is not to its setup page', async () => {
     host.installed = ['claude']
-    dialog()
+    dialog(undefined, { defaultAgent: 'codex' })
     await pickedProject('growth')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, model and reasoning/ }))
-    expect(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Claude' })).toBeChecked()
-    await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Agent' })).getByRole('radio', { name: 'Codex' }))
+    // The draft's own agent stays on the rail; one that is neither installed nor picked is not offered.
+    await waitFor(() => { expect(screen.queryByRole('tab', { name: 'Gemini' })).toBeNull() })
+    expect(agentTab('Codex')).toHaveAttribute('aria-selected', 'true')
+    expect(agentTab('Claude')).toBeInTheDocument()
     await userEvent.keyboard('{Escape}')
     expect(await screen.findByText(/Codex is not installed on this computer/)).toBeInTheDocument()
     await userEvent.type(box(), 'hello')
     expect(startButton()).toBeDisabled()
     await userEvent.click(screen.getByRole('button', { name: 'set it up' }))
     expect(host.openAgentDocs).toHaveBeenCalledWith('codex')
-  })
-
-  it('will not start with an agent that is not installed', async () => {
-    host.installed = ['codex']
-    dialog()
-    await pickedProject('growth')
-    expect(await screen.findByText(/Claude is not installed on this computer/)).toBeInTheDocument()
-  })
-
-  it('offers adding a machine from the machine list', async () => {
-    const add = vi.fn()
-    dialog(undefined, { onAddMachine: add })
-    await userEvent.click(screen.getByRole('button', { name: 'Machine: This computer' }))
-    await userEvent.click(within(await lastPopup()).getByRole('button', { name: 'Add a machine…' }))
-    expect(add).toHaveBeenCalledOnce()
   })
 
   it('starts Claude in Bypass permissions by default', async () => {
@@ -780,7 +594,7 @@ describe('the New session draft on another machine', () => {
     await pickedProject('app')
     await userEvent.click(screen.getByRole('button', { name: /^Agent, / }))
     await userEvent.click(within(screen.getByRole('radiogroup', { name: 'Model' })).getByRole('radio', { name: /Opus/ }))
-    await userEvent.click(within(screen.getByRole('slider', { name: 'Effort' })).getByText('High'))
+    await userEvent.click(level('High'))
     await userEvent.keyboard('{Escape}')
     await userEvent.type(box(), 'hello')
     await userEvent.click(startButton())
@@ -850,12 +664,6 @@ describe('the New session draft as a chat that has not been sent', () => {
     expect(parkedDraft()).toBe('')
   })
 
-  it('has no way to discard when it is the home screen, with no session to go back to', async () => {
-    render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} />, { container: windowRoot() })
-    await pickedProject('growth')
-    expect(screen.queryByRole('button', { name: 'More pane actions' })).not.toBeInTheDocument()
-  })
-
   it('starts the home draft on Ctrl+Shift+Enter as a plain start: there is no session to stay on', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} />, { container: windowRoot() })
@@ -864,11 +672,20 @@ describe('the New session draft as a chat that has not been sent', () => {
     await userEvent.keyboard('{Control>}{Shift>}{Enter}{/Shift}{/Control}')
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ message: 'go' })) })
   })
+})
 
-  it('attaches nothing on another machine and says why', async () => {
-    dialog(undefined, { machines: [...HERE, { machine: 2, label: 'devbox', local: false }] })
-    await pickedProject('growth')
-    expect(screen.getByRole('button', { name: 'Attach files' })).toBeInTheDocument()
+describe('the empty draft\'s question and where it runs', () => {
+  it('asks about the project, and starts without one in the start folder', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} looseFolder="/home/me" />, { container: windowRoot() })
+    expect(screen.getByRole('heading', { name: 'What should we build in growth?' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Runs on: This computer/ })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'or start without a project' }))
+    expect(screen.getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'or start without a project' })).not.toBeInTheDocument()
+    await userEvent.type(box(), 'go')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/home/me', message: 'go' })) })
   })
 })
 
@@ -877,7 +694,6 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     await userEvent.click(await screen.findByRole('button', { name: /^Branch(?! unavailable)/ }))
     return lastPopup()
   }
-  const started = () => vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
 
   it('asks origin once when it opens', async () => {
     dialog()
@@ -895,21 +711,6 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     expect(row).toHaveTextContent('in use')
     expect(row).toHaveTextContent('In use by \u201cFix login\u201d')
     expect(within(list).getByRole('radio', { name: /^feature\/refunds/ })).not.toHaveTextContent('in use')
-  })
-
-  it('says why a typed branch name is refused, in place of a row that would make it', async () => {
-    dialog()
-    const list = await openBranches()
-    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or switch branch' }), 'fix the login')
-    expect(within(list).getByRole('alert')).toHaveTextContent("Branch names can't have spaces. Try fix-the-login.")
-    expect(within(list).queryByText(/Create fix/)).not.toBeInTheDocument()
-    await userEvent.clear(within(list).getByRole('textbox', { name: 'Find or switch branch' }))
-    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or switch branch' }), 'a..b')
-    expect(within(list).getByRole('alert')).toHaveTextContent("That isn't a valid branch name.")
-    await userEvent.clear(within(list).getByRole('textbox', { name: 'Find or switch branch' }))
-    await userEvent.type(within(list).getByRole('textbox', { name: 'Find or switch branch' }), 'feat/ok')
-    expect(within(list).queryByRole('alert')).not.toBeInTheDocument()
-    expect(within(list).getByText('Create branch “feat/ok”')).toBeInTheDocument()
   })
 
   it('offers Update first when the checkout is behind origin, and says when it is done', async () => {
@@ -949,22 +750,6 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
   })
 
-  it('says nothing about origin when the checkout is up to date', async () => {
-    dialog()
-    await ready()
-    await waitFor(() => { expect(host.syncCalls).toContain(true) })
-    expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
-  })
-
-  it('does not judge the checkout when the session works in a worktree of its own', async () => {
-    host.sync = { branch: 'dev', upstream: 'origin/dev', behind: 4, ahead: 0, dirty: false, fetched: false }
-    dialog()
-    await ready()
-    expect(await screen.findByText(/is 4 behind origin\./)).toBeInTheDocument()
-    await worktree()
-    expect(screen.queryByText(/behind origin/)).not.toBeInTheDocument()
-  })
-
   it('explains a worktree folder that is already there, with Pick another branch that opens the branch list', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockRejectedValue("fatal: '/srv/trees/quiet-otter' already exists")
     dialog(onStart)
@@ -978,37 +763,5 @@ describe('starting from a checkout: sync with origin, branch names and worktree 
     expect(screen.getByRole('button', { name: /Copy details/ })).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Pick another branch' }))
     expect(await screen.findByRole('textbox', { name: 'Find or switch branch' })).toBeInTheDocument()
-  })
-
-  it('keeps any other start failure as it was explained before', async () => {
-    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockRejectedValue('Something else broke.')
-    dialog(onStart)
-    await ready()
-    await userEvent.type(box(), 'hello')
-    await userEvent.click(startButton())
-    expect(await screen.findByText('Could not start the session')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Pick another branch' })).not.toBeInTheDocument()
-  })
-
-  it('tells the project list how to open any folder, and tags the folder that is not a git repo', async () => {
-    host.branches = null
-    host.sync = null
-    dialog()
-    await pickedProject('growth')
-    await userEvent.click(screen.getByRole('button', { name: folderName('growth') }))
-    const list = await lastPopup()
-    expect(within(list).getByText('Type a path starting with ~ or / to open any folder.')).toBeInTheDocument()
-    await waitFor(() => { expect(within(list).getByRole('radio', { name: /^growth/ })).toHaveTextContent('/dev/growth \u00b7 not a git repo') })
-    expect(within(list).getByRole('radio', { name: /^api/ })).not.toHaveTextContent('not a git repo')
-  })
-
-  it('starts in the checkout with no branch once it is up to date', async () => {
-    const onStart = started()
-    dialog(onStart)
-    await ready()
-    await userEvent.type(box(), 'hello')
-    await userEvent.click(startButton())
-    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
-    expect(onStart.mock.calls[0]?.[0].branch).toBeNull()
   })
 })

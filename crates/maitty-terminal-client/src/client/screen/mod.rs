@@ -607,7 +607,7 @@ pub(super) fn rank(s: Status) -> u8 {
 pub(super) fn side_focused(app: &App) -> bool {
     matches!(
         app.mode,
-        Mode::Side | Mode::Helpers { side: true, .. }
+        Mode::Side | Mode::Helpers { side: true, .. } | Mode::ChatHelpers { side: true, .. }
     )
 }
 
@@ -1014,11 +1014,7 @@ impl App {
                 c.worktree.as_deref().unwrap_or(&c.cwd)
             };
             let wi = add_wt(&mut projs[pi], wt, String::new(), true);
-            let provider = match c.provider {
-                crate::conversation::Provider::Codex => "Codex",
-                crate::conversation::Provider::Claude => "Claude",
-                crate::conversation::Provider::Gemini => "Gemini",
-            };
+            let provider = c.agent_label();
             let checks = c.checks.clone();
             let check = crate::protocol::headline(&checks).cloned();
             projs[pi].wts[wi].sessions.push(Session {
@@ -1042,7 +1038,7 @@ impl App {
                 quiet_seen: false,
                 exit: None,
                 exit_seen: false,
-                question: None,
+                question: (!c.helper_ask.is_empty()).then(|| helpers_line(c.helper_ask.len())),
                 is_agent: true,
                 check,
                 checks,
@@ -1608,6 +1604,8 @@ pub(super) enum ScreenHit {
     Approve(check_approve::ApproveHit),
     /// A choice in that question.
     HelperAnswer(ClientTerm, crate::protocol::HelperChoice),
+    /// The same choice, for a chat with no terminal.
+    ChatHelperAnswer(ClientSession, crate::protocol::HelperChoice),
     SecretGive(ClientTerm),
     SecretDecline(ClientTerm),
     /// A button or row of Settings › Check.

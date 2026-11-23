@@ -1003,6 +1003,20 @@ async fn ask_running_daemon_if_it_reads(message: &ClientMsg) -> Result<Reply> {
     .await
 }
 
+/// Change a shared setting whose key is newer than the oldest daemon this app talks to (the helper settings). An
+/// older daemon cannot read the key and would pass over it without a word, so it is refused in words; the running
+/// one answers that it took the change, or says why not.
+pub async fn set_newer_shared_setting(
+    key: maitty_shared::settings_view::SettingKey,
+    value: maitty_shared::settings_view::SettingValue,
+) -> Result<()> {
+    let message = ClientMsg::Command(Command::SetSetting { key, value });
+    match ask_running_daemon_if_it_reads(&message).await? {
+        Reply::Ok => Ok(()),
+        _ => bail!("The Maiker service gave an answer this app does not understand (a setting). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
 /// Whether a repository question is newer than the oldest daemon this app talks to, so the running daemon's
 /// version is checked before it is asked.
 fn repo_question_needs_version(message: &ClientMsg) -> bool {
@@ -1195,16 +1209,49 @@ pub async fn git_request(term: u32, request: maitty_shared::protocol::GitRequest
     }
 }
 
+/// Have the daemon that owns pane `term` discard the uncommitted changes of the one file `path`
+/// in the checkout the pane is in. The line saying what it did, or an error whose text is the
+/// daemon's one line saying why not. This computer's daemon may be older than the app and would
+/// never answer, so it is refused in words; another machine's is on this version or not used.
+pub async fn discard_file(term: u32, path: String, daemon: impl Into<Daemon>) -> Result<String> {
+    let limit = Duration::from_secs(maitty_shared::discard::DISCARD_LIMIT_SECS + DISCARD_SLACK_SECS);
+    let asked = ClientMsg::Query(Query::DiscardFile { term, path, tag: 0 });
+    let reply = match daemon.into() {
+        Daemon::Local(_) => {
+            answered_within(limit, async {
+                let (mut connection, version) = ipc::open_for_user_knowing_version()
+                    .await
+                    .context("Could not reach the Maiker service")?;
+                refuse_unless_daemon_reads(&asked, version)?;
+                ask(&mut connection, &asked).await
+            })
+            .await?
+        }
+        remote => request_within(asked, remote, limit).await?,
+    };
+    match reply {
+        Reply::GitDone { outcome: Ok(line), .. } => Ok(line),
+        Reply::GitDone { outcome: Err(why), .. } => bail!("{why}"),
+        _ => bail!("The Maiker service gave an answer this app does not understand (discard). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+/// How much longer than the daemon gives a discard its answer is waited for, so the daemon's own
+/// "stopped after" line is what arrives.
+const DISCARD_SLACK_SECS: u64 = 15;
+
 /// `git worktree add` for `branch` next to the repository `term` is in (new from `base`, or the
 /// repo's HEAD); the daemon opens it as a new session. `branch` names an existing branch to
-/// check it out instead.
+/// check it out instead. `daemon` is the one that owns the pane: this computer's, or another
+/// machine's, whose list is asked of it for the pane's workspace.
 pub async fn new_worktree_session(
     term: u32,
     branch: String,
     base: Option<String>,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
-    let snapshot = match request(ClientMsg::Query(Query::List), daemon_executable.clone()).await? {
+    let daemon = daemon.into();
+    let snapshot = match request(ClientMsg::Query(Query::List), daemon.clone()).await? {
         Reply::List(snapshot) => snapshot,
         _ => bail!("The Maiker service gave an answer this app does not understand (session list). Restart the service in Settings, or update the app so both are the same version."),
     };
@@ -1230,7 +1277,7 @@ pub async fn new_worktree_session(
             agent: None,
             prompt: None,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1556,6 +1603,46 @@ pub async fn answer_helpers(
     }
 }
 
+/// The open pull requests of the repository `folder` is in, from the daemon of the machine the folder is on, where
+/// `gh` and its sign-in are; `fresh` asks past the list that daemon keeps for a minute. This computer's daemon may
+/// be older than the question and is then refused in words; another machine's is on this version or not used.
+/// The daemon gives `gh` less time than a request has, so the usual limit is enough.
+pub async fn pull_requests(
+    folder: String,
+    fresh: bool,
+    daemon: impl Into<Daemon>,
+) -> Result<maitty_shared::protocol::GitHubAnswer<maitty_shared::protocol::ProjectPulls>> {
+    let message = pull_requests_message(folder, fresh);
+    let reply = match daemon.into() {
+        Daemon::Local(_) => ask_running_daemon_if_it_reads(&message).await?,
+        remote => request(message, remote).await?,
+    };
+    match reply {
+        Reply::PullRequests { answer, .. } => Ok(answer),
+        _ => bail!("The Maiker service gave an answer this app does not understand (pull requests). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+fn pull_requests_message(folder: String, fresh: bool) -> ClientMsg {
+    ClientMsg::Query(Query::PullRequests { folder, fresh, tag: 0 })
+}
+
+/// The person's answer to a chat that asked to start helpers (ADR 0016). A service too old to
+/// read the command is refused in words here.
+pub async fn answer_chat_helpers(
+    conversation: u64,
+    choice: maitty_shared::protocol::HelperChoice,
+) -> Result<Value> {
+    let message = ClientMsg::Command(Command::AnswerChatHelpers {
+        conversation: maitty_shared::conversation::ConversationId(conversation),
+        choice,
+    });
+    match ask_running_daemon_if_it_reads(&message).await? {
+        Reply::Ok => Ok(Value::Null),
+        _ => bail!("The Maiker service gave an answer this app does not understand (helper answer). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
 /// What the person chose for a repo-supplied check command: `once`, `always` or `never`.
 pub fn approval_choice(word: &str) -> Result<maitty_shared::protocol::ApprovalChoice> {
     use maitty_shared::protocol::ApprovalChoice;
@@ -1745,14 +1832,14 @@ pub async fn cancel_conversation(
 pub async fn rename_conversation(
     id: u64,
     title: String,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationRename {
             id: maitty_shared::conversation::ConversationId(id),
             title,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1764,14 +1851,14 @@ pub async fn rename_conversation(
 pub async fn archive_conversation(
     id: u64,
     archived: bool,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationArchive {
             id: maitty_shared::conversation::ConversationId(id),
             archived,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1827,13 +1914,13 @@ pub async fn allow_conversation_always(
 }
 
 /// Close a chat with an undo window: the daemon hides it at once and ends it when the window passes.
-pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon_executable: PathBuf) -> Result<Value> {
+pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon: impl Into<Daemon>) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationClose {
             id: maitty_shared::conversation::ConversationId(id),
             generation,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1843,12 +1930,12 @@ pub async fn close_conversation_with_undo(id: u64, generation: u64, daemon_execu
 }
 
 /// Bring back a chat closed with `close_conversation_with_undo` while its window is open.
-pub async fn undo_close_conversation(id: u64, daemon_executable: PathBuf) -> Result<Value> {
+pub async fn undo_close_conversation(id: u64, daemon: impl Into<Daemon>) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationUndoClose {
             id: maitty_shared::conversation::ConversationId(id),
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -1998,14 +2085,14 @@ pub async fn forget_allowed_command(
 pub async fn end_conversation(
     id: u64,
     generation: u64,
-    daemon_executable: PathBuf,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
     let reply = request(
         ClientMsg::Command(Command::ConversationEnd {
             id: maitty_shared::conversation::ConversationId(id),
             generation,
         }),
-        daemon_executable,
+        daemon,
     )
     .await?;
     match reply {
@@ -2042,35 +2129,48 @@ impl Permissions {
     }
 }
 
-/// The posture of a chat session: it asks before a tool use the provider does not allow by itself,
-/// unless the caller asks for the provider's own skip-permissions mode (ADR 0005, ADR 0003).
-fn chat_session_permissions(full_access: bool) -> Permissions {
-    if full_access {
-        Permissions::FullAccess
-    } else {
-        Permissions::WorkspaceWrite
-    }
-}
-
-/// Start a chat session: a structured conversation the daemon owns (ADR 0003). With `full_access` the
-/// provider runs unsandboxed and without approvals; there is no other posture to choose. With a
+/// Start a chat session: a structured conversation the daemon owns (ADR 0003), with the posture the
+/// person picked for it (ADR 0020: the New session draft starts chats, and carries its mode). With a
 /// `branch` the daemon makes a worktree for it from the project at `cwd` and starts there.
 pub async fn start_chat_session(
     cwd: PathBuf,
     provider: Provider,
     branch: Option<String>,
-    full_access: bool,
-    daemon_executable: PathBuf,
+    permissions: Permissions,
+    daemon: impl Into<Daemon>,
 ) -> Result<Value> {
-    create_conversation(
-        cwd,
-        provider,
-        chat_session_permissions(full_access),
-        branch,
-        daemon_executable,
-    )
-    .await
+    match daemon.into() {
+        Daemon::Local(daemon_executable) => create_conversation(cwd, provider, permissions, branch, daemon_executable).await,
+        // Another machine's worktree is made before the start (`Command::BranchWorktree`), so a start there names its folder alone.
+        remote @ Daemon::Remote(_) if branch.is_none() => start_conversation(remote_agent_target(cwd, provider, permissions)?, None, remote).await,
+        Daemon::Remote(_) => bail!("A chat on another machine starts in a folder that is already there; make its worktree first"),
+    }
 }
+
+/// The start of a Claude Code or Codex chat on another machine. This computer cannot know where
+/// that machine keeps the agent or its settings, so the start names neither: its daemon finds both.
+fn remote_agent_target(cwd: PathBuf, provider: Provider, permissions: Permissions) -> Result<StartTarget> {
+    if !matches!(provider, Provider::Claude | Provider::Codex) {
+        bail!("Only Claude Code and Codex start a chat by their provider");
+    }
+    let (sandbox, approval_policy) = permissions.launch_policy();
+    Ok(StartTarget::Agent { provider, cwd: remote_folder(cwd)?, sandbox, approval_policy })
+}
+
+/// A folder on another machine, which this computer cannot look at: one plain absolute POSIX path
+/// (a Windows remote is out, ADR 0007). That machine's daemon checks that it is there.
+fn remote_folder(cwd: PathBuf) -> Result<PathBuf> {
+    let plain = cwd.to_str().is_some_and(|text| {
+        text.starts_with('/') && text.len() <= REMOTE_FOLDER_MAX && !text.chars().any(char::is_control)
+    });
+    if !plain {
+        bail!("The folder on the other machine must be a plain absolute path");
+    }
+    Ok(cwd)
+}
+
+/// Longest folder sent to another machine, in bytes.
+const REMOTE_FOLDER_MAX: usize = 4096;
 
 pub async fn create_conversation(
     cwd: PathBuf,
@@ -2079,6 +2179,40 @@ pub async fn create_conversation(
     branch: Option<String>,
     daemon_executable: PathBuf,
 ) -> Result<Value> {
+    let settings = chat_launch_settings(cwd, provider, permissions)?;
+    start_conversation(StartTarget::Create(settings), branch, daemon_executable).await
+}
+
+/// Open a saved Claude Code or Codex conversation as a chat session the daemon owns: the agent's own
+/// session `session` in `cwd`, continued where it stopped, with its earlier messages as the history.
+pub async fn resume_chat_session(
+    cwd: PathBuf,
+    provider: Provider,
+    session: String,
+    permissions: Permissions,
+    daemon_executable: PathBuf,
+) -> Result<Value> {
+    let target = saved_session_target(chat_launch_settings(cwd, provider, permissions)?, session)?;
+    start_conversation(target, None, daemon_executable).await
+}
+
+/// The start that opens the agent's saved session `session`. The name comes from the window, so it
+/// is checked here: it becomes part of a file name and of the agent's command line.
+fn saved_session_target(settings: LaunchSettings, session: String) -> Result<StartTarget> {
+    let mut letters = session.chars();
+    let named = letters.next().is_some_and(|first| first.is_ascii_alphanumeric())
+        && session.len() <= MAX_SAVED_SESSION_NAME
+        && letters.all(|letter| letter.is_ascii_alphanumeric() || letter == '-' || letter == '_');
+    if !named {
+        bail!("{session:?} is not a saved conversation's name");
+    }
+    Ok(StartTarget::Session { settings, thread_id: session })
+}
+
+/// The longest name an agent gives a saved session, as the daemon's saved list allows.
+const MAX_SAVED_SESSION_NAME: usize = 128;
+
+fn chat_launch_settings(cwd: PathBuf, provider: Provider, permissions: Permissions) -> Result<LaunchSettings> {
     let cwd = cwd
         .canonicalize()
         .context("The project folder is not there. It may have been moved or deleted")?;
@@ -2090,9 +2224,12 @@ pub async fn create_conversation(
         Provider::Claude => (claude_executable()?, claude_config_dir()?),
         // Gemini runs in a terminal and its chat is read from the transcript; it has no structured runtime.
         Provider::Gemini => bail!("Gemini has no structured chat; start it in a terminal"),
+        // The daemon picks an ACP agent's program from its own config; this start names a program itself.
+        Provider::Acp => bail!("An agent run over ACP cannot be started from here yet"),
     };
     let (sandbox, approval_policy) = permissions.launch_policy();
-    let settings = LaunchSettings {
+    Ok(LaunchSettings {
+        agent: None,
         provider,
         executable,
         config_root,
@@ -2101,20 +2238,141 @@ pub async fn create_conversation(
         model_provider: None,
         approval_policy,
         sandbox,
-    };
-    let reply = request(
-        ClientMsg::Command(Command::ConversationStart {
-            target: StartTarget::Create(settings),
-            branch,
-        }),
-        daemon_executable,
-    )
-    .await?;
+    })
+}
+
+async fn start_conversation(target: StartTarget, branch: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
+    let reply = request(ClientMsg::Command(Command::ConversationStart { target, branch }), daemon).await?;
     match reply {
         Reply::ConversationStarted { id, generation } => {
             Ok(json!({"id": id, "generation": generation}))
         }
         _ => bail!("The Maiker service gave an answer this app does not understand (conversation start). Restart the service in Settings, or update the app so both are the same version."),
+    }
+}
+
+/// Start a chat with `agent` over ACP in `cwd`. Only the agent's name is sent: the daemon picks
+/// its program from its own config, so this app never names a program to run.
+pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon: impl Into<Daemon>) -> Result<Value> {
+    let daemon = daemon.into();
+    let target = match &daemon {
+        Daemon::Local(_) => acp_start_target(cwd, agent)?,
+        Daemon::Remote(_) => remote_acp_target(cwd, agent)?,
+    };
+    start_conversation(target, None, daemon).await
+}
+
+/// `acp_start_target` for another machine, whose folders this computer cannot look at.
+fn remote_acp_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
+    if !maitty_shared::conversation::acp_agent_name(&agent) {
+        bail!("{agent:?} is not an agent's name");
+    }
+    Ok(StartTarget::Acp { agent, cwd: remote_folder(cwd)? })
+}
+
+fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
+    if !maitty_shared::conversation::acp_agent_name(&agent) {
+        bail!("{agent:?} is not an agent's name");
+    }
+    let cwd = cwd
+        .canonicalize()
+        .context("The project folder is not there. It may have been moved or deleted")?;
+    if !cwd.is_dir() {
+        bail!("The project path is a file, not a folder.");
+    }
+    Ok(StartTarget::Acp { agent, cwd })
+}
+
+#[cfg(test)]
+mod remote_start_tests {
+    use super::{ApprovalPolicy, Permissions, Provider, Sandbox, StartTarget, remote_acp_target, remote_agent_target};
+
+    #[test]
+    fn a_chat_on_another_machine_names_the_provider_folder_and_posture_and_no_program() {
+        let target = remote_agent_target("/home/dev/app".into(), Provider::Claude, Permissions::parse("full-access").unwrap()).unwrap();
+
+        assert_eq!(target, StartTarget::Agent {
+            provider: Provider::Claude,
+            cwd: "/home/dev/app".into(),
+            sandbox: Sandbox::FullAccess,
+            approval_policy: ApprovalPolicy::Never,
+        });
+    }
+
+    #[test]
+    fn a_folder_that_is_not_a_plain_absolute_path_and_an_agent_with_no_provider_start_are_refused() {
+        let asks = || Permissions::parse("workspace-write").unwrap();
+
+        assert!(remote_agent_target("app".into(), Provider::Codex, asks()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_agent_target("/home/dev/a\nb".into(), Provider::Codex, asks()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_agent_target("/home/dev/app".into(), Provider::Gemini, asks()).unwrap_err().to_string().contains("Only Claude Code and Codex"));
+        assert!(remote_acp_target("C:\\app".into(), "opencode".into()).unwrap_err().to_string().contains("plain absolute path"));
+        assert!(remote_acp_target("/home/dev/app".into(), "Not A Name".into()).unwrap_err().to_string().contains("not an agent's name"));
+    }
+
+    #[test]
+    fn an_acp_chat_on_another_machine_names_the_agent_and_the_folder_as_given() {
+        let target = remote_acp_target("/no/such/folder/here".into(), "opencode".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Acp { agent: "opencode".into(), cwd: "/no/such/folder/here".into() });
+    }
+}
+
+#[cfg(test)]
+mod acp_start_tests {
+    use super::{StartTarget, acp_start_target};
+
+    #[test]
+    fn an_acp_start_names_the_agent_and_a_folder_that_is_there() {
+        let folder = std::env::temp_dir().canonicalize().unwrap();
+
+        let target = acp_start_target(folder.clone(), "claude".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Acp { agent: "claude".into(), cwd: folder });
+    }
+
+    #[test]
+    fn an_acp_start_refuses_a_name_that_is_no_agents_a_missing_folder_and_a_file() {
+        let file = std::env::current_exe().unwrap();
+
+        assert!(acp_start_target(std::env::temp_dir(), "Not A Name".into()).unwrap_err().to_string().contains("not an agent's name"));
+        assert!(acp_start_target("/no/such/folder/anywhere".into(), "claude".into()).unwrap_err().to_string().contains("not there"));
+        assert!(acp_start_target(file, "claude".into()).unwrap_err().to_string().contains("a file"));
+    }
+}
+
+#[cfg(test)]
+mod saved_session_tests {
+    use super::{ApprovalPolicy, LaunchSettings, Provider, Sandbox, StartTarget, saved_session_target};
+
+    fn settings() -> LaunchSettings {
+        LaunchSettings {
+            agent: None,
+            provider: Provider::Claude,
+            executable: "/bin/claude".into(),
+            config_root: "/home/someone/.claude".into(),
+            cwd: "/code".into(),
+            model: None,
+            model_provider: None,
+            approval_policy: ApprovalPolicy::OnRequest,
+            sandbox: Sandbox::WorkspaceWrite,
+        }
+    }
+
+    #[test]
+    fn a_saved_session_is_opened_by_its_own_name_with_the_settings_asked_for() {
+        let target = saved_session_target(settings(), "0b5c-9a_1".into()).unwrap();
+
+        assert_eq!(target, StartTarget::Session { settings: settings(), thread_id: "0b5c-9a_1".into() });
+    }
+
+    #[test]
+    fn a_name_no_agent_gives_a_session_is_refused_before_it_reaches_the_service() {
+        for name in ["", "-leading", "../escape", "two words", "a;b", &"a".repeat(129)] {
+            let refused = saved_session_target(settings(), name.to_owned()).unwrap_err().to_string();
+
+            assert!(refused.contains("not a saved conversation's name"), "{name:?}: {refused}");
+        }
     }
 }
 
@@ -2496,6 +2754,7 @@ pub fn forget_remote(key: RemoteKey) {
 fn safe_to_ask_twice(query: &Query) -> bool {
     match query {
         Query::Git { .. }
+        | Query::DiscardFile { .. }
         | Query::GitIdentityRule { .. }
         | Query::CloneRepo { .. }
         | Query::FolderGit { .. }
@@ -2521,6 +2780,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::GitHubAccounts { .. }
         | Query::GitHubRepos { .. }
         | Query::GitHubOwners { .. }
+        | Query::PullRequests { .. }
         | Query::AgentCommands { .. }
         | Query::Repositories { .. }
         | Query::GitIdentities { .. }
@@ -2864,13 +3124,6 @@ mod request_timeout_tests {
 
         assert!(error.to_string().contains("did not answer"), "{error}");
     }
-
-    #[tokio::test]
-    async fn an_answer_in_time_is_passed_on_as_it_is() {
-        let answer = answered_within(Duration::from_secs(5), async { Ok(7) }).await;
-
-        assert_eq!(answer.unwrap(), 7);
-    }
 }
 
 /// Ask `message` and tell the daemon's refusal (the inner `Err`, the line still good) from a line
@@ -3195,6 +3448,50 @@ mod agent_command_tests {
         assert!(daemon_reads(&drop, PROTOCOL_VERSION));
     }
 
+    #[test]
+    fn a_discard_is_refused_in_words_for_a_daemon_from_before_it_and_never_asked_twice() {
+        use super::{ClientMsg, Query, refuse_unless_daemon_reads, safe_to_ask_twice};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, DISCARD_FILE_SINCE, PROTOCOL_VERSION};
+        let query = Query::DiscardFile { term: 3, path: "a.txt".into(), tag: 0 };
+        assert!(!safe_to_ask_twice(&query), "a discard asked again after the first landed would report a failure");
+        let discard = ClientMsg::Query(query);
+        let refused = refuse_unless_daemon_reads(&discard, COMPATIBLE_SINCE).expect_err("a daemon at the window's start cannot read it");
+        assert!(refused.to_string().contains("older than this app"), "{refused}");
+        assert!(refuse_unless_daemon_reads(&discard, DISCARD_FILE_SINCE).is_ok());
+        assert!(refuse_unless_daemon_reads(&discard, PROTOCOL_VERSION).is_ok());
+    }
+
+    #[test]
+    fn a_service_from_before_pull_request_lists_is_refused_in_words_and_never_asked() {
+        use super::{daemon_reads, pull_requests_message, refuse_unless_daemon_reads};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, PULL_REQUESTS_SINCE};
+        let message = pull_requests_message("~/code/app".into(), false);
+        assert!(daemon_reads(&message, PROTOCOL_VERSION));
+        assert!(refuse_unless_daemon_reads(&message, PULL_REQUESTS_SINCE).is_ok());
+        for older in COMPATIBLE_SINCE..PULL_REQUESTS_SINCE {
+            let refused = refuse_unless_daemon_reads(&message, older).unwrap_err();
+            assert!(format!("{refused:#}").contains("older than this app"), "{refused:#}");
+        }
+    }
+
+    #[test]
+    fn a_helper_setting_is_refused_in_words_to_a_daemon_from_before_it() {
+        use super::{ClientMsg, Command, refuse_unless_daemon_reads};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, HELPER_SETTINGS_SINCE};
+        use maitty_shared::settings_view::{SettingKey, SettingValue};
+        let limit = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::HelpersAtOnce,
+            value: SettingValue::Text("8".into()),
+        });
+        let refused = refuse_unless_daemon_reads(&limit, HELPER_SETTINGS_SINCE - 1).unwrap_err();
+        assert!(refused.to_string().contains("older than this app"), "{refused:#}");
+        assert!(refuse_unless_daemon_reads(&limit, HELPER_SETTINGS_SINCE).is_ok());
+        let older_key = ClientMsg::Command(Command::SetSetting {
+            key: SettingKey::UpdateMachines,
+            value: SettingValue::Bool(true),
+        });
+        assert!(refuse_unless_daemon_reads(&older_key, COMPATIBLE_SINCE).is_ok());
+    }
 
     #[test]
     fn a_terminal_send_carries_its_operation_only_to_a_daemon_that_honours_it() {
@@ -3387,23 +3684,21 @@ mod pane_command_tests {
 
 #[cfg(test)]
 mod chat_posture_tests {
-    use super::{chat_session_permissions, Permissions};
+    use super::Permissions;
     use maitty_shared::conversation::{ApprovalPolicy, Sandbox};
 
     #[test]
-    fn a_chat_session_asks_unless_full_access_is_requested() {
-        assert_eq!(
-            chat_session_permissions(false).launch_policy(),
-            (Sandbox::WorkspaceWrite, ApprovalPolicy::OnRequest)
-        );
-        assert!(matches!(
-            chat_session_permissions(true),
-            Permissions::FullAccess
-        ));
-        assert_eq!(
-            chat_session_permissions(true).launch_policy(),
-            (Sandbox::FullAccess, ApprovalPolicy::Never)
-        );
+    fn a_chat_session_asks_unless_full_access_is_picked() {
+        let policy = |picked: &str| Permissions::parse(picked).unwrap().launch_policy();
+
+        assert_eq!(policy("read-only"), (Sandbox::ReadOnly, ApprovalPolicy::OnRequest));
+        assert_eq!(policy("workspace-write"), (Sandbox::WorkspaceWrite, ApprovalPolicy::OnRequest));
+        assert_eq!(policy("full-access"), (Sandbox::FullAccess, ApprovalPolicy::Never));
+    }
+
+    #[test]
+    fn a_posture_this_app_does_not_know_is_refused() {
+        assert!(Permissions::parse("anything").is_err());
     }
 }
 

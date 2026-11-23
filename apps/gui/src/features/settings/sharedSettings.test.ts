@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SharedSettings } from '@/api/sharedSettings'
-import { framesOfTuiSpinner } from '@/lib/spinner-clock'
+import { framesOfTuiSpinner } from '@/lib/spinner-styles'
 import { readSettingsPreferences } from './preferences'
 import { applyShared, changesToSend, sharedFrom } from './sharedSettings'
 
@@ -14,9 +14,10 @@ const SHARED: SharedSettings = {
   spinner: [...framesOfTuiSpinner('snake')],
   start_dir: '/srv',
   reduce_motion: true,
-  window_style: 'glass',
   bypass_off: ['gemini'],
   update_machines: false,
+  helpers: 'ask',
+  helpers_at_once: 4,
 }
 
 describe('the settings shared with the terminal app', () => {

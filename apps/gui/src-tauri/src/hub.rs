@@ -13,6 +13,7 @@ use maitty_machines::connections::{Burst, Connections, NotConnected, SERVER_BURS
 use maitty_machines::link::{
     ConnectionState, LinkControl, LinkEvent, Links, Timing, configured_machines,
 };
+use maitty_machines::link_failure::{ClientOs, FailureClass, Subject, fix_command, sentence_here};
 use maitty_machines::machine_ids::{IdCheck, MachineIds, check_daemon_id};
 use maitty_machines::machine_config::Grant;
 use maitty_machines::remote_policy::{MachineOpts, vet};
@@ -130,6 +131,17 @@ struct Shared {
     routes: Mutex<BTreeMap<MachineId, Machine>>,
     /// When each machine that is not connected stopped being, in milliseconds since the epoch.
     down_since: Mutex<BTreeMap<MachineId, u64>>,
+    /// What each machine's state last said, as the window was told it: what a request it could
+    /// not take answers with, so a refusal says why and not only that it was refused.
+    last_said: Mutex<BTreeMap<MachineId, StateWords>>,
+}
+
+/// A machine's last state in words: its kind and, when a person has to act, the sentence why.
+#[derive(Clone, Debug, PartialEq)]
+pub struct StateWords {
+    pub kind: &'static str,
+    pub why: Option<String>,
+    pub attempt: Option<u32>,
 }
 
 fn is_typing(msg: &ClientMsg) -> bool {
@@ -281,6 +293,16 @@ impl HubHandle {
         } else {
             Some(*down.entry(machine).or_insert(now_ms))
         }
+    }
+
+    /// Keep what the window was last told of the machine, for the requests it cannot take.
+    pub fn note_state(&self, machine: MachineId, words: StateWords) {
+        lock(&self.shared.last_said).insert(machine, words);
+    }
+
+    /// What the window was last told of the machine, if anything.
+    pub fn last_said(&self, machine: MachineId) -> Option<StateWords> {
+        lock(&self.shared.last_said).get(&machine).cloned()
     }
 
     /// How many keystrokes the machine could not take while it was down, and start counting again.
@@ -516,6 +538,7 @@ impl Hub {
                 lock(&shared.allowance).remove(&machine);
                 lock(&shared.list_wanted).remove(&machine);
                 lock(&shared.down_since).remove(&machine);
+                lock(&shared.last_said).remove(&machine);
                 if self.ids.forget(&configured) {
                     self.ids.save(&self.ids_file);
                 }
@@ -649,14 +672,19 @@ impl Drop for Hub {
     }
 }
 
-/// A machine's state as the window is told it (`machine-state`): the kind, and the words that
-/// say what to do when a person has to act.
+/// A machine's state as the window is told it (`machine-state`): the kind, and the sentence that
+/// says what to do when a person has to act.
 #[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct MachineState {
     pub machine: u16,
     pub name: String,
     pub state: &'static str,
+    /// The failure as one sentence that names the machine and gives the fix (`link_failure::sentence`).
     pub why: Option<String>,
+    /// Which failure it is (`FailureClass::kind`), so the window picks its button by it, never by the words.
+    pub failure: Option<&'static str>,
+    /// The one command the sentence asks for, for a Copy button.
+    pub fix_command: Option<String>,
     /// On needs-login: ssh's own last line, so the window can show why it could not log in.
     pub said: Option<String>,
     /// On needs-login: the line to run in a terminal to log in by hand (`ssh -p 2222 me@box ...`).
@@ -675,30 +703,26 @@ pub struct MachineState {
     pub sounds: bool,
 }
 
-/// A fix text is one constant for every machine, with `<name>` where the machine goes: the window
-/// is given the command it can run.
-fn fix_for(why: &str, name: &str) -> String {
-    why.replace("<name>", name)
-}
-
-pub fn describe(machine: MachineId, name: &str, state: &ConnectionState) -> MachineState {
-    let said = match state {
-        ConnectionState::NeedsLogin { said, .. } => Some(said.clone()).filter(|said| !said.is_empty()),
-        _ => None,
+/// `route` is how the machine is reached, when it is known: the sentence's fix command needs its
+/// target and port.
+pub fn describe(machine: MachineId, name: &str, state: &ConnectionState, route: Option<&Machine>) -> MachineState {
+    let subject = match route {
+        Some(route) => Subject { name, ..Subject::of(route) },
+        None => Subject { name, target: None, port: None },
     };
-    let (why, attempt) = match state {
-        ConnectionState::NeedsLogin { why, .. }
-        | ConnectionState::NeedsUpdate { why }
-        | ConnectionState::Unreachable { why, .. } => (Some(fix_for(why, name)), None),
-        ConnectionState::Reconnecting { attempt, .. } => (None, Some(*attempt)),
-        ConnectionState::Connecting | ConnectionState::Connected => (None, None),
+    let failure = state.failure();
+    let attempt = match state {
+        ConnectionState::Reconnecting { attempt, .. } => Some(*attempt),
+        _ => None,
     };
     MachineState {
         machine: machine.0,
         name: name.to_owned(),
         state: state.kind(),
-        why,
-        said,
+        why: failure.map(|failure| sentence_here(failure, &subject)),
+        failure: failure.map(FailureClass::kind),
+        fix_command: failure.and_then(|failure| fix_command(failure, &subject, ClientOs::this())),
+        said: failure.and_then(FailureClass::said).filter(|said| !said.is_empty()).map(str::to_owned),
         login_command: None,
         target: None,
         attempt,

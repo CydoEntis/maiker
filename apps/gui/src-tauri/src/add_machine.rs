@@ -1,11 +1,11 @@
 //! Adding a machine from the window: the hosts `~/.ssh/config` offers, and the look at a machine
 //! before anything is written. The look logs in with what ssh already has and never asks anyone
-//! anything (the shared `machine_probe`); a login that needs a person is the caller's to open.
-//! Nothing here touches the config file or the hub: it decides, and the command acts.
+//! anything (the shared `machine_probe`): a host key ssh has not seen is recorded by ssh itself, a
+//! changed one is refused and nothing is added; a login that needs a person is the caller's to
+//! open. Nothing here touches the config file or the hub: it decides, and the command acts.
 
 use maitty_machines::MachineDef;
-use maitty_machines::link_failure::FailureClass;
-use maitty_machines::host_key::{self, TOOL_LIMIT, Tools};
+use maitty_machines::link_failure::{ClientOs, FailureClass, Subject, clean, fix_command, sentence_here};
 use maitty_machines::key_file::check_key_file;
 use maitty_machines::machine_config::{refusal_of, refusal_with, suggest_name};
 use maitty_machines::machine_probe::Probe;
@@ -14,7 +14,6 @@ use maitty_machines::Machine;
 use maitty_machines::machine_config::add_machine_keyed as write_entry;
 use maitty_machines::machine_probe;
 use maitty_machines::reach::reach_ms as measure_reach;
-use crate::machine_access::{HostKeyReport, is_fingerprint, report_of};
 use tauri::Manager;
 use maitty_machines::local_machines::{config_path, machines_beside};
 use serde::Serialize;
@@ -65,9 +64,9 @@ pub fn host_choices(hosts: &[SshHost], existing: &[MachineDef]) -> Vec<HostChoic
 pub enum How {
     /// Dial it now. `version` is what the app there said, when it answered; `reach` is how far the look got.
     Connect { version: Option<String>, reach: Reach },
-    /// ssh needs a person: write the entry and open ssh where prompts can be answered.
-    /// `said` is ssh's own last line, why it could not log in.
-    Login { said: String },
+    /// ssh could not log in alone (`FailureClass::is_login`): write the entry and let the window
+    /// say why and what to do.
+    Login { failure: FailureClass },
 }
 
 /// How far the look got on a machine ssh could log in to: the app answered, or why it did not.
@@ -90,6 +89,9 @@ pub enum Prepare {
     Ready { def: MachineDef, how: How },
     /// No usable name can be made from the target: ask for one.
     NeedsName,
+    /// ssh could not reach the machine, or refused its changed host key: nothing is to be added,
+    /// and `failure` is what the window says instead.
+    Refused { def: MachineDef, failure: FailureClass },
     Cancelled,
 }
 
@@ -103,8 +105,7 @@ pub struct Request<'a> {
 
 /// Check the request (and its name, or one made from the target) against the machines already
 /// there, then look at the machine with `probe`. Writes nothing. An error is words for the
-/// person: a target or name the loader refuses, or a machine ssh cannot reach (nothing is to be
-/// added then).
+/// person: a target or name the loader refuses. A machine ssh cannot reach is `Refused`.
 pub fn prepare(
     existing: &[MachineDef],
     request: &Request<'_>,
@@ -150,11 +151,21 @@ pub fn prepare(
                 reach: Reach::Answered,
             },
         }),
-        Probe::Failed(FailureClass::Login(said)) => Ok(Prepare::Ready {
+        // A host key ssh refused, changed or not yet known, means the machine would never connect:
+        // nothing is added, and the sentence says how to clear the old key once the change is
+        // confirmed, or how to accept a new one in a terminal. A machine refusing connections for
+        // now was never signed in to, so, like an unreachable one, nothing shows it is a machine to
+        // keep: the sentence says to wait and add it again.
+        Probe::Failed(
+            failure @ (FailureClass::Unreachable(_)
+            | FailureClass::RefusingConnections
+            | FailureClass::HostKeyChanged { .. }
+            | FailureClass::HostKeyUnknown),
+        ) => Ok(Prepare::Refused { def, failure }),
+        Probe::Failed(failure) if failure.is_login() => Ok(Prepare::Ready {
             def,
-            how: How::Login { said },
+            how: How::Login { failure },
         }),
-        Probe::Failed(FailureClass::Unreachable(why)) => Err(format!("{}: {why}", def.target)),
         // Reached, but the app is missing, old or not running: said here so the window can ask
         // about it at once, and the connection's own state carries on once it dials.
         Probe::Failed(class) => Ok(Prepare::Ready {
@@ -170,7 +181,22 @@ fn reach_of(class: &FailureClass) -> Reach {
         FailureClass::Install => Reach::Missing,
         FailureClass::Update => Reach::Older,
         FailureClass::UpdateHere => Reach::NewerHere,
-        FailureClass::NoDaemon | FailureClass::Login(_) | FailureClass::Unreachable(_) => Reach::NotRunning,
+        _ => Reach::NotRunning,
+    }
+}
+
+/// The failure a machine that was reached still has, said as the shared sentence: the app there
+/// is missing, of another version or not running, or putting it there failed. None once it answered.
+fn still_failing(reach: Reach, helper_install: Option<&HelperInstall>) -> Option<FailureClass> {
+    if let Some(HelperInstall { installed: false, said }) = helper_install {
+        return Some(FailureClass::InstallFailed(clean(said)));
+    }
+    match reach {
+        Reach::Answered => None,
+        Reach::Missing => Some(FailureClass::Install),
+        Reach::Older => Some(FailureClass::Update),
+        Reach::NewerHere => Some(FailureClass::UpdateHere),
+        Reach::NotRunning => Some(FailureClass::NoDaemon),
     }
 }
 
@@ -195,7 +221,8 @@ pub enum Outcome {
     /// how far the look got. `reach_ms` is how long the machine took to be reached (a plain
     /// connect), `took_ms` how long it took to log in and ask, `key` the file name of the key that
     /// signed in. `helper_install` is set when the app was missing and the window asked for it to
-    /// be installed as part of adding.
+    /// be installed as part of adding. `message` is the shared sentence for what is still wrong
+    /// there, when something is.
     Added {
         name: String,
         version: Option<String>,
@@ -204,14 +231,43 @@ pub enum Outcome {
         reach_ms: Option<u64>,
         key: Option<String>,
         helper_install: Option<HelperInstall>,
+        message: Option<String>,
     },
-    /// Written and dialling, but ssh could not log in without a person. Nothing is opened: the
-    /// window shows `said` (ssh's own words), and the way forward (the host key card, or the
-    /// user to fix). `command` is the same login to run in any terminal, when the machine has one.
-    Login { name: String, target: String, said: String, command: Option<String> },
+    /// Written and dialling, but ssh could not log in alone. Nothing is opened: the window shows
+    /// `message` (the shared sentence), with `said` (ssh's own words) beside it. `failure` is which
+    /// login failure it is (`FailureClass::kind`), `fix_command` the command the sentence names,
+    /// and `command` the same login to run in any terminal, when the machine has one.
+    Login {
+        name: String,
+        target: String,
+        said: String,
+        message: String,
+        failure: &'static str,
+        fix_command: Option<String>,
+        command: Option<String>,
+    },
+    /// Nothing was written: ssh could not reach the machine, or its host key changed. `message`
+    /// is the shared sentence, `failure` which failure it is (`FailureClass::kind`) and
+    /// `fix_command` the command the sentence names, for a Copy button.
+    Failed {
+        message: String,
+        failure: &'static str,
+        fix_command: Option<String>,
+    },
     /// No name could be made from the target.
     NeedsName,
     Cancelled,
+}
+
+/// What the window is told of a machine that was not added: the same three things a machine's
+/// own state carries, so both say a failure the same way.
+fn refused(def: &MachineDef, failure: &FailureClass) -> Outcome {
+    let subject = Subject::of_def(def);
+    Outcome::Failed {
+        message: sentence_here(failure, &subject),
+        failure: failure.kind(),
+        fix_command: fix_command(failure, &subject, ClientOs::this()),
+    }
 }
 
 /// The hosts of `~/.ssh/config`, minus the ones that are already machines. Read off the UI thread.
@@ -223,43 +279,6 @@ pub async fn list_ssh_hosts() -> Result<Vec<HostChoice>, String> {
     })
     .await
     .map_err(|error| format!("Could not read ~/.ssh/config: {error}"))
-}
-
-/// ssh with only a port, for looking at a host that is not a machine yet.
-fn bare_ssh(port: Option<u16>) -> Result<Vec<String>, String> {
-    let mut ssh = vec![maitty_machines::SSH_PROGRAM.to_string()];
-    ssh.extend(maitty_machines::machine_target::port_args(port)?);
-    Ok(ssh)
-}
-
-/// Look at the host key a new machine offers and whether this computer knows it, before anything
-/// is written: a new host asks to be trusted first, and Cancel leaves nothing behind. Read-only.
-#[tauri::command]
-pub async fn inspect_new_host(target: String, port: Option<u16>) -> Result<HostKeyReport, String> {
-    let target = target.trim().to_owned();
-    maitty_machines::machine_target::check_target(&target)?;
-    let ssh = bare_ssh(port)?;
-    let seen = tauri::async_runtime::spawn_blocking(move || host_key::inspect(&ssh, &target, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not look at the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))?;
-    Ok(report_of(&seen))
-}
-
-/// Trust the key whose fingerprint the person was shown for a host that is not a machine yet: it
-/// is fetched again and added to known_hosts only when it is still that key and is new.
-#[tauri::command]
-pub async fn trust_new_host(target: String, fingerprint: String, port: Option<u16>) -> Result<(), String> {
-    if !is_fingerprint(&fingerprint) {
-        return Err("That is not a fingerprint".to_string());
-    }
-    let target = target.trim().to_owned();
-    maitty_machines::machine_target::check_target(&target)?;
-    let ssh = bare_ssh(port)?;
-    tauri::async_runtime::spawn_blocking(move || host_key::trust(&ssh, &target, &fingerprint, &Tools::default(), TOOL_LIMIT))
-        .await
-        .map_err(|error| format!("Could not trust the host key: {error}"))?
-        .map_err(|error| format!("{error:#}"))
 }
 
 /// A key file the window named: blank means none; otherwise it must be a file that exists.
@@ -313,6 +332,7 @@ pub async fn add_machine(
     let (def, how) = match looked.prepared {
         Prepare::Cancelled => return Ok(Outcome::Cancelled),
         Prepare::NeedsName => return Ok(Outcome::NeedsName),
+        Prepare::Refused { def, failure } => return Ok(refused(&def, &failure)),
         Prepare::Ready { def, how } => (def, how),
     };
     handle.add(def.clone());
@@ -326,7 +346,10 @@ pub async fn add_machine(
                 Some(HelperInstall { installed: true, .. }) => Reach::Answered,
                 _ => reach,
             };
+            let message = still_failing(reach, helper_install.as_ref())
+                .map(|failure| sentence_here(&failure, &Subject::of_def(&def)));
             Ok(Outcome::Added {
+                message,
                 name: def.name,
                 version,
                 reach,
@@ -336,12 +359,18 @@ pub async fn add_machine(
                 helper_install,
             })
         }
-        How::Login { said } => Ok(Outcome::Login {
-            command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
-            name: def.name,
-            target: def.target,
-            said,
-        }),
+        How::Login { failure } => {
+            let subject = Subject::of_def(&def);
+            Ok(Outcome::Login {
+                command: Machine::from_def(&def, maitty_machines::SSH_PROGRAM).first_login_command().ok(),
+                message: sentence_here(&failure, &subject),
+                failure: failure.kind(),
+                fix_command: fix_command(&failure, &subject, ClientOs::this()),
+                said: failure.said().unwrap_or_default().to_owned(),
+                name: def.name,
+                target: def.target,
+            })
+        }
     }
 }
 
@@ -440,8 +469,14 @@ mod tests {
 
     /// The real look, through the fake ssh in `mode`.
     fn through_shim(sandbox: &Sandbox, mode: &str) -> impl Fn(&MachineDef) -> Probe {
+        through_shim_with(sandbox, mode, &[])
+    }
+
+    /// `through_shim` with more of the shim's own settings (its host key, the person's config).
+    fn through_shim_with(sandbox: &Sandbox, mode: &str, more: &[String]) -> impl Fn(&MachineDef) -> Probe {
         let shim = fake_ssh().display().to_string();
-        let args = sandbox.shim_args(mode);
+        let mut args = sandbox.shim_args(mode);
+        args.extend_from_slice(more);
         move |def: &MachineDef| {
             let def = MachineDef {
                 ssh_args: args.clone(),
@@ -488,8 +523,11 @@ mod tests {
 
     #[test]
     fn a_login_ssh_cannot_do_is_added_and_left_to_a_person() {
-        let Ok(Prepare::Ready { how: How::Login { said }, .. }) = look("auth-fail") else {
+        let Ok(Prepare::Ready { how: How::Login { failure }, .. }) = look("auth-fail") else {
             panic!("login");
+        };
+        let FailureClass::KeyRefused(said) = failure else {
+            panic!("a refused key: {failure:?}");
         };
         assert!(said.contains("Permission denied"), "ssh's own words reach the window: {said:?}");
     }
@@ -502,12 +540,86 @@ mod tests {
         ));
     }
 
+    /// What the window is told of a look that refused the machine.
+    fn refusal(looked: &Result<Prepare, String>) -> Outcome {
+        let Ok(Prepare::Refused { def, failure }) = looked else {
+            panic!("refused: {looked:?}");
+        };
+        refused(def, failure)
+    }
+
     #[test]
     fn a_machine_ssh_cannot_reach_adds_nothing_and_says_why() {
-        let Err(why) = look("unreachable") else {
-            panic!("an error");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&look("unreachable")) else {
+            panic!("a failure");
         };
-        assert!(why.starts_with("build.example: "), "{why}");
+        assert!(message.starts_with("Can't reach build.example: check the name or address"), "{message}");
+        assert_eq!((failure, fix_command), ("unreachable", None));
+    }
+
+    #[test]
+    fn a_machine_refusing_connections_adds_nothing_and_says_to_wait() {
+        let Outcome::Failed { message, failure, fix_command } = refusal(&look("refusing")) else {
+            panic!("a failure");
+        };
+        assert!(message.starts_with("build.example may be refusing new connections for a while"), "{message}");
+        assert_eq!((failure, fix_command), ("refusing-connections", None));
+    }
+
+    /// The ed25519 key the shim's machine offers, and another one on record for a changed key.
+    const OFFERED_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl";
+    const OLD_KEY: &str = "AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJm";
+
+    /// The look at `build.example` through the shim with its known_hosts file holding `known`
+    /// (nothing when `None`) and the person's config setting `config_strict`; what came of it and
+    /// the file afterwards (`None` when there is none).
+    fn look_with_keys(known: Option<&str>, config_strict: &str) -> (Result<Prepare, String>, Option<String>) {
+        let sandbox = Sandbox::new();
+        let known_hosts = sandbox.dir.join("known_hosts");
+        if let Some(line) = known {
+            std::fs::write(&known_hosts, line).unwrap();
+        }
+        let more = [
+            format!("--known-hosts={}", known_hosts.display()),
+            format!("--host-key={OFFERED_KEY}"),
+            format!("--config-strict={config_strict}"),
+        ];
+        let looked = prepare(&[], &request("build.example", None), &through_shim_with(&sandbox, "proxy", &more));
+        (looked, std::fs::read_to_string(&known_hosts).ok())
+    }
+
+    #[test]
+    fn a_host_key_never_seen_is_recorded_by_ssh_and_the_machine_is_added_without_a_question() {
+        let (looked, known_hosts) = look_with_keys(None, "ask");
+        assert!(matches!(looked, Ok(Prepare::Ready { how: How::Connect { reach: Reach::Answered, .. }, .. })), "{looked:?}");
+        assert_eq!(known_hosts, Some(format!("build.example ssh-ed25519 {OFFERED_KEY}\n")));
+    }
+
+    #[test]
+    fn a_changed_host_key_is_refused_adds_nothing_and_leaves_known_hosts_as_it_was() {
+        let on_record = format!("build.example ssh-ed25519 {OLD_KEY}\n");
+        let (looked, known_hosts) = look_with_keys(Some(&on_record), "ask");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&looked) else {
+            panic!("a failure");
+        };
+        assert!(message.starts_with("build.example's host key has changed"), "{message}");
+        assert!(message.contains("ssh-keygen -R 'build.example'"), "the fix is named, never an accept: {message}");
+        assert_eq!(failure, "host-key-changed", "never said to be unreachable");
+        assert_eq!(fix_command.as_deref(), Some("ssh-keygen -R 'build.example'"));
+        assert_eq!(known_hosts, Some(on_record));
+    }
+
+    #[test]
+    fn a_config_that_refuses_new_host_keys_is_the_person_s_and_is_kept() {
+        let (looked, known_hosts) = look_with_keys(None, "yes");
+        let Outcome::Failed { message, failure, fix_command } = refusal(&looked) else {
+            panic!("a failure");
+        };
+        assert!(message.starts_with("build.example's host key isn't known yet"), "{message}");
+        assert!(!message.contains("changed") && !message.contains("ssh-keygen"), "a good key is never to be removed: {message}");
+        assert_eq!(failure, "host-key-unknown");
+        assert_eq!(fix_command.as_deref(), Some("ssh -o StrictHostKeyChecking=ask build.example"));
+        assert_eq!(known_hosts, None, "nothing was written");
     }
 
     #[test]
@@ -572,13 +684,6 @@ mod tests {
     }
 
     #[test]
-    fn a_new_host_is_looked_at_through_ssh_with_only_its_port() {
-        assert_eq!(bare_ssh(None).unwrap(), [maitty_machines::SSH_PROGRAM]);
-        assert_eq!(bare_ssh(Some(2222)).unwrap(), [maitty_machines::SSH_PROGRAM, "-p", "2222"]);
-        assert!(bare_ssh(Some(0)).is_err());
-    }
-
-    #[test]
     fn the_outcome_names_reach_time_key_and_helper_step_for_the_window() {
         let added = Outcome::Added {
             name: "box".into(),
@@ -588,12 +693,37 @@ mod tests {
             reach_ms: Some(38),
             key: Some("id_ed25519".into()),
             helper_install: Some(HelperInstall { installed: true, said: "done".into() }),
+            message: None,
         };
         let json = serde_json::to_value(&added).unwrap();
         assert_eq!(json["outcome"], "added");
         assert_eq!((json["reach_ms"].as_u64(), json["took_ms"].as_u64()), (Some(38), Some(900)));
         assert_eq!(json["key"], "id_ed25519");
         assert_eq!(json["helper_install"]["installed"], true);
+    }
+
+    #[test]
+    fn a_refusal_reaches_the_window_as_one_failed_outcome() {
+        let failed = refused(&def("build", "build.example"), &FailureClass::HostKeyChanged { known_as: None });
+        let json = serde_json::to_value(&failed).unwrap();
+        assert_eq!(json["outcome"], "failed");
+        assert_eq!(json["failure"], "host-key-changed");
+        assert_eq!(json["fix_command"], "ssh-keygen -R 'build.example'");
+        assert!(json["message"].as_str().is_some_and(|message| message.starts_with("build's host key has changed")), "{json}");
+    }
+
+    #[test]
+    fn what_is_still_wrong_with_a_reached_machine_is_one_shared_failure() {
+        assert_eq!(still_failing(Reach::Answered, None), None);
+        assert_eq!(still_failing(Reach::Missing, None), Some(FailureClass::Install));
+        assert_eq!(still_failing(Reach::Older, None), Some(FailureClass::Update));
+        assert_eq!(still_failing(Reach::NewerHere, None), Some(FailureClass::UpdateHere));
+        assert_eq!(still_failing(Reach::NotRunning, None), Some(FailureClass::NoDaemon));
+        let failed = HelperInstall { installed: false, said: "no build for this system\n".into() };
+        assert_eq!(
+            still_failing(Reach::Missing, Some(&failed)),
+            Some(FailureClass::InstallFailed("no build for this system".into()))
+        );
     }
 
     #[test]

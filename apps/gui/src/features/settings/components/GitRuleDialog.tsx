@@ -1,5 +1,7 @@
 import { useState } from 'react'
-import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { changeGitRule, type GitConfigWrite, type GitIdentity } from '@/api/gitIdentities'
 import { errorMessage } from '@/lib/error-message'
 import { InlineNote } from '@/components/ui/feedback'
@@ -92,14 +94,15 @@ export function GitRuleDialog({ machine, where, logins, rule, chooseFolder, onWr
       <DialogContent unstyled asChild aria-describedby={undefined}>
         <form
           aria-label={title}
-          className="mx-rename mx-getfile"
+          className="mx-rename mx-modal mx-getfile"
           onSubmit={(event) => { event.preventDefault(); if (step.at === 'previewed') write(); else preview() }}
           onKeyDown={(event) => {
             // Radix closes on Escape; this keeps the key from reaching the app's own handlers.
             if (event.key === 'Escape') event.stopPropagation()
           }}
         >
-          <DialogTitle asChild><h2>{title}</h2></DialogTitle>
+          <ModalHead title={title} onClose={onCancel} />
+          <ModalBody>
           <p>Repositories inside this folder use the account and identity below:</p>
           <div className="mx-clone-into">
             <input autoFocus={rule === undefined} aria-label={`Folder on ${where}`} value={folder} maxLength={MOST_PATH_CHARS} spellCheck={false} disabled={busy || rule !== undefined} onChange={(event) => { edit(setFolder)(event.target.value) }} />
@@ -113,12 +116,13 @@ export function GitRuleDialog({ machine, where, logins, rule, chooseFolder, onWr
           {(step.at === 'previewed' || step.at === 'writing') && <Preview writes={step.writes} />}
           {step.at === 'asking' && <p role="status">Asking {where} what it would write…</p>}
           {failure !== null && <InlineNote title={`${where} did not change the rule`} reason={failure} />}
-          <div className="mx-rename-actions">
-            <button type="button" className="mx-text-button" disabled={busy} onClick={onCancel}>Cancel</button>
+          </ModalBody>
+          <ModalFoot>
+            <Button type="button" variant="ghost" size="lg" disabled={busy} onClick={onCancel}>Cancel</Button>
             {step.at === 'previewed' || step.at === 'writing'
-              ? <button type="submit" className="mx-text-button is-primary" disabled={busy}>{step.at === 'writing' ? 'Writing…' : 'Write these lines'}</button>
-              : <button type="submit" className="mx-text-button is-primary" disabled={!filled || busy}>Show the lines</button>}
-          </div>
+              ? <Button type="submit" variant="primary" size="lg" disabled={busy}>{step.at === 'writing' ? 'Writing…' : 'Write these lines'}</Button>
+              : <Button type="submit" variant="primary" size="lg" disabled={!filled || busy}>Show the lines</Button>}
+          </ModalFoot>
         </form>
       </DialogContent>
     </Dialog>

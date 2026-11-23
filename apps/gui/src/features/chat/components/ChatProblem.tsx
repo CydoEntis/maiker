@@ -20,8 +20,9 @@ function fixOf(problem: ChatProblem): Fix | null {
 }
 
 /**
- * A chat's problem, said where it belongs: a stop (the agent exited, its machine went quiet, a restart cut its turn) as a
- * dialog over this chat only, which Not now turns into one line in the dock; a full context as that line from the start.
+ * A chat's problem, said where it belongs: its machine going quiet or a restart cutting its turn as a dialog over this
+ * chat only, which Not now turns into one line in the dock; a stopped agent as that line from the start, with Restart
+ * where the session has a terminal to restart, because a stop is not a question; a full context as a caution line.
  * `alert` goes over the chat, `line` above everything else in the dock. Both are null when the chat has no problem.
  */
 export function useChatProblem(problem: ChatProblem | null, summarize: () => string): { alert: ReactNode; line: ReactNode } {
@@ -46,8 +47,8 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
   }
   const copy = (large: boolean) => <CopyDetails text={words.details} copy={copyText} large={large} className="mx-fb-end" />
 
-  if (!blocksChat(problem)) {
-    const context = problem.kind === 'context' ? problem : null
+  if (problem.kind === 'context') {
+    const context = problem
     return {
       alert: null,
       line: (
@@ -55,7 +56,7 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
           tone="caution"
           title={words.title}
           reason={words.line}
-          actions={context === null ? undefined : (
+          actions={(
             <>
               <FeedbackButton kind="text" onClick={() => { context.onNewWithSummary(summarize()) }}>New session with summary</FeedbackButton>
               <FeedbackButton kind="primary" onClick={context.onCompact}>Compact</FeedbackButton>
@@ -66,7 +67,7 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
     }
   }
 
-  if (putOff === key) {
+  if (!blocksChat(problem) || putOff === key) {
     return {
       alert: null,
       line: (
@@ -99,7 +100,6 @@ export function useChatProblem(problem: ChatProblem | null, summarize: () => str
         actions={(
           <>
             {fix !== null && <FeedbackButton kind="primary" large onClick={runFix}>{fix.label}</FeedbackButton>}
-            {problem.kind === 'stopped' && problem.onViewLog !== null && <FeedbackButton kind={fix === null ? 'primary' : 'text'} large onClick={problem.onViewLog}>Show the log</FeedbackButton>}
             <FeedbackButton large onClick={() => { setPutOff(key) }}>Not now</FeedbackButton>
             {copy(true)}
           </>

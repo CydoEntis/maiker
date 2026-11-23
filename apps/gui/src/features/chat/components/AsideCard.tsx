@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useCopied } from '@/lib/useCopied'
-import { Button, IconButton } from '@/components/ui/button'
+import { Button } from '@/components/ui/button'
+import { IconButton } from '@/components/ui/icon-button'
 import { Card, CardBody, CardFoot, CardHead } from '@/components/ui/card'
 import type { Aside } from '../useAside'
 import { Markdown } from './Markdown'
@@ -15,7 +16,7 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
   const { copied, copy } = useCopied('Could not copy the answer')
   return (
     <Card role="region" aria-label={aside.title} tone={state.kind === 'failed' ? 'err' : 'none'} className={`mx-aside${question === undefined ? '' : ' is-side'}`} onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); onClose() } }}>
-      <CardHead>
+      <CardHead className="mx-aside-head">
         {question !== undefined && <span className="mx-aside-badge" aria-hidden="true">btw</span>}
         <span className="min-w-0 flex-1 truncate">{aside.title}</span>
         <span className="mx-aside-note">Not added to the conversation</span>
@@ -27,10 +28,10 @@ export function AsideCard({ aside, onClose, onAskInConversation }: { aside: Asid
         {state.kind === 'answered' && <Markdown text={state.text} />}
         {state.kind === 'failed' && <p role="alert">{state.reason}</p>}
       </CardBody>
-      {(state.kind === 'answered' || question !== undefined) && (
-        <CardFoot>
-          {state.kind === 'answered' && <Button variant="soft" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
-          {question !== undefined && state.kind !== 'asking' && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
+      {(state.kind === 'answered' || (question !== undefined && state.kind !== 'asking')) && (
+        <CardFoot className="mx-aside-foot">
+          {state.kind === 'answered' && <Button variant="ghost" size="sm" onClick={() => { copy(state.text) }}>{copied ? 'Copied' : 'Copy'}</Button>}
+          {question !== undefined && <Button variant="ghost" size="sm" onClick={() => { onAskInConversation(question) }}>Ask in the conversation</Button>}
         </CardFoot>
       )}
     </Card>

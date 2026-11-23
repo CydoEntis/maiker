@@ -230,7 +230,7 @@ fn a_claude_write_to_a_secret_file_keeps_its_path_and_loses_its_text() {
 }
 
 #[test]
-fn a_claude_command_that_echoes_a_token_is_masked_in_input_label_and_output() {
+fn a_token_in_a_command_or_a_message_is_masked_in_input_label_output_and_text() {
     let command = format!("curl -H 'Authorization: Bearer {}' https://x.test", fake_token());
     let entry = read_item(
         "item/completed",
@@ -246,39 +246,7 @@ fn a_claude_command_that_echoes_a_token_is_masked_in_input_label_and_output() {
         assert!(!text.contains(&fake_token()), "{text}");
         assert!(text.contains("[redacted]"), "{text}");
     }
-}
 
-#[test]
-fn a_codex_file_change_to_a_secret_file_omits_its_diff_and_keeps_other_files() {
-    let entry = read_item(
-        "item/completed",
-        json!({}),
-        json!({"id":"1","type":"fileChange","status":"completed","changes":[
-            {"path":"app/.env","kind":"add","diff":"+DB_PASSWORD=hunter2hunter2\n"},
-            {"path":"src/a.rs","kind":"update","diff":"-old\n+new\n"},
-        ]}),
-    );
-    let Content::Tool { output, .. } = entry.content else {
-        panic!("a file change row");
-    };
-    assert!(output.contains("app/.env (add)"));
-    assert!(output.contains("[content of a secret file omitted]"));
-    assert!(!output.contains("hunter2"));
-    assert!(output.contains("src/a.rs (update)\n-old\n+new"));
-}
-
-#[test]
-fn codex_command_output_and_messages_are_masked() {
-    let entry = read_item(
-        "item/completed",
-        json!({}),
-        json!({"id":"1","type":"commandExecution","command":"echo","status":"completed",
-               "aggregatedOutput": format!("TOKEN: {}", fake_token())}),
-    );
-    let Content::Tool { output, .. } = entry.content else {
-        panic!("a tool row");
-    };
-    assert_eq!(output, "TOKEN: [redacted]");
     let entry = read_item(
         "item/completed",
         json!({}),
@@ -291,4 +259,25 @@ fn codex_command_output_and_messages_are_masked() {
             text: "the key is [redacted]".into()
         }
     );
+}
+
+#[test]
+fn a_codex_file_change_keeps_each_files_diff_for_review_except_a_secret_files() {
+    let entry = read_item(
+        "item/completed",
+        json!({}),
+        json!({"id":"1","type":"fileChange","status":"completed","changes":[
+            {"path":"app/.env","kind":"add","diff":"+DB_PASSWORD=hunter2hunter2\n"},
+            {"path":"src/a.rs","kind":{"type":"update"},"diff":"-old\n+new\n"},
+        ]}),
+    );
+    assert_eq!(entry.state, ItemState::Completed);
+    let Content::Tool { output, label, kind, .. } = entry.content else {
+        panic!("a file change row");
+    };
+    assert_eq!((kind.as_str(), label.as_str()), ("fileChange", "Edited 2 files"));
+    assert!(output.contains("app/.env (add)"));
+    assert!(output.contains("[content of a secret file omitted]"));
+    assert!(!output.contains("hunter2"));
+    assert!(output.contains("src/a.rs (update)\n-old\n+new"));
 }

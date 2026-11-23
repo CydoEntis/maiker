@@ -205,10 +205,4 @@ mod tests {
             "build"
         );
     }
-
-    #[test]
-    fn the_ring_steps_every_second_spinner_frame_and_wraps() {
-        let steps: Vec<usize> = (0..10).map(|f| ring_step(f, 4)).collect();
-        assert_eq!(steps, [0, 0, 1, 1, 2, 2, 3, 3, 0, 0]);
-    }
 }

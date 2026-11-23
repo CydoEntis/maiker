@@ -7,7 +7,7 @@ import { activeArrangement, documentPaneReplaced, openArrangement, openDocumentB
 import { useDocuments } from './useDocuments'
 
 vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), info: vi.fn(), error: vi.fn() } }))
-vi.mock('@/features/inspect/api', () => ({ repoTree: vi.fn() }))
+vi.mock('@/features/inspect/api', () => ({ repoTree: vi.fn(), repoLocate: vi.fn() }))
 
 const ids = () => { let next = 0; return (prefix: string) => `${prefix}${String(next++)}` }
 const forgotten: (() => void)[] = []
@@ -19,7 +19,7 @@ function setup() {
   const layout = openDocumentBeside(opened, 'chat', 'README.md', makeId) ?? opened
   let current: Layout = layout
   const setLayout = vi.fn((change: Layout | ((was: Layout) => Layout)) => { current = typeof change === 'function' ? change(current) : change })
-  const hook = renderHook(() => useDocuments({ layout, setLayout, focusedSession: undefined, repoPaneOf: () => 1, showSessionById: vi.fn(), setLookAt: vi.fn(), setInspectView: vi.fn(), setInspectOpen: vi.fn() }))
+  const hook = renderHook(() => useDocuments({ layout, setLayout, showSessionById: vi.fn() }))
   const doc = activeArrangement(layout)?.panes.find((pane) => pane.doc)
   return { ...hook, setLayout, layout, doc, now: () => current }
 }

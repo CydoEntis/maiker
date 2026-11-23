@@ -2,17 +2,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { hasSavedSettings, readSettingsPreferences, writeSettingsPreferences, type SettingsPreferences } from './preferences'
 
 const DEFAULTS: SettingsPreferences = {
-  accent: 'teal',
   spinner: 'braille',
   restoreLayout: true,
+  statusBar: true,
   reduceMotion: false,
-  animateSidebarActivity: true,
   compactSidebar: false,
- 
   notifyNeedsYou: true,
   notifyFinished: true,
-  notifyError: true,
-  notificationSound: false, toastPosition: 'bottom',
+  notificationSound: false,
   terminalFontSize: 13,
   terminalFontFamily: '',
   terminalFontWeight: 400,
@@ -27,7 +24,8 @@ const DEFAULTS: SettingsPreferences = {
   
   
   defaultAgent: 'claude',
-  density: 'comfortable', sidebarTextSize: 13.5, tabTextSize: 13.5, sidebarWidth: 264, sidebarSide: 'left', sidebarOrder: 'creation', sidebarGroup: 'status', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, iconSize: 'medium', iconColor: 'color', openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, perfOverlay: false, terminalPlainDrawing: false, cursorBlink: false, corners: 'rounded', chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  confirmSkipped: [],
+  sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, chatFont: 'inter', interfaceSize: 110, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -45,14 +43,6 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: false })
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cursorBlink: true }))
     expect(readSettingsPreferences()).toMatchObject({ cursorBlink: true })
-  })
-
-  it('stacks toasts at the bottom right until told otherwise, and ignores a value it does not know', () => {
-    expect(readSettingsPreferences().toastPosition).toBe('bottom')
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ toastPosition: 'top' }))
-    expect(readSettingsPreferences().toastPosition).toBe('top')
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ toastPosition: 'left' }))
-    expect(readSettingsPreferences().toastPosition).toBe('bottom')
   })
 
   it('installs updates when idle by default, and a stored off stays off', () => {
@@ -78,18 +68,10 @@ describe('settings preferences', () => {
   })
 
   it('restores every saved choice', () => {
-    const saved: SettingsPreferences = { ...DEFAULTS, accent: 'violet', spinner: 'snake', restoreLayout: false, reduceMotion: true, notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
+    const saved: SettingsPreferences = { ...DEFAULTS, spinner: 'snake', restoreLayout: false, reduceMotion: true, notifyNeedsYou: false, notificationSound: true, terminalFontSize: 15, themeMode: 'dark', darkTheme: 'Tokyo Night', cursorStyle: 'underline', scrollback: 50000, }
     writeSettingsPreferences(saved)
 
     expect(readSettingsPreferences()).toEqual(saved)
-  })
-
-  it('keeps the choice to draw terminals without the GPU, and ignores a value that is not a switch', () => {
-    writeSettingsPreferences({ ...DEFAULTS, terminalPlainDrawing: true })
-    expect(readSettingsPreferences().terminalPlainDrawing).toBe(true)
-
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ terminalPlainDrawing: 'yes' }))
-    expect(readSettingsPreferences().terminalPlainDrawing).toBe(false)
   })
 
   it('falls back safely when saved preferences are malformed', () => {
@@ -109,9 +91,9 @@ describe('settings preferences', () => {
   })
 
   it('reads preferences saved before the terminal settings existed', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ accent: 'blue', spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, toastPosition: 'bottom', terminalFontSize: 10, startFolder: '~/code' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ spinner: 'bars', restoreLayout: true, reduceMotion: false, animateSidebarActivity: true, compactSidebar: true, notifyNeedsYou: true, notifyFinished: false, notificationSound: false, terminalFontSize: 10, startFolder: '~/code' }))
 
-    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, accent: 'blue', spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
+    expect(readSettingsPreferences()).toEqual({ ...DEFAULTS, spinner: 'bars', compactSidebar: true, notifyFinished: false, terminalFontSize: 11, startFolder: '~/code', })
   })
 
   it('reads a saved line height of 1.6, the old default, as the new default, and keeps one that is still offered', () => {
@@ -128,39 +110,11 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restoreLayout).toBe(true)
   })
 
-  it('starts a fresh install with rounded corners and keeps saved corners', () => {
-    expect(readSettingsPreferences()).toMatchObject({ corners: 'rounded' })
-    for (const corners of ['square', 'rounded']) {
-      localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners, cornersEra: 2 }))
-      expect(readSettingsPreferences()).toMatchObject({ corners })
-    }
-  })
-
-  it('reads corners saved before the era stamp as the default, not as a choice', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'square' }))
-    expect(readSettingsPreferences().corners).toBe('rounded')
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'folded', cornersEra: 2 }))
-    expect(readSettingsPreferences().corners).toBe('rounded')
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ corners: 'folded', cornersEra: 2, style: 'pixel' }))
-    expect(readSettingsPreferences().corners).toBe('rounded')
-  })
-
   it('reads the Claude view saved before there was one setting as the one setting, and a pre-redesign Terminal as Chat', () => {
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ chatViewDefault: { claude: 'terminal', codex: 'terminal', gemini: 'terminal' } }))
     expect(readSettingsPreferences().openSessionsIn).toBe('chat')
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ cornersEra: 2, chatViewDefault: { claude: 'terminal', codex: 'chat', gemini: 'chat' } }))
     expect(readSettingsPreferences().openSessionsIn).toBe('terminal')
-  })
-
-  it('carries a window style saved before the corner switch over to its corners, and falls back from nonsense', () => {
-    const corners = (value: string) => {
-      localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: value }))
-      return readSettingsPreferences().corners
-    }
-    expect(['glass', 'console', 'flat', 'tiled', 'minimal', 'expressive', 'frosted'].map(corners)).toEqual(Array(7).fill('rounded'))
-    expect([corners('mono'), corners('pixel'), corners('neon')]).toEqual(['square', 'square', 'rounded'])
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ style: 'glass', corners: 'square', cornersEra: 2 }))
-    expect(readSettingsPreferences().corners).toBe('square')
   })
 
   it('colours file names unless that was turned off, as settings saved before it read', () => {
@@ -183,6 +137,18 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().hideSuccessfulTools).toBe(false)
   })
 
+  it('loads settings saved with the removed sidebar grouping and order, keeps the rest, and drops them on the next save', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarGroup: 'machine', sidebarOrder: 'priority', sidebarSide: 'right' }))
+    const read = readSettingsPreferences()
+    expect(read.sidebarSide).toBe('right')
+    expect(read).not.toHaveProperty('sidebarGroup')
+    expect(read).not.toHaveProperty('sidebarOrder')
+    writeSettingsPreferences(read)
+    const saved: unknown = JSON.parse(localStorage.getItem('maiker.gui.settings.v1') ?? '{}')
+    expect(saved).not.toHaveProperty('sidebarGroup')
+    expect(saved).not.toHaveProperty('sidebarOrder')
+  })
+
   it('opens sessions in the chat unless a view was chosen, and ignores nonsense', () => {
     expect(readSettingsPreferences().openSessionsIn).toBe('chat')
     localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ openSessionsIn: 'terminal' }))
@@ -191,24 +157,23 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().openSessionsIn).toBe('chat')
   })
 
-  it('keeps icons in colour unless grayscale was chosen', () => {
-    expect(readSettingsPreferences().iconColor).toBe('color')
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ iconColor: 'grayscale' }))
-    expect(readSettingsPreferences()).toMatchObject({ iconColor: 'grayscale' })
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ iconColor: 'sepia' }))
-    expect(readSettingsPreferences().iconColor).toBe('color')
+  it('keeps the sidebar width in range', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarWidth: 5 }))
+    expect(readSettingsPreferences().sidebarWidth).toBe(208)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarWidth: 9999 }))
+    expect(readSettingsPreferences().sidebarWidth).toBe(440)
   })
 
-  it('keeps the interface sizes in range and falls back from nonsense', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'spacious', sidebarTextSize: 99, tabTextSize: 'big', sidebarWidth: 5 }))
+  it('loads settings saved with the removed look options, keeps the rest, and drops them on the next save', () => {
+    const removed = { accent: 'violet', corners: 'square', cornersEra: 2, style: 'pixel', density: 'spacious', iconSize: 'large', iconColor: 'grayscale', sidebarTextSize: 17, tabTextSize: 12, toastPosition: 'top' }
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ ...removed, sidebarSide: 'right', chatTextSize: 125 }))
 
-    expect(readSettingsPreferences()).toMatchObject({ density: 'spacious', sidebarTextSize: 17, tabTextSize: 13.5, sidebarWidth: 208 })
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'huge', sidebarWidth: 9999 }))
-    expect(readSettingsPreferences()).toMatchObject({ density: 'comfortable', sidebarWidth: 440 })
-    // The old grouping and tray settings are gone: a saved copy is ignored, not carried.
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ }))
-    expect(readSettingsPreferences()).not.toHaveProperty('trayStyle')
-    expect(readSettingsPreferences()).not.toHaveProperty('groupBy')
+    const read = readSettingsPreferences()
+
+    expect(read).toEqual({ ...DEFAULTS, sidebarSide: 'right', chatTextSize: 125 })
+    writeSettingsPreferences(read)
+    const saved = JSON.parse(localStorage.getItem('maiker.gui.settings.v1') ?? '{}') as Record<string, unknown>
+    expect(Object.keys(removed).filter((key) => key !== 'cornersEra' && key in saved)).toEqual([])
   })
 
   it('keeps a valid terminal font and falls back to the defaults for nonsense', () => {
@@ -221,11 +186,11 @@ describe('settings preferences', () => {
   })
 
   it('ignores per-project colours saved by an older version, without an error', () => {
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ density: 'spacious', projectColors: { '/code/maiker': 'violet' } }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ sidebarSide: 'right', projectColors: { '/code/maiker': 'violet' } }))
 
     const read = readSettingsPreferences()
 
-    expect(read.density).toBe('spacious')
+    expect(read.sidebarSide).toBe('right')
     expect(read).not.toHaveProperty('projectColors')
   })
 

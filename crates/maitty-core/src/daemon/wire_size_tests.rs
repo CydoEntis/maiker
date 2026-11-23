@@ -369,8 +369,10 @@ fn pane(i: u32) -> TermInfo {
         started_by: None,
         tab_of: None,
         helper_ask: Vec::new(),
+        started_by_chat: None,
         pr: (status == Status::Done).then(|| pr_of(i)),
         queued: vec!["Then run the GUI tests too".into()],
+        waiting_for_slot: false,
         own_turn_over: false,
         root: Some(root_of(i)),
         top: Some(checkout_of(i)),
@@ -432,6 +434,10 @@ fn conversation(i: u32) -> ConversationSummary {
         root: Some(root_of(i)),
         branch: Some(branch_of(i)),
         helpers: Vec::new(),
+        helper_ask: Vec::new(),
+        capabilities: None,
+        agent: None,
+        status_since: Some(1_780_000_000),
     }
 }
 

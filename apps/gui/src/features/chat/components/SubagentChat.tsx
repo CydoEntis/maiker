@@ -61,7 +61,7 @@ export function SubagentChat({ subagent, agent, term = null, root = null }: Chat
         <div className="mx-chat-column">
           {record.startMissing && <p className="mx-sub-note">Its earlier steps are not shown.</p>}
           {record.rows.map((row) => (
-            <ChatItem key={row.key} row={row} agent={agent} workingSince={null} approval={null} root={root} openDiff={null} goToStep={null} waitingStep={null} />
+            <ChatItem key={row.key} row={row} agent={agent} workingSince={null} root={root} openDiff={null} goToStep={null} waitingStep={null} />
           ))}
           <SubagentNote subagent={subagent} />
         </div>
