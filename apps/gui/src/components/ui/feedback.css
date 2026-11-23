@@ -88,7 +88,7 @@
 .mx-veil.is-chat { z-index: 45; }
 .mx-veil.is-window { z-index: 92; background: color-mix(in srgb, var(--bg) 78%, transparent); }
 :root[data-gpu="software"] .mx-veil { animation: none; }
-.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; box-shadow: inset 3px 0 0 var(--edge), var(--float-sh); animation: mx-fb-fade .18s var(--ease); }
+.mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(480px, 100%); display: flex; flex-direction: column; gap: 8px; padding: 16px 18px 14px 20px; box-shadow: var(--float-sh); animation: mx-fb-fade .18s var(--ease); }
 .mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--fg); }
 .mx-alert-reason { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
 .mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; }
@@ -101,7 +101,7 @@
 .mx-alert-facts .is-caution b { color: var(--caution); }
 
 /* ---- the dock's problem line: 40px, above everything else in the dock ---- */
-.mx-app .mx-problem-line { position: relative; z-index: 1; width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; margin-bottom: 8px; padding: 4px 6px 4px 12px; background: var(--main); border: 1px solid var(--line2); box-shadow: inset 2px 0 0 var(--edge); --fold-line: var(--line2); animation: mx-fb-rise .18s var(--ease); }
+.mx-app .mx-problem-line { position: relative; z-index: 1; width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; margin-bottom: 8px; padding: 4px 6px 4px 12px; background: var(--main); border: 1px solid var(--line2); --fold-line: var(--line2); animation: mx-fb-rise .18s var(--ease); }
 .mx-problem-line .mx-fb-mark { width: 14px; font-size: 13px; line-height: 1; }
 .mx-problem-words { flex: 1 1 220px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .mx-problem-words strong { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
@@ -120,7 +120,7 @@
 .mx-svc-chip.is-found .mx-status-icon.is-working { --working: var(--ok); }
 
 /* ---- the inline note: a failure on the page you came to read, so it reads as part of the page ---- */
-.mx-app .mx-note { display: flex; gap: 10px; padding: 10px 8px 8px 12px; background: var(--main); border: 1px solid var(--line); box-shadow: inset 2px 0 0 var(--edge, var(--danger)); --fold-line: var(--line); animation: mx-fb-rise .18s var(--ease); }
+.mx-app .mx-note { display: flex; gap: 10px; padding: 10px 8px 8px 12px; background: var(--main); border: 1px solid var(--line); --fold-line: var(--line); animation: mx-fb-rise .18s var(--ease); }
 .mx-note-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .mx-note-title { font-size: 13px; font-weight: 600; line-height: 18px; color: var(--fg); }
 .mx-note-reason { font-size: 12.5px; line-height: 1.5; color: var(--fg2); overflow-wrap: anywhere; }

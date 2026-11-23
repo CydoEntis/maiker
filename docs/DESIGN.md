@@ -175,9 +175,9 @@ frame* (Toast). The desktop app's toasts are under *Errors*.
 
 The desktop app's error states (built 2026-11-18; `components/ui/feedback.tsx`, `feedback.css`, `lib/toast.ts`,
 `components/ui/toaster.tsx`). The rule: **say it where it happened, only as loud as what it blocks, and never twice.**
-There are no banners. Every surface but the toast (below: the status mark, no edge) is the float (a `--line2` hairline, the dialog shadow) with a 3px
-**status edge** on its left in its tone: `--err` failed, `--caution` (`--m-mid`) a warning, `--blocked` needs you,
-`--ok` back or done, `--working` running, the accent a note. The mark before the title is the tone's glyph (`×`, `▲`,
+There are no banners. Every surface but the toast (below: the status mark, no edge) is the float (a `--line2` hairline, the dialog shadow), with no edge bar: the tone (`--err` failed, `--caution`
+(`--m-mid`) a warning, `--blocked` needs you, `--ok` back or done, `--working` running, the accent a note) is carried
+by the mark before the title, the tone's glyph (`×`, `▲`,
 `!`, `✓`, `i`, or the running spinner). Buttons are 26px (30px in a dialog): the fix filled in the tone's soft ground with
 its line, then outlined ones, then text ones (Copy details); Copy details says Copied in the same width for 2 s.
 
@@ -268,6 +268,10 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
 
 ### Design language
 
+- **No edge bars.** Nothing gets a coloured bar down its left side: not a picked row, a quote, a notice, a found
+  message or a log block. Selection is a fill, a tone is its icon's colour, a quote is a well. A 1px rule between two
+  columns, or down the left of a nested list (sessions under a project, steps under a turn), is structure and stays.
+  `leftEdge.test.ts` fails on an `inset Npx 0 0` shadow or a left border wider than 1px.
 - **The tree.** Machine › project › session › helper or split. A project is a folder on a machine, so the same folder
   on two machines is two projects. There is no session without a project: open a project, then start sessions and
   worktrees from its `+`. A **helper** is a session its lead started; it nests one level under the lead while the lead
@@ -908,7 +912,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **At the right:** attach (the shared icon button, a paperclip) and send, both 26px. Send is `--fg` with a `--bg` arrow when there is something to send, and a quiet outlined square when there is not. While the agent works and nothing is typed it is the Stop square, still; just after a send, before there is a turn to stop, the square is there and off.
   **Locks.** The model and reasoning level lock while the agent works (`workingLock`): the button dims, does not open, and says why in its accessible name and tooltip, "You can change this when <agent> finishes, or after you stop it (Esc)." The permission mode can still be picked then and waits for the turn's end. The controls are drawn from the first frame of a new chat and only dim, so the row never gains or loses one.
   **Ended.** An ended session (`session.ended`) swaps the box for a read-only line in a `--well` panel, "This session has ended. The chat is read-only.", with **Resume** (reopens the saved conversation in its folder through the new-chat resume start, `endedResume`; greyed with its reason in the tooltip for another machine, an agent that cannot resume, or a conversation with no saved id) and **New session here** (the New session page on the same machine and folder).
-- **Model picker** (`AgentPicker.tsx`, `modelPicker.ts`, `model-picker.css`; screenshot 31). The model button opens a float (the float material, radius `--r-panel`) anchored above the chat box's left edge: 580px by 300px in three columns, 46px, the rest and 190px, parted by float hairlines. The agent rail and the reasoning column sink below the float (the float mixed 22% toward black) and the model list keeps the float's own ground, so the columns read apart in every theme; a picked model or level lifts above its column with a 2px accent edge.
+- **Model picker** (`AgentPicker.tsx`, `modelPicker.ts`, `model-picker.css`; screenshot 31). The model button opens a float (the float material, radius `--r-panel`) anchored above the chat box's left edge: 580px by 300px in three columns, 46px, the rest and 190px, parted by float hairlines. The agent rail and the reasoning column sink below the float (the float mixed 22% toward black) and the model list keeps the float's own ground, so the columns read apart in every theme; a picked model or level lifts above its column as a lighter fill.
   **The rail** holds a 32px mark per agent: the built-in agents installed on this computer (all of them on another machine, where that is not read) and, before a session starts, the agents ready to run over ACP. The agent whose models show has the ink fill and a 2px bar at the rail's edge; the agent this session runs has a 5px `--ok` dot. Before the session starts a mark switches the agent. Once it runs its agent cannot change: another agent's models are shown under a note ("This session runs Claude. Picking a Codex model starts a new session."), and picking one opens a New session draft in the same folder with that agent.
   **The middle** is a 34px search row ("Search models…") over the model rows (34px, 13.5px, the agent's mark, the name, a dim "default" on the model the agent's settings name). Earlier models wait behind **Show more**; a search looks through all of them. An agent over ACP lists none: a note says it keeps its own model and permission settings. Where an agent's own list of models is read (`useDiscoveredModels`) it is what shows.
   **The right** is headed Reasoning with the model's name, then a 32px row per level the model takes, with a dim **Default** on the level it runs at when none is picked. An agent with no reasoning setting has a line saying so instead. A level the agent runs at that cannot be picked here (Codex's `xhigh`) is shown picked and off. Pressing the picked level again goes back to the agent's own.
@@ -1178,7 +1182,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   table is a card (**Table**, "N rows", **Copy**, **Save as** Markdown / CSV / HTML; cells never wrap, numbers right-aligned, a wide table scrolls sideways).
   **A step** is a 30px row, gap 9: its status mark (14px), a verb at 13/600, what it acted on in mono 12.5 (cut at
   the end), how it ended in mono 11.5 `--dim` at the right, and a caret; it opens to its detail. The step a pending
-  request is about is the only one in amber: a 9% `--needs` tint, a 2px left edge and "waiting for you ↓". A file is a
+  request is about is the only one in amber: a 9% `--needs` tint and "waiting for you ↓". A file is a
   badge (type tag, folder in `--dim`, name in `--fg`, cut from the front so the name stays). A **command on its own**
   is a card: its mark, `$` and the command, an exit tag ("exit 0" in `--done`, "exit 1" in `--err`), the time and
   **Copy command** in the head, and the last 6 lines of output on `--well` with "Show all N lines"; a failed one has the
@@ -1472,7 +1476,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (added `--done`, removed `--err`, both on a 10% tint; hunk and file heads `--link`). A command head reads `$ command` and, at the
   right, "exit 1 · 2.9s" (red when it failed; a provider with no exit code shows only the time, and a screen reader hears "exit
   code not reported"); a failed block has no coloured edge (its words and meta are in `--err`, and a command's output marks passing lines `--done`, failing lines `--err` and colours the counts in its "2 failed | 9 passed" summary line); there is no check mark, chip or copy icon (Copy is a text button
-  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a 2px `--line2` edge with no box and a bold lead. A list uses dim bullets; a table is a card like a code block (a 36px head with its row count
+  once open). A diff has old and new number columns (34px), a 14px sign and 10% red/green rows. A note (a `>` quote, "Heads up") is a `--m-well` block at the control radius with a bold lead, no edge bar. A list uses dim bullets; a table is a card like a code block (a 36px head with its row count
   in 11px mono `--muted`, Copy and Save as; rules under the head and between rows; 7px 12px cells, the head 11.5px 600
   `--muted`). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
   agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row has the run's own mark

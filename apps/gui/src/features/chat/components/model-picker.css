@@ -25,7 +25,7 @@
 /* The row the pointer is on, the row the arrows are on (`data-lit`, driven from the search field) and a focused row look the same. */
 /* The picked row is left out: it keeps the shared selection fill under the pointer, so hovering it never reads as unpicking it. */
 :is(.mx-mp-row, .mx-mp-level):not(:disabled, [aria-checked="true"]):is(:hover, :focus-visible, [data-lit]) { background: var(--float-hover); color: var(--fg); }
-.mx-pop.mx-mp :is(.mx-mp-row, .mx-mp-level)[aria-checked="true"] { color: var(--fg); background: var(--mp-picked); box-shadow: inset 2px 0 0 var(--accent); }
+.mx-pop.mx-mp :is(.mx-mp-row, .mx-mp-level)[aria-checked="true"] { color: var(--fg); background: var(--mp-picked); }
 /* Three grounds, so the columns read apart: the agent rail and the levels sink below the float, the model list keeps the
    float's own, and a picked row lifts above whichever column it is in. Mixed from the float, so every theme keeps the steps. */
 .mx-pop.mx-mp { --mp-sunk: color-mix(in srgb, var(--float-bg) 78%, #000); --mp-picked: color-mix(in srgb, var(--float-bg) 86%, rgb(var(--ink))); }

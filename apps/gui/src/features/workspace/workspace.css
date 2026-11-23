@@ -392,7 +392,7 @@
 .mx-getfile-list p { margin: 8px; }
 /* flex: none, or a long list squeezes its rows (overflow: hidden lets them shrink) to slivers of text. */
 .mx-getfile-row { flex: none; display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mx-getfile-row.is-selected { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+.mx-getfile-row.is-selected { background: var(--accent-soft); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
 .mx-rename.mx-recent { max-width: 560px; }
 .mx-rename.mx-modal.mx-recent { width: 560px; }
@@ -683,11 +683,7 @@
 .mx-rm-empty p { margin: 0; max-width: 52ch; font-size: 12.5px; line-height: 1.5; color: var(--muted); text-wrap: pretty; }
 
 /* The one block that reports progress and problems: a mark or spinner, one sentence, an optional command, the actions. */
-.mx-rm-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--m-well); box-shadow: inset 2px 0 0 var(--line2); animation: mx-rm-in .16s ease-out; }
-.mx-rm-block.is-ok { box-shadow: inset 2px 0 0 var(--ok); }
-.mx-rm-block.is-work { box-shadow: inset 2px 0 0 var(--working); }
-.mx-rm-block.is-needs { box-shadow: inset 2px 0 0 var(--needs); }
-.mx-rm-block.is-bad { box-shadow: inset 2px 0 0 var(--danger); }
+.mx-rm-block { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; background: var(--m-well); border-radius: var(--r-control); animation: mx-rm-in .16s ease-out; }
 .mx-rm-block.is-plain { padding: 12px 0; background: none; box-shadow: none; }
 @keyframes mx-rm-in { from { opacity: 0; transform: translateX(-3px); } to { opacity: 1; transform: none; } }
 .mx-app[data-motion="reduced"] .mx-rm-block { animation: none; }

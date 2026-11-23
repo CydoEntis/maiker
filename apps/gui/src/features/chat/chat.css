@@ -33,7 +33,7 @@
 .mx-chat-column { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); padding: 0 20px; display: flex; flex-direction: column; gap: 16px; }
 .mx-chat-row { margin: 0 auto; width: 100%; max-width: var(--chat-width, 760px); padding: 8px 20px; }
 /* The row Find stopped on. */
-.mx-chat-found { background: var(--m-sel); box-shadow: inset 2px 0 0 var(--focus); }
+.mx-chat-found { background: var(--m-sel); }
 
 /* The person's message: attachments, the bubble, then its time and menu under it. */
 .mx-msg-user { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; }
@@ -101,7 +101,7 @@
 .mx-task-tick { width: 10px; height: 10px; }
 .mx-md-item { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 /* A note (Heads up): a 2px hairline edge and no box; its lead in the text colour. Amber is kept for "needs you". */
-.mx-md-quote { display: flex; gap: 10px; padding: 2px 0 2px 14px; box-shadow: inset 2px 0 0 var(--line2); font-size: 13.5px; line-height: 1.55; }
+.mx-md-quote { display: flex; gap: 10px; padding: 8px 12px; border-radius: var(--r-control); background: var(--m-well); font-size: 13.5px; line-height: 1.55; }
 .mx-md-quote-lead { flex: none; font-weight: 600; color: var(--fg); }
 .mx-md-quote-text { min-width: 0; color: var(--fg2); white-space: pre-wrap; overflow-wrap: anywhere; }
 .mx-code-chip { padding: 1px 5px; background: var(--m-sel); font-family: var(--mono); font-size: .9em; color: var(--fg); }
@@ -127,7 +127,7 @@
 button.mx-step-row:hover { background: var(--m-hover); }
 button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 /* Amber is the one colour that means "needs you", so only a step a request is waiting on wears it: a tint and a left edge. */
-.mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); box-shadow: inset 2px 0 0 var(--needs); }
+.mx-step-row.is-waiting, button.mx-step-row.is-waiting:hover { background: color-mix(in oklab, var(--needs) 9%, transparent); }
 /* The mark in front of a step sits in a 16px slot: ✓ and ■ quiet, × red, ! amber, the running light while it works. */
 .mx-step-glyph { flex: none; display: inline-flex; width: 16px; height: 16px; align-items: center; justify-content: center; font: 600 11px var(--mono); color: var(--dim); }
 .mx-step-glyph.is-failed { color: var(--err); font-size: 13px; }
