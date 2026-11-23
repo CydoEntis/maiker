@@ -122,6 +122,20 @@
   box-shadow: var(--sh);
   transition: width var(--panel-in), background-color var(--t-slow) var(--ease);
 }
+/* Hiding and showing the docked sidebar slides it: its width and its gap to the main card run to nothing (or from it)
+   over `--panel-in` while what is inside keeps its width, so nothing in it re-wraps; the terminal refits at most every
+   90ms meanwhile (PERFORMANCE.md). With motion reduced it goes and comes at once. */
+@keyframes mx-sb-slide-in { from { width: 0; margin-left: 0; margin-right: 0; opacity: 0; } }
+@keyframes mx-sb-slide-out { to { width: 0; margin-left: 0; margin-right: 0; opacity: 0; } }
+.mx-sidebar.is-sliding-in { animation: mx-sb-slide-in var(--panel-in); }
+.mx-sidebar.is-sliding-out { animation: mx-sb-slide-out var(--panel-in) forwards; pointer-events: none; }
+.mx-sidebar:is(.is-sliding-in, .is-sliding-out) > * { min-width: var(--sidebar-w, 264px); }
+.mx-app[data-motion="reduced"] .mx-sidebar.is-sliding-in { animation: none; }
+.mx-app[data-motion="reduced"] .mx-sidebar.is-sliding-out { display: none; }
+@media (prefers-reduced-motion: reduce) {
+  .mx-sidebar.is-sliding-in { animation: none; }
+  .mx-sidebar.is-sliding-out { display: none; }
+}
 .mx-drawer-scrim { position: absolute; inset: 0; z-index: 54; background: var(--scrim); animation: v7scrim .2s ease-out; }
 .mx-drawer { position: absolute; top: 0; bottom: 0; left: 0; display: flex; animation: mx-panel-from-left var(--panel-in); }
 .mx-drawer .mx-sidebar { margin: 8px; max-width: calc(100vw - 48px); }

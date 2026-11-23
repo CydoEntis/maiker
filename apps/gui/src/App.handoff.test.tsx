@@ -857,8 +857,8 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(fireEvent.keyDown(terminal, { key: 'Tab', shiftKey: true })).toBe(true)
     expect(fireEvent.keyDown(terminal, { key: '|', code: 'Backslash', ctrlKey: true, shiftKey: true })).toBe(false)
 
-    // Hidden, the sidebar leaves no rail; the first pane's header offers it back.
-    expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument()
+    // Hidden, the sidebar slides out and leaves no rail; the first pane's header offers it back.
+    await waitFor(() => { expect(screen.queryByRole('navigation', { name: 'Sessions' })).not.toBeInTheDocument() })
     expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeInTheDocument()
   })
 

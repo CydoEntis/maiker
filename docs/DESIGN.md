@@ -755,7 +755,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   that need you**, across the opened projects: 13px tall on its top right corner, 9px 600, `--t1` on `--fg2` (quiet,
   not amber: the row in the surface says why), and absent at zero or while nothing could be read. The rail has no
   pull-request button.
-  Hidden (the sidebar key, or Hide sidebar), the sidebar leaves no rail: the first pane's header starts with a **Show
+  Hidden (the sidebar key, or Hide sidebar), the sidebar slides out (its width and gap run to nothing over `--panel-in`, and back in the same way; at once with motion reduced) and leaves no rail: the first pane's header starts with a **Show
   sidebar** button. The edge drags (208 to 440px; double-click resets). The **rail** (a narrow window's sidebar;
   `SidebarRail.tsx`) is 56px, padded 9px above and 10px below with 4px between its parts: the expand button on top,
   then each project with something going on, in the sidebar's own order and 10px apart, as its 18px badge over one

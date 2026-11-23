@@ -30,6 +30,8 @@ import { useHoverController } from './useHoverController'
 import { useSidebarFolds } from './useSidebarFolds'
 
 export type SidebarProps = {
+  /** The docked column sliding in after it was hidden, or out as it hides (`useSidebarSlide`); absent at rest. */
+  slide?: 'in' | 'out' | undefined
   /** Every session of every machine. */
   sessions: readonly SessionView[]
   /** The daemon has sent its first list; until then an empty list means "not known yet", not "none". */
@@ -117,7 +119,7 @@ function cardAnchor(row: HTMLElement): DOMRect {
 
 export function Sidebar(props: SidebarProps) {
   const [resizing, setResizing] = useState(false)
-  const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}`
+  const className = `mx-sidebar mx-card${props.mode === 'rail' ? ' is-rail' : ''}${resizing ? ' is-resizing' : ''}${props.slide === undefined ? '' : ` is-sliding-${props.slide}`}`
   return (
     <nav aria-label="Sessions" className={className}>
       {props.mode === 'rail' ? <SidebarRail {...props} /> : <Expanded {...props} />}
