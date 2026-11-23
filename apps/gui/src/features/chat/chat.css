@@ -298,7 +298,6 @@ button.mx-step-row:focus-visible { box-shadow: var(--focus-edge); }
 .mx-aside-wait { margin: 0; color: var(--muted); }
 .mx-aside .mx-aside-foot { min-height: 0; padding: 0 8px 8px; }
 .mx-signin-code { font: 600 14px var(--mono); letter-spacing: .06em; padding: 1px 6px; border-radius: var(--r-badge); background: color-mix(in oklab, var(--link) 14%, transparent); user-select: all; }
-.mx-composer-error { margin: 6px 0 0; align-self: stretch; font-size: 12px; color: var(--danger); }
 
 /* The needs-you cards (`WaitingCard`, handoff 5): calm cards on the floating surface, stacked directly above the chat
    box at its width. The material (ground, hairline, shadow) is the one float's (material.css); the only colour is the

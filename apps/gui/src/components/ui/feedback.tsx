@@ -129,10 +129,13 @@ function ScopedAlert({ scope, tone, running = false, title, reason, actions, chi
   )
 }
 
-/** One line in the chat's dock for a problem you put off, or a warning that blocks nothing: above everything else in the dock. */
-function ProblemLine({ tone, running = false, title, reason, actions }: { tone: FeedbackTone; running?: boolean; title: string; reason: React.ReactNode; actions?: React.ReactNode }) {
+/**
+ * One line in the chat's dock for a problem you put off, or a warning that blocks nothing: above everything else in the
+ * dock. `urgent` is for what just failed because of you (a message that did not send), read out at once.
+ */
+function ProblemLine({ tone, running = false, urgent = false, title, reason, actions }: { tone: FeedbackTone; running?: boolean; urgent?: boolean; title: string; reason: React.ReactNode; actions?: React.ReactNode }) {
   return (
-    <div data-fold role="status" className={cn("mx-problem-line", `is-edge-${edgeOf(tone, running)}`)}>
+    <div data-fold role={urgent ? "alert" : "status"} className={cn("mx-problem-line", `is-edge-${edgeOf(tone, running)}`)}>
       <FeedbackMark tone={tone} running={running} />
       <span className="mx-problem-words"><strong>{title}</strong><span>{reason}</span></span>
       {!running && actions}

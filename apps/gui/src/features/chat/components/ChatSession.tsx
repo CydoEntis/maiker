@@ -1,6 +1,6 @@
 import { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { toast } from '@/lib/toast'
-import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen, setChatPermissions, type SessionPermissions } from '@/api/daemon'
+import { allowAlways, answerUserInput, approveRequest, loadTerminalScreen, resumeChat, setChatPermissions, type SessionPermissions } from '@/api/daemon'
 import { LOCAL_MACHINE, machineNameOf, parseSessionId, terminalOf } from '@/api/machines'
 import { readConversationPermissions, rememberConversationPermissions } from '@/data/conversationPermissions'
 import type { ChatAgent, ChatLink } from '@/features/workspace/model/chatView'
@@ -53,6 +53,7 @@ import { answerKeyTarget } from '../answerKeyTarget'
 import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
+import { ReadProblemLine } from './ReadProblemLine'
 import { ProblemLine } from '@/components/ui/feedback'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
@@ -816,9 +817,12 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   const problemView = useChatProblem(problem, () => summaryOf(bareRows))
   // The chat's own read: while it reconnects, or when it failed, one line in the dock says so, under any real problem.
   // A lost service is the window's news, said once by its bar (lib/toast.ts), so the chat speaks only while the service is up.
+  // A Claude or Codex chat this window drives can be started again on its own session; the service reads its past back.
+  // The list of chats and this chat's read pick up the new generation on their own, as after any restart.
+  const reconnect = chatModes === null ? null : async () => { await resumeChat({ id: ownKey, generation: link.generation }) }
   const readLine = offline && online
     ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
-    : feed.error !== null ? <ProblemLine tone="error" title="Could not read this chat" reason={feed.error} /> : null
+    : feed.error !== null ? <ReadProblemLine key={feed.error} error={feed.error} onReconnect={reconnect} /> : null
   const dockProblem = problemView.line ?? readLine
 
   return (

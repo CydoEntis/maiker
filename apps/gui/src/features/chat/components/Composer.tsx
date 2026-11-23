@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type KeyboardEvent, type ReactNode } from 'react'
 import { recallStep, type Recalled } from '../promptRecall'
 import { toast } from '@/lib/toast'
+import { ProblemLine } from '@/components/ui/feedback'
 import { pasteFromHost, pickFromClipboard, unsupportedMessage } from '@/features/terminal/clipboardImage'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import { abilitiesOf, runsMidTurn } from '@/features/workspace/model/agentAbilities'
@@ -403,7 +404,8 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   return (
     <div ref={box} className="mx-composer">
       <div className="mx-composer-column">
-        {problem}
+        {/* One line above the box: the chat's own problem first, since a send it refuses fails for that reason. */}
+        {problem ?? (error !== null && <ProblemLine tone="error" urgent title="Your message did not send" reason={`${error}. It is still in the box; send it again to retry.`} />)}
         <div ref={tray} className="mx-question-slot">{question}</div>
         {helpers}
         <QueuedMessages
@@ -483,7 +485,6 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
             <button type="button" className="mx-composer-note-action" onClick={() => { updateComposer(composer.conversationKey ?? NO_CONVERSATION, (state) => ({ ...state, note: null })) }}>Leave it out</button>
           </p>
         )}
-        {error !== null && <p role="alert" className="mx-composer-error">{error}. Your message is kept; send it again to retry.</p>}
       </div>
     </div>
   )

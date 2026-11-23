@@ -1661,7 +1661,12 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   `resume`, falls back to the old way: ask again for the last page read, or read from the start when that cursor is
   stale. A failed read is tried again after 500 ms (`RETRY_READ_MS`); the chat shows a "Reconnecting to this chat…" line ("What is shown may be out of date." and the reason)
   with the reason only when that one fails too, since one failure is usually a stale kept line, and only while the
-  service is up: a lost service is the window's news, said once by its bar. A history
+  service is up: a lost service is the window's news, said once by its bar. A chat the service holds but will not
+  continue (its history out of step with the agent, as after a service restart) reads "This chat needs to reconnect"
+  with **Reconnect** (`ReadProblemLine`), which starts its agent again on its own session (`resumeChat`) so the service
+  reads the past back; another read failure shows the service's reason. A message that did not send says so in that
+  same line above the box ("Your message did not send", the reason, and that it is still in the box), never under it,
+  and only when the chat has no problem line of its own, which is then the reason. A history
   the daemon marks incomplete (`completeness`, such as a long transcript of which it reads only the last 16 MB) shows
   no notice: the chat shows what it has. Entries already applied unchanged are skipped, so nothing is shown twice and unchanged events stay the same
   objects. A new generation shows a fresh projection. Pending approvals come with every page and go to `applyApprovals`,

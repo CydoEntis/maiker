@@ -142,7 +142,8 @@ describe('sending', () => {
     fake.submitMessage.mockRejectedValueOnce(new Error('the Maiker service went away'))
 
     await user.type(box, 'please retry{Enter}')
-    expect(await screen.findByRole('alert')).toHaveTextContent('the Maiker service went away')
+    // Said in the one line above the box, not under it.
+    expect(await screen.findByRole('alert')).toHaveTextContent('Your message did not sendthe Maiker service went away. It is still in the box')
     expect(box).toHaveValue('please retry')
 
     await user.type(box, '{Enter}')
