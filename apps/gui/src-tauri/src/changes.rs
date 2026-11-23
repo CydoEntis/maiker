@@ -272,6 +272,9 @@ mod tests {
         git(&folder, &["config", "user.email", "test@example.invalid"]);
         git(&folder, &["config", "user.name", "Test"]);
         git(&folder, &["config", "commit.gpgsign", "false"]);
+        // Windows runners set `core.autocrlf`, which writes restored files back with CRLF; the
+        // tests compare bytes, so the repository keeps what was written.
+        git(&folder, &["config", "core.autocrlf", "false"]);
         std::fs::write(folder.join("a.txt"), "one\n").expect("a file");
         git(&folder, &["add", "-A"]);
         git(&folder, &["commit", "-q", "-m", "start"]);
