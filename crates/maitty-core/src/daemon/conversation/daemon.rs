@@ -234,6 +234,9 @@ impl Daemon {
                     }
                 }
                 let state = self.conversation_states.entry(id).or_default();
+                // A turn the agent died in: the transcript may stop partway through it, so the chat is
+                // not taken up again from that transcript (`begin_claude_history_hydration`).
+                let cut = state.status == Status::Working;
                 state.approvals.clear();
                 state.file_change_previews.clear();
                 state.unsupported_requests.clear();
@@ -241,6 +244,9 @@ impl Daemon {
                 state.status = Status::Blocked;
                 state.error = Some(reason);
                 state.history_ready = false;
+                if cut {
+                    self.cut_conversations.insert(id);
+                }
                 self.conversation_history.reconnect(id)?;
                 Ok(())
             }

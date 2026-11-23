@@ -85,8 +85,11 @@ ended the turns as completed, completed and interrupted. Both `can_use_tool` req
 `display_name`, `blocked_path` and `permission_suggestions`, which the adapter does not read.
 Verified versions: 2.1.312, 2.1.314, 2.1.316, 2.1.327 and 2.1.330 (`VERIFIED_VERSIONS` in
 `maitty-provider-claude`).
-A Claude chat with history is not taken up again after a daemon restart; that is the daemon's
-history rule, not a version limit.
+After a daemon restart, a stop, or an agent gone between turns, a Claude chat is taken up again by
+reading its past from Claude Code's own transcript (`begin_saved_history`), which needs
+`restore.output` on. A chat whose turn was cut (the daemon or the agent went away mid-turn) is
+still refused: its transcript may stop partway through that turn. That is the daemon's history
+rule, not a version limit.
 
 Every Claude Code process a chat starts gets the chat's runtime identity (the four reserved
 variables, ADR 0016) after the inherited pane and chat variables are removed, so a Maiker tool
