@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { AGENT_LABELS, confirmAdd, loadExtensions, removeExtension, setPluginEnabled, type AddPreview, type ExtensionFailure, type ExtensionResult, type ExtTarget, type Extension } from '@/api/extensions'
+import { Trash2 } from 'lucide-react'
+import { IconButton } from '@/components/ui/icon-button'
 import { Switch } from '@/components/ui/switch'
 import { Card, FoldedCard, Row } from '@/features/settings/components/DesktopSettings'
 import { errorMessage } from '@/lib/error-message'
@@ -44,7 +46,7 @@ function ItemRow({ item, busy, onToggle, onRemove }: { item: Extension; busy: bo
   return (
     <Row label={item.name} detail={detailLine(item)}>
       {switchable && <Switch checked={item.enabled === true} disabled={busy} aria-label={`${item.enabled === true ? 'Turn off' : 'Turn on'} ${item.name}`} onCheckedChange={onToggle} />}
-      <button type="button" className="mx-scard-button is-danger" disabled={busy} aria-label={`Remove ${item.name}`} onClick={onRemove}>Remove</button>
+      <IconButton className="mx-icon-danger" label={`Remove ${item.name}`} tip="Remove" disabled={busy} onClick={onRemove}><Trash2 aria-hidden="true" /></IconButton>
     </Row>
   )
 }

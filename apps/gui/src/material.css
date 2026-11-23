@@ -103,6 +103,7 @@
 .mx-app .mx-waiting,
 .mx-app .mx-focus-pill,
 .mx-app .mx-select-bar,
+.mx-app .mx-aside,
 .mx-app .mx-slash,
 .mx-app .mx-dock-list,
 .mx-app .mx-changes-menu,
@@ -178,9 +179,19 @@
    edge: tone alone was too faint to tell a control from the text around it. */
 .mx-app .mx-settings {
   --s-rule: rgba(var(--ink), .07);
-  --c-field-bg: var(--t3); --c-field-sh: inset 0 0 0 1px var(--line2);
-  --c-track-bg: var(--t3); --c-track-sh: inset 0 0 0 1px var(--line2);
+  /* A step up from the dialog's own float, like a select's list: `--t3` equals the pane in most themes, so it vanished. */
+  --c-field-bg: color-mix(in srgb, var(--float-bg) 94%, rgb(var(--ink))); --c-field-sh: inset 0 0 0 1px var(--line2);
+  --c-track-bg: var(--c-field-bg); --c-track-sh: inset 0 0 0 1px var(--line2);
 }
+/* A native select draws the app's chevron instead of the system's, and its open list the raised float, so it reads as
+   one of the app's dropdowns on every system. */
+.mx-app select.mx-scard-input {
+  appearance: none; padding-right: 28px; cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+  background-size: 5px 5px; background-repeat: no-repeat;
+}
+.mx-app select option { background-color: var(--float-raised); color: var(--fg); }
 .mx-app .mx-settings-nav { background: var(--t1); }
 .mx-app .mx-settings-header { background: transparent; border-bottom-color: transparent; }
 .mx-app .mx-settings .mx-segmented { border-color: var(--line2); background: var(--c-track-bg); }
