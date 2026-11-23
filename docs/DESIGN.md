@@ -842,7 +842,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   size, cursor) and Panes (where an agent's terminals open, lines kept), then a folded **Advanced** card (text and bold
   weight, scroll speed, line height, screen reader support) that shows only its title until **Show**; a search looks
   inside it anyway. **Appearance**: **Theme** (System, Dark or Light and the dark and light theme pickers, each over
-  every theme of its kind), **Size and text** (Interface size, Chat text size, Chat font), Motion with Reduce motion,
+  every theme of its kind, A to Z, with the one in use checked in its place; the keys stay in a 36px search field, Up
+  and Down light a row and preview it, Enter picks), **Size and text** (Interface size, Chat text size, Chat font), Motion with Reduce motion,
   and the sidebar's position and width. **Notifications** has two
   switches, Needs you and Done, and the test toast. **Extensions** is the last page under Agents and stays short: Where
   to look (the project picker), one card per agent listing what is installed, an **Add** card with one row per kind
