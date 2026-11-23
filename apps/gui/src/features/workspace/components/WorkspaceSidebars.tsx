@@ -1,10 +1,11 @@
-import { useCallback } from 'react'
+import { useCallback, useState } from 'react'
 import { Panel } from '@/components/ui/panel'
 import { toast } from '@/lib/toast'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { projectOfSession } from '../model/startProject'
 import { projectName } from '../model/sidebarTree'
 import { useInstalledAgents } from '../model/newChatHost'
+import { PullRequestsWindow } from './PullRequestsWindow'
 import { Sidebar } from './Sidebar'
 import { useWorkspace } from '../workspaceContext'
 import { useChatPrefetch } from '../useChatPrefetch'
@@ -15,7 +16,10 @@ const noop = () => undefined
 
 /** The sidebar: the docked column or the rail, and the full one in a drawer over a narrow window. */
 export function WorkspaceSidebars() {
-  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject, pullRequests, showPanelView, focusedSession } = useWorkspace()
+  const { sessionsListed, sidebarSessions, sidebarMachineHeads, openedProjects, focusedId, online, canStart, root, preferences, sidebarWidth, setLiveSidebarWidth, setPreferences, setPaletteOpen, setSettingsSection, retryNamed, openLoginNamed, copyCommand, setRenamingMachine, setUpdateAsk, showSessionById, setRenameId, saveName, copyPathOf, endSession, updateProgress, focusMode, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, sessionMap, setWorktreeFrom, setProjectWorktreeFrom, setOpenWorktreeFor, setOpenProject, pullRequests, focusedSession } = useWorkspace()
+  // The session whose project's pull requests are open in their own window; null while it is closed.
+  const [pullsOf, setPullsOf] = useState<string | null>(null)
+  const pullsSession = pullsOf === null ? undefined : sessionMap.get(pullsOf)
   const warmChat = useChatPrefetch(useCallback((id: string) => sessionMap.get(id), [sessionMap]))
   const projectActionsFor = useProjectActions()
   const installedAgents = useInstalledAgents()
@@ -81,9 +85,9 @@ export function WorkspaceSidebars() {
         needYou: pullRequests.needsYou,
         onOpen: () => {
           afterPick()
-          // The surface is a session's side panel, so with no session in front there is nowhere to show it.
+          // The list is a project's, found through the session in front, so with none there is no project to list.
           if (focusedSession === undefined) toast.info('Open a session to see its project’s pull requests')
-          else showPanelView('pulls')
+          else setPullsOf(focusedSession.id)
         },
       }}
       updateProgress={updateProgress}
@@ -99,6 +103,7 @@ export function WorkspaceSidebars() {
                 {renderSidebar('docked', () => { setDrawerOpen(false) }, () => { setDrawerOpen(false) })}
               </Panel>
             )}
+      {pullsSession !== undefined && <PullRequestsWindow session={pullsSession} onClose={() => { setPullsOf(null) }} />}
     </>
   )
 }
