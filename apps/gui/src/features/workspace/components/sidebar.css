@@ -11,8 +11,13 @@
 }
 
 /* The header: collapse, the title, then search, filter and open a project. */
-.mx-sb-top { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 10px 0 14px; }
-.mx-sb-title { font-size: 13px; font-weight: 500; color: var(--fg2); }
+.mx-sb-top { flex: none; display: flex; align-items: center; gap: 4px; height: 46px; padding: 0 8px 0 10px; }
+.mx-sb-title { margin-left: 4px; font-size: 14px; font-weight: 600; color: var(--fg); }
+/* Search as a field across the sidebar (opens the palette): the field tone and hairline, so the flat sidebar has an edge to start from. */
+.mx-sb-search-button { flex: none; display: flex; align-items: center; gap: 8px; height: 34px; margin: 0 10px 10px; padding: 0 10px; border-radius: var(--r-control); background: var(--c-field-bg); box-shadow: var(--c-field-sh); font-size: 13px; color: var(--dim); cursor: pointer; transition: color var(--t-fast) var(--ease), background-color var(--t-fast) var(--ease); }
+.mx-sb-search-button svg { flex: none; width: 15px; height: 15px; }
+.mx-sb-search-button:hover { color: var(--fg2); background: color-mix(in srgb, var(--c-field-bg) 92%, rgb(var(--ink))); }
+.mx-sb-search-button:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 
 /* The projects scroll as one list between the header and the foot. */
 .mx-sb-body { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -105,7 +110,7 @@
 .mx-sb-group.is-idle .mx-sb-row.is-selected .mx-sb-row-name { color: var(--fg); }
 
 /* The foot: add a remote machine and pull requests at the left, Settings at the right. */
-.mx-sb-foot { flex: none; display: flex; align-items: center; gap: 2px; height: 44px; padding: 0 10px; }
+.mx-sb-foot { flex: none; display: flex; align-items: center; gap: 4px; height: 48px; margin: 0 8px; padding: 0 2px; border-top: 1px solid var(--line); }
 /* How many pull requests need you, on the corner of the button. Quiet, not amber: it counts, the row in the surface says why. */
 .mx-sb-foot-count { position: absolute; top: 0; right: -3px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 999px; font: 600 9px/13px var(--ui); text-align: center; color: var(--t1); background: var(--fg2); }
 

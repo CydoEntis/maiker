@@ -621,8 +621,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   sidebar (`useClosing`, `removePane`). A plain idle shell, or the only pane, ends its session, after the confirm.
 - **Sidebar** (`components/Sidebar.tsx`, `sidebar.css`, `frame.css`; handoff v5, section 4). A 264px card on the
   panel role, lifted from the ground by its tone. Agents and shells only: no fleets, ships or tabs.
-  **Header** (44px): **Hide sidebar**, the title **Chats** (13px 500 `--fg2`), then three 26px icon buttons: **Search**
-  (the command palette), **Sort and filter** (`SidebarFilterMenu`: a 262px popover; **Sort by** first, three choices
+  The sidebar sits flat on the window ground, so its chrome is sized to stand there alone: the header and foot use the
+  large icon button (30px, 16px glyph). **Header** (46px): **Hide sidebar**, the title **Chats** (14px 600 `--fg`), then
+  **Sort and filter** (`SidebarFilterMenu`: a 262px popover; **Sort by** first, three choices
   (Recently opened, Name A to Z, and Machine only once another machine is configured), kept with the settings
   (`sidebarSort`); then **Show**, a project search, the projects with
   their session counts, six rows before they scroll, **All projects** first while the search is empty, then, once
@@ -729,7 +730,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   colours are five tokens (`--proj-1` to `--proj-5`: teal, blue, pink, violet, green), chosen from the project's name,
   never amber or red. Until the service has listed its sessions the list says "Looking for your sessions…"; with none
   it shows a quiet card, **No sessions yet**, saying where to start one; the rail then holds only its buttons.
-  **Foot** (44px, no card and no rule): **Add a remote machine** at the left (a server with a plus; it opens the palette's
+  **Search** sits under the header as a field across the sidebar (34px, the field tone and hairline, a search mark and
+  "Search"; it opens the command palette), so the flat sidebar has an edge to start from.
+  **Foot** (48px, a hairline above it, no card): **Add a remote machine** at the left (a server with a plus; it opens the palette's
   New machine level, not Settings), then **Pull requests**, and **Settings** at the right. The pull-request button
   opens the open pull requests of the session in front's project in a **window of their own over the app**
   (`PullRequestsWindow`: Settings' scrim and frame, 760 by 620 at most, a title and ×; Esc or a click outside closes it). Its badge counts **only the pull requests
@@ -1442,7 +1445,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   between them, since each terminal holds a GPU context): the same box, not painted, `inert` and hidden from
   screen readers, their terminals paused and their chats unmounted, so going back builds no terminal and a
   hidden chat reads nothing and answers no key. A paused terminal catches up from the kept screen when shown.
-- **Cards in the chat** (a command and its output, a diff, a code block, a table, the plan, helpers). Each is the
+- **Cards in the chat** (a command and its output, a diff, a code block, the plan, helpers: what you copy, save or
+  review; a table is not a card but rows between two hairlines, its first column in line with the text). Each is the
   shared Card: solid `--card`, a 1px `--line` hairline, no shadow, wells (output, diffs, code) on `--well` flush
   inside it. The point is that a card reads as an object in the conversation, and the feed stays quiet: colour is for
   state, and amber only for what needs you.

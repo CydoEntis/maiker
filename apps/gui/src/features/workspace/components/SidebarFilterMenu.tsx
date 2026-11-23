@@ -37,7 +37,7 @@ export function SidebarFilterMenu({ projects, machines, filter, onFilter, sort, 
   return (
     <Popover.Root onOpenChange={(open) => { if (open) setQuery('') }}>
       <Popover.Trigger asChild>
-        <IconButton label={narrowed ? 'Sort and filter (on)' : 'Sort and filter'} tip="Sort, or filter by project or machine" on={narrowed}><Icon name="filter" /></IconButton>
+        <IconButton large label={narrowed ? 'Sort and filter (on)' : 'Sort and filter'} tip="Sort, or filter by project or machine" on={narrowed}><Icon name="filter" /></IconButton>
       </Popover.Trigger>
       <PopupContent side="bottom" align="start" sideOffset={2} aria-label="Sort and filter the sidebar" className="mx-sbf">
         <div className="mx-sbf-label" aria-hidden="true">Sort by</div>

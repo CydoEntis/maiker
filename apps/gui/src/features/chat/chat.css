@@ -76,12 +76,15 @@
 .mx-md-rule { margin: 6px 0; border: 0; border-top: 1px solid var(--line); }
 /* A table (design: TableCard) is a card like a code block: a 36px head row, then the table with a rule under its head and
    between its rows. */
-.mx-md-tablecard { display: flex; min-width: 0; flex-direction: column; background: var(--m-card); border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; }
-.mx-md-tableacts { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0 6px 0 12px; border-bottom: 1px solid var(--line); }
+/* A table is not a card: rows on the page between hairlines, so a long answer is not a stack of boxes. Code, diffs and commands keep theirs. */
+.mx-md-tablecard { display: flex; min-width: 0; flex-direction: column; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); overflow: hidden; }
+.mx-md-tableacts { display: flex; min-height: 36px; align-items: center; gap: 8px; padding: 0; border-bottom: 1px solid var(--line); }
 .mx-md-tabletitle { font: 600 11px var(--mono); color: var(--muted); }
 .mx-md-table table { width: 100%; border-collapse: collapse; font-size: 13.5px; line-height: 1.45; }
 /* The message breaks long words anywhere, which let a narrow column shrink to one letter a line. A cell keeps its words whole; a table too wide for the column scrolls in its own region. */
 .mx-md-table :is(th, td) { padding: 7px 12px; border-bottom: 1px solid var(--line); white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+/* With no card round it, the first column lines up with the text above. */
+.mx-md-table :is(th, td):first-child { padding-left: 0; }
 .mx-md-table th { font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .mx-md-table tbody tr:last-child td { border-bottom: 0; }
 .mx-md-table td { color: var(--fg2); }
