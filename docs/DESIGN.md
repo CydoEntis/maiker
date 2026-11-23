@@ -633,8 +633,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   letters, in the project's colour on an 18% tint of it), the name (12px 600 `--fg`; the folder is its tooltip), on
   another machine the machine tag and, **while folded**, the project's own state: the 14px status mark of its most urgent
   session (needs you, working, done), nothing while all are idle. Open, it shows no count or mark: its rows say their
-  own. A session in a worktree of its own shows its branch after its name (a branch mark and the name, 11px mono
-  `--dim`, cut short at 45% of the row); one in the project's own checkout shows nothing there. A click folds it: the caret shows on hover and while
+  own. A session in a worktree of its own has a 15px branch mark (`--muted`) before its name, with the branch in its
+  tooltip; one in the project's own checkout has no mark. A click folds it: the caret shows on hover and while
   folded. A `+` button shows on hover and on focus. The project just opened or picked is unfolded, and shown whatever the filter said.
   **Machine tag** (`MachineTag`): the machine's name with a 10px server mark, in `--accent-text`, 10.5px mono, with no
   fill; amber (`--needs`) while that machine is not connected. Its tooltip is the host's one sentence for what failed
