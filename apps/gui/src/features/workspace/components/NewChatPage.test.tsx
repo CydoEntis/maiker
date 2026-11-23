@@ -313,6 +313,22 @@ describe('the New session draft', () => {
     expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ create: true, worktree: true, name: 'hello' })
   })
 
+  it('starts a new worktree off a branch that is open in another folder, instead of refusing it', async () => {
+    host.branches = { current: 'feat/x', branches: [{ name: 'feat/x', current: true, when: 10 }, { name: 'dev', current: false, when: 20 }], worktrees: [{ path: '/dev/growth', branch: 'feat/x', main: true, when: 10 }, { path: '/dev/growth-dev', branch: 'dev', main: false, when: 20 }] }
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    dialog(onStart)
+    await ready()
+    await userEvent.click(branchChip())
+    const dev = await within(await lastPopup()).findByRole('radio', { name: /^dev/ })
+    expect(dev).toHaveTextContent('open elsewhere: a new worktree off it')
+    expect(dev).toBeEnabled()
+    await userEvent.click(dev)
+    await userEvent.type(box(), 'hello')
+    await userEvent.click(startButton())
+    await waitFor(() => { expect(onStart).toHaveBeenCalled() })
+    expect(onStart.mock.calls[0]?.[0].branch).toMatchObject({ name: 'dev', create: false, worktree: true })
+  })
+
   it('lets Work in put a busy branch back to the folder as it is', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     dialog(onStart, { busy: DEV_BUSY })

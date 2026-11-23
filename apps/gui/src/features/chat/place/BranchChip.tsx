@@ -80,17 +80,28 @@ export function BranchChip({ folder, machine, branch, project, worktreeName, pic
   const list = read.kind === 'listed' ? read.list : null
   // A draft works in the folder's own checkout, so the branch that checkout is on is not "in another worktree".
   const inTree = new Set((list?.worktrees ?? []).flatMap((tree) => (tree.branch === null || (picking !== undefined && tree.main) ? [] : [tree.branch])))
-  const local: ChipItem[] = (list === null ? [] : localBranches(list)).map((entry) => ({
-    key: entry.name,
-    label: entry.name,
-    mono: true,
-    icon: <Icon name={inTree.has(entry.name) ? 'worktree' : 'branch'} size={13} />,
-    ...(inTree.has(entry.name) && entry.name !== shown ? { sub: 'in another worktree' } : {}),
-    ...(picking?.busy.has(entry.name) === true ? { sub: `In use by “${picking.busy.get(entry.name) ?? ''}”`, right: <span className="mx-nc-in-use">in use</span> } : {}),
-    checked: entry.name === shown,
-    disabled: busy || (inTree.has(entry.name) && entry.name !== shown),
-    onPick: () => { if (picking !== undefined) { setOpen(false); picking.onPick(entry.name, false) } else if (entry.name !== shown) go(`Could not switch to ${entry.name}`, () => switchFolderBranch(machine, folder, entry.name), (now) => `Switched to ${now}`) },
-  }))
+  const local: ChipItem[] = (list === null ? [] : localBranches(list)).map((entry) => {
+    const elsewhere = inTree.has(entry.name) && entry.name !== shown
+    return {
+      key: entry.name,
+      label: entry.name,
+      mono: true,
+      icon: <Icon name={inTree.has(entry.name) ? 'worktree' : 'branch'} size={13} />,
+      // Git opens a branch in one folder only, so a draft cannot work on one that is open elsewhere; it gets a new
+      // worktree on a new branch cut from it instead (the service names it). Switching a live checkout to it cannot.
+      ...(elsewhere ? { sub: picking === undefined ? 'in another worktree' : 'open elsewhere: a new worktree off it' } : {}),
+      ...(picking?.busy.has(entry.name) === true ? { sub: `In use by “${picking.busy.get(entry.name) ?? ''}”`, right: <span className="mx-nc-in-use">in use</span> } : {}),
+      checked: entry.name === shown,
+      disabled: busy || (elsewhere && picking === undefined),
+      onPick: () => {
+        if (picking !== undefined) {
+          setOpen(false)
+          if (elsewhere && !picking.worktree) picking.onWorktree(true)
+          picking.onPick(entry.name, false)
+        } else if (entry.name !== shown) go(`Could not switch to ${entry.name}`, () => switchFolderBranch(machine, folder, entry.name), (now) => `Switched to ${now}`)
+      },
+    }
+  })
   const remote: ChipItem[] = (list === null ? [] : untrackedRemoteBranches(list)).map((entry) => ({
     key: `remote:${entry.name}`,
     label: entry.name,
