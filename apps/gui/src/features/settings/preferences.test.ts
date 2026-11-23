@@ -25,7 +25,7 @@ const DEFAULTS: SettingsPreferences = {
   
   defaultAgent: 'claude',
   confirmSkipped: [],
-  sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {},
+  sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, chatFont: 'inter', interfaceSize: 110, keyOverrides: {},
 }
 
 describe('settings preferences', () => {

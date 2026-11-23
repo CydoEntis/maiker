@@ -118,7 +118,9 @@ checks it the same way (one of the known agent names, flags that are single plai
 folder that exists), so it can start nothing a start could not; the daemon keeps one such
 agent, hidden, and stops it when it is not taken. The window's own permissions include setting its title and
 its icon's count (`core:window:allow-set-title`, `core:window:allow-set-badge-count`), which show how many sessions
-need you; they take a number the window counted, never text from a session.
+need you; they take a number the window counted, never text from a session. It may set its own zoom
+(`core:webview:allow-set-webview-zoom`), from the Interface size setting, a number the settings reader checks
+against a fixed list.
 
 The native host may start only the bundled CLI sidecar with the fixed `daemon`
 argument. Resolve its path from the application bundle; never accept a program

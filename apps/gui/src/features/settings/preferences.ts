@@ -18,6 +18,19 @@ const CHAT_TEXT_LARGE = 110
 const CHAT_TEXT_LARGER = 125
 const CHAT_TEXT_LARGEST = 140
 export const CHAT_TEXT_SIZES: readonly number[] = [CHAT_TEXT_SMALL, CHAT_TEXT_SIZE_DEFAULT, CHAT_TEXT_LARGE, CHAT_TEXT_LARGER, CHAT_TEXT_LARGEST]
+/**
+ * The sizes the whole window can be drawn at (Settings › Appearance › Interface size), as a percentage of the design
+ * size. The default is a step up: at the design size the text and icons read small on a laptop screen.
+ */
+const INTERFACE_SMALL = 90
+const INTERFACE_DESIGN = 100
+export const INTERFACE_SIZE_DEFAULT = 110
+const INTERFACE_LARGER = 125
+const INTERFACE_LARGEST = 140
+export const INTERFACE_SIZES: readonly number[] = [INTERFACE_SMALL, INTERFACE_DESIGN, INTERFACE_SIZE_DEFAULT, INTERFACE_LARGER, INTERFACE_LARGEST]
+/** The typeface the chat is written in: the app's own (Inter), the system's, a serif or the monospace. */
+export type ChatFont = 'inter' | 'system' | 'serif' | 'mono'
+export const CHAT_FONTS: readonly ChatFont[] = ['inter', 'system', 'serif', 'mono']
 /** Which side of the window the sidebar sits on. */
 export type SidebarSide = 'left' | 'right'
 /** Where the terminal dock sits beside the chat: under it, on its right, or in its place. */
@@ -94,6 +107,10 @@ export type SettingsPreferences = {
   chatWidth: ChatWidth
   /** The size of everything in the chat, as a percentage (`CHAT_TEXT_SIZES`). */
   chatTextSize: number
+  /** The typeface of the chat's messages; code stays in the monospace. */
+  chatFont: ChatFont
+  /** The size of the whole window, as a percentage (`INTERFACE_SIZES`): the webview's own zoom. */
+  interfaceSize: number
   /** Which view a Claude or Codex session opens in. Terminal until you change it. */
   /** The view a new session opens in; the other is one click away on its pane. */
   openSessionsIn: PaneView
@@ -176,6 +193,8 @@ function defaults(): SettingsPreferences {
     keyOverrides: NO_OVERRIDES,
     chatWidth: 'auto',
     chatTextSize: CHAT_TEXT_SIZE_DEFAULT,
+    chatFont: 'inter',
+    interfaceSize: INTERFACE_SIZE_DEFAULT,
     openSessionsIn: 'chat',
     defaultAgent: 'claude',
     confirmSkipped: [],
@@ -266,6 +285,8 @@ export function readSettingsPreferences(): SettingsPreferences {
       terminalDock: terminalDockOf(preferences.terminalDock) ?? fallback.terminalDock,
       chatWidth: CHAT_WIDTHS.find((width) => width === preferences.chatWidth) ?? fallback.chatWidth,
       chatTextSize: CHAT_TEXT_SIZES.find((size) => size === preferences.chatTextSize) ?? fallback.chatTextSize,
+      chatFont: CHAT_FONTS.find((font) => font === preferences.chatFont) ?? fallback.chatFont,
+      interfaceSize: INTERFACE_SIZES.find((size) => size === preferences.interfaceSize) ?? fallback.interfaceSize,
       // Before one setting there was one per agent: what was chosen for Claude carries over.
       openSessionsIn: paneView(preferences.openSessionsIn, (value as Record<string, unknown>)[CORNERS_ERA_KEY] === CORNERS_ERA ? paneView(((value as Record<string, unknown>).chatViewDefault as { claude?: unknown } | null | undefined)?.claude, fallback.openSessionsIn) : fallback.openSessionsIn),
       defaultAgent: preferences.defaultAgent === 'claude' || preferences.defaultAgent === 'codex' ? preferences.defaultAgent : fallback.defaultAgent,

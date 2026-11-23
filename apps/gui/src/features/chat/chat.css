@@ -2,7 +2,7 @@
    the agent's replies as plain text, and its work as solid cards with a hairline and no shadow. Every colour is a
    theme token; amber (`--needs`) is only ever "needs you". */
 
-.mx-chat-layer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; background: transparent; font-family: var(--ui); line-height: normal; cursor: default; }
+.mx-chat-layer { position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column; min-height: 0; background: transparent; font-family: var(--chat-font, var(--ui)); line-height: normal; cursor: default; }
 .mx-pane-body.is-chat > :not(.mx-chat-layer) { visibility: hidden; }
 /* The body keeps its padding in the chat view: the chat layer covers it anyway (absolute, inset 0), and dropping it
    would resize the hidden terminal on every switch, so the agent would redraw its whole screen twice. */

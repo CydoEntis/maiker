@@ -6,7 +6,7 @@ import type { SettingsPreferences } from '../preferences'
 import { bindingFor, reservedReason } from '@/features/workspace/model/shortcuts'
 import { DesktopSettings, type DesktopSettingsSection, type MachinesInfo } from './DesktopSettings'
 
-const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, statusBar: true, reduceMotion: false, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, keyOverrides: {} }
+const PREFS: SettingsPreferences = { exportFolder: '', confirmSkipped: [], spinner: 'braille', restoreLayout: true, statusBar: true, reduceMotion: false, compactSidebar: false, notifyNeedsYou: true, notifyFinished: true, notificationSound: false, terminalFontSize: 13, terminalFontFamily: '', terminalFontWeight: 400, terminalFontWeightBold: 700, startFolder: '', themeMode: 'dark', darkTheme: 'Maiker Dark', lightTheme: 'Maiker Day', cursorStyle: 'block', scrollback: 10000, scrollSpeed: 1, terminalLineHeight: 1.2, sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: false, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'terminal', defaultAgent: 'claude', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, chatFont: 'inter', interfaceSize: 110, keyOverrides: {} }
 
 const accounts = vi.hoisted(() => ({
   loadAgentAuth: vi.fn<(agent: string) => Promise<{ installed: boolean; signedIn: boolean | null; account: string; plan: string }>>(),
@@ -131,11 +131,16 @@ describe('desktop settings', () => {
     ['terminal', 'Cursor', 'Underline', { cursorStyle: 'underline' }],
     ['terminal', 'Lines kept per pane', '100k', { scrollback: 100000 }],
     ['appearance', 'Appearance', 'Light', { themeMode: 'light' }],
-  ])('on %s, choosing %s: %s saves it', async (section, group, choice, patch) => {
+    ['appearance', 'Interface size', '125%', { interfaceSize: 125 }],
+    ['appearance', 'Chat text size', '90%', { chatTextSize: 90 }],
+    ['appearance', 'Chat font', 'Serif', { chatFont: 'serif' }],
+  ])('on %s, choosing %s: %s saves it and says so', async (section, group, choice, patch) => {
     const user = userEvent.setup()
     const { onChange } = renderSettings(section)
+    expect(screen.getByRole('status', { name: '' })).toBeEmptyDOMElement()
     await user.click(within(screen.getByRole('radiogroup', { name: group })).getByRole('radio', { name: choice }))
     expect(onChange).toHaveBeenLastCalledWith({ ...PREFS, ...patch })
+    expect(screen.getByText('Saved')).toBeInTheDocument()
   })
 
   it('keeps the rarely changed terminal settings folded under Advanced until Show, and saves them from there', async () => {

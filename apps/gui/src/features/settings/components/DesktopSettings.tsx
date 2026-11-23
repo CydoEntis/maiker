@@ -32,7 +32,7 @@ import type { AddMachineOptions, Added, Grant, HostChoice, MachineActivity, Upda
 import type { MachineHead, UpdateAction } from '@/features/workspace/model/machines'
 import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
-import { BYPASS_AGENTS, bypasses, CHAT_TEXT_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
+import { BYPASS_AGENTS, bypasses, type ChatFont, CHAT_TEXT_SIZES, INTERFACE_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
 export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'helpers' | 'terminal' | 'extensions' | 'machines' | 'usage'
 
@@ -200,7 +200,10 @@ function foundLine(rows: number, query: string): string {
 
 /** Settings (⌘,): a dialog in the window that holds focus until it closes, then gives it back. */
 export function DesktopSettings(props: DesktopSettingsProps) {
-  const { section, preferences, onChange } = props
+  const { section, preferences, onChange: change } = props
+  // Every change is kept the moment it is made; the header says so for a moment after each one.
+  const [saved, flashSaved] = useSavedFlash()
+  const onChange = (next: SettingsPreferences) => { change(next); flashSaved() }
   const update = <K extends keyof SettingsPreferences>(key: K, value: SettingsPreferences[K]) => { onChange({ ...preferences, [key]: value }) }
   // One change, not two: the view and a ticked "Don't ask again" are saved together, so neither overwrites the other.
   const switchView = (view: PaneView, dontAskAgain: boolean) => { onChange({ ...preferences, openSessionsIn: view, confirmSkipped: dontAskAgain ? withSkipped(preferences.confirmSkipped, 'switch-view') : preferences.confirmSkipped }) }
@@ -317,6 +320,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
               <h2>{title}</h2>
               <p>{subtitle}</p>
             </div>
+            <span className="mx-settings-saved" role="status">{saved && <><Icon name="check" size={12} />Saved</>}</span>
             <button type="button" className="mx-icon-button mx-settings-close" aria-label="Close settings" title="Close (Esc)" onClick={props.onClose}><Icon name="close" size={14} /></button>
           </header>
           <div className="mx-settings-scroll" ref={scroller}>
@@ -433,10 +437,10 @@ function BypassSection({ preferences, update }: { preferences: SettingsPreferenc
   )
 }
 
-/** How long a card says Saved after one of its values changed. */
+/** How long the header says Saved after a value changed. */
 const SAVED_FLASH_MS = 2000
 
-/** A card's Saved note: shown for a moment each time `flash` is called after a change was kept. */
+/** The header's Saved note: shown for a moment each time `flash` is called after a change was kept. */
 function useSavedFlash(): [boolean, () => void] {
   const [shown, setShown] = useState(false)
   const timer = useRef<number | undefined>(undefined)
@@ -452,14 +456,12 @@ function useSavedFlash(): [boolean, () => void] {
 function GeneralSection({ preferences, update, onSwitchView, onChooseFolder, onShowWelcome }: { preferences: SettingsPreferences; update: Update; onSwitchView: (view: PaneView, dontAskAgain: boolean) => void; onChooseFolder: ((current: string) => Promise<string | null>) | undefined; onShowWelcome: () => void }) {
   // The folder comes from the system's folder picker, which only offers one that exists, so nothing is typed or checked.
   const home = preferences.startFolder === ''
-  const [saved, flashSaved] = useSavedFlash()
-  const setStart = (folder: string) => { update('startFolder', folder); flashSaved() }
+  const setStart = (folder: string) => { update('startFolder', folder) }
   return (
     <>
       <SessionViewCard preferences={preferences} onSwitchView={onSwitchView} />
       <Card
         title="Start folder"
-        meta={saved ? <span className="mx-scard-meta" role="status">Saved</span> : undefined}
         foot="Every new session opens a shell here. Leave it empty for your home folder. Projects appear in the sidebar when a session cds into a git repo."
       >
         <div className="mx-scard-body">
@@ -650,6 +652,17 @@ function AppearanceSection({ preferences, update, systemDark, onPreviewTheme }: 
           <ThemePicker kind="light" value={preferences.lightTheme} inUse={!darkInUse} dimmed={darkInUse && preferences.themeMode !== 'system'} onPick={(name) => { update('lightTheme', name) }} onPreview={onPreviewTheme} />
         </Row>
       </Card>
+      <Card title="Size and text">
+        <Row label="Interface size" detail="Draws the whole window larger or smaller: text, icons, panes and dialogs together.">
+          <SegmentedChoice label="Interface size" value={preferences.interfaceSize} options={INTERFACE_SIZE_OPTIONS} onChange={(value) => { update('interfaceSize', value) }} />
+        </Row>
+        <Row label="Chat text size" detail="On top of the interface size: everything in the chat, its messages, its cards and its message box.">
+          <SegmentedChoice label="Chat text size" value={preferences.chatTextSize} options={CHAT_TEXT_SIZE_OPTIONS} onChange={(value) => { update('chatTextSize', value) }} />
+        </Row>
+        <Row label="Chat font" detail="The typeface of the chat's messages. Code stays in the monospace.">
+          <SegmentedChoice label="Chat font" value={preferences.chatFont} options={CHAT_FONT_OPTIONS} onChange={(value) => { update('chatFont', value) }} />
+        </Row>
+      </Card>
       <Card title="Motion">
         <Row label="Reduce motion" detail="Turns off pulses, slide-ins and size animations, and holds spinners still. Your system setting is always respected.">
           <Switch aria-label="Reduce motion" checked={preferences.reduceMotion} onCheckedChange={(value) => { update('reduceMotion', value) }} />
@@ -669,9 +682,6 @@ function ChatSection({ preferences, update }: { preferences: SettingsPreferences
         </Row>
         <Row label="Chat width" detail="How wide the messages and the message box run. Auto grows with the pane.">
           <SegmentedChoice label="Chat width" value={preferences.chatWidth} options={CHAT_WIDTH_OPTIONS} onChange={(value) => { update('chatWidth', value) }} />
-        </Row>
-        <Row label="Chat text size" detail="Draws everything in the chat larger or smaller: its messages, its cards and its message box.">
-          <SegmentedChoice label="Chat text size" value={preferences.chatTextSize} options={CHAT_TEXT_SIZE_OPTIONS} onChange={(value) => { update('chatTextSize', value) }} />
         </Row>
         <Row label="Hide successful tool calls" detail="Leaves out the file reads and searches that worked. Commands, edits, other tools and anything that failed still show.">
           <Switch aria-label="Hide successful tool calls" checked={preferences.hideSuccessfulTools} onCheckedChange={(value) => { update('hideSuccessfulTools', value) }} />
@@ -861,6 +871,8 @@ function UsageSection({ usage }: { usage: UsageInfo }) {
 const AGENT_OPTIONS = [['claude', 'Claude'], ['codex', 'Codex']] as const
 const CHAT_WIDTH_OPTIONS = [['auto', 'Auto'], ['narrow', 'Narrow'], ['wide', 'Wide'], ['full', 'Full']] as const
 const CHAT_TEXT_SIZE_OPTIONS: ReadonlyArray<readonly [number, string]> = CHAT_TEXT_SIZES.map((size) => [size, `${String(size)}%`] as const)
+const INTERFACE_SIZE_OPTIONS: ReadonlyArray<readonly [number, string]> = INTERFACE_SIZES.map((size) => [size, `${String(size)}%`] as const)
+const CHAT_FONT_OPTIONS: ReadonlyArray<readonly [ChatFont, string]> = [['inter', 'Inter'], ['system', 'System'], ['serif', 'Serif'], ['mono', 'Mono']]
 
 /** Native notifications: sent only while the window is in the background, for the session you are not looking at. A stopped agent has its own toast, with no switch. */
 function NotificationsSection({ preferences, update, onTestNotice }: { preferences: SettingsPreferences; update: Update; onTestNotice: (() => void) | undefined }) {

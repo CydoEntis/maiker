@@ -350,7 +350,8 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   Ctrl with a non-letter, and never a plain Ctrl+letter, which is the terminal's. Where the handoff writes `Ctrl O`,
   the key is the one in the binding table (*One key table*, below).
 - **Every existing theme stays.** The handoff's themes the app lacks are added to them.
-- **No options for** corners, density, icon size or colour, the accent, interface text size or toast position.
+- **No options for** corners, density, icon colour, the accent or toast position. The one size control is the whole
+  window's (**Interface size**), which scales text, icons and panes together.
   Settings has no Performance page, and its Extensions page is to go: it stays, last under Agents, until the user
   confirms its removal. The side panel has no History view and no Checks view.
 - **Where the handoff is older than the code, the code wins.** The daemon owns every PTY
@@ -806,10 +807,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   with nothing to change is not a row. **General**: first **Session view** (**Open sessions in**, the only setting for
   the view, so it is the first thing seen); then start and export folders, each the folder shown with **Browse…**,
   which opens the system's folder picker, and a way back to the default (nothing is typed; the start folder reads as
-  `cd <folder>` and says "Saved" for two seconds after a change); **Window** (**Status bar**, `statusBar`, on by
+  `cd <folder>`); **Window** (**Status bar**, `statusBar`, on by
   default: off removes the line at the window's foot); updates; sessions, whose last row, **Questions you turned
   off**, has **Ask again**: it empties `confirmSkipped`, so every confirm asks again, and is disabled while none is
-  skipped. **Chat**: how a chat starts and is drawn (default agent, width, text size, tool calls, file name colours),
+  skipped. Every page saves a change the moment it is made, and the header says **Saved** (a check, `--ok`) for two
+  seconds after each one. **Chat**: how a chat starts and is drawn (default agent, width, tool calls, file name colours),
   then **Accounts**, the account each of Claude and Codex is signed in to, as the agent's own command says, with
   **Sign in**, which opens the agent's own sign-in, **Sign out**, and **Check again**. **Permissions**: a **Bypass
   Permissions** card, one switch per agent, all on, with a foot that says what it allows, then the commands approved
@@ -817,15 +819,19 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   size, cursor) and Panes (where an agent's terminals open, lines kept), then a folded **Advanced** card (text and bold
   weight, scroll speed, line height, screen reader support) that shows only its title until **Show**; a search looks
   inside it anyway. **Appearance**: **Theme** (System, Dark or Light and the dark and light theme pickers, each over
-  every theme of its kind), Motion with Reduce motion, and the sidebar's position and width. **Notifications** has two
+  every theme of its kind), **Size and text** (Interface size, Chat text size, Chat font), Motion with Reduce motion,
+  and the sidebar's position and width. **Notifications** has two
   switches, Needs you and Done, and the test toast. **Extensions** is the last page under Agents and stays short: Where
   to look (the project picker), one card per agent listing what is installed, an **Add** card with one row per kind
   (Marketplace, Plugin, MCP server) whose **Add…** opens that one form under it, and **Needs a terminal** folded to one
   row with **Show** ([UI](UI.md#project-specific-extensions-page-desktop)). A check that fails says why in plain words, never the raw text
-  of a tool or of an answer's shape check (`UNREADABLE_ANSWER`). No page offers corners, density, icon size or
-  colour, an accent, interface text size or status headings.
-- **Chat size.** Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full) and **Chat
-  text size** (`chatTextSize`: 90 to 140%). Auto is the 760px column on a small pane and grows with a large one, to 62%
+  of a tool or of an answer's shape check (`UNREADABLE_ANSWER`). No page offers corners, density, icon
+  colour, an accent or status headings.
+- **Window and chat size.** Settings › Appearance › Size and text has **Interface size** (`interfaceSize`: 90 to
+  140%, 110% by default because the design size read small): the webview's own zoom (`setInterfaceZoom`), so the
+  terminal's measuring, drags and portals scale together. Under it **Chat text size** (`chatTextSize`: 90 to 140%, on
+  top of the interface size) and **Chat font** (`chatFont`: Inter, System, Serif, Mono; `--chat-font` on the chat,
+  code stays monospace). Settings › Chat › Chat view has **Chat width** (`chatWidth`: Auto, Narrow, Wide, Full). Auto is the 760px column on a small pane and grows with a large one, to 62%
   of the pane and 1100px at most, so the chat is not a strip on a big screen; the message box is as wide as the
   messages. The text size draws the whole chat larger or smaller (`zoom` on `.mx-chat`), cards and message box included.
 - **Slash commands.** In a Claude chat, a slash as the first thing in the message box opens the agent's commands over
