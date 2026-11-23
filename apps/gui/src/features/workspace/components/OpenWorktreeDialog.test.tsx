@@ -77,7 +77,7 @@ describe('Open worktree', () => {
     const row = await screen.findByRole('button', { name: /old/ })
     expect(row.textContent).toContain('Missing')
     expect(row.getAttribute('aria-disabled')).toBe('true')
-    expect(row.title).toContain('Its folder is gone')
+    expect(row.textContent).toContain('Its folder is gone')
     fireEvent.click(row)
     expect(onStart).not.toHaveBeenCalled()
   })

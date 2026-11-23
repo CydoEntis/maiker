@@ -53,6 +53,12 @@ function matches(choice: WorktreeChoice, query: string): boolean {
   return choice.name.toLowerCase().includes(typed) || (choice.worktree.branch ?? '').toLowerCase().includes(typed)
 }
 
+/** A worktree's second line: its branch when that differs from its folder's name, then where the folder is. */
+function whereOf(choice: WorktreeChoice): string {
+  const branch = choice.worktree.branch ?? 'No branch (detached)'
+  return branch === choice.name ? choice.worktree.path : `${branch} · ${choice.worktree.path}`
+}
+
 function Row({ choice, missingTip, onStart, onShow }: { choice: WorktreeChoice; missingTip: string } & Pick<Props, 'onStart' | 'onShow'>) {
   const missing = choice.kind === 'missing'
   const pick = () => {
@@ -61,15 +67,16 @@ function Row({ choice, missingTip, onStart, onShow }: { choice: WorktreeChoice; 
   }
   return (
     <li>
-      {/* aria-disabled rather than disabled: a missing worktree stays reachable by Tab, so its tooltip says why. */}
-      <button type="button" className="mx-recent-row" aria-disabled={missing} title={missing ? missingTip : choice.worktree.path} onClick={pick}>
+      {/* aria-disabled rather than disabled: a missing worktree stays reachable by Tab, and its second line says why. No
+          native tooltip: WebKitGTK drew the long path cut off and outside the dialog, so the path is on the row itself. */}
+      <button type="button" className="mx-recent-row" aria-disabled={missing} onClick={pick}>
         <span className="mx-recent-mark"><Icon name="worktree" size={ROW_ICON_PX} /></span>
         <span className="mx-recent-text">
           <span className="mx-recent-title">{choice.name}</span>
-          <span className="mx-recent-where">{choice.worktree.branch ?? 'No branch (detached)'}</span>
+          <span className="mx-recent-where">{missing ? missingTip : whereOf(choice)}</span>
         </span>
         {/* A badge says it is taken; picking the row shows that session instead of starting another. */}
-        {choice.kind === 'running' && <Tag tone="working" title={inUseWords(choice)} aria-label={inUseWords(choice)}>{choice.others > 0 ? `In use · ${String(choice.others + 1)}` : 'In use'}</Tag>}
+        {choice.kind === 'running' && <Tag tone="working" aria-label={inUseWords(choice)}>{choice.others > 0 ? `In use · ${String(choice.others + 1)}` : 'In use'}</Tag>}
         {missing && <Tag tone="err">Missing</Tag>}
       </button>
     </li>
