@@ -159,6 +159,9 @@ pub(super) mod fixtures {
         git(&folder, &["config", "user.email", "test@example.invalid"]);
         git(&folder, &["config", "user.name", "Test"]);
         git(&folder, &["config", "commit.gpgsign", "false"]);
+        // Windows runners set `core.autocrlf`, which writes restored files back with CRLF; the
+        // tests compare bytes, so the repository keeps what was written.
+        git(&folder, &["config", "core.autocrlf", "false"]);
         commit(&folder, "a.txt", "start");
         folder
     }
