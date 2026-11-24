@@ -34,13 +34,33 @@ fn prompt_delivered(operations: &[crate::conversation::Operation], id: Conversat
 }
 
 /// Kills the processes as something outside the daemon would, with no word to the daemon.
+///
+/// A provider's descendant can already be going away by the time its turn comes: the daemon
+/// stops what a provider started once it notices the provider died. Windows then refuses the
+/// kill (access denied on a process already terminating) and the process list may no longer show
+/// it. Either way it is gone, which is all this needs, so a refusal is waited out and only a
+/// process that stays alive fails. The first pid (the provider itself) must be found running:
+/// nothing else may have stopped it.
 async fn kill(pids: Vec<u32>) {
     tokio::task::spawn_blocking(move || {
         let mut system = sysinfo::System::new();
-        system.refresh_processes(sysinfo::ProcessesToUpdate::All, true);
-        for pid in pids {
-            let process = system.process(sysinfo::Pid::from_u32(pid)).expect("the provider is running");
-            assert!(process.kill(), "the provider could be killed");
+        for (position, pid) in pids.into_iter().enumerate() {
+            let target = sysinfo::Pid::from_u32(pid);
+            system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[target]), true);
+            let Some(process) = system.process(target) else {
+                assert!(position > 0, "the provider (pid {pid}) was not running before the kill");
+                continue;
+            };
+            let killed = process.kill();
+            let until = std::time::Instant::now() + Duration::from_secs(10);
+            while system.process(target).is_some() {
+                assert!(
+                    std::time::Instant::now() < until,
+                    "pid {pid} (position {position}) is still running 10s after kill() = {killed}"
+                );
+                std::thread::sleep(Duration::from_millis(50));
+                system.refresh_processes(sysinfo::ProcessesToUpdate::Some(&[target]), true);
+            }
         }
     })
     .await
