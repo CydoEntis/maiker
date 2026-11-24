@@ -221,10 +221,10 @@ mod usage_tests {
     }
 }
 
-/// Codex app-server versions whose required methods and payloads are verified.
+/// Codex app-server versions this adapter was run against. Only a tag: no version is refused for
+/// being absent (ADR 0005).
 pub const VERIFIED_VERSIONS: &[&str] =
     &["0.164.0", "0.165.0", "0.166.0-alpha.5.1", "0.166.0", "0.170.0"];
-const VERIFIED_VERSIONS_TEXT: &str = "0.164.0, 0.165.0, 0.166.0-alpha.5.1, 0.166.0 or 0.170.0";
 const CLIENT_METHODS: &[(&str, &str)] = &[
     ("initialize", "InitializeParams"),
     ("config/read", "ConfigReadParams"),
@@ -236,7 +236,7 @@ const CLIENT_METHODS: &[(&str, &str)] = &[
     ("turn/start", "TurnStartParams"),
     ("turn/interrupt", "TurnInterruptParams"),
 ];
-/// Methods some verified Codex versions lack. A connection that lacks one still passes
+/// Methods some Codex versions lack. A connection that lacks one still passes
 /// [`check_compatibility`]; the caller asks before using it.
 const TURN_STEER: (&str, &str) = ("turn/steer", "TurnSteerParams");
 const SERVER_METHODS: &[(&str, &str)] = &[
@@ -258,55 +258,73 @@ const SERVER_METHODS: &[(&str, &str)] = &[
 #[derive(Debug, PartialEq, Eq)]
 /// A Codex app-server failed the no-session-mutation compatibility preflight.
 pub enum CompatibilityError {
-    Unsupported { capability: String },
+    Unsupported { version: String, missing: String },
 }
 
 impl fmt::Display for CompatibilityError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let Self::Unsupported { capability } = self;
+        let Self::Unsupported { version, missing } = self;
         write!(
             formatter,
-            "Unsupported Codex app-server: {capability}. Select a verified Codex {VERIFIED_VERSIONS_TEXT} executable; no session was started or resumed."
+            "Codex {version} cannot run structured chat: {missing}. Update Codex, or use the terminal agent; no session was started or resumed."
         )
     }
 }
 
 impl std::error::Error for CompatibilityError {}
 
-fn unsupported(capability: &str) -> CompatibilityError {
-    CompatibilityError::Unsupported {
-        capability: capability.into(),
-    }
+fn unsupported(version: &str, missing: impl Into<String>) -> CompatibilityError {
+    CompatibilityError::Unsupported { version: version.into(), missing: missing.into() }
 }
 
-/// Returns whether `version` is in the verified Codex app-server set.
+fn lacks(version: &str, method: &str) -> CompatibilityError {
+    unsupported(version, format!("its app-server schema does not declare `{method}` with the parameters Maiker sends"))
+}
+
+/// Whether a Codex is one this adapter was run against, or one it only found able to do what a
+/// chat needs.
+#[derive(Debug, PartialEq, Eq)]
+pub enum CodexTag {
+    Tested,
+    Untested(String),
+}
+
+/// Returns whether `version` is in the set the adapter was run against.
 pub fn is_verified_version(version: &str) -> bool {
     VERIFIED_VERSIONS.contains(&version)
 }
 
-/// Checks that a verified Codex server advertises every operation Maiker uses.
+/// The version from `codex --version` output (`codex-cli 0.170.0`), or why it is not one.
+pub fn version_number(output: &str) -> Result<&str, String> {
+    output
+        .trim()
+        .strip_prefix("codex-cli ")
+        .filter(|version| version.starts_with(|c: char| c.is_ascii_digit()) && !version.contains(char::is_whitespace))
+        .ok_or_else(|| format!("`codex --version` did not print a Codex version (it printed {:?}). Update Codex, or use the terminal agent", output.trim()))
+}
+
+/// Checks that a Codex server advertises every operation Maiker uses. The schema is the only
+/// gate: any version that declares them is accepted, and one the adapter was not run against is
+/// tagged [`CodexTag::Untested`].
 ///
 /// This preflight takes no session handle, so refusal cannot mutate a thread.
-pub fn check_compatibility(version: &str, schema: &str) -> Result<(), CompatibilityError> {
-    if !is_verified_version(version) {
-        return Err(unsupported("unverified executable version"));
-    }
+pub fn check_compatibility(version: &str, schema: &str) -> Result<CodexTag, CompatibilityError> {
     let schema: Value = serde_json::from_str(schema)
-        .map_err(|_| unsupported("invalid generated-schema representation"))?;
+        .map_err(|_| unsupported(version, "its generated schema is not valid JSON"))?;
     for (section, requirements) in [
         ("clientRequests", CLIENT_METHODS),
         ("serverRequests", SERVER_METHODS),
     ] {
         let variants = schema[section]["oneOf"]
             .as_array()
-            .ok_or_else(|| unsupported(section))?;
+            .ok_or_else(|| unsupported(version, format!("its generated schema has no `{section}` list")))?;
         for (method, params) in requirements {
             if !declares(variants, method, params) {
-                return Err(unsupported(method));
+                return Err(lacks(version, method));
             }
         }
     }
-    Ok(())
+    Ok(if is_verified_version(version) { CodexTag::Tested } else { CodexTag::Untested(version.to_owned()) })
 }
 
 fn declares(variants: &[Value], method: &str, params: &str) -> bool {
@@ -357,7 +375,8 @@ pub fn parse_turn_steer_ack(response: &Value) -> Result<String, String> {
         .ok_or_else(|| "Codex's steer response has no turnId".to_owned())
 }
 
-/// What Codex's app-server can do in a chat, checked against the pinned version. `steers` is
+/// What Codex's app-server can do in a chat, as run against the tested versions (the daemon
+/// reports it advertised for any other). `steers` is
 /// what the running version's schema says about taking a message into a turn.
 pub fn capabilities(steers: bool) -> maitty_shared::conversation::capabilities::Capabilities {
     use maitty_shared::conversation::capabilities::{Capabilities, Verified};
@@ -421,7 +440,7 @@ mod tests {
             } else {
                 SUPPORTED_SCHEMA
             };
-            assert_eq!(check_compatibility(version, schema), Ok(()));
+            assert_eq!(check_compatibility(version, schema), Ok(CodexTag::Tested));
         }
     }
 
@@ -439,7 +458,7 @@ mod tests {
                 let method = removed["properties"]["method"]["enum"][0].as_str().unwrap();
                 assert_eq!(
                     check_compatibility("0.164.0", &schema.to_string()),
-                    Err(unsupported(method)),
+                    Err(lacks("0.164.0", method)),
                     "missing {method}"
                 );
             }
@@ -461,39 +480,57 @@ mod tests {
             serde_json::json!("#/definitions/DifferentInitializeParams");
         assert_eq!(
             check_compatibility("0.164.0", &schema.to_string()),
-            Err(unsupported("initialize"))
+            Err(lacks("0.164.0", "initialize"))
         );
     }
 
-    /// An unverified executable version, a malformed schema, and an initialize response (which
-    /// does not advertise server capabilities) are each unsupported, and say which.
+    /// A malformed schema and an initialize response (which does not advertise server
+    /// capabilities) are each unsupported, and say which.
     #[test]
-    fn an_unverified_version_or_a_schema_that_is_not_one_is_unsupported() {
-        for (version, schema, capability) in [
-            ("0.167.0", SUPPORTED_SCHEMA, "unverified executable version"),
-            ("0.164.0", "{", "invalid generated-schema representation"),
-            ("0.164.0", include_str!("fixtures/initialize-response.json"), "clientRequests"),
+    fn a_schema_that_is_not_one_is_unsupported_and_says_why() {
+        for (schema, said) in [
+            ("{", "not valid JSON"),
+            (include_str!("fixtures/initialize-response.json"), "no `clientRequests` list"),
         ] {
-            assert_eq!(check_compatibility(version, schema), Err(unsupported(capability)), "{capability}");
+            let error = check_compatibility("0.164.0", schema).unwrap_err().to_string();
+            assert!(error.contains("Codex 0.164.0") && error.contains(said), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_version_no_one_listed_is_accepted_on_its_schema_and_tagged_untested() {
+        assert_eq!(check_compatibility("0.167.0", SUPPORTED_SCHEMA), Ok(CodexTag::Untested("0.167.0".into())));
+        assert_eq!(check_compatibility("9.0.0", STABLE_SCHEMA), Ok(CodexTag::Untested("9.0.0".into())));
+        // A listed version does not vouch for a schema that lost a method.
+        assert!(check_compatibility("0.170.0", MISSING_INTERRUPT).is_err());
+    }
+
+    #[test]
+    fn the_version_line_must_name_a_codex_version() {
+        assert_eq!(version_number("codex-cli 0.170.0\n"), Ok("0.170.0"));
+        assert_eq!(version_number("codex-cli 0.171.0-alpha.2"), Ok("0.171.0-alpha.2"));
+        for bad in ["", "0.170.0", "codex-cli ", "codex-cli beta", "codex-cli 1.0 extra"] {
+            assert!(version_number(bad).unwrap_err().contains("did not print a Codex version"), "{bad}");
         }
     }
 
     #[test]
     fn missing_capability_refuses_session_mutation_with_actionable_error() {
         let mut session_requests = Vec::new();
-        let result = check_compatibility("0.164.0", MISSING_INTERRUPT).map(|()| {
+        let result = check_compatibility("0.171.0", MISSING_INTERRUPT).map(|_| {
             session_requests.push("thread/start");
         });
 
         assert_eq!(
             result,
-            Err(CompatibilityError::Unsupported {
-                capability: "turn/interrupt".into(),
-            })
+            Err(lacks("0.171.0", "turn/interrupt"))
         );
         assert!(session_requests.is_empty());
         let said = result.unwrap_err().to_string();
-        assert!(said.contains("turn/interrupt") && said.contains(VERIFIED_VERSIONS_TEXT), "{said}");
+        assert!(
+            said.contains("Codex 0.171.0") && said.contains("turn/interrupt") && said.contains("Update Codex") && !said.contains("verified"),
+            "{said}"
+        );
     }
 
     #[test]
@@ -503,7 +540,7 @@ mod tests {
         assert!(!supports_turn_steer(CURRENT_SCHEMA));
         assert!(!supports_turn_steer("{"));
         assert!(!supports_turn_steer("{}"));
-        assert_eq!(check_compatibility("0.166.0", STABLE_SCHEMA), Ok(()));
+        assert_eq!(check_compatibility("0.166.0", STABLE_SCHEMA), Ok(CodexTag::Tested));
 
         // It needs the params contract, not just the method name.
         let mut schema: Value = serde_json::from_str(STABLE_SCHEMA).unwrap();

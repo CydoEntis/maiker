@@ -50,7 +50,7 @@ describe('a key chosen in Settings', () => {
   it('runs its action, and the action\'s old key no longer does', () => {
     const runShortcut = listen({ palette: { mods: ['ctrl', 'shift'], key: 'H' } })
 
-    press(document.body, 'K', { ctrlKey: true, shiftKey: true })
+    press(document.body, 'P', { ctrlKey: true, shiftKey: true })
     expect(runShortcut).not.toHaveBeenCalled()
     press(document.body, 'H', { ctrlKey: true, shiftKey: true })
     expect(runShortcut).toHaveBeenCalledExactlyOnceWith('palette', undefined)
@@ -62,7 +62,7 @@ describe('a key chosen in Settings', () => {
     field.setAttribute(KEY_CAPTURE_ATTRIBUTE, '')
     document.body.append(field)
 
-    press(field, 'K', { ctrlKey: true, shiftKey: true })
+    press(field, 'P', { ctrlKey: true, shiftKey: true })
 
     expect(runShortcut).not.toHaveBeenCalled()
   })
@@ -71,7 +71,7 @@ describe('a key chosen in Settings', () => {
 describe('the window\'s keys and the field with the focus', () => {
   it('takes a window key before the field hears it, the same in a text box as anywhere', () => {
     const runShortcut = listen()
-    expect(pressIn('textarea', { key: 'K', ctrlKey: true, shiftKey: true })).toEqual({ reached: false, prevented: true })
+    expect(pressIn('textarea', { key: 'P', ctrlKey: true, shiftKey: true })).toEqual({ reached: false, prevented: true })
     expect(runShortcut).toHaveBeenCalledWith('palette', undefined)
     expect(pressIn('textarea', { key: 'F6' }).reached).toBe(false)
     expect(runShortcut).toHaveBeenLastCalledWith('focus-next', undefined)
@@ -100,7 +100,7 @@ describe('the window\'s keys and the field with the focus', () => {
 describe('the window\'s keys under something open', () => {
   it('answers only its own key while the shortcut sheet is open', () => {
     const runShortcut = listen({}, { shortcutsOpen: true })
-    pressIn('div', { key: 'K', ctrlKey: true, shiftKey: true })
+    pressIn('div', { key: 'P', ctrlKey: true, shiftKey: true })
     expect(runShortcut).not.toHaveBeenCalled()
     pressIn('div', { key: '/', code: 'Slash', ctrlKey: true })
     expect(runShortcut).toHaveBeenCalledExactlyOnceWith('shortcuts')
@@ -111,7 +111,7 @@ describe('the window\'s keys under something open', () => {
     pressIn('input', { key: 'T', ctrlKey: true, shiftKey: true })
     pressIn('input', { key: 'ArrowDown', altKey: true })
     expect(runShortcut).not.toHaveBeenCalled()
-    pressIn('input', { key: 'K', ctrlKey: true, shiftKey: true })
+    pressIn('input', { key: 'P', ctrlKey: true, shiftKey: true })
     expect(runShortcut).toHaveBeenCalledExactlyOnceWith('palette')
   })
 

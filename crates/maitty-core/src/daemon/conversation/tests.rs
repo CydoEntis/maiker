@@ -132,6 +132,7 @@ fn claude_launch(root: &Path, scenario: Option<&str>) -> (Launch, super::runtime
         identity: super::transport::LaunchIdentity::Existing(Box::new(conversation.clone())),
         environment,
         arguments: Vec::new(),
+        untested_cli: None,
         failure_point: None,
     };
     let owner = super::runtime::test_owner(conversation.id, conversation.generation);
@@ -216,6 +217,7 @@ impl Fixture {
             identity: super::transport::LaunchIdentity::Existing(Box::new(self.record.clone())),
             environment,
             arguments: Vec::new(),
+            untested_cli: None,
             failure_point: None,
         }
     }
@@ -787,6 +789,7 @@ mod provider_crash;
 mod branch_chat;
 
 mod claude_chat;
+mod codex_version;
 mod acp_chat;
 
 mod claude_warm;

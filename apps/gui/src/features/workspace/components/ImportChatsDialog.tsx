@@ -3,8 +3,9 @@ import type { ImportableChat } from '@/api/daemon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
+import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
 import { groupByFolder, importKey, maybeOpenElsewhere, tickedAtFirst, type ImportRead } from '../model/importChats'
-import { ageOf } from '../model/newChatHost'
+import { ageOf, savedName, whenOf } from '../model/newChatHost'
 import { AppIcon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -45,7 +46,7 @@ export function ImportChatsDialog(props: Props) {
             ? <ImportList {...props} list={props.read.list} />
             : (
                 <>
-                  <ModalBody><p role="status">{statusWords(props.read)}</p></ModalBody>
+                  <ModalBody><p role="status">{statusWords(props.read)}{props.read.kind === 'older' && <> <RestartServiceButton /></>}</p></ModalBody>
                   <ModalFoot><Button type="button" variant="ghost" size="lg" onClick={props.onCancel}>Close</Button></ModalFoot>
                 </>
               )}
@@ -58,7 +59,7 @@ export function ImportChatsDialog(props: Props) {
 function statusWords(read: ImportRead): string {
   if (read.kind === 'loading') return 'Looking for chats on this computer…'
   if (read.kind === 'failed') return 'Could not read the chats on this computer.'
-  if (read.kind === 'older') return 'Restart the Maiker service to look for chats to bring in.'
+  if (read.kind === 'older') return 'The Maiker service needs a restart to look for chats to bring in.'
   return 'No Claude or Codex chat on this computer to bring in. Every one is already here.'
 }
 
@@ -86,11 +87,12 @@ function ImportList({ list, now, locked, onImport, onCancel }: Props & { list: r
                   const elsewhere = maybeOpenElsewhere(chat, now)
                   return (
                     <li key={key}>
-                      <label className="mx-cutoff-row" title={chat.saved.first_message}>
+                      <label className="mx-cutoff-row" title={savedName(chat.saved)}>
                         <input type="checkbox" data-bare checked={ticked.has(key)} onChange={() => { toggle(key) }} />
                         <AppIcon process={chat.agent} size={14} />
-                        <span className="mx-cutoff-name">{chat.saved.first_message}</span>
-                        <span className="mx-cutoff-where">{elsewhere ? 'May be open elsewhere: close it there first' : ageOf(chat.saved.last_active, now)}</span>
+                        <span className="mx-cutoff-name">{savedName(chat.saved)}</span>
+                        {elsewhere && <span className="mx-cutoff-where">May be open elsewhere: close it there first</span>}
+                        <span className="mx-cutoff-when">{whenOf(chat.saved.last_active, now)} · {ageOf(chat.saved.last_active, now)}</span>
                       </label>
                     </li>
                   )

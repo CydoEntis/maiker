@@ -39,7 +39,8 @@ fn main() {
         }
     }
     if args == ["--version"] {
-        println!("codex-cli 0.164.0");
+        let version = std::fs::read_to_string(fixture.join("codex-version")).unwrap_or_else(|_| "0.164.0".into());
+        println!("codex-cli {}", version.trim());
         return;
     }
     if args.get(1).map(String::as_str) == Some("generate-json-schema") {

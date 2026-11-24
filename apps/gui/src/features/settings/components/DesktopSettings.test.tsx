@@ -381,6 +381,19 @@ describe('the nav', () => {
     expect(onSection).toHaveBeenCalledWith('machines')
   })
 
+  it('opens Updates & repair, where the app, the service and the machines are listed', async () => {
+    const user = userEvent.setup()
+    const { onSection } = renderSettings('general')
+    await user.click(within(screen.getByRole('navigation', { name: 'Settings sections' })).getByRole('button', { name: 'Updates & repair' }))
+    expect(onSection).toHaveBeenCalledWith('updates')
+  })
+
+  it('draws the Updates & repair page with a card for each thing that updates', () => {
+    renderSettings('updates')
+    expect(screen.getByRole('heading', { name: 'Updates & repair' })).toBeInTheDocument()
+    for (const title of ['Check', 'Maiker app', 'Maiker service', 'Remote machines']) expect(screen.getByRole('region', { name: title })).toBeInTheDocument()
+  })
+
   it('does not change page on a letter pressed in the dialog', async () => {
     const user = userEvent.setup()
     const { onSection } = renderSettings('general')

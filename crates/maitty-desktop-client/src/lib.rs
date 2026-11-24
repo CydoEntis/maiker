@@ -1,16 +1,18 @@
 use maitty_shared::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox, StartTarget};
 mod host_env;
 mod ipc;
+mod service_repair;
 mod shared_daemon;
 use anyhow::{Context, Result, bail};
 pub use host_env::host_command;
 pub use ipc::data_dir;
+pub use service_repair::{local_service_report, repair_local_service};
 pub use shared_daemon::{ensure_shared_daemon, shared_daemon_path};
 use maitty_shared::protocol::{COMPATIBLE_SINCE, ClientMsg, Command, Query, Reply, ServerMsg};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 use std::future::Future;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -151,6 +153,32 @@ pub async fn daemon_restart_status() -> Result<Value> {
     }))
 }
 
+/// What the local service's activity file says about it, read from disk: it works when the service
+/// is old or stuck. `None` when there is no file, or it belongs to a process that is not the pid file's.
+pub struct ServiceFacts {
+    pub version: String,
+    pub sessions: usize,
+}
+
+pub fn service_facts() -> Option<ServiceFacts> {
+    read_activity().map(|a| ServiceFacts { version: a.version, sessions: a.sessions })
+}
+
+/// Whether the local service takes a connection from this build, without starting one.
+pub enum ServiceReach {
+    Answering,
+    /// It runs and speaks this protocol version, which this build does not.
+    OtherProtocol(u32),
+    NotAnswering,
+}
+
+pub async fn service_reach() -> ServiceReach {
+    match ipc::open_for_user().await {
+        Ok(_) => ServiceReach::Answering,
+        Err(error) => ipc::other_version(&error).map_or(ServiceReach::NotAnswering, ServiceReach::OtherProtocol),
+    }
+}
+
 /// An older daemon may be replaced when its sessions are saved on disk (the next daemon
 /// restores them) or when it provably has none. One that owns sessions it isn't saving
 /// would lose them, so it is left running.
@@ -267,13 +295,17 @@ fn daemon_pid() -> Option<u32> {
         .and_then(|value| value.trim().parse::<u32>().ok())
 }
 
-/// Stops the daemon the pid file names, and says which process that was.
-fn stop_mismatched_daemon() -> Result<u32> {
-    let pid = daemon_pid()
+/// The daemon process the pid file names, once it is confirmed to be this product's.
+fn identified_daemon_pid() -> Result<u32> {
+    daemon_pid()
         .filter(|pid| is_app_daemon(*pid))
         .ok_or_else(|| {
             anyhow::anyhow!("couldn't identify the local {APP_NAME} ({APP_COMMAND}) daemon process")
-        })?;
+        })
+}
+
+/// Ends a process by its id: the last resort for a service that cannot be asked to stop.
+fn kill_process(pid: u32) -> Result<()> {
     let mut command = if cfg!(windows) {
         let mut command = std::process::Command::new("taskkill");
         command.args(["/PID", &pid.to_string(), "/F"]);
@@ -295,7 +327,7 @@ fn stop_mismatched_daemon() -> Result<u32> {
         status.success(),
         "couldn't stop the old daemon process {pid}"
     );
-    Ok(pid)
+    Ok(())
 }
 
 fn is_app_daemon(pid: u32) -> bool {
@@ -371,7 +403,7 @@ pub fn is_daemon_invocation(program: &[u8], first_argument: Option<&[u8]>) -> bo
 }
 
 /// Stop only the exact older local daemon the user confirmed replacing.
-pub async fn restart_mismatched_daemon(expected_protocol: u32) -> Result<()> {
+pub async fn restart_mismatched_daemon(expected_protocol: u32, daemon_executable: &Path) -> Result<()> {
     let daemon_protocol = match ipc::open_for_user().await {
         Err(error) => ipc::other_version(&error)
             .ok_or_else(|| error.context("Could not ask the Maiker service which version it is"))?,
@@ -381,30 +413,51 @@ pub async fn restart_mismatched_daemon(expected_protocol: u32) -> Result<()> {
         }
     };
     validate_restart_confirmation(daemon_protocol, expected_protocol)?;
-    stop_local_daemon().await
+    stop_local_daemon(Some(daemon_executable), false).await
 }
 
 /// Stop the exact older release the user confirmed replacing. It must still be the version the
 /// prompt named and still older than this app, so a daemon another window already replaced is
 /// never stopped by a stale prompt.
-pub async fn restart_stale_daemon(app_version: &str, expected_version: &str) -> Result<()> {
+pub async fn restart_stale_daemon(app_version: &str, expected_version: &str, daemon_executable: &Path) -> Result<()> {
     let activity = read_activity();
     let running = activity.as_ref().map_or("", |a| a.version.as_str());
     anyhow::ensure!(
         running == expected_version && shared_daemon::is_older(running, app_version),
         "the local {APP_NAME} service changed since the restart prompt opened"
     );
-    stop_local_daemon().await
+    stop_local_daemon(Some(daemon_executable), false).await
 }
 
-/// Stop the local daemon, after checking that its sessions are saved or that it has none, and
-/// wait until it lets go of the socket.
-async fn stop_local_daemon() -> Result<()> {
-    validate_restart_activity(read_activity().as_ref(), session_file().is_file())?;
-    let stopped = tokio::task::spawn_blocking(stop_mismatched_daemon)
+/// Stop the local daemon, after checking that its sessions are saved or that it has none (unless
+/// `discard_unsaved`: the person was told they would be lost), and wait until it lets go of the
+/// socket. With `graceful` (a current daemon file) it is asked to save and stop first, the way
+/// `kill-server` does, and its process is ended only if that did not work in time.
+async fn stop_local_daemon(graceful: Option<&Path>, discard_unsaved: bool) -> Result<()> {
+    if !discard_unsaved {
+        validate_restart_activity(read_activity().as_ref(), session_file().is_file())?;
+    }
+    let stopped = identified_daemon_pid()?;
+    if let Some(executable) = graceful {
+        service_repair::ask_to_stop(executable).await;
+        if wait_until_gone(stopped, 1).await {
+            return Ok(());
+        }
+    }
+    tokio::task::spawn_blocking(move || kill_process(stopped))
         .await
         .context(format!("waiting for the local {APP_NAME} service to stop"))??;
-    for _ in 0..50 {
+    if wait_until_gone(stopped, 50).await {
+        return Ok(());
+    }
+    bail!(
+        "the old {APP_NAME} service (process {stopped}) did not stop within 5 seconds, so it still holds the local service socket"
+    )
+}
+
+/// Looks up to `tries` times, 100 ms apart, for the stopped daemon to let go of the socket.
+async fn wait_until_gone(stopped: u32, tries: u32) -> bool {
+    for _ in 0..tries {
         let listening = ipc::is_running().await;
         let named = daemon_pid();
         if stopped_daemon_is_gone(stopped, listening, named) {
@@ -412,13 +465,11 @@ async fn stop_local_daemon() -> Result<()> {
             if named == Some(stopped) {
                 ipc::remove_pid_file();
             }
-            return Ok(());
+            return true;
         }
         tokio::time::sleep(Duration::from_millis(100)).await;
     }
-    bail!(
-        "the old {APP_NAME} service (process {stopped}) did not stop within 5 seconds, so it still holds the local service socket"
-    )
+    false
 }
 
 /// Whether the stopped daemon let go of the socket. Something listening is not proof that it
@@ -1848,6 +1899,17 @@ pub async fn rename_conversation(
         Reply::Ok => Ok(Value::Null),
         _ => bail!("The Maiker service gave an answer this app does not understand (rename). Restart the service in Settings, or update the app so both are the same version."),
     }
+}
+
+/// A chat opened on a saved session was last used at `at` (unix seconds): its row's age counts from then. This
+/// computer's daemon from before the command is not asked (it would never answer) and the age counts from the start.
+pub async fn conversation_active_at(id: u64, at: u64) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ConversationActiveAt {
+        id: maitty_shared::conversation::ConversationId(id),
+        at,
+    });
+    ask_if_known(message).await?;
+    Ok(Value::Null)
 }
 
 /// The window shows a finished chat, so its done becomes idle. This computer's daemon from before the command is

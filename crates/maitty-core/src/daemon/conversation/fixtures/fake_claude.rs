@@ -13,8 +13,21 @@ fn log(line: &str) {
 }
 
 fn main() {
+    // A test names another version, or a help without a flag, in a file beside the executable.
+    let beside = |extension: &str| {
+        std::env::current_exe()
+            .ok()
+            .and_then(|executable| std::fs::read_to_string(executable.with_extension(extension)).ok())
+    };
     if std::env::args().any(|argument| argument == "--version") {
-        println!("Claude Code 2.1.312");
+        println!("{}", beside("version").unwrap_or_else(|| "Claude Code 2.1.312".into()));
+        return;
+    }
+    if std::env::args().any(|argument| argument == "--help") {
+        print!(
+            "{}",
+            beside("help").unwrap_or_else(|| "--input-format <f>\n--output-format <f>\n--include-partial-messages\n--replay-user-messages\n--verbose\n--permission-mode <m>\n--session-id <uuid>\n--resume [id]\n--permission-prompts <t>  (--permission-prompt-tool)\n".into())
+        );
         return;
     }
 

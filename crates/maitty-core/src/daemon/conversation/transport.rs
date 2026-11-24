@@ -29,6 +29,9 @@ pub(crate) struct Launch {
     /// The arguments the daemon's config gives the program, for an agent whose program is the
     /// config's to name. Empty for every other.
     pub(crate) arguments: Vec<OsString>,
+    /// The Claude Code or Codex version this chat was admitted on without it being one the adapter
+    /// was run against; `None` for a tested version and for every other provider.
+    pub(super) untested_cli: Option<String>,
     #[cfg(test)]
     pub(super) failure_point: Option<FailurePoint>,
 }
@@ -127,7 +130,35 @@ pub(super) enum FailurePoint {
 }
 
 impl Launch {
-    pub(super) async fn validate(mut self) -> Result<Self> {
+    pub(super) async fn validate(self) -> Result<Self> {
+        let mut launch = self.validate_binding().await?;
+        if launch.provider() == Provider::Claude {
+            let (config_root, executable, cwd) = launch.paths();
+            let tag = super::claude::probe_cli(executable, cwd, config_root, &launch.environment).await?;
+            if let maitty_provider_claude::CliTag::Untested(version) = tag {
+                tracing::warn!("Claude Code {version} was not run against this adapter; the chat starts on what its help lists");
+                launch.untested_cli = Some(version);
+            }
+        }
+        Ok(launch)
+    }
+
+    /// `validate`, then the checks that run the provider's own binary, so a start that cannot work
+    /// is refused before it has a conversation. Codex's is the schema preflight that `connect`
+    /// repeats from its cache.
+    pub(super) async fn admit(self) -> Result<Self> {
+        let mut launch = self.validate().await?;
+        if launch.provider() == Provider::Codex {
+            let preflight = launch.preflight().await.map_err(|failure| failure.error)?;
+            if let Some(version) = &preflight.untested {
+                tracing::warn!("Codex {version} was not run against this adapter; the chat starts on what its schema declares");
+            }
+            launch.untested_cli = preflight.untested;
+        }
+        Ok(launch)
+    }
+
+    async fn validate_binding(mut self) -> Result<Self> {
         tokio::task::spawn_blocking(move || {
             let provider = self.provider();
             // An agent whose chat is only read from its terminal's transcript (follow.rs) has no runtime to start.
@@ -215,7 +246,7 @@ impl Launch {
         &self,
         identity: &crate::protocol::StructuredIdentity,
     ) -> Result<Connection, StartupFailure> {
-        let turn_steer = self.preflight().await?;
+        let turn_steer = self.preflight().await?.turn_steer;
         let mut command = self.command(self.paths().0);
         identify(&mut command, identity);
         command.arg("app-server").args(["--listen", "stdio://"]);
@@ -243,8 +274,9 @@ impl Launch {
         })
     }
 
-    /// Checks the selected Codex and says whether its own schema declares `turn/steer`.
-    async fn preflight(&self) -> Result<bool, StartupFailure> {
+    /// Checks the selected Codex against its own generated schema, whatever its version, and says
+    /// whether the schema declares `turn/steer`.
+    async fn preflight(&self) -> Result<Preflight, StartupFailure> {
         let directory = PreflightDirectory::create().await?;
         let home = directory.0.join("home");
         let schema = directory.0.join("schema");
@@ -254,24 +286,14 @@ impl Launch {
         let version = std::str::from_utf8(&version)
             .context("Codex version is not UTF-8")?
             .trim();
-        let version = version
-            .strip_prefix("codex-cli ")
-            .context("Unrecognized Codex executable version")?;
-        // Refuse an unverified binary before asking it to generate a schema.
-        if !maitty_provider_codex::is_verified_version(version) {
-            return Err(anyhow::anyhow!(
-                "Unsupported Codex executable version; select a verified Codex {}",
-                maitty_provider_codex::VERIFIED_VERSIONS.join(" or ")
-            )
-            .into());
-        }
+        let version = maitty_provider_codex::version_number(version).map_err(anyhow::Error::msg)?;
         // A passed check holds for this path and version, so the slow schema
         // generation is not repeated for every conversation. A changed version
         // is a different key and is checked in full.
         let key = (self.paths().1.to_path_buf(), version.to_owned());
-        if let Some(turn_steer) = preflight_already_passed(&key) {
+        if let Some(passed) = preflight_already_passed(&key) {
             directory.remove().await?;
-            return Ok(turn_steer);
+            return Ok(passed);
         }
         let mut generate = self.command(&home);
         generate
@@ -289,37 +311,50 @@ impl Launch {
             };
             Ok(json!({"clientRequests": read("ClientRequest.json")?, "serverRequests": read("ServerRequest.json")?}).to_string())
         }).await.context("Read Codex schema in background")??;
-        maitty_provider_codex::check_compatibility(version, &inventory)
+        let tag = maitty_provider_codex::check_compatibility(version, &inventory)
             .map_err(anyhow::Error::new)?;
-        let turn_steer = maitty_provider_codex::supports_turn_steer(&inventory);
+        let untested = match tag {
+            maitty_provider_codex::CodexTag::Tested => None,
+            maitty_provider_codex::CodexTag::Untested(version) => Some(version),
+        };
+        let passed = Preflight { turn_steer: maitty_provider_codex::supports_turn_steer(&inventory), untested };
         directory.remove().await?;
-        remember_preflight_passed(key, turn_steer);
-        Ok(turn_steer)
+        remember_preflight_passed(key, passed.clone());
+        Ok(passed)
     }
+}
+
+/// What a passed Codex preflight found out.
+#[derive(Clone)]
+struct Preflight {
+    /// Whether the schema declares `turn/steer`.
+    turn_steer: bool,
+    /// The version, when the adapter was not run against it.
+    untested: Option<String>,
 }
 
 type PreflightKey = (PathBuf, String);
 
-/// The executables whose preflight passed, each with whether its schema declares `turn/steer`.
+/// The executables whose preflight passed, each with what it found.
 fn passed_preflights()
--> &'static std::sync::Mutex<std::collections::HashMap<PreflightKey, bool>> {
+-> &'static std::sync::Mutex<std::collections::HashMap<PreflightKey, Preflight>> {
     static PASSED: std::sync::OnceLock<
-        std::sync::Mutex<std::collections::HashMap<PreflightKey, bool>>,
+        std::sync::Mutex<std::collections::HashMap<PreflightKey, Preflight>>,
     > = std::sync::OnceLock::new();
     PASSED.get_or_init(Default::default)
 }
 
-fn preflight_already_passed(key: &PreflightKey) -> Option<bool> {
+fn preflight_already_passed(key: &PreflightKey) -> Option<Preflight> {
     passed_preflights()
         .lock()
         .ok()
-        .and_then(|passed| passed.get(key).copied())
+        .and_then(|passed| passed.get(key).cloned())
 }
 
-fn remember_preflight_passed(key: PreflightKey, turn_steer: bool) {
+fn remember_preflight_passed(key: PreflightKey, preflight: Preflight) {
     // A poisoned lock only means the next start repeats the full check.
     if let Ok(mut passed) = passed_preflights().lock() {
-        passed.insert(key, turn_steer);
+        passed.insert(key, preflight);
     }
 }
 
@@ -330,10 +365,11 @@ mod preflight_cache_tests {
     #[test]
     fn a_passed_binary_and_version_is_remembered_but_a_new_version_is_not() {
         let path = PathBuf::from("codex-for-cache-test");
-        assert_eq!(preflight_already_passed(&(path.clone(), "9.9.9".into())), None);
-        remember_preflight_passed((path.clone(), "9.9.9".into()), true);
-        assert_eq!(preflight_already_passed(&(path.clone(), "9.9.9".into())), Some(true));
-        assert_eq!(preflight_already_passed(&(path, "9.9.10".into())), None);
+        assert!(preflight_already_passed(&(path.clone(), "9.9.9".into())).is_none());
+        remember_preflight_passed((path.clone(), "9.9.9".into()), Preflight { turn_steer: true, untested: Some("9.9.9".into()) });
+        let remembered = preflight_already_passed(&(path.clone(), "9.9.9".into())).unwrap();
+        assert!(remembered.turn_steer && remembered.untested.as_deref() == Some("9.9.9"));
+        assert!(preflight_already_passed(&(path, "9.9.10".into())).is_none());
     }
 }
 
@@ -703,10 +739,11 @@ mod tests {
             })),
             environment: Vec::new(),
             arguments: Vec::new(),
+            untested_cli: None,
             failure_point: None,
         };
 
-        let validated = launch.validate().await.unwrap();
+        let validated = launch.validate_binding().await.unwrap();
         assert_eq!(validated.provider(), crate::conversation::Provider::Claude);
     }
 
@@ -766,6 +803,7 @@ mod tests {
             })),
             environment: Vec::new(),
             arguments: Vec::new(),
+            untested_cli: None,
             failure_point: None,
         };
 

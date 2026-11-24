@@ -692,6 +692,21 @@ describe('the New session draft as a chat that has not been sent', () => {
 })
 
 describe('the empty draft\'s question and where it runs', () => {
+  it('names a renamed machine by its nickname in the chip and the list, and starts on its real name', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    const machines = [{ machine: 0, label: 'This computer', local: true }, { machine: 2, label: 'kingdom', name: 'server-15', local: false }]
+    render(<NewChatPage machine={2} machines={machines} projects={[{ folder: '/srv/app', name: 'app', color: 'teal', sessions: 1 }]} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} />, { container: windowRoot() })
+    await userEvent.click(screen.getByRole('button', { name: /^Runs on: kingdom/ }))
+    const list = await lastPopup()
+    expect(within(list).getByRole('radio', { name: /^kingdom/ })).toBeChecked()
+    expect(within(list).queryByText('The session runs here')).not.toBeInTheDocument()
+    expect(document.body).not.toHaveTextContent('server-15')
+    await userEvent.keyboard('{Escape}')
+    await userEvent.type(box(), 'go')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ machine: 2, machineName: 'server-15' })) })
+  })
+
   it('asks about the project, and starts without one in the start folder', async () => {
     const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
     render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} looseFolder="/home/me" />, { container: windowRoot() })

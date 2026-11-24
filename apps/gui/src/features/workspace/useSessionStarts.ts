@@ -4,7 +4,7 @@ import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
 import { toast } from '@/lib/toast'
 import { DEFAULT_PICK, everywhereModel, writeChoice } from '@/features/chat/agentChoice'
-import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, resumeChatSession, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
+import { addWorktree, defaultSessionFolder, handoffBrief, dropPrewarmedAgent, prewarmAgentSession, startAgentSession as launchAgentSession, loadConversations, conversationActiveAt, renameConversationOnDaemon, sendTerminalInput, sendWhenAgentReady, resumeChatSession, startAcpChat, startChatSession, startShellSession, submitMessage, switchBranch } from '@/api/daemon'
 import { LOCAL_MACHINE, askMachineList, remoteChatId, startSessionOnMachine } from '@/api/machines'
 import { conversationKey } from '@/api/conversationKey'
 import { startGitHubSignIn } from '@/api/githubAccounts'
@@ -261,6 +261,9 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       }
       const named = request.name ?? (request.message === '' ? '' : nameFromMessage(request.message))
       if (named !== '') void renameConversationOnDaemon({ id }, named).catch((error: unknown) => { console.warn('Could not name the new session', error) })
+      // A saved conversation's row counts its age from when it was last used, not from this start. Asked before the list is
+      // read so the first row already says it; a daemon that cannot take it leaves the age as the start.
+      if (request.lastActive !== undefined) await conversationActiveAt(id, request.lastActive).catch((error: unknown) => { console.warn('Could not date the resumed session', error) })
       if (there === null) {
         await queryClient.invalidateQueries({ queryKey: ['conversations'] })
         await queryClient.query({ queryKey: ['conversations'], queryFn: loadConversations, staleTime: 0 })

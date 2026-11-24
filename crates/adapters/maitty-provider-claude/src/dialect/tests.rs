@@ -306,3 +306,17 @@ fn a_process_that_exits_mid_turn_is_reported_and_one_that_exits_after_is_not() {
     assert!(matches!(&mid_turn[..], [Step::Emit(ProviderEvent::Terminated { .. })]), "{mid_turn:?}");
     assert!(after_turn.is_empty());
 }
+
+#[test]
+fn a_permission_frame_that_is_not_understood_is_never_answered_and_never_allowed() {
+    let mut dialect = dialect();
+    start_turn(&mut dialect, "turn-1", "list files");
+    // A control request of a kind a newer Claude Code may add.
+    let unknown = dialect.on_line(r#"{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool_v2","tool_name":"Bash","input":{"command":"ls"}}}"#);
+    assert!(unknown.is_err(), "{unknown:?}");
+    // A permission request with no tool is shown to the person, never answered by the adapter.
+    let bare = dialect
+        .on_line(r#"{"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool"}}"#)
+        .unwrap();
+    assert!(bare.iter().all(|step| matches!(step, Step::Emit(ProviderEvent::ApprovalRequested { .. }))), "{bare:?}");
+}

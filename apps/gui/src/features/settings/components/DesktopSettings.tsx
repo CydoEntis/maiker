@@ -14,6 +14,7 @@ import { Switch } from '@/components/ui/switch'
 import type { GitHubSignIn } from './GitHubSection'
 import { MachinesPage } from './MachinesPage'
 import { UpdateBox } from './UpdateBox'
+import { UpdatesPage } from './UpdatesPage'
 import { ExtensionsSection } from '@/features/extensions/ExtensionsSection'
 import type { ExtensionProject } from '@/features/extensions/projects'
 import { captureCombo, comboChord, HOTKEY_GROUPS, hotkeyRows, isOwnKey, KEY_CAPTURE_ATTRIBUTE, matchShortcut, takenBy, withoutAction, writeChord, type KeyOverrides, type Platform, type ShortcutAction } from '@/features/workspace/model/shortcuts'
@@ -34,7 +35,7 @@ import { UsagePage } from '@/features/usage/UsagePage'
 import type { OpenSession } from '@/features/usage/UsageTable'
 import { BYPASS_AGENTS, bypasses, type ChatFont, CHAT_TEXT_SIZES, INTERFACE_SIZES, LINE_HEIGHT_CHOICES, SCROLL_SPEED_CHOICES, SCROLLBACK_CHOICES, SIDEBAR_WIDTH_DEFAULT, TERMINAL_FONT_SIZE_MAX, TERMINAL_FONT_SIZE_MIN, type CursorStyle, type ScrollbackLines, type ScrollSpeed, type TerminalLineHeight, type SettingsPreferences } from '../preferences'
 
-export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'helpers' | 'terminal' | 'extensions' | 'machines' | 'usage'
+export type DesktopSettingsSection = 'general' | 'appearance' | 'notifications' | 'keys' | 'chat' | 'permissions' | 'helpers' | 'terminal' | 'extensions' | 'machines' | 'updates' | 'usage'
 
 /** The other machines, for the Machines page: what the window knows of each, and what it can ask of the host. */
 export type MachinesInfo = {
@@ -147,6 +148,7 @@ const NAV: Array<{ label: string; items: NavItem[] }> = [
       { id: 'general', label: 'General', path: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
       { id: 'appearance', label: 'Appearance', path: 'M12 3a9 9 0 1 0 0 18c1 0 1.5-.8 1.5-1.6 0-.9-.8-1.3-.8-2.2 0-.9.7-1.6 1.6-1.6H16a5 5 0 0 0 5-5c0-4.4-4-7.6-9-7.6zM7.5 11.5h.01M10.5 7.5h.01M15.5 8.5h.01' },
       { id: 'notifications', label: 'Notifications', path: 'M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9M10.3 21a1.9 1.9 0 0 0 3.4 0' },
+      { id: 'updates', label: 'Updates & repair', path: 'M21 12a9 9 0 1 1-3-6.7M21 4v5h-5' },
       { id: 'keys', label: 'Hotkeys', path: 'M2 6h20v12H2zM6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8' },
     ],
   },
@@ -179,6 +181,7 @@ const PAGE: Record<DesktopSettingsSection, [string, string]> = {
   terminal: ['Terminal', 'How every pane renders. Changes apply instantly.'],
   extensions: ['Extensions', 'Skills, plugins and MCP servers for Claude Code and Codex, for you and for a project.'],
   machines: ['Remote machines', 'Other computers whose sessions show up in your sidebar.'],
+  updates: ['Updates & repair', 'What can update, what version it is on, and how to fix it when an update did not take.'],
   usage: ['Usage & cost', 'What the agents reported using, by session. Never estimated.'],
 }
 
@@ -279,6 +282,7 @@ export function DesktopSettings(props: DesktopSettingsProps) {
       case 'usage': return <UsageSection usage={props.usage} />
       case 'notifications': return <NotificationsSection preferences={preferences} update={update} onTestNotice={props.onTestNotice} />
       case 'machines': return <MachinesPage daemon={props.daemon} machines={props.machines} github={props.github} appVersion={props.appVersion} />
+      case 'updates': return <UpdatesPage updates={props.updates} appVersion={props.appVersion} machines={props.machines} />
       case 'extensions': return <ExtensionsSection projects={props.extensionProjects ?? []} />
       case 'keys': return <HotkeysSection platform={props.platform} overrides={preferences.keyOverrides} onOverrides={(next) => { update('keyOverrides', next) }} />
     }

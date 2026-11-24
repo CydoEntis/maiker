@@ -48,13 +48,13 @@ describe('update slot', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 
-  it('restarts on a click of the restart icon and says chats keep running', async () => {
+  it('restarts on a click of the restart icon and says sessions are saved and a turn in progress stops', async () => {
     const user = userEvent.setup()
     const actions = setup({ status: 'ready', version: '0.61.0' })
 
     const button = screen.getByRole('button', { name: 'Restart to update' })
     await user.hover(button)
-    expect(await findCard()).toHaveTextContent('Click to restart · chats keep running')
+    expect(await findCard()).toHaveTextContent('Click to restart · sessions are saved, a turn in progress stops')
     await user.click(button)
 
     expect(actions.onRestartNow).toHaveBeenCalledTimes(1)

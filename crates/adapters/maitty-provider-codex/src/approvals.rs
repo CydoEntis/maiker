@@ -185,3 +185,24 @@ fn user_input_questions(
         })
         .collect()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn asked(method: &str, params: Value) -> Option<Asked> {
+        approval_request(ProviderRequestId::Integer(1), method, &params, None)
+    }
+
+    /// A newer Codex may ask in a way this project cannot show; it is never shown as, or answered
+    /// like, one it can.
+    #[test]
+    fn a_request_that_is_unknown_or_malformed_is_not_shown_as_an_approval() {
+        assert!(asked("item/newKind/requestApproval", serde_json::json!({"command": "ls"})).is_none());
+        assert!(asked(COMMAND_APPROVAL, serde_json::json!({})).is_none());
+        assert!(asked(PERMISSION_APPROVAL, serde_json::json!({"itemId": "i"})).is_none());
+        assert!(asked(USER_INPUT, serde_json::json!({"questions": "none"})).is_none());
+        let bare = asked(FILE_CHANGE_APPROVAL, serde_json::json!({})).unwrap();
+        assert!(bare.request.choices.is_empty(), "a file change with no diff cannot be approved");
+    }
+}

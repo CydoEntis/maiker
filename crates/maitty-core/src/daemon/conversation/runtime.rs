@@ -332,6 +332,15 @@ impl Registry {
         Ok(())
     }
 
+    /// Drops a runtime at once, without waiting for its agent to say it is gone: the actor is
+    /// aborted, which ends the provider's process tree with it, and the chat can start again
+    /// right away. Whatever the dead actor had queued is ignored (`accept` knows no such owner).
+    pub(super) fn abandon(&mut self, id: ConversationId) {
+        if let Some(runtime) = self.entries.remove(&id) {
+            runtime.task.abort();
+        }
+    }
+
     /// Ask every runtime to stop, for a daemon that is about to end its process and will not
     /// run their destructors. Each handle says when its actor has finished, which is after the
     /// provider's process tree is stopped. A runtime already stopping, or whose actor has

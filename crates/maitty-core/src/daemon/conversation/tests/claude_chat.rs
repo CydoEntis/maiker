@@ -334,3 +334,97 @@ async fn a_claude_session_with_no_transcript_is_refused_in_words_and_can_be_aske
         std::panic::resume_unwind(panic);
     }
 }
+
+/// A start of a new Claude chat on a fake `claude` that prints `version` and, when `help` is given,
+/// that help text instead of the full one.
+async fn start_claude_with(session: &mut TestSession, client: u64, version: &str, help: Option<&str>) -> ServerMsg {
+    let root = session.fixture.directory.path().to_path_buf();
+    let (version, help) = (version.to_owned(), help.map(str::to_owned));
+    let (executable, config_root) = tokio::task::spawn_blocking(move || {
+        let executable = fake_claude_executable(&root);
+        std::fs::write(executable.with_extension("version"), version).unwrap();
+        if let Some(help) = help {
+            std::fs::write(executable.with_extension("help"), help).unwrap();
+        }
+        (executable, std::fs::canonicalize(&root).unwrap())
+    })
+    .await
+    .unwrap();
+    let claude = crate::conversation::LaunchSettings {
+        agent: None,
+        provider: crate::conversation::Provider::Claude,
+        executable,
+        config_root,
+        cwd: session.fixture.record.binding.cwd.clone(),
+        model: None,
+        model_provider: None,
+        approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+        sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+    };
+    exchange(
+        session,
+        client,
+        ClientMsg::Command(Command::ConversationStart {
+            target: crate::conversation::StartTarget::Create(claude),
+            branch: None,
+        }),
+        None,
+    )
+    .await
+}
+
+#[tokio::test]
+async fn a_claude_version_no_one_listed_starts_a_chat_and_is_tagged_untested() {
+    let mut session = conversation_fixture("conversation-newer-claude").await;
+    let outcome = AssertUnwindSafe(async {
+        let started = start_claude_with(&mut session, 480, "Claude Code 9.9.9", None).await;
+        let ServerMsg::Reply(Reply::ConversationStarted { id, generation }) = started else {
+            panic!("{started:?}");
+        };
+        let summaries = session.daemon.conversation_summaries();
+        let summary = summaries.iter().find(|summary| summary.id == id).unwrap();
+        let capabilities = summary.capabilities.as_ref().unwrap();
+        assert_eq!(capabilities.verified, crate::conversation::capabilities::Verified::Advertised);
+        let sent = exchange(
+            &mut session,
+            481,
+            ClientMsg::Command(Command::ConversationSend {
+                id,
+                generation,
+                operation: 1,
+                text: "hello fake Claude".into(),
+                choice: None,
+            }),
+            None,
+        )
+        .await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+#[tokio::test]
+async fn a_claude_that_lacks_a_needed_flag_is_refused_by_name_and_leaves_no_chat_behind() {
+    let mut session = conversation_fixture("conversation-old-claude").await;
+    let outcome = AssertUnwindSafe(async {
+        let before = session.daemon.conversation_summaries().len();
+        let refused = start_claude_with(&mut session, 485, "Claude Code 1.0.0", Some("--verbose\n")).await;
+        assert!(
+            matches!(refused, ServerMsg::Error(ref why) if why.contains("Claude Code 1.0.0") && why.contains("--input-format") && !why.contains("Codex")),
+            "{refused:?}"
+        );
+        assert!(session.daemon.pending_starts.is_empty());
+        assert_eq!(session.daemon.conversation_summaries().len(), before, "no blocked row is left in the sidebar");
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}

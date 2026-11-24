@@ -21,7 +21,7 @@ type Props = {
  * foot, away from the row's one fix. Update and Retry stay on the row itself, so nothing here repeats them.
  */
 export function MachineFold({ head, sessions, machines, appVersion, onRemove }: Props) {
-  const name = head.label
+  const name = head.name ?? head.label
   const status = foldStatusOf(head, sessions)
   return (
     <div className="mx-rm-fold" role="group" aria-label={`More about ${nameOf(head)}`}>

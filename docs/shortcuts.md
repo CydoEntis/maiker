@@ -114,7 +114,7 @@ shortcut sheet (`Ctrl+/`) and Settings › Hotkeys show it as it is on your comp
 | --- | --- | --- |
 | **Go to** | | |
 | Open a project | `Ctrl+Shift+O` | `⌘O` |
-| Command palette | `Ctrl+Shift+K` | `⌘K` |
+| Command palette | `Ctrl+Shift+P` | `⌘K` |
 | Next session | `Alt+↓` | `⌘⌥↓` |
 | Previous session | `Alt+↑` | `⌘⌥↑` |
 | Session 1 to 9 | `Alt+1` … `Alt+9` | `⌘1` … `⌘9` |

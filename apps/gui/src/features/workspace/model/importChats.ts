@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react'
 import { importableChats, type ImportableChat } from '@/api/daemon'
+import type { NewChatRequest } from '../components/NewChatPage'
 import { baseName } from './folderPick'
+import { savedName } from './newChatHost'
+import { savedStart } from './recentSessions'
 
 /** A chat used this recently may still be open in another terminal: it is offered unticked, with a word about it. */
 export const OPEN_ELSEWHERE_SECONDS = 120
@@ -20,6 +23,11 @@ export function importKey(chat: ImportableChat): string {
 /** Whether `chat` was written to so lately that its agent may still be running it elsewhere. */
 export function maybeOpenElsewhere(chat: ImportableChat, now: number): boolean {
   return now - chat.saved.last_active < OPEN_ELSEWHERE_SECONDS
+}
+
+/** The start that brings `chat` in: under the name its agent gave it, aged from when it was last used. */
+export function importStart(chat: ImportableChat): NewChatRequest {
+  return savedStart(chat.folder, chat.agent, chat.saved.id, { name: savedName(chat.saved), lastActive: chat.saved.last_active })
 }
 
 /** The chats ticked when the list opens: the recent ones, but none that may still be open elsewhere. */

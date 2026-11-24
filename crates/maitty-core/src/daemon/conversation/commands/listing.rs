@@ -19,6 +19,18 @@ impl Daemon {
         Ok(())
     }
 
+    /// A chat opened on a session its agent saved was last used at `at`: its row's age counts from
+    /// then until its status next changes. A time after now is read as now, so a clock that is off
+    /// never puts a chat in the future.
+    pub(in crate::daemon) fn conversation_active_at(&mut self, id: ConversationId, at: u64) {
+        let Some(chat) = self.conversations.iter().find(|c| c.id == id && c.execution == ExecutionKind::Structured) else {
+            return;
+        };
+        let status = self.listed_status(chat, None);
+        let at = at.min(crate::daemon::term::unix_now());
+        self.conversation_since.insert(id, (status, at));
+    }
+
     /// The window shows a finished chat: its done becomes idle, as a pane's does when the cursor
     /// rests on it. Anything else (working, needs you, a check holding it) is left as it is.
     pub(in crate::daemon) fn conversation_mark_seen(&mut self, id: ConversationId) {
@@ -247,7 +259,11 @@ impl Daemon {
         generation: u64,
     ) -> Option<crate::conversation::capabilities::Capabilities> {
         let structured = crate::daemon::providers::adapter(provider).structured.as_ref()?;
-        Some((structured.capabilities)(self.conversation_runtimes.can_steer(id, generation)))
+        let mut capabilities = (structured.capabilities)(self.conversation_runtimes.can_steer(id, generation));
+        if self.conversation_untested_cli.contains(&id) {
+            capabilities.verified = crate::conversation::capabilities::Verified::Advertised;
+        }
+        Some(capabilities)
     }
 }
 
@@ -285,6 +301,35 @@ mod tests {
         d.conversation_states.entry(id).or_default().status = Status::Done;
         d.note_conversation_status_times();
         assert!(since(&d, id).is_some_and(|at| at > LONG_AGO), "a new status is stamped now");
+    }
+
+    #[test]
+    fn a_chat_opened_on_a_saved_session_counts_its_age_from_when_that_was_last_used() {
+        let (mut d, id) = daemon_with_chat();
+        d.conversation_states.entry(id).or_default().status = Status::Idle;
+        d.note_conversation_status_times();
+
+        d.conversation_active_at(id, LONG_AGO);
+        assert_eq!(since(&d, id), Some(LONG_AGO));
+        d.note_conversation_status_times();
+        assert_eq!(since(&d, id), Some(LONG_AGO), "kept while its status holds");
+
+        d.conversation_states.entry(id).or_default().status = Status::Working;
+        d.note_conversation_status_times();
+        assert!(since(&d, id).is_some_and(|at| at > LONG_AGO), "a new status is stamped now");
+    }
+
+    #[test]
+    fn a_time_in_the_future_or_for_no_chat_is_not_taken() {
+        let (mut d, id) = daemon_with_chat();
+        d.conversation_states.entry(id).or_default().status = Status::Idle;
+        d.note_conversation_status_times();
+        let now = crate::daemon::term::unix_now();
+
+        d.conversation_active_at(id, now + 86_400);
+        assert!(since(&d, id).is_some_and(|at| at <= crate::daemon::term::unix_now()));
+        d.conversation_active_at(ConversationId(id.0 + 1), LONG_AGO);
+        assert!(!d.conversation_since.contains_key(&ConversationId(id.0 + 1)));
     }
 
     #[test]

@@ -23,6 +23,12 @@ const FILES_MAX: usize = 500;
 const HEAD_MAX_BYTES: u64 = 1024 * 1024;
 /// How much of a Codex file's first line is read for its folder and id.
 const CODEX_META_MAX_BYTES: u64 = 64 * 1024;
+/// How much of the end of a long Claude file is read for the name it was given: Claude appends
+/// its generated title again as the chat goes on, and `/rename` appends the person's.
+const TAIL_MAX_BYTES: u64 = 256 * 1024;
+/// How much of the end of Codex's `session_index.jsonl` (a thread's id and name, one line each
+/// time it is named) is read for names.
+const CODEX_INDEX_MAX_BYTES: u64 = 1024 * 1024;
 /// The longest id passed on: it is what a later resume is given.
 const ID_MAX_CHARS: usize = 128;
 
@@ -66,7 +72,7 @@ fn claude(root: &Path, folder: &Path) -> Vec<SavedConversation> {
             let id = file.file_stem()?.to_str()?.to_owned();
             let head = read_or_log(&file, HEAD_MAX_BYTES)?;
             let first_message = claude_first_message(&head, folder)?;
-            saved(id, first_message, modified)
+            saved(id, first_message, claude_title(&file, &head), modified)
         })
         .take(SAVED_CONVERSATIONS_MAX)
         .collect()
@@ -132,13 +138,15 @@ fn claude_said(head: &str, wanted: impl Fn(&Path) -> bool) -> Option<(PathBuf, S
 }
 
 fn codex(root: &Path, folder: &Path) -> Vec<SavedConversation> {
+    let names = codex_names(root);
     newest_first(codex_files(root))
         .into_iter()
         .filter_map(|(file, modified)| {
             let meta = read_or_log(&file, CODEX_META_MAX_BYTES)?;
             let id = codex_id_for(complete_lines(&meta).next()?, folder)?;
             let head = read_or_log(&file, HEAD_MAX_BYTES)?;
-            saved(id, codex_first_message(&head)?, modified)
+            let title = names.get(&id).cloned();
+            saved(id, codex_first_message(&head)?, title, modified)
         })
         .take(SAVED_CONVERSATIONS_MAX)
         .collect()
@@ -206,7 +214,8 @@ fn claude_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat>
             }
             let head = read_or_log(&file, HEAD_MAX_BYTES)?;
             let (folder, first_message) = claude_said(&head, |_| true)?;
-            let chat = importable_chat("claude", folder, saved(id, first_message, modified)?)?;
+            let title = claude_title(&file, &head);
+            let chat = importable_chat("claude", folder, saved(id, first_message, title, modified)?)?;
             taken.take(file.parent()?);
             Some(chat)
         })
@@ -215,6 +224,7 @@ fn claude_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat>
 }
 
 fn codex_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat> {
+    let names = codex_names(root);
     let mut taken = Taken::default();
     newest_first(codex_files(root))
         .into_iter()
@@ -225,7 +235,8 @@ fn codex_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat> 
                 return None;
             }
             let head = read_or_log(&file, HEAD_MAX_BYTES)?;
-            let chat = importable_chat("codex", folder, saved(id, codex_first_message(&head)?, modified)?)?;
+            let title = names.get(&id).cloned();
+            let chat = importable_chat("codex", folder, saved(id, codex_first_message(&head)?, title, modified)?)?;
             taken.take(&chat.folder);
             Some(chat)
         })
@@ -250,6 +261,69 @@ impl Taken {
     fn take(&mut self, folder: &Path) {
         *self.0.entry(folder.to_path_buf()).or_default() += 1;
     }
+}
+
+/// The name Claude gave a transcript: the person's own (`/rename`), else the title Claude made, the
+/// latest of each. Read from `head` and, when the file is longer than that, from its end.
+fn claude_title(file: &Path, head: &str) -> Option<String> {
+    let mut found = ClaudeTitles::default();
+    head.lines().for_each(|line| found.note(line));
+    let long = std::fs::metadata(file).is_ok_and(|meta| meta.len() > HEAD_MAX_BYTES);
+    if long && let Some(tail) = read_tail_or_log(file, TAIL_MAX_BYTES) {
+        // The first line of a tail starts anywhere, and the last may be unfinished.
+        complete_lines(&tail).skip(1).for_each(|line| found.note(line));
+    }
+    found.best()
+}
+
+#[derive(Default)]
+struct ClaudeTitles {
+    custom: Option<String>,
+    generated: Option<String>,
+}
+
+impl ClaudeTitles {
+    fn note(&mut self, line: &str) {
+        let (kind, key, slot) = if line.contains(r#""custom-title""#) {
+            ("custom-title", "customTitle", &mut self.custom)
+        } else if line.contains(r#""ai-title""#) {
+            ("ai-title", "aiTitle", &mut self.generated)
+        } else {
+            return;
+        };
+        let Ok(line) = serde_json::from_str::<Value>(line) else { return };
+        if line.get("type").and_then(Value::as_str) != Some(kind) {
+            return;
+        }
+        if let Some(title) = line.get(key).and_then(Value::as_str).and_then(one_line) {
+            *slot = Some(title);
+        }
+    }
+
+    fn best(self) -> Option<String> {
+        self.custom.or(self.generated)
+    }
+}
+
+/// Codex's thread names by session id, from the end of its index: a thread named again later in the
+/// file takes the later name. Empty when the index is not there.
+fn codex_names(sessions: &Path) -> HashMap<String, String> {
+    let Some(index) = sessions.parent().map(|home| home.join("session_index.jsonl")) else {
+        return HashMap::new();
+    };
+    let Some(tail) = read_tail_or_log(&index, CODEX_INDEX_MAX_BYTES) else {
+        return HashMap::new();
+    };
+    // Only a read that began inside the file can start in the middle of a line.
+    let skip = usize::from(std::fs::metadata(&index).is_ok_and(|meta| meta.len() > CODEX_INDEX_MAX_BYTES));
+    complete_lines(&tail)
+        .skip(skip)
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter_map(|line| {
+            let id = line.get("id")?.as_str()?.to_owned();
+            Some((id, one_line(line.get("thread_name")?.as_str()?)?))
+        })
+        .collect()
 }
 
 fn codex_first_message(head: &str) -> Option<String> {
@@ -340,6 +414,27 @@ fn read_or_log(file: &Path, max: u64) -> Option<String> {
     }
 }
 
+/// Up to `max` bytes from the end of `file`, as text; a file shorter than that is read whole. Skipped
+/// like `read_or_log` skips a file, and a missing one quietly.
+fn read_tail_or_log(file: &Path, max: u64) -> Option<String> {
+    use std::io::{Seek, SeekFrom};
+    let read = std::fs::File::open(file).and_then(|mut opened| {
+        let len = opened.metadata()?.len();
+        opened.seek(SeekFrom::Start(len.saturating_sub(max)))?;
+        let mut bytes = Vec::new();
+        opened.take(max).read_to_end(&mut bytes)?;
+        Ok(bytes)
+    });
+    match read {
+        Ok(bytes) => Some(String::from_utf8_lossy(&bytes).into_owned()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            tracing::warn!(file = %file.display(), kind = ?error.kind(), "saved conversations: skipped a file's end that could not be read");
+            None
+        }
+    }
+}
+
 /// The lines of `text` that ended: the last one may have been cut by the read.
 fn complete_lines(text: &str) -> impl Iterator<Item = &str> {
     let ended = text.rfind('\n').map_or("", |end| &text[..end]);
@@ -357,13 +452,14 @@ fn one_line(text: &str) -> Option<String> {
 
 /// A listed conversation, when its id is one a resume can be given as is. A letter or digit comes
 /// first: the id lands on the agent's command line, where a leading `-` would be read as a flag.
-fn saved(id: String, first_message: String, modified: SystemTime) -> Option<SavedConversation> {
+fn saved(id: String, first_message: String, title: Option<String>, modified: SystemTime) -> Option<SavedConversation> {
     let plain = id.starts_with(|c: char| c.is_ascii_alphanumeric())
         && id.chars().count() <= ID_MAX_CHARS
         && id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
     plain.then(|| SavedConversation {
         id,
         first_message,
+        title,
         last_active: modified.duration_since(SystemTime::UNIX_EPOCH).map_or(0, |since| since.as_secs()),
     })
 }

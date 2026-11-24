@@ -8,6 +8,13 @@ import { windowRoot } from './windowRoot'
 
 const TITLE = 'Pick up where you left off'
 
+/** The button's words: how many of what it resumes, so a person sees the count before pressing it. */
+function resumeLabel(ticked: readonly SessionView[]): string {
+  const chats = ticked.every((session) => session.chatCutOff === true)
+  const noun = chats ? 'chat' : 'session'
+  return `Resume ${String(ticked.length)} ${noun}${ticked.length === 1 ? '' : 's'}`
+}
+
 type Props = {
   /** The sessions a service restart cut mid-reply, on every machine. Never empty while the dialog is shown. */
   sessions: readonly SessionView[]
@@ -19,7 +26,7 @@ type Props = {
 
 /**
  * The one question after a restart, and only when a reply was cut: the sessions it stopped mid-reply, all ticked, with
- * Continue and Not now. Sessions that were idle came back by themselves and are not here. A session that joins while the
+ * Resume N chats and Not now. Nothing starts until Resume is pressed. Sessions that were idle came back by themselves and are not here. A session that joins while the
  * dialog is up (another machine coming back) joins ticked.
  */
 export function CutOffDialog({ sessions, onContinue, onNotNow }: Props) {
@@ -51,7 +58,7 @@ export function CutOffDialog({ sessions, onContinue, onNotNow }: Props) {
           <ModalBody>
             <p>
               Maiker restarted while {count === 1 ? 'this session was' : `these ${String(count)} sessions were`} replying.
-              Continue picks {count === 1 ? 'it' : 'the ticked ones'} up from {count === 1 ? 'its' : 'their'} own record.
+              Resume picks {count === 1 ? 'it' : 'the ticked ones'} up from {count === 1 ? 'its' : 'their'} own record; nothing starts until you press it.
             </p>
             <ul className="mx-cutoff-list" aria-label="Sessions cut off mid-reply">
               {sessions.map((session) => (
@@ -68,7 +75,7 @@ export function CutOffDialog({ sessions, onContinue, onNotNow }: Props) {
           </ModalBody>
           <ModalFoot left={<Button type="button" variant="ghost" size="lg" onClick={onNotNow}>Not now</Button>}>
             <Button type="button" variant="primary" size="lg" disabled={ticked.length === 0} onClick={() => { onContinue(ticked) }}>
-              {ticked.length === count ? (count === 1 ? 'Continue' : 'Continue all') : `Continue ${String(ticked.length)}`}
+              {resumeLabel(ticked)}
             </Button>
           </ModalFoot>
         </div>

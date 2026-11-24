@@ -8,9 +8,11 @@
 
 - Keep the provider process daemon-owned. Use app-server JSON-RPC over stdio;
   do not introduce a Node bridge or interpret terminal text as provider events.
-- Check the selected executable's version and generated schema before starting or
-  resuming a thread. Missing methods or an unverified version must return an
-  actionable unsupported error before any session mutation. Never auto-upgrade.
+- Check the selected executable's generated schema before starting or resuming a
+  thread (`check_compatibility`), whatever its version; the policy is in
+  [ADR 0005](../adr/0005-provider-adapters-and-permissions.md). A missing method returns an
+  actionable unsupported error, naming the Codex version and the method, before any session
+  mutation. Never auto-upgrade.
 - On Windows, search `PATH`, `NVM_SYMLINK`, `%APPDATA%\npm` and
   `%ProgramFiles%\nodejs` for npm-installed Codex; resolve it to the packaged
   platform executable and do not launch its `.cmd` or `.ps1` wrapper as the
@@ -36,6 +38,8 @@
 
 ## Project-specific: verified baseline
 
+The versions below only mark what was run: any other version whose schema declares the same
+methods starts, and its capabilities are reported advertised, not pinned. They are not a gate.
 Verified `codex-cli` versions: `0.164.0`, `0.165.0`, `0.166.0-alpha.5.1`,
 `0.166.0` and `0.170.0`. Their generated schemas contain every required app-server method
 and parameter type. The 13 required parameter definitions in
@@ -156,7 +160,7 @@ and profile command selection in
 compatibility contract. The fixtures are hand-authored synthetic representations
 of the inspected method/params-reference schema subset, not generated schemas or
 captured sessions. Tests run offline with no provider subprocess or session I/O.
-The checker proves required method coverage for the pinned baseline, not arbitrary
+The checker proves required method coverage for the tested baseline, not arbitrary
 JSON Schema validation or runtime protocol support. Production adapter transport,
 field validation and live handoff remain later phase-32 work.
 
@@ -169,7 +173,8 @@ daemon asks in typed commands (`runtime::Rpc`) and `Rpc::codex` builds each requ
 adapter. The preflight, handshake and process below stay in the daemon's own Codex loop
 (`runtime.rs`), which the generic dialect runner has not replaced.
 
-`daemon/conversation/transport.rs` preflights the exact selected executable with
+`daemon/conversation/transport.rs` preflights the exact selected executable, at admission
+(`Launch::admit`, so a refusal leaves no sidebar row) and again from a cache at connect, with
 `--version` and `app-server generate-json-schema --out` in an isolated temporary
 Codex home. It normalizes generated `ClientRequest.json` and `ServerRequest.json`
 into the compatibility inventory. Schema generation never opens or resumes a

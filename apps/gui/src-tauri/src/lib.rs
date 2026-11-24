@@ -10,11 +10,13 @@ mod agent_auth;
 mod agent_install;
 mod reveal;
 mod daemon_log;
+mod diagnostics;
 mod export;
 mod highlight;
 #[cfg(target_os = "linux")]
 mod linux_gpu;
 mod machine_update;
+mod service_repair;
 mod machines;
 mod changes;
 mod new_chat;
@@ -1310,6 +1312,14 @@ async fn resume_conversation(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// A chat opened on a saved session was last used at `at` (unix seconds); its row's age counts from then.
+#[tauri::command]
+async fn conversation_active_at(id: u64, at: u64) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::conversation_active_at(id, at)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
@@ -1392,8 +1402,9 @@ async fn daemon_restart_status() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn restart_mismatched_daemon(expected_protocol: u32) -> Result<(), String> {
-    maitty_desktop_client::restart_mismatched_daemon(expected_protocol)
+async fn restart_mismatched_daemon(app: tauri::AppHandle, expected_protocol: u32) -> Result<(), String> {
+    let file = service_repair::current_daemon_file(&app)?;
+    maitty_desktop_client::restart_mismatched_daemon(expected_protocol, &file)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1408,9 +1419,11 @@ async fn restart_stale_daemon(
     app: tauri::AppHandle,
     expected_version: String,
 ) -> Result<(), String> {
+    let file = service_repair::current_daemon_file(&app)?;
     maitty_desktop_client::restart_stale_daemon(
         &app.package_info().version.to_string(),
         &expected_version,
+        &file,
     )
     .await
     .map_err(|error| format!("{error:#}"))
@@ -1495,6 +1508,8 @@ pub fn run() {
             open_link::open_link,
             daemon_log::open_daemon_log,
             daemon_log::export_daemon_log,
+            diagnostics::prepare_diagnostics,
+            diagnostics::save_diagnostics,
             highlight::highlight_file,
             acp_agents::acp_agents,
             acp_agents::install_acp_agent,
@@ -1591,6 +1606,7 @@ pub fn run() {
             dequeue_conversation,
             send_conversation_now,
             rename_conversation,
+            conversation_active_at,
             start_chat_session,
             resume_chat_session,
             start_acp_chat,
@@ -1598,6 +1614,8 @@ pub fn run() {
             restart_mismatched_daemon,
             daemon_update_status,
             restart_stale_daemon,
+            service_repair::local_service_report,
+            service_repair::repair_local_service,
             performance::performance_sample
         ])
         .build(tauri::generate_context!())

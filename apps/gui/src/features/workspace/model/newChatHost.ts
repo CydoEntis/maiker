@@ -115,6 +115,18 @@ export function ageOf(when: number | null, now: number): string {
   return `${String(Math.floor(seconds / WEEK))}w`
 }
 
+/** What a saved chat is called: the name its agent gave it, else the first thing the person typed. */
+export function savedName(saved: { readonly title?: string | null | undefined; readonly first_message: string }): string {
+  return saved.title?.trim() ? saved.title : saved.first_message
+}
+
+/** "Nov 24, 2:22 PM": the day and time a Unix time was, with the year when it is not this one. */
+export function whenOf(when: number, now: number): string {
+  const at = new Date(when * MS_PER_SECOND)
+  const thisYear = at.getFullYear() === new Date(now * MS_PER_SECOND).getFullYear()
+  return at.toLocaleString([], { month: 'short', day: 'numeric', ...(thisYear ? {} : { year: 'numeric' }), hour: 'numeric', minute: '2-digit' })
+}
+
 /** Which agent programs are on this computer, or null while that is unknown (or could not be read). */
 export function useInstalledAgents(): readonly string[] | null {
   const [installed, setInstalled] = useState<readonly string[] | null>(null)

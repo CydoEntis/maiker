@@ -162,7 +162,8 @@ impl Daemon {
         state.history_ready = is_complete && history.completeness == Completeness::Complete;
         if !state.history_ready {
             state.status = Status::Blocked;
-            state.error = Some(if recorded {
+            // A reason already kept (why a saved history could not be read) is the real one.
+            state.error.get_or_insert_with(|| if recorded {
                 "No history was kept for this conversation, so it cannot be continued; chat resume is disabled".into()
             } else {
                 "Claude history could not be reconciled with the provider transcript; chat resume is disabled".into()
@@ -227,6 +228,7 @@ impl Daemon {
         #[cfg(not(test))]
         let home = super::super::follow::user_home();
         let tx = self.tx.clone();
+        self.saved_reads.insert(id);
         tokio::task::spawn_blocking(move || {
             let result = match home {
                 Some(home) => super::super::follow::saved_history(id, provider, &session, &path, &home)
@@ -244,6 +246,7 @@ impl Daemon {
     /// that is not whole is refused: a chat is never continued over a past it cannot show.
     pub(in crate::daemon) fn saved_history_read(&mut self, saved: super::super::follow::Saved) {
         let super::super::follow::Saved { id, generation, client, result } = saved;
+        self.saved_reads.remove(&id);
         if !self.conversations.iter().any(|c| c.id == id && c.generation == generation) {
             self.send(client, ServerMsg::Error("Conversation identity changed while its saved history was read".into()));
             return;
@@ -252,7 +255,8 @@ impl Daemon {
             .map_err(|why| format!("The saved conversation could not be read: {why}"))
             .and_then(|history| match history.completeness {
                 Completeness::Complete => Ok(history),
-                _ => Err("This saved conversation is too long to open as a chat; resume it in a terminal".to_owned()),
+                Completeness::Incomplete(reason) => Err(refusal_for(&reason).to_owned()),
+                _ => Err(NOT_WHOLE.to_owned()),
             })
             .and_then(|history| self.keep_saved_history(id, history).map_err(|error| error.to_string()));
         match kept {
@@ -261,10 +265,16 @@ impl Daemon {
                 self.continue_cut_turn(client, id, generation);
             }
             Err(error) => {
+                // The agent is up but the chat cannot use it: stopped, with the real reason kept,
+                // so Reconnect starts it again and a later read can retry the wake.
+                self.abandon_structured(id);
                 let state = self.conversation_states.entry(id).or_default();
                 state.status = Status::Blocked;
                 state.error = Some(error.clone());
                 state.history_ready = false;
+                if client == DAEMON_REQUESTER && self.wake_retried.insert(id) {
+                    self.resumable_conversations.push((id, generation));
+                }
                 self.dirty = true;
                 self.send(client, ServerMsg::Error(error));
             }
@@ -475,5 +485,34 @@ impl Daemon {
             })),
         );
         Ok(())
+    }
+}
+
+/// The words the desktop app looks for to show a chat too long to open as a chat without offering
+/// Reconnect, which can never succeed for it. Changing them changes `ReadProblemLine.tsx`.
+pub(in crate::daemon) const TOO_LONG: &str =
+    "This saved conversation is too long to open as a chat (over 16 MB); resume it in a terminal";
+const NOT_WHOLE: &str = "This saved conversation's history could not be shown whole, so it cannot open as a chat; resume it in a terminal";
+
+/// Why a saved history that is not whole is refused. Only a missing start (a long file, or more
+/// entries than are kept) is the length limit.
+fn refusal_for(reason: &crate::daemon::conversation::history::IncompleteReason) -> &'static str {
+    use crate::daemon::conversation::history::IncompleteReason;
+    match reason {
+        IncompleteReason::MissingPages => TOO_LONG,
+        _ => NOT_WHOLE,
+    }
+}
+
+#[cfg(test)]
+mod refusal_tests {
+    use super::*;
+    use crate::daemon::conversation::history::IncompleteReason;
+
+    #[test]
+    fn a_history_missing_its_start_is_refused_as_too_long_and_any_other_gap_is_not() {
+        assert_eq!(refusal_for(&IncompleteReason::MissingPages), TOO_LONG);
+        assert_ne!(refusal_for(&IncompleteReason::InvalidEvent), TOO_LONG);
+        assert!(TOO_LONG.contains("too long to open as a chat"));
     }
 }

@@ -336,7 +336,7 @@ The desktop window is terminal-only today; the chat body (G15-G18) does not exis
 - **G13 Usage and cost page (C.7)** (feature / client). Blocked by G12, G1. Built on `feat/gui-usage-page`
   (page, Ctrl+Shift+U, footer icon, client-side budget); remote machines' usage waits for a daemon report that covers them.
 - **G14 Performance page to spec (C.8)** (feature / client). Four tiles with sparklines, daemon ping,
-  ranked "What's costing" with session-only switches, Ctrl+Shift+P, harness brought up to date.
+  ranked "What's costing" with session-only switches, opened from Settings (no shortcut), harness brought up to date.
 - **G15 Event projection (CV-0)** (feature / client). Needs question 1.
 - **G16 Chat switch, history, composer (CV-1..3)** (feature / client, daemon). Blocked by G15, G1.
   Client side built (CV-1..3, see the chat view plan). Two daemon gaps found, proposed as new tickets:

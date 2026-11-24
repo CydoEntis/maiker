@@ -22,11 +22,18 @@
   own release (ADR 0004) and leaves a running daemon alone: the old file is moved aside and goes on
   running with its sessions. A daemon that speaks another protocol is restarted only when the user
   says so on the "Restart Maiker to finish updating" card, or by itself when **Restart the service when
-  idle** is on (off by default; a separate setting from the idle install) and the moment is quiet: the
+  idle** is on (the default, owner-approved 2026-11-24; a separate setting from the idle install; a store saved
+  before the default changed reads as on) and the moment is quiet: the
   service counts no agent working or waiting, no visible session is working, needs the user or is
   starting, and nothing is starting from the window (`features/updates/serviceRestart.ts`). It runs the
-  card's own restart, which restores the saved sessions, and retries every 10 seconds until quiet. An
-  update never ends an agent's turn.
+  card's own restart, which restores the saved sessions, and retries every 10 seconds until quiet. Whether the
+  service is behind is the real version mismatch, read on every launch and every minute, not the flag the app sets
+  before its own restart, so any install route is covered. A service whose sessions are not saved is never restarted by
+  itself. An update never ends an agent's turn.
+- Settings › Updates & repair lets the person check, update or force-update the app, the service and each remote
+  machine. The service's repair does not use the service's protocol: it replaces the shared daemon file, asks the old
+  service to save and stop through the file's own `kill-server` (its process is ended only when that fails in 15 s),
+  and starts the new one. Each restart says what it will do first; a forced one is an explicit confirm.
 - A failed or offline check is quiet: no banner, only the line in Settings. A failed install says so
   and never claims the app is updated.
 - Enable only the operations the GUI calls in its Tauri capability.

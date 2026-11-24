@@ -280,8 +280,9 @@ describe('machine nicknames', () => {
     const state = { name: 'Build-Box', state: 'connected' } as unknown as MachineState
     const heads = machineHeads(new Map([[1, { state, conversations: [], heard: true, listedAt: 0 }]]), { 'build-box': 'Builder' })
     expect(machineTitle(heads[1] as MachineHead)).toBe('Builder')
-    expect(heads[1]).toMatchObject({ name: 'Build-Box' })
+    expect(heads[1]).toMatchObject({ name: 'Build-Box', label: 'Builder' })
     expect(machineTitle(machineHeads(new Map([[1, { state, conversations: [], heard: true, listedAt: 0 }]]))[1] as MachineHead)).toBe('Build-Box')
+    expect(machineHeads(new Map([[1, { state, conversations: [], heard: true, listedAt: 0 }]]))[1]).toMatchObject({ label: 'Build-Box' })
   })
 })
 

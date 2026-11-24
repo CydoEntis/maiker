@@ -111,7 +111,7 @@ const MINUS = '−'
 /** Every action of the window with its keys. An action with no key is reached from the command palette. */
 export const BINDINGS: readonly Binding[] = [
   { action: 'open-folder', label: 'Open a project', group: 'Go to', mac: [cmd('O')], other: [ctrlShift('O')] },
-  { action: 'palette', label: 'Command palette', group: 'Go to', mac: [cmd('K')], other: [ctrlShift('K')] },
+  { action: 'palette', label: 'Command palette', group: 'Go to', mac: [cmd('K')], other: [ctrlShift('P')] },
   // Alt with an arrow or a digit is the TUI's way too. Ctrl with a digit is a control code in a terminal.
   { action: 'session-next', label: 'Next session', group: 'Go to', mac: [cmd(DOWN, 'alt')], other: [alt(DOWN)] },
   { action: 'session-previous', label: 'Previous session', group: 'Go to', mac: [cmd(UP, 'alt')], other: [alt(UP)] },

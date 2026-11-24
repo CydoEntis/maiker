@@ -12,7 +12,7 @@ const usages = agentUsages([
 ], { claude: 'pro' }, NOW)
 
 function bar(extra: Partial<Parameters<typeof StatusBar>[0]> = {}) {
-  const props = { version: '0.80.0', update: <button type="button">Update to 0.81.0</button>, usages, currentAgent: 'claude', commandsKeys: 'Ctrl+Shift+K', shortcutsKeys: 'Ctrl+/', onOpenCommands: vi.fn(), onOpenShortcuts: vi.fn(), onOpenUsage: vi.fn(), ...extra }
+  const props = { version: '0.80.0', update: <button type="button">Update to 0.81.0</button>, usages, currentAgent: 'claude', commandsKeys: 'Ctrl+Shift+P', shortcutsKeys: 'Ctrl+/', onOpenCommands: vi.fn(), onOpenShortcuts: vi.fn(), onOpenUsage: vi.fn(), ...extra }
   render(<StatusBar {...props} />)
   return props
 }

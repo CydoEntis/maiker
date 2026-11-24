@@ -278,6 +278,38 @@ export async function restartStaleDaemon(expectedVersion: string): Promise<void>
   await invoke('restart_stale_daemon', { expectedVersion })
 }
 
+/**
+ * The local service as the files it publishes say, so it answers even when the service is old, wedged or not running.
+ * `behind`: what runs is older than this app. `fileBehind`: the installed service file is older (or unreadable).
+ */
+const LocalServiceReportSchema = z.object({
+  appVersion: z.string(),
+  running: z.boolean(),
+  daemonVersion: z.string().nullable(),
+  fileVersion: z.string().nullable(),
+  behind: z.boolean(),
+  fileBehind: z.boolean(),
+  canRestart: z.boolean(),
+  sessionCount: z.number().int().nonnegative(),
+  activeTurnCount: z.number().int().nonnegative().nullable(),
+})
+export type LocalServiceReport = z.infer<typeof LocalServiceReportSchema>
+
+export async function loadLocalServiceReport(): Promise<LocalServiceReport> {
+  if (!isDesktop()) throw new Error('The service report is available in the desktop app')
+  return invokeParsed('local_service_report', LocalServiceReportSchema)
+}
+
+/**
+ * Brings the service up to this app and restarts it, whatever its state: replaces its file, saves its sessions and
+ * stops it (its process is ended if it will not stop), then starts the new one. `discardUnsaved` goes ahead even when
+ * its sessions are not saved, which loses them. Rejects with the host's own words.
+ */
+export async function repairLocalService(discardUnsaved: boolean): Promise<LocalServiceReport> {
+  if (!isDesktop()) throw new Error('Service repair is available in the desktop app')
+  return invokeParsed('repair_local_service', LocalServiceReportSchema, { discardUnsaved })
+}
+
 /** Shows the service's log in the system's file manager. Rejects with the host's words, such as "There is no log yet." */
 export async function openDaemonLog(): Promise<void> {
   if (!isDesktop()) throw new Error('The log is available in the desktop app')
@@ -853,6 +885,14 @@ export async function renameConversationOnDaemon(conversation: Pick<Conversation
   await invokeParsed('rename_conversation', NullSchema, { ...chatArgs(conversation.id), title })
 }
 
+/**
+ * Tells the daemon a chat opened on a saved session was last used at `at` (unix seconds): its row's age counts from then,
+ * not from the import. A daemon from before the command is not asked, so the age counts from the start.
+ */
+export async function conversationActiveAt(conversation: string, at: number): Promise<void> {
+  await invokeParsed('conversation_active_at', NullSchema, { id: chatArgs(conversation).id, at })
+}
+
 export type SessionPermissions = 'read-only' | 'workspace-write' | 'full-access'
 
 /**
@@ -960,7 +1000,8 @@ export async function pullFolder(folder: string): Promise<void> {
   await invokeParsed('git_pull', NullSchema, { folder })
 }
 
-const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
+// `title` is the name the agent gave the chat; a service from before 126 sends none.
+const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), title: z.string().nullish(), last_active: z.number().int().nonnegative() })
 export type SavedConversation = z.infer<typeof SavedConversationSchema>
 const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])
 

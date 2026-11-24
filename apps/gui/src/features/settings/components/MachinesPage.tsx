@@ -8,6 +8,7 @@ import type { MachineHead } from '@/features/workspace/model/machines'
 import { matching, nameOf, ordered, rowOf, SEARCH_AFTER, updatable, UPDATE_ALL_FROM, type MachineRow, type RowAction } from '../model/machineRows'
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row as SettingsRow, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
+import { ExportLogsCard } from './ExportLogsCard'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
 import { MachineFold } from './MachineFold'
 import { Since } from './Since'
@@ -101,7 +102,7 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
 
   const act = (head: MachineHead, action: RowAction) => {
     if (action === 'fix') setUnfolded(head.key)
-    else if (action === 'retry') retry(head.label)
+    else if (action === 'retry') retry(head.name ?? head.label)
     else flow.ask(head)
   }
 
@@ -115,8 +116,8 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
       </div>
       {askingAll && (
         <StatusBlock tone="needs" lead={`Update ${String(behind.length)} machines?`} more="Updating restarts each machine's service. Their sessions are saved and come back with their agents resumed; an agent in the middle of a turn loses that turn if you update now. Update when idle waits until nothing is open on a machine, up to half an hour.">
-          <button type="button" className="mx-rm-primary" onClick={() => { flow.runAll(behind.map((head) => head.label), false); setAskingAll(false) }}>Update all now</button>
-          <button type="button" className="mx-rm-text" onClick={() => { flow.runAll(behind.map((head) => head.label), true); setAskingAll(false) }}>Update all when idle</button>
+          <button type="button" className="mx-rm-primary" onClick={() => { flow.runAll(behind.map((head) => head.name ?? head.label), false); setAskingAll(false) }}>Update all now</button>
+          <button type="button" className="mx-rm-text" onClick={() => { flow.runAll(behind.map((head) => head.name ?? head.label), true); setAskingAll(false) }}>Update all when idle</button>
           <button type="button" className="mx-rm-text" onClick={() => { setAskingAll(false) }}>Cancel</button>
         </StatusBlock>
       )}
@@ -131,7 +132,8 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
       {machines.known && heads.length > 0 && (
         <div role="list" className="mx-rm-list">
           {shown.map((head) => {
-            const busy = flow.running.has(head.label) ? (head.updateAction === 'install' ? 'Installing…' : 'Updating…') : flow.checking === head.label ? 'Checking…' : retrying.has(head.label) ? 'Retrying…' : null
+            const real = head.name ?? head.label
+            const busy = flow.running.has(real) ? (head.updateAction === 'install' ? 'Installing…' : 'Updating…') : flow.checking === real ? 'Checking…' : retrying.has(real) ? 'Retrying…' : null
             const open = unfolded === head.key
             return (
               <MachineRowView
@@ -143,9 +145,9 @@ function MachineList({ machines, flow, countOf, appVersion, localLine, onAdd, on
                 onFold={() => { setUnfolded(open ? null : head.key) }}
                 onAction={(action) => { act(head, action) }}
               >
-                {flow.asking?.name === head.label && <UpdateAsk flow={flow} />}
+                {flow.asking?.name === (head.name ?? head.label) && <UpdateAsk flow={flow} />}
                 {open && <MachineFold head={head} sessions={countOf(head)} machines={machines} appVersion={appVersion} onRemove={() => { setRemoving(head.key) }} />}
-                {removing === head.key && <RemoveAsk name={head.label} onRemove={() => { setRemoving(null); void machines.onRemove(head.label) }} onCancel={() => { setRemoving(null) }} />}
+                {removing === head.key && <RemoveAsk name={nameOf(head)} onRemove={() => { setRemoving(null); void machines.onRemove(head.name ?? head.label) }} onCancel={() => { setRemoving(null) }} />}
               </MachineRowView>
             )
           })}
@@ -243,6 +245,7 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
           </span>
         </SettingsRow>
       </Card>
+      <ExportLogsCard />
       <GitHubSection machines={[]} signIn={github} only={LOCAL_MACHINE} />
     </>
   )

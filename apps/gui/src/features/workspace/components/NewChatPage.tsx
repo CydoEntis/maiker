@@ -28,7 +28,6 @@ import { FolderMark, Icon } from './glyphs'
 import { type ChipItem } from './NewChatMenus'
 import { NEW_SESSION } from '../model/sidebar'
 import { Tag } from '@/components/ui/tag'
-import { machineLabel } from '@/data/machineNicknames'
 import { loadAcpAgents } from '@/api/acpAgents'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
 import type { PickedFolder } from '../model/folderPick'
@@ -49,7 +48,7 @@ export type BranchChoice = { name: string; create: boolean; worktree: boolean; b
  * `bypass` is this session's Bypass Permissions choice over Settings, and `name` a name for it; without one the first
  * message names the session.
  */
-export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0021); the model, effort and mode are then its own. */ acp?: string; name?: string; bypass?: boolean | undefined }
+export type NewChatRequest = { folder: string; agent: ChatAgent; model: string; reasoning: AgentChoice['reasoning']; mode: string; message: string; branch: BranchChoice | null; machine: number; machineName: string; resume: string | null; /** An agent run over ACP by this id, in place of `agent` (ADR 0021); the model, effort and mode are then its own. */ acp?: string; name?: string; /** When the saved conversation being resumed was last used (unix seconds): the chat's age counts from then. */ lastActive?: number; bypass?: boolean | undefined }
 
 /** What the draft opens with: a folder and a first message (a chat continued from a full one), and the agent a + menu pick asked for. */
 export type NewChatSeed = {
@@ -64,7 +63,7 @@ export type NewChatSeed = {
 export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
 
 /** A computer a session could start on. `down` is why it cannot, in words, when it cannot. */
-export type NewChatMachine = { machine: number; label: string; local: boolean; down?: string | null }
+export type NewChatMachine = { machine: number; /** What the machine is called on screen. */ label: string; /** What the daemon calls it; null for this computer. */ name?: string | null; local: boolean; down?: string | null }
 
 /** What the clone window opens with: its first view, and an address and folder already filled in (a clone that needs another folder). */
 export type CloneOpening = { start: 'link' | 'repos'; address?: string; parent?: string }
@@ -172,6 +171,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const remote = machine !== LOCAL_MACHINE
   const target = machines.find((candidate) => candidate.machine === machine)
   const targetLabel = target?.label ?? 'This computer'
+  const targetName = target?.name ?? targetLabel
   const targetDown = target?.down ?? null
   // The agent and the model and effort each was left at start as they were last used.
   const [last] = useState(readLastWho)
@@ -290,7 +290,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   useWarmAgent(onWarm, warmSpec, starting || background.pending > 0)
   const requestFor = (task: string): NewChatRequest => ({
     folder, agent, model: choice.model, reasoning: choice.reasoning, mode: startMode, message: buildAttachmentMessage(task.trim(), attachments), bypass,
-    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetLabel, resume: null, ...(acp === null ? {} : { acp: acp.id }),
+    branch: remote && branch?.worktree !== true ? null : branch, machine, machineName: targetName, resume: null, ...(acp === null ? {} : { acp: acp.id }),
   })
   const empty = message.trim() === '' && attachments.length === 0
   // Why the box cannot start anything now, said in its own place; typing stays open.
@@ -553,7 +553,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     <section ref={page} className="mx-newchat" aria-label="New session" onKeyDown={onKeyDown}>
       <header className="mx-pane-head">
         {leading}
-        {remote && <Tag className="mx-pane-machine">{machineLabel(targetLabel)}</Tag>}
+        {remote && <Tag className="mx-pane-machine">{targetLabel}</Tag>}
         <span className="mx-pane-title" title={folder === '' ? 'No folder chosen yet' : folder}>
           <span className="mx-pane-project">{folderName}</span><span className="mx-pane-slash" aria-hidden="true">/</span>
           <span className="mx-pane-name">{NEW_SESSION}</span>

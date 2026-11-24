@@ -14,8 +14,7 @@ use maitty_provider::ProviderEvent;
 use maitty_provider_claude::approvals::approval_request;
 use maitty_provider_claude::{
     MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, TurnProjector,
-    command_arguments_for_turn, parse_output_frame, session_id, verified_version,
-    version_number,
+    CliTag, check_cli, command_arguments_for_turn, parse_output_frame, session_id,
 };
 
 const STDERR_CHUNK_BYTES: usize = 8192;
@@ -372,25 +371,6 @@ pub(super) async fn run(
             return;
         }
     };
-    if let Err(error) = verify_cli_version(
-        launch.paths().1,
-        launch.paths().2,
-        launch.paths().0,
-        &launch.environment,
-    )
-    .await
-    {
-        let _ = super::runtime::emit(
-            &events,
-            owner,
-            super::runtime::Payload::Terminated {
-                failure: Some(format!("{error:#}")),
-                reaped: true,
-            },
-        )
-        .await;
-        return;
-    }
     if super::runtime::emit(&events, owner, super::runtime::Payload::Ready)
         .await
         .is_err()
@@ -512,15 +492,30 @@ pub(super) async fn run(
     }
 }
 
-async fn verify_cli_version(
+/// Runs `claude --version` and `claude --help` the way a chat's own process runs, and decides from
+/// them whether a chat can run on this binary (`check_cli`). Called when a chat is admitted, so a
+/// refusal leaves no conversation behind.
+pub(super) async fn probe_cli(
     executable: &Path,
     cwd: &Path,
     config_root: &Path,
     environment: &[(OsString, OsString)],
-) -> Result<()> {
+) -> Result<CliTag> {
+    let version = cli_output(executable, "--version", cwd, config_root, environment).await?;
+    let help = cli_output(executable, "--help", cwd, config_root, environment).await?;
+    check_cli(&version, &help)
+}
+
+async fn cli_output(
+    executable: &Path,
+    argument: &str,
+    cwd: &Path,
+    config_root: &Path,
+    environment: &[(OsString, OsString)],
+) -> Result<String> {
     let mut command = tokio::process::Command::new(executable);
     command
-        .arg("--version")
+        .arg(argument)
         .env_clear()
         .envs(
             environment
@@ -545,16 +540,10 @@ async fn verify_cli_version(
     }
     let output = tokio::time::timeout(PROCESS_EXIT_TIMEOUT * 5, command.output())
         .await
-        .context("Claude Code version check timed out")?
-        .context("Read Claude Code version")?;
-    anyhow::ensure!(output.status.success(), "Claude Code version check failed");
-    let output = String::from_utf8_lossy(&output.stdout);
-    let version = version_number(&output).context("Unrecognized Claude Code version output")?;
-    anyhow::ensure!(
-        verified_version(version),
-        "Claude Code version {version} has not been verified for structured chat"
-    );
-    Ok(())
+        .with_context(|| format!("Claude Code `{argument}` check timed out"))?
+        .with_context(|| format!("Run Claude Code `{argument}`"))?;
+    anyhow::ensure!(output.status.success(), "Claude Code `{argument}` check failed");
+    Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
 enum TurnFailure {

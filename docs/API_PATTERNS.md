@@ -1321,6 +1321,18 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
+125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;
+`COMPATIBLE_SINCE` stays 122, since an older daemon is never sent the command). `title` is the name the agent gave the
+chat, one clean line cut at `SAVED_FIRST_MESSAGE_MAX_CHARS`: for Claude the person's `custom-title`, else the latest
+`ai-title`, read from the first 1 MiB of the transcript and, for a longer file, its last 256 KiB; for Codex the latest
+`thread_name` in `session_index.jsonl` (its last 1 MiB). None when the agent gave none, and a client shows `title`, else
+`first_message`. Both `SavedConversations` and `ImportableChats` carry it. `ConversationActiveAt` (human clients only)
+sets a chat's status time to `at`, never later than now, so a chat opened on a saved session shows its real last use
+instead of the time it was opened; the next status change stamps now as for any chat. The window sends it after a resume
+start (`conversation_active_at`) and a daemon before 126 is not asked. The name itself goes through the existing
+`ConversationRename`.
+
 Protocol 125 adds `Query::ImportableChats { tag }` with `Reply::ImportableChats { tag, chats }`
 (`IMPORTABLE_CHATS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is
 never asked and an older client never asks). `chats` are the conversations Claude and Codex saved in any folder of the
@@ -1345,7 +1357,18 @@ generation, which starts its agent again; a Claude chat is read back from its tr
 with a turn that was cut marked interrupted. After a daemon restart a chat is asleep until a client's first
 `ConversationRead` of it, which is answered at once (from what was kept, or as loading, never refused) and then starts
 it. A chat cut mid-turn is not started by a read: `ConversationSummary.interrupted` (absent when false, so an older
-client reads the same) lists it until a person resumes it.
+client reads the same) lists it until a person resumes it; the desktop client's **Resume N chats** is that person.
+A service restart (`KillServer`) saves the sessions first, then ends every agent on purpose: a turn in progress stops
+and is listed `interrupted` afterwards, and the agent's ending is told to no client as a failure while the daemon is
+stopping. Agents do not outlive the daemon.
+A chat whose saved history cannot be read back (a missing or unreadable transcript, one past the 16 MiB first read, a
+`restore.output` that is off) is not left half-alive: the daemon drops its agent, marks the record stopped and keeps the
+real reason (`The saved conversation could not be read: …`) as the chat's error, which a later read never replaces with
+the generic wording. A wake that failed this way is put back to sleep once (`wake_retried`), so the next read tries
+again; after that only a person's Reconnect does. Reconnect is a recovery start: while the chat's start or its saved
+history read is under way (`saved_reads`) it is refused as "already reconnecting"; a runtime that is up with its history
+not ready and nothing under way is dropped and started again; a healthy one is refused ("already owns a runtime"). No
+message shape changed, so `PROTOCOL_VERSION` and `COMPATIBLE_SINCE` stay as they are.
 The seen is the window opening a finished chat: the daemon turns its done to idle, as `MarkSeen` does for a pane, and
 leaves every other status alone; human clients with the write grant only. A daemon before 124 is not asked
 (`mark_conversation_seen`, through `ask_if_known`) and the chat keeps its done. With `base`, `branch` is a new branch cut

@@ -81,6 +81,7 @@ export type MachineHead = {
   name: string | null
   /** The name you gave it in the sidebar, when you did; `name` stays what its sessions go by. */
   nickname?: string
+  /** The name every screen shows: the nickname when there is one, else `name`. Commands that reach the machine use `name`. */
   label: string
   chip: MachineChip | null
   /** The host's one sentence for what failed and what to do; null when nothing failed. */
@@ -279,7 +280,7 @@ export function machineHeads(machines: ReadonlyMap<number, RemoteMachine>, nickn
   if (machines.size === 0) return []
   const others = [...machines.entries()]
     .sort(([a], [b]) => a - b)
-    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: machine.state.name, chip: machineChip(machine.state), why: machine.state.why, failure: machine.state.failure ?? null, fixCommand: machine.state.fix_command ?? null, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
+    .map(([id, machine]): MachineHead => ({ key: `machine-${String(id)}`, machine: id, name: machine.state.name, ...nicknameOf(nicknames, machine.state.name), label: nicknames[machine.state.name.toLowerCase()] ?? machine.state.name, chip: machineChip(machine.state), why: machine.state.why, failure: machine.state.failure ?? null, fixCommand: machine.state.fix_command ?? null, said: machine.state.said ?? null, loginCommand: machine.state.login_command ?? null, target: machine.state.target ?? null, down: isDown(machine.state), downSince: machine.state.since ?? null, grants: { clipboard: machine.state.clipboard === true, notices: machine.state.notices === true }, updateCommand: updateCommandOf(machine.state), updateAction: updateActionOf(machine.state) }))
   return [LOCAL_HEAD, ...others]
 }
 

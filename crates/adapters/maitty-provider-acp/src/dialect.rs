@@ -183,7 +183,7 @@ impl AcpDialect {
     fn initialized(&mut self, resume: Option<String>, result: Value) -> Result<Vec<Step>> {
         let agent: InitializeResponse = read(result, INITIALIZE)?;
         if agent.protocol_version != PROTOCOL_VERSION {
-            let reason = format!("The agent speaks ACP version {}, and only version 1 is supported", agent.protocol_version);
+            let reason = format!("The agent speaks ACP version {}, and only version 1 is supported. Update the agent, or use its terminal", agent.protocol_version);
             return Ok(self.refuse_open(ProviderEvent::Invalid { asked: Asked::Open, reason }));
         }
         self.load_session = agent.agent_capabilities.unwrap_or_default().load_session.unwrap_or(false);
