@@ -413,6 +413,10 @@
 .mx-cutoff-row input { flex: none; margin: 0; accent-color: var(--accent); }
 .mx-cutoff-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-size: 13px; }
 .mx-cutoff-where { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
+/* Bring in your chats (`ImportChatsDialog`): the cut-off rows, under one small heading per project. */
+.mx-import-groups { display: flex; flex-direction: column; gap: 12px; max-height: 420px; overflow-y: auto; margin-top: 12px; }
+.mx-import-group .mx-cutoff-list { margin: 0; max-height: none; overflow: visible; }
+.mx-import-folder { margin: 0 0 6px; font-size: 12px; font-weight: 600; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-rename.mx-recent { max-width: 560px; }
 .mx-rename.mx-modal.mx-recent { width: 560px; }
 /* The worktree's branch mark on a small tile, as a file or an agent has one. */

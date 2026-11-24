@@ -974,6 +974,17 @@ export async function savedConversations(agent: 'claude' | 'codex', folder: stri
   return found === 'NotSupported' ? [] : found.Listed
 }
 
+const ImportableChatSchema = z.object({ agent: z.enum(['claude', 'codex']), folder: z.string(), saved: SavedConversationSchema })
+export type ImportableChat = z.infer<typeof ImportableChatSchema>
+
+/**
+ * The chats Claude and Codex saved in any folder on this computer that Maiker does not run yet, newest first. Null when
+ * the service running is older than the question.
+ */
+export async function importableChats(): Promise<ImportableChat[] | null> {
+  return invokeParsed('importable_chats', z.union([z.null(), z.array(ImportableChatSchema)]))
+}
+
 /** The commands Claude Code answers beside a conversation, with nothing after the name: each only reports. */
 export const SIDE_COMMANDS = ['context', 'usage', 'skill-doctor', 'goal', 'advisor', 'config', 'mcp'] as const
 export type SideCommand = (typeof SIDE_COMMANDS)[number]

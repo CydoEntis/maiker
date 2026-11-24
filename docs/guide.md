@@ -1022,6 +1022,12 @@ without asking. Turn it off per agent in Settings › Permissions (or `[permissi
 `config.toml`); sessions started afterwards ask again. The agent is on the model button too. If an agent is not installed, the page says
 so and offers **set it up**.
 
+**Bring in your chats.** The first time you open Maiker, it looks for chats you had with Claude or Codex
+anywhere on this computer and offers to bring them in, grouped by project. The ones from the last week are ticked;
+**Bring in** opens each as a Maiker chat with its history. A chat that is still open in another terminal is marked:
+close it there first. You can do this again any time from the command palette, **Bring in chats from Claude and
+Codex…**.
+
 **Resume a saved chat.** In the command palette, **Resume a saved chat…** lists the conversations
 Claude or Codex saved for a project on this computer. Pick one and its agent starts in that folder
 with that conversation.

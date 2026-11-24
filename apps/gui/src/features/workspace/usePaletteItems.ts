@@ -18,7 +18,7 @@ import { SETUP_AGENTS } from '@/features/welcome/setup'
 import { ADD_MACHINE, type OpenProjectRequest } from './useOpenProject'
 
 /** The command palette's list: sessions, their projects, actions and themes. */
-export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject }: {
+export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, sessions, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, focusedSession, addAgentTerminal, runShortcut, heads, online, preferences, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setImportOpen, setOpenProject }: {
   /** Asks for a file to pull from the machine of a session. */
   setGetFileId: (id: string) => void
   paletteOpen: boolean
@@ -55,6 +55,7 @@ export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, s
   /** Picks a folder in the system's dialog and opens the New session draft on it. */
   openFolder: () => void
   setSavedOpen: Dispatch<SetStateAction<boolean>>
+  setImportOpen: Dispatch<SetStateAction<boolean>>
   setOpenProject: (request: OpenProjectRequest) => void
 }) {
   const paletteItems: PaletteItem[] = useMemo(() => {
@@ -89,6 +90,7 @@ export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, s
       action('open-folder', 'Open a folder…', openFolder, keys('open-folder')),
       action('recent-sessions', 'Recent sessions…', () => { setRecentOpen(true) }),
       action('resume-saved', 'Resume a saved chat…', () => { setSavedOpen(true) }),
+      action('import-chats', 'Bring in chats from Claude and Codex…', () => { setImportOpen(true) }),
       // Everything here acts where the palette was opened. A loose shell is a Terminal view door only, and opens in the
       // folder of the session in front; in Chat view a terminal belongs to the session, in its side panel.
       // In the Chat view a session's terminal is its own, on the Terminal key and in the side panel, not a palette action.
@@ -132,7 +134,7 @@ export function usePaletteItems({ setGetFileId, paletteOpen, platform, layout, s
     ]
     for (const candidate of THEMES) items.push({ id: `theme-${candidate.name}`, label: candidate.name, detail: candidate.family, kind: 'Theme', needsQuery: true, run: () => { setPreferences((current) => ({ ...current, themeMode: candidate.light ? 'light' : 'dark', ...(candidate.light ? { lightTheme: candidate.name } : { darkTheme: candidate.name }) })) } })
     return items
-  }, [setGetFileId, paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setOpenProject])
+  }, [setGetFileId, paletteOpen, layout, sessions, focusedSession, heads, preferences.sidebarSide, preferences.keyOverrides, platform, projectOf, showSessionById, home, newSession, focusedMachineNumber, newTerminal, chatView, addAgentTerminal, runShortcut, online, setPreferences, split, setSettingsSection, inspectRefusal, setInspectOpen, showPanelView, setFindOpen, setFocusMode, setShortcutsOpen, setLayout, startAgent, setRecentOpen, openFolder, setSavedOpen, setImportOpen, setOpenProject])
   /** A line some session printed, as a row that opens that session; null when the pane is not one of the window's sessions. */
   const paletteOutputItem = useCallback((hit: SearchHit, query: string): PaletteItem | null => {
     const owner = sessions.find((member) => member.machine === hit.machine && member.pane === hit.term)
