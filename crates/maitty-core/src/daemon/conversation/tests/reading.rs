@@ -188,7 +188,7 @@ async fn structured_local_ipc_missing_exact_thread_never_creates_fallback() {
         .await;
         assert!(matches!(reply, ServerMsg::Error(_)));
         assert!(s.daemon.conversations.is_empty());
-        assert_eq!(s.daemon.pending_starts.len(), 1);
+        assert!(s.daemon.pending_starts.is_empty(), "a failed start is a draft and leaves no row");
     })
     .catch_unwind()
     .await;
