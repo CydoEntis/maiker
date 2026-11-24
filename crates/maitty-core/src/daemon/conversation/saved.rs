@@ -1,11 +1,16 @@
-//! The conversations Claude and Codex saved for a folder (`Query::SavedConversations`): the id, the
-//! first thing the person typed, and when the file was last written. Read only from each agent's own
-//! store; the folder just picks which of its files count. Runs on a blocking thread.
+//! The conversations Claude and Codex saved for a folder (`Query::SavedConversations`), or in any
+//! folder (`Query::ImportableChats`): the id, the first thing the person typed, and when the file was
+//! last written. Read only from each agent's own store; a folder just picks which of its files count.
+//! Runs on a blocking thread.
 
 use super::follow_transcript::{ClaudeLine, claude_line, codex_text, is_codex_context, without_paste_tags};
 use super::tool_input::clean_text;
 use crate::config::same_path;
-use crate::protocol::{SAVED_CONVERSATIONS_MAX, SAVED_FIRST_MESSAGE_MAX_CHARS, SavedConversation, SavedConversations};
+use crate::protocol::{
+    IMPORTABLE_CHATS_MAX, IMPORTABLE_CHATS_PER_FOLDER, ImportableChat, SAVED_CONVERSATIONS_MAX,
+    SAVED_FIRST_MESSAGE_MAX_CHARS, SavedConversation, SavedConversations,
+};
+use std::collections::{HashMap, HashSet};
 use serde_json::Value;
 use std::io::Read;
 use std::path::{Path, PathBuf};
@@ -91,6 +96,12 @@ pub(super) fn claude_folder_name(folder: &Path) -> String {
 
 /// The first thing the person typed in a Claude transcript, when the transcript is `folder`'s.
 fn claude_first_message(head: &str, folder: &Path) -> Option<String> {
+    claude_said(head, |cwd| same_path(cwd, folder)).map(|(_, said)| said)
+}
+
+/// The folder a Claude transcript ran in and the first thing the person typed there, when `wanted`
+/// takes the folder of each of the person's lines up to it.
+fn claude_said(head: &str, wanted: impl Fn(&Path) -> bool) -> Option<(PathBuf, String)> {
     for line in complete_lines(head).filter_map(|line| serde_json::from_str::<Value>(line).ok()) {
         if line.get("type").and_then(Value::as_str) != Some("user")
             || line.get("isMeta").and_then(Value::as_bool) == Some(true)
@@ -98,8 +109,8 @@ fn claude_first_message(head: &str, folder: &Path) -> Option<String> {
         {
             continue;
         }
-        let cwd = line.get("cwd").and_then(Value::as_str)?;
-        if !same_path(Path::new(cwd), folder) {
+        let cwd = Path::new(line.get("cwd").and_then(Value::as_str)?);
+        if !wanted(cwd) {
             return None;
         }
         let text = match line.pointer("/message/content") {
@@ -114,7 +125,7 @@ fn claude_first_message(head: &str, folder: &Path) -> Option<String> {
         if let ClaudeLine::Said = claude_line(&text)
             && let Some(said) = one_line(&without_paste_tags(&text))
         {
-            return Some(said);
+            return Some((cwd.to_path_buf(), said));
         }
     }
     None
@@ -136,6 +147,13 @@ fn codex(root: &Path, folder: &Path) -> Vec<SavedConversation> {
 /// The session's id, when its first line says it ran in `folder` and a person started it (a
 /// subagent's session is its parent's business).
 fn codex_id_for(first_line: &str, folder: &Path) -> Option<String> {
+    codex_meta(first_line)
+        .filter(|(_, cwd)| same_path(cwd, folder))
+        .map(|(id, _)| id)
+}
+
+/// The session's id and the folder it ran in, from its first line, when a person started it.
+fn codex_meta(first_line: &str) -> Option<(String, PathBuf)> {
     let line: Value = serde_json::from_str(first_line).ok()?;
     if line.get("type").and_then(Value::as_str) != Some("session_meta") {
         return None;
@@ -144,11 +162,94 @@ fn codex_id_for(first_line: &str, folder: &Path) -> Option<String> {
     if payload.get("thread_source").and_then(Value::as_str) == Some("subagent") {
         return None;
     }
-    let cwd = payload.get("cwd").and_then(Value::as_str)?;
-    if !same_path(Path::new(cwd), folder) {
-        return None;
+    let cwd = PathBuf::from(payload.get("cwd").and_then(Value::as_str)?);
+    let id = payload.get("id").and_then(Value::as_str)?.to_owned();
+    Some((id, cwd))
+}
+
+impl crate::daemon::Daemon {
+    /// The agents' own ids of every conversation the daemon already runs: its chats, the chats it is
+    /// starting on a saved session, and the terminal agents whose session it knows. None of them is
+    /// offered for import.
+    pub(in crate::daemon) fn held_agent_sessions(&self) -> HashSet<String> {
+        self.conversations
+            .iter()
+            .map(|conversation| conversation.binding.session_id.clone())
+            .chain(self.pending_starts.iter().filter_map(|pending| pending.thread_id.clone()))
+            .chain(self.terms.values().filter_map(|term| term.session.clone()))
+            .collect()
     }
-    payload.get("id").and_then(Value::as_str).map(str::to_owned)
+}
+
+/// The conversations Claude and Codex saved in any folder, newest first, leaving out those whose id
+/// is in `held` (the daemon already runs them) and those whose folder is gone, since a chat cannot
+/// start there. At most `IMPORTABLE_CHATS_MAX`, and `IMPORTABLE_CHATS_PER_FOLDER` of one folder.
+pub(in crate::daemon) fn importable(stores: &Stores, held: &HashSet<String>) -> Vec<ImportableChat> {
+    let claude = stores.claude.as_deref().map(|root| claude_everywhere(root, held)).unwrap_or_default();
+    let codex = stores.codex.as_deref().map(|root| codex_everywhere(root, held)).unwrap_or_default();
+    let mut chats: Vec<ImportableChat> = claude.into_iter().chain(codex).collect();
+    chats.sort_by_key(|chat| std::cmp::Reverse(chat.saved.last_active));
+    chats.truncate(IMPORTABLE_CHATS_MAX);
+    chats
+}
+
+fn claude_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat> {
+    let files = newest_first(subfolders(root).iter().flat_map(|folder| jsonl_files(folder)).collect());
+    let mut taken = Taken::default();
+    files
+        .into_iter()
+        .filter_map(|(file, modified)| {
+            let id = file.file_stem()?.to_str()?.to_owned();
+            // Counted by Claude's own folder before anything is read, so a busy one is not read through.
+            if held.contains(&id) || !taken.has_room(file.parent()?) {
+                return None;
+            }
+            let head = read_or_log(&file, HEAD_MAX_BYTES)?;
+            let (folder, first_message) = claude_said(&head, |_| true)?;
+            let chat = importable_chat("claude", folder, saved(id, first_message, modified)?)?;
+            taken.take(file.parent()?);
+            Some(chat)
+        })
+        .take(IMPORTABLE_CHATS_MAX)
+        .collect()
+}
+
+fn codex_everywhere(root: &Path, held: &HashSet<String>) -> Vec<ImportableChat> {
+    let mut taken = Taken::default();
+    newest_first(codex_files(root))
+        .into_iter()
+        .filter_map(|(file, modified)| {
+            let meta = read_or_log(&file, CODEX_META_MAX_BYTES)?;
+            let (id, folder) = codex_meta(complete_lines(&meta).next()?)?;
+            if held.contains(&id) || !taken.has_room(&folder) {
+                return None;
+            }
+            let head = read_or_log(&file, HEAD_MAX_BYTES)?;
+            let chat = importable_chat("codex", folder, saved(id, codex_first_message(&head)?, modified)?)?;
+            taken.take(&chat.folder);
+            Some(chat)
+        })
+        .take(IMPORTABLE_CHATS_MAX)
+        .collect()
+}
+
+/// A chat to offer, when its folder is still there to start it in.
+fn importable_chat(agent: &str, folder: PathBuf, saved: SavedConversation) -> Option<ImportableChat> {
+    folder.is_dir().then(|| ImportableChat { agent: agent.to_owned(), folder, saved })
+}
+
+/// How many chats each folder has given.
+#[derive(Default)]
+struct Taken(HashMap<PathBuf, usize>);
+
+impl Taken {
+    fn has_room(&self, folder: &Path) -> bool {
+        self.0.get(folder).is_none_or(|count| *count < IMPORTABLE_CHATS_PER_FOLDER)
+    }
+
+    fn take(&mut self, folder: &Path) {
+        *self.0.entry(folder.to_path_buf()).or_default() += 1;
+    }
 }
 
 fn codex_first_message(head: &str) -> Option<String> {

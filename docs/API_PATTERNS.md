@@ -1321,6 +1321,16 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 125 adds `Query::ImportableChats { tag }` with `Reply::ImportableChats { tag, chats }`
+(`IMPORTABLE_CHATS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is
+never asked and an older client never asks). `chats` are the conversations Claude and Codex saved in any folder of the
+daemon's computer, read as `SavedConversations` reads them (the same stores, limits, first-message rules and id
+check), each with its `agent` and the `folder` it recorded, newest first: at most 60, and 5 of one folder. Left out are
+the ones the daemon already holds (a chat's session, a pending start's thread, a pane's agent session:
+`held_agent_sessions`) and the ones whose folder is gone. Human clients only; read on a blocking task. The desktop
+client asks through `importable_chats` and reads null from an older daemon; another machine's answer is ignored
+(SECURITY).
+
 Protocol 124 adds `Command::ConversationMarkSeen { id }`, `Command::ConversationSetPermissions { id, generation,
 permissions }` and `BranchWorktree.base` (`CHAT_CONTROLS_SINCE`, with an arm in `ClientMsg::introduced_in` for the two
 commands and for a `BranchWorktree` that carries a base; `COMPATIBLE_SINCE` stays 122). `ConversationSetPermissions`

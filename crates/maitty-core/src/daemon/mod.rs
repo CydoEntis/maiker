@@ -3505,6 +3505,20 @@ impl Daemon {
                         });
                         return;
                     }
+                    Query::ImportableChats { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can list chats to import".into())
+                    }
+                    Query::ImportableChats { tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let stores = conversation::saved::Stores::of_this_user(home.as_deref());
+                        let held = self.held_agent_sessions();
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let chats = conversation::saved::importable(&stores, &held);
+                            let _ = tx.blocking_send(Ev::Answered { client, reply: Reply::ImportableChats { tag, chats } });
+                        });
+                        return;
+                    }
                     Query::SideAnswer { .. } if self.client_is_agent(client) => {
                         ServerMsg::Error("Only a human client can ask beside a conversation".into())
                     }
