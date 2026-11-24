@@ -180,6 +180,16 @@ Daemon › Service log). The webview supplies nothing: the log, the folder and t
 host's, and an existing file is never replaced (`export::save_in`). The log names folders,
 repositories and sessions, so the setting says to look before sharing it.
 
+`prepare_diagnostics` and `save_diagnostics` (`diagnostics.rs`, Settings › Machines › Export logs) build one text
+file to send to the maintainer. The host reads only files it names (the service log, 256 KiB of its end, and the
+warnings and errors in its last 1 MiB), the activity file's version, the machine names, and the system's name and
+version; it never reads sessions, conversations, settings, `config.local.toml` or the environment, and asks the
+service nothing but whether it takes a connection (3 seconds at most). Everything passes `diagnostics/redact.rs`
+(home folder and user names, this computer's name, addresses and host names, secret-named values, bearer tokens,
+URL credentials, private key blocks, common key shapes); a file that is not plain text is left out and the preview
+says so. The webview supplies nothing: Save writes the text the preview showed to a path chosen in the system's own
+save dialog, opened by the host. The redaction is heuristic, so the setting says to look before sending.
+
 The repository index (`daemon::repo_index`, `Query::Repositories`) takes no input beyond a flag: its search starts at the
 home folder, never follows a link, never enters a hidden folder or another computer's mount, is bounded in depth, folders
 and time, and only reads `.git` files. It tells a window folder names and branches, which the window already reads through

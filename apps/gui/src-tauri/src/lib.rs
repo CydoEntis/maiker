@@ -10,6 +10,7 @@ mod agent_auth;
 mod agent_install;
 mod reveal;
 mod daemon_log;
+mod diagnostics;
 mod export;
 mod highlight;
 #[cfg(target_os = "linux")]
@@ -1503,6 +1504,8 @@ pub fn run() {
             open_link::open_link,
             daemon_log::open_daemon_log,
             daemon_log::export_daemon_log,
+            diagnostics::prepare_diagnostics,
+            diagnostics::save_diagnostics,
             highlight::highlight_file,
             acp_agents::acp_agents,
             acp_agents::install_acp_agent,

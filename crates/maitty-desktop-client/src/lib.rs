@@ -151,6 +151,32 @@ pub async fn daemon_restart_status() -> Result<Value> {
     }))
 }
 
+/// What the local service's activity file says about it, read from disk: it works when the service
+/// is old or stuck. `None` when there is no file, or it belongs to a process that is not the pid file's.
+pub struct ServiceFacts {
+    pub version: String,
+    pub sessions: usize,
+}
+
+pub fn service_facts() -> Option<ServiceFacts> {
+    read_activity().map(|a| ServiceFacts { version: a.version, sessions: a.sessions })
+}
+
+/// Whether the local service takes a connection from this build, without starting one.
+pub enum ServiceReach {
+    Answering,
+    /// It runs and speaks this protocol version, which this build does not.
+    OtherProtocol(u32),
+    NotAnswering,
+}
+
+pub async fn service_reach() -> ServiceReach {
+    match ipc::open_for_user().await {
+        Ok(_) => ServiceReach::Answering,
+        Err(error) => ipc::other_version(&error).map_or(ServiceReach::NotAnswering, ServiceReach::OtherProtocol),
+    }
+}
+
 /// An older daemon may be replaced when its sessions are saved on disk (the next daemon
 /// restores them) or when it provably has none. One that owns sessions it isn't saving
 /// would lose them, so it is left running.

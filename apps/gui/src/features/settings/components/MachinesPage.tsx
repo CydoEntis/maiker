@@ -8,6 +8,7 @@ import type { MachineHead } from '@/features/workspace/model/machines'
 import { matching, nameOf, ordered, rowOf, SEARCH_AFTER, updatable, UPDATE_ALL_FROM, type MachineRow, type RowAction } from '../model/machineRows'
 import { SettingsSearch } from '../settingsSearch'
 import { Card, Row as SettingsRow, type DaemonInfo, type MachinesInfo } from './DesktopSettings'
+import { ExportLogsCard } from './ExportLogsCard'
 import { GitHubSection, type GitHubSignIn } from './GitHubSection'
 import { MachineFold } from './MachineFold'
 import { Since } from './Since'
@@ -244,6 +245,7 @@ function ThisComputer({ daemon, github }: { daemon: DaemonInfo; github: GitHubSi
           </span>
         </SettingsRow>
       </Card>
+      <ExportLogsCard />
       <GitHubSection machines={[]} signIn={github} only={LOCAL_MACHINE} />
     </>
   )

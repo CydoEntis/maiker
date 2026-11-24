@@ -13,7 +13,7 @@ const COPY_NAME: &str = "maiker-log.txt";
 const COPY_BYTES: u64 = 4 * 1024 * 1024;
 
 /// The end of the log as text, from the start of a line: at most `limit` bytes of it.
-fn log_tail(file: &Path, limit: u64) -> Result<String, String> {
+pub(crate) fn log_tail(file: &Path, limit: u64) -> Result<String, String> {
     let mut log = std::fs::File::open(file).map_err(|error| format!("Could not read the log: {error}"))?;
     let length = log.metadata().map_err(|error| format!("Could not read the log: {error}"))?.len();
     let start = length.saturating_sub(limit);
