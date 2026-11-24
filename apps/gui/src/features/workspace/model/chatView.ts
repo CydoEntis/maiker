@@ -40,6 +40,8 @@ export type ChatLink = {
   readonly machine?: string | null
   /** The daemon's report that the agent takes a message into a running turn; absent when it made none. */
   readonly steers?: boolean
+  /** Its agent is not up yet: asleep since a service restart until it is opened, or starting again on its own session. */
+  readonly waking?: boolean
 }
 
 export type ChatAvailability =

@@ -126,6 +126,18 @@ describe('the chat history', () => {
     warn.mockRestore()
   })
 
+  it('says in the dock that it is waking its agent while a restart left the chat asleep, and nothing once it is up', async () => {
+    conversation(1)
+    const { rerender } = render(<ChatSession link={{ ...link(), waking: true }} agent="claude" online />)
+    await settle()
+    expect(screen.getByText('Waking Claude up…')).toBeInTheDocument()
+    expect(screen.getByText('message 0')).toBeInTheDocument()
+
+    rerender(<ChatSession link={link(2)} agent="claude" online />)
+    await settle()
+    expect(screen.queryByText('Waking Claude up…')).not.toBeInTheDocument()
+  })
+
   it('says in the dock that it is reconnecting when reads keep failing, keeps what it showed, and resumes without duplicates', async () => {
     const daemon = conversation(2)
     render(<ChatSession link={link()} agent="claude" online />)

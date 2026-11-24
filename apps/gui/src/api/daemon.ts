@@ -1205,6 +1205,8 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
   // A chat session is a conversation the daemon started itself: it has no terminal, and the window writes to it
   // (ADR 0003). A followed pane's conversation is read-only and belongs to that pane, so it is not one.
   const chatSession = summary.execution === 'Structured' && summary.native_term === null
+  // Asleep since a restart (listed idle while it needs recovery), or an existing chat starting again on its own session.
+  const waking = !summary.interrupted && ((summary.state === 'RecoveryRequired' && summary.status === 'Idle') || (summary.state === 'Stopped' && summary.status === 'Working'))
   const root = summary.root
   // A chat over ACP is named by its agent (ADR 0020); the others by their provider.
   const acp = summary.provider === 'Acp'
@@ -1240,7 +1242,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent,
           process: agent,
-          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
+          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }), ...(waking ? { waking: true } : {}) },
           details: { asking: '', interrupted: null, chatCutOff: summary.interrupted, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),

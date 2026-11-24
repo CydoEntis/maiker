@@ -137,7 +137,7 @@ export type Conversation = {
    * one (a conversation whose native terminal is this pane). The chat view reads and writes
    * through it; without it the session has no chat.
    */
-  chat?: { conversation: number; generation: number; /** The agent runs over ACP (ADR 0020): its model and permissions are its own settings. */ acp?: boolean; /** Follows an agent the user started in the terminal (ADR 0003): the chat reads, it does not write. */ readOnly?: boolean; /** The daemon says the agent takes a message into a running turn; absent when it did not say. */ steers?: boolean }
+  chat?: { conversation: number; generation: number; /** The agent runs over ACP (ADR 0020): its model and permissions are its own settings. */ acp?: boolean; /** Follows an agent the user started in the terminal (ADR 0003): the chat reads, it does not write. */ readOnly?: boolean; /** The daemon says the agent takes a message into a running turn; absent when it did not say. */ steers?: boolean; /** Its agent is not up yet: a service restart left it asleep until it is opened, or it is starting again on its own session. */ waking?: boolean }
 }
 
 export type Message = {

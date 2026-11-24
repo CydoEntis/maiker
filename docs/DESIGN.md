@@ -222,7 +222,8 @@ dialog radius and shadow, 22px by 24px of body, its facts in a `--m-well` block,
   right. Not now leaves a red **× Offline** chip that opens it again. Back after an outage, the dialog turns green
   ("Reconnecting…", "Found the service. Picking your chats back up.") for 1.2 s, then a **Back online** toast, or, when the
   restart cut replies, the **Pick up where you left off** dialog instead: one ticked row per session it cut (agent mark,
-  name, project · machine), **Not now** at the left of the foot and **Continue all** at the right. The sidebar foot has no service dot.
+  name, project · machine), **Not now** at the left of the foot and **Continue all** at the right. A chat that rested
+  through the restart says **Waking Claude up…** in its dock, in the working tone, until its agent is up. The sidebar foot has no service dot.
 - **Service update** (same dialog, caution): **Restart Maiker to finish updating** with what a restart keeps (`✓` green),
   warns about (`▲` caution) and stops (`–` dim), a restart that asks for a second click, **Later** and `protocol a → b`;
   Later leaves a caution **Restart needed** chip. A downloaded app update is a note toast that stays, "Maiker X is ready",

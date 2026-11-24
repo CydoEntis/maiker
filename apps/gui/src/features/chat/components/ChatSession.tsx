@@ -820,9 +820,11 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   // A Claude or Codex chat this window drives can be started again on its own session; the service reads its past back.
   // The list of chats and this chat's read pick up the new generation on their own, as after any restart.
   const reconnect = chatModes === null ? null : async () => { await resumeChat({ id: ownKey, generation: link.generation }) }
+  // A chat a service restart left asleep starts when it is opened: until its agent is up, the dock says it is waking.
   const readLine = offline && online
     ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
-    : feed.error !== null ? <ReadProblemLine key={feed.error} error={feed.error} onReconnect={reconnect} /> : null
+    : feed.error !== null ? <ReadProblemLine key={feed.error} error={feed.error} onReconnect={reconnect} />
+      : link.waking === true && online ? <ProblemLine tone="working" running title={`Waking ${agentLabel(agent)} up…`} reason="This chat rested while Maiker restarted. It picks up where it was in a moment." /> : null
   const dockProblem = problemView.line ?? readLine
 
   return (

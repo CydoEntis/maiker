@@ -98,6 +98,13 @@ describe('chat sessions', () => {
     expect([asleep?.status, asleep?.details?.chatCutOff]).toEqual(['idle', false])
     expect([cut?.status, cut?.details?.chatCutOff]).toEqual(['recovery', true])
     expect([older?.status, older?.details?.chatCutOff]).toEqual(['recovery', false])
+    // Asleep, it says it is waking once opened; a cut one waits for the person instead.
+    expect([asleep?.chat?.waking, cut?.chat?.waking, older?.chat?.waking]).toEqual([true, undefined, undefined])
+  })
+
+  it('says an existing chat is waking while it starts again, and not a running one', () => {
+    const [starting, running] = conversationsFromSnapshot(snapshot([summary({ id: 44, state: 'Stopped', status: 'Working' }), summary({ id: 45 })]))
+    expect([starting?.chat?.waking, running?.chat?.waking]).toEqual([true, undefined])
   })
 
   it('gives a chat the time its status changed, and none from an older daemon', () => {
