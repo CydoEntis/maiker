@@ -15,7 +15,7 @@ const PERCENT_MAX = 100
 export type ChatProblem =
   | { kind: 'stopped'; agent: string; code: number | null; onRestart: (() => void) | null }
   | { kind: 'machine'; machine: string; since: number | null; onRetry: () => void }
-  | { kind: 'interrupted'; agent: string; resume: string; onRestart: () => void; onDismiss: () => void }
+  | { kind: 'interrupted'; agent: string; /** A terminal agent's resume command; empty for a chat, which has none. */ resume: string; onRestart: () => void; onDismiss: () => void }
   | { kind: 'context'; agent: string; percent: number; onCompact: () => void; /** Opens a new chat in the same folder with the summary as its first message. */ onNewWithSummary: (summary: string) => void }
 
 /**
@@ -106,7 +106,7 @@ export function problemWords(problem: ChatProblem, now: number): ProblemWords {
         title: `${problem.agent} was interrupted`,
         reason: `${problem.agent} was mid-step when the service restarted. Nothing is lost. Restart to carry on from the last message.`,
         line: 'Restart to carry on from the last message.',
-        details: `${problem.agent} was interrupted by a service restart. Resume command: ${problem.resume}`,
+        details: `${problem.agent} was interrupted by a service restart.${problem.resume === '' ? '' : ` Resume command: ${problem.resume}`}`,
       }
     case 'context':
       return {

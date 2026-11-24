@@ -406,6 +406,13 @@
 .mx-getfile-row { flex: none; display: block; width: 100%; text-align: left; padding: 6px 10px; border: 0; border-radius: var(--r-control); background: transparent; color: var(--fg); font-family: var(--mono, monospace); font-size: 13px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .mx-getfile-row.is-selected { background: var(--accent-soft); }
 .mx-getfile-row mark { background: transparent; color: var(--accent-text); font-weight: 700; text-decoration: underline; }
+/* After a restart, the sessions cut mid-reply: one ticked row each, in the same well as the file list. */
+.mx-cutoff-list { list-style: none; margin: 12px 0 0; display: flex; flex-direction: column; max-height: 280px; overflow-y: auto; border: 1px solid var(--pane-line); border-radius: var(--r-panel); background: var(--m-well); padding: 4px; }
+.mx-cutoff-row { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 10px; border-radius: var(--r-control); cursor: pointer; }
+.mx-cutoff-row:hover { background: var(--accent-soft); }
+.mx-cutoff-row input { flex: none; margin: 0; accent-color: var(--accent); }
+.mx-cutoff-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg); font-size: 13px; }
+.mx-cutoff-where { flex: none; max-width: 45%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); font-size: 12px; }
 .mx-rename.mx-recent { max-width: 560px; }
 .mx-rename.mx-modal.mx-recent { width: 560px; }
 /* The worktree's branch mark on a small tile, as a file or an agent has one. */

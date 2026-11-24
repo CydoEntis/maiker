@@ -17,6 +17,8 @@ export type TerminalDetails = {
   ask?: PermissionAsk | null
   /** An agent that was mid-turn when the daemon restarted; offered a resume, never resumed on its own. */
   interrupted: { agent: string; resume: string } | null
+  /** A chat a service restart cut mid-reply that nobody has taken up since (`ConversationSummary.interrupted`); absent for a terminal. */
+  chatCutOff?: boolean
   /** The agent's own conversation id, for resuming it elsewhere; null when the daemon did not say. */
   agentSession?: string | null
   /** The agent's own hooks have reported in: without them the daemon has no session or transcript to follow, so no chat. */

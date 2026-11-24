@@ -58,6 +58,8 @@ const ConversationSummarySchema = z.object({
   capabilities: CapabilitiesSchema.nullable().default(null).catch(null),
   // When its status last changed (unix seconds), for the row's age; absent from an older daemon.
   status_since: z.number().int().nonnegative().nullable().default(null).catch(null),
+  // A service restart cut it mid-reply and nobody has taken it up; absent when not, and from an older daemon.
+  interrupted: z.boolean().default(false),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -1189,7 +1191,8 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
   const key = machine === undefined ? summary.id : (conversationKey(machine.id, summary.id) ?? summary.id)
   const cwd = summary.worktree ?? summary.cwd
   const workspace = workspaces.find((candidate) => candidate.cwd === cwd || candidate.cwd === summary.cwd)
-  const status: SessionStatus = summary.state === 'RecoveryRequired'
+  // A chat a service restart left asleep is listed idle by its daemon: it starts when opened, and nothing is wrong with it.
+  const status: SessionStatus = summary.state === 'RecoveryRequired' && summary.status !== 'Idle'
     ? 'recovery'
     : summary.status === 'Blocked'
       ? 'needs-you'
@@ -1238,7 +1241,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           agent,
           process: agent,
           chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }) },
-          details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
+          details: { asking: '', interrupted: null, chatCutOff: summary.interrupted, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),
   }

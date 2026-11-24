@@ -51,6 +51,8 @@ export type SessionView = {
   /** The permission prompt the agent's own hook says it is stopped on. */
   ask: PermissionAsk | null
   interrupted: TerminalDetails['interrupted']
+  /** A chat a service restart cut mid-reply, waiting for the person to continue it; absent or false otherwise. */
+  chatCutOff?: boolean
   /** The agent's own conversation id; null when unknown. */
   agentSession?: string | null
   /** The agent's own hooks have reported in (the daemon's `TermInfo.hooked`); absent for a session that is not a terminal. */
@@ -336,6 +338,7 @@ export function toSessionView(conversation: Conversation, home: string, now: num
     asking: conversation.details?.asking ?? '',
     ask: conversation.details?.ask ?? null,
     interrupted: conversation.details?.interrupted ?? null,
+    chatCutOff: conversation.details?.chatCutOff ?? false,
     agentSession: conversation.details?.agentSession ?? null,
     ...(conversation.details?.hooked === undefined ? {} : { hooked: conversation.details.hooked }),
     hookProblem: conversation.details?.hookProblem ?? null,

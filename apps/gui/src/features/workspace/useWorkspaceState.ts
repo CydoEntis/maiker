@@ -38,7 +38,7 @@ import { leftOutOfChatView, sectionOf } from './model/sidebar'
 import { activeArrangement, dropSession, EMPTY_LAYOUT, focusedSessionId, type Layout, removeSessions, visibleSessionIds } from './model/layout'
 import { LAYOUT_RESET_NOTICE, readLayout, writeLayout } from './model/layoutStorage'
 import { byPriority } from './model/attentionOrder'
-import { agentLabel, folderNameOf, inCreationOrder, type SessionView } from './model/session'
+import { agentLabel, displayName, folderNameOf, inCreationOrder, type SessionView } from './model/session'
 import { startChoiceFor } from './model/lastWho'
 import { sharedCheckoutRefusal } from './model/sharedCheckout'
 import { bindingFor, detectPlatform, shortcutChords } from './model/shortcuts'
@@ -77,6 +77,8 @@ import { askNotificationPermission } from '@/features/notifications/native'
 import { useAttentionBadge } from '@/features/notifications/useAttentionBadge'
 import { useServiceStage } from './useServiceStage'
 import { sayBackOnline } from './backOnline'
+import { cutOffSessions } from './model/cutOff'
+import { continueCutChat } from './continueCutChat'
 
 /** The one toast that key and drag notes share: a newer note replaces the one showing. */
 const FLASH_TOAST_ID = 'workspace-note'
@@ -375,7 +377,10 @@ export function useWorkspaceState() {
   // The request of a terminal session whose dialog is open (`useOutsideAsks`).
   const [openAsk, setOpenAsk] = useState<OpenAsk | null>(null)
   const dialogOpen = openAsk !== null || settingsSection !== null || renameId !== null || getFileId !== null || specialistsId !== null || newChatOpen || renamingMachine !== null || recentOpen || openProject !== null || openWorktreeFor !== null
-  const modalOpen = dialogOpen || overlayOpen
+  // After a restart, the sessions it cut mid-reply, asked about once no other dialog is up.
+  const cutOff = useMemo(() => cutOffSessions(sessions, dismissedRestores), [sessions, dismissedRestores])
+  const cutOffOpen = cutOff.length > 0 && online && !dialogOpen && !welcomeOpen
+  const modalOpen = dialogOpen || overlayOpen || cutOffOpen
   // Only the New session draft is up, with no dialog over it.
   const onNewChatPage = newChatOpen && settingsSection === null && renameId === null && getFileId === null && specialistsId === null && renamingMachine === null && !recentOpen && openProject === null && openWorktreeFor === null
   useShortcutKeys({ runShortcut, dialogOpen, onNewChatPage, overlayOpen, paletteOpen, focusMode, drawerShown, welcomeOpen, shortcutsOpen, setPaletteOpen, setSettingsSection, setNewChatOpen, setDrawerOpen, setFocusMode, platform, keyOverrides: preferences.keyOverrides })
@@ -431,10 +436,26 @@ export function useWorkspaceState() {
       .catch((error: unknown) => { console.warn('Could not mark the session seen', error) })
   }, [online, windowFocused, viewedId, viewedStatus, queryClient])
   const { answerSession, sendTo, resumeInterrupted } = useSessionReplies({ sessionMap, flash, showSessionById, setDismissedRestores })
-  // Back after an outage: the toast names the chats a service restart cut mid-turn (the daemon marks them), if any.
-  const sayBack = useCallback(() => {
-    sayBackOnline(sessions.filter((item) => item.interrupted !== null && !dismissedRestores.has(item.id)), resumeInterrupted)
-  }, [sessions, dismissedRestores, resumeInterrupted])
+  // Back after an outage: a toast, unless a restart cut replies, which the cut-off dialog asks about instead.
+  const cutOffCount = cutOff.length
+  const sayBack = useCallback(() => { sayBackOnline(cutOffCount) }, [cutOffCount])
+  const putOff = useCallback((listed: readonly SessionView[]) => {
+    setDismissedRestores((current) => new Set([...current, ...listed.map((session) => session.id)]))
+  }, [])
+  // Continue: a chat starts again and is told to carry on; a terminal agent runs its resume command in its pane.
+  const continueCut = useCallback((session: SessionView) => {
+    putOff([session])
+    if (session.chatCutOff === true) {
+      continueCutChat(session).catch((error: unknown) => { toast.failed(`Could not continue ${displayName(session)}`, error) })
+    } else {
+      resumeInterrupted(session)
+    }
+  }, [putOff, resumeInterrupted])
+  const continueCutOff = useCallback((ticked: readonly SessionView[]) => {
+    putOff(cutOff)
+    for (const session of ticked) continueCut(session)
+  }, [cutOff, putOff, continueCut])
+  const notNowCutOff = useCallback(() => { putOff(cutOff) }, [cutOff, putOff])
   const service = useServiceStage({ online, mismatch: Boolean(mismatch), onBack: sayBack })
   const moveToWorktree = useMoveToWorktree({ sessionMap, sendTo })
 
@@ -468,5 +489,5 @@ export function useWorkspaceState() {
   useAttentionBadge(sessions, sessionsQuery.data !== undefined)
   // Until the first list arrives nothing is known about the sessions: "none running" would be a guess, and wrong.
   const sessionsListed = sessionsQuery.data !== undefined
-  return { pullRequests, showPanelView, showFilesOf, confirm, pendingConfirm, openDocument, sessionsListed, inspectRefusal, signInGitHub, gitHubSignInsEnded, terminalOpen, terminalShown, canDock, toggleTerminal, dockFocused, setDockFocused, tabsOf, toggleInspect, signInAgent, activeTerminals, setActiveTerminals, closeAgentTerminals, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, inspectOpen, focusMode, inspectTerm, focusedSession, projectOf, turnDiff, setTurnDiff, setInspectOpen, panelOf, changePanel, pinTerminal, unpinTerminals, panelFocused, setPanelFocused, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, tracks, showSessionById, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, openWorktreeFor, setOpenWorktreeFor, heads, sessions, home, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, pullsOf, setPullsOf, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, newChatOpen, newChatMachine, setNewChatMachine, newChatAgent, setNewChatAgent, newChatSeed, setNewChatSeed, newChatWithSummary, sidebarMachineHeads, setNewChatOpen, startNewChat, warmNewChat, findOpen, terminalHandles, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, failures, mismatch, retryAt, offlineDetail, service, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, canStart, starting, theme, setTextSize, sidebarSessions, openSubagent, sidebarWidth, setLiveSidebarWidth, newTerminal: newTerminalHere, chatView, showSubagent, addAgentTerminal, copyPathOf, copyText, endSession, endSessions, updateProgress, skippedVersion, setSkippedVersion, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, reducedMotion, setRoot, rootStyle, machineSaid, paneSessions, chatOf, agentTerminals, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, setOpenSubagent, openPanel, startChatHere, handoffSession, look, modalOpen, mirrorInput, openPath, pasteImage, split, closePaneById, sendTo, restartPane, moveToWorktree, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, specialistsId, setSpecialistsId, afterAppUpdate, startAgent, openDraft, openProject, setOpenProject, openedProjects, openAsk, setOpenAsk, splitsOf, paneCountOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit }
+  return { pullRequests, showPanelView, showFilesOf, confirm, pendingConfirm, openDocument, sessionsListed, inspectRefusal, signInGitHub, gitHubSignInsEnded, terminalOpen, terminalShown, canDock, toggleTerminal, dockFocused, setDockFocused, tabsOf, toggleInspect, signInAgent, activeTerminals, setActiveTerminals, closeAgentTerminals, ownsTerminals, repoPaneOf, sharedFolderRefusalOf, inspectOpen, focusMode, inspectTerm, focusedSession, projectOf, turnDiff, setTurnDiff, setInspectOpen, panelOf, changePanel, pinTerminal, unpinTerminals, panelFocused, setPanelFocused, flash, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, newSession, focusedMachineNumber, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, tracks, showSessionById, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, openWorktreeFor, setOpenWorktreeFor, heads, sessions, home, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, pullsOf, setPullsOf, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, newChatOpen, newChatMachine, setNewChatMachine, newChatAgent, setNewChatAgent, newChatSeed, setNewChatSeed, newChatWithSummary, sidebarMachineHeads, setNewChatOpen, startNewChat, warmNewChat, findOpen, terminalHandles, setFindOpen, dismissedRestores, resumeInterrupted, setDismissedRestores, cutOff, cutOffOpen, continueCut, continueCutOff, notNowCutOff, failures, mismatch, retryAt, offlineDetail, service, sessionsQuery, restartOffer, appBehindOffer, refetchSessions, tab, mountedTabs, layout, narrow, setLayout, closingPanes, canStart, starting, theme, setTextSize, sidebarSessions, openSubagent, sidebarWidth, setLiveSidebarWidth, newTerminal: newTerminalHere, chatView, showSubagent, addAgentTerminal, copyPathOf, copyText, endSession, endSessions, updateProgress, skippedVersion, setSkippedVersion, sidebarMode, toggleSidebar, drawerShown, setDrawerOpen, reducedMotion, setRoot, rootStyle, machineSaid, paneSessions, chatOf, agentTerminals, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, setOpenSubagent, openPanel, startChatHere, handoffSession, look, modalOpen, mirrorInput, openPath, pasteImage, split, closePaneById, sendTo, restartPane, moveToWorktree, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, specialistsId, setSpecialistsId, afterAppUpdate, startAgent, openDraft, openProject, setOpenProject, openedProjects, openAsk, setOpenAsk, splitsOf, paneCountOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit }
 }

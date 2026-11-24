@@ -13,6 +13,7 @@ conversation continuity are planned in phases 34–37:
 **Core**
 - Daemon owns sessions; detach / reattach; many clients — shipped — `crates/maitty-core/src/daemon/mod.rs`, ADR 0001
 - Sessions survive a daemon restart (agents resumed, commands re-run) — shipped — `crates/maitty-core/src/daemon/persist.rs`, `restore` in `crates/maitty-core/src/daemon/mod.rs`
+- After a daemon restart a chat comes back asleep and starts when it is first opened, and the sessions the restart cut mid-reply, on every machine, are one **Pick up where you left off** dialog in the desktop app (all ticked, Continue / Not now; a chat is started again and told to continue) — built 2026-11-23, not yet seen on screen — `crates/maitty-core/src/daemon/restore.rs`, `apps/gui/src/features/workspace/components/CutOffDialog.tsx`
 - Windows (ConPTY, named pipes, PowerShell folder tracking), macOS, Linux — shipped — `crates/maitty-core/src/daemon/term.rs`, `crates/maitty-core/src/ipc.rs`
 - SSH remotes (`--remote host`) — shipped — `crates/maitty-core/src/ipc.rs` `connect_remote`
 
