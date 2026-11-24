@@ -1332,7 +1332,10 @@ the next `Rpc::Send` (`State::new_permissions`): Claude's per-message process st
 `set_conversation_permissions` and refuses an older daemon in words (`ask_running_daemon_if_it_reads`).
 A chat's Reconnect is `resume_conversation`: `ConversationStart` with `StartTarget::Conversation` at the chat's
 generation, which starts its agent again; a Claude chat is read back from its transcript before the start is answered,
-except one whose turn was cut.
+with a turn that was cut marked interrupted. After a daemon restart a chat is asleep until a client's first
+`ConversationRead` of it, which is answered at once (from what was kept, or as loading, never refused) and then starts
+it. A chat cut mid-turn is not started by a read: `ConversationSummary.interrupted` (absent when false, so an older
+client reads the same) lists it until a person resumes it.
 The seen is the window opening a finished chat: the daemon turns its done to idle, as `MarkSeen` does for a pane, and
 leaves every other status alone; human clients with the write grant only. A daemon before 124 is not asked
 (`mark_conversation_seen`, through `ask_if_known`) and the chat keeps its done. With `base`, `branch` is a new branch cut

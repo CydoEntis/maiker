@@ -527,7 +527,8 @@ struct Daemon {
     pending_starts: Vec<crate::conversation::PendingStart>,
     conversation_operations: Vec<crate::conversation::Operation>,
     /// Chat conversations that were running when the previous daemon went away, with the
-    /// generation they were fenced to: what an automatic resume may start, once.
+    /// generation they were fenced to, and not started since: asleep until a client first reads
+    /// one (`wake_conversation`) or a person resumes it. Each is started by the daemon once.
     resumable_conversations: Vec<(crate::conversation::ConversationId, u64)>,
     /// Chat conversations whose turn was cut: those of `resumable_conversations` that were
     /// Running, not mid-transfer, with a turn in flight, and those whose agent died mid-turn.

@@ -9,6 +9,30 @@ fn history_source(provider: Provider) -> Option<crate::daemon::providers::Histor
         .map(|structured| structured.history)
 }
 
+/// Marks the last turn stopped when its transcript ends before the turn did, as a turn the daemon
+/// or the agent went away in does: read back, it would otherwise show as still running.
+fn stop_open_turn(history: &mut History) -> Result<()> {
+    let Some(turn) = history.entries.last().map(|entry| entry.source.turn.clone()) else {
+        return Ok(());
+    };
+    let ended = history.entries.iter().any(|entry| {
+        entry.source.turn == turn
+            && entry.content == history::Content::TurnStatus
+            && entry.state != history::ItemState::Running
+    });
+    if ended {
+        return Ok(());
+    }
+    history
+        .apply(history::Update::SetTurnStatus {
+            turn,
+            state: history::ItemState::Interrupted,
+            started_at_ms: None,
+            completed_at_ms: None,
+        })
+        .map_err(|reason| anyhow::anyhow!("Could not mark the cut turn stopped: {reason:?}"))
+}
+
 /// Whether the provider is never asked for its saved history: what the daemon holds is used.
 fn reads_transcript(provider: Provider) -> bool {
     history_source(provider).is_some_and(|source| source != crate::daemon::providers::HistorySource::Provider)
@@ -47,13 +71,18 @@ impl Daemon {
             changed: false,
             bytes: 0,
         })?;
-        self.conversation_runtimes
-            .request(
-                id,
-                generation,
-                token,
-                Rpc::ReadHistory { session, cursor: None, limit: history::MAX_READ_ENTRIES },
-            )
+        let asked = self.conversation_runtimes.request(
+            id,
+            generation,
+            token,
+            Rpc::ReadHistory { session, cursor: None, limit: history::MAX_READ_ENTRIES },
+        );
+        // A read that never reached a runtime (none runs) must not stay pending: it would hold off
+        // the start that brings the runtime back.
+        if asked.is_err() {
+            self.conversation_requests.remove(&token);
+        }
+        asked
     }
 
     pub(super) fn begin_claude_history_hydration(
@@ -105,12 +134,11 @@ impl Daemon {
             .is_some_and(|state| state.history_ready)
             && self.conversation_runtimes.owns(id);
         // Claude's transcript is the chat's whole past, so a chat the daemon no longer holds in step
-        // with it (a restart, a stop, an agent gone between turns) is read again from it instead of
-        // refused. A cut turn is not: its transcript may stop partway through that turn.
+        // with it (a restart, a stop, an agent gone mid-turn or between turns) is read again from it
+        // instead of refused. It is what the agent itself resumes from.
         if let (Some(client), None) = (started, &read)
             && !recorded
             && !is_currently_reconciled
-            && !self.cut_conversations.contains(&id)
         {
             return self.begin_saved_history(id, generation, client);
         }
@@ -230,6 +258,7 @@ impl Daemon {
         match kept {
             Ok(()) => {
                 self.send(client, ServerMsg::Reply(Reply::ConversationStarted { id, generation }));
+                self.continue_cut_turn(client, id, generation);
             }
             Err(error) => {
                 let state = self.conversation_states.entry(id).or_default();
@@ -245,6 +274,9 @@ impl Daemon {
     fn keep_saved_history(&mut self, id: ConversationId, mut history: History) -> Result<()> {
         if !self.cfg.restore.enabled || !self.cfg.restore.output {
             bail!("Opening a saved conversation as a chat needs `restore.output` on, so its history is kept");
+        }
+        if self.cut_conversations.remove(&id) {
+            stop_open_turn(&mut history)?;
         }
         let state = self.conversation_states.entry(id).or_default();
         state.history_revision = state
@@ -291,6 +323,9 @@ impl Daemon {
         Ok(())
     }
 
+    /// Answers a read of a conversation's history, then starts the chat if a restart left it
+    /// asleep: a first read is a client opening it. The start comes after the answer, so the read
+    /// is answered from what the daemon kept and not refused while the agent starts.
     pub(in crate::daemon) fn conversation_read(
         &mut self,
         client: ClientId,
@@ -299,6 +334,18 @@ impl Daemon {
         limit: usize,
     ) -> Result<()> {
         self.may(client, Grant::Read, None)?;
+        let read = self.read_conversation_history(client, id, cursor, limit);
+        self.wake_conversation(id);
+        read
+    }
+
+    fn read_conversation_history(
+        &mut self,
+        client: ClientId,
+        id: ConversationId,
+        cursor: Option<history::Cursor>,
+        limit: usize,
+    ) -> Result<()> {
         if limit == 0 || limit > history::MAX_READ_ENTRIES {
             bail!(
                 "History limit must be between 1 and {}",
@@ -361,6 +408,15 @@ impl Daemon {
             }
             return self.reply_history(id, read);
         }
+        // A chat a restart left asleep has no runtime to read from until this read starts it
+        // (`conversation_read`), and a refusal would show as a failure: it reads as still loading,
+        // and the start's own read of its past follows.
+        if self.is_asleep(id) {
+            let mut history = History::new(id);
+            history.set_completeness(Completeness::Loading)?;
+            self.conversation_history.hydrate_cached(client, history)?;
+            return self.reply_history(id, read);
+        }
         self.begin_hydration(id, generation, Some(read), None)
     }
 
@@ -388,7 +444,11 @@ impl Daemon {
             ServerMsg::Reply(Reply::ConversationRead(ReadResult {
                 conversation: id,
                 generation: c.generation,
-                status: state.map_or(Status::Blocked, |s| s.effective_status()),
+                // A chat a restart left asleep has no state until this read starts it.
+                status: state.map_or(
+                    if self.is_asleep(id) { Status::Idle } else { Status::Blocked },
+                    |s| s.effective_status(),
+                ),
                 receipt: self.visible_receipt(id),
                 history: page,
                 error: state.and_then(|s| s.error.clone()),

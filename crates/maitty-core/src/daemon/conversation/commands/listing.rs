@@ -131,6 +131,7 @@ impl Daemon {
                         Some(term) if c.execution == ExecutionKind::Native => Some(term.status_since),
                         _ => self.conversation_since.get(&c.id).map(|(_, at)| *at),
                     },
+                    interrupted: self.waits_after_cut(c.id),
                 }
             })
             .collect();
@@ -158,6 +159,7 @@ impl Daemon {
                 capabilities: None,
                 agent: None,
                 status_since: Some(term.status_since),
+                interrupted: false,
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -182,19 +184,21 @@ impl Daemon {
                 capabilities: self.conversation_capabilities(p.settings.provider, p.id, p.generation),
                 agent: p.settings.agent.clone(),
                 status_since: self.conversation_since.get(&p.id).map(|(_, at)| *at),
+                interrupted: false,
             }
         }));
         summaries
     }
 
     /// A conversation's status as the list reports it: its pane's for a native one, else its
-    /// chat's, and needs-you for one that must be recovered.
+    /// chat's, and needs-you for one that must be recovered. A chat a restart left asleep is idle:
+    /// opening it starts it, and nothing about it needs the person.
     fn listed_status(
         &self,
         c: &crate::conversation::Conversation,
         native_term: Option<&crate::daemon::term::Term>,
     ) -> Status {
-        let unrun = if c.state == RecoveryState::RecoveryRequired {
+        let unrun = if c.state == RecoveryState::RecoveryRequired && !self.is_asleep(c.id) {
             Status::Blocked
         } else {
             Status::Idle

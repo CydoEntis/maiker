@@ -25,6 +25,7 @@ fn conversation() -> ConversationSummary {
         capabilities: None,
         agent: None,
         status_since: None,
+        interrupted: false,
     }
 }
 

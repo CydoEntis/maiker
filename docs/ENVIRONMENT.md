@@ -412,12 +412,16 @@ deleting the file empties the list.
 
 ## Project-specific: continuing a chat turn after a restart
 
-`restore.continue_turn` (default `false`; Settings › Sessions › *Continue chat turns*) lets the
-daemon send `Continue where you left off.` to a chat conversation it has just
-resumed. It needs `restore.enabled` and `restore.conversations`, and applies only to a structured
-conversation that was in a turn when the daemon stopped and that the daemon itself resumed; an
-idle chat (its last turn had ended), a conversation a person resumes, one that was mid-transfer,
-and every terminal agent get nothing.
+After a restart no chat starts by itself: each waits, asleep, and starts on its own provider
+session the first time a client reads it (`restore.conversations`). A chat that was mid-turn when
+the daemon stopped waits for a person instead, listed `interrupted` (`ConversationSummary`), and
+the desktop app offers to continue it.
+
+`restore.continue_turn` (default `false`; Settings › Sessions › *Continue chat turns*) makes the
+daemon resume such a mid-turn chat as soon as it starts and send it `Continue where you left off.`
+It needs `restore.enabled` and `restore.conversations`, and applies only to a structured
+conversation that was in a turn when the daemon stopped; an idle chat (its last turn had ended), a
+conversation a person resumes, one that was mid-transfer, and every terminal agent get nothing.
 The message is sent once per daemon start, after the resume has succeeded, and at most 3 times in
 5 minutes per conversation. That count is kept in the session file
 ([DATABASE](DATABASE.md#project-specific-entities)), so it holds across restarts. It adds no

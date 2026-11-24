@@ -544,6 +544,11 @@ pub struct ConversationSummary {
     /// listed a chat that way. Display only (a row's age). Absent from an older daemon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status_since: Option<u64>,
+    /// A restart cut this chat mid-reply and nobody has taken it up since: it is not started
+    /// again by itself, and a client offers to continue it. False from an older daemon, which
+    /// does not say.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub interrupted: bool,
 }
 
 impl ConversationSummary {
@@ -3816,6 +3821,15 @@ mod tests {
         assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
         assert_eq!(summary.status_since, None, "an older daemon says no status time");
+        assert!(!summary.interrupted, "an older daemon says no chat was cut by a restart");
+
+        // `interrupted` is written only when it is true, so an older client's read is the same.
+        assert!(serde_json::to_value(&summary).unwrap().get("interrupted").is_none());
+        summary.interrupted = true;
+        let cut = serde_json::to_value(&summary).unwrap();
+        assert_eq!(cut["interrupted"], true);
+        assert!(serde_json::from_value::<ConversationSummary>(cut).unwrap().interrupted);
+        summary.interrupted = false;
 
         // Capabilities are written only when the daemon knows them.
         let unknown = serde_json::to_value(&summary).unwrap();

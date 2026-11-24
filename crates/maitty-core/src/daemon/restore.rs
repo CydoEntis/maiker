@@ -536,22 +536,63 @@ impl Daemon {
         }
     }
 
-    /// Start again each chat conversation that was running when the last daemon went away, on
-    /// its own provider session (ADR 0003). Each is tried once: the list is emptied here, so a
-    /// runtime that fails again stays failed until a person resumes it.
+    /// What a daemon start does with the chats that were running when the last daemon went away
+    /// (ADR 0003). None is started here: each waits, asleep, until a client first reads it
+    /// (`wake_conversation`), so a restart does not start every agent at once. The exception is a
+    /// chat cut mid-turn while `restore.continue_turn` is on: the person asked for those to carry
+    /// on by themselves, so they start now and are told to continue.
     pub(super) fn resume_conversations(&mut self) {
-        let candidates = std::mem::take(&mut self.resumable_conversations);
-        if !self.cfg.restore.conversations {
+        if !self.cfg.restore.conversations || !self.cfg.restore.continue_turn {
             return;
         }
-        for (id, generation) in candidates {
-            let target = crate::conversation::StartTarget::Conversation { id, generation };
-            match self.conversation_start(conversation::commands::DAEMON_REQUESTER, target) {
-                Ok(()) if self.cut_conversations.contains(&id) => self.continue_when_resumed(id),
-                Ok(()) => {}
-                Err(error) => tracing::warn!("conversation {} was not resumed: {error:#}", id.0),
-            }
+        let cut: Vec<_> = self
+            .resumable_conversations
+            .iter()
+            .filter(|(id, _)| self.cut_conversations.contains(id))
+            .copied()
+            .collect();
+        for (id, generation) in cut {
+            self.resume_asleep(id, generation, true);
         }
+    }
+
+    /// Starts a chat left asleep by a restart the first time a client reads it: what opening a
+    /// chat after a restart does. A chat whose turn was cut is not started: it waits for a person
+    /// to take it up (it is listed `interrupted`), since it would otherwise sit at its prompt as
+    /// if the cut reply had finished.
+    pub(super) fn wake_conversation(&mut self, id: crate::conversation::ConversationId) {
+        if !self.cfg.restore.conversations || self.cut_conversations.contains(&id) {
+            return;
+        }
+        if let Some(&(_, generation)) = self.resumable_conversations.iter().find(|(asleep, _)| *asleep == id) {
+            self.resume_asleep(id, generation, false);
+        }
+    }
+
+    /// Starts an asleep chat on its own provider session. Each is tried once: it leaves the list
+    /// here, so a runtime that fails stays failed until a person resumes it.
+    fn resume_asleep(&mut self, id: crate::conversation::ConversationId, generation: u64, continues: bool) {
+        self.resumable_conversations.retain(|(asleep, _)| *asleep != id);
+        let target = crate::conversation::StartTarget::Conversation { id, generation };
+        match self.conversation_start(conversation::commands::DAEMON_REQUESTER, target) {
+            Ok(()) if continues => self.continue_when_resumed(id),
+            Ok(()) => {}
+            Err(error) => tracing::warn!("conversation {} was not resumed: {error:#}", id.0),
+        }
+    }
+
+    /// A chat a restart cut mid-turn that nobody has taken up yet: what the desktop app lists for
+    /// the person to continue or leave.
+    pub(super) fn waits_after_cut(&self, id: crate::conversation::ConversationId) -> bool {
+        self.cut_conversations.contains(&id)
+            && self.resumable_conversations.iter().any(|(asleep, _)| *asleep == id)
+    }
+
+    /// A chat a restart left asleep that a first read will start.
+    pub(super) fn is_asleep(&self, id: crate::conversation::ConversationId) -> bool {
+        self.cfg.restore.conversations
+            && !self.cut_conversations.contains(&id)
+            && self.resumable_conversations.iter().any(|(asleep, _)| *asleep == id)
     }
 
     pub(super) fn restore_startup(&mut self, saved: persist::Saved) {

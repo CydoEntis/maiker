@@ -117,7 +117,10 @@ impl Daemon {
                     .checked_add(1)
                     .ok_or_else(|| anyhow::anyhow!("Conversation generation exhausted"))?;
                 c.state = RecoveryState::Stopped;
-                LaunchIdentity::Existing(Box::new(c.clone()))
+                let identity = LaunchIdentity::Existing(Box::new(c.clone()));
+                // Taken up, by a person or by a first read: no longer asleep after a restart.
+                self.resumable_conversations.retain(|(asleep, _)| *asleep != id);
+                identity
             }
         };
         let (executable, arguments, agent_environment) = match program {

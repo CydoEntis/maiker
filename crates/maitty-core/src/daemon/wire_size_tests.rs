@@ -438,6 +438,7 @@ fn conversation(i: u32) -> ConversationSummary {
         capabilities: None,
         agent: None,
         status_since: Some(1_780_000_000),
+        interrupted: false,
     }
 }
 
