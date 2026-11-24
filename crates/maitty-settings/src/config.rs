@@ -400,10 +400,10 @@ pub struct Restore {
     /// Relaunch agents with their resume command (`claude --resume <id>`, ...).
     pub agents: bool,
     /// Resume chat conversations that were running when the server stopped, on the same
-    /// provider session.
+    /// provider session, each when it is first opened. One cut mid-reply waits for a person.
     pub conversations: bool,
-    /// Tell a chat conversation resumed that way to continue where it left off. Off unless
-    /// asked for: it sends the agent a message nobody typed.
+    /// Resume a chat cut mid-reply by the server stopping as soon as it starts again, and tell it
+    /// to continue where it left off. Off unless asked for: it sends the agent a message nobody typed.
     pub continue_turn: bool,
     /// Re-run commands panes were started with (`spawn-right:lazygit`, `<app> split -- x`).
     pub commands: bool,

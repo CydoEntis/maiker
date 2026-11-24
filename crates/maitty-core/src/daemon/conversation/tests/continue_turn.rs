@@ -45,6 +45,16 @@ async fn settle(session: &mut TestSession, id: ConversationId) {
     .expect("the conversation resumes");
 }
 
+/// Restores `saved` as a daemon start does and checks that `id` was left asleep, then opens it
+/// as a client's first read does and waits until it runs.
+async fn restart_and_open(session: &mut TestSession, id: ConversationId, saved: Saved) {
+    restore(session, saved);
+    session.daemon.resume_conversations();
+    assert!(!session.daemon.conversation_runtimes.owns(id), "a restart starts no chat by itself");
+    session.daemon.wake_conversation(id);
+    settle(session, id).await;
+}
+
 pub(super) async fn turns_started(session: &TestSession) -> usize {
     let path = session.fixture.directory.path().join("requests");
     tokio::fs::read_to_string(path)
@@ -112,15 +122,15 @@ async fn a_conversation_cut_by_a_restart_is_told_once_to_continue_after_it_resum
 }
 
 #[tokio::test]
-async fn an_idle_conversation_is_resumed_but_not_told_to_continue() {
+async fn an_idle_conversation_waits_until_opened_and_is_not_told_to_continue() {
     let mut s = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         let id = s.fixture.record.id;
         s.daemon.cfg.restore.continue_turn = true;
         let saved = one(running_record(&s, id.0));
-        restart(&mut s, id, saved).await;
+        restart_and_open(&mut s, id, saved).await;
 
-        assert!(s.daemon.conversation_runtimes.owns(id), "it was resumed");
+        assert!(s.daemon.conversation_runtimes.owns(id), "opening it resumed it");
         assert_eq!(turns_started(&s).await, 0, "its turn had ended; nothing to continue");
         assert!(s.daemon.conversation_operations.is_empty());
     })
@@ -163,14 +173,23 @@ async fn the_session_file_names_only_conversations_with_a_turn_in_flight() {
 }
 
 #[tokio::test]
-async fn a_resumed_conversation_is_sent_nothing_unless_the_setting_is_on() {
+async fn a_cut_conversation_waits_for_a_person_and_is_sent_nothing_unless_the_setting_is_on() {
     let mut s = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         let id = s.fixture.record.id;
         assert!(!s.daemon.cfg.restore.continue_turn, "off by default");
         let saved = cut(running_record(&s, id.0));
-        restart(&mut s, id, saved).await;
+        restore(&mut s, saved);
+        s.daemon.resume_conversations();
+        s.daemon.wake_conversation(id);
+        assert!(!s.daemon.conversation_runtimes.owns(id), "neither the restart nor a read starts it");
+        assert!(s.daemon.waits_after_cut(id), "it is listed for the person to take up");
 
+        let generation = s.daemon.conversations[0].generation;
+        let target = crate::conversation::StartTarget::Conversation { id, generation };
+        s.daemon.conversation_start(DAEMON_REQUESTER, target).unwrap();
+        settle(&mut s, id).await;
+        assert!(!s.daemon.waits_after_cut(id), "taken up, it is no longer listed");
         assert_eq!(turns_started(&s).await, 0);
         assert!(s.daemon.conversation_operations.is_empty());
         assert_eq!(s.daemon.saved().turn_continues, Continues::default());
@@ -233,14 +252,14 @@ async fn a_daemon_restarting_in_a_loop_stops_telling_a_conversation_to_continue(
 }
 
 #[tokio::test]
-async fn a_conversation_that_was_mid_transfer_is_resumed_but_not_told_to_continue() {
+async fn a_conversation_that_was_mid_transfer_waits_until_opened_and_is_not_told_to_continue() {
     let mut s = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         let id = s.fixture.record.id;
         s.daemon.cfg.restore.continue_turn = true;
         let mut record = running_record(&s, id.0);
         record.state = RecoveryState::Transferring;
-        restart(&mut s, id, cut(record)).await;
+        restart_and_open(&mut s, id, cut(record)).await;
 
         assert_eq!(turns_started(&s).await, 0);
         assert!(s.daemon.conversation_operations.is_empty());

@@ -209,6 +209,7 @@ fn a_chat_command_goes_to_the_machine_that_lists_the_chat() {
         capabilities: None,
         agent: None,
         status_since: None,
+        interrupted: false,
     };
     app.remotes.get_mut(&THERE).unwrap().snap.conversations = vec![chat];
     app.archive_conversation(id);

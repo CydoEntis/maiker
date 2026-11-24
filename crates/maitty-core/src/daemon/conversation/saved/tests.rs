@@ -198,3 +198,52 @@ fn claude_finds_a_folders_transcripts_when_asked_through_a_link_to_it() {
 
     assert_eq!(found, [("the-session".to_owned(), "Fix the login bug".to_owned())]);
 }
+
+fn found(chats: Vec<ImportableChat>) -> Vec<(String, String, PathBuf)> {
+    chats.into_iter().map(|chat| (chat.agent, chat.saved.id, chat.folder)).collect()
+}
+
+#[test]
+fn every_folders_chats_are_offered_newest_first_but_not_those_held_or_whose_folder_is_gone() {
+    let root = scratch("import");
+    let (claude, codex) = (root.join("claude"), root.join("codex"));
+    let (app, api) = (root.join("app"), root.join("api"));
+    std::fs::create_dir_all(&app).unwrap();
+    std::fs::create_dir_all(&api).unwrap();
+    let gone = root.join("gone");
+    let transcript = |folder: &Path, id: &str| claude.join(claude_folder_name(folder)).join(format!("{id}.jsonl"));
+    write(&transcript(&app, "c-app"), &[claude_user(&app, serde_json::json!("Fix the login"))], 30);
+    write(&transcript(&api, "c-api"), &[claude_user(&api, serde_json::json!("Add the endpoint"))], 10);
+    write(&transcript(&app, "c-held"), &[claude_user(&app, serde_json::json!("Already a chat"))], 5);
+    write(&transcript(&gone, "c-gone"), &[claude_user(&gone, serde_json::json!("Its folder was removed"))], 1);
+    let session = |id: &str| codex.join("2026/11/12").join(format!("rollout-2026-11-12T09-00-00-{id}.jsonl"));
+    write(&session("x-api"), &[codex_meta("x-api", &api, "user"), codex_user("Write the release notes")], 20);
+    write(&session("x-helper"), &[codex_meta("x-helper", &api, "subagent"), codex_user("Helper task")], 2);
+
+    let chats = importable(&stores(&claude, &codex), &HashSet::from(["c-held".to_string()]));
+
+    assert_eq!(
+        found(chats),
+        [
+            ("claude".to_string(), "c-api".to_string(), api.clone()),
+            ("codex".to_string(), "x-api".to_string(), api),
+            ("claude".to_string(), "c-app".to_string(), app),
+        ]
+    );
+}
+
+#[test]
+fn one_folder_gives_at_most_its_share_of_the_chats_offered() {
+    let root = scratch("import-share");
+    let (claude, app) = (root.join("claude"), root.join("app"));
+    std::fs::create_dir_all(&app).unwrap();
+    for age in 0..IMPORTABLE_CHATS_PER_FOLDER as u64 + 3 {
+        let id = format!("c{age}");
+        write(&claude.join(claude_folder_name(&app)).join(format!("{id}.jsonl")), &[claude_user(&app, serde_json::json!("A task"))], 10 + age);
+    }
+
+    let chats = importable(&stores(&claude, &root.join("none")), &HashSet::new());
+
+    let ids: Vec<String> = chats.into_iter().map(|chat| chat.saved.id).collect();
+    assert_eq!(ids, (0..IMPORTABLE_CHATS_PER_FOLDER).map(|age| format!("c{age}")).collect::<Vec<_>>(), "the newest of the folder");
+}

@@ -86,6 +86,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::SavedConversations { .. }) => {
             Verdict::Ignore("saved conversations are listed for this computer's folders only")
         }
+        ServerMsg::Reply(Reply::ImportableChats { .. }) => {
+            Verdict::Ignore("chats are brought in from this computer only")
+        }
         ServerMsg::Reply(Reply::Extensions { .. }) => {
             Verdict::Ignore("extensions are changed on this computer only")
         }
@@ -1009,6 +1012,7 @@ mod tests {
                 tag: 1,
                 found: maitty_shared::protocol::SavedConversations::NotSupported,
             }),
+            ServerMsg::Reply(Reply::ImportableChats { tag: 1, chats: Vec::new() }),
             ServerMsg::Notice("n".into()),
             ServerMsg::AskRemoveWorktree {
                 path: PathBuf::from("/home/me/repo-wt"),
@@ -1054,6 +1058,7 @@ mod tests {
             ServerMsg::Output { .. } => "Output",
             ServerMsg::Attention { .. } => "Attention",
             ServerMsg::Reply(Reply::SavedConversations { .. }) => "SavedConversations",
+            ServerMsg::Reply(Reply::ImportableChats { .. }) => "ImportableChats",
             ServerMsg::Reply(_) => "Reply",
             ServerMsg::Error(_) => "Error",
             ServerMsg::Notice(_) => "Notice",
@@ -1103,6 +1108,7 @@ mod tests {
             ignored,
             [
                 "SavedConversations",
+                "ImportableChats",
                 "Notice",
                 "AskRemoveWorktree",
                 "Clipboard",

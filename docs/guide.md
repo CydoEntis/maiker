@@ -973,9 +973,11 @@ Either way the list of closed agent sessions is kept, as the usage history is.
 Closing every pane yourself also starts fresh. A pane or agent that ends on its own is left out
 of the saved session for 15 seconds: a shutdown, reboot or logoff kills agents a moment before
 maiker, so the session from before it is the one that comes back. Chat conversations that were running
-resume by themselves on the same provider session (`conversations = false` leaves them in Recovery
-needed until you press Resume). A resumed chat waits for you; with `continue_turn = true` maiker sends
-a chat that was mid-turn `Continue where you left off.` once after it resumes, and never more than 3 times in 5 minutes to
+come back asleep and start on the same provider session when you first open them, so a restart does
+not start every agent at once (`conversations = false` leaves them in Recovery needed until you press
+Resume). A chat that was mid-reply waits for you: the desktop app lists those in one window, ticked,
+with Continue selected and Not now. With `continue_turn = true` maiker instead resumes a chat that
+was mid-turn at once and sends it `Continue where you left off.` once, and never more than 3 times in 5 minutes to
 one conversation, however often the service restarts. The message shows in the chat like one you
 sent. A chat whose turn had already ended, and every terminal agent, never get it. Configure all of this under `[restore]`,
 and per agent with `resume` / `resume_last`. Each pane's recent output is kept on disk so it is
@@ -1019,6 +1021,12 @@ shield beside it. Agents start with **Bypass Permissions** on: they change files
 without asking. Turn it off per agent in Settings › Permissions (or `[permissions.bypass]` in
 `config.toml`); sessions started afterwards ask again. The agent is on the model button too. If an agent is not installed, the page says
 so and offers **set it up**.
+
+**Bring in your chats.** The first time you open Maiker, it looks for chats you had with Claude or Codex
+anywhere on this computer and offers to bring them in, grouped by project. The ones from the last week are ticked;
+**Bring in** opens each as a Maiker chat with its history. A chat that is still open in another terminal is marked:
+close it there first. You can do this again any time from the command palette, **Bring in chats from Claude and
+Codex…**.
 
 **Resume a saved chat.** In the command palette, **Resume a saved chat…** lists the conversations
 Claude or Codex saved for a project on this computer. Pick one and its agent starts in that folder

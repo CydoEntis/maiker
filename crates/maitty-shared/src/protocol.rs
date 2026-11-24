@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 124;
+pub const PROTOCOL_VERSION: u32 = 125;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -84,6 +84,24 @@ pub struct SavedConversation {
     pub first_message: String,
     /// When its file was last written (unix seconds).
     pub last_active: u64,
+}
+
+/// The most chats one `Reply::ImportableChats` carries.
+pub const IMPORTABLE_CHATS_MAX: usize = 60;
+
+/// The most chats of one folder a `Reply::ImportableChats` carries, so a folder with hundreds does
+/// not crowd out the others.
+pub const IMPORTABLE_CHATS_PER_FOLDER: usize = 5;
+
+/// A conversation an agent saved on the daemon's computer that the daemon does not hold: one a
+/// client can offer to bring in as a chat (`Query::ImportableChats`).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportableChat {
+    /// `claude` or `codex`.
+    pub agent: String,
+    /// The folder it ran in, as the agent recorded it. It exists on the daemon's computer.
+    pub folder: PathBuf,
+    pub saved: SavedConversation,
 }
 
 /// What `Query::SavedConversations` found.
@@ -544,6 +562,11 @@ pub struct ConversationSummary {
     /// listed a chat that way. Display only (a row's age). Absent from an older daemon.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub status_since: Option<u64>,
+    /// A restart cut this chat mid-reply and nobody has taken it up since: it is not started
+    /// again by itself, and a client offers to continue it. False from an older daemon, which
+    /// does not say.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub interrupted: bool,
 }
 
 impl ConversationSummary {
@@ -1449,6 +1472,12 @@ pub enum Query {
         folder: String,
         tag: u64,
     },
+    /// The conversations Claude and Codex saved in any folder of this daemon's computer that it does
+    /// not already hold, newest first, at most `IMPORTABLE_CHATS_MAX` and `IMPORTABLE_CHATS_PER_FOLDER`
+    /// a folder (human clients only). Answered with `Reply::ImportableChats`, which echoes `tag`.
+    ImportableChats {
+        tag: u64,
+    },
     /// Asks Claude Code about conversation `id` without adding to it (human clients only): the
     /// daemon starts a copy of the agent's session that is never saved and answers `ask` from it.
     /// The answer echoes `tag`.
@@ -1773,6 +1802,10 @@ pub enum Reply {
     SavedConversations {
         tag: u64,
         found: SavedConversations,
+    },
+    ImportableChats {
+        tag: u64,
+        chats: Vec<ImportableChat>,
     },
     ClosedSessions(Vec<ClosedSession>),
     HelperRead(HelperRecord),
@@ -2784,6 +2817,7 @@ impl ServerMsg {
     pub fn introduced_in(&self) -> u32 {
         match self {
             ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+            ServerMsg::Reply(Reply::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2798,6 +2832,7 @@ impl ClientMsg {
         match self {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+            ClientMsg::Query(Query::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
                 | Command::ConversationSetPermissions { .. }
@@ -2817,6 +2852,10 @@ impl ClientMsg {
 /// passes the first two over and would make the worktree on the base branch itself, so a client
 /// checks before it sends any of them.
 pub const CHAT_CONTROLS_SINCE: u32 = 124;
+
+/// The first version with `Query::ImportableChats` and its `Reply::ImportableChats`. An older daemon
+/// is never asked, so the desktop app offers no import, and an older client is never sent the reply.
+pub const IMPORTABLE_CHATS_SINCE: u32 = 125;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3527,6 +3566,37 @@ mod tests {
         })
     }
 
+    /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124
+    /// still talks to this build, cannot read either message, and is never sent one.
+    #[test]
+    fn a_peer_from_before_importable_chats_still_talks_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize)]
+        enum Query124 {
+            SavedConversations { agent: String, folder: String, tag: u64 },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply124 {
+            SavedConversations { tag: u64, found: SavedConversations },
+        }
+        const { assert!(IMPORTABLE_CHATS_SINCE > COMPATIBLE_SINCE && IMPORTABLE_CHATS_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(IMPORTABLE_CHATS_SINCE - 1, 0));
+
+        let ask = Query::ImportableChats { tag: 6 };
+        unreadable_before::<Query124, _>(&ask);
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), IMPORTABLE_CHATS_SINCE);
+        let reply = Reply::ImportableChats {
+            tag: 6,
+            chats: vec![ImportableChat {
+                agent: "claude".into(),
+                folder: "/code/app".into(),
+                saved: SavedConversation { id: "abc".into(), first_message: "Fix the login".into(), last_active: 9 },
+            }],
+        };
+        unreadable_before::<Reply124, _>(&reply);
+        round_trips(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), IMPORTABLE_CHATS_SINCE);
+    }
+
     /// 123 added a project's pull requests as a question and an answer of their own. A peer at
     /// 122 still talks to this build (`COMPATIBLE_SINCE` stays), cannot read either message, and
     /// is never sent one: each has its `introduced_in` arm. What that peer does send still reads.
@@ -3816,6 +3886,15 @@ mod tests {
         assert!(summary.helper_ask.is_empty(), "an older daemon's chat asks for no helpers");
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
         assert_eq!(summary.status_since, None, "an older daemon says no status time");
+        assert!(!summary.interrupted, "an older daemon says no chat was cut by a restart");
+
+        // `interrupted` is written only when it is true, so an older client's read is the same.
+        assert!(serde_json::to_value(&summary).unwrap().get("interrupted").is_none());
+        summary.interrupted = true;
+        let cut = serde_json::to_value(&summary).unwrap();
+        assert_eq!(cut["interrupted"], true);
+        assert!(serde_json::from_value::<ConversationSummary>(cut).unwrap().interrupted);
+        summary.interrupted = false;
 
         // Capabilities are written only when the daemon knows them.
         let unknown = serde_json::to_value(&summary).unwrap();

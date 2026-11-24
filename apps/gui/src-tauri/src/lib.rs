@@ -698,6 +698,14 @@ async fn saved_conversations(agent: String, folder: String) -> Result<serde_json
         .map_err(|error| format!("{error:#}"))
 }
 
+/// The chats saved in any folder on this computer that Maiker does not run yet, for the import screen.
+#[tauri::command]
+async fn importable_chats() -> Result<serde_json::Value, String> {
+    maitty_desktop_client::importable_chats()
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// Claude Code's answer beside a chat's conversation, for `/btw` and the commands that only report: the daemon
 /// resumes a copy of the session that is never saved. The webview names the conversation and the ask, one of a
 /// fixed set of commands or a question; the daemon checks both and finds the session, the folder and the program.
@@ -1466,6 +1474,7 @@ pub fn run() {
             set_conversation_permissions,
             resume_conversation,
             saved_conversations,
+            importable_chats,
             side_answer,
             closed_sessions,
             reopen_closed_session,

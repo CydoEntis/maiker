@@ -527,7 +527,8 @@ struct Daemon {
     pending_starts: Vec<crate::conversation::PendingStart>,
     conversation_operations: Vec<crate::conversation::Operation>,
     /// Chat conversations that were running when the previous daemon went away, with the
-    /// generation they were fenced to: what an automatic resume may start, once.
+    /// generation they were fenced to, and not started since: asleep until a client first reads
+    /// one (`wake_conversation`) or a person resumes it. Each is started by the daemon once.
     resumable_conversations: Vec<(crate::conversation::ConversationId, u64)>,
     /// Chat conversations whose turn was cut: those of `resumable_conversations` that were
     /// Running, not mid-transfer, with a turn in flight, and those whose agent died mid-turn.
@@ -3501,6 +3502,20 @@ impl Daemon {
                         tokio::task::spawn_blocking(move || {
                             let found = conversation::saved::list(&agent, &folder, &stores);
                             let _ = tx.blocking_send(Ev::SavedConversationsReady { client, tag, found });
+                        });
+                        return;
+                    }
+                    Query::ImportableChats { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can list chats to import".into())
+                    }
+                    Query::ImportableChats { tag } => {
+                        let home = directories::BaseDirs::new().map(|dirs| dirs.home_dir().to_path_buf());
+                        let stores = conversation::saved::Stores::of_this_user(home.as_deref());
+                        let held = self.held_agent_sessions();
+                        let tx = self.tx.clone();
+                        tokio::task::spawn_blocking(move || {
+                            let chats = conversation::saved::importable(&stores, &held);
+                            let _ = tx.blocking_send(Ev::Answered { client, reply: Reply::ImportableChats { tag, chats } });
                         });
                         return;
                     }

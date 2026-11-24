@@ -1,4 +1,4 @@
-//! The daemon resuming conversations by itself after a restart.
+//! The daemon resuming conversations by itself after a restart: each when it is first opened.
 
 use super::*;
 
@@ -74,7 +74,7 @@ async fn the_daemon_may_resume_but_never_create_or_adopt_a_conversation() {
 }
 
 #[tokio::test]
-async fn a_restart_resumes_the_conversation_that_was_running_and_only_once() {
+async fn a_restart_leaves_the_running_conversation_asleep_until_it_is_opened_and_resumes_it_once() {
     let mut s = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         let id = crate::conversation::ConversationId(61);
@@ -90,6 +90,11 @@ async fn a_restart_resumes_the_conversation_that_was_running_and_only_once() {
         );
 
         s.daemon.resume_conversations();
+        assert!(!s.daemon.conversation_runtimes.owns(id), "a restart starts no chat by itself");
+        assert_eq!(s.daemon.conversations[0].generation, 4, "fenced, not resumed yet");
+        assert!(s.daemon.is_asleep(id));
+
+        s.daemon.wake_conversation(id);
         assert!(s.daemon.resumable_conversations.is_empty(), "the list is spent");
         loop {
             let event = tokio::time::timeout(Duration::from_secs(10), s.events.recv())
@@ -103,8 +108,8 @@ async fn a_restart_resumes_the_conversation_that_was_running_and_only_once() {
         }
         assert_eq!(s.daemon.conversations.len(), 1);
         assert_eq!(s.daemon.conversations[0].generation, 5, "fenced once, resumed once");
-        s.daemon.resume_conversations();
-        assert_eq!(s.daemon.conversations[0].generation, 5, "a second call does nothing");
+        s.daemon.wake_conversation(id);
+        assert_eq!(s.daemon.conversations[0].generation, 5, "a second read does nothing");
     })
     .catch_unwind()
     .await;
@@ -126,6 +131,7 @@ async fn with_the_setting_off_a_running_conversation_waits_for_a_person() {
             ..Default::default()
         }));
         s.daemon.resume_conversations();
+        s.daemon.wake_conversation(crate::conversation::ConversationId(62));
         assert!(!s.daemon.conversation_runtimes.owns(crate::conversation::ConversationId(62)));
         assert_eq!(
             s.daemon.conversations[0].state,
@@ -156,7 +162,7 @@ async fn a_resume_that_fails_is_reported_and_not_tried_again() {
             conversations: vec![record],
             ..Default::default()
         }));
-        s.daemon.resume_conversations();
+        s.daemon.wake_conversation(id);
         loop {
             let event = tokio::time::timeout(Duration::from_secs(10), s.events.recv())
                 .await
@@ -169,7 +175,7 @@ async fn a_resume_that_fails_is_reported_and_not_tried_again() {
         }
         assert!(!s.daemon.conversation_runtimes.owns(id));
         let generation = s.daemon.conversations[0].generation;
-        s.daemon.resume_conversations();
+        s.daemon.wake_conversation(id);
         assert_eq!(s.daemon.conversations[0].generation, generation, "no second attempt");
     })
     .catch_unwind()
@@ -193,7 +199,7 @@ async fn a_running_claude_conversation_is_taken_up_for_resume_too() {
             ..Default::default()
         }));
         assert_eq!(s.daemon.resumable_conversations.len(), 1);
-        s.daemon.resume_conversations();
+        s.daemon.wake_conversation(crate::conversation::ConversationId(64));
         assert_eq!(
             s.daemon.conversations[0].generation, 5,
             "the start was admitted for the same conversation, one generation on"

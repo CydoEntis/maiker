@@ -2000,6 +2000,26 @@ pub async fn saved_conversations(agent: String, folder: String) -> Result<Value>
     .await
 }
 
+/// The chats Claude and Codex saved in any folder on this computer that the daemon does not run yet,
+/// newest first, as the daemon's `ImportableChat` list. Null when the daemon running is older than the
+/// question: it would never answer.
+pub async fn importable_chats() -> Result<Value> {
+    let message = ClientMsg::Query(Query::ImportableChats { tag: 0 });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("Could not reach the Maiker service")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::ImportableChats { chats, .. } => Ok(serde_json::to_value(chats)?),
+            _ => bail!("The Maiker service gave an answer this app does not understand (chats to import). Restart the service in Settings, or update the app so both are the same version."),
+        }
+    })
+    .await
+}
+
 /// How long a side answer may take: the daemon's own limit, with a margin for the connection.
 const SIDE_ANSWER_TIMEOUT: Duration = Duration::from_secs(100);
 
@@ -2813,6 +2833,7 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::Repositories { .. }
         | Query::GitIdentities { .. }
         | Query::SavedConversations { .. }
+        | Query::ImportableChats { .. }
         | Query::List
         | Query::HelperRead { .. }
         | Query::Specialists { .. }

@@ -1,14 +1,15 @@
 //! A turn cut short (ADR 0003). A provider killed mid-turn leaves the chat blocked with the
-//! reason, never done, until a person resumes it. A daemon that restarts mid-turn resumes the chat
-//! by itself, once. In both the prompt the provider already took is not sent again.
+//! reason, never done, until a person resumes it. A daemon that restarts mid-turn starts no chat by
+//! itself: one cut mid-turn waits for a person, and one between turns starts when it is first
+//! opened. In every case the prompt the provider already took is not sent again.
 //!
-//! A Claude chat cut mid-turn gets its runtime back but stays blocked: its history cannot be
-//! reconciled with the transcript, so the daemon refuses to take the chat up again.
+//! A Claude chat is taken up again from its own transcript; a turn the transcript ends in the middle
+//! of reads as stopped.
 
 use super::continue_turn::turns_started;
 use super::*;
 use crate::conversation::{ConversationId, Delivery, RecoveryState, StartTarget};
-use crate::protocol::{ClientMsg, Command, Reply, Status};
+use crate::protocol::{ClientMsg, Command, Query, Reply, Status};
 
 async fn send(session: &mut TestSession, client: u64, id: ConversationId, generation: u64, text: &str) -> ServerMsg {
     let message = ClientMsg::Command(Command::ConversationSend {
@@ -59,15 +60,59 @@ fn assert_blocked_with_the_prompt_delivered(session: &TestSession, id: Conversat
     );
 }
 
-/// A Claude chat whose turn was cut: blocked, with the reason, and never done.
-fn assert_still_blocked(session: &TestSession, id: ConversationId) {
-    let state = &session.daemon.conversation_states[&id];
-    assert_eq!(state.status, Status::Blocked);
+/// Handles events until the daemon has started the chat again and read its past back, or said why
+/// not.
+async fn resume_decided(session: &mut TestSession, id: ConversationId) {
+    handle_until(session, "the resume is decided", |daemon| {
+        let decided = daemon
+            .conversation_states
+            .get(&id)
+            .is_some_and(|state| state.history_ready || state.error.is_some());
+        let in_flight = daemon.conversation_requests.values().any(|pending| pending.conversation() == id);
+        daemon.conversation_runtimes.owns(id) && decided && !in_flight
+    })
+    .await;
+}
+
+/// Writes what Claude Code keeps of the chat, as its own transcript, under the name the daemon looks
+/// for. `cut`: the transcript stops before the turn's answer and its end, as when the agent went away
+/// mid-turn.
+async fn write_transcript(session: &mut TestSession, cut: bool) {
+    let binding = session.daemon.conversations[0].binding.clone();
+    let path = super::super::claude::transcript_path(&binding.config_root, &binding.cwd, &binding.session_id).unwrap();
+    session.daemon.followed_home = Some(binding.config_root.clone());
+    tokio::task::spawn_blocking(move || {
+        let whole = include_str!("../fixtures/claude_transcript.jsonl")
+            .replace("00000000-0000-4000-8000-000000000001", &binding.session_id);
+        let lines: Vec<&str> = whole.lines().collect();
+        let kept = if cut { &lines[..lines.len() - 2] } else { &lines[..] };
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, kept.join("\n") + "\n").unwrap();
+    })
+    .await
+    .unwrap();
+}
+
+/// The chat's past as the daemon read it back: nothing in it still running, and its last turn
+/// stopped.
+fn assert_cut_turn_stopped(session: &TestSession, id: ConversationId) {
+    use crate::daemon::conversation::history::{Content, ItemState};
+    let history = &session.daemon.conversation_histories[&id];
     assert!(
-        state.error.as_deref().is_some_and(|error| error.contains("chat resume is disabled")),
-        "{:?}",
-        state.error
+        history.entries.iter().all(|entry| entry.state != ItemState::Running),
+        "a turn cut by a restart is not shown as still going"
     );
+    let last = &history.entries.last().unwrap().source.turn;
+    assert!(
+        history.entries.iter().any(|entry| &entry.source.turn == last
+            && entry.content == Content::TurnStatus
+            && entry.state == ItemState::Interrupted),
+        "the cut turn reads as stopped"
+    );
+}
+
+fn listed(session: &TestSession, id: ConversationId) -> crate::protocol::ConversationSummary {
+    session.daemon.conversation_summaries().into_iter().find(|summary| summary.id == id).unwrap()
 }
 
 /// A person asks for the conversation back, as the chat's Restart does.
@@ -111,15 +156,7 @@ async fn restart_daemon(session: &mut TestSession, id: ConversationId) {
     assert!(session.daemon.restore(saved));
     session.daemon.initialize_conversation_cache().await.unwrap();
     session.daemon.resume_conversations();
-    handle_until(session, "the resume is decided", |daemon| {
-        let decided = daemon
-            .conversation_states
-            .get(&id)
-            .is_some_and(|state| state.history_ready || state.error.is_some());
-        let in_flight = daemon.conversation_requests.values().any(|pending| pending.conversation() == id);
-        daemon.conversation_runtimes.owns(id) && decided && !in_flight
-    })
-    .await;
+    assert!(!session.daemon.conversation_runtimes.owns(id), "a restart starts no chat by itself");
 }
 
 #[tokio::test]
@@ -157,7 +194,7 @@ async fn a_codex_killed_mid_turn_blocks_the_chat_until_a_person_resumes_it_witho
 }
 
 #[tokio::test]
-async fn a_daemon_restart_mid_turn_resumes_a_codex_chat_once_without_a_second_send() {
+async fn a_daemon_restart_mid_turn_leaves_a_codex_chat_for_a_person_to_resume_without_a_second_send() {
     let mut session = conversation_fixture("conversation-cancel").await;
     let outcome = AssertUnwindSafe(async {
         let (id, started) = create(&mut session).await;
@@ -165,7 +202,15 @@ async fn a_daemon_restart_mid_turn_resumes_a_codex_chat_once_without_a_second_se
         assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
 
         restart_daemon(&mut session, id).await;
+        assert!(listed(&session, id).interrupted, "listed for the person to take up");
+        // Codex keeps no copy here to answer from while its runtime is down, so the read is refused.
+        exchange(&mut session, 631, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        assert!(!session.daemon.conversation_runtimes.owns(id), "opening a cut chat does not start it");
 
+        resume_by_hand(&mut session, 632, id).await;
+        resume_decided(&mut session, id).await;
+
+        assert!(!listed(&session, id).interrupted, "taken up, it is no longer listed");
         let state = &session.daemon.conversation_states[&id];
         assert_eq!(state.status, Status::Idle, "the cut turn is neither working nor done");
         assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
@@ -173,8 +218,8 @@ async fn a_daemon_restart_mid_turn_resumes_a_codex_chat_once_without_a_second_se
         assert!(resumed > started, "the restart fenced the old generation");
         assert_eq!(session.daemon.conversations.len(), 1, "no second conversation appeared");
         assert_eq!(turns_started(&session).await, 1, "the prompt was not sent again");
-        session.daemon.resume_conversations();
-        assert_eq!(generation(&session, id), resumed, "a second resume does nothing");
+        session.daemon.wake_conversation(id);
+        assert_eq!(generation(&session, id), resumed, "a later read starts nothing more");
     })
     .catch_unwind()
     .await;
@@ -199,7 +244,7 @@ async fn claude_messages(executable: &Path) -> usize {
 }
 
 #[tokio::test]
-async fn a_claude_killed_mid_turn_blocks_the_chat_and_its_resume_is_refused_without_a_second_send() {
+async fn a_claude_killed_mid_turn_blocks_the_chat_until_a_person_resumes_it_with_the_turn_stopped() {
     let mut session = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         // This scenario holds its first turn open until it is interrupted.
@@ -215,22 +260,15 @@ async fn a_claude_killed_mid_turn_blocks_the_chat_and_its_resume_is_refused_with
 
         assert_blocked_with_the_prompt_delivered(&session, id);
         assert_eq!(claude_messages(&executable).await, 1);
+        write_transcript(&mut session, true).await;
 
-        let target = StartTarget::Conversation { id, generation: generation(&session, id) };
-        let refused = exchange(
-            &mut session,
-            622,
-            ClientMsg::Command(Command::ConversationStart { target, branch: None }),
-            None,
-        )
-        .await;
+        let resumed = resume_by_hand(&mut session, 622, id).await;
 
-        assert!(
-            matches!(refused, ServerMsg::Error(ref error) if error.contains("chat resume is disabled")),
-            "{refused:?}"
-        );
-        assert_still_blocked(&session, id);
-        assert!(generation(&session, id) > started, "the attempt fenced the dead provider's generation");
+        let state = &session.daemon.conversation_states[&id];
+        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert_eq!(state.status, Status::Idle, "neither working nor waiting on the person");
+        assert_cut_turn_stopped(&session, id);
+        assert!(resumed > started, "the resume fenced the dead provider's generation");
         assert_eq!(session.daemon.conversations.len(), 1, "no second conversation appeared");
         assert_eq!(claude_messages(&executable).await, 1, "the prompt was not sent again");
     })
@@ -243,7 +281,7 @@ async fn a_claude_killed_mid_turn_blocks_the_chat_and_its_resume_is_refused_with
 }
 
 #[tokio::test]
-async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_blocked_without_a_second_send() {
+async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_for_a_person_and_takes_it_up_with_the_turn_stopped() {
     let mut session = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         // This scenario holds its first turn open until it is interrupted.
@@ -251,14 +289,22 @@ async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_blocked_without_a_second
         let sent = send(&mut session, 641, id, started, "hello fake Claude").await;
         assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
 
+        write_transcript(&mut session, true).await;
         restart_daemon(&mut session, id).await;
 
-        assert_still_blocked(&session, id);
-        let resumed = generation(&session, id);
-        assert!(resumed > started, "the restart fenced the old generation");
+        assert!(listed(&session, id).interrupted, "listed for the person to take up");
+        assert_eq!(listed(&session, id).status, Status::Blocked, "it needs the person");
+        let fenced = generation(&session, id);
+        assert!(fenced > started, "the restart fenced the old generation");
+
+        let resumed = resume_by_hand(&mut session, 642, id).await;
+
+        assert!(resumed > fenced, "one start, at the next generation");
+        let state = &session.daemon.conversation_states[&id];
+        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert_cut_turn_stopped(&session, id);
+        assert!(!listed(&session, id).interrupted, "taken up, it is no longer listed");
         assert_eq!(session.daemon.conversations.len(), 1, "no second conversation appeared");
-        session.daemon.resume_conversations();
-        assert_eq!(generation(&session, id), resumed, "a second resume does nothing");
         assert_eq!(claude_messages(&executable).await, 1, "the prompt was not sent again");
     })
     .catch_unwind()
@@ -270,7 +316,7 @@ async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_blocked_without_a_second
 }
 
 #[tokio::test]
-async fn a_daemon_restart_between_turns_takes_a_claude_chat_up_again_from_its_transcript() {
+async fn a_daemon_restart_between_turns_takes_a_claude_chat_up_again_from_its_transcript_when_opened() {
     let mut session = conversation_fixture("conversation").await;
     let outcome = AssertUnwindSafe(async {
         let (executable, id, started) = start_claude_chat(&mut session, 650, "reply").await;
@@ -280,20 +326,20 @@ async fn a_daemon_restart_between_turns_takes_a_claude_chat_up_again_from_its_tr
             daemon.conversation_states.get(&id).is_some_and(|state| state.status == Status::Done)
         })
         .await;
-        // What Claude Code keeps of the chat, as its own transcript, under the name the daemon looks for.
-        let binding = session.daemon.conversations[0].binding.clone();
-        let path = super::super::claude::transcript_path(&binding.config_root, &binding.cwd, &binding.session_id).unwrap();
-        session.daemon.followed_home = Some(binding.config_root.clone());
-        tokio::task::spawn_blocking(move || {
-            let transcript = include_str!("../fixtures/claude_transcript.jsonl")
-                .replace("00000000-0000-4000-8000-000000000001", &binding.session_id);
-            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
-            std::fs::write(path, transcript).unwrap();
-        })
-        .await
-        .unwrap();
+        write_transcript(&mut session, false).await;
 
         restart_daemon(&mut session, id).await;
+        let asleep = listed(&session, id);
+        assert!(!asleep.interrupted, "nothing was cut");
+        assert_eq!(asleep.status, Status::Idle, "asleep, it is idle and needs nobody");
+
+        // A client opening it is what starts it again.
+        let read = exchange(&mut session, 651, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+            panic!("{read:?}");
+        };
+        assert_eq!(page.status, Status::Idle, "the read is answered at once, as idle, while the chat starts");
+        resume_decided(&mut session, id).await;
 
         let state = &session.daemon.conversation_states[&id];
         assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);

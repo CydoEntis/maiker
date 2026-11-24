@@ -261,6 +261,10 @@ mod tests {
         c.binding.worktree = None;
         let id = c.id;
         let mut cfg = crate::config::Config::default();
+        // A turn's end also snapshots the folder on a thread of its own, which nothing here waits for:
+        // under load it was still writing as the folder was removed, and left it behind. The test of
+        // that snapshot turns it on and waits for it.
+        cfg.snapshots.enabled = false;
         cfg.check.push(crate::config::CheckDef {
             project: dir.path().to_path_buf(),
             name: Some("verify".into()),
@@ -313,6 +317,7 @@ mod tests {
     #[tokio::test]
     async fn a_finished_turn_keeps_the_files_as_it_left_them() {
         let (mut d, mut rx, dir, id) = fixture();
+        d.cfg.snapshots.enabled = true;
         d.conversation_turn_ended(id, 7, "turn-a".into());
         let repo = dir.path().to_path_buf();
         let kept = tokio::task::spawn_blocking(move || {

@@ -23,6 +23,7 @@ import { NoTerminalNote } from '@/features/chat/components/NoTerminalNote'
 import { type Arrangement, focusPane, type PaneSlot, toggleMaximize } from '../model/layout'
 import { toSubagentView } from '../model/subagents'
 import { isShell } from '../model/sidebar'
+import { agentLabel } from '../model/session'
 import { guardLocal } from '@/lib/localOnly'
 import type { RewindPlace } from '@/features/chat/editFromHere'
 import { fileSearchOf } from '@/features/chat/fileMention'
@@ -44,7 +45,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, continueCut, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -77,6 +78,8 @@ export function WorkspacePane({ shown, pane, kept }: {
   const head = session.machine === LOCAL_MACHINE ? undefined : heads.find((candidate) => candidate.machine === session.machine)
   const fullPercent = contextFull({ context: session.usage.context, limits: [] })
   const interrupted = session.interrupted !== null && !dismissedRestores.has(session.id) ? session.interrupted : null
+  // A chat cut the same way has no resume command: Restart starts it again and tells it to carry on.
+  const cutChat = session.chatCutOff === true && !dismissedRestores.has(session.id)
   // One problem at a time, the one that matters most: a lost machine, then a stopped agent, then a turn a service restart
   // cut, then a full context. Each is what the daemon reports about the session; none is guessed here.
   const problem: ChatProblem | null = head?.down === true && head.name !== null
@@ -85,7 +88,9 @@ export function WorkspacePane({ shown, pane, kept }: {
       ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
       : interrupted !== null
         ? { kind: 'interrupted', agent: interrupted.agent, resume: interrupted.resume, onRestart: () => { resumeInterrupted(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
-        : fullPercent !== null && typeInto !== undefined
+        : cutChat
+          ? { kind: 'interrupted', agent: agentLabel(session.process), resume: '', onRestart: () => { continueCut(session) }, onDismiss: () => { setDismissedRestores((current) => new Set(current).add(session.id)) } }
+          : fullPercent !== null && typeInto !== undefined
           ? { kind: 'context', agent: session.process, percent: fullPercent, onNewWithSummary: (summary) => { newChatWithSummary(session, summary) }, onCompact: () => { void typeInto('/compact').then(() => new Promise((resolve) => { window.setTimeout(resolve, COMMAND_SUBMIT_GAP_MS) })).then(() => typeInto('\r')).catch((error: unknown) => { toast.failed('Could not compact', error) }) } }
           : null
   // An ended chat is read-only: it offers to reopen its conversation or to start a fresh session in the same folder.

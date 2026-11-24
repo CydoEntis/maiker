@@ -89,6 +89,24 @@ describe('chat sessions', () => {
     expect(older?.details?.helperAsk).toEqual([])
   })
 
+  it('lists a chat a restart left asleep as idle, one it cut as needing recovery and cut off, and none cut from an older daemon', () => {
+    const [asleep, cut, older] = conversationsFromSnapshot(snapshot([
+      summary({ id: 44, state: 'RecoveryRequired', status: 'Idle' }),
+      summary({ id: 45, state: 'RecoveryRequired', status: 'Blocked', interrupted: true }),
+      summary({ id: 46, state: 'RecoveryRequired', status: 'Blocked' }),
+    ]))
+    expect([asleep?.status, asleep?.details?.chatCutOff]).toEqual(['idle', false])
+    expect([cut?.status, cut?.details?.chatCutOff]).toEqual(['recovery', true])
+    expect([older?.status, older?.details?.chatCutOff]).toEqual(['recovery', false])
+    // Asleep, it says it is waking once opened; a cut one waits for the person instead.
+    expect([asleep?.chat?.waking, cut?.chat?.waking, older?.chat?.waking]).toEqual([true, undefined, undefined])
+  })
+
+  it('says an existing chat is waking while it starts again, and not a running one', () => {
+    const [starting, running] = conversationsFromSnapshot(snapshot([summary({ id: 44, state: 'Stopped', status: 'Working' }), summary({ id: 45 })]))
+    expect([starting?.chat?.waking, running?.chat?.waking]).toEqual([true, undefined])
+  })
+
   it('gives a chat the time its status changed, and none from an older daemon', () => {
     const [chat] = conversationsFromSnapshot(snapshot([summary({ status_since: 1_780_000_000 })]))
     expect(chat?.details?.since).toBe(1_780_000_000)
