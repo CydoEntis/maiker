@@ -870,7 +870,7 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
 
     await user.keyboard('{Control>},{/Control}')
     await screen.findByRole('dialog', { name: 'Settings' })
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Shell in ~/b' })).not.toBeInTheDocument()
@@ -954,7 +954,7 @@ describe('desktop overlays and pane tools', () => {
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     const box = within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox')
     await user.type(box, 'codex')
     await user.keyboard('{Control>}z{/Control}')
@@ -963,13 +963,13 @@ describe('desktop overlays and pane tools', () => {
     expect(box).toHaveValue('codex')
   })
 
-  it('opens the palette with Ctrl+K, finds a session by typing, opens it with Enter and closes with Escape', async () => {
+  it('opens the palette with Ctrl+Shift+P, finds a session by typing, opens it with Enter and closes with Escape', async () => {
     const user = userEvent.setup()
     daemon.loadConversations.mockResolvedValue([term(2, `${HOME}/a`), term(3, `${HOME}/b`, { agent: 'codex' })])
     renderDesktopApp()
     await screen.findByRole('region', { name: 'Shell in ~/a' })
 
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     const dialog = await screen.findByRole('dialog', { name: 'Command palette' })
     await user.type(within(dialog).getByRole('combobox'), 'codex')
     await user.click(within(dialog).getByRole('option', { name: /codex · b/ }))
@@ -977,7 +977,7 @@ describe('desktop overlays and pane tools', () => {
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
     expect(await screen.findByRole('region', { name: 'Shell in ~/b' })).toBeInTheDocument()
 
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
@@ -1059,7 +1059,7 @@ describe('desktop overlays and pane tools', () => {
     await user.keyboard('{Enter}')
     expect(await within(dialog).findByRole('heading', { name: 'Welcome to Maiker' })).toBeInTheDocument()
     // Global shortcuts are ignored while it is open.
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     expect(screen.queryByRole('dialog', { name: 'Command palette' })).not.toBeInTheDocument()
 
     await user.click(within(dialog).getByRole('button', { name: 'Continue' }))
@@ -1140,7 +1140,7 @@ describe('desktop overlays and pane tools', () => {
 
     // Broadcast has no key: it is one of the command palette's actions.
     const fromPalette = async () => {
-      await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+      await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
       const dialog = await screen.findByRole('dialog', { name: 'Command palette' })
       await user.type(within(dialog).getByRole('combobox'), 'broadcast')
       await user.click(within(dialog).getByRole('option', { name: /broadcast/i }))
@@ -1183,7 +1183,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(screen.getByRole('region', { name: 'New session' })).toBeInTheDocument()
     expect(box).toHaveFocus()
 
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     expect(await screen.findByRole('dialog', { name: 'Command palette' })).toBeInTheDocument()
   })
 
@@ -1227,7 +1227,7 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await screen.findByRole('heading', { name: 'Nothing running' })
     daemon.loadConversations.mockResolvedValue([term(5, HOME)])
 
-    await user.keyboard('{Control>}{Shift>}k{/Shift}{/Control}')
+    await user.keyboard('{Control>}{Shift>}p{/Shift}{/Control}')
     const box = within(await screen.findByRole('dialog', { name: 'Command palette' })).getByRole('combobox')
     await user.type(box, 'Start OpenCode{Enter}')
 

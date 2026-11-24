@@ -25,7 +25,7 @@ function pressText(text: string, platform: Platform): Key {
 /** One row per action with a key: what the keycap says on macOS and on Windows and Linux. */
 const TABLE: readonly [ShortcutAction, string, string][] = [
   ['open-folder', '⌘O', 'Ctrl+Shift+O'],
-  ['palette', '⌘K', 'Ctrl+Shift+K'],
+  ['palette', '⌘K', 'Ctrl+Shift+P'],
   ['session-next', '⌘⌥↓', 'Alt+↓'],
   ['session-previous', '⌘⌥↑', 'Alt+↑'],
   ['go-to-session', '⌘1…9', 'Alt+1…9'],
@@ -222,7 +222,7 @@ describe('keys chosen in Settings', () => {
 
   it('puts the chosen key in place of the action\'s own, for the key handler and every list that names it', () => {
     expect(matchShortcut(press('H', { ctrlKey: true, shiftKey: true }), 'linux', chosen)).toEqual({ action: 'palette' })
-    expect(matchShortcut(press('K', { ctrlKey: true, shiftKey: true }), 'linux', chosen)).toBeNull()
+    expect(matchShortcut(press('P', { ctrlKey: true, shiftKey: true }), 'linux', chosen)).toBeNull()
     expect(shortcutText('palette', 'linux', chosen)).toBe('Ctrl+Shift+H')
     expect(hotkeyRows('linux', chosen).find((row) => row.id === 'palette')).toMatchObject({ chords: [['Ctrl', 'Shift', 'H']], changed: true })
   })
@@ -264,18 +264,18 @@ describe('keys chosen in Settings', () => {
   })
 
   it('names the action a key already does, with the chosen keys in place', () => {
-    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'find', 'linux', {})?.action).toBe('palette')
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'P' }, 'find', 'linux', {})?.action).toBe('palette')
     // Once the palette has moved, its old key is free.
-    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'find', 'linux', chosen)).toBeNull()
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'P' }, 'find', 'linux', chosen)).toBeNull()
     expect(takenBy({ mods: ['ctrl', 'shift'], key: 'H' }, 'find', 'linux', chosen)?.action).toBe('palette')
     // Shift with = is still "larger", as the key handler reads it.
     expect(takenBy({ mods: ['ctrl', 'shift'], key: '=' }, 'find', 'linux', {})?.action).toBe('text-larger')
-    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'K' }, 'palette', 'linux', {})).toBeNull()
+    expect(takenBy({ mods: ['ctrl', 'shift'], key: 'P' }, 'palette', 'linux', {})).toBeNull()
     expect(takenBy({ mods: ['alt'], key: '7' }, 'find', 'linux', {})?.action).toBe('go-to-session')
   })
 
   it('knows a key that is the action\'s own, so choosing it again resets it', () => {
-    expect(isOwnKey({ mods: ['ctrl', 'shift'], key: 'K' }, 'palette', 'linux')).toBe(true)
+    expect(isOwnKey({ mods: ['ctrl', 'shift'], key: 'P' }, 'palette', 'linux')).toBe(true)
     expect(isOwnKey({ mods: ['cmd'], key: 'K' }, 'palette', 'mac')).toBe(true)
     expect(isOwnKey({ mods: ['ctrl', 'shift'], key: 'H' }, 'palette', 'linux')).toBe(false)
   })
@@ -294,7 +294,7 @@ describe('keys read back from saved settings', () => {
   it('drops a key that is reserved now, so the action goes back to its own', () => {
     const read = readKeyOverrides({ palette: { mods: ['ctrl', 'alt'], key: 'P' }, find: { mods: ['ctrl'], key: 'K' }, usage: { mods: ['ctrl', 'shift'], key: 'V' } }, 'windows')
     expect(read).toEqual({})
-    expect(shortcutText('palette', 'windows', read)).toBe('Ctrl+Shift+K')
+    expect(shortcutText('palette', 'windows', read)).toBe('Ctrl+Shift+P')
   })
 
   it('drops a key that an action of the table now owns', () => {

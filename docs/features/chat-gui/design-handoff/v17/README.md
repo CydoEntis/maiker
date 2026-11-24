@@ -209,7 +209,7 @@ The UI renders from these only and never parses terminal output.
 - **Empty (fresh install, no agent sessions):** an icon tile, "No usage yet", one sentence, and **New agent**.
 - **Data:** provider-reported only (codex app-server usage events, claude stream-json `usage`). maittyd stores it per session per day so the TUI can show it too. **Never estimate cost.**
 
-### C.8 Performance (Settings → Performance; ⌘⇧P / Ctrl+Shift+P)
+### C.8 Performance (Settings → Performance; no shortcut, Ctrl+Shift+P is the command palette)
 - **Live strip, "Last 60 seconds":** four tiles, each with its threshold **in the label**, the current value (20/600, red over the threshold), and a 36px sparkline (60 samples, 1/s, stroke 1.5, red over the threshold).
 
 | Tile | Measures | Red when |
@@ -242,7 +242,7 @@ v17 includes every v16 machine screen unchanged: the machine chip, the machine m
 | ⌘\ / Ctrl+\ | Session panel |
 | ⌘⇧N / Ctrl+Shift+N | Brain dump (was New worktree session) |
 | ⌘⇧U / Ctrl+Shift+U | Usage and cost |
-| ⌘⇧P / Ctrl+Shift+P | Settings → Performance |
+| (none) | Settings → Performance is opened from Settings; Ctrl+Shift+P belongs to the command palette |
 | ⌘↵ / Ctrl+Enter | Start (New agent dialog), Send (comment composer) |
 
 All of these are added to the "caught inside a pane" list. Esc order: comment composer → New agent / What's new dialogs → Overview → drawers.
@@ -1575,7 +1575,7 @@ Shortcuts below are Windows/Linux; use ⌘ on macOS. The fastest route is the **
   - **Start all** stays disabled until every row has a project;
   - Back, Add and Delete all work.
 - **Usage (C.7), Ctrl+Shift+U:** every column sorts; Day / Week / Month; subscription rows show — with a single note; the budget ring appears only once a budget is set.
-- **Performance (C.8), Ctrl+Shift+P:** live tiles, **Simulate load spike** (tiles turn red), the switches under What's costing, **Simulate software GPU** (warn hint), **Copy report**.
+- **Performance (C.8), from Settings:** live tiles, **Simulate load spike** (tiles turn red), the switches under What's costing, **Simulate software GPU** (warn hint), **Copy report**.
 - **Updates (C.5):** the footer pill → Download → Restart gives the toast "Updated to 0.65.0 · What's new". Settings → General has **Install updates when idle**.
 - **Loading (C.0a):** local sessions show no loader; a remote session shows a slim "Catching up from devbox" strip only when connecting is slow.
 
