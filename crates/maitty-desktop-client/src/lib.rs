@@ -2143,6 +2143,35 @@ fn reopen_closed_message(agent: String, session: String) -> ClientMsg {
     ClientMsg::Command(Command::ReopenClosedSession { agent, session })
 }
 
+/// Have this computer's daemon keep `sessions` as the set open in `project`, replacing what it kept. False when the
+/// daemon running is from before this and was not asked, so the caller carries on without a saved set.
+pub async fn save_workspace(project: PathBuf, sessions: Vec<maitty_shared::protocol::ClosedSession>) -> Result<Value> {
+    let asked = ask_if_known(save_workspace_message(project, sessions)).await?;
+    Ok(Value::Bool(asked))
+}
+
+fn save_workspace_message(project: PathBuf, sessions: Vec<maitty_shared::protocol::ClosedSession>) -> ClientMsg {
+    ClientMsg::Command(Command::SaveWorkspace { project, sessions })
+}
+
+/// The sessions this computer's daemon kept open in `project`. Null when the daemon running is older than the question.
+pub async fn workspace(project: PathBuf) -> Result<Value> {
+    let message = ClientMsg::Query(Query::Workspace { project });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("Could not reach the Maiker service")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::Workspace(list) => Ok(serde_json::to_value(list)?),
+            _ => bail!("The Maiker service gave an answer this app does not understand (saved workspace). Restart the service in Settings, or update the app so both are the same version."),
+        }
+    })
+    .await
+}
+
 /// How long the closed sessions' folders are looked for, all of them together.
 const FOLDER_LOOK_LIMIT: Duration = Duration::from_secs(2);
 
@@ -2903,7 +2932,8 @@ fn safe_to_ask_twice(query: &Query) -> bool {
         | Query::Worktrees { .. }
         | Query::WorktreeStanding { .. }
         | Query::CheckOutput { .. }
-        | Query::ClosedSessions => true,
+        | Query::ClosedSessions
+        | Query::Workspace { .. } => true,
     }
 }
 
@@ -3582,6 +3612,22 @@ mod agent_command_tests {
         for older in COMPATIBLE_SINCE..PULL_REQUESTS_SINCE {
             let refused = refuse_unless_daemon_reads(&message, older).unwrap_err();
             assert!(format!("{refused:#}").contains("older than this app"), "{refused:#}");
+        }
+    }
+
+    #[test]
+    fn the_open_set_is_never_sent_to_a_service_from_before_it() {
+        use super::{ClientMsg, Query, daemon_reads, refuse_unless_daemon_reads, safe_to_ask_twice, save_workspace_message};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, WORKSPACE_SINCE};
+        let ask = Query::Workspace { project: "/code/app".into() };
+        assert!(safe_to_ask_twice(&ask));
+        for message in [ClientMsg::Query(ask), save_workspace_message("/code/app".into(), Vec::new())] {
+            assert!(!daemon_reads(&message, WORKSPACE_SINCE - 1));
+            assert!(!daemon_reads(&message, COMPATIBLE_SINCE));
+            let refused = refuse_unless_daemon_reads(&message, WORKSPACE_SINCE - 1).unwrap_err();
+            assert!(refused.to_string().contains("older than this app"), "{refused:#}");
+            assert!(daemon_reads(&message, WORKSPACE_SINCE));
+            assert!(daemon_reads(&message, PROTOCOL_VERSION));
         }
     }
 

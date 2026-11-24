@@ -1321,6 +1321,20 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 127 adds `Command::SaveWorkspace { project, sessions }`, `Query::Workspace { project }` and
+`Reply::Workspace(Vec<ClosedSession>)` (`WORKSPACE_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays
+122, since an older daemon is never sent the command or the question and an older client is never sent the reply). The
+daemon keeps, per project (an absolute folder), the sessions that were open when it was parked or closed, so they can
+be opened again; a save replaces the project's set and an empty set forgets the project. Records are `ClosedSession`s,
+cleaned as the closed list cleans them, and the daemon keeps at most `WORKSPACE_SESSIONS_MAX` (50) per project and
+`WORKSPACE_PROJECTS_MAX` (50) projects, the oldest first to go (what is kept and where is in
+[DATABASE](DATABASE.md#project-specific-saved-workspaces)). Human clients only; a pane is refused both. A relative or
+control-character project is refused with an error. `Reply::Workspace` is the set in the order saved, empty when none;
+another machine's answer is ignored (`remote_policy`). The desktop client sends them through `save_workspace` (false
+without asking from an older daemon) and `workspace` (null from an older daemon); tests:
+`a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one`,
+`the_open_set_is_never_sent_to_a_service_from_before_it`.
+
 Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
 125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;
 `COMPATIBLE_SINCE` stays 122, since an older daemon is never sent the command). `title` is the name the agent gave the
