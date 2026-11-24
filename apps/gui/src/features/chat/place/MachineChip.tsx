@@ -2,6 +2,7 @@ import { Icon } from '@/features/workspace/components/glyphs'
 import { ChipMenu } from '@/features/workspace/components/NewChatMenus'
 import { PlaceHead } from './PlaceHead'
 import type { MachinePicking } from './picking'
+import './place-chips.css'
 
 const WIDTH = 300
 
@@ -16,10 +17,11 @@ export function MachineChip({ machine, hero = false }: { machine: MachinePicking
       chevron={hero}
       side={hero ? 'bottom' : 'top'}
       triggerClass={`mx-place-chip is-machine${machine.down === null ? '' : ' is-down'}${hero ? ' is-hero' : ''}`}
+      variant="place"
       width={WIDTH}
       icon={<span className="mx-place-icon"><Icon name={machine.remote ? 'server' : 'laptop'} size={13} /></span>}
       label={machine.remote || hero ? <span className="mx-place-text">{machine.remote ? machine.label : 'This computer'}</span> : null}
-      header={<PlaceHead main={machine.label} sub={machine.down ?? 'The session runs here'} />}
+      header={hero ? undefined : <PlaceHead main={machine.label} sub={machine.down ?? 'The session runs here'} />}
       sections={machine.sections}
       footer={machine.footer}
     />

@@ -90,7 +90,7 @@ export function WorkspaceMain() {
                     leading={sidebarMode === 'hidden' && !focusMode ? <ShowSidebarButton onShow={toggleSidebar} tip={tip('Show sidebar', 'toggle-sidebar')} /> : undefined}
                     seed={newChatSeed}
                     machine={newChatMachine}
-                    machines={sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, local: head.machine === LOCAL_MACHINE, down: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok' ? null : head.why ?? head.chip?.word ?? 'not reachable' }))}
+                    machines={sidebarMachineHeads.map((head) => ({ machine: head.machine, label: head.label, name: head.name, local: head.machine === LOCAL_MACHINE, down: head.machine === LOCAL_MACHINE || head.chip?.tone === 'ok' ? null : head.why ?? head.chip?.word ?? 'not reachable' }))}
                     onOtherMachine={setNewChatMachine}
                     projects={machineProjects(sessions, newChatMachine, focusedSession, newChatStartFolder)}
                     busy={busyBranchesOf(sessions, newChatMachine, rowTitle)}

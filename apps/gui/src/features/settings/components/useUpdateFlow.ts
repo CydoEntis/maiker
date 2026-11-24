@@ -36,7 +36,8 @@ export function useUpdateFlow(onUpdate: Update, onCheckActivity: Check): UpdateF
   }, [])
 
   const ask = useCallback((head: MachineHead) => {
-    const { updateAction: action, label: name } = head
+    const { updateAction: action } = head
+    const name = head.name ?? head.label
     if (action === null) return
     const ticket = ++latest.current
     if (action === 'install') { setAsking({ name, action, activity: null }); return }

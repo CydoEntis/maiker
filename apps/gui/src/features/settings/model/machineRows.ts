@@ -108,7 +108,7 @@ export function ordered(heads: readonly MachineHead[], sessionsOf: (head: Machin
 export function matching(heads: readonly MachineHead[], typed: string): MachineHead[] {
   const text = typed.trim().toLowerCase()
   if (text === '') return [...heads]
-  return heads.filter((head) => `${nameOf(head)} ${head.label} ${head.target ?? ''}`.toLowerCase().includes(text))
+  return heads.filter((head) => `${nameOf(head)} ${head.name ?? ''} ${head.target ?? ''}`.toLowerCase().includes(text))
 }
 
 /** The machines a single "Update all" would update: those whose app is older, never a first install. */
