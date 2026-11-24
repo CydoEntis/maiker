@@ -53,8 +53,7 @@ import { answerKeyTarget } from '../answerKeyTarget'
 import { keysToPick, parseChoiceMenu, typeEach } from '../screenMenu'
 import { CommandMenuTray } from './CommandMenuTray'
 import { useChatProblem } from './ChatProblem'
-import { ReadProblemLine } from './ReadProblemLine'
-import { ProblemLine } from '@/components/ui/feedback'
+import { ReadProblemLine, type ReadNotice } from './ReadProblemLine'
 import { summaryOf } from '../summary'
 import type { ChatProblem } from '../problem'
 import { SubagentBar, SubagentChat } from './SubagentChat'
@@ -821,10 +820,13 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   // The list of chats and this chat's read pick up the new generation on their own, as after any restart.
   const reconnect = chatModes === null ? null : async () => { await resumeChat({ id: ownKey, generation: link.generation }) }
   // A chat a service restart left asleep starts when it is opened: until its agent is up, the dock says it is waking.
-  const readLine = offline && online
-    ? <ProblemLine tone="working" running title="Reconnecting to this chat…" reason={`What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}`} />
-    : feed.error !== null ? <ReadProblemLine key={feed.error} error={feed.error} onReconnect={reconnect} />
-      : link.waking === true && online ? <ProblemLine tone="working" running title={`Waking ${agentLabel(agent)} up…`} reason="This chat rested while Maiker restarted. It picks up where it was in a moment." /> : null
+  const readNotice: ReadNotice | null = offline && online
+    ? { title: 'Reconnecting to this chat…', reason: `What is shown may be out of date.${readError !== null ? ` ${truncateError(readError)}` : ''}` }
+    : feed.error === null && link.waking === true && online
+      ? { title: `Waking ${agentLabel(agent)} up…`, reason: 'This chat rested while Maiker restarted. It picks up where it was in a moment.' }
+      : null
+  // One element for all three, so a chat moving between them keeps its line (and its spinner) instead of mounting a new one.
+  const readLine = readNotice !== null || feed.error !== null ? <ReadProblemLine error={readNotice === null ? feed.error : null} notice={readNotice} onReconnect={reconnect} /> : null
   const dockProblem = problemView.line ?? readLine
 
   return (
