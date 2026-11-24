@@ -255,7 +255,8 @@ impl Daemon {
             .map_err(|why| format!("The saved conversation could not be read: {why}"))
             .and_then(|history| match history.completeness {
                 Completeness::Complete => Ok(history),
-                _ => Err("This saved conversation is too long to open as a chat; resume it in a terminal".to_owned()),
+                Completeness::Incomplete(reason) => Err(refusal_for(&reason).to_owned()),
+                _ => Err(NOT_WHOLE.to_owned()),
             })
             .and_then(|history| self.keep_saved_history(id, history).map_err(|error| error.to_string()));
         match kept {
@@ -484,5 +485,34 @@ impl Daemon {
             })),
         );
         Ok(())
+    }
+}
+
+/// The words the desktop app looks for to show a chat too long to open as a chat without offering
+/// Reconnect, which can never succeed for it. Changing them changes `ReadProblemLine.tsx`.
+pub(in crate::daemon) const TOO_LONG: &str =
+    "This saved conversation is too long to open as a chat (over 16 MB); resume it in a terminal";
+const NOT_WHOLE: &str = "This saved conversation's history could not be shown whole, so it cannot open as a chat; resume it in a terminal";
+
+/// Why a saved history that is not whole is refused. Only a missing start (a long file, or more
+/// entries than are kept) is the length limit.
+fn refusal_for(reason: &crate::daemon::conversation::history::IncompleteReason) -> &'static str {
+    use crate::daemon::conversation::history::IncompleteReason;
+    match reason {
+        IncompleteReason::MissingPages => TOO_LONG,
+        _ => NOT_WHOLE,
+    }
+}
+
+#[cfg(test)]
+mod refusal_tests {
+    use super::*;
+    use crate::daemon::conversation::history::IncompleteReason;
+
+    #[test]
+    fn a_history_missing_its_start_is_refused_as_too_long_and_any_other_gap_is_not() {
+        assert_eq!(refusal_for(&IncompleteReason::MissingPages), TOO_LONG);
+        assert_ne!(refusal_for(&IncompleteReason::InvalidEvent), TOO_LONG);
+        assert!(TOO_LONG.contains("too long to open as a chat"));
     }
 }

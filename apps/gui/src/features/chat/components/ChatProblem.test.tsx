@@ -61,4 +61,14 @@ describe('a chat whose read failed', () => {
     expect(screen.getByText('The history page is too large')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
   })
+
+  it('says a saved chat that is too long cannot open as a chat, that nothing was lost, and offers no Reconnect', () => {
+    const error = 'This saved conversation is too long to open as a chat (over 16 MB); resume it in a terminal'
+    render(<ReadProblemLine error={error} onReconnect={vi.fn(() => Promise.resolve())} />)
+    expect(screen.getByText('This chat is too long to open')).toBeInTheDocument()
+    expect(screen.getByText(/over 16 MB\)\. Nothing was lost/)).toBeInTheDocument()
+    expect(screen.getByText(/terminal to carry on, or start a new chat/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /copy details/i })).toBeInTheDocument()
+  })
 })
