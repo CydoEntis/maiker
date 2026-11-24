@@ -247,7 +247,11 @@ impl Daemon {
         generation: u64,
     ) -> Option<crate::conversation::capabilities::Capabilities> {
         let structured = crate::daemon::providers::adapter(provider).structured.as_ref()?;
-        Some((structured.capabilities)(self.conversation_runtimes.can_steer(id, generation)))
+        let mut capabilities = (structured.capabilities)(self.conversation_runtimes.can_steer(id, generation));
+        if self.conversation_untested_cli.contains(&id) {
+            capabilities.verified = crate::conversation::capabilities::Verified::Advertised;
+        }
+        Some(capabilities)
     }
 }
 

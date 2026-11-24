@@ -44,6 +44,14 @@ a pane (0003). Each provider speaks its own protocol.
   structured client is refused. A rule widens nothing the person has not already said yes to.
 - A capability is reported as verified only when it was checked against a pinned version of the
   provider. Each adapter states its own, and the daemon sends them with the conversation.
+- **A Claude Code version does not need adding by hand.** A chat starts on any Claude Code that
+  prints a version and whose `claude --help` lists the flags the adapter passes (the permission
+  channel included). A missing flag refuses the start, naming it, before any conversation exists.
+  A version the adapter was not run against is tagged `Verified::Advertised`, the label this
+  contract already has for what a provider only says about itself; the pinned list
+  (`VERIFIED_VERSIONS`) records only what was run. What stays strict at run time: unknown frames,
+  unknown control requests and unreadable permission requests end the turn or wait for a person;
+  nothing is ever allowed on the adapter's own say. Codex keeps its pinned-version gate.
 
 ## Alternatives considered
 

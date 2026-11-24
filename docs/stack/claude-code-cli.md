@@ -14,8 +14,11 @@
 - Preserve and resume only the exact native session ID and its verified
   configuration root and working directory. Never continue the most recent
   session by inference.
-- Pin and verify Claude Code versions before enabling structured chat. Validate
-  each JSONL frame, cap frame and queue sizes, use argument arrays, and reject
+- Gate structured chat on what the installed Claude Code can do, not on its version
+  number: `claude --version` must name a version and `claude --help` must list the flags
+  the adapter passes (`check_cli`; [ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
+  A version nobody ran the adapter against starts and is tagged advertised, not pinned.
+  Validate each JSONL frame, cap frame and queue sizes, use argument arrays, and reject
   unknown or ambiguous control messages.
 - Route permission prompts through Claude Code's Agent SDK stdio callback
   channel using `--permission-prompt-tool=stdio`. Keep every offered choice and
@@ -83,8 +86,11 @@ ended the turns as completed, completed and interrupted. Both `can_use_tool` req
 `tool_use_id`, so an approval links to its tool step by that id; the request-id fallback in
 `approval_request` stays for a request without one. The request also carries `description`,
 `display_name`, `blocked_path` and `permission_suggestions`, which the adapter does not read.
-Verified versions: 2.1.312, 2.1.314, 2.1.316, 2.1.327 and 2.1.330 (`VERIFIED_VERSIONS` in
-`maitty-provider-claude`).
+Versions the adapter was run against: 2.1.312, 2.1.314, 2.1.316, 2.1.327 and 2.1.330
+(`VERIFIED_VERSIONS` in `maitty-provider-claude`). It only tags them pinned; any other version
+that passes the flag check starts, tagged advertised, and is not refused. Claude Code
+2.1.331 accepted every launch flag the adapter passes and lists `--permission-prompts` in its help,
+naming `--permission-prompt-tool` only in that option's text, so the check accepts either name.
 After a daemon restart, a stop, or an agent gone mid-turn or between turns, a Claude chat is taken
 up again by reading its past from Claude Code's own transcript (`begin_saved_history`), which needs
 `restore.output` on. That transcript is what `claude --resume` itself continues from. When the
@@ -94,8 +100,7 @@ so the daemon marks that last turn interrupted (`stop_open_turn`) rather than le
 Every Claude Code process a chat starts gets the chat's runtime identity (the four reserved
 variables, ADR 0016) after the inherited pane and chat variables are removed, so a Maiker tool
 server it loads is known as the chat. Seen on Linux with Claude Code 2.1.330 on 2026-11-21, on
-terminal sessions and with `claude mcp list`, not through a chat (2.1.330 is not a verified
-version, so a chat does not start on it):
+terminal sessions and with `claude mcp list`, not through a chat:
 
 - Claude Code passes its whole environment to the stdio MCP servers it starts: a `mcp` child of a
   session in a pane held the pane's variables.

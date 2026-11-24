@@ -29,6 +29,9 @@ pub(crate) struct Launch {
     /// The arguments the daemon's config gives the program, for an agent whose program is the
     /// config's to name. Empty for every other.
     pub(crate) arguments: Vec<OsString>,
+    /// The Claude Code version this chat was admitted on without it being one the adapter was run
+    /// against; `None` for a tested version and for every other provider.
+    pub(super) untested_cli: Option<String>,
     #[cfg(test)]
     pub(super) failure_point: Option<FailurePoint>,
 }
@@ -127,7 +130,20 @@ pub(super) enum FailurePoint {
 }
 
 impl Launch {
-    pub(super) async fn validate(mut self) -> Result<Self> {
+    pub(super) async fn validate(self) -> Result<Self> {
+        let mut launch = self.validate_binding().await?;
+        if launch.provider() == Provider::Claude {
+            let (config_root, executable, cwd) = launch.paths();
+            let tag = super::claude::probe_cli(executable, cwd, config_root, &launch.environment).await?;
+            if let maitty_provider_claude::CliTag::Untested(version) = tag {
+                tracing::warn!("Claude Code {version} was not run against this adapter; the chat starts on what its help lists");
+                launch.untested_cli = Some(version);
+            }
+        }
+        Ok(launch)
+    }
+
+    async fn validate_binding(mut self) -> Result<Self> {
         tokio::task::spawn_blocking(move || {
             let provider = self.provider();
             // An agent whose chat is only read from its terminal's transcript (follow.rs) has no runtime to start.
@@ -703,10 +719,11 @@ mod tests {
             })),
             environment: Vec::new(),
             arguments: Vec::new(),
+            untested_cli: None,
             failure_point: None,
         };
 
-        let validated = launch.validate().await.unwrap();
+        let validated = launch.validate_binding().await.unwrap();
         assert_eq!(validated.provider(), crate::conversation::Provider::Claude);
     }
 
@@ -766,6 +783,7 @@ mod tests {
             })),
             environment: Vec::new(),
             arguments: Vec::new(),
+            untested_cli: None,
             failure_point: None,
         };
 

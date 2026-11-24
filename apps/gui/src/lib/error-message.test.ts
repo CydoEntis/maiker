@@ -71,4 +71,11 @@ describe('an answer that failed its shape check', () => {
     expect(errorMessage(failure, 'fallback')).toBe(UNREADABLE_ANSWER)
     expect(explainError(failure, 'Could not check')).toEqual({ title: 'Could not check', reason: UNREADABLE_ANSWER, details: null })
   })
+
+  it('shows why a chat could not start on the installed Claude Code, not that its process ended', () => {
+    const refusal = 'Claude Code 2.1.400 cannot run structured chat: `claude --help` does not list --replay-user-messages. Update Claude Code, or use the terminal agent.'
+    const words = explainError(new Error(refusal), 'Could not start Claude')
+    expect(words.reason).toBe(refusal)
+    expect(words.reason).not.toMatch(/process ended|Codex/)
+  })
 })

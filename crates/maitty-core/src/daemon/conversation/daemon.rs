@@ -5,7 +5,7 @@ use super::{
 };
 #[cfg(test)]
 use super::{Launch, transport::LaunchIdentity};
-use crate::conversation::{ConversationId, RecoveryState};
+use crate::conversation::{ConversationId, Provider, RecoveryState};
 use crate::daemon::{Daemon, Ev, ServerMsg};
 use crate::protocol::Status;
 use anyhow::{Result, bail};
@@ -37,6 +37,21 @@ struct Reported {
 }
 
 impl Daemon {
+    /// The name of the agent a conversation runs, for the errors it reports.
+    fn conversation_agent(&self, id: ConversationId) -> &'static str {
+        self.conversations
+            .iter()
+            .find(|c| c.id == id)
+            .map(|c| c.binding.provider)
+            .or_else(|| self.pending_starts.iter().find(|p| p.id == id).map(|p| p.settings.provider))
+            .map_or("Chat", |provider| match provider {
+                Provider::Codex => "Codex",
+                Provider::Claude => "Claude",
+                Provider::Gemini => "Gemini",
+                Provider::Acp => "Agent",
+            })
+    }
+
     pub(in crate::daemon) async fn initialize_conversation_cache(&mut self) -> Result<()> {
         let path = self.session_path.clone();
         let enabled = self.cfg.restore.enabled;
@@ -143,7 +158,7 @@ impl Daemon {
             state.error = Some(error.to_string());
             self.broadcast(
                 |client| client.attach,
-                ServerMsg::Error(format!("Codex conversation {}: {error}", id.0)),
+                ServerMsg::Error(format!("{} conversation {}: {error}", self.conversation_agent(id), id.0)),
             );
             if let Err(error) = self.conversation_runtimes.dispose(id) {
                 tracing::warn!(%error,"Cannot dispose failed conversation runtime");
@@ -219,7 +234,7 @@ impl Daemon {
                 if failed {
                     self.broadcast(
                         |client| client.attach,
-                        ServerMsg::Error(format!("Codex conversation {}: {reason}", id.0)),
+                        ServerMsg::Error(format!("{} conversation {}: {reason}", self.conversation_agent(id), id.0)),
                     );
                 }
                 let tokens: Vec<_> = self

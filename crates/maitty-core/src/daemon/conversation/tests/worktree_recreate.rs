@@ -77,6 +77,7 @@ async fn two_sends_to_one_deleted_folder_both_succeed() {
         identity: LaunchIdentity::Existing(chat.clone()),
         environment: Vec::new(),
         arguments: Vec::new(),
+        untested_cli: None,
         failure_point: None,
     };
     let (a, b) = tokio::join!(twin.validate(), launch.validate());
