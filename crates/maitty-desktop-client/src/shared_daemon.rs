@@ -89,6 +89,12 @@ fn installed_version(executable: &Path) -> Option<String> {
         .map(|version| version.trim().to_string())
 }
 
+/// The release the shared daemon file reports; `None` when there is no file or it does not run.
+pub(crate) fn installed_daemon_version() -> Option<String> {
+    let target = shared_daemon_path().ok()?;
+    target.is_file().then(|| installed_version(&target)).flatten()
+}
+
 /// Make the shared daemon file the same release as the app, and return its path.
 ///
 /// A running daemon is never stopped for this: the old file is moved aside and goes on running

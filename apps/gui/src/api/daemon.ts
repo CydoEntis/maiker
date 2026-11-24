@@ -278,6 +278,38 @@ export async function restartStaleDaemon(expectedVersion: string): Promise<void>
   await invoke('restart_stale_daemon', { expectedVersion })
 }
 
+/**
+ * The local service as the files it publishes say, so it answers even when the service is old, wedged or not running.
+ * `behind`: what runs is older than this app. `fileBehind`: the installed service file is older (or unreadable).
+ */
+const LocalServiceReportSchema = z.object({
+  appVersion: z.string(),
+  running: z.boolean(),
+  daemonVersion: z.string().nullable(),
+  fileVersion: z.string().nullable(),
+  behind: z.boolean(),
+  fileBehind: z.boolean(),
+  canRestart: z.boolean(),
+  sessionCount: z.number().int().nonnegative(),
+  activeTurnCount: z.number().int().nonnegative().nullable(),
+})
+export type LocalServiceReport = z.infer<typeof LocalServiceReportSchema>
+
+export async function loadLocalServiceReport(): Promise<LocalServiceReport> {
+  if (!isDesktop()) throw new Error('The service report is available in the desktop app')
+  return invokeParsed('local_service_report', LocalServiceReportSchema)
+}
+
+/**
+ * Brings the service up to this app and restarts it, whatever its state: replaces its file, saves its sessions and
+ * stops it (its process is ended if it will not stop), then starts the new one. `discardUnsaved` goes ahead even when
+ * its sessions are not saved, which loses them. Rejects with the host's own words.
+ */
+export async function repairLocalService(discardUnsaved: boolean): Promise<LocalServiceReport> {
+  if (!isDesktop()) throw new Error('Service repair is available in the desktop app')
+  return invokeParsed('repair_local_service', LocalServiceReportSchema, { discardUnsaved })
+}
+
 /** Shows the service's log in the system's file manager. Rejects with the host's words, such as "There is no log yet." */
 export async function openDaemonLog(): Promise<void> {
   if (!isDesktop()) throw new Error('The log is available in the desktop app')

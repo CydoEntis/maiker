@@ -3,6 +3,7 @@ import type { ImportableChat } from '@/api/daemon'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
+import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
 import { groupByFolder, importKey, maybeOpenElsewhere, tickedAtFirst, type ImportRead } from '../model/importChats'
 import { ageOf, savedName, whenOf } from '../model/newChatHost'
 import { AppIcon } from './glyphs'
@@ -45,7 +46,7 @@ export function ImportChatsDialog(props: Props) {
             ? <ImportList {...props} list={props.read.list} />
             : (
                 <>
-                  <ModalBody><p role="status">{statusWords(props.read)}</p></ModalBody>
+                  <ModalBody><p role="status">{statusWords(props.read)}{props.read.kind === 'older' && <> <RestartServiceButton /></>}</p></ModalBody>
                   <ModalFoot><Button type="button" variant="ghost" size="lg" onClick={props.onCancel}>Close</Button></ModalFoot>
                 </>
               )}
@@ -58,7 +59,7 @@ export function ImportChatsDialog(props: Props) {
 function statusWords(read: ImportRead): string {
   if (read.kind === 'loading') return 'Looking for chats on this computer…'
   if (read.kind === 'failed') return 'Could not read the chats on this computer.'
-  if (read.kind === 'older') return 'Restart the Maiker service to look for chats to bring in.'
+  if (read.kind === 'older') return 'The Maiker service needs a restart to look for chats to bring in.'
   return 'No Claude or Codex chat on this computer to bring in. Every one is already here.'
 }
 

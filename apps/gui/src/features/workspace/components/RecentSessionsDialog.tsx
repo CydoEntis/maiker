@@ -4,9 +4,10 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import type { ClosedSession } from '@/api/daemon'
+import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
 import { agentName } from '../model/agentMessage'
 import { ageOf, nowSeconds } from '../model/newChatHost'
-import { reopenRefusal, useClosedSessions, useReopenRemoved, type RecentRead, type RemakeState } from '../model/recentSessions'
+import { reopenRefusal, RESTART_TO_REOPEN, useClosedSessions, useReopenRemoved, type RecentRead, type RemakeState } from '../model/recentSessions'
 import { tildePath } from '../model/session'
 import { AppIcon } from './glyphs'
 
@@ -41,13 +42,13 @@ function Row({ closed, home, now, locked, onPick }: { closed: ClosedSession; hom
 
 function RemakeLine({ state }: { state: RemakeState }) {
   if (state.kind === 'working') return <p role="status">Making the folder again and starting the session…</p>
-  if (state.kind === 'failed') return <p role="alert">{state.message}</p>
+  if (state.kind === 'failed') return <p role="alert">{state.message}{state.message === RESTART_TO_REOPEN && <> <RestartServiceButton /></>}</p>
   return null
 }
 
 function Body({ read, home, locked, onPick, onRetry }: { read: RecentRead; home: string; locked: boolean; onPick: Props['onPick']; onRetry: () => void }) {
   if (read.kind === 'loading') return <p role="status">Looking for closed sessions…</p>
-  if (read.kind === 'older') return <p role="status">Restart the Maiker service to see closed sessions.</p>
+  if (read.kind === 'older') return <p role="status">The Maiker service needs a restart to see closed sessions. <RestartServiceButton /></p>
   if (read.kind === 'failed') {
     return (
       <p role="status">

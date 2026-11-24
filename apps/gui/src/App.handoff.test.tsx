@@ -745,8 +745,19 @@ await user.click(within(await screen.findByRole('alertdialog')).getByRole('butto
     expect(screen.queryByRole('alertdialog')).toBeNull()
   }, 10_000)
 
+  it('restarts an older service by itself by default once no agent is working or waiting', async () => {
+    daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v49, while this GUI needs v62')
+    daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 2, activeTurnCount: 0 })
+    daemon.restartMismatchedDaemon.mockResolvedValue(undefined)
+    renderDesktopApp()
+
+    await waitFor(() => { expect(daemon.restartMismatchedDaemon).toHaveBeenCalledExactlyOnceWith(49) })
+  })
+
   it('asks to restart an older service, and Later leaves a chip that asks again', async () => {
     const user = userEvent.setup()
+    // The person switched the restart-when-idle setting off.
+    setSettings({ serviceIdleEra: 1, restartServiceWhenIdle: false })
     daemon.loadConversations.mockRejectedValue('connecting to the local daemon: the running maiker service uses protocol v49, while this GUI needs v62')
     daemon.loadDaemonRestartStatus.mockResolvedValue({ daemonProtocol: 49, guiProtocol: 62, canRestart: true, sessionCount: 2, activeTurnCount: 0 })
     renderDesktopApp()

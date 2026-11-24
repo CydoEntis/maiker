@@ -25,7 +25,7 @@ const DEFAULTS: SettingsPreferences = {
   
   defaultAgent: 'claude',
   confirmSkipped: [],
-  sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: false, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, chatFont: 'inter', interfaceSize: 110, keyOverrides: {},
+  sidebarWidth: 264, sidebarSide: 'left', sidebarSort: 'recent', terminalDock: 'bottom', terminalScreenReader: false, autoDownloadUpdates: true, restartWhenIdle: true, restartServiceWhenIdle: true, monthlyBudget: null, openSessionsIn: 'chat', hideSuccessfulTools: false, colourFileNames: true, bypassOff: [], updateMachines: true, cursorBlink: false, chatWidth: 'auto', chatTextSize: 100, chatFont: 'inter', interfaceSize: 110, keyOverrides: {},
 }
 
 describe('settings preferences', () => {
@@ -53,14 +53,17 @@ describe('settings preferences', () => {
     expect(readSettingsPreferences().restartWhenIdle).toBe(false)
   })
 
-  it('restarts an older service by itself only when asked, and reads an old store without the key as off', () => {
-    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartWhenIdle: true }))
-    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: true }))
+  it('restarts an older service by itself by default, and an off saved before the default changed is not a choice', () => {
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
-    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: 'yes' }))
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ restartServiceWhenIdle: false }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
+  })
+
+  it('keeps an off chosen since the default changed, and reads a value that is not a switch as the default', () => {
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ serviceIdleEra: 1, restartServiceWhenIdle: false }))
     expect(readSettingsPreferences().restartServiceWhenIdle).toBe(false)
+    localStorage.setItem('maiker.gui.settings.v1', JSON.stringify({ serviceIdleEra: 1, restartServiceWhenIdle: 'yes' }))
+    expect(readSettingsPreferences().restartServiceWhenIdle).toBe(true)
   })
 
   it('uses the defaults until preferences are saved', () => {

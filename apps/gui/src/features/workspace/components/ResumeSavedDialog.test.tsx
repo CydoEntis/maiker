@@ -24,6 +24,6 @@ describe('Resume a saved chat', () => {
   it('says when the service is too old to list them', async () => {
     saved.read.mockResolvedValue(null)
     render(<div className="mx-app"><ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} /></div>)
-    expect(await screen.findByText('Restart the Maiker service to see saved conversations.')).toBeInTheDocument()
+    expect(await screen.findByText('The Maiker service needs a restart to see saved conversations.')).toBeInTheDocument()
   })
 })

@@ -1,6 +1,9 @@
 /** How often the service's state is read again while an automatic restart waits for a quiet moment. */
 export const SERVICE_IDLE_POLL_MS = 10_000
 
+/** How often the window asks whether the service is behind this app, with nothing waiting: it only reads two small files. */
+export const SERVICE_STATUS_POLL_MS = 60_000
+
 /**
  * A session's status as the daemon words it that means the service must not be restarted yet: an agent is working,
  * one needs the user (a question or an approval pending), one is being restored or started (`recovery`), or the

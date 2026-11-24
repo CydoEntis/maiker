@@ -1124,13 +1124,16 @@ keeps it), so starting never flashes white or another theme's colour.
   dialogs when the service is on the app's protocol): an update leaves a running daemon alone while it holds
   sessions, so the window can be newer than the service it talks to, and none of the release's fixes to the service
   apply until it restarts. When the service can be restarted with nothing lost and says no agent is working or
-  waiting, and **Restart the service when idle** (Settings › General › Updates, off by default, separate from
-  **Install updates when idle**, which installs the app) is on, the window restarts it by itself at the first quiet
-  moment and says `Service restarted` with how many sessions came back (idle agents are resumed by the restore).
+  waiting, and **Restart the service when idle** (Settings › General › Updates, **on by default**, separate from
+  **Install updates when idle**, which installs the app; a store saved before the default changed reads as on) is on,
+  the window restarts it by itself at the first quiet moment and says `Service restarted` with how many sessions came back (idle agents are resumed by the restore).
   Quiet means the service counts no agent working or waiting, no session the window can see is working, needs
   you, is being restored or has an unknown status, and no session is starting
-  (`features/updates/serviceRestart.ts`); until then the toast below stays and the window looks again every 10
-  seconds. The service on another protocol (the **Restart Maiker to finish updating** card) follows the same rule
+  (`features/updates/serviceRestart.ts`); until then the toast below stays, says `Maiker will restart it by itself when
+  no chat is busy, or you can restart it now`, and the window looks again every 10 seconds. Whether the service is behind
+  is read from the real version mismatch (the service's own files against the app's version) at every launch and every
+  minute, so an update that did not go through Restart now (an installer, a package, a manual replace) is noticed too;
+  nothing depends on the `afterAppUpdate` flag. A service whose sessions are not saved is never restarted by itself. The service on another protocol (the **Restart Maiker to finish updating** card) follows the same rule
   with the service's own count, since its sessions cannot be read, and runs the card's own restart; the quiet
   note afterwards reads `Service restarted · N sessions back`. There is no countdown. Otherwise a toast that stays says
   `The Maiker service is still on <version>` with `Restart…`, which opens a dialog saying how many sessions come
@@ -1143,6 +1146,23 @@ keeps it), so starting never flashes white or another theme's colour.
   once no agent is working." while it waits. A service on an older protocol (the restart card) is restarted the same
   way. Only a service that cannot be restarted with nothing lost, or cannot say who is working, still asks. Remote
   machines follow on their own under **Update remote machines too** (`[updates] machines`), or with their one-click Update.
+- **Updates & repair (desktop)** (Settings › Updates & repair, `features/settings/components/UpdatesPage.tsx`): one
+  page for everything that updates. Cards: **Check** (Check for updates: the app's check and a fresh read of the
+  service), **Maiker app** (version, status, Download update / Restart to update / Try again), **Maiker service**
+  (what it is, the version it runs, the chats open, its state: Not running, Needs a restart to finish updating, Its
+  program file is out of date, Up to date; buttons Check, Restart now / Start service / Update now, and Force update)
+  and **Remote machines** (each machine's state with Update or Install, and Update all N, through the same ask as
+  Settings › Remote machines). The service's buttons run the host's repair (`local_service_report`,
+  `repair_local_service`), which reads the service's published files and never speaks its protocol, so it works when
+  the service is old, stale, wedged or not running: it replaces the service's file if it is out of date (Windows moves
+  the locked one aside), asks the service to save and stop (`kill-server`), ends its process only if that did not work
+  in 15 seconds, then starts the new one. Every restart goes through one confirm (`RestartServiceDialog`) that says
+  before anything runs: `Your N chats are saved.`, `N turns in progress will stop.`, and `Chats come back asleep.
+  After the restart you can press Resume N chats.` A service whose chats are not saved gets no plain restart; **Force
+  update** says it cannot confirm they are saved and that going on can lose them, and only its explicit confirm goes
+  ahead. A failure shows the host's real text with **Copy details** (app and service versions, whether the chats were
+  saved, then the raw error) and Try again. The messages that say the service is too old for a list (Recent sessions,
+  saved conversations, Bring in your chats) carry a **Restart the Maiker service** button that opens the same confirm.
 - **After a restart** a line reads `maikerd restarted · N agents stopped · Enter on its row resumes` for 30 seconds
   while any session has `TermInfo.interrupted`; Enter on that row in the sidebar types its resume command.
   Resuming is never automatic.

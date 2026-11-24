@@ -16,6 +16,7 @@ mod highlight;
 #[cfg(target_os = "linux")]
 mod linux_gpu;
 mod machine_update;
+mod service_repair;
 mod machines;
 mod changes;
 mod new_chat;
@@ -1401,8 +1402,9 @@ async fn daemon_restart_status() -> Result<serde_json::Value, String> {
 }
 
 #[tauri::command]
-async fn restart_mismatched_daemon(expected_protocol: u32) -> Result<(), String> {
-    maitty_desktop_client::restart_mismatched_daemon(expected_protocol)
+async fn restart_mismatched_daemon(app: tauri::AppHandle, expected_protocol: u32) -> Result<(), String> {
+    let file = service_repair::current_daemon_file(&app)?;
+    maitty_desktop_client::restart_mismatched_daemon(expected_protocol, &file)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1417,9 +1419,11 @@ async fn restart_stale_daemon(
     app: tauri::AppHandle,
     expected_version: String,
 ) -> Result<(), String> {
+    let file = service_repair::current_daemon_file(&app)?;
     maitty_desktop_client::restart_stale_daemon(
         &app.package_info().version.to_string(),
         &expected_version,
+        &file,
     )
     .await
     .map_err(|error| format!("{error:#}"))
@@ -1610,6 +1614,8 @@ pub fn run() {
             restart_mismatched_daemon,
             daemon_update_status,
             restart_stale_daemon,
+            service_repair::local_service_report,
+            service_repair::repair_local_service,
             performance::performance_sample
         ])
         .build(tauri::generate_context!())

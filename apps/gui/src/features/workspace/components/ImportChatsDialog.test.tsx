@@ -60,6 +60,6 @@ describe('Bring in your chats', () => {
     rerender(<ImportChatsDialog read={{ kind: 'listed', list: [] }} now={NOW} locked={false} onImport={() => undefined} onCancel={() => undefined} />)
     expect(screen.getByRole('status')).toHaveTextContent('Every one is already here.')
     rerender(<ImportChatsDialog read={{ kind: 'older' }} now={NOW} locked={false} onImport={() => undefined} onCancel={() => undefined} />)
-    expect(screen.getByRole('status')).toHaveTextContent('Restart the Maiker service')
+    expect(screen.getByRole('status')).toHaveTextContent('needs a restart')
   })
 })

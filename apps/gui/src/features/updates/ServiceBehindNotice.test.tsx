@@ -5,6 +5,7 @@ import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { ServiceBehindNotice } from './ServiceBehindNotice'
+import { SERVICE_STATUS_POLL_MS } from './serviceRestart'
 
 const daemon = vi.hoisted(() => ({
   loadDaemonUpdateStatus: vi.fn(),
@@ -168,5 +169,55 @@ describe('a service a release behind, right after the app updated', () => {
     renderNotice(false, { afterAppUpdate: true })
     await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
     expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+})
+
+describe('a service left behind by an update that did not go through Restart now', () => {
+  const idle = { ...behind, activeTurnCount: 0 }
+
+  function renderByDefault() {
+    const sessionsQuery = { isSuccess: true, refetch: vi.fn(() => Promise.resolve()), data: [] } as unknown as UseQueryResult<Conversation[]>
+    render(
+      <QueryClientProvider client={new QueryClient()}>
+        <ServiceBehindNotice sessionsQuery={sessionsQuery} />
+      </QueryClientProvider>,
+    )
+  }
+
+  it('restarts by itself with no setting passed and no update flag: the real version mismatch is enough', async () => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+    renderByDefault()
+    await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
+  })
+
+  it('says it will restart when no chat is busy while one is, and never restarts under it', async () => {
+    renderByDefault()
+    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
+    expect(toasts.warning.mock.calls[0]?.[1]).toMatchObject({ description: expect.stringContaining('restart it by itself when no chat is busy') as string })
+    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+  })
+
+  it('never restarts by itself when its sessions are not saved, and does not promise to', async () => {
+    daemon.loadDaemonUpdateStatus.mockResolvedValue({ ...idle, canRestart: false })
+    renderByDefault()
+    await waitFor(() => { expect(toasts.warning).toHaveBeenCalledTimes(1) })
+    expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+    expect(toasts.warning.mock.calls[0]?.[1]).toMatchObject({ description: expect.stringContaining('not saved') as string })
+  })
+
+  it('reads the mismatch again on a timer, so a service that fell behind while the app ran is noticed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    try {
+      daemon.loadDaemonUpdateStatus.mockResolvedValue({ daemonVersion: null, behind: false, canRestart: true, sessionCount: 0, activeTurnCount: 0 })
+      renderByDefault()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(daemon.restartStaleDaemon).not.toHaveBeenCalled()
+
+      daemon.loadDaemonUpdateStatus.mockResolvedValue(idle)
+      await vi.advanceTimersByTimeAsync(SERVICE_STATUS_POLL_MS)
+      await waitFor(() => { expect(daemon.restartStaleDaemon).toHaveBeenCalledExactlyOnceWith('0.71.0') })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

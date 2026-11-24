@@ -15,6 +15,9 @@ export function savedStart(folder: string, agent: 'claude' | 'codex', id: string
   }
 }
 
+/** What a reopen says when the service is too old to take it: the window offers the restart beside it. */
+export const RESTART_TO_REOPEN = 'The Maiker service needs a restart to reopen it.'
+
 /** What the Recent sessions list knows: nothing yet, the list, or why there is none. */
 export type RecentRead = { kind: 'loading' } | { kind: 'listed'; list: readonly ClosedSession[] } | { kind: 'older' } | { kind: 'failed' }
 
@@ -106,7 +109,7 @@ export function useReopenRemoved(onReopened: () => void): { state: RemakeState; 
       let outcome: RemakeState
       try {
         const asked = await reopenClosedSession(closed.agent, closed.session)
-        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: 'Restart the Maiker service to reopen it.' }
+        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: RESTART_TO_REOPEN }
       } catch (error) {
         outcome = { kind: 'failed', message: errorMessage(error, 'Could not reopen the session.') }
       }

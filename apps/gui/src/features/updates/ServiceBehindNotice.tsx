@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { loadDaemonUpdateStatus, restartStaleDaemon } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
-import { serviceRestartStep } from './serviceRestart'
+import { SERVICE_STATUS_POLL_MS, serviceRestartStep } from './serviceRestart'
 import { useIdleServiceRestart } from './useIdleServiceRestart'
 import { serviceStep } from './finishUpdate'
 import { SERVICE_STATUS_KEY } from './serviceUpdateStatus'
@@ -42,7 +42,7 @@ const plural = (count: number, word: string) => `${String(count)} ${word}${count
  * so and offers the restart, which asks first. With Settings › Restart the service when idle on, it restarts by
  * itself at the first quiet moment (idle agents come back resumed) and keeps the notice until then.
  */
-export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = false, starting = false, afterAppUpdate = false }: ServiceBehindNoticeProps) {
+export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = true, starting = false, afterAppUpdate = false }: ServiceBehindNoticeProps) {
   const queryClient = useQueryClient()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -54,7 +54,10 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
     queryFn: loadDaemonUpdateStatus,
     enabled: sessionsQuery.isSuccess,
     retry: false,
+    // The version mismatch is read from the service's own files again every minute, so a service left behind by an
+    // update through any route (not only Restart now) is noticed without relaunching.
     staleTime: Infinity,
+    refetchInterval: SERVICE_STATUS_POLL_MS,
   })
   const refetchStatus = statusQuery.refetch
   const status = statusQuery.data
@@ -75,6 +78,8 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
   // Otherwise only while the restart is actually under way is there nothing to ask; while it waits for a quiet moment the notice stays.
   const unasked = step === 'restart' || restartingNow || finishingUpdate
   const sessionCount = status?.sessionCount ?? 0
+  // The restart is on and only waiting for a quiet moment (a chat is busy, or one is starting); a failed one is not waiting.
+  const waitingForIdle = step === 'wait' && !autoFailed
   const refetchSessions = sessionsQuery.refetch
 
   // Tried once for each version found behind: a restart that failed leaves the notice and its button.
@@ -107,14 +112,16 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
       id: TOAST_ID,
       duration: Infinity,
       description: canRestart
-        ? 'This app is newer. Restart the service to finish updating.'
+        ? waitingForIdle
+          ? 'This app is newer. Maiker will restart it by itself when no chat is busy, or you can restart it now.'
+          : 'This app is newer. Restart the service to finish updating.'
         : `This app is newer, but its sessions are not saved, so ${APP_NAME} is leaving it running.`,
       action: canRestart ? { label: 'Restart…', onClick: () => { setDialogOpen(true) } } : undefined,
     })
     return () => {
       toast.dismiss(TOAST_ID)
     }
-  }, [version, canRestart, unasked, autoFailed])
+  }, [version, canRestart, unasked, autoFailed, waitingForIdle])
 
   if (!status || !version) return null
 
@@ -137,7 +144,7 @@ export function ServiceBehindNotice({ sessionsQuery, restartServiceWhenIdle = fa
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{`Restart the ${APP_NAME} service?`}</DialogTitle>
-          <DialogDescription>{`It is on ${version}, and this app is newer. ${description}`}</DialogDescription>
+          <DialogDescription>{`It is on ${version}, and this app is newer. ${description}${waitingForIdle ? ' It restarts by itself when no chat is busy.' : ''}`}</DialogDescription>
         </DialogHeader>
         {failure !== null && <InlineNote title="Could not restart the service" reason={failure} />}
         <DialogFooter>

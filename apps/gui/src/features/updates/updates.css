@@ -1,0 +1,2 @@
+/* What a restart will do, in the confirm in front of it: short plain lines, one thought each. */
+.mx-restart-lines { margin: 0; padding: 0 0 0 18px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: var(--fg2); text-wrap: pretty; }

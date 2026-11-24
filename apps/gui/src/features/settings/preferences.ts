@@ -205,7 +205,7 @@ function defaults(): SettingsPreferences {
     cursorBlink: false,
     autoDownloadUpdates: true,
     restartWhenIdle: true,
-    restartServiceWhenIdle: false,
+    restartServiceWhenIdle: true,
     monthlyBudget: null,
   }
 }
@@ -233,6 +233,13 @@ function readStored(): string | null {
  */
 const CORNERS_ERA_KEY = 'cornersEra'
 const CORNERS_ERA = 2
+
+/**
+ * Restarting an older service by itself became the default after it had been saved as a plain off. A blob saved before
+ * that has no marker, so its off is the old default, not a choice: it reads as on. From the marker on, a saved choice wins.
+ */
+const SERVICE_IDLE_ERA_KEY = 'serviceIdleEra'
+const SERVICE_IDLE_ERA = 1
 
 /** The agents a Bypass Permissions switch can name. */
 export const BYPASS_AGENTS: readonly ChatAgent[] = ['claude', 'codex', 'gemini']
@@ -299,7 +306,7 @@ export function readSettingsPreferences(): SettingsPreferences {
       cursorBlink: bool(preferences.cursorBlink, fallback.cursorBlink),
       autoDownloadUpdates: bool(preferences.autoDownloadUpdates, fallback.autoDownloadUpdates),
       restartWhenIdle: bool(preferences.restartWhenIdle, fallback.restartWhenIdle),
-      restartServiceWhenIdle: bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle),
+      restartServiceWhenIdle: (value as Record<string, unknown>)[SERVICE_IDLE_ERA_KEY] === SERVICE_IDLE_ERA ? bool(preferences.restartServiceWhenIdle, fallback.restartServiceWhenIdle) : fallback.restartServiceWhenIdle,
       monthlyBudget: validBudget(preferences.monthlyBudget),
       // The keys were pressed on this computer, so they are checked against this platform's table.
       keyOverrides: readKeyOverrides(preferences.keyOverrides, detectPlatform(navigator.userAgent)),
@@ -311,7 +318,7 @@ export function readSettingsPreferences(): SettingsPreferences {
 }
 
 export function writeSettingsPreferences(preferences: SettingsPreferences): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preferences, [CORNERS_ERA_KEY]: CORNERS_ERA }))
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...preferences, [CORNERS_ERA_KEY]: CORNERS_ERA, [SERVICE_IDLE_ERA_KEY]: SERVICE_IDLE_ERA }))
 }
 
 
