@@ -543,7 +543,7 @@ struct Daemon {
     conversation_since: HashMap<crate::conversation::ConversationId, (Status, u64)>,
     /// Conversations whose agent was stopped on purpose, so its exit is not a failure.
     conversation_ending: std::collections::BTreeSet<crate::conversation::ConversationId>,
-    /// Chats admitted on a Claude Code version nobody ran the adapter against; their capabilities
+    /// Chats admitted on a Claude Code or Codex version nobody ran the adapter against; their capabilities
     /// are reported as advertised, not pinned.
     conversation_untested_cli: std::collections::BTreeSet<crate::conversation::ConversationId>,
     /// Chats closed with an undo window, and when each was: ended for real when the window passes.

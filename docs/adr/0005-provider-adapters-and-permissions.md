@@ -42,16 +42,27 @@ a pane (0003). Each provider speaks its own protocol.
   command, written the same, in that project without asking. It covers command requests only: never
   a file change, a permission grant or a question. Only a human client can make it; a pane or
   structured client is refused. A rule widens nothing the person has not already said yes to.
-- A capability is reported as verified only when it was checked against a pinned version of the
-  provider. Each adapter states its own, and the daemon sends them with the conversation.
-- **A Claude Code version does not need adding by hand.** A chat starts on any Claude Code that
-  prints a version and whose `claude --help` lists the flags the adapter passes (the permission
-  channel included). A missing flag refuses the start, naming it, before any conversation exists.
-  A version the adapter was not run against is tagged `Verified::Advertised`, the label this
-  contract already has for what a provider only says about itself; the pinned list
-  (`VERIFIED_VERSIONS`) records only what was run. What stays strict at run time: unknown frames,
-  unknown control requests and unreadable permission requests end the turn or wait for a person;
-  nothing is ever allowed on the adapter's own say. Codex keeps its pinned-version gate.
+- **An adapter works with any version of its provider's CLI or app-server; a version list is
+  never a gate.** A start is refused only when the binary cannot say what it is, or lacks a
+  capability the adapter needs, and the refusal names the provider, the version found, what is
+  missing and what to do (update it, or use the terminal agent). It is raised when the chat is
+  admitted, before any conversation exists, so a refused start leaves no row. Each adapter probes
+  what it can without starting a session:
+  - Claude Code: `claude --version` must name a version and `claude --help` must list the flags the
+    adapter passes, the permission channel included (`check_cli`).
+  - Codex: `codex --version` must name a version and the generated app-server schema must declare
+    every method and params type the adapter uses (`check_compatibility`). `turn/steer` stays
+    optional and is read from the same schema.
+  - ACP agents (Gemini CLI, OpenCode and any other): there is no probe before `initialize`, so the
+    agent is asked, and it is refused only when it answers `initialize` with a protocol version other than 1.
+    No program version is ever compared.
+- A capability is reported `Verified::Pinned` only when it was run against that version of the
+  provider; each adapter keeps a list of what it was run against (`VERIFIED_VERSIONS`) and it is
+  only a tag. Any other version that passes its probe starts and is reported
+  `Verified::Advertised`, the label for what a provider only says about itself.
+- What stays strict at run time, for every provider: unknown frames, unknown control or server
+  requests and unreadable permission requests end the turn or wait for a person, and nothing is
+  ever allowed on the adapter's own say.
 
 ## Alternatives considered
 

@@ -61,7 +61,8 @@
   (`loadSession`, its modes, its commands), reported as `Verified::Advertised` and labelled so in
   the window.
 - A claim becomes `Verified::Pinned` only for an agent and version this project ran and recorded
-  here. The two agents meant to be supported are Gemini CLI and OpenCode; neither is recorded
+  here; no agent version is ever a gate ([ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
+  An ACP agent cannot be probed without starting it: the check is the `initialize` answer. The two agents meant to be supported are Gemini CLI and OpenCode; neither is recorded
   yet, so every ACP capability is advertised.
 - Steering is never claimed: ACP has no way to add a message to a running turn.
 

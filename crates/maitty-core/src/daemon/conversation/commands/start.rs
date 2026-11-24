@@ -171,7 +171,7 @@ impl Daemon {
         let token = self.conversation_token(Pending::Validating { client, id })?;
         let tx = self.tx.clone();
         tokio::spawn(async move {
-            let result = launch.validate().await.map_err(|e| e.to_string());
+            let result = launch.admit().await.map_err(|e| e.to_string());
             // A closed daemon has no consumer for the completed admission.
             let _ = tx
                 .send(crate::daemon::Ev::ConversationValidated { token, result })

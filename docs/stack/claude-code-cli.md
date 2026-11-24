@@ -15,9 +15,8 @@
   configuration root and working directory. Never continue the most recent
   session by inference.
 - Gate structured chat on what the installed Claude Code can do, not on its version
-  number: `claude --version` must name a version and `claude --help` must list the flags
-  the adapter passes (`check_cli`; [ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
-  A version nobody ran the adapter against starts and is tagged advertised, not pinned.
+  number (`check_cli`; the policy is in
+  [ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
   Validate each JSONL frame, cap frame and queue sizes, use argument arrays, and reject
   unknown or ambiguous control messages.
 - Route permission prompts through Claude Code's Agent SDK stdio callback

@@ -789,6 +789,7 @@ mod provider_crash;
 mod branch_chat;
 
 mod claude_chat;
+mod codex_version;
 mod acp_chat;
 
 mod claude_warm;
