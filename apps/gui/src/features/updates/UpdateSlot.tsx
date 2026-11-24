@@ -93,7 +93,7 @@ export function UpdateSlot({ state, version, skipped, portalContainer, onInstall
         return (
           <>
             <div className="mx-upd-head"><span className="mx-upd-title">Restart to finish</span><span className="mx-upd-versions"><span className="mx-upd-new">{vee(offer.version)}</span></span></div>
-            <div className="mx-upd-foot"><span>Click to restart · chats keep running</span></div>
+            <div className="mx-upd-foot"><span>Click to restart · sessions are saved, a turn in progress stops</span></div>
           </>
         )
       case 'failed':

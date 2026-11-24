@@ -231,7 +231,9 @@ impl Daemon {
                 }
                 let failed = failure.is_some();
                 let reason = failure.unwrap_or_else(|| "Provider runtime disconnected".into());
-                if failed {
+                // A daemon that is ending stops its agents on purpose, and the turn it cuts comes back
+                // as interrupted after the restart: no failure to announce.
+                if failed && !self.stopping {
                     self.broadcast(
                         |client| client.attach,
                         ServerMsg::Error(format!("{} conversation {}: {reason}", self.conversation_agent(id), id.0)),

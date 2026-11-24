@@ -162,7 +162,8 @@ impl Daemon {
         state.history_ready = is_complete && history.completeness == Completeness::Complete;
         if !state.history_ready {
             state.status = Status::Blocked;
-            state.error = Some(if recorded {
+            // A reason already kept (why a saved history could not be read) is the real one.
+            state.error.get_or_insert_with(|| if recorded {
                 "No history was kept for this conversation, so it cannot be continued; chat resume is disabled".into()
             } else {
                 "Claude history could not be reconciled with the provider transcript; chat resume is disabled".into()
@@ -227,6 +228,7 @@ impl Daemon {
         #[cfg(not(test))]
         let home = super::super::follow::user_home();
         let tx = self.tx.clone();
+        self.saved_reads.insert(id);
         tokio::task::spawn_blocking(move || {
             let result = match home {
                 Some(home) => super::super::follow::saved_history(id, provider, &session, &path, &home)
@@ -244,6 +246,7 @@ impl Daemon {
     /// that is not whole is refused: a chat is never continued over a past it cannot show.
     pub(in crate::daemon) fn saved_history_read(&mut self, saved: super::super::follow::Saved) {
         let super::super::follow::Saved { id, generation, client, result } = saved;
+        self.saved_reads.remove(&id);
         if !self.conversations.iter().any(|c| c.id == id && c.generation == generation) {
             self.send(client, ServerMsg::Error("Conversation identity changed while its saved history was read".into()));
             return;
@@ -261,10 +264,16 @@ impl Daemon {
                 self.continue_cut_turn(client, id, generation);
             }
             Err(error) => {
+                // The agent is up but the chat cannot use it: stopped, with the real reason kept,
+                // so Reconnect starts it again and a later read can retry the wake.
+                self.abandon_structured(id);
                 let state = self.conversation_states.entry(id).or_default();
                 state.status = Status::Blocked;
                 state.error = Some(error.clone());
                 state.history_ready = false;
+                if client == DAEMON_REQUESTER && self.wake_retried.insert(id) {
+                    self.resumable_conversations.push((id, generation));
+                }
                 self.dirty = true;
                 self.send(client, ServerMsg::Error(error));
             }

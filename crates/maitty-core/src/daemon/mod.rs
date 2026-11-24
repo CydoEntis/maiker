@@ -543,6 +543,12 @@ struct Daemon {
     conversation_since: HashMap<crate::conversation::ConversationId, (Status, u64)>,
     /// Conversations whose agent was stopped on purpose, so its exit is not a failure.
     conversation_ending: std::collections::BTreeSet<crate::conversation::ConversationId>,
+    /// Chats whose saved history is being read off the daemon's thread, so a start of one is
+    /// refused as already under way.
+    saved_reads: std::collections::BTreeSet<crate::conversation::ConversationId>,
+    /// Chats a failed saved-history read has already put back to sleep once, so one that keeps
+    /// failing is not woken again by every read.
+    wake_retried: std::collections::BTreeSet<crate::conversation::ConversationId>,
     /// Chats admitted on a Claude Code or Codex version nobody ran the adapter against; their capabilities
     /// are reported as advertised, not pinned.
     conversation_untested_cli: std::collections::BTreeSet<crate::conversation::ConversationId>,
@@ -1407,6 +1413,8 @@ impl Daemon {
             conversation_states: BTreeMap::new(),
             conversation_since: HashMap::new(),
             conversation_ending: std::collections::BTreeSet::new(),
+            saved_reads: std::collections::BTreeSet::new(),
+            wake_retried: std::collections::BTreeSet::new(),
             conversation_untested_cli: std::collections::BTreeSet::new(),
             conversation_closing: std::collections::BTreeMap::new(),
             chat_allowed: conversation::allowed::Allowed::default(),

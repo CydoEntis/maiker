@@ -45,6 +45,16 @@ describe('a chat whose read failed', () => {
     expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
   })
 
+  it('shows the real reason a saved chat could not be read, with Reconnect to try again', async () => {
+    const reason = 'The saved conversation could not be read: The transcript is not found'
+    const onReconnect = vi.fn(() => Promise.resolve())
+    render(<ReadProblemLine error={reason} onReconnect={onReconnect} />)
+    expect(screen.getByText('Could not read this chat')).toBeInTheDocument()
+    expect(screen.getByText(reason)).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    expect(onReconnect).toHaveBeenCalledOnce()
+  })
+
   it('shows any other failure as the service said it, with nothing to reconnect', () => {
     render(<ReadProblemLine error="The history page is too large" onReconnect={vi.fn(() => Promise.resolve())} />)
     expect(screen.getByText('Could not read this chat')).toBeInTheDocument()

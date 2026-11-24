@@ -91,13 +91,24 @@ impl Daemon {
                 LaunchIdentity::Pending(Box::new(pending))
             }
             StartTarget::Conversation { id, generation } => {
-                if self.conversation_runtimes.owns(id)
+                if self.saved_reads.contains(&id)
                     || self
                         .conversation_requests
                         .values()
                         .any(|p| p.conversation() == id)
                 {
-                    bail!("Conversation already owns a runtime or pending operation");
+                    bail!("This chat is already reconnecting; wait for it to finish");
+                }
+                // A runtime whose past was never read back is no chat to keep: starting over is the
+                // recovery. One that is whole is refused.
+                let owns = self.conversation_runtimes.owns(id);
+                if owns
+                    && self
+                        .conversation_states
+                        .get(&id)
+                        .is_some_and(|state| state.history_ready)
+                {
+                    bail!("Conversation already owns a runtime");
                 }
                 if self.terms.values().any(|t| t.conversation_id == Some(id)) {
                     bail!("A native terminal still owns this conversation");
@@ -111,6 +122,12 @@ impl Daemon {
                 }
                 if c.settings.is_none() {
                     bail!("Conversation has no verified structured launch settings");
+                }
+                if owns {
+                    self.conversation_runtimes.abandon(id);
+                    if let Err(error) = self.conversation_history.reconnect(id) {
+                        tracing::warn!(%error, "cannot mark an abandoned chat's history as reconnecting");
+                    }
                 }
                 c.generation = c
                     .generation

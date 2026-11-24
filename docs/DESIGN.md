@@ -222,7 +222,7 @@ dialog radius and shadow, 22px by 24px of body, its facts in a `--m-well` block,
   right. Not now leaves a red **× Offline** chip that opens it again. Back after an outage, the dialog turns green
   ("Reconnecting…", "Found the service. Picking your chats back up.") for 1.2 s, then a **Back online** toast, or, when the
   restart cut replies, the **Pick up where you left off** dialog instead: one ticked row per session it cut (agent mark,
-  name, project · machine), **Not now** at the left of the foot and **Continue all** at the right. A chat that rested
+  name, project · machine), **Not now** at the left of the foot and **Resume N chats** at the right. A chat that rested
   through the restart says **Waking Claude up…** in its dock, in the working tone, until its agent is up. The sidebar foot has no service dot.
 - **Service update** (same dialog, caution): **Restart Maiker to finish updating** with what a restart keeps (`✓` green),
   warns about (`▲` caution) and stops (`–` dim), a restart that asks for a second click, **Later** and `protocol a → b`;
@@ -1525,7 +1525,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   button (`UpdateSlot`) with its words beside the icon: a download icon with a 5px accent dot while a release waits; a running light while it downloads; a restart icon once it is
   downloaded; the icon in `--danger` when the update failed. A card beside it (300px, `role="tooltip"`, opens on hover or focus, grows from the button's corner)
   says **Update ready** with `v0.45.2 → v0.46.0` in mono, a short **What's new** (the release's first lines) and "Click to download · installs on restart"; while it downloads the card shows the bar, what has arrived
-  of the whole (`34.9 MB of 102 MB`) and, on the right, the percent and the time left from the last ten seconds' speed (`about 12 min left`, `downloadEta.ts`); once downloaded it says **Restart to finish** and "Click to restart · chats keep running"; a failure
+  of the whole (`34.9 MB of 102 MB`) and, on the right, the percent and the time left from the last ten seconds' speed (`about 12 min left`, `downloadEta.ts`); once downloaded it says **Restart to finish** and "Click to restart · sessions are saved, a turn in progress stops"; a failure
   shows the real error with **Copy details** and "Click to retry". The click does the next step (download, nothing while it downloads, restart, retry); **Skip this version** is on the card of an available update, and a skipped release gets no button. Settings shows the same bar and line under its update row while a download runs, with the percent on its button (`DownloadProgress`); a light passes along the bar, and with no size yet a short run slides across, so it never reads as stuck. The updater downloads first and installs only on
   **Restart now**, or by itself when the app is idle, so sessions keep running either way. Settings › General › Updates shows the state with
   one fitting button and four switches: download automatically (on), **Install updates when idle** (on, helper

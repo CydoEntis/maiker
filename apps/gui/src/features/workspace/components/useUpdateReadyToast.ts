@@ -21,7 +21,7 @@ export function useUpdateReadyToast(readyVersion: string | null, restartNow: () 
     offered.current = readyVersion
     toast.info(`${APP_NAME} ${readyVersion} is ready`, {
       id: UPDATE_READY_TOAST,
-      description: 'Restart to update. Running chats keep going in the service.',
+      description: 'Restart to update. Sessions are saved and come back; a turn in progress stops.',
       duration: Infinity,
       action: { label: 'Restart now', onClick: () => { restart.current() } },
       secondary: { label: 'Later', onClick: () => undefined },

@@ -153,6 +153,19 @@ impl Daemon {
         Ok(())
     }
 
+    /// Drops the agent of a chat that is up but cannot be used (its past could not be read back),
+    /// so the chat is stopped, resumable, and holds nothing half-alive.
+    pub(super) fn abandon_structured(&mut self, id: ConversationId) {
+        self.conversation_runtimes.abandon(id);
+        if let Some(record) = self.conversations.iter_mut().find(|c| c.id == id) {
+            record.state = RecoveryState::Stopped;
+        }
+        if let Err(error) = self.conversation_history.reconnect(id) {
+            tracing::warn!(%error, "cannot mark an abandoned chat's history as reconnecting");
+        }
+        self.dirty = true;
+    }
+
     /// Closes a chat with an undo window: it is archived (hidden) at once and its agent keeps running
     /// until `UNDO_WINDOW` passes, when `finish_chat_closes` ends it. A second close keeps the first clock.
     pub(in crate::daemon) fn conversation_close(
