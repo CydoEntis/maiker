@@ -43,6 +43,7 @@ fn saved(id: &str, said: &str, ago: u64) -> SavedConversation {
     SavedConversation {
         id: id.into(),
         first_message: said.into(),
+        title: None,
         last_active: now() - ago,
     }
 }

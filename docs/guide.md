@@ -1023,7 +1023,7 @@ without asking. Turn it off per agent in Settings › Permissions (or `[permissi
 so and offers **set it up**.
 
 **Bring in your chats.** The first time you open Maiker, it looks for chats you had with Claude or Codex
-anywhere on this computer and offers to bring them in, grouped by project. The ones from the last week are ticked;
+anywhere on this computer and offers to bring them in, grouped by project, each with the name the chat already had and when you last used it. The ones from the last week are ticked;
 **Bring in** opens each as a Maiker chat with its history. A chat that is still open in another terminal is marked:
 close it there first. You can do this again any time from the command palette, **Bring in chats from Claude and
 Codex…**.

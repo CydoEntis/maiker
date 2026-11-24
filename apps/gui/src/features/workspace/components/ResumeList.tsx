@@ -1,13 +1,14 @@
-import { ageOf, type SavedRead } from '../model/newChatHost'
+import type { SavedConversation } from '@/api/daemon'
+import { ageOf, savedName, whenOf, type SavedRead } from '../model/newChatHost'
 
 type Props = {
   read: SavedRead
   disabled: boolean
   now: number
-  onPick: (id: string) => void
+  onPick: (saved: SavedConversation) => void
 }
 
-/** The conversations an agent saved for a folder, newest first, each its first message and how long ago it was active; a click resumes it. */
+/** The conversations an agent saved for a folder, newest first, each by its name, the day and time it was last used and how long ago; a click resumes it. */
 export function ResumeList({ read, disabled, now, onPick }: Props) {
   if (read.kind === 'none') return <p role="status">Looking for saved conversations…</p>
   if (read.kind === 'failed') return <p role="status">Could not read the saved conversations.</p>
@@ -17,9 +18,9 @@ export function ResumeList({ read, disabled, now, onPick }: Props) {
     <ul className="mx-recent-list" aria-label="Saved conversations">
       {read.list.map((saved) => (
         <li key={saved.id}>
-          <button type="button" className="mx-recent-row" aria-disabled={disabled} title={saved.first_message} onClick={() => { if (!disabled) onPick(saved.id) }}>
-            <span className="mx-recent-text"><span className="mx-recent-title">{saved.first_message}</span></span>
-            <span className="mx-recent-when">{ageOf(saved.last_active, now)}</span>
+          <button type="button" className="mx-recent-row" aria-disabled={disabled} title={savedName(saved)} onClick={() => { if (!disabled) onPick(saved) }}>
+            <span className="mx-recent-text"><span className="mx-recent-title">{savedName(saved)}</span></span>
+            <span className="mx-recent-when">{whenOf(saved.last_active, now)} · {ageOf(saved.last_active, now)}</span>
           </button>
         </li>
       ))}

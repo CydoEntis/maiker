@@ -853,6 +853,14 @@ export async function renameConversationOnDaemon(conversation: Pick<Conversation
   await invokeParsed('rename_conversation', NullSchema, { ...chatArgs(conversation.id), title })
 }
 
+/**
+ * Tells the daemon a chat opened on a saved session was last used at `at` (unix seconds): its row's age counts from then,
+ * not from the import. A daemon from before the command is not asked, so the age counts from the start.
+ */
+export async function conversationActiveAt(conversation: string, at: number): Promise<void> {
+  await invokeParsed('conversation_active_at', NullSchema, { id: chatArgs(conversation).id, at })
+}
+
 export type SessionPermissions = 'read-only' | 'workspace-write' | 'full-access'
 
 /**
@@ -960,7 +968,8 @@ export async function pullFolder(folder: string): Promise<void> {
   await invokeParsed('git_pull', NullSchema, { folder })
 }
 
-const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), last_active: z.number().int().nonnegative() })
+// `title` is the name the agent gave the chat; a service from before 126 sends none.
+const SavedConversationSchema = z.object({ id: z.string(), first_message: z.string(), title: z.string().nullish(), last_active: z.number().int().nonnegative() })
 export type SavedConversation = z.infer<typeof SavedConversationSchema>
 const SavedConversationsSchema = z.union([z.null(), z.literal('NotSupported'), z.object({ Listed: z.array(SavedConversationSchema) })])
 

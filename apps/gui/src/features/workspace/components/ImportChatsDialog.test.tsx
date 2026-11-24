@@ -14,6 +14,7 @@ function chat(agent: 'claude' | 'codex', id: string, folder: string, first: stri
 const LOGIN = chat('claude', 'a', '/code/app', 'Fix the login', DAY)
 const OLD = chat('codex', 'b', '/code/app', 'Port the parser', 30 * DAY)
 const LIVE = chat('claude', 'c', '/code/api', 'Add the endpoint', 10)
+const NAMED: ImportableChat = { agent: 'claude', folder: '/code/web', saved: { id: 'd', first_message: 'help me with this', title: 'Checkout redesign', last_active: NOW - 3 * DAY } }
 const LIST = [LOGIN, LIVE, OLD]
 
 function show(onImport = vi.fn()) {
@@ -41,6 +42,16 @@ describe('Bring in your chats', () => {
     await userEvent.click(within(api).getByRole('checkbox', { name: /Add the endpoint/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Bring in 2 chats' }))
     expect(onImport).toHaveBeenCalledWith([LOGIN, LIVE])
+  })
+
+  it('shows the name its agent gave a chat, and when it was last used with how long ago', () => {
+    render(<div className="mx-app"><ImportChatsDialog read={{ kind: 'listed', list: [NAMED, LOGIN] }} now={NOW} locked={false} onImport={() => undefined} onCancel={() => undefined} /></div>)
+
+    const web = screen.getByRole('region', { name: 'web' })
+    expect(within(web).getByText('Checkout redesign')).toBeInTheDocument()
+    expect(within(web).queryByText('help me with this')).toBeNull()
+    expect(within(web).getByText(/\d{1,2}:\d{2}.* · 3d/)).toBeInTheDocument()
+    expect(within(screen.getByRole('region', { name: 'app' })).getByText('Fix the login')).toBeInTheDocument()
   })
 
   it('says why there is nothing to pick while it looks, when nothing is left, and for an older service', () => {

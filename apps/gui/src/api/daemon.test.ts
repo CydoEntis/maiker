@@ -3,7 +3,7 @@ import { invoke, isTauri } from '@tauri-apps/api/core'
 import { forgetMachines, registerMachine } from './machines'
 import { conversationKey } from './conversationKey'
 import type { Conversation } from '@/data/preview'
-import { loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, renameConversationOnDaemon, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, daemonSaidEnded, localListRevision, markSeenOnDaemon, closeSession, readConversationPage, submitMessage, cancelTurn, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer } from './daemon'
+import { loadTerminalScreen, loadTerminalReplay, sendTerminalInput, resizeTerminal, renameConversationOnDaemon, loadConversations, checkConversations, conversationsFromSnapshot, daemonSaidRemoved, daemonSaidEnded, localListRevision, markSeenOnDaemon, closeSession, readConversationPage, submitMessage, cancelTurn, reloadAgentOnDaemon, loadDaemonRestartStatus, loadDaemonUpdateStatus, loadMachines, restartMismatchedDaemon, restartStaleDaemon, allowAlways, sideAnswer, conversationActiveAt, importableChats } from './daemon'
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: vi.fn(),
@@ -205,6 +205,25 @@ describe('names and closed sessions shared through the daemon', () => {
     await renameConversationOnDaemon({ id: '42' }, 'Fix the login bug')
 
     expect(invoke).toHaveBeenCalledExactlyOnceWith('rename_conversation', { id: 42, title: 'Fix the login bug' })
+  })
+
+  it('tells the daemon when a saved session was last used, so the chat\'s age counts from then', async () => {
+    vi.mocked(invoke).mockResolvedValue(null)
+
+    await conversationActiveAt('42', 1_780_000_000)
+
+    expect(invoke).toHaveBeenCalledExactlyOnceWith('conversation_active_at', { id: 42, at: 1_780_000_000 })
+  })
+
+  it('reads the name an agent gave a chat to bring in, and none from a service that sends no name', async () => {
+    vi.mocked(invoke).mockResolvedValue([
+      { agent: 'claude', folder: '/code/app', saved: { id: 'a', first_message: 'Fix it', title: 'Login bug', last_active: 5 } },
+      { agent: 'codex', folder: '/code/app', saved: { id: 'b', first_message: 'Add it', last_active: 4 } },
+    ])
+
+    const chats = await importableChats()
+
+    expect(chats?.map((chat) => chat.saved.title ?? null)).toEqual(['Login bug', null])
   })
 
   it('names a chat of another machine on that machine', async () => {

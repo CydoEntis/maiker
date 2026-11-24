@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 125;
+pub const PROTOCOL_VERSION: u32 = 126;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -82,6 +82,11 @@ pub struct SavedConversation {
     /// The first thing the person typed, as one clean line of at most
     /// `SAVED_FIRST_MESSAGE_MAX_CHARS` characters.
     pub first_message: String,
+    /// The name its agent gave it (Claude's own or generated title, Codex's thread name) as one clean
+    /// line of at most `SAVED_FIRST_MESSAGE_MAX_CHARS` characters; none when the agent gave it none.
+    /// A client shows it, else `first_message`. Absent from a daemon before 126.
+    #[serde(default)]
+    pub title: Option<String>,
     /// When its file was last written (unix seconds).
     pub last_active: u64,
 }
@@ -843,6 +848,12 @@ pub enum Command {
     ConversationRename {
         id: crate::conversation::ConversationId,
         title: String,
+    },
+    /// A chat opened on a session its agent saved was last used at `at` (unix seconds, human clients
+    /// only): its row's age counts from then, until its status next changes. Read as no later than now.
+    ConversationActiveAt {
+        id: crate::conversation::ConversationId,
+        at: u64,
     },
     /// Type into a terminal pane (human clients only).
     TerminalInput {
@@ -2833,6 +2844,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ClientMsg::Query(Query::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
+            ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
                 | Command::ConversationSetPermissions { .. }
@@ -2856,6 +2868,10 @@ pub const CHAT_CONTROLS_SINCE: u32 = 124;
 /// The first version with `Query::ImportableChats` and its `Reply::ImportableChats`. An older daemon
 /// is never asked, so the desktop app offers no import, and an older client is never sent the reply.
 pub const IMPORTABLE_CHATS_SINCE: u32 = 125;
+
+/// The first version whose daemon reads `Command::ConversationActiveAt`. A daemon before it passes the
+/// command over without an answer, so a client does not send it and the chat's age counts from its start.
+pub const CHAT_ACTIVE_AT_SINCE: u32 = 126;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3195,6 +3211,7 @@ mod tests {
                 base: Some("dev".into()),
             }),
             ClientMsg::Command(Command::ConversationMarkSeen { id }),
+            ClientMsg::Command(Command::ConversationActiveAt { id, at: 1_780_000_000 }),
             ClientMsg::Command(Command::ConversationSetPermissions {
                 id,
                 generation: 2,
@@ -3337,6 +3354,7 @@ mod tests {
                 found: SavedConversations::Listed(vec![SavedConversation {
                     id: "0195c0de-0000-7000-8000-000000000001".into(),
                     first_message: "Rename the export button".into(),
+                    title: Some("Export button".into()),
                     last_active: 1_780_000_000,
                 }]),
             }),
@@ -3506,6 +3524,7 @@ mod tests {
                     | Command::ConversationSetPermissions { .. }
                     | Command::BranchWorktree { base: Some(_), .. },
                 ) => CHAT_CONTROLS_SINCE,
+                ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3566,6 +3585,36 @@ mod tests {
         })
     }
 
+    /// 126 added `SavedConversation.title` (a defaulted field) and `Command::ConversationActiveAt`. A
+    /// peer at 125 reads a saved conversation without the title, still talks to this build, and is
+    /// never sent the command, which has its own `introduced_in` arm.
+    #[test]
+    fn a_peer_from_before_chat_titles_reads_the_saved_conversation_and_is_never_sent_the_activity() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        struct SavedConversation125 {
+            id: String,
+            first_message: String,
+            last_active: u64,
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Command125 {
+            ConversationMarkSeen { id: crate::conversation::ConversationId },
+        }
+        const { assert!(CHAT_ACTIVE_AT_SINCE > COMPATIBLE_SINCE && CHAT_ACTIVE_AT_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(CHAT_ACTIVE_AT_SINCE - 1, 0));
+
+        let old = rmp_serde::to_vec_named(&SavedConversation125 { id: "abc".into(), first_message: "Fix it".into(), last_active: 9 }).unwrap();
+        let read: SavedConversation = decode(&old).unwrap();
+        assert_eq!(read.title, None);
+        let new = rmp_serde::to_vec_named(&SavedConversation { id: "abc".into(), first_message: "Fix it".into(), title: Some("Login".into()), last_active: 9 }).unwrap();
+        assert_eq!(decode::<SavedConversation125>(&new).unwrap().first_message, "Fix it");
+
+        let active = Command::ConversationActiveAt { id: crate::conversation::ConversationId(3), at: 7 };
+        unreadable_before::<Command125, _>(&active);
+        round_trips(&active);
+        assert_eq!(ClientMsg::Command(active).introduced_in(), CHAT_ACTIVE_AT_SINCE);
+    }
+
     /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124
     /// still talks to this build, cannot read either message, and is never sent one.
     #[test]
@@ -3589,7 +3638,7 @@ mod tests {
             chats: vec![ImportableChat {
                 agent: "claude".into(),
                 folder: "/code/app".into(),
-                saved: SavedConversation { id: "abc".into(), first_message: "Fix the login".into(), last_active: 9 },
+                saved: SavedConversation { id: "abc".into(), first_message: "Fix the login".into(), title: None, last_active: 9 },
             }],
         };
         unreadable_before::<Reply124, _>(&reply);

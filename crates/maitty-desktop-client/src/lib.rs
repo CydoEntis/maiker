@@ -1850,6 +1850,17 @@ pub async fn rename_conversation(
     }
 }
 
+/// A chat opened on a saved session was last used at `at` (unix seconds): its row's age counts from then. This
+/// computer's daemon from before the command is not asked (it would never answer) and the age counts from the start.
+pub async fn conversation_active_at(id: u64, at: u64) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ConversationActiveAt {
+        id: maitty_shared::conversation::ConversationId(id),
+        at,
+    });
+    ask_if_known(message).await?;
+    Ok(Value::Null)
+}
+
 /// The window shows a finished chat, so its done becomes idle. This computer's daemon from before the command is
 /// not asked (it would never answer) and the chat keeps its done; another machine's is on this version.
 pub async fn mark_conversation_seen(id: u64, daemon: impl Into<Daemon>) -> Result<Value> {

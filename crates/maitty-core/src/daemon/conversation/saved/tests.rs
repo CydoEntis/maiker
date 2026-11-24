@@ -247,3 +247,85 @@ fn one_folder_gives_at_most_its_share_of_the_chats_offered() {
     let ids: Vec<String> = chats.into_iter().map(|chat| chat.saved.id).collect();
     assert_eq!(ids, (0..IMPORTABLE_CHATS_PER_FOLDER).map(|age| format!("c{age}")).collect::<Vec<_>>(), "the newest of the folder");
 }
+
+fn titled(chats: Vec<ImportableChat>) -> Vec<(String, Option<String>, String)> {
+    chats.into_iter().map(|chat| (chat.saved.id, chat.saved.title, chat.saved.first_message)).collect()
+}
+
+#[test]
+fn claude_chats_carry_the_name_claude_gave_them_the_person_s_own_before_a_generated_one() {
+    let root = scratch("titles");
+    let (claude, app) = (root.join("claude"), root.join("app"));
+    std::fs::create_dir_all(&app).unwrap();
+    let file = |id: &str| claude.join(claude_folder_name(&app)).join(format!("{id}.jsonl"));
+    let ai = |title: &str| serde_json::json!({"type": "ai-title", "aiTitle": title});
+    let custom = |title: &str| serde_json::json!({"type": "custom-title", "customTitle": title});
+    let said = || claude_user(&app, serde_json::json!("Fix the login"));
+    write(&file("generated"), &[said(), ai("First guess"), ai("Login bug\u{1b}[31m fix")], 10);
+    write(&file("renamed"), &[custom("My own name"), said(), ai("Generated")], 20);
+    write(&file("unnamed"), &[said()], 30);
+    write(&file("long"), &[said(), ai(&"x".repeat(1000))], 40);
+
+    let chats = titled(importable(&stores(&claude, &root.join("none")), &HashSet::new()));
+
+    let said = "Fix the login".to_string();
+    assert_eq!(chats[0], ("generated".into(), Some("Login bug fix".into()), said.clone()));
+    assert_eq!(chats[1], ("renamed".into(), Some("My own name".into()), said.clone()));
+    assert_eq!(chats[2], ("unnamed".into(), None, said));
+    assert_eq!(chats[3].1.as_ref().map(|title| title.chars().count()), Some(SAVED_FIRST_MESSAGE_MAX_CHARS));
+}
+
+#[test]
+fn a_name_given_late_in_a_long_claude_chat_is_found_from_the_end_of_its_file() {
+    let root = scratch("titles-tail");
+    let (claude, app) = (root.join("claude"), root.join("app"));
+    std::fs::create_dir_all(&app).unwrap();
+    let file = claude.join(claude_folder_name(&app)).join("long.jsonl");
+    let filler = serde_json::json!({"type": "assistant", "message": {"content": "y".repeat(8192)}});
+    let mut lines = vec![claude_user(&app, serde_json::json!("Fix the login"))];
+    lines.extend(std::iter::repeat_n(filler, HEAD_MAX_BYTES as usize / 8192 + 8));
+    lines.push(serde_json::json!({"type": "custom-title", "customTitle": "Named at the end"}));
+    write(&file, &lines, 10);
+
+    let chats = titled(importable(&stores(&claude, &root.join("none")), &HashSet::new()));
+
+    assert_eq!(chats, [("long".into(), Some("Named at the end".into()), "Fix the login".into())]);
+}
+
+#[test]
+fn codex_chats_carry_the_thread_name_its_index_holds_the_latest_one_winning() {
+    let root = scratch("titles-codex");
+    let (codex, api) = (root.join("codex"), root.join("api"));
+    std::fs::create_dir_all(&api).unwrap();
+    let session = |id: &str| codex.join("2026/11/12").join(format!("rollout-2026-11-12T09-00-00-{id}.jsonl"));
+    write(&session("named"), &[codex_meta("named", &api, "user"), codex_user("Write the release notes")], 10);
+    write(&session("plain"), &[codex_meta("plain", &api, "user"), codex_user("Another task")], 20);
+    let index = [
+        serde_json::json!({"id": "named", "thread_name": "Old name", "updated_at": "2026-11-12T09:00:00Z"}),
+        serde_json::json!({"id": "other", "thread_name": "Not a listed one"}),
+        serde_json::json!({"id": "named", "thread_name": "Release notes\u{7}", "updated_at": "2026-11-12T10:00:00Z"}),
+    ];
+    std::fs::write(root.join("session_index.jsonl"), index.iter().map(|line| format!("{line}\n")).collect::<String>()).unwrap();
+
+    let chats = titled(importable(&stores(&root.join("none"), &codex), &HashSet::new()));
+
+    assert_eq!(
+        chats,
+        [
+            ("named".into(), Some("Release notes".into()), "Write the release notes".into()),
+            ("plain".into(), None, "Another task".into()),
+        ]
+    );
+}
+
+#[test]
+fn a_folders_own_list_carries_the_names_too() {
+    let root = scratch("titles-list");
+    let app = project();
+    let dir = root.join(claude_folder_name(&app));
+    write(&dir.join("s.jsonl"), &[claude_user(&app, serde_json::json!("Fix it")), serde_json::json!({"type": "ai-title", "aiTitle": "Login fix"})], 5);
+
+    let SavedConversations::Listed(found) = list("claude", &app, &stores(&root, &root.join("none"))) else { panic!("expected a list") };
+
+    assert_eq!(found.into_iter().map(|saved| saved.title).collect::<Vec<_>>(), [Some("Login fix".to_string())]);
+}

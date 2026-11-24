@@ -1321,6 +1321,18 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
+125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;
+`COMPATIBLE_SINCE` stays 122, since an older daemon is never sent the command). `title` is the name the agent gave the
+chat, one clean line cut at `SAVED_FIRST_MESSAGE_MAX_CHARS`: for Claude the person's `custom-title`, else the latest
+`ai-title`, read from the first 1 MiB of the transcript and, for a longer file, its last 256 KiB; for Codex the latest
+`thread_name` in `session_index.jsonl` (its last 1 MiB). None when the agent gave none, and a client shows `title`, else
+`first_message`. Both `SavedConversations` and `ImportableChats` carry it. `ConversationActiveAt` (human clients only)
+sets a chat's status time to `at`, never later than now, so a chat opened on a saved session shows its real last use
+instead of the time it was opened; the next status change stamps now as for any chat. The window sends it after a resume
+start (`conversation_active_at`) and a daemon before 126 is not asked. The name itself goes through the existing
+`ConversationRename`.
+
 Protocol 125 adds `Query::ImportableChats { tag }` with `Reply::ImportableChats { tag, chats }`
 (`IMPORTABLE_CHATS_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is
 never asked and an older client never asks). `chats` are the conversations Claude and Codex saved in any folder of the

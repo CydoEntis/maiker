@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { Segmented, SegmentedItem } from '@/components/ui/radio-group'
-import { nowSeconds, useSavedConversations } from '../model/newChatHost'
+import { nowSeconds, savedName, useSavedConversations } from '../model/newChatHost'
 import type { NewSessionProject } from '../model/newSession'
 import { ChipMenu } from './NewChatMenus'
 import { ResumeList } from './ResumeList'
@@ -19,7 +19,7 @@ type Props = {
   defaultAgent: SavedAgent
   /** A start is under way, so a pick would be refused. */
   locked: boolean
-  onPick: (pick: { folder: string; agent: SavedAgent; id: string }) => void
+  onPick: (pick: { folder: string; agent: SavedAgent; id: string; name: string; lastActive: number }) => void
   onCancel: () => void
 }
 
@@ -58,7 +58,7 @@ export function ResumeSavedDialog({ projects, defaultAgent, locked, onPick, onCa
             <ChipMenu side="bottom" title="Folder" label={project?.name ?? 'Choose a folder'} summary={project?.name ?? 'Choose a folder'}
               sections={[{ heading: 'Folder', items: projects.map((each) => ({ key: each.folder, label: each.name, sub: each.folder, checked: each.folder === folder, onPick: () => { setFolder(each.folder) } })) }]} />
           </div>
-          {folder === '' ? <p role="status">No project on this computer yet.</p> : <ResumeList read={read} disabled={locked} now={now} onPick={(id) => { onPick({ folder, agent, id }) }} />}
+          {folder === '' ? <p role="status">No project on this computer yet.</p> : <ResumeList read={read} disabled={locked} now={now} onPick={(saved) => { onPick({ folder, agent, id: saved.id, name: savedName(saved), lastActive: saved.last_active }) }} />}
           </ModalBody>
           <ModalFoot>
             <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Close</Button>

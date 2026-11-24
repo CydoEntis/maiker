@@ -7,6 +7,14 @@ import type { NewChatRequest } from '../components/NewChatPage'
 import { resumeWords } from './moveToWorktree'
 import type { SessionView } from './session'
 
+/** A saved conversation's resume start: in its folder as it is, with no branch made, named as its agent named it and aged from when it was last used. */
+export function savedStart(folder: string, agent: 'claude' | 'codex', id: string, saved: { name: string; lastActive: number } | null = null): NewChatRequest {
+  return {
+    folder, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: id,
+    ...(saved === null ? {} : { name: saved.name, lastActive: saved.lastActive }),
+  }
+}
+
 /** What the Recent sessions list knows: nothing yet, the list, or why there is none. */
 export type RecentRead = { kind: 'loading' } | { kind: 'listed'; list: readonly ClosedSession[] } | { kind: 'older' } | { kind: 'failed' }
 

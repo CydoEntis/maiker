@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { groupByFolder, importKey, maybeOpenElsewhere, tickedAtFirst, type ImportRead } from '../model/importChats'
-import { ageOf } from '../model/newChatHost'
+import { ageOf, savedName, whenOf } from '../model/newChatHost'
 import { AppIcon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -86,11 +86,12 @@ function ImportList({ list, now, locked, onImport, onCancel }: Props & { list: r
                   const elsewhere = maybeOpenElsewhere(chat, now)
                   return (
                     <li key={key}>
-                      <label className="mx-cutoff-row" title={chat.saved.first_message}>
+                      <label className="mx-cutoff-row" title={savedName(chat.saved)}>
                         <input type="checkbox" data-bare checked={ticked.has(key)} onChange={() => { toggle(key) }} />
                         <AppIcon process={chat.agent} size={14} />
-                        <span className="mx-cutoff-name">{chat.saved.first_message}</span>
-                        <span className="mx-cutoff-where">{elsewhere ? 'May be open elsewhere: close it there first' : ageOf(chat.saved.last_active, now)}</span>
+                        <span className="mx-cutoff-name">{savedName(chat.saved)}</span>
+                        {elsewhere && <span className="mx-cutoff-where">May be open elsewhere: close it there first</span>}
+                        <span className="mx-cutoff-when">{whenOf(chat.saved.last_active, now)} · {ageOf(chat.saved.last_active, now)}</span>
                       </label>
                     </li>
                   )

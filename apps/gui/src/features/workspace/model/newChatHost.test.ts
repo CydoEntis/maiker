@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { chatPermissions, launchFlags, startsBypassed, withBypass } from './newChatHost'
+import { chatPermissions, launchFlags, savedName, startsBypassed, whenOf, withBypass } from './newChatHost'
 
 
 describe('launchFlags', () => {
@@ -96,5 +96,23 @@ describe('what a chat started from the draft may do', () => {
     expect(chatPermissions('claude', 'acceptEdits', false)).toBeNull()
     expect(chatPermissions('claude', 'auto', true)).toBeNull()
     expect(chatPermissions('codex', 'nonsense', false)).toBeNull()
+  })
+})
+
+describe('a saved chat as the lists show it', () => {
+  it('is named by what its agent called it, else by what the person typed first', () => {
+    expect(savedName({ title: 'Login bug', first_message: 'Fix the login' })).toBe('Login bug')
+    expect(savedName({ title: null, first_message: 'Fix the login' })).toBe('Fix the login')
+    expect(savedName({ first_message: 'Fix the login' })).toBe('Fix the login')
+    expect(savedName({ title: '  ', first_message: 'Fix the login' })).toBe('Fix the login')
+  })
+
+  it('is dated by its day and time, with the year only when it is not this one', () => {
+    const now = Date.UTC(2033, 5, 15, 12) / 1000
+    const lately = now - 3 * 86_400
+    const long = now - 400 * 86_400
+    expect(whenOf(lately, now)).toMatch(/\d{1,2}:\d{2}/)
+    expect(whenOf(lately, now)).not.toMatch(/20\d\d/)
+    expect(whenOf(long, now)).toMatch(/2032/)
   })
 })

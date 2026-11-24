@@ -1110,6 +1110,7 @@ impl Daemon {
             Command::ConversationSetPermissions { .. } => self.may(client, Grant::Admin, None),
             Command::ConversationRename { .. }
             | Command::ConversationArchive { .. }
+            | Command::ConversationActiveAt { .. }
             | Command::ConversationMarkSeen { .. }
                 if structured
                     || self
@@ -1121,6 +1122,7 @@ impl Daemon {
             }
             Command::ConversationRename { .. }
             | Command::ConversationArchive { .. }
+            | Command::ConversationActiveAt { .. }
             | Command::ConversationMarkSeen { .. } => self.may(client, Grant::Write, None),
             Command::ConversationTerminalInput { .. }
             | Command::ConversationTerminalResize { .. }

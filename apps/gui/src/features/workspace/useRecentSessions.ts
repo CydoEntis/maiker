@@ -2,15 +2,9 @@ import { useCallback, useState } from 'react'
 import type { ClosedSession, ImportableChat } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
-import { LOCAL_MACHINE } from '@/api/machines'
 import type { SessionView } from './model/session'
-import { DEFAULT_PICK } from '@/features/chat/agentChoice'
-import { endedResume, reopenRequest } from './model/recentSessions'
-
-/** A saved conversation's resume start: in its folder as it is, with no branch made, as the New session draft's Resume did. */
-function savedStart(folder: string, agent: 'claude' | 'codex', id: string): NewChatRequest {
-  return { folder, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: id }
-}
+import { importStart } from './model/importChats'
+import { endedResume, reopenRequest, savedStart } from './model/recentSessions'
 
 /**
  * The Recent sessions list, the Resume a saved chat dialog and Bring in your chats: whether each is open, and starting a
@@ -33,8 +27,8 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest, option
     const request = reopenRequest(closed)
     if (request !== null) begin(request, () => { setRecentOpen(false) })
   }, [begin])
-  const resumeSaved = useCallback(({ folder, agent, id }: { folder: string; agent: 'claude' | 'codex'; id: string }) => {
-    begin(savedStart(folder, agent, id), () => { setSavedOpen(false) })
+  const resumeSaved = useCallback(({ folder, agent, id, name, lastActive }: { folder: string; agent: 'claude' | 'codex'; id: string; name: string; lastActive: number }) => {
+    begin(savedStart(folder, agent, id, { name, lastActive }), () => { setSavedOpen(false) })
   }, [begin])
   // Each picked chat starts in the background, one after another, so the window stays where it is; one that fails is
   // counted and the rest still start.
@@ -49,7 +43,7 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest, option
       let lastError: unknown = null
       for (const chat of chats) {
         try {
-          await startNewChat(savedStart(chat.folder, chat.agent, chat.saved.id), { background: true })
+          await startNewChat(importStart(chat), { background: true })
         } catch (error) {
           failed += 1
           lastError = error

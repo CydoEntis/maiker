@@ -1310,6 +1310,14 @@ async fn resume_conversation(
         .map_err(|error| format!("{error:#}"))
 }
 
+/// A chat opened on a saved session was last used at `at` (unix seconds); its row's age counts from then.
+#[tauri::command]
+async fn conversation_active_at(id: u64, at: u64) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::conversation_active_at(id, at)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 #[tauri::command]
 async fn rename_conversation(
     app: tauri::AppHandle,
@@ -1591,6 +1599,7 @@ pub fn run() {
             dequeue_conversation,
             send_conversation_now,
             rename_conversation,
+            conversation_active_at,
             start_chat_session,
             resume_chat_session,
             start_acp_chat,
