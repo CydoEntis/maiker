@@ -2731,7 +2731,7 @@ dependencies = [
 
 [[package]]
 name = "maiker"
-version = "0.83.2"
+version = "0.84.0"
 dependencies = [
  "maitty-shared",
  "maitty-terminal-client",
