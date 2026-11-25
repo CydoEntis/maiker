@@ -330,11 +330,30 @@ pub(super) fn copy_claude_transcript(src: &std::path::Path, session: &str, dest:
     }
 }
 
-/// A worktree to remove in a clean-up: its folder, and whether to go ahead with
-/// uncommitted changes in it.
-pub(super) type TidyGo = (PathBuf, bool);
-/// One that stays: its name, and why.
-pub(super) type TidyStay = (String, String);
+/// A worktree to remove in a clean-up: the folder it was asked for by, its top folder, and
+/// whether to go ahead with uncommitted changes in it. The asked folder is what the answer names,
+/// so the client finds its own row in it.
+#[derive(Debug)]
+pub(crate) struct TidyGo {
+    pub asked: PathBuf,
+    pub top: PathBuf,
+    pub force: bool,
+}
+
+/// One that stays: the folder it was asked for by, its name, and why.
+#[derive(Debug)]
+pub(crate) struct TidyStay {
+    pub asked: PathBuf,
+    pub name: String,
+    pub why: String,
+}
+
+/// One that went: the folder it was asked for by, and whether its merged branch went too.
+#[derive(Debug)]
+pub(crate) struct TidyGone {
+    pub asked: PathBuf,
+    pub branch_went: bool,
+}
 
 impl Daemon {
     /// Heuristic statuses for agents without hooks, and "seen" bookkeeping for everyone.
@@ -511,21 +530,28 @@ impl Daemon {
 
     /// A clean-up's worktrees, sorted into the ones to remove (folder, even with uncommitted
     /// changes) and the ones that stay, with why.
-    pub(super) fn tidy_plan(&self, items: Vec<TidyGo>) -> (Vec<TidyGo>, Vec<TidyStay>) {
+    pub(super) fn tidy_plan(&self, items: Vec<(PathBuf, bool)>) -> (Vec<TidyGo>, Vec<TidyStay>) {
         let mut go = Vec::new();
         let mut stay = Vec::new();
-        for (path, force) in items {
-            let path = clean_path(path);
+        for (asked, force) in items {
+            let path = clean_path(asked.clone());
             let name = path
                 .file_name()
                 .map(|n| n.to_string_lossy().into_owned())
                 .unwrap_or_default();
+            let kept = |why: &str| TidyStay {
+                asked: asked.clone(),
+                name: name.clone(),
+                why: why.to_string(),
+            };
             match crate::gitfs::head(&path).filter(|h| h.linked) {
-                None => stay.push((name, "it isn't a worktree".to_string())),
-                Some(h) if self.runs_in(&h.top) => {
-                    stay.push((name, "something is running in it".to_string()))
-                }
-                Some(h) => go.push((h.top, force)),
+                None => stay.push(kept("it isn't a worktree")),
+                Some(h) if self.runs_in(&h.top) => stay.push(kept("something is running in it")),
+                Some(h) => go.push(TidyGo {
+                    asked,
+                    top: h.top,
+                    force,
+                }),
             }
         }
         (go, stay)

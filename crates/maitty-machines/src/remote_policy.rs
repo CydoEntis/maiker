@@ -92,6 +92,9 @@ pub fn allow(opts: &MachineOpts, msg: &ServerMsg) -> Verdict {
         ServerMsg::Reply(Reply::Workspace(_)) => {
             Verdict::Ignore("a project's open sessions are kept on this computer only")
         }
+        ServerMsg::Reply(Reply::WorktreesTidied { .. }) => {
+            Verdict::Ignore("worktrees are removed by folder on this computer only")
+        }
         ServerMsg::Reply(Reply::Extensions { .. }) => {
             Verdict::Ignore("extensions are changed on this computer only")
         }
@@ -1017,6 +1020,7 @@ mod tests {
             }),
             ServerMsg::Reply(Reply::ImportableChats { tag: 1, chats: Vec::new() }),
             ServerMsg::Reply(Reply::Workspace(Vec::new())),
+            ServerMsg::Reply(Reply::WorktreesTidied { removed: Vec::new(), kept: Vec::new() }),
             ServerMsg::Notice("n".into()),
             ServerMsg::AskRemoveWorktree {
                 path: PathBuf::from("/home/me/repo-wt"),
@@ -1064,6 +1068,7 @@ mod tests {
             ServerMsg::Reply(Reply::SavedConversations { .. }) => "SavedConversations",
             ServerMsg::Reply(Reply::ImportableChats { .. }) => "ImportableChats",
             ServerMsg::Reply(Reply::Workspace(_)) => "Workspace",
+            ServerMsg::Reply(Reply::WorktreesTidied { .. }) => "WorktreesTidied",
             ServerMsg::Reply(_) => "Reply",
             ServerMsg::Error(_) => "Error",
             ServerMsg::Notice(_) => "Notice",
@@ -1115,6 +1120,7 @@ mod tests {
                 "SavedConversations",
                 "ImportableChats",
                 "Workspace",
+                "WorktreesTidied",
                 "Notice",
                 "AskRemoveWorktree",
                 "Clipboard",

@@ -386,7 +386,7 @@ fn another_machines_worktrees_are_asked_about_one_at_a_time_and_removed_there() 
     app.menu_do(c.act);
     let out = sent(&mut rx);
     assert!(
-        out.iter().any(|o| o.machine == THERE && matches!(&o.msg, ClientMsg::Command(Command::TidyWorktrees { items }) if items == &[(PathBuf::from("/srv/app-worktrees/merged-fix"), false)])),
+        out.iter().any(|o| o.machine == THERE && matches!(&o.msg, ClientMsg::Command(Command::TidyWorktrees { items, answer_each: false }) if items == &[(PathBuf::from("/srv/app-worktrees/merged-fix"), false)])),
         "removed by the machine they are on: {out:?}"
     );
 }

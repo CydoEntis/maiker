@@ -20,7 +20,7 @@ import type { OpenOutcome, SavedRead, StandingRead, WorkspaceFor, WorkspaceRow, 
 import { MenuPopup } from '@/features/workspace/components/MenuPopup'
 import { projectContextMenu, type ProjectActions, type ProjectTarget } from '@/features/workspace/components/projectMenu'
 import { toast } from '@/lib/toast'
-import type { WorktreeStanding } from '@/features/worktrees/api'
+import type { WorktreeStanding, WorktreesRemoved } from '@/features/worktrees/api'
 import { toastOpened } from '@/features/workspace/useRecentSessions'
 import { Toaster } from '@/components/ui/toaster'
 import { confirmAsk } from '@/features/confirm/confirm'
@@ -35,7 +35,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed, workspace-busy (a worktree a session runs in), workspace-remove (Remove's question), workspace-removed (a worktree the daemon kept, with its reason)); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  * `switch` is a project's right-click menu with Switch to… open on the other opened projects, and `switch-failed` the
  * toast a switch ends with when its project's sessions could not be saved.
  */
@@ -222,22 +222,23 @@ const WORKSPACE_ROWS: WorkspaceRow[] = [
 const WORKSPACE_TICKED = ['Upgrade to React 19', 'Fix the flaky checkout test', '/home/dev/acme-store-wt/fix-checkout-test']
 
 /** A linked worktree of the gallery's project at `/home/dev/acme-store-wt/<branch>`, its standing as given. */
-function linkedWorktree(branch: string, standing: StandingRead): WorktreeRow {
+function linkedWorktree(branch: string, standing: StandingRead, running = false): WorktreeRow {
   const path = `/home/dev/acme-store-wt/${branch}`
-  return { key: `worktree:${path}`, path, name: branch, main: false, standing }
+  return { key: `worktree:${path}`, path, name: branch, main: false, standing, running }
 }
 
 const CLEAN: WorktreeStanding = { dirty: 0, branch: null, merged: true, last_commit: '2 weeks ago', inactive_days: null, missing: false }
 
 /**
  * The project's worktrees as its Workspace panel lists them: the main checkout, then one with work only on it, one merged
- * and quiet for 16 days, and one whose folder was deleted by hand. `checking` leaves every standing unread.
+ * and quiet for 16 days, and one whose folder was deleted by hand. `checking` leaves every standing unread; `busy` has a
+ * session running in the first.
  */
-function workspaceWorktrees(checking: boolean): WorktreeRow[] {
+function workspaceWorktrees(checking: boolean, busy: boolean): WorktreeRow[] {
   const read = (standing: Partial<WorktreeStanding>): StandingRead => (checking ? { kind: 'checking' } : { kind: 'read', standing: { ...CLEAN, ...standing } })
   return [
     { key: 'worktree:/home/dev/acme-store', path: '/home/dev/acme-store', name: 'main', main: true },
-    linkedWorktree('feat/react-19', read({ dirty: 3, merged: false, last_commit: '5 minutes ago' })),
+    linkedWorktree('feat/react-19', read({ dirty: 3, merged: false, last_commit: '5 minutes ago' }), busy),
     linkedWorktree('fix-checkout-test', read({ inactive_days: 16, last_commit: '3 weeks ago' })),
     linkedWorktree('docs/billing-webhooks', read({ missing: true, merged: false })),
   ]
@@ -246,6 +247,20 @@ function workspaceWorktrees(checking: boolean): WorktreeRow[] {
 /** What workspace-opened says after an Open: one that opened with a skipped session, and one where a start failed. */
 const OPENED_SKIPPED: OpenOutcome = { opened: 1, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }] }
 const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [] }
+/** The worktrees workspace-remove and workspace-removed tick before pressing Remove, by their folders. */
+const REMOVE_TICKED = ['/home/dev/acme-store-wt/feat/react-19', '/home/dev/acme-store-wt/fix-checkout-test']
+
+/** What the gallery's daemon answers a removal: it keeps each one, saying why, so workspace-removed shows the reason. */
+function keepEach(items: readonly { path: string; force: boolean }[]): Promise<WorktreesRemoved> {
+  return Promise.resolve({ removed: [], kept: items.map((item) => ({ path: item.path, why: 'something is running in it' })) })
+}
+
+/** The foot's Remove button: the list's, or once its question is up, the question's. */
+const pressRemove = () => {
+  const buttons = document.querySelectorAll<HTMLButtonElement>('.mx-workspace .mx-modal-foot button')
+  Array.from(buttons).find((button) => button.textContent.startsWith('Remove'))?.click()
+}
+
 /** What workspace-close asks: Close on the panel's running rows, named as Close project names them. */
 const WORKSPACE_CLOSE_ASK = confirmAsk('close-session', { names: WORKSPACE_ROWS.filter((row) => row.state !== 'closed').map((row) => row.name) })
 
@@ -262,6 +277,17 @@ function WorkspaceShown({ what }: { what: string }) {
     return () => { window.clearTimeout(timer) }
   }, [what])
   useEffect(() => {
+    if (what !== 'workspace-remove' && what !== 'workspace-removed') return undefined
+    // Tick, ask, and for workspace-removed answer yes, a step per timer so each view is drawn before the next click.
+    const steps = [
+      () => { for (const path of REMOVE_TICKED) document.querySelector<HTMLInputElement>(`.mx-workspace label[title="${path}"] input`)?.click() },
+      pressRemove,
+      ...(what === 'workspace-removed' ? [pressRemove] : []),
+    ]
+    const timers = steps.map((step, index) => window.setTimeout(step, STATE_READ_MS * (index + 1)))
+    return () => { for (const timer of timers) window.clearTimeout(timer) }
+  }, [what])
+  useEffect(() => {
     if (what !== 'workspace-opened') return
     toastOpened(OPENED_FAILED, 'acme-store')
     toastOpened(OPENED_SKIPPED, 'acme-store')
@@ -270,7 +296,7 @@ function WorkspaceShown({ what }: { what: string }) {
   const rows = what === 'workspace-empty' ? [] : saved.kind === 'listed' ? WORKSPACE_ROWS : WORKSPACE_ROWS.filter((row) => row.state !== 'closed')
   return (
     <>
-      <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} worktrees={workspaceWorktreesRead(what)} now={NOW_SECONDS} opening={what === 'workspace-opening'} onOpen={SAME} onClose={SAME} onRetry={SAME} onRetryWorktrees={SAME} onCancel={SAME} />
+      <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} worktrees={workspaceWorktreesRead(what)} now={NOW_SECONDS} opening={what === 'workspace-opening'} onOpen={SAME} onClose={SAME} onRemove={keepEach} onRetry={SAME} onRetryWorktrees={SAME} onCancel={SAME} />
       {what === 'workspace-opened' && <Toaster />}
       {what === 'workspace-close' && <ConfirmDialog {...WORKSPACE_CLOSE_ASK} offersDontAskAgain onConfirm={SAME} onCancel={SAME} />}
     </>
@@ -308,7 +334,7 @@ function workspaceWorktreesRead(what: string): WorktreesRead {
   if (what === 'workspace-empty') return { kind: 'not-a-repo' }
   if (what === 'workspace-loading') return { kind: 'loading' }
   if (what === 'workspace-worktrees-failed') return { kind: 'failed' }
-  return { kind: 'listed', rows: workspaceWorktrees(what === 'workspace-checking') }
+  return { kind: 'listed', rows: workspaceWorktrees(what === 'workspace-checking', what === 'workspace-busy') }
 }
 
 function Show({ what }: { what: string }): ReactNode {

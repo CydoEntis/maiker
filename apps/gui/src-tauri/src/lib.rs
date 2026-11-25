@@ -769,10 +769,10 @@ async fn saved_workspace(project: PathBuf) -> Result<serde_json::Value, String> 
         .map_err(|error| format!("{error:#}"))
 }
 
-/// Removes worktrees of the project with the daemon, which closes what runs in them first: each folder with
-/// whether to go on when it holds uncommitted changes (they are lost). A branch is kept unless it is already
-/// merged. The daemon answers at once and does the removing in the background; a worktree something still runs
-/// in is left, so the caller looks again.
+/// Removes worktrees of the project with the daemon: each folder with whether to go on when it holds uncommitted
+/// changes (they are lost). A branch is kept unless it is already merged, and a worktree something still runs in is
+/// kept. Answers once it is done with what went and why each other one stayed (`maitty_desktop_client::tidy_worktrees`),
+/// or null from an older service, so the caller looks again.
 #[tauri::command]
 async fn remove_worktrees(
     app: tauri::AppHandle,

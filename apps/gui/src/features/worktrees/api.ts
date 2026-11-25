@@ -51,12 +51,22 @@ export async function mergeWorktree(folder: string, machine: number): Promise<st
   return z.string().parse(await invoke<unknown>('worktree_merge', { machine, folder }))
 }
 
+const RemovedSchema = z.object({
+  removed: z.array(z.string()),
+  kept: z.array(z.object({ path: z.string(), why: z.string() })),
+}).nullable()
+
 /**
- * Removes worktrees with the daemon, which leaves one something still runs in. `force` goes on when the worktree
- * holds uncommitted changes (they are lost). The daemon removes them in the background and keeps a worktree
- * that still has a session in it, so the caller looks again afterwards.
+ * How a removal went, by the folders as they were asked for: the ones removed, and each one kept with the daemon's
+ * reason. Null from a service too old to say, so the caller looks again.
  */
-export async function removeWorktrees(items: readonly { path: string; force: boolean }[], machine: number): Promise<void> {
+export type WorktreesRemoved = z.infer<typeof RemovedSchema>
+
+/**
+ * Removes worktrees with the daemon, which keeps one something still runs in. `force` goes on when the worktree
+ * holds uncommitted changes (they are lost). It resolves once the daemon is done.
+ */
+export async function removeWorktrees(items: readonly { path: string; force: boolean }[], machine: number): Promise<WorktreesRemoved> {
   if (!isTauri()) throw new Error('Worktrees are only available in the desktop app')
-  await invoke('remove_worktrees', { machine, items: items.map((item) => [item.path, item.force]) })
+  return RemovedSchema.parse(await invoke<unknown>('remove_worktrees', { machine, items: items.map((item) => [item.path, item.force]) }))
 }

@@ -773,19 +773,19 @@ impl Daemon {
                 });
                 return Ok(false);
             }
-            Command::TidyWorktrees { items } => {
+            Command::TidyWorktrees { items, answer_each } => {
                 let (go, mut kept) = self.tidy_plan(items);
                 self.made_worktrees
-                    .retain(|m| !go.iter().any(|(top, _)| same_path(top, m)));
+                    .retain(|m| !go.iter().any(|item| same_path(&item.top, m)));
                 let jobs: Vec<_> = go
                     .into_iter()
-                    .map(|(top, force)| (self.hook_job(&top, false), top, force))
+                    .map(|item| (self.hook_job(&item.top, false), item))
                     .collect();
                 let tx = self.tx.clone();
                 self.pending_ops += 1;
                 tokio::task::spawn_blocking(move || {
                     let mut removed = Vec::new();
-                    for (hook, top, force) in jobs {
+                    for (hook, TidyGo { asked, top, force }) in jobs {
                         let name = top
                             .file_name()
                             .map(|n| n.to_string_lossy().into_owned())
@@ -797,25 +797,28 @@ impl Daemon {
                         let branch = git::branch_of(&top);
                         match git::remove_worktree(&top, force, false) {
                             // A branch already merged has nothing left in it: it goes too.
-                            Ok(()) => removed.push((
-                                name,
-                                repo.zip(branch)
+                            Ok(()) => removed.push(TidyGone {
+                                asked,
+                                branch_went: repo
+                                    .zip(branch)
                                     .is_some_and(|(repo, b)| git::delete_if_merged(&repo, &b)),
-                            )),
-                            Err(e) => kept.push((
+                            }),
+                            Err(e) => kept.push(TidyStay {
+                                asked,
                                 name,
-                                format!("{e:#}")
+                                why: format!("{e:#}")
                                     .lines()
                                     .next()
                                     .unwrap_or("git wouldn't remove it")
                                     .to_string(),
-                            )),
+                            }),
                         }
                     }
                     let _ = tx.blocking_send(Ev::WorktreesTidied {
                         client,
                         removed,
                         kept,
+                        answer_each,
                     });
                 });
                 return Ok(false);
