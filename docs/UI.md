@@ -252,7 +252,8 @@ kind, so its "Don't ask again" holds here too; ended ones close without a questi
 `endSessions`: a draft in one of their documents is asked about first, and each close keeps the service's undo window.
 It closes neither the project nor its saved set. **Remove N** (a danger button; its accessible name "Remove N ticked
 worktrees", N counting the ticked linked worktrees no session runs in) is off while none is ticked, and asks first in the
-panel itself (`RemoveWorktreesStep`): "Remove this worktree?" or "Remove these N worktrees?" takes focus, then "Each
+panel itself, as a list, not the confirm dialog (the exception in DESIGN's
+[design language](DESIGN.md#design-language); `RemoveWorktreesStep`): "Remove this worktree?" or "Remove these N worktrees?" takes focus, then "Each
 folder is deleted for good. A branch stays unless its work is already merged." and a row per worktree with its branch,
 its folder and its standing. A clean worktree whose work is merged (or whose folder is already gone) says "loses
 nothing" and goes as it is; any other has a tick of its own in the worktree manager's words, "Lose its 3 uncommitted

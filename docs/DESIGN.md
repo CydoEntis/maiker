@@ -336,7 +336,11 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   looks the same everywhere**, the sidebar's selected-row fill: no check marks and no accent outline for "selected".
 - **Confirm only what is destructive or surprising.** One confirm dialog, used for: close a session, close a terminal
   or split, switch the view, discard changes, remove a project, pull when the branch has diverged. Each has **Don't ask
-  again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. Nothing else confirms.
+  again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. The one
+  exception is removing several things that can each lose different work (a project's Workspace panel's Remove
+  worktrees): it confirms inside its own panel as a list, a row per item saying what it would lose and a tick of its own
+  for each that loses work, with no **Don't ask again** (the worktree manager's second press, "Lose …? Remove", is the
+  same for one row). Nothing else confirms.
 - **The window.** Title bar: the Maiker logo and name; at the right **one side-panel button** and the window controls.
   Under it: sidebar | main pane | optional file pane | optional side panel; the sidebar sits flat on the window ground and the others are cards with gaps; the side panel
   takes its own room beside a file pane too (it floats only in a narrow window). The **status bar**: version and `Update to …` at the
