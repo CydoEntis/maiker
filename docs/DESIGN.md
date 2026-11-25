@@ -1425,7 +1425,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   session open in it". The body is the **Branch name** field (mono, a free two-word name offered and selected once the
   branch lists arrive, a problem shown as a `FieldError` once the field is left or the form is sent) and **Start from**, the
   themed Select (the current commit, then each branch; an existing branch is checked out instead and the picker gives way to a
-  line saying so). It opens a session in the new folder in a new tab. A
+  line saying so). It opens a session in the new folder in a new tab: a chat with the same agent in the Chat view, the
+  pane's worktree command or a shell in the Terminal view (UI › *desktop window sizes and sidebar order*). A
   project's right-click menu has a **Worktrees** submenu that opens a shell in any of the repo's
   worktrees, and a **New worktree…** row. Under the fields, a folded **Other worktrees of <repo>** line with a count (collapsed
   until opened; a line about two checkouts that changed one file stays visible) lists the project's other worktrees one line
