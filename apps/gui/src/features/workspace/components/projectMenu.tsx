@@ -28,6 +28,8 @@ export type ProjectActions = {
   onCopyPath: (project: OpenedProject) => void
   /** Shows a session of the project with the side panel's Files beside it: the files are read through a session. */
   onShowFiles: (sessionId: string) => void
+  /** Opens the project's Workspace panel: its sessions, running and closed. `name` is the heading's. */
+  onWorkspace: (project: OpenedProject, name: string) => void
   /**
    * Closes the project once the person confirms: its sessions stop and it leaves the sidebar. `name` is the heading's,
    * for the question.
@@ -100,7 +102,7 @@ export function projectPlusMenu(actions: ProjectActions, target: ProjectTarget, 
   }
 }
 
-/** A project heading's right-click menu: what starts in it, what shows it, then taking it off the sidebar. */
+/** A project heading's right-click menu: what starts in it, what shows it and its workspace, then taking it off the sidebar. */
 export function projectContextMenu(actions: ProjectActions, target: ProjectTarget, keys: KeysOf): MenuEntry[] {
   const worktrees = worktreeRows(actions, target, keys)
   const shown = target.sessions[0]
@@ -111,6 +113,8 @@ export function projectContextMenu(actions: ProjectActions, target: ProjectTarge
     'separator',
     { label: 'Copy path', run: () => { actions.onCopyPath(target.project) } },
     { label: 'Show files', disabled: shown === undefined, why: 'Start a session here first: the files are read through one', run: () => { if (shown !== undefined) actions.onShowFiles(shown.id) } },
+    // The saved set is kept by this computer's daemon, so another machine's project has none to show yet.
+    { label: 'Workspace…', disabled: target.remote, why: `Workspace is local-only in v1: this project is on ${target.machineLabel}, not on this computer.`, run: () => { actions.onWorkspace(target.project, target.name) } },
     'separator',
     { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } },
   ]

@@ -745,6 +745,15 @@ async fn reopen_closed_session(agent: String, session: String) -> Result<serde_j
         .map_err(|error| format!("{error:#}"))
 }
 
+/// The sessions this computer's daemon kept as open in `project` when it was last parked or closed, for the project's
+/// Workspace panel; null when the service running is older. This computer's daemon only, like `closed_sessions`.
+#[tauri::command]
+async fn saved_workspace(project: PathBuf) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::workspace(project)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// Removes worktrees of the project with the daemon, which closes what runs in them first: each folder with
 /// whether to go on when it holds uncommitted changes (they are lost). A branch is kept unless it is already
 /// merged. The daemon answers at once and does the removing in the background; a worktree something still runs
@@ -1491,6 +1500,7 @@ pub fn run() {
             side_answer,
             closed_sessions,
             reopen_closed_session,
+            saved_workspace,
             new_chat::git_sync_state,
             new_chat::git_pull,
             new_chat::open_agent_docs,

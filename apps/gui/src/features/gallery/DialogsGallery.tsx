@@ -15,6 +15,8 @@ import type { PaletteMachine } from '@/features/open-project/openPalette'
 import { RecentSessionsDialog } from '@/features/workspace/components/RecentSessionsDialog'
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import { AcpAgentsDialog } from '@/features/workspace/components/AcpAgentsDialog'
+import { WorkspacePanelDialog } from '@/features/workspace/components/WorkspacePanelDialog'
+import type { SavedRead, WorkspaceRow } from '@/features/workspace/model/workspacePanel'
 import type { PaletteItem } from '@/features/workspace/model/palette'
 import { withLook } from '@/features/workspace/theme/look'
 import { findTheme, themeStyle } from '@/features/workspace/theme/themes'
@@ -25,7 +27,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent or resume; err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-loading, workspace-empty, workspace-older, workspace-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -37,6 +39,7 @@ const LONG_PROJECTS = [PROJECTS[1] ?? { folder: '', name: '', color: '' }, ...PR
 const MS_PER_SECOND = 1000
 const NOW_SECONDS = Math.floor(Date.now() / MS_PER_SECOND)
 const HOUR = 3600
+const FIVE_MINUTES = 300
 const DAY = 86_400
 const COLUMN_WIDTH = 760
 const IN_THREE_HOURS = HOUR + HOUR + HOUR
@@ -192,6 +195,36 @@ function ScriptedNew({ what, children }: { what: string; children: ReactNode }) 
   return children
 }
 
+/** A session from the project's saved set, closed `ago` seconds before now. */
+function closedRow(title: string, branch: string, ago: number): WorkspaceRow {
+  const saved = { agent: 'claude', session: branch, cwd: '/home/dev/acme-store', branch, title, at: NOW_SECONDS - ago, worktree: null, repo: null }
+  return { key: `saved:claude:${branch}`, name: title, agent: saved.agent, branch, at: saved.at, state: 'closed', saved }
+}
+
+/** A project's sessions as its Workspace panel lists them: two running in the window, then two from its saved set. */
+const WORKSPACE_ROWS: WorkspaceRow[] = [
+  { key: 'session:t3', name: 'Upgrade to React 19', agent: 'claude', branch: 'feat/react-19', at: NOW_SECONDS - FIVE_MINUTES, state: 'running', sessionId: 't3', conversation: null },
+  { key: 'session:t5', name: 'Move auth from JWT to sessions', agent: 'codex', branch: 'main', at: NOW_SECONDS - HOUR, state: 'running', sessionId: 't5', conversation: null },
+  closedRow('Fix the flaky checkout test', 'fix-checkout-test', IN_THREE_HOURS),
+  closedRow('Write the billing webhook docs', 'docs/billing-webhooks', IN_THREE_DAYS),
+]
+/** The rows workspace-ticked ticks once the panel is up: one running and one closed. */
+const WORKSPACE_TICKED = ['Upgrade to React 19', 'Fix the flaky checkout test']
+
+/** The Workspace panel in each state: the saved set listed, loading, unread or from an older service, and two rows ticked. */
+function WorkspaceShown({ what }: { what: string }) {
+  useEffect(() => {
+    if (what !== 'workspace-ticked') return undefined
+    const timer = window.setTimeout(() => {
+      for (const name of WORKSPACE_TICKED) document.querySelector<HTMLInputElement>(`.mx-workspace label[title="${name}"] input`)?.click()
+    }, STATE_READ_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [what])
+  const saved: SavedRead = what === 'workspace-loading' ? { kind: 'loading' } : what === 'workspace-older' ? { kind: 'older' } : what === 'workspace-failed' ? { kind: 'failed' } : { kind: 'listed', list: [] }
+  const rows = what === 'workspace-empty' ? [] : saved.kind === 'listed' ? WORKSPACE_ROWS : WORKSPACE_ROWS.filter((row) => row.state !== 'closed')
+  return <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} now={NOW_SECONDS} onRetry={SAME} onCancel={SAME} />
+}
+
 function Show({ what }: { what: string }): ReactNode {
   if (what.startsWith('err-')) return <ErrorsGallery what={what} />
   const long = what === 'new-long'
@@ -209,6 +242,7 @@ function Show({ what }: { what: string }): ReactNode {
   if (what === 'palette') return <CommandPalette items={ITEMS} outputItem={() => null} onClose={() => undefined} />
   if (what === 'agents') return <AcpAgentsDialog onPick={() => undefined} onCancel={() => undefined} />
   if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onReopened={() => undefined} onCancel={() => undefined} />
+  if (what === 'workspace' || what.startsWith('workspace-')) return <WorkspaceShown what={what} />
   if (what === 'resume') return <ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} />
   return null
 }

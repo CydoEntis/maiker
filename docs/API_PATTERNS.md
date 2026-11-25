@@ -1335,6 +1335,11 @@ without asking from an older daemon) and `workspace` (null from an older daemon)
 `a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one`,
 `the_open_set_is_never_sent_to_a_service_from_before_it`.
 
+The desktop command `saved_workspace { project }` (`maitty_desktop_client::workspace`) reads a project's set for its
+Workspace panel, from this computer's daemon only, on a connection of its own: the list, or null without asking from a
+daemon older than 127. The daemon matches the folder exactly, so the window always names a project by its opened
+project's `folder` as the sidebar spells it, both when it saves the set and when it reads it.
+
 Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
 125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;
 `COMPATIBLE_SINCE` stays 122, since an older daemon is never sent the command). `title` is the name the agent gave the

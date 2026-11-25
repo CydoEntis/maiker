@@ -1082,6 +1082,19 @@ export async function reopenClosedSession(agent: string, session: string): Promi
   return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
 }
 
+/** A session kept in a project's saved set: a closed session's record, without the look at its folder. */
+const SavedSessionSchema = ClosedSessionSchema.omit({ folder_present: true })
+export type SavedSession = z.infer<typeof SavedSessionSchema>
+
+/**
+ * The sessions this computer's service kept as open in `project` when it was last parked or closed, in the order saved.
+ * `project` is the opened project's folder as the window spells it, since the service matches it exactly. Null when
+ * the service running is older than the question.
+ */
+export async function savedWorkspace(project: string): Promise<SavedSession[] | null> {
+  return invokeParsed('saved_workspace', z.array(SavedSessionSchema).nullable(), { project })
+}
+
 /**
  * The person's answer to an agent's request for a secret: the value, or null to decline. Only this computer's
  * daemon is asked. The value is not logged or kept anywhere on the way.
