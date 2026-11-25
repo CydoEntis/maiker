@@ -60,6 +60,8 @@ const ConversationSummarySchema = z.object({
   status_since: z.number().int().nonnegative().nullable().default(null).catch(null),
   // A service restart cut it mid-reply and nobody has taken it up; absent when not, and from an older daemon.
   interrupted: z.boolean().default(false),
+  // The agent's own conversation id, which its resume takes, for a chat session; absent for a pane's and from an older daemon.
+  session: z.string().nullable().default(null).catch(null),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -1082,6 +1084,17 @@ export async function reopenClosedSession(agent: string, session: string): Promi
   return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
 }
 
+/** A session as a project's saved open set keeps it: a closed session's record, with no word on its folder. */
+export type SavedSession = Omit<ClosedSession, 'folder_present'>
+
+/**
+ * Has this computer's service keep `sessions` as the set open in `project` (an absolute folder), replacing the one it
+ * kept; an empty set forgets the project. False when the service running is older than this and was not asked.
+ */
+export async function saveWorkspace(project: string, sessions: readonly SavedSession[]): Promise<boolean> {
+  return invokeParsed('save_workspace', z.boolean(), { project, sessions })
+}
+
 /**
  * The person's answer to an agent's request for a secret: the value, or null to decline. Only this computer's
  * daemon is asked. The value is not logged or kept anywhere on the way.
@@ -1294,7 +1307,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent,
           process: agent,
-          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }), ...(waking ? { waking: true } : {}) },
+          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }), ...(waking ? { waking: true } : {}), ...(summary.session === null ? {} : { session: summary.session }) },
           details: { asking: '', interrupted: null, chatCutOff: summary.interrupted, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),
