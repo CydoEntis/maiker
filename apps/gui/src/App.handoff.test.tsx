@@ -1300,6 +1300,35 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     expect(daemon.submitMessage).toHaveBeenCalledTimes(1)
   })
 
+  it('gives the keys to the draft\'s box when it opens, and to the started chat\'s box once it is shown', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const undo = glideLikeTheWebView()
+    try {
+      const user = userEvent.setup()
+      daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+      renderDesktopApp()
+      await screen.findByRole('button', { name: 'a, 1 session' })
+      await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+      const draft = await screen.findByRole('region', { name: 'New session' })
+      await waitFor(() => { expect(within(draft).getByRole('textbox', { name: /^Message / })).toHaveFocus() })
+      daemon.startChatSession.mockImplementation(() => {
+        daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`), startedChat(6, `${HOME}/a`)])
+        return Promise.resolve({ id: 6, generation: 1 })
+      })
+      daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
+      daemon.submitMessage.mockResolvedValue(null)
+      await user.keyboard('fix the cart{Enter}')
+      await waitFor(() => { expect(document.querySelector('.mx-pane[data-session-id="6"]')).not.toBeNull() })
+      const pane = document.querySelector<HTMLElement>('.mx-pane[data-session-id="6"]')
+      if (pane === null) throw new Error('the started chat has no pane')
+      await waitFor(() => { expect(within(pane).getByRole('textbox', { name: 'Message Claude' })).toHaveFocus() })
+      await user.keyboard('and the tests')
+      expect(within(pane).getByRole('textbox', { name: 'Message Claude' })).toHaveValue('and the tests')
+    } finally {
+      undo()
+    }
+  })
+
   it('does not show the empty draft again while the started chat glides in', async () => {
     setSettings({ openSessionsIn: 'chat' })
     const undo = glideLikeTheWebView()

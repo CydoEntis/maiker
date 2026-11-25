@@ -68,6 +68,37 @@ async function open(setup: (daemon: FakeDaemonHistory) => void = () => undefined
   return { daemon, user, box: screen.getByRole('textbox', { name: 'Message Claude' }) }
 }
 
+describe('the keys when the chat opens', () => {
+  it('takes them while the web view still names a field that just left the page, as the New session draft\'s box does', async () => {
+    // The web view moves the focus off a removed field only at its next frame; until then it still names it.
+    const removedDraftBox = document.createElement('textarea')
+    const named = Object.getOwnPropertyDescriptor(Document.prototype, 'activeElement')?.get
+    if (named === undefined) throw new Error('no activeElement to follow')
+    const stale = vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => {
+      const now = named.call(document) as Element | null
+      return now === document.body ? removedDraftBox : now
+    })
+    try {
+      const { box } = await open()
+      expect(box).toHaveFocus()
+    } finally {
+      stale.mockRestore()
+    }
+  })
+
+  it('leaves them where they are when another field on the page has them', async () => {
+    const elsewhere = document.createElement('input')
+    document.body.append(elsewhere)
+    elsewhere.focus()
+    try {
+      await open()
+      expect(elsewhere).toHaveFocus()
+    } finally {
+      elsewhere.remove()
+    }
+  })
+})
+
 describe('the context bar', () => {
 
   it('shows how full the context is, and leaves the plan limits to the status bar', async () => {
