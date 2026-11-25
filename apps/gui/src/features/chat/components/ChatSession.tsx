@@ -9,6 +9,7 @@ import type { SecretAsk, SessionStatus } from '@/features/workspace/model/sessio
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
 import { buildRows, type ChatRow } from '../chatRows'
+import { lastTurnStatus } from '../projection'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
@@ -828,7 +829,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       ? { title: `Waking ${agentLabel(agent)} up…`, reason: 'This chat rested while Maiker restarted. It picks up where it was in a moment.' }
       : null
   // One element for all three, so a chat moving between them keeps its line (and its spinner) instead of mounting a new one.
-  const readLine = readNotice !== null || feed.error !== null ? <ReadProblemLine error={readNotice === null ? feed.error : null} notice={readNotice} onReconnect={reconnect} /> : null
+  // A turn that ended badly is why the agent stopped, and the error is its reason, not a failed read.
+  const turnEnded = lastTurnStatus(feed.projection)
+  const stoppedAgent = turnEnded === 'failed' || turnEnded === 'interrupted' ? agentLabel(agent) : null
+  const readLine = readNotice !== null || feed.error !== null ? <ReadProblemLine error={readNotice === null ? feed.error : null} notice={readNotice} onReconnect={reconnect} stoppedAgent={stoppedAgent} /> : null
   const dockProblem = problemView.line ?? readLine
 
   return (

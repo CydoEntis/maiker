@@ -5,7 +5,7 @@ use super::{
 };
 #[cfg(test)]
 use super::{Launch, transport::LaunchIdentity};
-use crate::conversation::{ConversationId, Provider, RecoveryState};
+use crate::conversation::{ConversationId, RecoveryState};
 use crate::daemon::{Daemon, Ev, ServerMsg};
 use crate::protocol::Status;
 use anyhow::{Result, bail};
@@ -28,6 +28,16 @@ fn reset_state_after_provider_ready(state: &mut super::State) {
     state.cancelling = None;
 }
 
+/// What a conversation says when its turn failed or was cut short and its agent gave no reason,
+/// naming the agent the person is talking to.
+fn turn_failure(agent: &str, state: &super::history::ItemState) -> Option<String> {
+    match state {
+        super::history::ItemState::Failed => Some(format!("{agent}'s turn failed; it gave no reason")),
+        super::history::ItemState::Interrupted => Some(format!("{agent}'s turn was interrupted")),
+        _ => None,
+    }
+}
+
 /// What the daemon needs to know about a reported event beside its history update.
 struct Reported {
     /// The event ends the turn a person asked to stop.
@@ -38,18 +48,18 @@ struct Reported {
 
 impl Daemon {
     /// The name of the agent a conversation runs, for the errors it reports.
-    fn conversation_agent(&self, id: ConversationId) -> &'static str {
+    fn conversation_agent(&self, id: ConversationId) -> String {
         self.conversations
             .iter()
             .find(|c| c.id == id)
-            .map(|c| c.binding.provider)
-            .or_else(|| self.pending_starts.iter().find(|p| p.id == id).map(|p| p.settings.provider))
-            .map_or("Chat", |provider| match provider {
-                Provider::Codex => "Codex",
-                Provider::Claude => "Claude",
-                Provider::Gemini => "Gemini",
-                Provider::Acp => "Agent",
+            .map(|c| (c.binding.provider, c.binding.agent.as_deref()))
+            .or_else(|| {
+                self.pending_starts
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| (p.settings.provider, p.settings.agent.as_deref()))
             })
+            .map_or_else(|| "Chat".into(), |(provider, agent)| provider.agent_label(agent))
     }
 
     pub(in crate::daemon) async fn initialize_conversation_cache(&mut self) -> Result<()> {
@@ -404,6 +414,12 @@ impl Daemon {
                 }
             }
         }
+        let failure = match &update {
+            Ok(Some(super::history::Update::SetTurnStatus { state, .. })) => {
+                turn_failure(&self.conversation_agent(id), state)
+            }
+            _ => None,
+        };
         let state = self.conversation_states.entry(id).or_default();
         if let Ok(Some(super::history::Update::ProviderError {
             message,
@@ -439,19 +455,12 @@ impl Daemon {
         {
             let cancelled_turn = reported.cancellation_finished
                 && *turn_state == super::history::ItemState::Interrupted;
-            let failure = match turn_state {
-                super::history::ItemState::Failed => Some("Codex turn failed"),
-                super::history::ItemState::Interrupted => {
-                    Some("Codex turn was interrupted")
-                }
-                _ => None,
-            };
             if cancelled_turn {
                 state.error = None;
                 state.status = Status::Idle;
             } else {
-                if let Some(failure) = failure {
-                    state.error = Some(turn_error()?.unwrap_or_else(|| failure.into()));
+                if let Some(failure) = &failure {
+                    state.error = Some(turn_error()?.unwrap_or_else(|| failure.clone()));
                 } else if let Some(error) = turn_error()? {
                     state.error = Some(error);
                 }
@@ -699,6 +708,20 @@ impl Daemon {
                 result,
             });
         });
+    }
+}
+
+#[cfg(test)]
+mod turn_failure_tests {
+    use super::super::history::ItemState;
+    use super::turn_failure;
+
+    #[test]
+    fn a_turn_that_ended_badly_names_the_agent_it_ran_on() {
+        assert_eq!(turn_failure("Claude", &ItemState::Failed).as_deref(), Some("Claude's turn failed; it gave no reason"));
+        assert_eq!(turn_failure("opencode", &ItemState::Interrupted).as_deref(), Some("opencode's turn was interrupted"));
+        assert_eq!(turn_failure("Codex", &ItemState::Completed), None);
+        assert_eq!(turn_failure("Codex", &ItemState::Running), None);
     }
 }
 

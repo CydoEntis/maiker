@@ -153,8 +153,10 @@ fn run_scrubbed(
             duration: started.elapsed(),
         }
     };
-    let mut child = match check_command(shell, dir, line, scrub).spawn() {
-        Ok(child) => child,
+    let spawned = check_command(shell, dir, line, scrub)
+        .and_then(|(mut command, watch)| Ok((command.spawn()?, watch)));
+    let (mut child, watch) = match spawned {
+        Ok(spawned) => spawned,
         Err(e) => {
             tracing::warn!("couldn't start the check: {e}");
             return done(CheckOutcome::SpawnFailed, &Output::default());
@@ -167,6 +169,7 @@ fn run_scrubbed(
         child.stderr.take().map(|r| output.fill_from(r)),
     ];
     let outcome = wait_for(&mut child, &tree, timeout, started);
+    watch.release();
     let grace_ends = Instant::now() + OUTPUT_DRAIN_GRACE;
     for reader in readers.into_iter().flatten() {
         while !reader.is_finished() && Instant::now() < grace_ends {
@@ -181,7 +184,7 @@ fn check_command(
     dir: &Path,
     line: &str,
     scrub: &[&str],
-) -> std::process::Command {
+) -> std::io::Result<(std::process::Command, DaemonWatch)> {
     let line = if crate::proc::is_powershell(shell) {
         format!(
             "{POWERSHELL_NOT_FOUND_TRAP}{}",
@@ -199,38 +202,34 @@ fn check_command(
         c.env_remove(var);
     }
     crate::proc::quiet(&mut c);
+    // A check leads its own process group, so the panes' hang-up on a closing PTY never reaches it.
     #[cfg(unix)]
-    {
-        std::os::unix::process::CommandExt::process_group(&mut c, 0);
-        die_with_daemon(&mut c);
-    }
-    c
+    std::os::unix::process::CommandExt::process_group(&mut c, 0);
+    let watch = DaemonWatch::arm(&mut c)?;
+    Ok((c, watch))
 }
 
-/// A check leads its own process group, so the panes' hang-up on a closing PTY never reaches
-/// it. Where the kernel can say so, make it die with the daemon: Linux's parent-death signal
-/// kills the shell. The signal is tied to the thread that spawned the child, which stays in
-/// `run_check` for as long as the child lives. macOS has no such call, so there a check
-/// outlives a crashed daemon until it ends or writes to its closed pipes (SIGPIPE); see
-/// docs/SECURITY.md.
+/// Linux ties a check to the daemon's life with a watcher (`daemon_watch`). Windows does with the
+/// check's job object, closed by the kernel when the daemon goes (`Tree`). macOS has no such
+/// call, so there a check outlives a crashed daemon until it ends or writes to its closed pipes
+/// (SIGPIPE); see docs/SECURITY.md.
 #[cfg(target_os = "linux")]
-fn die_with_daemon(c: &mut std::process::Command) {
-    let daemon = std::process::id() as libc::pid_t;
-    // SAFETY: runs between fork and exec and calls only async-signal-safe functions.
-    unsafe {
-        std::os::unix::process::CommandExt::pre_exec(c, move || {
-            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL as libc::c_ulong);
-            // The daemon may have died before the signal was armed, and the signal never fires then.
-            if libc::getppid() != daemon {
-                libc::_exit(1);
-            }
-            Ok(())
-        });
-    }
-}
+mod daemon_watch;
+#[cfg(target_os = "linux")]
+use daemon_watch::DaemonWatch;
 
-#[cfg(all(unix, not(target_os = "linux")))]
-fn die_with_daemon(_: &mut std::process::Command) {}
+/// Nothing to hold where the platform ties a check to the daemon already, or cannot.
+#[cfg(not(target_os = "linux"))]
+struct DaemonWatch;
+
+#[cfg(not(target_os = "linux"))]
+impl DaemonWatch {
+    fn arm(_: &mut std::process::Command) -> std::io::Result<Self> {
+        Ok(Self)
+    }
+
+    fn release(self) {}
+}
 
 fn wait_for(child: &mut Child, tree: &Tree, timeout: Duration, started: Instant) -> CheckOutcome {
     loop {
@@ -1462,42 +1461,33 @@ mod tests {
     #[cfg(target_os = "linux")]
     const KILLED_DAEMON_ENV: &str = concat!(env!("APP_ENV"), "_TEST_CHECK_AS_DAEMON");
 
-    /// Run as the stand-in daemon for `a_check_dies_with_the_daemon_that_started_it`: start a
-    /// check that writes its pid and waits, and never return.
+    /// Runs `line` as a check in a stand-in daemon (this test binary re-run as `test`), kills the
+    /// stand-in, and asserts the process whose pid the check wrote to `{pidfile}` goes with it.
+    /// In the stand-in it only runs the check.
     #[cfg(target_os = "linux")]
-    fn be_the_killed_daemon(pidfile: &str) {
-        let line = format!("echo $$ > '{pidfile}'; exec sleep 60");
-        run_check(&test_shell(), &std::env::temp_dir(), &line, LONG);
-    }
-
-    #[cfg(target_os = "linux")]
-    #[test]
-    fn a_check_dies_with_the_daemon_that_started_it() {
+    fn check_dies_with_its_daemon(test: &str, line: &str) {
         if let Ok(pidfile) = std::env::var(KILLED_DAEMON_ENV) {
-            return be_the_killed_daemon(&pidfile);
+            let line = line.replace("{pidfile}", &pidfile);
+            run_check(&test_shell(), &std::env::temp_dir(), &line, LONG);
+            return;
         }
         let dir = persist::scratch_dir();
         std::fs::create_dir_all(dir.path()).unwrap();
         let pidfile = dir.path().join("check.pid");
         let mut daemon = std::process::Command::new(crate::test_support::this_test_binary())
-            .args([
-                "--exact",
-                "daemon::check::tests::a_check_dies_with_the_daemon_that_started_it",
-                "--nocapture",
-            ])
+            .args(["--exact", &format!("daemon::check::tests::{test}"), "--nocapture"])
             .env(KILLED_DAEMON_ENV, &pidfile)
             .stdout(Stdio::null())
             .stderr(Stdio::null())
             .spawn()
             .expect("start the stand-in daemon");
+        // The shell creates the file before it writes the number: wait for the whole line.
+        let written = || std::fs::read_to_string(&pidfile).ok().filter(|pid| pid.ends_with('\n'));
         let started_by = Instant::now() + Duration::from_secs(30);
-        while !pidfile.exists() && Instant::now() < started_by {
+        while written().is_none() && Instant::now() < started_by {
             std::thread::sleep(CHECK_POLL);
         }
-        let pid = std::fs::read_to_string(&pidfile)
-            .expect("the check started")
-            .trim()
-            .to_string();
+        let pid = written().expect("the check started").trim().to_string();
         assert!(alive(&pid), "the check runs while its daemon does");
         daemon.kill().unwrap();
         let _ = daemon.wait();
@@ -1510,7 +1500,66 @@ mod tests {
             // SAFETY: stops the process this test started so a failure leaves nothing behind.
             unsafe { libc::kill(pid.parse().unwrap(), libc::SIGKILL) };
         }
-        assert!(!outlived, "the check {pid} outlived its daemon");
+        assert!(!outlived, "the check's process {pid} outlived its daemon");
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_check_dies_with_the_daemon_that_started_it() {
+        check_dies_with_its_daemon(
+            "a_check_dies_with_the_daemon_that_started_it",
+            "echo $$ > '{pidfile}'; exec sleep 60",
+        );
+    }
+
+    /// The live processes in process group `group`, from each one's `/proc/<pid>/stat`.
+    #[cfg(target_os = "linux")]
+    fn group_members(group: &str) -> Vec<String> {
+        let mut members: Vec<String> = std::fs::read_dir("/proc")
+            .unwrap()
+            .flatten()
+            .filter_map(|entry| {
+                let stat = std::fs::read_to_string(entry.path().join("stat")).ok()?;
+                // After the name in parentheses: state, parent, group.
+                let mut fields = stat.rsplit_once(')')?.1.split_whitespace();
+                let state = fields.next()?;
+                let pgrp = fields.nth(1)?;
+                (pgrp == group && state != "Z").then(|| entry.file_name().to_string_lossy().into_owned())
+            })
+            .collect();
+        members.sort();
+        members
+    }
+
+    /// A check that ends on its own lets its watcher go and leaves what it started in the
+    /// background running, as it did before there was a watcher.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_check_that_ends_releases_its_watcher_and_leaves_its_background_work() {
+        let run = run("sleep 30 >/dev/null 2>&1 & echo $$ $!", LONG);
+        assert_eq!(run.outcome, CheckOutcome::Exited(0));
+        let (group, sleeper) = run.output.trim().split_once(' ').expect("the group and the sleeper");
+        let (group, sleeper) = (group.to_string(), sleeper.to_string());
+        let gone_by = Instant::now() + Duration::from_secs(10);
+        while group_members(&group) != [sleeper.clone()] && Instant::now() < gone_by {
+            std::thread::sleep(CHECK_POLL);
+        }
+        let members = group_members(&group);
+        // SAFETY: stops the process this test's check started, so nothing is left behind.
+        unsafe { libc::kill(-group.parse::<libc::pid_t>().unwrap(), libc::SIGKILL) };
+        assert_eq!(members, [sleeper], "only the background work is left; the watcher went");
+    }
+
+    /// A process of the check without the parent-death signal, as the kernel leaves every child
+    /// the shell forks and any program it execs that the kernel clears the signal for: the
+    /// daemon's going still ends it.
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn a_check_process_without_the_parent_death_signal_dies_with_the_daemon() {
+        check_dies_with_its_daemon(
+            "a_check_process_without_the_parent_death_signal_dies_with_the_daemon",
+            "sleep 60 & echo $! > '{pidfile}'; wait",
+        );
     }
 
     #[test]

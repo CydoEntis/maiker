@@ -62,6 +62,22 @@ describe('a chat whose read failed', () => {
     expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
   })
 
+  it('says the agent stopped when its turn failed, with its reason, and never that the chat could not be read', () => {
+    render(<ReadProblemLine error="API Error: 400 model not found" stoppedAgent="Claude" onReconnect={vi.fn(() => Promise.resolve())} />)
+    expect(screen.getByText('Claude stopped')).toBeInTheDocument()
+    expect(screen.getByText('API Error: 400 model not found')).toBeInTheDocument()
+    expect(screen.queryByText('Could not read this chat')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /copy details/i })).toBeInTheDocument()
+  })
+
+  it('keeps a real read problem a read problem even after a failed turn', () => {
+    const reason = 'The saved conversation could not be read: The transcript is not found'
+    render(<ReadProblemLine error={reason} stoppedAgent="Claude" onReconnect={vi.fn(() => Promise.resolve())} />)
+    expect(screen.getByText('Could not read this chat')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeInTheDocument()
+  })
+
   it('says a saved chat that is too long cannot open as a chat, that nothing was lost, and offers no Reconnect', () => {
     const error = 'This saved conversation is too long to open as a chat (over 16 MB); resume it in a terminal'
     render(<ReadProblemLine error={error} onReconnect={vi.fn(() => Promise.resolve())} />)

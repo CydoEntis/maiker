@@ -428,3 +428,43 @@ async fn a_claude_that_lacks_a_needed_flag_is_refused_by_name_and_leaves_no_chat
         std::panic::resume_unwind(panic);
     }
 }
+
+/// A Claude turn that failed says why in Claude's own words, or names Claude when it gave none:
+/// never another provider.
+#[tokio::test]
+async fn a_failed_claude_turn_reports_its_reason_and_names_claude() {
+    for (client, scenario, expected) in [
+        (490, "fail-with-reason", "API Error: 400 model not found"),
+        (495, "fail-silently", "Claude's turn failed; it gave no reason"),
+    ] {
+        let mut session = conversation_fixture("conversation").await;
+        let outcome = AssertUnwindSafe(async {
+            let (_, id, generation) = start_claude_chat(&mut session, client, scenario).await;
+            let message = ClientMsg::Command(Command::ConversationSend {
+                id,
+                generation,
+                operation: 1,
+                text: "hello fake Claude".into(),
+                choice: None,
+            });
+            let sent = exchange(&mut session, client + 1, message, None).await;
+            assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+            handle_until(&mut session, "the turn fails", |daemon| {
+                daemon.conversation_states.get(&id).is_some_and(|state| state.error.is_some())
+            })
+            .await;
+            let read = exchange(&mut session, client + 2, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+            let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+                panic!("{read:?}");
+            };
+            assert_eq!(page.error.as_deref(), Some(expected), "{scenario}");
+            assert_eq!(page.status, crate::protocol::Status::Blocked, "{scenario}: a failed turn needs the person");
+        })
+        .catch_unwind()
+        .await;
+        session.cleanup().await;
+        if let Err(panic) = outcome {
+            std::panic::resume_unwind(panic);
+        }
+    }
+}

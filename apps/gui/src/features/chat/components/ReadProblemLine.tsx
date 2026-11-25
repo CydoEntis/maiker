@@ -20,8 +20,10 @@ export type ReadNotice = { title: string; reason: string }
  * read the past back; anything else shows the service's reason. Either way the raw words are one Copy details away.
  * A `notice` takes the same line over, so the chat moving between reconnecting, waking and failed keeps one element: its
  * running light is not restarted and its rise (which plays when a line first appears) is not replayed.
+ * When `stoppedAgent` names the agent whose latest turn failed or was cut short, the error is why that agent stopped, not
+ * a read problem: the line says the agent stopped and gives its reason.
  */
-export function ReadProblemLine({ error, notice, onReconnect }: { error: string | null; notice?: ReadNotice | null; onReconnect: (() => Promise<void>) | null }) {
+export function ReadProblemLine({ error, notice, onReconnect, stoppedAgent = null }: { error: string | null; notice?: ReadNotice | null; onReconnect: (() => Promise<void>) | null; stoppedAgent?: string | null }) {
   const [running, setRunning] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
   const [shownFor, setShownFor] = useState(error)
@@ -37,6 +39,7 @@ export function ReadProblemLine({ error, notice, onReconnect }: { error: string 
   const tooLong = TOO_LONG.test(error)
   const explained = NEEDS_RESUME.test(error)
   const resumable = !tooLong && onReconnect !== null && (explained || READ_FAILED.test(error))
+  const stopped = stoppedAgent !== null && !tooLong && !explained && !READ_FAILED.test(error)
   const reconnect = () => {
     if (onReconnect === null) return
     setRunning(true)
@@ -53,7 +56,7 @@ export function ReadProblemLine({ error, notice, onReconnect }: { error: string 
     <ProblemLine
       tone="error"
       running={running}
-      title={running ? 'Reconnecting…' : tooLong ? 'This chat is too long to open' : explained && resumable ? 'This chat needs to reconnect' : 'Could not read this chat'}
+      title={running ? 'Reconnecting…' : tooLong ? 'This chat is too long to open' : explained && resumable ? 'This chat needs to reconnect' : stopped ? `${stoppedAgent} stopped` : 'Could not read this chat'}
       reason={reason}
       actions={(
         <>
