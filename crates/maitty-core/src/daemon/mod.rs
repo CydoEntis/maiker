@@ -298,11 +298,12 @@ pub enum Ev {
         tag: u64,
         listing: crate::protocol::FolderListing,
     },
-    /// A closed session's folder is ready to start it in, its worktree made again if it was gone
-    /// (`Command::ReopenClosedSession`).
+    /// A closed session's folder is ready to start it in, its worktree made again if it was gone:
+    /// `cmd` is the agent's resume command to start there (`Command::ReopenClosedSession`), or None
+    /// when the client starts it itself and is told the folder (`Command::ReadyClosedFolder`).
     ClosedSessionReady {
         client: ClientId,
-        cmd: String,
+        cmd: Option<String>,
         result: Result<reopen::Ready, String>,
     },
     HelperReadReady {
@@ -1176,10 +1177,10 @@ impl Daemon {
                 anyhow::bail!("Only an app window can keep an agent warm")
             }
             Command::Prewarm { .. } | Command::DropPrewarm => Ok(()),
-            Command::ReopenClosedSession { .. } if self.client_is_agent(client) => {
+            Command::ReopenClosedSession { .. } | Command::ReadyClosedFolder { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("reopening a closed session is yours to do, not a pane's")
             }
-            Command::ReopenClosedSession { .. } => self.may(client, Grant::Start, None),
+            Command::ReopenClosedSession { .. } | Command::ReadyClosedFolder { .. } => self.may(client, Grant::Start, None),
             Command::SaveWorkspace { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("saving a project's open sessions is yours to do, not a pane's")
             }

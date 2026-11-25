@@ -6,6 +6,7 @@ import { ageWords, changesAndMerged, lossOfRemoving } from '@/features/worktrees
 import { agentName } from './agentMessage'
 import { baseName } from './folderPick'
 import { ageOf } from './newChatHost'
+import { reopenPlan } from './recentSessions'
 import { sameProject, type MachineProjects, type OpenedProject } from './openedProjects'
 import { worktreeChoices } from './projectWorktrees'
 import type { SessionView } from './session'
@@ -21,7 +22,8 @@ export type SavedRead = { kind: 'loading' } | { kind: 'listed'; list: readonly C
 
 /**
  * One row of the panel. A session listed in the window is `running`, or `ended` once its agent has gone while its row
- * stays; one from the saved set is `closed`. `at` is the last time anything happened to it, in unix seconds.
+ * stays; one from the saved set is `closed`, with why Open would skip it (`skip`, in the words its toast uses) or null.
+ * `at` is the last time anything happened to it, in unix seconds.
  */
 export type WorkspaceRow = {
   readonly key: string
@@ -32,7 +34,7 @@ export type WorkspaceRow = {
   readonly at: number | null
 } & (
   | { readonly state: 'running' | 'ended'; readonly sessionId: string; readonly conversation: string | null }
-  | { readonly state: 'closed'; readonly saved: ClosedSession }
+  | { readonly state: 'closed'; readonly saved: ClosedSession; readonly skip: string | null }
 )
 
 const MS_PER_SECOND = 1000
@@ -55,7 +57,8 @@ export function savedName(saved: ClosedSession): string {
   return saved.title ?? `${agentName(saved.agent)} session`
 }
 
-function savedRow(saved: ClosedSession): WorkspaceRow {
+function savedRow(saved: ClosedSession, chatView: boolean): WorkspaceRow {
+  const plan = reopenPlan(saved, chatView)
   return {
     key: `saved:${saved.agent}:${saved.session}`,
     name: savedName(saved),
@@ -64,18 +67,20 @@ function savedRow(saved: ClosedSession): WorkspaceRow {
     at: saved.at,
     state: 'closed',
     saved,
+    skip: plan.kind === 'skip' ? plan.why : null,
   }
 }
 
 /**
  * The panel's rows: the project's agent sessions in the window, in the order the sidebar lists them, then its saved set,
  * newest first. A plain terminal is left out (the workspace is the agents' work), and so is a saved session whose
- * conversation runs again in the window, so one piece of work is one row.
+ * conversation runs again in the window, so one piece of work is one row. `chatView` is Settings › Open sessions in
+ * being Chat, which decides whether a chat over ACP can open.
  */
-export function workspaceRows(sessions: readonly SessionView[], saved: readonly ClosedSession[]): WorkspaceRow[] {
+export function workspaceRows(sessions: readonly SessionView[], saved: readonly ClosedSession[], chatView: boolean): WorkspaceRow[] {
   const live = sessions.filter((session) => !isShell(session)).map(liveRow)
   const running = (entry: ClosedSession) => live.some((row) => row.state !== 'closed' && row.agent === entry.agent && row.conversation === entry.session)
-  const closed = saved.filter((entry) => !running(entry)).sort((a, b) => b.at - a.at).map(savedRow)
+  const closed = saved.filter((entry) => !running(entry)).sort((a, b) => b.at - a.at).map((entry) => savedRow(entry, chatView))
   return [...live, ...closed]
 }
 
@@ -84,9 +89,17 @@ export function savedOf(read: SavedRead): readonly ClosedSession[] {
   return read.kind === 'listed' ? read.list : []
 }
 
-/** The saved sessions among `rows` that Open starts again: the closed ones, since a session in the window already runs. */
+/**
+ * The saved sessions among `rows` that Open starts again: the closed ones, since a session in the window already runs,
+ * less the ones Open would skip, which their rows already say.
+ */
 export function openTargets(rows: readonly WorkspaceRow[]): ClosedSession[] {
-  return rows.flatMap((row) => (row.state === 'closed' ? [row.saved] : []))
+  return rows.flatMap((row) => (row.state === 'closed' && row.skip === null ? [row.saved] : []))
+}
+
+/** Why Open would skip a row, or null: a row in the window is never opened, so it has none. */
+export function skipOf(row: WorkspaceRow): string | null {
+  return row.state === 'closed' ? row.skip : null
 }
 
 /** The sessions among `rows` that Close ends: the ones in the window, running or ended; a closed row has nothing to end. */
@@ -94,12 +107,16 @@ export function closeTargets(rows: readonly WorkspaceRow[]): string[] {
   return rows.flatMap((row) => (row.state === 'closed' ? [] : [row.sessionId]))
 }
 
-/** How an Open went: how many started, how many failed and the last reason why, and each one skipped with why. */
+/**
+ * How an Open went: how many started, how many failed and the last reason why, each one skipped with why, and each one
+ * that started a new conversation in place of its own, with why (`fresh`, counted in `opened`).
+ */
 export type OpenOutcome = {
   readonly opened: number
   readonly failed: number
   readonly lastError: unknown
   readonly skipped: readonly { readonly name: string; readonly why: string }[]
+  readonly fresh: readonly { readonly name: string; readonly why: string }[]
 }
 
 /** The one toast an Open ends with: its kind, its title, and the line naming what was skipped, if anything was. */
@@ -107,19 +124,27 @@ export type OpenWords = { readonly kind: 'success' | 'warning' | 'failed'; reado
 
 const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)
 
+const asNewWord = (count: number): string => (count === 1 ? '1 as a new conversation' : `${String(count)} as new conversations`)
+
 /**
  * What the toast after an Open says. A failure is an error toast whose line under the title is the failure's own reason,
- * so the title counts the skipped ones too; a skip alone is a warning, which stays until dismissed, with a line naming
- * each skipped session and why.
+ * so the title counts the skipped and the new conversations too; a skip or a new conversation without a failure is a
+ * warning, which stays until dismissed, with a line naming each one and why.
  */
-export function openWords({ opened, failed, skipped }: OpenOutcome): OpenWords {
+export function openWords({ opened, failed, skipped, fresh }: OpenOutcome): OpenWords {
   if (failed > 0) {
     if (opened === 0 && skipped.length === 0) return { kind: 'failed', title: failed === 1 ? 'Could not open the session' : `Could not open the ${String(failed)} sessions`, note: null }
     const skips = skipped.length === 0 ? '' : `, and ${String(skipped.length)} ${skipped.length === 1 ? 'was' : 'were'} skipped`
-    return { kind: 'failed', title: `Opened ${String(opened)}, but ${String(failed)} could not start${skips}`, note: null }
+    const news = fresh.length === 0 ? '' : ` (${asNewWord(fresh.length)})`
+    return { kind: 'failed', title: `Opened ${String(opened)}${news}, but ${String(failed)} could not start${skips}`, note: null }
   }
-  const note = `Skipped ${skipped.map(({ name, why }) => `“${name}”: ${why}`).join('; ')}.`
+  const lines = [
+    skipped.length === 0 ? null : `Skipped ${skipped.map(({ name, why }) => `“${name}”: ${why}`).join('; ')}.`,
+    fresh.length === 0 ? null : `${fresh.map(({ name, why }) => `“${name}” started a new conversation: ${why}`).join('; ')}.`,
+  ]
+  const note = lines.filter((line): line is string => line !== null).join(' ')
   if (skipped.length > 0) return { kind: 'warning', title: opened === 0 ? `Could not open ${sessionsWord(skipped.length)}` : `Opened ${sessionsWord(opened)}, skipped ${String(skipped.length)}`, note }
+  if (fresh.length > 0) return { kind: 'warning', title: `Opened ${sessionsWord(opened)}, ${asNewWord(fresh.length)}`, note }
   return { kind: 'success', title: `Opened ${sessionsWord(opened)}`, note: null }
 }
 
@@ -128,8 +153,10 @@ export function rowWhere(row: WorkspaceRow): string {
   return [agentName(row.agent), row.branch].filter((part): part is string => part !== null && part !== '').join(' · ')
 }
 
-/** What a row says at its right: whether it runs, and how long since anything happened to it. */
+/** What a row says at its right: whether it runs, and how long since anything happened to it, or why Open skips it. */
 export function rowWhen(row: WorkspaceRow, now: number): string {
+  const skip = skipOf(row)
+  if (skip !== null) return `${row.state} · ${skip}`
   return row.at === null ? row.state : `${row.state} · ${ageOf(row.at, now)} ago`
 }
 

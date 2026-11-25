@@ -931,8 +931,10 @@ export async function resumeChatSession(folder: string, agent: 'claude' | 'codex
  * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0020). Only the agent's name is sent: the
  * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */
-export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
-  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
+export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE, session: string | null = null): Promise<{ id: number; generation: number }> {
+  // `session` opens the agent's own saved conversation by its id (`session/load`), on this computer only; an agent that
+  // cannot load one, or a service older than this, refuses the start.
+  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }), ...(session === null ? {} : { session }) })
 }
 
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
@@ -1082,6 +1084,15 @@ export async function closedSessions(): Promise<ClosedSession[] | null> {
  */
 export async function reopenClosedSession(agent: string, session: string): Promise<boolean> {
   return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
+}
+
+/**
+ * Has this computer's service make the removed folder of a closed or saved session it keeps again (its worktree, from the
+ * recorded repository and branch), starting nothing; resolves to the folder to start it in. Null when the service
+ * running is older than this and was not asked.
+ */
+export async function readyClosedFolder(agent: string, session: string): Promise<string | null> {
+  return invokeParsed('ready_closed_folder', z.string().nullable(), { agent, session })
 }
 
 /** A session as a project's saved open set keeps it: a closed session's record, with no word on its folder. */

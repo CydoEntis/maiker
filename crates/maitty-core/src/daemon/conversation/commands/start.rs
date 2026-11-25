@@ -25,7 +25,9 @@ impl Daemon {
         let (target, program) = self.acp_target(target)?;
         let identity = match target {
             // `acp_target` turned it into a start with the config's own program.
-            StartTarget::Acp { .. } | StartTarget::Agent { .. } => bail!("A start by name was not resolved"),
+            StartTarget::Acp { .. } | StartTarget::AcpSession { .. } | StartTarget::Agent { .. } => {
+                bail!("A start by name was not resolved")
+            }
             StartTarget::Create(settings)
             | StartTarget::Session {
                 settings,
@@ -203,21 +205,14 @@ impl Daemon {
     fn acp_target(&self, target: StartTarget) -> Result<(StartTarget, Option<AcpProgram>)> {
         match target {
             StartTarget::Acp { agent, cwd } => {
-                let program = self.acp_program(&agent)?;
-                let settings = LaunchSettings {
-                    provider: Provider::Acp,
-                    executable: program.executable.clone(),
-                    // An ACP agent is not pointed at a configuration; the folder stands in.
-                    config_root: cwd.clone(),
-                    cwd,
-                    model: None,
-                    model_provider: None,
-                    // The agent asks before it acts and keeps its own limits; the daemon sets neither.
-                    approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
-                    sandbox: crate::conversation::Sandbox::WorkspaceWrite,
-                    agent: Some(agent),
-                };
+                let (settings, program) = self.acp_settings(agent, cwd)?;
                 Ok((StartTarget::Create(settings), Some(program)))
+            }
+            // A saved conversation goes the way any saved one does; the agent's own answer to
+            // `session/load` decides whether it opens.
+            StartTarget::AcpSession { agent, cwd, session } => {
+                let (settings, program) = self.acp_settings(agent, cwd)?;
+                Ok((StartTarget::Session { settings, thread_id: session }, Some(program)))
             }
             StartTarget::Agent { provider, cwd, sandbox, approval_policy } => {
                 let (executable, config_root) = own_agent(provider)?;
@@ -252,6 +247,25 @@ impl Daemon {
         }
     }
 
+    /// The launch settings and the program of the agent the daemon's config names `agent` over
+    /// ACP, in `cwd`.
+    fn acp_settings(&self, agent: String, cwd: PathBuf) -> Result<(LaunchSettings, AcpProgram)> {
+        let program = self.acp_program(&agent)?;
+        let settings = LaunchSettings {
+            provider: Provider::Acp,
+            executable: program.executable.clone(),
+            // An ACP agent is not pointed at a configuration; the folder stands in.
+            config_root: cwd.clone(),
+            cwd,
+            model: None,
+            model_provider: None,
+            // The agent asks before it acts and keeps its own limits; the daemon sets neither.
+            approval_policy: crate::conversation::ApprovalPolicy::OnRequest,
+            sandbox: crate::conversation::Sandbox::WorkspaceWrite,
+            agent: Some(agent),
+        };
+        Ok((settings, program))
+    }
 }
 
 const CODEX_PROGRAM: &str = if cfg!(windows) { "codex.exe" } else { "codex" };

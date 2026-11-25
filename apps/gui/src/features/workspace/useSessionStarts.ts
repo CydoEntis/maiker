@@ -248,7 +248,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       if (there !== null && request.resume !== null) throw new Error('A saved conversation is resumed on the computer that saved it')
       const started = hasAbility(agent, 'structuredChat') && permissions !== undefined
         ? request.resume === null ? await startChatSession(request.folder, agent, null, permissions, request.machine) : await resumeChatSession(request.folder, agent, request.resume, permissions)
-        : await startAcpChat(request.folder, request.acp ?? agent, request.machine)
+        : await startAcpChat(request.folder, request.acp ?? agent, request.machine, request.resume)
       // Another machine's chat is `build/c12`, and its feed, box and sends are kept under a key that holds the machine too.
       const id = there === null ? String(started.id) : remoteChatId(started.id, there.state.name)
       const key = there === null ? started.id : conversationKey(request.machine, started.id)
@@ -428,7 +428,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session shown in
   // the app's view (ADR 0003), the same for every agent. Starts from the page run alongside each
   // other; one in the `background` is not opened and leaves the page open for the next.
-  const startNewChat = useCallback(async (asked: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
+  const startNewChat = useCallback(async (asked: NewChatRequest, { background = false, onPlaced, terminal = false }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The Maiker service is not reachable')
     // A start that made no Bypass choice (the Terminal view's, which has no draft) skips no prompts in the start folder.
     const request = asked.machine === LOCAL_MACHINE ? { ...asked, bypass: bypassFor(asked.bypass, asked.folder, resolveStartFolder(preferences.startFolder, home)) } : asked
@@ -440,7 +440,8 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       const there = request.branch ? await addWorktree(request.folder, request.branch.name, request.machine, request.branch.base) : request.folder
       return startDirectChat({ ...request, folder: there, branch: null }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     }
-    const resume = request.resume === null ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
+    // A chat over ACP is loaded by its id in the chat itself (`startDirectChat`), never typed on a command line.
+    const resume = request.resume === null || request.acp !== undefined ? [] : !hasAbility(request.agent, 'resumeSaved') ? null : resumeWords(request.agent, request.resume)
     if (resume === null) throw new Error('This saved conversation cannot be resumed from here')
     // The branch is settled before the agent starts, and a failure stays on the page with its words.
     let folder = request.folder
@@ -448,7 +449,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
     else if (request.branch) await switchBranch(folder, request.branch.name, request.branch.create)
     if (request.acp !== undefined && !chatView) throw new Error('An agent from the ACP registry starts only in the Chat view. Switch to it in Settings.')
     // In the Chat view a session is a chat with no terminal behind it (ADR 0020), a saved conversation included.
-    if (chatView) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
+    if (chatView && !terminal) return startDirectChat({ ...request, folder }, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
     const flags = `${resume.map((word) => ` ${word}`).join('')}${launchFlags(request.agent, request.model, request.reasoning, request.mode)}`
     // The page stays, with the message in it, until the chat that replaces it is there: closing it first showed the
     // empty window (or the last chat) for a moment between the two.

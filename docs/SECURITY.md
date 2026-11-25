@@ -569,6 +569,7 @@ that is not this one (`remote_policy.rs`, `remote_snapshot.rs` in `maitty-machin
 | `AskRemoveWorktree` | ignore | names a folder on this computer's disk to delete; remote worktree management is out of scope (ADR 0007) |
 | `Reply::SavedConversations` | ignore | saved conversations are listed for this computer's folders only; another machine's are out of scope |
 | `Reply::ImportableChats` | ignore | chats are brought in from this computer only; another machine's folders are out of scope |
+| `Reply::ClosedFolderReady` | ignore | a closed or saved session's folder is made again by this computer's daemon only (`ready_closed_folder` is local-only), and a folder of another machine would name this computer's disk |
 | `Reply::WorktreesTidied` | ignore | a clean-up's answer by folder is asked of this computer's daemon only (the desktop app's `remove_worktrees` is local-only); the terminal app's clean-up of another machine's worktrees never asks for it |
 | `Reply::SideAnswer` | ignore on the attached line | a side answer is asked on a request line to the chat's machine and taken only there, through `remote_chat::vet_side_answer`: nothing but a side answer passes, every string is cleaned like a chat's and the text is cut at `SIDE_ANSWER_MAX_BYTES` |
 | `Reply::PullRequests` | answer, cleaned | a project's pull requests are asked on a request line to the project's machine and taken through `remote_policy::vet_pull_requests_reply`, where nothing but that answer passes; `vet` cleans one on the attached line the same way: at most 50, each kept only with an address that is exactly `https://github.com/<owner>/<repo>/pull/<number>` (a click opens it in the browser), its title, author and branch one clean line cut at 300 characters, its time one GitHub could print, the login a GitHub login or empty. Whether one needs the person is that machine's own claim about its own account and only changes a count and a row here |
@@ -859,11 +860,15 @@ private to the user (0600 in a 0700 folder on Unix). `Query::ClosedSessions` is 
 only: an agent pane or a structured runtime cannot read where other work was done.
 
 `Command::ReopenClosedSession { agent, session }` is for human clients only, the same way: a pane,
-a structured runtime or a rejected client is refused. It names an entry the daemon keeps, never a
+a structured runtime or a rejected client is refused. It names an entry the daemon keeps (in the
+closed list, else in a project's saved set, whose entries were cleaned as they were saved), never a
 path, branch or command: the folder, branch and repository come from that entry, and the command
 typed is the agent's own resume template with the entry's conversation id, which must start with a
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again
-follows DATABASE "closed sessions": nothing at the path is ever overwritten. Another machine: the
+follows DATABASE "closed sessions": nothing at the path is ever overwritten. `Command::ReadyClosedFolder
+{ agent, session }` is held to the same rules (human clients only, an entry the daemon keeps, the
+same remake) but types nothing: it answers with the folder, and the window starts the session there
+through its usual start, which checks the id again (`resumeWords`). Another machine: the
 command is a worktree command, so a window sends it to this computer's daemon only (API_PATTERNS
 "client routing"; remote worktree management is out of scope, ADR 0007). Two requests make a worktree
 on another machine, and nothing else manages one there. `BranchWorktree`: the desktop app asks that machine's
@@ -884,7 +889,9 @@ The folder is sent only as one plain absolute POSIX path with no control charact
 (`remote_folder`), and the name must be an agent's name (`acp_agent_name`). The answer is taken only when it is the
 start itself, a conversation's number and generation (`remote_chat::vet_chat_start`); they address that machine's
 request lines alone and are never drawn. This gives the window nothing it did not have: it can already start a shell
-on that machine and type into it.
+on that machine and type into it. An ACP agent's saved conversation (`StartTarget::AcpSession`, protocol 130) is loaded on this computer only: the
+desktop host refuses one for another machine, and its id is checked as any saved conversation's (a letter or digit,
+then letters, digits, `-` and `_`, at most 128) before it reaches the agent's `session/load`.
 
 ## Project-specific: followed transcripts
 

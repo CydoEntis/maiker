@@ -207,7 +207,8 @@ is read at start: a file that does not parse, or whose `version` is newer than t
 renamed to `<file>.bak` and the list starts empty with a logged warning. Every stored entry is
 checked as a new one is, unknown fields are ignored and missing ones default.
 
-Reopening an entry (`daemon/reopen.rs`, `Command::ReopenClosedSession`) whose folder is gone makes
+Reopening an entry (`daemon/reopen.rs`, `Command::ReopenClosedSession`; the entry is looked up in
+this list first, then in the saved workspaces) whose folder is gone makes
 its worktree again: only at the recorded `worktree` path, only in the recorded `repo` (which must
 still be a main checkout), only from the recorded branch as it exists there now. It never
 overwrites or deletes: anything at that path (a folder that is not that worktree, a file, a link)

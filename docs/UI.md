@@ -192,7 +192,9 @@ list and starts that agent in that folder with its conversation, through the new
 with `resume`; the id held to `resumeWords`' rule, model, effort and mode left to the agent); while another start is
 under way the list stays open and a toast says "A session is already starting". A row whose folder is gone but was a
 worktree with a known repository and branch reads "folder removed · closed 1d ago" and can be picked: the service makes
-the worktree again and starts the agent itself (`reopen_closed_session`, API_PATTERNS; never `startNewChat`), while a
+the worktree again (`ready_closed_folder`, API_PATTERNS) and the session starts there through the same resume start
+(`startNewChat`, `reopenRemoved`), so it opens as a chat or in its terminal as Settings › Open sessions in says (a
+service from before 129 is asked to reopen it itself, `reopen_closed_session`, which starts it in its terminal), while a
 line over the list says "Making the folder again and starting the session…" and every row is `aria-disabled` until
 it answers, so no second session starts meanwhile; an answer that comes after the list was closed changes nothing. Once it has, the
 list closes; a refusal (a branch that is gone is named) shows as an alert line over the list, which stays usable, and a
@@ -216,7 +218,11 @@ kept as open when it was last closed (`saved_workspace`, API_PATTERNS; read off 
 newest first. A plain terminal is not listed, and a saved session whose conversation runs again in the window is one
 row, the running one. Each row is a tick, the agent's mark, the name (else "<Agent> session"), the agent and branch under
 it, and at its right "running", "ended" or "closed" with how long ago ("running · 5m ago", from the status's last change
-for a session in the window, its close for a saved one). Under it a **Worktrees** section (`useWorkspaceWorktrees`)
+for a session in the window, its close for a saved one). A saved row Open would skip (`reopenPlan`, the same rules
+Open uses) says why in place of the age, in the toast's words ("closed · folder removed; cannot be made again",
+"closed · its agent runs only in the Chat view" for a chat over ACP while sessions open in their terminal); its tick is
+off and its tooltip reads "Open skips it: …", and Select all, the count, **Open N** and **Open everything** leave it out.
+Under it a **Worktrees** section (`useWorkspaceWorktrees`)
 lists the project's worktrees in git's order, read off the UI thread from this computer's daemon (`loadFolderBranches`,
 no session needed): the main checkout first, with no tick, "main checkout · stays", since removing it would remove the
 project; then each linked worktree with a tick, its branch (else its folder's name), and under it its uncommitted
@@ -239,10 +245,17 @@ ticked or not; both are off while nothing applies and while an Open or any other
 (`openSaved` in `useRecentSessions`, the way Bring in your chats starts its picks), so the panel stays and its rows turn
 to running as they start, by Recent sessions' rules (`reopenPlan`): in place through the resume start, or, for a folder
 that is gone but was a worktree with a known repository and branch, through the service, which makes it again
-(`reopen_closed_session`); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
-saved under its agent's own name and resumes by no id. One toast with the project as its context ends it: "Opened 3
-sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1 session") with a line naming each skipped
-one and why; or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is
+(`ready_closed_folder`; the service finds the session in the project's saved set when it has left the closed list), then
+the same resume start there, so it opens in the view Settings › Open sessions in picks (`plannedRequest`). Claude and
+Codex resume their conversation. Gemini starts a new conversation in its terminal, whatever the view, since the app
+knows no way to continue one of its own. A chat run over ACP, saved under its agent's own name, is loaded by its id in
+the Chat view (`start_acp_chat` with `session`, API_PATTERNS protocol 130); when its agent cannot load it, a new chat
+with that agent starts in the same folder instead; in the Terminal view it is skipped, "its agent runs only in the Chat
+view". A record that names no agent ("acp") or whose folder cannot be made again is skipped. One toast with the
+project as its context ends it: "Opened 3 sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1
+session") with a line naming each skipped one and why, or "Opened 2 sessions, 1 as a new conversation" with a line
+naming each that started anew and why ("“Ask Gemini” started a new conversation: Gemini cannot continue a conversation
+from here."); or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is
 pressed. **Close N** (a danger button) ends the ticked rows in the window, running or ended (N counts only those: a
 closed row has nothing to end), and is off while none is ticked; its accessible name is "Close N ticked sessions", so it
 is not a second "Close" beside the panel's ×. It asks first as Close project does (`closeSessions` in
@@ -280,7 +293,7 @@ click outside closes it. It is this computer's only: on another machine's projec
 is local-only in v1: this project is on <machine>, not on this computer." The gallery shows it at
 `#dialogs?show=workspace` (and `workspace-ticked`, `-opening`, `-opened` with the toasts an Open ends with, `-close`
 with Close's question, `-loading`, `-empty`, `-older`, `-failed`, `-checking`, `-worktrees-failed`, `-busy` with a
-worktree a session runs in, `-remove` with Remove's question, `-removed` with the reason on each row the daemon kept).
+worktree a session runs in, `-unopenable` with saved rows Open would skip, `-remove` with Remove's question, `-removed` with the reason on each row the daemon kept).
 
 **Desktop service states** (`ServiceStatus.tsx`, `useServiceStage.ts`, `model/serviceState.ts`; DESIGN › *Errors*). While the service does not answer, every status reads Unknown, spinners stop and input waits. For the first 3 seconds (`OFFLINE_AFTER_MS`) it is a blip: only the title bar's chip says **Reconnecting…**, and nothing dims. After that the whole window dims under one dialog, **Maiker can’t reach its background service** ("Nothing works until it is back, but your chats are safe and will reconnect on their own…"), with **Start service**, **Not now**, **Copy details** (the connection's own error) and "Trying again in Ns"; the window tries again after 2, 4, 8, then every 15 seconds (`RETRY_DELAYS_MS`). The desktop's connection starts the service itself on every try (`open_or_spawn_for_user`), so Start service is a try now, showing "Starting…" while it runs. **Not now** leaves a red **× Offline** chip in the title bar that opens the dialog again. When the service answers after an outage the dialog (or the chip) turns green, "Reconnecting…" / "Found the service. Picking your chats back up.", for 1.2 s (`FOUND_FOR_MS`), then a **Back online** toast says "All chats reconnected. Nothing was lost.", unless the restart cut replies: then the cut-off dialog below asks instead and no toast shows. Back after a blip says nothing. Toasts raised while the window is offline are held and show once it is back (`holdToasts`). A running service of another protocol gets the same window dialog in caution, **Restart Maiker to finish updating**, "The app updated, but the service behind it is still the older one.", the list of what a restart keeps and stops (sessions that reopen, agents that will offer Resume, shells that stop; a line with a count of 0 is left out) and a restart button that asks for a second click (`restart_mismatched_daemon`, then "Service restarted · N sessions back"), with `protocol 75 → 76` beside it (protocol numbers are never written as app versions); a service newer than the app asks **Update Maiker to reconnect**. **Later** leaves a caution **Restart needed** (or **Update needed**) chip in the title bar. The sidebar foot never repeats any of this. No needs-you toast shows while the service is not connected, and a failed action whose only reason is that the window has no line to the service (`lib/serviceLine.ts`) shows no error toast either (`lib/toast.ts`): the chip and the dialog already say it. **After a restart** (`CutOffDialog.tsx`, `model/cutOff.ts`) the sessions it cut mid-reply, on every machine (a terminal agent's `TermInfo.interrupted`, a chat's `ConversationSummary.interrupted`), are one dialog, **Pick up where you left off**, once the service answers and no other dialog is up: a row each, all ticked, with **Resume N chats** (N is the ticked count; **Resume N sessions** when a terminal agent is among them) and **Not now**. Nothing starts until Resume is pressed. A session that joins while it is up (another machine coming back) joins ticked. Resume runs a terminal agent's resume command in its pane, and starts a chat again on its own session (`resume_conversation`) then sends it `Continue where you left off.` as a message (`continueCutChat.ts`); a failure is a toast naming the session. Either button takes every listed session off the list for this window, and each still offers **Restart** over its own chat until it is taken up. Sessions that were idle never show here: a chat comes back asleep, listed idle, and starts when it is opened; until its agent is up its dock reads **Waking Claude up…** (the running mark, "This chat rested while Maiker restarted. It picks up where it was in a moment."), from the chat link's `waking` (`toConversation`: a summary that needs recovery but is listed idle, or an existing chat stopped and working while it starts). Nothing resumes by itself.
 

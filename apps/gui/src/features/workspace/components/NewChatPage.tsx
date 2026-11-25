@@ -61,7 +61,7 @@ export type NewChatSeed = {
 }
 
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
-export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
+export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void; /** Starts it in its terminal whatever view Settings picks: a reopened Gemini session keeps its terminal. */ terminal?: boolean }
 
 /** A computer a session could start on. `down` is why it cannot, in words, when it cannot. */
 export type NewChatMachine = { machine: number; /** What the machine is called on screen. */ label: string; /** What the daemon calls it; null for this computer. */ name?: string | null; local: boolean; down?: string | null }

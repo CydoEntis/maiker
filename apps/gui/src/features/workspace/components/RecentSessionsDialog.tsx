@@ -10,13 +10,16 @@ import { ageOf, nowSeconds } from '../model/newChatHost'
 import { reopenRefusal, RESTART_TO_REOPEN, useClosedSessions, useReopenRemoved, type RecentRead, type RemakeState } from '../model/recentSessions'
 import { tildePath } from '../model/session'
 import { AppIcon } from './glyphs'
+import type { NewChatRequest } from './NewChatPage'
 
 type Props = {
   /** The home folder, so a folder under it reads as `~/…`. */
   home: string
   /** Reopens a session whose folder is still there. */
   onPick: (closed: ClosedSession) => void
-  /** The service made a removed folder again and started its session. */
+  /** Starts a session in the folder the service made again (`startNewChat`), so it opens in the view Settings picks. */
+  onStart: (request: NewChatRequest) => Promise<void>
+  /** The service made a removed folder again and its session started. */
   onReopened: () => void
   onCancel: () => void
 }
@@ -67,9 +70,9 @@ function Body({ read, home, locked, onPick, onRetry }: { read: RecentRead; home:
 }
 
 /** The agent sessions closed on this computer, newest first; picking one starts its agent in its folder with its conversation. */
-export function RecentSessionsDialog({ home, onPick, onReopened, onCancel }: Props) {
+export function RecentSessionsDialog({ home, onPick, onStart, onReopened, onCancel }: Props) {
   const { read, retry } = useClosedSessions()
-  const remake = useReopenRemoved(onReopened)
+  const remake = useReopenRemoved(onStart, onReopened)
   const pick = (closed: ClosedSession) => {
     if (closed.folder_present) onPick(closed)
     else remake.reopen(closed)

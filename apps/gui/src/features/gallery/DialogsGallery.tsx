@@ -35,7 +35,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed, workspace-busy (a worktree a session runs in), workspace-remove (Remove's question), workspace-removed (a worktree the daemon kept, with its reason)); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed, workspace-busy (a worktree a session runs in), workspace-unopenable (saved rows Open would skip, each saying why), workspace-remove (Remove's question), workspace-removed (a worktree the daemon kept, with its reason)); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  * `switch` is a project's right-click menu with Switch to… open on the other opened projects, and `switch-failed` the
  * toast a switch ends with when its project's sessions could not be saved.
  */
@@ -206,9 +206,9 @@ function ScriptedNew({ what, children }: { what: string; children: ReactNode }) 
 }
 
 /** A session from the project's saved set, closed `ago` seconds before now. */
-function closedRow(title: string, branch: string, ago: number): WorkspaceRow {
-  const saved = { agent: 'claude', session: branch, cwd: '/home/dev/acme-store', branch, title, at: NOW_SECONDS - ago, folder_present: true, worktree: null, repo: null }
-  return { key: `saved:claude:${branch}`, name: title, agent: saved.agent, branch, at: saved.at, state: 'closed', saved }
+function closedRow(title: string, branch: string, ago: number, skip: string | null = null, agent = 'claude'): WorkspaceRow {
+  const saved = { agent, session: branch, cwd: '/home/dev/acme-store', branch, title, at: NOW_SECONDS - ago, folder_present: true, worktree: null, repo: null }
+  return { key: `saved:${agent}:${branch}`, name: title, agent, branch, at: saved.at, state: 'closed', saved, skip }
 }
 
 /** A project's sessions as its Workspace panel lists them: two running in the window, then two from its saved set. */
@@ -217,6 +217,15 @@ const WORKSPACE_ROWS: WorkspaceRow[] = [
   { key: 'session:t5', name: 'Move auth from JWT to sessions', agent: 'codex', branch: 'main', at: NOW_SECONDS - HOUR, state: 'running', sessionId: 't5', conversation: null },
   closedRow('Fix the flaky checkout test', 'fix-checkout-test', IN_THREE_HOURS),
   closedRow('Write the billing webhook docs', 'docs/billing-webhooks', IN_THREE_DAYS),
+]
+/**
+ * workspace-unopenable's rows: the usual ones, then two Open would skip, each saying why in place of its age, with its
+ * tick off: one whose folder is gone and cannot be made again, and a chat over ACP seen from the Terminal view.
+ */
+const UNOPENABLE_ROWS: WorkspaceRow[] = [
+  ...WORKSPACE_ROWS,
+  closedRow('Sketch the pricing page', 'pricing-sketch', IN_THREE_DAYS, 'folder removed; cannot be made again'),
+  closedRow('Ask about the cache', 'cache-question', IN_THREE_DAYS, 'its agent runs only in the Chat view', 'opencode'),
 ]
 /** The rows workspace-ticked ticks once the panel is up: one running, one closed and one worktree (by its folder). */
 const WORKSPACE_TICKED = ['Upgrade to React 19', 'Fix the flaky checkout test', '/home/dev/acme-store-wt/fix-checkout-test']
@@ -244,9 +253,9 @@ function workspaceWorktrees(checking: boolean, busy: boolean): WorktreeRow[] {
   ]
 }
 
-/** What workspace-opened says after an Open: one that opened with a skipped session, and one where a start failed. */
-const OPENED_SKIPPED: OpenOutcome = { opened: 1, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }] }
-const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [] }
+/** What workspace-opened says after an Open: one with a skipped session and a Gemini one started anew, and one where a start failed. */
+const OPENED_SKIPPED: OpenOutcome = { opened: 2, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }], fresh: [{ name: 'Sketch the onboarding copy', why: 'Gemini cannot continue a conversation from here' }] }
+const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [], fresh: [] }
 /** The worktrees workspace-remove and workspace-removed tick before pressing Remove, by their folders. */
 const REMOVE_TICKED = ['/home/dev/acme-store-wt/feat/react-19', '/home/dev/acme-store-wt/fix-checkout-test']
 
@@ -293,7 +302,7 @@ function WorkspaceShown({ what }: { what: string }) {
     toastOpened(OPENED_SKIPPED, 'acme-store')
   }, [what])
   const saved: SavedRead = what === 'workspace-loading' ? { kind: 'loading' } : what === 'workspace-older' ? { kind: 'older' } : what === 'workspace-failed' ? { kind: 'failed' } : { kind: 'listed', list: [] }
-  const rows = what === 'workspace-empty' ? [] : saved.kind === 'listed' ? WORKSPACE_ROWS : WORKSPACE_ROWS.filter((row) => row.state !== 'closed')
+  const rows = what === 'workspace-empty' ? [] : what === 'workspace-unopenable' ? UNOPENABLE_ROWS : saved.kind === 'listed' ? WORKSPACE_ROWS : WORKSPACE_ROWS.filter((row) => row.state !== 'closed')
   return (
     <>
       <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} worktrees={workspaceWorktreesRead(what)} now={NOW_SECONDS} opening={what === 'workspace-opening'} onOpen={SAME} onClose={SAME} onRemove={keepEach} onRetry={SAME} onRetryWorktrees={SAME} onCancel={SAME} />
@@ -354,7 +363,7 @@ function Show({ what }: { what: string }): ReactNode {
   if (what.startsWith('settings')) return <Settings section={(what.split('-')[1] ?? 'appearance') as DesktopSettingsSection} />
   if (what === 'palette') return <CommandPalette items={ITEMS} outputItem={() => null} onClose={() => undefined} />
   if (what === 'agents') return <AcpAgentsDialog onPick={() => undefined} onCancel={() => undefined} />
-  if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onReopened={() => undefined} onCancel={() => undefined} />
+  if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onStart={() => Promise.resolve()} onReopened={() => undefined} onCancel={() => undefined} />
   if (what === 'workspace' || what.startsWith('workspace-')) return <WorkspaceShown what={what} />
   if (what === 'switch' || what === 'switch-failed') return <SwitchShown what={what} />
   if (what === 'resume') return <ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} />

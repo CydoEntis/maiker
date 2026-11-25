@@ -1,38 +1,60 @@
 import { useCallback, useRef, useState } from 'react'
-import { reopenClosedSession, type ClosedSession, type ImportableChat } from '@/api/daemon'
+import type { ClosedSession, ImportableChat } from '@/api/daemon'
+import { errorMessage } from '@/lib/error-message'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import type { SessionView } from './model/session'
 import { importStart } from './model/importChats'
-import { endedResume, reopenPlan, reopenRequest, RESTART_TO_REOPEN, savedStart } from './model/recentSessions'
+import { endedResume, plannedRequest, reopenPlan, reopenRequest, savedStart, type ReopenPlan } from './model/recentSessions'
 import { openWords, savedName, type OpenOutcome, type WorkspaceFor } from './model/workspacePanel'
 
+/** Starts a saved session in its terminal (`terminal`, Gemini's) or in the view Settings picks. */
+type SavedStart = (request: NewChatRequest, terminal: boolean) => Promise<void>
+
 /**
- * Opens each of `list` again, one after another: in place through `start`, or, when its folder is gone, through the
- * service, which makes it again and starts the agent itself. One that fails is counted and the rest still open; one
- * that cannot be opened is skipped with why.
+ * Starts one planned reopen; resolves to why it is a new conversation, or null when it continues its own. A chat over ACP
+ * whose agent cannot load its conversation (or a service too old to ask) starts a new one with that agent there instead.
  */
-async function openEach(list: readonly ClosedSession[], start: (request: NewChatRequest) => Promise<void>): Promise<OpenOutcome> {
+async function startPlanned(request: NewChatRequest, plan: Extract<ReopenPlan, { kind: 'open' }>, start: SavedStart): Promise<string | null> {
+  try {
+    await start(request, plan.terminal)
+    return plan.fresh
+  } catch (error) {
+    if (request.acp === undefined || request.resume === null) throw error
+    await start({ ...request, resume: null }, plan.terminal)
+    return errorMessage(error, 'it could not continue its conversation')
+  }
+}
+
+/**
+ * Opens each of `list` again, one after another, through `start` (`reopenPlan`): in place, or, when its folder is
+ * gone, once the service has made it again, so each opens in the view Settings picks. One that fails is counted and the
+ * rest still open; one that cannot be opened is skipped with why, and one that starts a new conversation says why.
+ */
+async function openEach(list: readonly ClosedSession[], chatView: boolean, start: SavedStart): Promise<OpenOutcome> {
   let opened = 0
   let failed = 0
   let lastError: unknown = null
   const skipped: { name: string; why: string }[] = []
-  for (const closed of list) {
-    const plan = reopenPlan(closed)
+  const fresh: { name: string; why: string }[] = []
+  for (const saved of list) {
+    const plan = reopenPlan(saved, chatView)
     if (plan.kind === 'skip') {
-      skipped.push({ name: savedName(closed), why: plan.why })
+      skipped.push({ name: savedName(saved), why: plan.why })
       continue
     }
     try {
-      if (plan.kind === 'start') await start(plan.request)
-      else if (!(await reopenClosedSession(closed.agent, closed.session))) throw new Error(RESTART_TO_REOPEN)
+      // One in place starts at once, as a pick from the list does; only a removed folder waits for the service.
+      const request = plan.remake ? await plannedRequest(saved, plan) : plan.request
+      const why = request === null ? null : await startPlanned(request, plan, start)
+      if (why !== null) fresh.push({ name: savedName(saved), why })
       opened += 1
     } catch (error) {
       failed += 1
       lastError = error
     }
   }
-  return { opened, failed, lastError, skipped }
+  return { opened, failed, lastError, skipped, fresh }
 }
 
 /** The one toast an Open ends with, under the project it opened in (`where`). */
@@ -46,7 +68,7 @@ export function toastOpened(outcome: OpenOutcome, where: string): void {
  * The Recent sessions list, the Resume a saved chat dialog, Bring in your chats and a project's Workspace panel: whether
  * each is open, and starting a pick from any of them through the new chat's resume start.
  */
-export function useRecentSessions(startNewChat: (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>, starting: boolean) {
+export function useRecentSessions(startNewChat: (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>, starting: boolean, chatView: boolean) {
   const [recentOpen, setRecentOpen] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
@@ -105,12 +127,12 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest, option
     openingNow.current = true
     setOpening(true)
     void (async () => {
-      const outcome = await openEach(list, (request) => startNewChat(request, { background: true }))
+      const outcome = await openEach(list, chatView, (request, terminal) => startNewChat(request, { background: true, ...(terminal ? { terminal } : {}) }))
       openingNow.current = false
       setOpening(false)
       toastOpened(outcome, where)
     })()
-  }, [startNewChat, starting])
+  }, [startNewChat, starting, chatView])
   // The Resume on an ended chat: the same resume start, from what the app remembers of the session.
   const resumeEnded = useCallback((session: SessionView) => {
     const resume = endedResume(session)

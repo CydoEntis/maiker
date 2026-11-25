@@ -1325,6 +1325,36 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 130 adds `StartTarget::AcpSession { agent, cwd, session }` (`ACP_SESSION_SINCE`, with an arm in
+`ClientMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is never sent it). It opens an ACP
+agent's own saved conversation by its id: the daemon picks the program by the agent's name as `StartTarget::Acp` does,
+and opens the session with `session/load` when the agent advertised `loadSession`; else the start is refused with
+`ServerMsg::Error` ("The agent did not continue the saved conversation …") and no chat is kept. A loaded one starts as
+an empty chat (the daemon recorded none of its past; the agent holds it). Human clients only, this computer only: the
+desktop host's `start_acp_chat { …, session }` refuses one for another machine, checks the id as any saved
+conversation's (`check_saved_session_name`) and asks a daemon before 130 nothing (an error in words). The workspace
+panel's Open starts a new chat with that agent in the same folder when the load is refused, and says so in its toast.
+Tests: `a_daemon_from_before_acp_sessions_is_never_asked_to_load_one`,
+`a_saved_acp_conversation_is_loaded_by_its_id_when_the_agent_can_load_one`,
+`a_saved_acp_conversation_whose_agent_cannot_load_one_is_refused_saying_why`,
+`a_saved_acp_conversation_names_the_agent_the_folder_and_a_plain_id`.
+
+Protocol 129 adds `Command::ReadyClosedFolder { agent, session }` and `Reply::ClosedFolderReady { folder }`
+(`READY_CLOSED_FOLDER_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon
+is never sent the command and an older client is never sent the reply). It makes the folder of a session the daemon
+keeps (its closed list, then the saved sets) ready as `ReopenClosedSession` does, worktree made again by the same
+rules, hook run and listed with the checkouts the app made, and starts nothing: the answer is the folder (the one it
+worked in, or its worktree's top when that subfolder is gone), else `ServerMsg::Error` with the reason. No resume
+template is needed, since nothing is typed. Human clients only; another machine's answer is ignored (`remote_policy`).
+The desktop host's `ready_closed_folder { agent, session }` (`maitty_desktop_client::ready_closed_folder`, this
+computer only, on a connection of its own) gives the window the folder, or null without asking from a daemon before
+129. The window then starts the session there through `startNewChat` with `resume` (`reopenRemoved`), so a remade
+session opens as a chat or in its terminal as Settings › Open sessions in says; from an older daemon it falls back to
+`reopen_closed_session`, which starts it in its terminal. Tests:
+`a_peer_from_before_ready_folders_still_talks_and_is_never_sent_one`,
+`a_folder_made_ready_is_answered_with_and_nothing_is_started_there`,
+`a_folder_is_made_ready_only_by_a_service_that_reads_it_and_an_older_one_reopens_instead`.
+
 Protocol 128 adds `Command::TidyWorktrees.answer_each` (`#[serde(default)]`) and `Reply::WorktreesTidied { removed,
 kept }` (`WORKTREES_TIDIED_SINCE`, with an arm in `ServerMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122). A clean-up
 answers once the removing is done; with `answer_each` it answers `WorktreesTidied` instead of the notice and `Ok`:
@@ -1355,8 +1385,9 @@ without asking from an older daemon) and `workspace` (null from an older daemon)
 (`saveWorkspace` in `api/daemon.ts`) when a project is closed, and reads through `saved_workspace { project }`
 (`savedWorkspace`, `maitty_desktop_client::workspace`: the list, each record with `folder_present` added as
 `closed_sessions` adds it, or null without asking from a daemon older than 127) for the project's Workspace panel,
-whose Open starts a record in place or, when its folder is gone, asks `reopen_closed_session` to make it again (the
-daemon looks it up in its closed list, so one that has left that list fails and is counted as such); both ask this computer's daemon only, each on a connection of its own. The daemon
+whose Open starts a record in place or, when its folder is gone, asks `ready_closed_folder` (129) to make it again and starts it there (the
+daemon looks it up in its closed list, then in the projects' saved sets, so one that has left the 50-entry list is
+still made again: `a_saved_session_that_left_the_closed_list_gets_its_worktree_back_and_resumes_there`); both ask this computer's daemon only, each on a connection of its own. The daemon
 matches the folder exactly, so both name a project by its opened project's `folder` as the sidebar spells it. The window
 builds each saved record itself (`model/openSet.ts`): a terminal's agent conversation id is its pane's
 `TermInfo.session`, and a chat's is `ConversationSummary.session` (`#[serde(default)]`, written only when known, so it

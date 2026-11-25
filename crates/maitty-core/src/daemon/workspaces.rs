@@ -116,6 +116,16 @@ impl Workspaces {
             .unwrap_or_default()
     }
 
+    /// The record kept for the conversation `session` of `agent` in any project's set, from the
+    /// project saved last first; None when no set holds it.
+    pub fn find(&self, agent: &str, session: &str) -> Option<ClosedSession> {
+        self.projects
+            .iter()
+            .flat_map(|kept| &kept.sessions)
+            .find(|kept| kept.agent == agent && kept.session == session)
+            .cloned()
+    }
+
     /// Keep `sessions` as the set for `project`, replacing the one before, and save off the loop.
     /// An empty set (or one with nothing valid in it) forgets the project.
     pub fn save(&mut self, project: PathBuf, sessions: Vec<ClosedSession>) -> Result<()> {

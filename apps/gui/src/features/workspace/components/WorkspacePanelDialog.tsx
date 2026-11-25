@@ -6,7 +6,7 @@ import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
 import type { ClosedSession } from '@/api/daemon'
 import type { WorktreesRemoved } from '@/features/worktrees/api'
 import { explainError } from '@/lib/error-message'
-import { closeTargets, openTargets, removalCheck, removalItems, removedWords, rowWhen, rowWhere, tickableWorktrees, worktreeWhen, worktreeWhere, type RemovalCheck, type SavedRead, type WorkspaceRow, type WorktreeRow, type WorktreesRead } from '../model/workspacePanel'
+import { closeTargets, openTargets, removalCheck, removalItems, removedWords, rowWhen, rowWhere, skipOf, tickableWorktrees, worktreeWhen, worktreeWhere, type RemovalCheck, type SavedRead, type WorkspaceRow, type WorktreeRow, type WorktreesRead } from '../model/workspacePanel'
 import { AppIcon, Icon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -260,12 +260,13 @@ function WorkspaceBody({ name, rows, saved, worktrees, now, opening, onOpen, onC
       return next
     })
   }
-  // Select all and the count cover every row a tick can go on, sessions and linked worktrees alike.
-  const tickable = [...rows.map((row) => row.key), ...tickableWorktrees(worktrees).map((row) => row.key)]
+  // Select all and the count cover every row a tick can go on, sessions and linked worktrees alike. A closed row Open
+  // would skip takes none: its row says why, and a tick on it would only count toward nothing.
+  const tickable = [...rows.filter((row) => skipOf(row) === null).map((row) => row.key), ...tickableWorktrees(worktrees).map((row) => row.key)]
   const tickedCount = tickable.filter((key) => ticked.has(key)).length
   const empty = rows.length === 0 && saved.kind === 'listed'
   // The ticked session rows. Open and Close act on these only: a ticked worktree is Remove worktree's.
-  const chosen = rows.filter((row) => ticked.has(row.key))
+  const chosen = rows.filter((row) => ticked.has(row.key) && skipOf(row) === null)
   // Open starts only closed rows: a running one ticked beside them is left as it is.
   const toOpen = openTargets(chosen)
   const closedRows = openTargets(rows)
@@ -329,10 +330,12 @@ function WorkspaceBody({ name, rows, saved, worktrees, now, opening, onOpen, onC
               <h3 className="mx-import-folder">Sessions</h3>
             </div>
             <ul className="mx-recent-list" aria-label="Sessions">
-              {rows.map((row) => (
+              {rows.map((row) => {
+                const skip = skipOf(row)
+                return (
                 <li key={row.key}>
-                  <label className="mx-recent-row mx-workspace-row" title={row.name}>
-                    <input type="checkbox" data-bare checked={ticked.has(row.key)} onChange={() => { toggle(row.key) }} />
+                  <label className={skip === null ? 'mx-recent-row mx-workspace-row' : 'mx-recent-row mx-workspace-row is-fixed'} title={skip === null ? row.name : `${row.name}\nOpen skips it: ${skip}.`}>
+                    <input type="checkbox" data-bare checked={skip === null && ticked.has(row.key)} disabled={skip !== null} onChange={() => { toggle(row.key) }} />
                     <AppIcon process={row.agent} size={20} />
                     <span className="mx-recent-text">
                       <span className="mx-recent-title">{row.name}</span>
@@ -341,7 +344,8 @@ function WorkspaceBody({ name, rows, saved, worktrees, now, opening, onOpen, onC
                     <span className={`mx-recent-when is-${row.state}`}>{rowWhen(row, now)}</span>
                   </label>
                 </li>
-              ))}
+                )
+              })}
             </ul>
           </section>
         )}

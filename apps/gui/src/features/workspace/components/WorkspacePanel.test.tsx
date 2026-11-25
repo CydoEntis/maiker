@@ -50,7 +50,7 @@ function showPanel(windowSessions: readonly SessionView[]) {
   render(
     <QueryClientProvider client={client}>
       <div className="mx-app">
-        <WorkspacePanel target={{ project: { machineName: null, folder: '/code/shop/web' }, name: 'web' }} sessions={[]} windowSessions={windowSessions} opening={false} onOpen={vi.fn()} onClose={vi.fn()} onCancel={vi.fn()} />
+        <WorkspacePanel target={{ project: { machineName: null, folder: '/code/shop/web' }, name: 'web' }} sessions={[]} windowSessions={windowSessions} chatView opening={false} onOpen={vi.fn()} onClose={vi.fn()} onCancel={vi.fn()} />
       </div>
     </QueryClientProvider>,
   )
