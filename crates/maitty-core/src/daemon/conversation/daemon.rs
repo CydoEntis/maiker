@@ -21,7 +21,7 @@ fn cache_write_result(result: Result<bool>) -> Result<()> {
 fn reset_state_after_provider_ready(state: &mut super::State) {
     state.status = Status::Idle;
     state.blocked = false;
-    state.error = None;
+    state.clear_errors();
     state.approvals.clear();
     state.file_change_previews.clear();
     state.unsupported_requests.clear();
@@ -234,7 +234,7 @@ impl Daemon {
                     state.cancelling = None;
                     state.blocked = false;
                     state.status = Status::Idle;
-                    state.error = None;
+                    state.clear_errors();
                     state.history_ready = false;
                     self.conversation_history.reconnect(id)?;
                     return Ok(());
@@ -426,7 +426,7 @@ impl Daemon {
             will_retry,
         })) = &update
         {
-            state.error = Some(message.clone());
+            state.turn_error = Some(message.clone());
             state.status = if *will_retry {
                 Status::Working
             } else {
@@ -456,16 +456,17 @@ impl Daemon {
             let cancelled_turn = reported.cancellation_finished
                 && *turn_state == super::history::ItemState::Interrupted;
             if cancelled_turn {
-                state.error = None;
+                state.clear_errors();
                 state.status = Status::Idle;
             } else {
-                if let Some(failure) = &failure {
-                    state.error = Some(turn_error()?.unwrap_or_else(|| failure.clone()));
-                } else if let Some(error) = turn_error()? {
-                    state.error = Some(error);
-                }
+                // A turn that starts, or ends well, is past what went wrong in the one before;
+                // only `turn_error` goes, so a lasting problem stays in `error`.
+                state.turn_error = match &failure {
+                    Some(failure) => Some(turn_error()?.unwrap_or_else(|| failure.clone())),
+                    None => turn_error()?,
+                };
                 state.status =
-                    if state.blocked || failure.is_some() || state.error.is_some() {
+                    if state.blocked || failure.is_some() || state.shown_error().is_some() {
                         Status::Blocked
                     } else if *turn_state == super::history::ItemState::Running {
                         Status::Working
@@ -525,6 +526,8 @@ impl Daemon {
                 {
                     state.error = None;
                 }
+                // The turn goes on to ask: whatever its provider reported going wrong was got past.
+                state.turn_error = None;
                 Some(request_id)
             }
             Err((request_id, method)) => {
@@ -625,7 +628,7 @@ impl Daemon {
         state.file_change_previews.clear();
         state.unsupported_requests.clear();
         state.blocked = false;
-        state.error = None;
+        state.clear_errors();
     }
 
     /// Keeps the conversation's helpers (ADR 0010) from what its provider reports, and takes a
@@ -743,6 +746,7 @@ mod cache_write_tests {
             status: Status::Blocked,
             blocked: true,
             error: Some("Codex stdout closed".into()),
+            turn_error: Some("Codex's turn was interrupted".into()),
             ..Default::default()
         };
 
@@ -750,7 +754,7 @@ mod cache_write_tests {
 
         assert_eq!(state.status, Status::Idle);
         assert!(!state.blocked);
-        assert!(state.error.is_none());
+        assert!(state.shown_error().is_none());
         assert!(!state.history_ready);
     }
 }

@@ -136,7 +136,7 @@ async fn a_steer_codex_refuses_leaves_the_message_waiting_and_it_is_sent_once_th
         assert_eq!(queued(&read(&mut session, 613, id).await), [(2, "second".to_string())]);
         // A refusal is not a fault of the conversation: it keeps working and shows no error.
         let state = &session.daemon.conversation_states[&id];
-        assert_eq!(state.error, None);
+        assert_eq!(state.shown_error(), None);
         assert!(!state.blocked);
         assert_eq!(turns_started(&session).await, 1);
 
@@ -429,7 +429,7 @@ async fn an_interrupt_the_provider_refuses_because_the_turn_just_ended_blocks_no
         // The message went out as the next turn, and the chat never looked like it needed you.
         assert_eq!(turns_started(&session).await, 2);
         let state = &session.daemon.conversation_states[&id];
-        assert_eq!(state.error, None);
+        assert_eq!(state.shown_error(), None);
         assert!(!state.blocked && state.history_ready && state.cancelling.is_none());
         assert_ne!(state.status, crate::protocol::Status::Blocked);
     })

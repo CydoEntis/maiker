@@ -813,8 +813,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Panes change places with a glide.** Every change that moves panes (a split, a pane closed, a saved arrangement,
   maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
   the browser's pictures of the panes move, cropped and never stretched, so text never reflows on the way; a pane that leaves
-  fades out and one that arrives fades in. Without View Transitions, with Reduce motion, or on the Linux web view (where a swap
-  by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
+  fades out and one that arrives fades in. Without View Transitions, or with Reduce motion, the change just happens. The Linux
+  web view glides too, by request; a swap by drag was reported to take the window down there in 0.72.0 (Hyprland), so if
+  that comes back, `paneTransition.ts` is the first place to look. Picking a session to show (the sidebar, the palette, a
   notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
   each pick made switching feel slow.
 - **Toasts are one design** (see *Errors*): bottom right, 380px, the status mark, the title with its context, the reason, the actions on their own row (a note keeps its one action on its line).

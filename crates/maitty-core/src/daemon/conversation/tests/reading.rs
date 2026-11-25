@@ -34,7 +34,7 @@ async fn structured_provider_errors_and_failed_turns_never_read_as_done() {
             let (id,generation)=create(&mut s).await;
             let reply=exchange(&mut s,220,crate::protocol::ClientMsg::Command(crate::protocol::Command::ConversationSend {id,generation,operation:1,text:"Synthetic failure request".into(),choice:None }),None).await;
             assert!(matches!(reply,ServerMsg::Reply(crate::protocol::Reply::ConversationSent(_))));
-            while s.daemon.conversation_states[&id].error.is_none() {let event=tokio::time::timeout(Duration::from_secs(10),s.events.recv()).await.unwrap().unwrap();s.daemon.handle(event);}
+            while s.daemon.conversation_states[&id].shown_error().is_none() {let event=tokio::time::timeout(Duration::from_secs(10),s.events.recv()).await.unwrap().unwrap();s.daemon.handle(event);}
             let reply=exchange(&mut s,221,crate::protocol::ClientMsg::Query(crate::protocol::Query::ConversationRead {id,cursor:None,limit:128}),None).await;
             assert!(matches!(reply,ServerMsg::Reply(crate::protocol::Reply::ConversationRead(ref r)) if r.status==crate::protocol::Status::Blocked && r.error.as_deref()==Some(message)),"{reply:?}");
             assert_eq!(s.daemon.conversation_summaries()[0].status,crate::protocol::Status::Blocked);

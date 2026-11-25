@@ -105,7 +105,7 @@ impl Daemon {
                         state.map(|state| {
                             (
                                 std::mem::discriminant(&state.effective_status()),
-                                state.error.is_some(),
+                                state.shown_error().is_some(),
                                 state.approvals.len(),
                                 state.answered_approvals.len(),
                                 state.cancelling.is_some(),

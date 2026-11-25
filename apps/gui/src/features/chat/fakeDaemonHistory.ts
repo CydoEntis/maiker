@@ -22,6 +22,8 @@ export class FakeDaemonHistory {
   revision = 1
   generation = 1
   status: ChatPage['status'] = 'Idle'
+  /** The problem the daemon reports on the chat: why its latest turn failed, or a read it could not make. */
+  error: string | null = null
   approvals: unknown[] = []
   /** What the agent's own file says of its mode and model, or null. */
   meta: { mode: string | null; model: string | null } | null = null
@@ -136,7 +138,7 @@ export class FakeDaemonHistory {
       generation: this.generation,
       status: this.status,
       receipt: null,
-      error: null,
+      error: this.error,
       cancelling: false,
       history: {
         entries: taken.map((index) => this.entries[index] as Entry),
