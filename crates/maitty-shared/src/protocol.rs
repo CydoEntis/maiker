@@ -577,6 +577,11 @@ pub struct ConversationSummary {
     /// does not say.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub interrupted: bool,
+    /// The agent's own conversation id, which its resume takes, for a chat session; a pane's
+    /// conversation leaves it out, since its pane says it (`TermInfo.session`). A client keeps it
+    /// in a project's saved open set (`Command::SaveWorkspace`). Absent from an older daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 impl ConversationSummary {
@@ -4017,6 +4022,14 @@ mod tests {
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
         assert_eq!(summary.status_since, None, "an older daemon says no status time");
         assert!(!summary.interrupted, "an older daemon says no chat was cut by a restart");
+        assert_eq!(summary.session, None, "an older daemon says no agent conversation id");
+
+        // `session` is written only when known; an older client skips it as a field it does not know.
+        assert!(serde_json::to_value(&summary).unwrap().get("session").is_none());
+        summary.session = Some("0f3c".into());
+        let read: ConversationSummary = decode(&encode(&summary).unwrap()).unwrap();
+        assert_eq!(read.session.as_deref(), Some("0f3c"));
+        summary.session = None;
 
         // `interrupted` is written only when it is true, so an older client's read is the same.
         assert!(serde_json::to_value(&summary).unwrap().get("interrupted").is_none());
