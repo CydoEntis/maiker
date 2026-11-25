@@ -668,8 +668,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Terminal** (Terminal view only), a divider, **New worktree…** and **Open worktree…** (both open their dialogs).
   Keys shown are the binding table's. **Project right-click menu**: the project's name (and machine when it is
   remote), **New session**, **New worktree…**, a divider, **Copy path**, **Show files** (the side panel's Files beside
-  a session of the project; off while it has none), a divider, **Close project…** (the confirm dialog, which names the
-  sessions still running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
+  a session of the project; off while it has none), **Workspace…**, **Switch to…** (a row with a chevron whose submenu
+  lists this computer's other opened projects by name; a pick asks Close project's question, then opens that
+  project's Workspace panel), a divider, **Close project…** (the confirm dialog, which names the sessions still
+  running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
   a terminal or a project stops what runs in it and takes it off the sidebar, and every menu, toast and question says
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session rows** sit under their project set in 16px, with 6px and a 1px rule (the ink at 8%) down their left edge.

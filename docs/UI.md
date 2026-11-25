@@ -454,8 +454,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    since what is installed there is not known. Then **Terminal** (only in the Terminal view: a plain shell in the
    project's folder), **New worktree…** and **Open worktree…**. The right-click menu (`projectContextMenu`) offers
    **New session** (the draft with no agent picked), **New worktree…**, **Copy path**, **Show files** (shows a session
-   of the project with the side panel's Files; off while the project has none, since files are read through a session)
-   and **Remove from sidebar…**. An Idle project's heading folds its rows like any project's (`aria-expanded`, its own fold key `idleProjectFoldKey`); one with no session has nothing to fold, so its heading opens the `+` menu on a click. Nothing starts on a machine
+   of the project with the side panel's Files; off while the project has none, since files are read through a session),
+   **Workspace…**, **Switch to…** and **Close project…**. An Idle project's heading folds its rows like any project's (`aria-expanded`, its own fold key `idleProjectFoldKey`); one with no session has nothing to fold, so its heading opens the `+` menu on a click. Nothing starts on a machine
    that is not connected. New worktree opens the New worktree dialog off a live session in the
    project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
    from a session's terminal; a project with no live session opens the new-chat draft with **Own worktree** on instead
@@ -478,7 +478,20 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    repository (`openSetOf`, `model/openSet.ts`). A set with nothing in it is not sent, so the set kept before stays. The
    close never waits on it: a failed save is one toast (`Could not save the sessions open in <name>`), a service from
    before saved sets is not asked and says nothing, and an undone close keeps the set it saved. Another machine's
-   project saves nothing. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
+   project saves nothing. **Switch to…** parks the project and opens another's Workspace panel. It is a row that opens
+   a submenu beside it (`MenuItem.items` in `MenuPopup`) listing this computer's other opened projects by their
+   headings' names, in the order they were opened (`switchTargetsOf`, `model/projectActions.ts`); it is off, with "Open
+   another project on this computer to switch to it" as its tooltip, while there is none, and another machine's project
+   and the No project group have no such row, since their sets are not kept here. Picking a project asks Close project's
+   question, under the same *close-project* kind, so its "Don't ask again" holds here too. On the answer the open set is
+   saved as Close project saves it, but the switch waits for the answer (`parkOpenSet` in `useProjectActions`): a save
+   that fails, or a service too old to keep one, ends nothing and says "<name> stays open: its sessions could not be
+   saved" with the reason (or "The Maiker service needs a restart to keep them."). Once saved (or with nothing to
+   keep), the project closes as Close project closes it, the other project is selected, and its Workspace panel opens.
+   The switch opens none of its sessions: the person ticks them there and presses Open. An undone close of the parked
+   project (the service's undo window) brings its sessions back and keeps the set; the other project's panel, and
+   anything opened from it, is left as it is. The gallery shows the menu at `#dialogs?show=switch` and the failed save's
+   toast at `switch-failed`. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
    `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through
@@ -785,7 +798,8 @@ See [theme sources](theme-credits.md) for upstream palettes and local UI adaptat
 ## Project-specific: menus drawn to the handoff (desktop)
 
 Right-click and row menus (`MenuPopup`, `.mx-ctx`) are 190px at least with 4px of room and draw no heading; the name is only the
-accessible label. The place chips' menus (branch, sync, folder)
+accessible label. A row with `items` opens them beside it as a submenu of the same rows, marked by a chevron, from a
+hover, a click or the right arrow (a project's **Switch to…**). The place chips' menus (branch, sync, folder)
 use `ChipMenu` variant `place` (298-300px, flat search, no counts, plain labels, `ruled` sections). Their picked row is a ground and
 bold, never a tick. `WorkspacePlaceActions` mounts the `PlaceActionsContext` that feeds the folder menu's projects and its
 Open folder and Clone rows. The model picker is its own float (see *Agent, model and reasoning*).

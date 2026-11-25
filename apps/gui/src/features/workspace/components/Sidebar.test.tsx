@@ -5,6 +5,7 @@ import type { Conversation } from '@/data/preview'
 import { resetToasts } from '@/lib/toast'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 import { groupByProject, type OpenedProject } from '../model/openedProjects'
+import { switchTargetsOf } from '../model/projectActions'
 import { toSessionView, type SessionView } from '../model/session'
 import type { ProjectActions } from './projectMenu'
 import { Sidebar, type SidebarProps } from './Sidebar'
@@ -35,7 +36,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened:
   const grouping = groupByProject(sessions, opened, startFolder)
   const projectActions = {
     onNewSession: vi.fn(), onNewWorktree: vi.fn(), onNewTerminal: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onShowFiles: vi.fn(),
-    onWorkspace: vi.fn(), onClose: vi.fn(),
+    onWorkspace: vi.fn(), switchTargets: switchTargetsOf(grouping.machines), onSwitch: vi.fn(), onClose: vi.fn(),
   } satisfies ProjectActions
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, opened: grouping.opened, sort: 'recent', onSort: none, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
@@ -336,6 +337,30 @@ describe('a project heading', () => {
     fireEvent.contextMenu(heading('shop'))
     await user.click(await screen.findByRole('menuitem', { name: 'Close project…' }))
     expect(projectActions.onClose).toHaveBeenLastCalledWith(SHOP, 'shop')
+  })
+
+  it('offers Switch to… listing the other opened projects, and switches to the one picked', async () => {
+    const user = userEvent.setup()
+    const DOCS: OpenedProject = { machineName: null, folder: '/home/me/docs' }
+    const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES, DOCS])
+    fireEvent.contextMenu(heading('shop'))
+    await screen.findByRole('menu', { name: 'shop' })
+    expect(menuItems()).toEqual(['New session', 'Copy path', 'Show files', 'Workspace…', 'Switch to…', 'Close project…'])
+    // From the keyboard: the arrow opens the projects beside the row and moves into them.
+    act(() => { screen.getByRole('menuitem', { name: 'Switch to…' }).focus() })
+    await user.keyboard('{ArrowRight}')
+    await waitFor(() => { expect(screen.getByRole('menuitem', { name: 'notes' })).toHaveFocus() })
+    expect(menuItems().slice(-2)).toEqual(['notes', 'docs'])
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(projectActions.onSwitch).toHaveBeenCalledWith(SHOP, 'shop', { project: DOCS, name: 'docs' })
+  })
+
+  it('offers Switch to… off, saying why, while no other project is open on this computer', async () => {
+    show([session(1, 'One', { status: 'working' })])
+    fireEvent.contextMenu(heading('shop'))
+    const switchTo = await screen.findByRole('menuitem', { name: 'Switch to…' })
+    expect(switchTo).toHaveAttribute('aria-disabled', 'true')
+    expect(switchTo).toHaveAttribute('title', 'Open another project on this computer to switch to it')
   })
 
   it('lists sessions in the start folder last under No project, with a plain mark and nothing to close', async () => {
