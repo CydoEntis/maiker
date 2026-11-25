@@ -67,14 +67,18 @@ describe('what Open opens and what it says after', () => {
     expect(openTargets(rows)).toEqual([parser])
   })
 
-  it('counts what opened, what failed and what was skipped, naming each skip and why', () => {
+  it('counts what opened, what failed, what was skipped and what started anew, naming each skip and new one and why', () => {
     const skip = { name: 'Port the parser', why: 'folder removed; cannot be made again' }
+    const anew = { name: 'Ask Gemini', why: 'Gemini cannot continue a conversation from here' }
     const cases: [Parameters<typeof openWords>[0], ReturnType<typeof openWords>][] = [
-      [{ opened: 3, failed: 0, lastError: null, skipped: [] }, { kind: 'success', title: 'Opened 3 sessions', note: null }],
-      [{ opened: 0, failed: 2, lastError: null, skipped: [] }, { kind: 'failed', title: 'Could not open the 2 sessions', note: null }],
-      [{ opened: 2, failed: 1, lastError: null, skipped: [skip] }, { kind: 'failed', title: 'Opened 2, but 1 could not start, and 1 was skipped', note: null }],
-      [{ opened: 1, failed: 0, lastError: null, skipped: [skip] }, { kind: 'warning', title: 'Opened 1 session, skipped 1', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
-      [{ opened: 0, failed: 0, lastError: null, skipped: [skip] }, { kind: 'warning', title: 'Could not open 1 session', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
+      [{ opened: 3, failed: 0, lastError: null, skipped: [], fresh: [] }, { kind: 'success', title: 'Opened 3 sessions', note: null }],
+      [{ opened: 0, failed: 2, lastError: null, skipped: [], fresh: [] }, { kind: 'failed', title: 'Could not open the 2 sessions', note: null }],
+      [{ opened: 2, failed: 1, lastError: null, skipped: [skip], fresh: [] }, { kind: 'failed', title: 'Opened 2, but 1 could not start, and 1 was skipped', note: null }],
+      [{ opened: 1, failed: 0, lastError: null, skipped: [skip], fresh: [] }, { kind: 'warning', title: 'Opened 1 session, skipped 1', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
+      [{ opened: 0, failed: 0, lastError: null, skipped: [skip], fresh: [] }, { kind: 'warning', title: 'Could not open 1 session', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
+      [{ opened: 2, failed: 0, lastError: null, skipped: [], fresh: [anew] }, { kind: 'warning', title: 'Opened 2 sessions, 1 as a new conversation', note: '“Ask Gemini” started a new conversation: Gemini cannot continue a conversation from here.' }],
+      [{ opened: 1, failed: 0, lastError: null, skipped: [skip], fresh: [anew] }, { kind: 'warning', title: 'Opened 1 session, skipped 1', note: 'Skipped “Port the parser”: folder removed; cannot be made again. “Ask Gemini” started a new conversation: Gemini cannot continue a conversation from here.' }],
+      [{ opened: 1, failed: 1, lastError: null, skipped: [], fresh: [anew] }, { kind: 'failed', title: 'Opened 1 (1 as a new conversation), but 1 could not start', note: null }],
     ]
     for (const [outcome, words] of cases) expect(openWords(outcome)).toEqual(words)
   })

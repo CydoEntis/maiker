@@ -1325,6 +1325,20 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 130 adds `StartTarget::AcpSession { agent, cwd, session }` (`ACP_SESSION_SINCE`, with an arm in
+`ClientMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is never sent it). It opens an ACP
+agent's own saved conversation by its id: the daemon picks the program by the agent's name as `StartTarget::Acp` does,
+and opens the session with `session/load` when the agent advertised `loadSession`; else the start is refused with
+`ServerMsg::Error` ("The agent did not continue the saved conversation …") and no chat is kept. A loaded one starts as
+an empty chat (the daemon recorded none of its past; the agent holds it). Human clients only, this computer only: the
+desktop host's `start_acp_chat { …, session }` refuses one for another machine, checks the id as any saved
+conversation's (`check_saved_session_name`) and asks a daemon before 130 nothing (an error in words). The workspace
+panel's Open starts a new chat with that agent in the same folder when the load is refused, and says so in its toast.
+Tests: `a_daemon_from_before_acp_sessions_is_never_asked_to_load_one`,
+`a_saved_acp_conversation_is_loaded_by_its_id_when_the_agent_can_load_one`,
+`a_saved_acp_conversation_whose_agent_cannot_load_one_is_refused_saying_why`,
+`a_saved_acp_conversation_names_the_agent_the_folder_and_a_plain_id`.
+
 Protocol 129 adds `Command::ReadyClosedFolder { agent, session }` and `Reply::ClosedFolderReady { folder }`
 (`READY_CLOSED_FOLDER_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon
 is never sent the command and an older client is never sent the reply). It makes the folder of a session the daemon

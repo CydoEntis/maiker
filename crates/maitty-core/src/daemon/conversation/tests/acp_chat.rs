@@ -227,3 +227,44 @@ async fn an_acp_chat_whose_agent_cannot_load_it_is_blocked_and_says_why() {
     })
     .await;
 }
+
+/// The agent's own saved conversation, named by its id, as the workspace panel reopens one.
+fn saved(session: &TestSession) -> StartTarget {
+    StartTarget::AcpSession { agent: AGENT.into(), cwd: session.fixture.record.binding.cwd.clone(), session: "fake-acp-session".into() }
+}
+
+#[tokio::test]
+async fn a_saved_acp_conversation_is_loaded_by_its_id_when_the_agent_can_load_one() {
+    let session = acp_session(&["--loads"]).await;
+    checked(session, |session| {
+        Box::pin(async move {
+            let target = saved(session);
+
+            let (id, generation) = started(session, 650, target).await;
+            say(session, 651, id, generation, 1, "again").await;
+            let texts = read_until(session, id, "You said: again").await;
+
+            let summaries = session.daemon.conversation_summaries();
+            let summary = summaries.iter().find(|summary| summary.id == id).unwrap();
+            assert_eq!((summary.provider, summary.agent.as_deref()), (Provider::Acp, Some(AGENT)));
+            assert_eq!(texts.last().map(String::as_str), Some("You said: again"));
+        })
+    })
+    .await;
+}
+
+#[tokio::test]
+async fn a_saved_acp_conversation_whose_agent_cannot_load_one_is_refused_saying_why() {
+    let session = acp_session(&[]).await;
+    checked(session, |session| {
+        Box::pin(async move {
+            let target = saved(session);
+
+            let refused = exchange(session, 660, start(target), None).await;
+
+            assert!(matches!(&refused, ServerMsg::Error(why) if why.contains("did not continue the saved conversation")), "{refused:?}");
+            assert!(session.daemon.conversations.is_empty(), "no chat is left behind for the window to show");
+        })
+    })
+    .await;
+}

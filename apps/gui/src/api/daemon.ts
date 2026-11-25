@@ -931,8 +931,10 @@ export async function resumeChatSession(folder: string, agent: 'claude' | 'codex
  * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0020). Only the agent's name is sent: the
  * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */
-export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
-  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
+export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE, session: string | null = null): Promise<{ id: number; generation: number }> {
+  // `session` opens the agent's own saved conversation by its id (`session/load`), on this computer only; an agent that
+  // cannot load one, or a service older than this, refuses the start.
+  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }), ...(session === null ? {} : { session }) })
 }
 
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */

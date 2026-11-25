@@ -1415,6 +1415,7 @@ async fn resume_chat_session(
 }
 
 /// A chat with `agent` over ACP in `cwd`, on this computer or on `machine`. That machine's daemon picks the agent's program.
+/// With `session`, the agent's own saved conversation is loaded by its id instead, on this computer only.
 #[tauri::command]
 async fn start_acp_chat(
     app: tauri::AppHandle,
@@ -1422,8 +1423,9 @@ async fn start_acp_chat(
     machine: Option<u16>,
     cwd: PathBuf,
     agent: String,
+    session: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::start_acp_chat(cwd, agent, wire.start_daemon(machine, || daemon_executable(&app))?)
+    maitty_desktop_client::start_acp_chat(cwd, agent, session, wire.start_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }

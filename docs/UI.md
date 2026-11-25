@@ -242,10 +242,16 @@ ticked or not; both are off while nothing applies and while an Open or any other
 to running as they start, by Recent sessions' rules (`reopenPlan`): in place through the resume start, or, for a folder
 that is gone but was a worktree with a known repository and branch, through the service, which makes it again
 (`ready_closed_folder`; the service finds the session in the project's saved set when it has left the closed list), then
-the same resume start there, so it opens in the view Settings › Open sessions in picks (`reopenRemoved`); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
-saved under its agent's own name and resumes by no id. One toast with the project as its context ends it: "Opened 3
-sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1 session") with a line naming each skipped
-one and why; or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is
+the same resume start there, so it opens in the view Settings › Open sessions in picks (`plannedRequest`). Claude and
+Codex resume their conversation. Gemini starts a new conversation in its terminal, whatever the view, since the app
+knows no way to continue one of its own. A chat run over ACP, saved under its agent's own name, is loaded by its id in
+the Chat view (`start_acp_chat` with `session`, API_PATTERNS protocol 130); when its agent cannot load it, a new chat
+with that agent starts in the same folder instead; in the Terminal view it is skipped, "its agent runs only in the Chat
+view". A record that names no agent ("acp") or whose folder cannot be made again is skipped. One toast with the
+project as its context ends it: "Opened 3 sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1
+session") with a line naming each skipped one and why, or "Opened 2 sessions, 1 as a new conversation" with a line
+naming each that started anew and why ("“Ask Gemini” started a new conversation: Gemini cannot continue a conversation
+from here."); or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is
 pressed. **Close N** (a danger button) ends the ticked rows in the window, running or ended (N counts only those: a
 closed row has nothing to end), and is off while none is ticked; its accessible name is "Close N ticked sessions", so it
 is not a second "Close" beside the panel's ×. It asks first as Close project does (`closeSessions` in

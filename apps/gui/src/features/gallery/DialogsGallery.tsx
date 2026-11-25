@@ -244,9 +244,9 @@ function workspaceWorktrees(checking: boolean, busy: boolean): WorktreeRow[] {
   ]
 }
 
-/** What workspace-opened says after an Open: one that opened with a skipped session, and one where a start failed. */
-const OPENED_SKIPPED: OpenOutcome = { opened: 1, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }] }
-const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [] }
+/** What workspace-opened says after an Open: one with a skipped session and a Gemini one started anew, and one where a start failed. */
+const OPENED_SKIPPED: OpenOutcome = { opened: 2, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }], fresh: [{ name: 'Sketch the onboarding copy', why: 'Gemini cannot continue a conversation from here' }] }
+const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [], fresh: [] }
 /** The worktrees workspace-remove and workspace-removed tick before pressing Remove, by their folders. */
 const REMOVE_TICKED = ['/home/dev/acme-store-wt/feat/react-19', '/home/dev/acme-store-wt/fix-checkout-test']
 

@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 129;
+pub const PROTOCOL_VERSION: u32 = 130;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -2890,6 +2890,10 @@ impl ClientMsg {
             ClientMsg::Query(Query::Workspace { .. })
             | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
             ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
+            ClientMsg::Command(Command::ConversationStart {
+                target: crate::conversation::StartTarget::AcpSession { .. },
+                ..
+            }) => ACP_SESSION_SINCE,
             ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
@@ -2933,6 +2937,11 @@ pub const WORKTREES_TIDIED_SINCE: u32 = 128;
 /// daemon passes the command over, so a client asks it to reopen the session itself instead
 /// (`Command::ReopenClosedSession`), and an older client is never sent the reply.
 pub const READY_CLOSED_FOLDER_SINCE: u32 = 129;
+
+/// The first version whose daemon reads a `ConversationStart` with `StartTarget::AcpSession`. An
+/// older daemon cannot decode the start and never answers it, so a client refuses in words instead
+/// of sending it, and starts a new conversation with the agent.
+pub const ACP_SESSION_SINCE: u32 = 130;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3332,6 +3341,14 @@ mod tests {
                 target: crate::conversation::StartTarget::Conversation { id, generation: 2 },
                 branch: Some("chat/one".into()),
             }),
+            ClientMsg::Command(Command::ConversationStart {
+                target: crate::conversation::StartTarget::AcpSession {
+                    agent: "opencode".into(),
+                    cwd: "/code/app".into(),
+                    session: "ses_1".into(),
+                },
+                branch: None,
+            }),
             ClientMsg::Command(Command::ConversationSend {
                 id,
                 generation: 1,
@@ -3622,6 +3639,10 @@ mod tests {
                 ClientMsg::Query(Query::Workspace { .. })
                 | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
                 ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
+                ClientMsg::Command(Command::ConversationStart {
+                    target: crate::conversation::StartTarget::AcpSession { .. },
+                    ..
+                }) => ACP_SESSION_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3779,6 +3800,33 @@ mod tests {
         let reply = Reply::WorktreesTidied { removed: vec!["/code/.wt/rate".into()], kept: Vec::new() };
         unreadable_before::<Reply127, _>(&reply);
         assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKTREES_TIDIED_SINCE);
+    }
+
+    /// 130 added a start that loads an ACP agent's saved conversation by its id. A daemon at 129
+    /// cannot decode it and is never sent one; the start by name it does read is as before.
+    #[test]
+    fn a_daemon_from_before_acp_sessions_is_never_asked_to_load_one() {
+        use crate::conversation::StartTarget;
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum StartTarget129 {
+            Create(serde_json::Value),
+            Session { settings: serde_json::Value, thread_id: String },
+            Conversation { id: u64, generation: u64 },
+            Acp { agent: String, cwd: PathBuf },
+            Agent { provider: serde_json::Value, cwd: PathBuf, sandbox: serde_json::Value, approval_policy: serde_json::Value },
+        }
+        const { assert!(ACP_SESSION_SINCE > COMPATIBLE_SINCE && ACP_SESSION_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(ACP_SESSION_SINCE - 1, 0));
+
+        let load = StartTarget::AcpSession { agent: "opencode".into(), cwd: "/code".into(), session: "ses_1".into() };
+        unreadable_before::<StartTarget129, _>(&load);
+        round_trips(&load);
+        let start = |target| ClientMsg::Command(Command::ConversationStart { target, branch: None });
+        assert_eq!(start(load).introduced_in(), ACP_SESSION_SINCE);
+        let by_name = StartTarget::Acp { agent: "opencode".into(), cwd: "/code".into() };
+        assert!(decode::<StartTarget129>(&encode(&by_name).unwrap()).is_ok());
+        assert_eq!(start(by_name).introduced_in(), COMPATIBLE_SINCE);
     }
 
     /// 129 added making a closed session's folder ready without starting it, as a command and an

@@ -237,7 +237,7 @@ export function useWorkspaceState() {
   const { refetchSessions, retryAt, tracks } = useSessionSync({ sessionsQuery, retryDelay, queryClient, setFailures, sessions, setLayout, machinesRef, visibleKey, flash })
   const { signInGitHub, gitHubSignInsEnded, signInAgent, runStart, startRemoteShell, newTerminal, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree: worktreeInTerminal } = useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef })
   const createWorktree = useNewWorktree({ chatView, inTerminal: worktreeInTerminal, startNewChat, defaultAgent: preferences.defaultAgent, setWorktreeFrom, flash })
-  const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, importOpen, setImportOpen, importChats, workspaceFor, setWorkspaceFor, openSaved, opening } = useRecentSessions(startNewChat, starting)
+  const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, importOpen, setImportOpen, importChats, workspaceFor, setWorkspaceFor, openSaved, opening } = useRecentSessions(startNewChat, starting, chatView)
   const [openProject, setOpenProject] = useOpenProjectState()
   // This computer's start folder (Settings), where a session with no project runs; null until the home folder is read.
   const startFolder = knownStartFolder(preferences.startFolder, home, homeRead)

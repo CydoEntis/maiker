@@ -94,12 +94,16 @@ export function closeTargets(rows: readonly WorkspaceRow[]): string[] {
   return rows.flatMap((row) => (row.state === 'closed' ? [] : [row.sessionId]))
 }
 
-/** How an Open went: how many started, how many failed and the last reason why, and each one skipped with why. */
+/**
+ * How an Open went: how many started, how many failed and the last reason why, each one skipped with why, and each one
+ * that started a new conversation in place of its own, with why (`fresh`, counted in `opened`).
+ */
 export type OpenOutcome = {
   readonly opened: number
   readonly failed: number
   readonly lastError: unknown
   readonly skipped: readonly { readonly name: string; readonly why: string }[]
+  readonly fresh: readonly { readonly name: string; readonly why: string }[]
 }
 
 /** The one toast an Open ends with: its kind, its title, and the line naming what was skipped, if anything was. */
@@ -107,19 +111,27 @@ export type OpenWords = { readonly kind: 'success' | 'warning' | 'failed'; reado
 
 const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)
 
+const asNewWord = (count: number): string => (count === 1 ? '1 as a new conversation' : `${String(count)} as new conversations`)
+
 /**
  * What the toast after an Open says. A failure is an error toast whose line under the title is the failure's own reason,
- * so the title counts the skipped ones too; a skip alone is a warning, which stays until dismissed, with a line naming
- * each skipped session and why.
+ * so the title counts the skipped and the new conversations too; a skip or a new conversation without a failure is a
+ * warning, which stays until dismissed, with a line naming each one and why.
  */
-export function openWords({ opened, failed, skipped }: OpenOutcome): OpenWords {
+export function openWords({ opened, failed, skipped, fresh }: OpenOutcome): OpenWords {
   if (failed > 0) {
     if (opened === 0 && skipped.length === 0) return { kind: 'failed', title: failed === 1 ? 'Could not open the session' : `Could not open the ${String(failed)} sessions`, note: null }
     const skips = skipped.length === 0 ? '' : `, and ${String(skipped.length)} ${skipped.length === 1 ? 'was' : 'were'} skipped`
-    return { kind: 'failed', title: `Opened ${String(opened)}, but ${String(failed)} could not start${skips}`, note: null }
+    const news = fresh.length === 0 ? '' : ` (${asNewWord(fresh.length)})`
+    return { kind: 'failed', title: `Opened ${String(opened)}${news}, but ${String(failed)} could not start${skips}`, note: null }
   }
-  const note = `Skipped ${skipped.map(({ name, why }) => `“${name}”: ${why}`).join('; ')}.`
+  const lines = [
+    skipped.length === 0 ? null : `Skipped ${skipped.map(({ name, why }) => `“${name}”: ${why}`).join('; ')}.`,
+    fresh.length === 0 ? null : `${fresh.map(({ name, why }) => `“${name}” started a new conversation: ${why}`).join('; ')}.`,
+  ]
+  const note = lines.filter((line): line is string => line !== null).join(' ')
   if (skipped.length > 0) return { kind: 'warning', title: opened === 0 ? `Could not open ${sessionsWord(skipped.length)}` : `Opened ${sessionsWord(opened)}, skipped ${String(skipped.length)}`, note }
+  if (fresh.length > 0) return { kind: 'warning', title: `Opened ${sessionsWord(opened)}, ${asNewWord(fresh.length)}`, note }
   return { kind: 'success', title: `Opened ${sessionsWord(opened)}`, note: null }
 }
 

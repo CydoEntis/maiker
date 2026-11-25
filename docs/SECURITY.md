@@ -889,7 +889,9 @@ The folder is sent only as one plain absolute POSIX path with no control charact
 (`remote_folder`), and the name must be an agent's name (`acp_agent_name`). The answer is taken only when it is the
 start itself, a conversation's number and generation (`remote_chat::vet_chat_start`); they address that machine's
 request lines alone and are never drawn. This gives the window nothing it did not have: it can already start a shell
-on that machine and type into it.
+on that machine and type into it. An ACP agent's saved conversation (`StartTarget::AcpSession`, protocol 130) is loaded on this computer only: the
+desktop host refuses one for another machine, and its id is checked as any saved conversation's (a letter or digit,
+then letters, digits, `-` and `_`, at most 128) before it reaches the agent's `session/load`.
 
 ## Project-specific: followed transcripts
 

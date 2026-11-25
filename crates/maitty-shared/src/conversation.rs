@@ -137,6 +137,10 @@ pub enum StartTarget {
     /// A new conversation with the agent the daemon's own config names `agent` and runs over
     /// ACP. The daemon chooses the program; a client names only the agent and the folder.
     Acp { agent: String, cwd: PathBuf },
+    /// The agent's own saved conversation `session` in `cwd`, run over ACP as `Acp` runs one and
+    /// loaded by its id (`session/load`), which only an agent that says it can load one does; any
+    /// other refuses the start. The client names only the agent, the folder and the id.
+    AcpSession { agent: String, cwd: PathBuf, session: String },
     /// A new Claude Code or Codex conversation in `cwd` whose program and settings folder the
     /// daemon finds on its own machine. A client on another machine knows neither, so it names
     /// the provider, the folder and the posture, and never a program to run.
