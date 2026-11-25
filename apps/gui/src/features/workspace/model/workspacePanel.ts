@@ -84,6 +84,11 @@ export function openTargets(rows: readonly WorkspaceRow[]): ClosedSession[] {
   return rows.flatMap((row) => (row.state === 'closed' ? [row.saved] : []))
 }
 
+/** The sessions among `rows` that Close ends: the ones in the window, running or ended; a closed row has nothing to end. */
+export function closeTargets(rows: readonly WorkspaceRow[]): string[] {
+  return rows.flatMap((row) => (row.state === 'closed' ? [] : [row.sessionId]))
+}
+
 /** How an Open went: how many started, how many failed and the last reason why, and each one skipped with why. */
 export type OpenOutcome = {
   readonly opened: number

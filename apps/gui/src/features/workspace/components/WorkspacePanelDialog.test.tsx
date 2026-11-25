@@ -19,8 +19,9 @@ const LISTED: SavedRead = { kind: 'listed', list: [] }
 function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), opening = false) {
   const onCancel = vi.fn()
   const onOpen = vi.fn()
-  render(<div className="mx-app"><WorkspacePanelDialog name="shop" rows={rows} saved={saved} now={NOW} opening={opening} onOpen={onOpen} onRetry={onRetry} onCancel={onCancel} /></div>)
-  return { onCancel, onRetry, onOpen }
+  const onClose = vi.fn()
+  render(<div className="mx-app"><WorkspacePanelDialog name="shop" rows={rows} saved={saved} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRetry={onRetry} onCancel={onCancel} /></div>)
+  return { onCancel, onRetry, onOpen, onClose }
 }
 
 const ticks = () => screen.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)
@@ -116,6 +117,19 @@ describe('a project’s workspace panel', () => {
   it('has nothing for Open everything when every session runs', () => {
     show([LOGIN])
     expect(screen.getByRole('button', { name: 'Open everything' })).toBeDisabled()
+  })
+
+  it('closes only the ticked sessions in the window, and is off while none is ticked', async () => {
+    const user = userEvent.setup()
+    const ended: WorkspaceRow = { key: 'session:t2', name: 'Old build', agent: 'codex', branch: null, at: null, state: 'ended', sessionId: 't2', conversation: null }
+    const { onClose } = show([LOGIN, ended, PARSER])
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Port the parser/ }))
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Close 2 ticked sessions' }))
+    expect(onClose).toHaveBeenCalledWith(['t1', 't2'])
   })
 
   it('closes with Done', async () => {

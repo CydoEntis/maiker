@@ -4,7 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
 import type { ClosedSession } from '@/api/daemon'
-import { openTargets, rowWhen, rowWhere, type SavedRead, type WorkspaceRow } from '../model/workspacePanel'
+import { closeTargets, openTargets, rowWhen, rowWhere, type SavedRead, type WorkspaceRow } from '../model/workspacePanel'
 import { AppIcon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -21,6 +21,8 @@ type Props = {
   opening: boolean
   /** Opens these saved sessions again, one after another (`useRecentSessions().openSaved`). */
   onOpen: (saved: readonly ClosedSession[]) => void
+  /** Ends these sessions of the window, asking first as Close project does (`useClosing().closeSessions`). */
+  onClose: (sessionIds: readonly string[]) => void
   onRetry: () => void
   onCancel: () => void
 }
@@ -74,7 +76,20 @@ function openLabel(count: number, opening: boolean): string {
   return count === 0 ? 'Open' : `Open ${String(count)}`
 }
 
-function WorkspaceBody({ name, rows, saved, now, opening, onOpen, onRetry, onCancel }: Props) {
+/** The Close button's words, counting what it ends, as Open's do. */
+function closeLabel(count: number): string {
+  return count === 0 ? 'Close' : `Close ${String(count)}`
+}
+
+/**
+ * The Close button's accessible name: its words and what they close, so it is not a second "Close" beside the panel's
+ * own × (which closes the panel), and still starts with what it shows.
+ */
+function closeName(count: number): string {
+  return `${closeLabel(count)} ticked ${count === 1 ? 'session' : 'sessions'}`
+}
+
+function WorkspaceBody({ name, rows, saved, now, opening, onOpen, onClose, onRetry, onCancel }: Props) {
   // Keys of the ticked rows. A row that leaves the list (a session that ends and is closed) simply stops counting.
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set())
   const toggle = (key: string) => {
@@ -89,6 +104,8 @@ function WorkspaceBody({ name, rows, saved, now, opening, onOpen, onRetry, onCan
   // Open starts only closed rows: a running one ticked beside them is left as it is.
   const toOpen = openTargets(chosen)
   const closedRows = openTargets(rows)
+  // Close ends only sessions in the window: a closed row ticked beside them has nothing to end.
+  const toClose = closeTargets(chosen)
   // Either Open sends every ticked closed row, so those are unticked and the ticks left are the ones nothing was done to.
   const open = (list: readonly ClosedSession[]) => {
     onOpen(list)
@@ -127,6 +144,7 @@ function WorkspaceBody({ name, rows, saved, now, opening, onOpen, onRetry, onCan
       </ModalBody>
       <ModalFoot left={rows.length > 0 ? <span className="mx-workspace-count" role="status">{`${String(chosen.length)} of ${String(rows.length)} ticked`}</span> : undefined}>
         <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Done</Button>
+        <Button type="button" variant="danger" size="lg" disabled={toClose.length === 0} aria-label={closeName(toClose.length)} onClick={() => { onClose(toClose) }}>{closeLabel(toClose.length)}</Button>
         <Button type="button" variant="ghost" size="lg" disabled={closedRows.length === 0 || opening} onClick={() => { open(closedRows) }}>Open everything</Button>
         <Button type="button" variant="primary" size="lg" disabled={toOpen.length === 0 || opening} onClick={() => { open(toOpen) }}>{openLabel(toOpen.length, opening)}</Button>
       </ModalFoot>

@@ -12,11 +12,13 @@ type Props = {
   opening: boolean
   /** Opens saved sessions again (`useRecentSessions().openSaved`), naming the project in its toast. */
   onOpen: (saved: readonly ClosedSession[], where: string) => void
+  /** Ends sessions of the window, asking first (`useClosing().closeSessions`). */
+  onClose: (sessionIds: readonly string[]) => void
   onCancel: () => void
 }
 
 /** A project's Workspace panel: its sessions in the window as they change, and its saved set, read once as it opens. */
-export function WorkspacePanel({ target, sessions, opening, onOpen, onCancel }: Props) {
+export function WorkspacePanel({ target, sessions, opening, onOpen, onClose, onCancel }: Props) {
   const { read, retry } = useSavedWorkspace(target.project.folder)
   const [now] = useState(nowSeconds)
   return (
@@ -27,6 +29,7 @@ export function WorkspacePanel({ target, sessions, opening, onOpen, onCancel }: 
       now={now}
       opening={opening}
       onOpen={(saved) => { onOpen(saved, target.name) }}
+      onClose={onClose}
       onRetry={retry}
       onCancel={onCancel}
     />

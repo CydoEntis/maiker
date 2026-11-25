@@ -40,6 +40,11 @@ describe('what closing a project asks', () => {
     expect(confirmAsk('close-project', { name: 'shop', running: ['A', 'B', 'C', 'D', 'E'] }).body).toBe('A, B, C and 2 more stop, and the project leaves the sidebar.')
     expect(confirmAsk('close-project', { name: 'shop', running: [] }).note).toContain('stay on disk')
   })
+
+  it('names the sessions a Workspace panel closes the same way, as sessions closing', () => {
+    expect(confirmAsk('close-session', { names: ['A', 'B'] })).toMatchObject({ title: 'Close 2 sessions?', body: 'A and B stop, and they leave the sidebar.', confirmLabel: 'Close sessions', danger: true })
+    expect(confirmAsk('close-session', { names: ['A', 'B', 'C', 'D', 'E'] }).body).toBe('A, B, C and 2 more stop, and they leave the sidebar.')
+  })
 })
 
 describe('what a discard asks', () => {
