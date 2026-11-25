@@ -1050,7 +1050,9 @@ in `repo`; the standing's git and `gh` run only in a worktree its repository lis
 have their own `introduced_in` arm (`WORKTREE_STANDING_SINCE`); `COMPATIBLE_SINCE` stays 78, since an older daemon
 is simply not asked. The desktop command `worktree_standing { machine, repo, folder }` (this computer only) asks it through
 `maitty_desktop_client::worktree_standing`, which adds `missing` to the JSON, or fails with a line saying to restart
-the service when the daemon running is older than 90.
+the service when the daemon running is older than 90. The worktree manager and a project's Workspace panel ask it
+(`worktreeStanding`), one worktree per request with the main checkout as `repo`, under one shared cache key per
+worktree folder.
 
 `Conversation.worktree_origin` (main checkout, worktree folder, branch) is a defaulted field of the saved conversation, not
 of any message, so `PROTOCOL_VERSION` is unchanged; a test decodes the old shape. The daemon fills it when a chat opens

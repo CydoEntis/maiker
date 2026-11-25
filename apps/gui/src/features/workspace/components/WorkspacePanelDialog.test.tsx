@@ -1,8 +1,8 @@
-import { render, screen, within } from '@testing-library/react'
+import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClosedSession } from '@/api/daemon'
-import type { SavedRead, WorkspaceRow } from '../model/workspacePanel'
+import type { SavedRead, StandingRead, WorkspaceRow, WorktreeRow, WorktreesRead } from '../model/workspacePanel'
 import { WorkspacePanelDialog } from './WorkspacePanelDialog'
 
 const NOW = 2_000_000_000
@@ -15,13 +15,28 @@ function closedRow(agent: string, session: string, title: string, branch: string
 const PARSER = closedRow('codex', 'p1', 'Port the parser', 'main', NOW - 3 * HOUR)
 const DOCS = closedRow('claude', 'd1', 'Write the docs', 'docs', NOW - 5 * HOUR)
 const LISTED: SavedRead = { kind: 'listed', list: [] }
+const NO_GIT: WorktreesRead = { kind: 'not-a-repo' }
 
-function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), opening = false) {
+const MAIN: WorktreeRow = { key: 'worktree:/code/shop', path: '/code/shop', name: 'main', main: true }
+function linked(branch: string, standing: StandingRead): WorktreeRow {
+  return { key: `worktree:/code/shop-${branch}`, path: `/code/shop-${branch}`, name: branch, main: false, standing }
+}
+const STANDING = { dirty: 0, branch: 'b', merged: true, last_commit: '2 days ago', inactive_days: null, missing: false }
+const DIRTY = linked('dark-mode', { kind: 'read', standing: { ...STANDING, dirty: 3, merged: false } })
+const QUIET = linked('old-fix', { kind: 'read', standing: { ...STANDING, inactive_days: 16 } })
+const WORKTREES: WorktreesRead = { kind: 'listed', rows: [MAIN, DIRTY, QUIET] }
+
+function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), worktrees: WorktreesRead = NO_GIT, opening = false) {
   const onCancel = vi.fn()
+  const onRetryWorktrees = vi.fn()
   const onOpen = vi.fn()
   const onClose = vi.fn()
-  render(<div className="mx-app"><WorkspacePanelDialog name="shop" rows={rows} saved={saved} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRetry={onRetry} onCancel={onCancel} /></div>)
-  return { onCancel, onRetry, onOpen, onClose }
+  render(
+    <div className="mx-app">
+      <WorkspacePanelDialog name="shop" rows={rows} saved={saved} worktrees={worktrees} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRetry={onRetry} onRetryWorktrees={onRetryWorktrees} onCancel={onCancel} />
+    </div>,
+  )
+  return { onCancel, onRetry, onRetryWorktrees, onOpen, onClose }
 }
 
 const ticks = () => screen.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)
@@ -108,7 +123,7 @@ describe('a project’s workspace panel', () => {
 
   it('keeps both Opens off while a session is starting', async () => {
     const user = userEvent.setup()
-    show([LOGIN, PARSER], LISTED, vi.fn(), true)
+    show([LOGIN, PARSER], LISTED, vi.fn(), NO_GIT, true)
     await user.click(screen.getByRole('checkbox', { name: /Port the parser/ }))
     expect(screen.getByRole('button', { name: 'Opening…' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Open everything' })).toBeDisabled()
@@ -130,6 +145,86 @@ describe('a project’s workspace panel', () => {
     await user.click(screen.getByRole('button', { name: 'Select all' }))
     await user.click(screen.getByRole('button', { name: 'Close 2 ticked sessions' }))
     expect(onClose).toHaveBeenCalledWith(['t1', 't2'])
+  })
+
+  it('leaves ticked worktrees to Remove worktree: Open and Close stay off, and an Open keeps their ticks', async () => {
+    const user = userEvent.setup()
+    const { onOpen, onClose } = show([LOGIN, PARSER], LISTED, vi.fn(), WORKTREES)
+    await user.click(screen.getByRole('checkbox', { name: /dark-mode/ }))
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Close 1 ticked session' }))
+    expect(onClose).toHaveBeenCalledWith(['t1'])
+    await user.click(screen.getByRole('button', { name: 'Open 1' }))
+    expect(onOpen).toHaveBeenCalledWith([PARSER.saved])
+    expect(screen.getByRole('checkbox', { name: /dark-mode/ })).toBeChecked()
+  })
+
+  it('lists each worktree with its branch, uncommitted changes, whether it is merged and how long it has been quiet', () => {
+    show([LOGIN], LISTED, vi.fn(), WORKTREES)
+
+    const list = screen.getByRole('list', { name: 'Worktrees' })
+    const dirty = within(list).getByRole('checkbox', { name: /dark-mode/ })
+    expect(dirty).toHaveAccessibleName(/3 uncommitted changes · not merged/)
+    expect(dirty).toHaveAccessibleName(/2 days ago/)
+    const quiet = within(list).getByRole('checkbox', { name: /old-fix/ })
+    expect(quiet).toHaveAccessibleName(/nothing uncommitted · merged/)
+    expect(quiet).toHaveAccessibleName(/inactive 16 days/)
+    expect(ticks()).toEqual([false, false, false])
+  })
+
+  it('lists the main checkout without a tick, and Select all ticks every other row', async () => {
+    const user = userEvent.setup()
+    show([LOGIN], LISTED, vi.fn(), WORKTREES)
+    const list = screen.getByRole('list', { name: 'Worktrees' })
+    const [main] = within(list).getAllByRole('listitem')
+    expect(main).toHaveTextContent('main')
+    expect(main).toHaveTextContent('main checkout · stays')
+    expect(within(main ?? list).queryByRole('checkbox')).toBeNull()
+    expect(screen.getByText('0 of 3 ticked')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(ticks()).toEqual([true, true, true])
+    expect(screen.getByText('3 of 3 ticked')).toBeInTheDocument()
+    await user.click(within(list).getByRole('checkbox', { name: /old-fix/ }))
+    expect(screen.getByText('2 of 3 ticked')).toBeInTheDocument()
+  })
+
+  it('says checking on each worktree until its standing arrives, and can still be ticked meanwhile', async () => {
+    const user = userEvent.setup()
+    show([], LISTED, vi.fn(), { kind: 'listed', rows: [MAIN, linked('dark-mode', { kind: 'checking' })] })
+    const row = screen.getByRole('checkbox', { name: /dark-mode/ })
+    expect(row).toHaveAccessibleName(/checking…/)
+    await user.click(row)
+    expect(screen.getByText('1 of 1 ticked')).toBeInTheDocument()
+  })
+
+  it('says a worktree whose folder is gone, and one whose standing could not be read', () => {
+    show([], LISTED, vi.fn(), {
+      kind: 'listed',
+      rows: [linked('gone', { kind: 'read', standing: { ...STANDING, missing: true } }), linked('odd', { kind: 'failed', why: 'The service did not answer.' })],
+    })
+    expect(screen.getByRole('checkbox', { name: /gone/ })).toHaveAccessibleName(/its folder is gone/)
+    expect(screen.getByRole('checkbox', { name: /odd/ })).toHaveAccessibleName(/could not check where it stands/)
+    expect(screen.getByText('could not check where it stands')).toHaveAttribute('title', 'The service did not answer.')
+  })
+
+  it('says it is looking for the worktrees, offers Try again when it could not, and shows nothing outside git', async () => {
+    const user = userEvent.setup()
+    show([LOGIN], LISTED, vi.fn(), { kind: 'loading' })
+    expect(screen.getByText('Looking for the worktrees of shop…')).toBeInTheDocument()
+    cleanup()
+
+    const { onRetryWorktrees } = show([LOGIN], LISTED, vi.fn(), { kind: 'failed' })
+    expect(screen.getByText(/Could not read the worktrees of shop\./)).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(onRetryWorktrees).toHaveBeenCalledTimes(1)
+    cleanup()
+
+    show([LOGIN], LISTED, vi.fn(), NO_GIT)
+    expect(screen.queryByRole('region', { name: 'Worktrees' })).toBeNull()
   })
 
   it('closes with Done', async () => {

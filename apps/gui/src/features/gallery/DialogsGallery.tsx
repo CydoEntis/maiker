@@ -16,7 +16,8 @@ import { RecentSessionsDialog } from '@/features/workspace/components/RecentSess
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import { AcpAgentsDialog } from '@/features/workspace/components/AcpAgentsDialog'
 import { WorkspacePanelDialog } from '@/features/workspace/components/WorkspacePanelDialog'
-import type { OpenOutcome, SavedRead, WorkspaceRow } from '@/features/workspace/model/workspacePanel'
+import type { OpenOutcome, SavedRead, StandingRead, WorkspaceRow, WorktreeRow, WorktreesRead } from '@/features/workspace/model/workspacePanel'
+import type { WorktreeStanding } from '@/features/worktrees/api'
 import { toastOpened } from '@/features/workspace/useRecentSessions'
 import { Toaster } from '@/components/ui/toaster'
 import { confirmAsk } from '@/features/confirm/confirm'
@@ -31,7 +32,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -212,18 +213,40 @@ const WORKSPACE_ROWS: WorkspaceRow[] = [
   closedRow('Fix the flaky checkout test', 'fix-checkout-test', IN_THREE_HOURS),
   closedRow('Write the billing webhook docs', 'docs/billing-webhooks', IN_THREE_DAYS),
 ]
-/** The rows workspace-ticked ticks once the panel is up: one running and one closed. */
-const WORKSPACE_TICKED = ['Upgrade to React 19', 'Fix the flaky checkout test']
+/** The rows workspace-ticked ticks once the panel is up: one running, one closed and one worktree (by its folder). */
+const WORKSPACE_TICKED = ['Upgrade to React 19', 'Fix the flaky checkout test', '/home/dev/acme-store-wt/fix-checkout-test']
+
+/** A linked worktree of the gallery's project at `/home/dev/acme-store-wt/<branch>`, its standing as given. */
+function linkedWorktree(branch: string, standing: StandingRead): WorktreeRow {
+  const path = `/home/dev/acme-store-wt/${branch}`
+  return { key: `worktree:${path}`, path, name: branch, main: false, standing }
+}
+
+const CLEAN: WorktreeStanding = { dirty: 0, branch: null, merged: true, last_commit: '2 weeks ago', inactive_days: null, missing: false }
+
+/**
+ * The project's worktrees as its Workspace panel lists them: the main checkout, then one with work only on it, one merged
+ * and quiet for 16 days, and one whose folder was deleted by hand. `checking` leaves every standing unread.
+ */
+function workspaceWorktrees(checking: boolean): WorktreeRow[] {
+  const read = (standing: Partial<WorktreeStanding>): StandingRead => (checking ? { kind: 'checking' } : { kind: 'read', standing: { ...CLEAN, ...standing } })
+  return [
+    { key: 'worktree:/home/dev/acme-store', path: '/home/dev/acme-store', name: 'main', main: true },
+    linkedWorktree('feat/react-19', read({ dirty: 3, merged: false, last_commit: '5 minutes ago' })),
+    linkedWorktree('fix-checkout-test', read({ inactive_days: 16, last_commit: '3 weeks ago' })),
+    linkedWorktree('docs/billing-webhooks', read({ missing: true, merged: false })),
+  ]
+}
 
 /** What workspace-opened says after an Open: one that opened with a skipped session, and one where a start failed. */
 const OPENED_SKIPPED: OpenOutcome = { opened: 1, failed: 0, lastError: null, skipped: [{ name: 'Write the billing webhook docs', why: 'folder removed; cannot be made again' }] }
+const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [] }
 /** What workspace-close asks: Close on the panel's running rows, named as Close project names them. */
 const WORKSPACE_CLOSE_ASK = confirmAsk('close-session', { names: WORKSPACE_ROWS.filter((row) => row.state !== 'closed').map((row) => row.name) })
-const OPENED_FAILED: OpenOutcome = { opened: 1, failed: 1, lastError: new Error('Claude did not start: the conversation file is missing.'), skipped: [] }
 
 /**
- * The Workspace panel in each state: the saved set listed, loading, unread or from an older service, two rows ticked
- * (Open 1 on), an Open under way, and the toasts an Open ends with.
+ * The Workspace panel in each state: the saved set listed, loading, unread or from an older service, a session of each
+ * kind and a worktree ticked (Open 1 and Close 1 on), an Open under way, the toasts an Open ends with, and Close's question.
  */
 function WorkspaceShown({ what }: { what: string }) {
   useEffect(() => {
@@ -242,11 +265,19 @@ function WorkspaceShown({ what }: { what: string }) {
   const rows = what === 'workspace-empty' ? [] : saved.kind === 'listed' ? WORKSPACE_ROWS : WORKSPACE_ROWS.filter((row) => row.state !== 'closed')
   return (
     <>
-      <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} now={NOW_SECONDS} opening={what === 'workspace-opening'} onOpen={SAME} onClose={SAME} onRetry={SAME} onCancel={SAME} />
+      <WorkspacePanelDialog name="acme-store" rows={rows} saved={saved} worktrees={workspaceWorktreesRead(what)} now={NOW_SECONDS} opening={what === 'workspace-opening'} onOpen={SAME} onClose={SAME} onRetry={SAME} onRetryWorktrees={SAME} onCancel={SAME} />
       {what === 'workspace-opened' && <Toaster />}
       {what === 'workspace-close' && <ConfirmDialog {...WORKSPACE_CLOSE_ASK} offersDontAskAgain onConfirm={SAME} onCancel={SAME} />}
     </>
   )
+}
+
+/** The Worktrees section of each Workspace state: being listed while the saved set loads, unread, outside git when empty. */
+function workspaceWorktreesRead(what: string): WorktreesRead {
+  if (what === 'workspace-empty') return { kind: 'not-a-repo' }
+  if (what === 'workspace-loading') return { kind: 'loading' }
+  if (what === 'workspace-worktrees-failed') return { kind: 'failed' }
+  return { kind: 'listed', rows: workspaceWorktrees(what === 'workspace-checking') }
 }
 
 function Show({ what }: { what: string }): ReactNode {

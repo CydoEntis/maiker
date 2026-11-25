@@ -3,7 +3,7 @@ import type { ClosedSession } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { openTargets, openWords, rowWhen, rowWhere, workspaceRows, workspaceTargetOf } from './workspacePanel'
+import { openTargets, openWords, rowWhen, rowWhere, tickableWorktrees, workspaceRows, workspaceTargetOf, worktreeRows, worktreeWhen, worktreeWhere, type WorktreeRow } from './workspacePanel'
 
 const NOW = 2_000_000_000
 const HOUR = 3600
@@ -95,5 +95,39 @@ describe('the project Workspace… opens from the palette', () => {
     const { machines } = groupByProject([loose], [], '/home/me')
     expect(machines[0]?.projects[0]?.loose).toBe(true)
     expect(workspaceTargetOf(machines, 't1', null)).toBeNull()
+  })
+})
+
+describe('the workspace worktree rows', () => {
+  const READ = { dirty: 0, branch: 'b', merged: true, last_commit: '2 days ago', inactive_days: null, missing: false }
+  const MAIN = { path: '/code/shop', branch: 'main', main: true, when: null }
+  const FIX = { path: '/code/shop-fix', branch: 'fix', main: false, when: null }
+  const DETACHED = { path: '/code/shop-detached', branch: null, main: false, when: null }
+
+  it('keeps git’s order, keys each by its folder, and names one on no branch by its folder', () => {
+    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }))
+    expect(rows.map((row) => [row.key, row.name, row.main])).toEqual([
+      ['worktree:/code/shop', 'main', true],
+      ['worktree:/code/shop-fix', 'fix', false],
+      ['worktree:/code/shop-detached', 'shop-detached', false],
+    ])
+  })
+
+  it('never offers the main checkout a tick', () => {
+    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }))
+    expect(tickableWorktrees({ kind: 'listed', rows }).map((row) => row.name)).toEqual(['fix', 'shop-detached'])
+    expect(tickableWorktrees({ kind: 'loading' })).toEqual([])
+  })
+
+  it('says what is on a worktree once its standing is read, and checking until then', () => {
+    const says = (rows: readonly WorktreeRow[]) => rows.map((row) => [worktreeWhere(row), worktreeWhen(row)])
+    expect(says(worktreeRows([MAIN, FIX], () => ({ kind: 'read', standing: { ...READ, dirty: 1, inactive_days: 1 } })))).toEqual([
+      ['main checkout · stays', ''],
+      ['1 uncommitted change · merged', 'inactive 1 day'],
+    ])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, merged: false } })))).toEqual([['nothing uncommitted · not merged', '2 days ago']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'checking' })))).toEqual([['checking…', '']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, missing: true } })))).toEqual([['its folder is gone', '']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'failed', why: 'No answer.' })))).toEqual([['could not check where it stands', '']])
   })
 })

@@ -22,6 +22,13 @@ export function standingWords(standing: WorktreeStanding): string {
   return `${idle}${standing.merged ? 'merged, nothing uncommitted' : 'not merged anywhere'}${ago}`
 }
 
+/** Its uncommitted changes and whether its commits are merged, in a line ("3 uncommitted changes · not merged"). */
+export function changesAndMerged(standing: WorktreeStanding): string {
+  if (standing.missing) return 'its folder is gone'
+  const changes = standing.dirty === 0 ? 'nothing uncommitted' : `${String(standing.dirty)} uncommitted ${standing.dirty === 1 ? 'change' : 'changes'}`
+  return `${changes} · ${standing.merged ? 'merged' : 'not merged'}`
+}
+
 /** The word a worktree's row carries: what is on it that is not yet anywhere else. */
 export function standingTag(standing: WorktreeStanding): string {
   if (standing.missing) return 'folder gone'
