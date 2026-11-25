@@ -1,10 +1,16 @@
 use super::*;
 
+/// A Unix-style test path made absolute on every platform: on Windows a path needs a drive to be
+/// absolute, and the store refuses one that is not.
+fn abs(path: &str) -> PathBuf {
+    PathBuf::from(if cfg!(windows) { format!("C:{path}") } else { path.to_owned() })
+}
+
 fn open_session(session: &str, at: u64) -> ClosedSession {
     ClosedSession {
         agent: "claude".into(),
         session: session.into(),
-        cwd: PathBuf::from("/code/api"),
+        cwd: abs("/code/api"),
         branch: Some("main".into()),
         title: Some("fix the parser".into()),
         at,
@@ -14,7 +20,7 @@ fn open_session(session: &str, at: u64) -> ClosedSession {
 }
 
 fn app() -> PathBuf {
-    PathBuf::from("/code/api")
+    abs("/code/api")
 }
 
 fn ids(sessions: &[ClosedSession]) -> Vec<&str> {
@@ -25,11 +31,11 @@ fn ids(sessions: &[ClosedSession]) -> Vec<&str> {
 fn a_save_replaces_the_projects_set_and_other_projects_are_left_alone() {
     let mut store = Workspaces::in_memory();
     store.save(app(), vec![open_session("a", 1), open_session("b", 2)]).unwrap();
-    store.save("/code/web".into(), vec![open_session("w", 3)]).unwrap();
+    store.save(abs("/code/web"), vec![open_session("w", 3)]).unwrap();
     store.save(app(), vec![open_session("c", 4)]).unwrap();
     assert_eq!(ids(&store.get(&app())), ["c"]);
-    assert_eq!(ids(&store.get(Path::new("/code/web"))), ["w"]);
-    assert!(store.get(Path::new("/code/none")).is_empty());
+    assert_eq!(ids(&store.get(&abs("/code/web"))), ["w"]);
+    assert!(store.get(&abs("/code/none")).is_empty());
 }
 
 #[test]
@@ -66,12 +72,12 @@ fn only_the_newest_fifty_sessions_of_a_project_are_kept_in_the_order_sent() {
 fn only_the_fifty_projects_saved_last_are_kept() {
     let mut store = Workspaces::in_memory();
     for n in 0..60 {
-        store.save(format!("/code/p{n}").into(), vec![open_session("a", n)]).unwrap();
+        store.save(abs(&format!("/code/p{n}")), vec![open_session("a", n)]).unwrap();
     }
     assert_eq!(store.projects.len(), WORKSPACE_PROJECTS_MAX);
-    assert_eq!(store.get(Path::new("/code/p59")).len(), 1);
-    assert!(store.get(Path::new("/code/p9")).is_empty());
-    assert_eq!(store.get(Path::new("/code/p10")).len(), 1);
+    assert_eq!(store.get(&abs("/code/p59")).len(), 1);
+    assert!(store.get(&abs("/code/p9")).is_empty());
+    assert_eq!(store.get(&abs("/code/p10")).len(), 1);
 }
 
 #[test]
@@ -89,8 +95,8 @@ fn a_record_is_cleaned_like_a_closed_session_and_a_bad_one_is_dropped() {
                 },
                 open_session("", 2),
                 ClosedSession { cwd: "relative/dir".into(), ..open_session("rel", 3) },
-                ClosedSession { cwd: "/code/\u{1b}[2Jx".into(), ..open_session("esc", 4) },
-                ClosedSession { cwd: format!("/{}", "d".repeat(5000)).into(), ..open_session("long", 5) },
+                ClosedSession { cwd: abs("/code/\u{1b}[2Jx"), ..open_session("esc", 4) },
+                ClosedSession { cwd: abs(&format!("/{}", "d".repeat(5000))), ..open_session("long", 5) },
             ],
         )
         .unwrap();
@@ -133,8 +139,8 @@ fn a_worktree_is_kept_only_as_a_pair_that_holds_together() {
 #[test]
 fn a_project_that_is_not_an_absolute_clean_path_is_refused() {
     let mut store = Workspaces::in_memory();
-    for project in ["relative", "", "/code/\u{7}x"] {
-        assert!(store.save(project.into(), vec![open_session("a", 1)]).is_err(), "{project:?}");
+    for project in [PathBuf::from("relative"), PathBuf::new(), abs("/code/\u{7}x")] {
+        assert!(store.save(project.clone(), vec![open_session("a", 1)]).is_err(), "{project:?}");
     }
     assert!(store.projects.is_empty());
 }
@@ -147,13 +153,13 @@ fn the_sets_survive_a_restart() {
     let _in_rt = rt.enter();
     let mut store = Workspaces::open(file.clone());
     store.save(app(), vec![open_session("a", 1), open_session("b", 2)]).unwrap();
-    store.save("/code/web".into(), vec![open_session("w", 3)]).unwrap();
+    store.save(abs("/code/web"), vec![open_session("w", 3)]).unwrap();
     store.save_now();
 
     let reopened = Workspaces::open(file);
     assert_eq!(reopened.get(&app()), store.get(&app()));
-    assert_eq!(ids(&reopened.get(Path::new("/code/web"))), ["w"]);
-    assert_eq!(reopened.projects[0].path, Path::new("/code/web"), "the project saved last stays first");
+    assert_eq!(ids(&reopened.get(&abs("/code/web"))), ["w"]);
+    assert_eq!(reopened.projects[0].path, abs("/code/web"), "the project saved last stays first");
 }
 
 #[test]
@@ -161,6 +167,7 @@ fn a_stored_file_is_checked_when_read() {
     let dir = persist::scratch_dir();
     std::fs::create_dir_all(dir.path()).unwrap();
     let file = dir.path().join("workspaces.json");
+    let path = |p: &str| abs(p).to_string_lossy().into_owned();
     let entry = |session: &str, cwd: &str| {
         serde_json::json!({
             "agent": "codex", "session": session, "cwd": cwd, "branch": null,
@@ -170,8 +177,8 @@ fn a_stored_file_is_checked_when_read() {
     let stored = serde_json::json!({
         "version": 1,
         "projects": [
-            {"path": "/code/api", "sessions": [entry("ok", "/code/api"), entry("", "/code"), entry("rel", "x")]},
-            {"path": "not-absolute", "sessions": [entry("lost", "/code")]},
+            {"path": path("/code/api"), "sessions": [entry("ok", &path("/code/api")), entry("", &path("/code")), entry("rel", "x")]},
+            {"path": "not-absolute", "sessions": [entry("lost", &path("/code"))]},
         ],
     });
     std::fs::write(&file, stored.to_string()).unwrap();

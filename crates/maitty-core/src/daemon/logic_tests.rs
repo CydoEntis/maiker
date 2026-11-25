@@ -10514,17 +10514,18 @@ fn a_person_reads_the_closed_sessions_newest_first_and_a_pane_cannot() {
 fn a_person_saves_and_reads_a_projects_open_set_and_a_pane_cannot() {
     let (mut d, _rx) = daemon();
     let asking = pane(&mut d);
+    // A drive makes it absolute on Windows; the store refuses a project that is not.
+    let project = std::path::PathBuf::from(if cfg!(windows) { r"C:\code\app" } else { "/code/app" });
     let session = |id: &str| ClosedSession {
         agent: "claude".into(),
         session: id.into(),
-        cwd: "/code/app".into(),
+        cwd: project.clone(),
         branch: None,
         title: None,
         at: 1,
         worktree: None,
         repo: None,
     };
-    let project = std::path::PathBuf::from("/code/app");
 
     let (tx, mut person) = mpsc::channel(16);
     d.handle(Ev::Connected(7, tx, false, crate::protocol::Surface::Terminal, true));
