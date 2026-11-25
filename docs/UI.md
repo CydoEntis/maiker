@@ -417,7 +417,13 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    the sessions still running in it and counting the rest, and says its folder and git history stay on disk. On the
    answer an empty project leaves at once (`useOpenedProjects().close`); otherwise every listed session in it, ended
    ones too, is closed (`endSessions`) and `closeOnceEmpty` takes the project off the list in the render its last
-   session leaves, since a listed session would open it again. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
+   session leaves, since a listed session would open it again. Just before they close, a project of this computer has
+   its open set saved with the service (`saveWorkspace`, `Command::SaveWorkspace`): each agent and chat session with a
+   conversation to resume, plain terminals left out, a session in a linked worktree with that worktree and its
+   repository (`openSetOf`, `model/openSet.ts`). A set with nothing in it is not sent, so the set kept before stays. The
+   close never waits on it: a failed save is one toast (`Could not save the sessions open in <name>`), a service from
+   before saved sets is not asked and says nothing, and an undone close keeps the set it saved. Another machine's
+   project saves nothing. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
    `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through

@@ -1,5 +1,5 @@
-import { renderHook } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { groupByProject, type OpenedProject } from './model/openedProjects'
 import { toSessionView, type SessionView } from './model/session'
@@ -10,6 +10,10 @@ const workspace = vi.hoisted(() => {
   return { current }
 })
 vi.mock('./workspaceContext', () => ({ useWorkspace: () => workspace.current }))
+const service = vi.hoisted(() => ({ saveWorkspace: vi.fn<(project: string, sessions: readonly unknown[]) => Promise<boolean>>() }))
+vi.mock('@/api/daemon', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/daemon')>(), saveWorkspace: service.saveWorkspace }))
+const toast = vi.hoisted(() => ({ failed: vi.fn() }))
+vi.mock('@/lib/toast', () => ({ toast }))
 
 const SHOP: OpenedProject = { machineName: null, folder: '/home/me/shop' }
 const WORKTREE = '/home/me/.maiker/shop/feat-x'
@@ -109,5 +113,60 @@ describe('a project heading\'s starts in the window', () => {
     run()
     expect(endSessions).toHaveBeenCalledWith([running.id, gone.id])
     expect(closeOnceEmpty).toHaveBeenCalledWith(SHOP)
+  })
+})
+
+describe('closing a project keeps what was open in it', () => {
+  const NOW = 1_780_000_000_000
+  beforeEach(() => { service.saveWorkspace.mockReset(); toast.failed.mockReset() })
+  afterEach(() => { vi.restoreAllMocks() })
+
+  /** An agent in a linked worktree of the shop, a chat in its main checkout and a plain terminal: the project's sessions. */
+  function openInShop(): SessionView[] {
+    const agent = toSessionView({ ...onMain().conversation, id: 't2', nativePane: 2, cwd: WORKTREE, branch: 'feat-x', linked: true, checkout: WORKTREE, named: true, title: 'Login fix', details: { asking: '', interrupted: null, agentSession: 'claude-1', timeline: [], usage: { context: null, cost: null, tokens: null } } }, '/home/me')
+    const chat = toSessionView({ id: '7', generation: 1, execution: 'Structured', title: 'Codex conversation 7', named: false, project: 'shop', folder: '/home/me/shop', cwd: '/home/me/shop', repo: 'shop', branch: 'main', provider: 'Codex', status: 'idle', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'codex', process: 'codex', chat: { conversation: 7, generation: 1, session: 'codex-7' } }, '/home/me')
+    const shell = onMain({ id: 't3', nativePane: 3, agent: null, process: 'bash' })
+    return [agent, chat, shell]
+  }
+
+  /** Close project on `sessions` of the shop, answered yes; the window's parts, each a spy. */
+  function closeShop(sessions: readonly SessionView[]) {
+    const parts = { confirm: vi.fn((_ask: unknown, run: () => void) => { run() }), endSessions: vi.fn(), closeOnceEmpty: vi.fn() }
+    workspace.current = { ...windowWith(null, []), ...parts, openedProjects: { machines: [{ machineName: null, projects: [{ project: SHOP, sessions }] }], close: vi.fn(), closeOnceEmpty: parts.closeOnceEmpty } }
+    vi.spyOn(Date, 'now').mockReturnValue(NOW)
+    renderHook(() => useProjectActions()).result.current(vi.fn()).onClose(SHOP, 'shop')
+    return parts
+  }
+
+  it('saves its agent and chat sessions, not its plain terminals, after the answer and before they end', () => {
+    service.saveWorkspace.mockResolvedValue(true)
+    const parts = closeShop(openInShop())
+    expect(service.saveWorkspace).toHaveBeenCalledExactlyOnceWith(SHOP.folder, [
+      { agent: 'claude', session: 'claude-1', cwd: WORKTREE, branch: 'feat-x', title: 'Login fix', at: NOW / 1000, worktree: WORKTREE, repo: '/home/me/shop' },
+      { agent: 'codex', session: 'codex-7', cwd: '/home/me/shop', branch: 'main', title: null, at: NOW / 1000, worktree: null, repo: null },
+    ])
+    expect(service.saveWorkspace.mock.invocationCallOrder[0]).toBeLessThan(parts.endSessions.mock.invocationCallOrder[0] ?? 0)
+    expect(parts.endSessions).toHaveBeenCalledWith(['t2', '7', 't3'])
+    expect(parts.closeOnceEmpty).toHaveBeenCalledWith(SHOP)
+  })
+
+  it('still closes when the save fails, and says so in one toast', async () => {
+    service.saveWorkspace.mockRejectedValue(new Error('The Maiker service is not running'))
+    const parts = closeShop(openInShop())
+    expect(parts.endSessions).toHaveBeenCalled()
+    expect(parts.closeOnceEmpty).toHaveBeenCalledWith(SHOP)
+    await waitFor(() => { expect(toast.failed).toHaveBeenCalledTimes(1) })
+    expect(toast.failed.mock.calls[0]?.[0]).toContain('shop')
+  })
+
+  it('says nothing when the service is from before saved sets, and asks nothing with no session to keep', async () => {
+    service.saveWorkspace.mockResolvedValue(false)
+    const parts = closeShop(openInShop())
+    expect(parts.closeOnceEmpty).toHaveBeenCalledWith(SHOP)
+    await Promise.resolve()
+    expect(toast.failed).not.toHaveBeenCalled()
+    service.saveWorkspace.mockClear()
+    closeShop([onMain({ id: 't3', nativePane: 3, agent: null, process: 'bash' })])
+    expect(service.saveWorkspace).not.toHaveBeenCalled()
   })
 })
