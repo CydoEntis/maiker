@@ -273,8 +273,14 @@ the repo's `.maiker/checks.toml` under the approval rules below. It runs through
 session's worktree with no stdin and without `AGENT_PANE_TOKEN`, so it cannot report status
 as the pane. On timeout its whole process tree is killed (process group on unix, job object
 on Windows). If the daemon dies, a check dies with it on Windows (the job closes) and on
-Linux (a parent-death signal kills the shell; a descendant the shell already started is
-left to finish or to fail on its closed pipes). On macOS there is no such call, so a check
+Linux, its whole process group included: a parent-death signal kills the shell, and because
+the kernel does not keep that signal across a fork, nor across an exec it treats as
+privileged, each check also has a watcher (`daemon/check/daemon_watch.rs`) that holds one end
+of a socket pair only the daemon holds the other end of, and kills the check's process group
+when the daemon's end closes. The watcher is forked before the check's exec, keeps no other
+file open, and leaves without stopping anything when the daemon says the check ended, so a
+check's background work outlives the check as before, though not the daemon. A process the
+check moved to a group of its own escapes it. On macOS there is no such call, so a check
 running when the daemon crashes lasts until it ends or writes to its closed pipes. Its output is a capped tail held by the daemon, saved beside the pane's output
 files and served only by `Query::CheckOutput` under the read grant; it is never logged and
 never in the state snapshot. It may contain secrets the command printed, like any pane's

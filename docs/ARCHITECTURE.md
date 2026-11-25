@@ -86,6 +86,7 @@ src/
     repo.rs      read-only answers about the repository a pane is in (`Query::Repo`), and the one snapshot restore
     search.rs    find across sessions: text in what each pane printed recently
     check.rs     a pane's check result, and the runner: the project's check command run in the session's worktree when a turn ends
+    check/daemon_watch.rs  Linux: the watcher that kills a check's process group when the daemon goes
     check_source.rs which checks a project has (yours, else the repo's .maiker/checks.toml), where each comes from, whether it may run
     check_stale.rs  a pass gone stale: the worktree's tree when a run starts, compared on the git poll
     closed_sessions.rs the agent sessions that closed for good or crashed, newest 50 (closed-sessions-<socket>.json): what a close or a failed exit records, read at start and written off the loop
