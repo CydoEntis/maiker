@@ -202,6 +202,56 @@ describe('the chat history', () => {
   })
 })
 
+describe('the chat’s problem line after a failed turn', () => {
+  const REASON = 'API Error: 400 model not found'
+
+  function failedTurn(): FakeDaemonHistory {
+    const daemon = conversation(0)
+    daemon.upsert(daemon.message('t1', 'u1', 'User', 'hello'))
+    daemon.upsert(daemon.turnStatus('t1', 'Failed'))
+    daemon.status = 'Blocked'
+    daemon.error = REASON
+    return daemon
+  }
+
+  function laterTurnWorks(daemon: FakeDaemonHistory): void {
+    daemon.upsert(daemon.message('t2', 'u2', 'User', 'hello again'))
+    daemon.upsert(daemon.message('t2', 'a2', 'Assistant', 'it worked'))
+    daemon.upsert(daemon.turnStatus('t2', 'Completed'))
+    daemon.status = 'Done'
+  }
+
+  it('says the agent stopped, and takes the line away once a later turn goes through', async () => {
+    const daemon = failedTurn()
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+    expect(screen.getByText('Claude stopped')).toBeInTheDocument()
+    expect(screen.getByText(REASON)).toBeInTheDocument()
+
+    // The daemon clears the failure as the next turn runs (ADR 0003): the chat only shows what it reports.
+    laterTurnWorks(daemon)
+    daemon.error = null
+    await settle(IDLE_POLL_MS)
+
+    expect(screen.queryByText('Claude stopped')).not.toBeInTheDocument()
+    expect(screen.queryByText('Could not read this chat')).not.toBeInTheDocument()
+    expect(screen.queryByText(REASON)).not.toBeInTheDocument()
+  })
+
+  it('still says a chat could not be read when that is what the daemon reports after a turn went through', async () => {
+    const daemon = failedTurn()
+    render(<ChatSession link={link()} agent="claude" online />)
+    await settle()
+
+    laterTurnWorks(daemon)
+    daemon.error = 'The saved conversation could not be read: The transcript is not found'
+    await settle(IDLE_POLL_MS)
+
+    expect(screen.getByText('Could not read this chat')).toBeInTheDocument()
+    expect(screen.queryByText('Claude stopped')).not.toBeInTheDocument()
+  })
+})
+
 describe('a subagent’s own chat', () => {
   const subagent = { id: 'b', name: 'Write drafts tests', kind: 'Explore', status: 'done' as const, task: 'Write drafts tests for the routes.', latest: null, result: 'Wrote 12 tests.\n\nThey all pass.', startedAt: 100, updatedAt: 170 }
 

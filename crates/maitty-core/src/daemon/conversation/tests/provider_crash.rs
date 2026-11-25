@@ -71,7 +71,7 @@ async fn kill(pids: Vec<u32>) {
 fn assert_blocked_with_the_prompt_delivered(session: &TestSession, id: ConversationId) {
     let state = &session.daemon.conversation_states[&id];
     assert_eq!(state.status, Status::Blocked, "a turn that never finished is not done");
-    assert!(state.error.is_some(), "the reason is kept for the chat to show");
+    assert!(state.shown_error().is_some(), "the reason is kept for the chat to show");
     let record = session.daemon.conversations.iter().find(|c| c.id == id).unwrap();
     assert_eq!(record.state, RecoveryState::RecoveryRequired);
     assert!(
@@ -87,7 +87,7 @@ async fn resume_decided(session: &mut TestSession, id: ConversationId) {
         let decided = daemon
             .conversation_states
             .get(&id)
-            .is_some_and(|state| state.history_ready || state.error.is_some());
+            .is_some_and(|state| state.history_ready || state.shown_error().is_some());
         let in_flight = daemon.conversation_requests.values().any(|pending| pending.conversation() == id);
         daemon.conversation_runtimes.owns(id) && decided && !in_flight
     })
@@ -233,7 +233,7 @@ async fn a_daemon_restart_mid_turn_leaves_a_codex_chat_for_a_person_to_resume_wi
         assert!(!listed(&session, id).interrupted, "taken up, it is no longer listed");
         let state = &session.daemon.conversation_states[&id];
         assert_eq!(state.status, Status::Idle, "the cut turn is neither working nor done");
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         let resumed = generation(&session, id);
         assert!(resumed > started, "the restart fenced the old generation");
         assert_eq!(session.daemon.conversations.len(), 1, "no second conversation appeared");
@@ -285,7 +285,7 @@ async fn a_claude_killed_mid_turn_blocks_the_chat_until_a_person_resumes_it_with
         let resumed = resume_by_hand(&mut session, 622, id).await;
 
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         assert_eq!(state.status, Status::Idle, "neither working nor waiting on the person");
         assert_cut_turn_stopped(&session, id);
         assert!(resumed > started, "the resume fenced the dead provider's generation");
@@ -321,7 +321,7 @@ async fn a_daemon_restart_mid_turn_leaves_a_claude_chat_for_a_person_and_takes_i
 
         assert!(resumed > fenced, "one start, at the next generation");
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         assert_cut_turn_stopped(&session, id);
         assert!(!listed(&session, id).interrupted, "taken up, it is no longer listed");
         assert_eq!(session.daemon.conversations.len(), 1, "no second conversation appeared");
@@ -362,7 +362,7 @@ async fn a_daemon_restart_between_turns_takes_a_claude_chat_up_again_from_its_tr
         resume_decided(&mut session, id).await;
 
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         assert_eq!(state.status, Status::Idle, "nothing runs and nothing waits on the person");
         let resumed = generation(&session, id);
         assert!(resumed > started, "the restart fenced the old generation");
@@ -420,7 +420,7 @@ async fn read_settled(session: &mut TestSession, id: ConversationId) {
         let in_flight = daemon.conversation_requests.values().any(|pending| pending.conversation() == id);
         !daemon.saved_reads.contains(&id)
             && !in_flight
-            && daemon.conversation_states.get(&id).is_some_and(|state| state.history_ready || state.error.is_some())
+            && daemon.conversation_states.get(&id).is_some_and(|state| state.history_ready || state.shown_error().is_some())
     })
     .await;
 }
@@ -441,7 +441,7 @@ async fn a_chat_whose_saved_history_cannot_be_read_is_stopped_with_the_reason_an
         let state = &session.daemon.conversation_states[&id];
         assert_eq!(state.status, Status::Blocked);
         assert!(!state.history_ready);
-        let reason = state.error.clone().unwrap();
+        let reason = state.shown_error().unwrap().to_owned();
         assert!(reason.contains("saved conversation could not be read"), "the real reason, not the generic one: {reason}");
         assert!(!session.daemon.conversation_runtimes.owns(id), "no half-alive runtime is left");
         let record = &session.daemon.conversations[0];
@@ -452,12 +452,12 @@ async fn a_chat_whose_saved_history_cannot_be_read_is_stopped_with_the_reason_an
         exchange(&mut session, 662, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
         read_settled(&mut session, id).await;
         exchange(&mut session, 662, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
-        assert_eq!(session.daemon.conversation_states[&id].error.as_deref(), Some(reason.as_str()));
+        assert_eq!(session.daemon.conversation_states[&id].shown_error(), Some(reason.as_str()));
 
         write_transcript(&mut session, false).await;
         resume_by_hand(&mut session, 663, id).await;
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         assert!(session.daemon.conversation_runtimes.owns(id));
 
         let current = generation(&session, id);
@@ -490,7 +490,7 @@ async fn a_failed_wake_is_tried_once_more_by_the_next_read() {
 
         open_chat(&mut session, id);
         read_settled(&mut session, id).await;
-        assert!(session.daemon.conversation_states[&id].error.is_some());
+        assert!(session.daemon.conversation_states[&id].shown_error().is_some());
         assert!(session.daemon.is_asleep(id), "put back to sleep for another try");
 
         write_transcript(&mut session, false).await;
@@ -500,7 +500,7 @@ async fn a_failed_wake_is_tried_once_more_by_the_next_read() {
         })
         .await;
         assert!(session.daemon.conversation_runtimes.owns(id));
-        assert!(session.daemon.conversation_states[&id].error.is_none());
+        assert!(session.daemon.conversation_states[&id].shown_error().is_none());
     })
     .catch_unwind()
     .await;
@@ -549,7 +549,7 @@ async fn a_reconnect_while_the_chat_is_still_reading_its_past_is_told_it_is_alre
 
         read_settled(&mut session, id).await;
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "the read in flight was not disturbed: {:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "the read in flight was not disturbed: {:?}", state.shown_error());
         assert!(session.daemon.conversation_runtimes.owns(id));
     })
     .catch_unwind()
@@ -574,7 +574,7 @@ async fn a_chat_stuck_up_with_its_history_unread_is_recovered_by_reconnect() {
 
         assert!(resumed > started);
         let state = &session.daemon.conversation_states[&id];
-        assert!(state.history_ready && state.error.is_none(), "{:?}", state.error);
+        assert!(state.history_ready && state.shown_error().is_none(), "{:?}", state.shown_error());
         assert!(session.daemon.conversation_runtimes.owns(id));
     })
     .catch_unwind()

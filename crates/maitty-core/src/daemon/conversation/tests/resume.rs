@@ -169,7 +169,7 @@ async fn a_resume_that_fails_is_reported_and_not_tried_again() {
                 .unwrap()
                 .unwrap();
             s.daemon.handle(event);
-            if s.daemon.conversation_states.get(&id).is_some_and(|state| state.error.is_some()) {
+            if s.daemon.conversation_states.get(&id).is_some_and(|state| state.shown_error().is_some()) {
                 break;
             }
         }

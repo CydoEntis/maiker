@@ -807,6 +807,7 @@ mod delivery;
 mod process;
 mod resume;
 mod golden;
+mod turn_errors;
 
 /// Asks the Claude adapter to take up its conversation.
 fn claude_open() -> super::runtime::Rpc {

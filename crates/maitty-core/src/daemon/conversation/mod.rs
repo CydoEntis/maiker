@@ -38,7 +38,13 @@ pub(super) struct State {
     pub(super) status: crate::protocol::Status,
     pub(super) checks: crate::daemon::check::Checks,
     pub(super) completed_turns: std::collections::BTreeSet<String>,
+    /// A problem that outlives turns, such as a history that cannot be read or a request left
+    /// unanswered: only what fixes it clears it.
     pub(super) error: Option<String>,
+    /// Why the latest turn failed or was cut short, or what its provider reported going wrong in
+    /// it. Kept apart from `error` so the next turn that starts, or ends well, clears it without
+    /// hiding a problem that outlives turns.
+    pub(super) turn_error: Option<String>,
     pub(super) blocked: bool,
     pub(super) history_ready: bool,
     pub(super) history_revision: u64,
@@ -96,9 +102,21 @@ impl State {
         });
     }
 
+    /// The problem a reader is shown: one that outlives turns first, since it is what needs
+    /// fixing, else why the latest turn failed.
+    pub(super) fn shown_error(&self) -> Option<&str> {
+        self.error.as_deref().or(self.turn_error.as_deref())
+    }
+
+    /// Nothing is wrong any more: neither a lasting problem nor the latest turn's.
+    pub(super) fn clear_errors(&mut self) {
+        self.error = None;
+        self.turn_error = None;
+    }
+
     pub(super) fn effective_status(&self) -> crate::protocol::Status {
         use crate::protocol::Status;
-        if self.error.is_some()
+        if self.shown_error().is_some()
             || !self.helper_consent.asked.is_empty()
             || (matches!(self.status, Status::Done | Status::Idle) && self.checks.holds_done())
         {

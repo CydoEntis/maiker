@@ -450,7 +450,7 @@ async fn a_failed_claude_turn_reports_its_reason_and_names_claude() {
             let sent = exchange(&mut session, client + 1, message, None).await;
             assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
             handle_until(&mut session, "the turn fails", |daemon| {
-                daemon.conversation_states.get(&id).is_some_and(|state| state.error.is_some())
+                daemon.conversation_states.get(&id).is_some_and(|state| state.shown_error().is_some())
             })
             .await;
             let read = exchange(&mut session, client + 2, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
@@ -466,5 +466,49 @@ async fn a_failed_claude_turn_reports_its_reason_and_names_claude() {
         if let Err(panic) = outcome {
             std::panic::resume_unwind(panic);
         }
+    }
+}
+
+/// A turn that goes through after a failed one leaves the failure behind: the chat shows no error
+/// and is done, not waiting on the person. The second message picks another model, as a person
+/// does after a model was refused, so it starts its own Claude process.
+#[tokio::test]
+async fn a_turn_that_succeeds_after_a_failed_one_clears_its_error() {
+    let mut session = conversation_fixture("conversation-recovers").await;
+    let outcome = AssertUnwindSafe(async {
+        let (executable, id, generation) = start_claude_chat(&mut session, 500, "fail-with-reason").await;
+        let send = |operation: u64, choice: Option<crate::conversation::TurnChoice>| {
+            ClientMsg::Command(Command::ConversationSend { id, generation, operation, text: "hello fake Claude".into(), choice })
+        };
+        let sent = exchange(&mut session, 501, send(1, None), None).await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        handle_until(&mut session, "the first turn fails", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| state.shown_error().is_some())
+        })
+        .await;
+
+        tokio::task::spawn_blocking(move || std::fs::write(executable.with_extension("scenario"), "").unwrap()).await.unwrap();
+        let choice = crate::conversation::TurnChoice { model: Some("sonnet".into()), effort: None };
+        let sent = exchange(&mut session, 502, send(2, Some(choice)), None).await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        // Done waits on the turn's checks, which this project has none of.
+        handle_until(&mut session, "the second turn ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| {
+                state.completed_turns.len() >= 2 && state.effective_status() == crate::protocol::Status::Done
+            })
+        })
+        .await;
+        let read = exchange(&mut session, 503, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+            panic!("{read:?}");
+        };
+        assert_eq!(page.error, None, "the failed turn's reason went with it");
+        assert_eq!(page.status, crate::protocol::Status::Done);
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
     }
 }

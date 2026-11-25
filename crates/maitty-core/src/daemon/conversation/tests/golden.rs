@@ -61,7 +61,7 @@ impl Record {
             "moment": moment,
             "status": format!("{:?}", state.status),
             "recovery": format!("{:?}", record.state),
-            "error": state.error,
+            "error": state.shown_error(),
             "open_requests": state.approvals.values().collect::<Vec<_>>(),
             "answered_requests": state.answered_approvals,
             "history_complete": format!("{:?}", read.history.completeness),

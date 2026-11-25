@@ -297,7 +297,7 @@ impl Daemon {
         history.revision = state.history_revision;
         state.history_ready = true;
         state.blocked = false;
-        state.error = None;
+        state.clear_errors();
         // The whole past is read and nothing runs yet: neither working nor waiting on the person,
         // whatever an earlier refusal or a stopped agent left.
         if matches!(state.status, Status::Working | Status::Blocked) {
@@ -321,7 +321,7 @@ impl Daemon {
         history.revision = state.history_revision;
         state.history_ready = true;
         state.blocked = false;
-        state.error = None;
+        state.clear_errors();
         if state.status == Status::Working {
             state.status = Status::Idle;
         }
@@ -461,7 +461,7 @@ impl Daemon {
                 ),
                 receipt: self.visible_receipt(id),
                 history: page,
-                error: state.and_then(|s| s.error.clone()),
+                error: state.and_then(|s| s.shown_error().map(str::to_owned)),
                 checks: state.map_or_else(Vec::new, |s| s.checks.infos()),
                 // A structured conversation chose its own mode and model; only a followed pane reads them from a file.
                 meta: None,

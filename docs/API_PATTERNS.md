@@ -1635,6 +1635,11 @@ They carry no transcripts, launch environment, configuration roots or credential
 Explicit read replies carry the same checkpoint-gated status and checkpoint
 summaries. Provider error notifications and failed/interrupted native turns stay
 blocked with an explicit error reason; they cannot report successful completion.
+That reason belongs to the turn (`turn_error`): sending the next message, or the
+next turn starting or completing without a reason of its own, clears it. A problem
+that outlives turns (a history that is incomplete or holds unsupported content, an
+unanswered provider request) is kept apart (`error`), so a turn neither clears nor
+hides it; while both are set, a read reports that one.
 Failures answer the owning pending request and notify attached observers, without
 injecting unrelated errors into other one-shot clients.
 
