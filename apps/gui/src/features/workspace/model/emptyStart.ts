@@ -1,7 +1,7 @@
 import { CHAT_AGENTS, type ChatAgent } from './chatView'
 import { machineTitle, type MachineHead } from './machines'
 import { sameProject, type MachineProjects, type OpenedProject } from './openedProjects'
-import { listedProjects } from './sidebarTree'
+import { listedProjects, NO_PROJECT } from './sidebarTree'
 
 /** A project the empty state can start an agent in. */
 export type StartPlace = {
@@ -13,19 +13,27 @@ export type StartPlace = {
   readonly remote: boolean
   /** Its machine cannot be reached now, so nothing starts there. */
   readonly down: boolean
+  /** No project: this computer's start folder, where a session starts outside every project. */
+  readonly loose: boolean
 }
 
-function placeOf(head: MachineHead, project: OpenedProject, name: string): StartPlace {
+function placeOf(head: MachineHead, project: OpenedProject, name: string, loose: boolean): StartPlace {
   const remote = head.name !== null
-  return { label: remote ? `${name} · ${machineTitle(head)}` : name, name, project, machine: head.machine, remote, down: head.down }
+  return { label: remote ? `${name} · ${machineTitle(head)}` : name, name, project, machine: head.machine, remote, down: head.down, loose }
 }
 
 /**
- * Every opened project as a place to start in, in the sidebar's order. Two projects that would read the same (two
- * folders with one name) are told apart by their folder.
+ * Every opened project as a place to start in, in the sidebar's order, then No project: this computer's start folder
+ * (`looseFolder`, '' while it is not known), so with no project open the agents start there. Two projects that would
+ * read the same (two folders with one name) are told apart by their folder.
  */
-export function startPlaces(heads: readonly MachineHead[], machines: readonly MachineProjects[]): StartPlace[] {
-  const places = listedProjects(heads, machines).map(({ head, entry, name }) => placeOf(head, entry.project, name))
+export function startPlaces(heads: readonly MachineHead[], machines: readonly MachineProjects[], looseFolder = ''): StartPlace[] {
+  const projects = listedProjects(heads, machines).filter(({ entry }) => entry.loose !== true).map(({ head, entry, name }) => placeOf(head, entry.project, name, false))
+  const here = heads.find((head) => head.name === null)
+  // A start folder opened as a project is that project, not No project.
+  const opened = projects.some((place) => sameProject(place.project, { machineName: null, folder: looseFolder }))
+  const loose = here === undefined || looseFolder === '' || opened ? [] : [placeOf(here, { machineName: null, folder: looseFolder }, NO_PROJECT, true)]
+  const places = [...projects, ...loose]
   const times = new Map<string, number>()
   for (const place of places) times.set(place.label, (times.get(place.label) ?? 0) + 1)
   return places.map((place) => ((times.get(place.label) ?? 0) > 1 ? { ...place, label: `${place.label} (${place.project.folder})` } : place))

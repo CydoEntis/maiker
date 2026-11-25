@@ -51,6 +51,8 @@ export type ProjectTarget = {
   online: boolean
   /** The agent programs on this computer; null while that is unknown. Nothing is known of another machine's. */
   installed: readonly string[] | null
+  /** The No project group (this computer's sessions in the start folder): no project, so there is nothing to close. */
+  loose?: boolean
 }
 
 /** The key the binding table gives an action on this platform, '' when it has none. */
@@ -100,10 +102,14 @@ export function projectPlusMenu(actions: ProjectActions, target: ProjectTarget, 
   }
 }
 
-/** A project heading's right-click menu: what starts in it, what shows it, then taking it off the sidebar. */
+/**
+ * A project heading's right-click menu: what starts in it, what shows it, then taking it off the sidebar. The No project
+ * group leaves the sidebar when its last session does, so it has no Close.
+ */
 export function projectContextMenu(actions: ProjectActions, target: ProjectTarget, keys: KeysOf): MenuEntry[] {
   const worktrees = worktreeRows(actions, target, keys)
   const shown = target.sessions[0]
+  const closing: MenuEntry[] = target.loose === true ? [] : ['separator', { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } }]
   return [
     { heading: target.remote ? `${target.name} · ${target.machineLabel}` : target.name },
     withKeys({ label: 'New session', disabled: !target.canStart, run: () => { actions.onNewSession(target.machine, target.project) } }, keys('new-session')),
@@ -111,7 +117,6 @@ export function projectContextMenu(actions: ProjectActions, target: ProjectTarge
     'separator',
     { label: 'Copy path', run: () => { actions.onCopyPath(target.project) } },
     { label: 'Show files', disabled: shown === undefined, why: 'Start a session here first: the files are read through one', run: () => { if (shown !== undefined) actions.onShowFiles(shown.id) } },
-    'separator',
-    { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } },
+    ...closing,
   ]
 }

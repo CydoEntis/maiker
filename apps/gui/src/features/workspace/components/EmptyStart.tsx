@@ -80,7 +80,7 @@ export function EmptyStart({ running, places, place, installed, canStart, covere
   }, [])
 
   const menuItems: MenuEntry[] = [
-    ...places.map((each): MenuEntry => ({ label: each.label, icon: <ProjectBadge name={each.name} />, ...(each === place ? { hint: 'picked' } : {}), run: () => { onPick(each) } })),
+    ...places.map((each): MenuEntry => ({ label: each.label, icon: <ProjectBadge name={each.name} loose={each.loose} />, ...(each === place ? { hint: 'picked' } : {}), run: () => { onPick(each) } })),
     'separator',
     { label: 'Open a project…', ...(openProjectKeys === '' ? {} : { hint: openProjectKeys }), run: onOpenProject },
   ]
@@ -107,7 +107,7 @@ export function EmptyStart({ running, places, place, installed, canStart, covere
                 setMenuAt({ x: box.left, y: box.bottom })
               }}
             >
-              <ProjectBadge name={place.name} />
+              <ProjectBadge name={place.name} loose={place.loose} />
               {place.label}
               <ChevronDown className="mx-es-chevron" strokeWidth={2} aria-hidden="true" />
             </button>

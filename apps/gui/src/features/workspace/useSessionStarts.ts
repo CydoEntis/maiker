@@ -29,7 +29,7 @@ import { chatPermissions, launchFlags, startsBypassed, withBypass } from './mode
 import { CODEX_FULL_MODE, START_MODE } from '@/features/chat/chatMeta'
 import { type Layout, openArrangement } from './model/layout'
 import type { SessionView } from './model/session'
-import { resolveStartFolder } from './model/startFolder'
+import { bypassFor, resolveStartFolder } from './model/startFolder'
 import { resumeWords } from './model/moveToWorktree'
 import { hasAbility } from './model/agentAbilities'
 import { makeId } from './makeId'
@@ -419,8 +419,10 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
   // The new chat is the agent in a terminal the daemon owns, shown as its chat: one session shown in
   // the app's view (ADR 0003), the same for every agent. Starts from the page run alongside each
   // other; one in the `background` is not opened and leaves the page open for the next.
-  const startNewChat = useCallback(async (request: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
+  const startNewChat = useCallback(async (asked: NewChatRequest, { background = false, onPlaced }: NewChatStartOptions = {}): Promise<void> => {
     if (!online) throw new Error('The Maiker service is not reachable')
+    // A start that made no Bypass choice (the Terminal view's, which has no draft) skips no prompts in the start folder.
+    const request = asked.machine === LOCAL_MACHINE ? { ...asked, bypass: bypassFor(asked.bypass, asked.folder, resolveStartFolder(preferences.startFolder, home)) } : asked
     if (request.machine !== LOCAL_MACHINE) {
       if (!chatView) return startRemoteChat(request, { background, ...(onPlaced === undefined ? {} : { onPlaced }) })
       // In the Chat view a session on another machine is a chat its own daemon runs, with no terminal behind it (ADR 0020).
@@ -448,7 +450,7 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
       if (!background) setNewChatOpen(false)
       onPlaced?.(id)
     } })
-  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff, chatView, startDirectChat])
+  }, [online, setNewChatOpen, startAgentSession, startRemoteChat, bypassOff, chatView, startDirectChat, preferences.startFolder, home])
 
   // A shell in another machine's home folder, opened in the window when that machine lists it.
   const startRemoteShell = useCallback((machine: number) => startOnMachine({ machine, name: 'The machine' }, REMOTE_HOME), [startOnMachine])

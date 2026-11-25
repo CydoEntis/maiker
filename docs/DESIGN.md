@@ -279,8 +279,9 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   columns, or down the left of a nested list (sessions under a project, steps under a turn), is structure and stays.
   `leftEdge.test.ts` fails on an `inset Npx 0 0` shadow or a left border wider than 1px.
 - **The tree.** Machine › project › session › helper or split. A project is a folder on a machine, so the same folder
-  on two machines is two projects. There is no session without a project: open a project, then start sessions and
-  worktrees from its `+`. A **helper** is a session its lead started; it nests one level under the lead while the lead
+  on two machines is two projects. A session starts in a project (open one, then start sessions and worktrees from its
+  `+`), or on this computer with no project, in the start folder (Settings), where its sessions are listed under
+  **No project**. A **helper** is a session its lead started; it nests one level under the lead while the lead
   exists. A **split** is a plain shell that belongs to its session, in the Terminal view only: it is not in the sidebar
   and it closes with the session. A session holds six panes at most, its own among them.
 - **Four states, and only four.** There is no failed, error, starting or waiting state in the window.
@@ -345,7 +346,10 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   were made, so a row stays put while its state changes, with idle rows dropped below the rest; folded, its heading
   says its own state, the most urgent of them. A project
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
-  opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
+  opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). The
+  **No project** group (this computer's sessions in the start folder that no opened project holds) is last in each
+  sort; it is listed only while it has sessions, and its badge is a plain folder in `--muted`, not two letters in a
+  project colour, since it is no project. There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
   project carries a machine tag (the server mark and name in that machine's own colour, `machineColor`, one of the five
   project colours picked from its name), amber while that machine is offline. A project's sessions are set in under its badge
@@ -774,9 +778,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   no New session draft, once the service has listed its sessions (before that, "Looking for your sessions…"). One centred
   column, 460px at most, with no card of its own: the Maiker mark (54×42, the text colour at 16%), the heading **Nothing
   running**, then "Start an agent in" and the **project picker**, a quiet chip with the project's badge and name that
-  opens the one menu material listing every opened project (another machine's as `name · machine`) and **Open a
-  project…**. It shows the project picked here, else the one selected in the sidebar, else the one opened most recently;
-  with no project open the chip is **Open a project…** itself and no agent is listed. Under it is one 44px row per agent
+  opens the one menu material listing every opened project (another machine's as `name · machine`), then **No project**
+  (this computer's start folder, with the plain folder badge), and **Open a project…**. It shows the project picked
+  here, else the one selected in the sidebar, else the one opened most recently; with no project open it is **No
+  project**, so the agents start in the start folder. Only while the start folder is not known yet is the chip **Open a
+  project…** itself, with no agent listed. Under it is one 44px row per agent
   installed on this computer (every agent for a project on another machine, where that is not read): the agent's mark,
   its name and its number as a key hint, `1` first. A row, or its number key, starts that agent in the picked project the
   way the project's `+` menu does: the New session draft with that agent picked. The rows are off while nothing can start
@@ -784,7 +790,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   quiet text buttons, **Open a project** with its key from the binding table and **Add a remote machine** (the palette's
   New machine level), and the fine print "Sessions keep running when you close this window." While sessions exist and
   none is open the same screen is headed **No session open**, never "Nothing running".
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`), on the model and effort that agent was last started with or last given in a chat (`startChoiceFor`), so the two views agree. Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
+- **Starting a session.** A session is started from an opened project or, on this computer, from no project in the start folder; there is no start menu, and the empty state's agent rows start in the place its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked; a session under No project puts the start folder in front). With no project open on this computer they open the draft in the start folder, in its **No project** state (the folder chip says No project and the heading "What are we building today?"); with projects open there but none in front, and on another machine with no project in front, they open a project there first. A session started in the start folder, which usually holds every repository, starts in the agent's usual permission mode, never Bypass permissions, even while Bypass Permissions is on; the draft's shield can still pick Bypass permissions for that one session. When the start folder is no git repository the draft's branch chip says "no git repo", and its tooltip says the start folder is not a git repository, so the session has no branch or worktree. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`), on the model and effort that agent was last started with or last given in a chat (`startChoiceFor`), so the two views agree. Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
