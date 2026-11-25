@@ -1333,12 +1333,15 @@ control-character project is refused with an error. `Reply::Workspace` is the se
 another machine's answer is ignored (`remote_policy`). The desktop client sends them through `save_workspace` (false
 without asking from an older daemon) and `workspace` (null from an older daemon); tests:
 `a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one`,
-`the_open_set_is_never_sent_to_a_service_from_before_it`.
-
-The desktop command `saved_workspace { project }` (`maitty_desktop_client::workspace`) reads a project's set for its
-Workspace panel, from this computer's daemon only, on a connection of its own: the list, or null without asking from a
-daemon older than 127. The daemon matches the folder exactly, so the window always names a project by its opened
-project's `folder` as the sidebar spells it, both when it saves the set and when it reads it.
+`the_open_set_is_never_sent_to_a_service_from_before_it`. The window saves through the host's `save_workspace` command
+(`saveWorkspace` in `api/daemon.ts`) when a project is closed, and reads through `saved_workspace { project }`
+(`savedWorkspace`, `maitty_desktop_client::workspace`: the list, or null without asking from a daemon older than 127)
+for the project's Workspace panel; both ask this computer's daemon only, each on a connection of its own. The daemon
+matches the folder exactly, so both name a project by its opened project's `folder` as the sidebar spells it. The window
+builds each saved record itself (`model/openSet.ts`): a terminal's agent conversation id is its pane's
+`TermInfo.session`, and a chat's is `ConversationSummary.session` (`#[serde(default)]`, written only when known, so it
+needs no bump: the 126 shape decodes in `conversation_summary_from_an_older_daemon_defaults_to_structured_execution`),
+the chat's `binding.session_id`, set for a chat session only, since a pane's conversation has its pane to say it.
 
 Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
 125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;

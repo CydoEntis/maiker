@@ -144,6 +144,9 @@ impl Daemon {
                         _ => self.conversation_since.get(&c.id).map(|(_, at)| *at),
                     },
                     interrupted: self.waits_after_cut(c.id),
+                    session: (c.execution == ExecutionKind::Structured)
+                        .then(|| c.binding.session_id.clone())
+                        .filter(|id| !id.is_empty()),
                 }
             })
             .collect();
@@ -172,6 +175,7 @@ impl Daemon {
                 agent: None,
                 status_since: Some(term.status_since),
                 interrupted: false,
+                session: None,
             })
         }));
         summaries.extend(self.pending_starts.iter().map(|p| {
@@ -197,6 +201,7 @@ impl Daemon {
                 agent: p.settings.agent.clone(),
                 status_since: self.conversation_since.get(&p.id).map(|(_, at)| *at),
                 interrupted: false,
+                session: None,
             }
         }));
         summaries
@@ -330,6 +335,27 @@ mod tests {
         assert!(since(&d, id).is_some_and(|at| at <= crate::daemon::term::unix_now()));
         d.conversation_active_at(ConversationId(id.0 + 1), LONG_AGO);
         assert!(!d.conversation_since.contains_key(&ConversationId(id.0 + 1)));
+    }
+
+    /// A client saves a project's open set from the list, so a chat must say what its agent resumes by.
+    #[test]
+    fn a_chat_names_its_agent_conversation_and_a_pane_conversation_leaves_it_to_its_pane() {
+        let (mut d, id) = daemon_with_chat();
+        let session_of = |d: &Daemon| {
+            d.conversation_summaries()
+                .into_iter()
+                .find(|s| s.id == id)
+                .and_then(|s| s.session)
+        };
+        let saved = d.conversations[0].binding.session_id.clone();
+        assert!(!saved.is_empty());
+        assert_eq!(session_of(&d), Some(saved));
+
+        d.conversations[0].execution = ExecutionKind::Native;
+        assert_eq!(session_of(&d), None);
+        d.conversations[0].execution = ExecutionKind::Structured;
+        d.conversations[0].binding.session_id.clear();
+        assert_eq!(session_of(&d), None, "a chat with no id yet says none");
     }
 
     #[test]

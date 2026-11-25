@@ -745,6 +745,20 @@ async fn reopen_closed_session(agent: String, session: String) -> Result<serde_j
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Has this computer's daemon keep `sessions` as the set open in `project` when the project is closed, replacing the
+/// one it kept. False when the service running is older and was not asked. The daemon refuses a project that is not an
+/// absolute folder and cleans and caps every record, so nothing is trusted here. This computer's daemon only, like
+/// `closed_sessions`.
+#[tauri::command]
+async fn save_workspace(
+    project: PathBuf,
+    sessions: Vec<maitty_shared::protocol::ClosedSession>,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::save_workspace(project, sessions)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// The sessions this computer's daemon kept as open in `project` when it was last parked or closed, for the project's
 /// Workspace panel; null when the service running is older. This computer's daemon only, like `closed_sessions`.
 #[tauri::command]
@@ -1501,6 +1515,7 @@ pub fn run() {
             closed_sessions,
             reopen_closed_session,
             saved_workspace,
+            save_workspace,
             new_chat::git_sync_state,
             new_chat::git_pull,
             new_chat::open_agent_docs,

@@ -6,7 +6,11 @@ import { worktreeSourceOf } from './model/projectActions'
 import type { ChatAgent } from './model/chatView'
 import type { SessionView } from './model/session'
 import { rowTitle } from './model/sidebar'
+import { openSetOf } from './model/openSet'
+import { saveWorkspace } from '@/api/daemon'
+import { LOCAL_MACHINE } from '@/api/machines'
 import { confirmAsk } from '@/features/confirm/confirm'
+import { toast } from '@/lib/toast'
 import { useWorkspace } from './workspaceContext'
 
 /**
@@ -40,6 +44,18 @@ function useDraftIn() {
 }
 
 /**
+ * Has this computer's service keep what is open in a project as it closes, so the set can be opened again. Another
+ * machine's project is not kept, and neither is a set with nothing to resume, so a close never forgets the set kept
+ * before. The close goes on whatever the answer: a failure is one toast, and a service from before saved sets is not asked.
+ */
+function saveOpenSet(project: OpenedProject, name: string, sessions: readonly SessionView[]): void {
+  if (project.machineName !== null) return
+  const kept = openSetOf(sessions.filter((session) => session.machine === LOCAL_MACHINE), Date.now())
+  if (kept.length === 0) return
+  saveWorkspace(project.folder, kept).catch((error: unknown) => { toast.failed(`Could not save the sessions open in ${name}`, error) })
+}
+
+/**
  * What a project heading's menus do in this window, for `Sidebar`'s `projectActions`. `afterPick` runs first, so the
  * overlay sidebar of a narrow window gets out of the way.
  */
@@ -69,6 +85,7 @@ export function useProjectActions(): (afterPick: () => void) => ProjectActions {
           close(project)
           return
         }
+        saveOpenSet(project, name, listed)
         endSessions(listed.map((session) => session.id))
         closeOnceEmpty(project)
       })

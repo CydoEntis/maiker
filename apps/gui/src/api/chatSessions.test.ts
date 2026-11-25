@@ -60,6 +60,13 @@ describe('chat sessions', () => {
     expect(chat?.chat).not.toHaveProperty('readOnly')
   })
 
+  it('keeps the agent conversation a chat resumes by, and none from an older daemon', () => {
+    const [chat] = conversationsFromSnapshot(snapshot([summary({ session: 'claude-44' })]))
+    expect(chat?.chat?.session).toBe('claude-44')
+    const [older] = conversationsFromSnapshot(snapshot([summary()]))
+    expect(older?.chat).not.toHaveProperty('session')
+  })
+
   it('does not mistake the chat that follows a terminal pane for a chat session', () => {
     const term = { id: 7, agent: 'claude', process: 'claude', status: 'Working', cwd: '/srv', summary: '', name: 'n', label: '', pinned: false, archived: false, branch: null, root: null, conversation_id: null, popup: false, remote: null }
     const followed = summary({ id: 9, execution: 'Native', native_term: 7 })
