@@ -156,7 +156,27 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
-  it('opens a project first from New session (Ctrl+Shift+T) when none is open: no draft page, and nothing starts', async () => {
+  it('opens the draft in the start folder as No project from New session (Ctrl+Shift+T) when no project is open, and starts nothing', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await screen.findByRole('heading', { name: 'Nothing running' })
+
+    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+
+    const draft = await screen.findByRole('region', { name: 'New session' })
+    expect(await within(draft).findByRole('button', { name: 'Project: No project' })).toBeInTheDocument()
+    expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
+    expect(daemon.startChatSession).not.toHaveBeenCalled()
+  })
+
+  it('opens a project first from New session (Ctrl+Shift+T) while projects are open but none is in front, as before', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    window.localStorage.setItem('maiker.gui.opened-projects.v1', JSON.stringify({ 'this computer': [`${HOME}/shop`] }))
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'Nothing running' })
@@ -164,9 +184,6 @@ describe('desktop terminal multiplexer', () => {
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
     expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
-    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
-    expect(daemon.startAcpChat).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
   })
 

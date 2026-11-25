@@ -95,7 +95,7 @@ export function SidebarRail(props: SidebarProps) {
         {going.map((group) => (
           <div key={group.key} className="mx-rail-group" role="list" aria-label={group.name}>
             {/* The name is on the badge alone: on the group it would also show over each mark, against its hover card. */}
-            <span className="mx-rail-badge" title={group.name}><ProjectBadge name={group.name} /></span>
+            <span className="mx-rail-badge" title={group.name}><ProjectBadge name={group.name} loose={group.loose} /></span>
             {group.rows.map(item)}
           </div>
         ))}

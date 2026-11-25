@@ -719,6 +719,40 @@ describe('the empty draft\'s question and where it runs', () => {
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
     await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/home/me', message: 'go' })) })
   })
+
+  it('opens in the start folder as No project in the agent\'s usual mode while Bypass Permissions is on, and the shield can still pick it', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    render(<NewChatPage machine={0} machines={HERE} projects={[]} defaultAgent="claude" bypassOff={[]} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} seed={{ folder: '/home/me', message: '' }} looseFolder="/home/me" />, { container: windowRoot() })
+    expect(screen.getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /No project/ })).toBeInTheDocument()
+    const mode = screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })
+    expect(mode).not.toHaveClass('is-danger')
+    await userEvent.click(mode)
+    await userEvent.click(await screen.findByRole('menuitemradio', { name: /^Bypass permissions/ }))
+    expect(screen.getByRole('button', { name: 'Permission mode: Bypass permissions. Pick another.' })).toHaveClass('is-danger')
+    await userEvent.type(box(), 'go')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/home/me', mode: 'bypassPermissions', bypass: true })) })
+  })
+
+  it('says why a start folder outside git has no branch or worktree', async () => {
+    host.branches = null
+    host.sync = null
+    render(<NewChatPage machine={0} machines={HERE} projects={[]} defaultAgent="claude" bypassOff={ALL_OFF} pickFolder={null} onStart={() => Promise.resolve()} onOtherMachine={() => undefined} seed={{ folder: '/home/me', message: '' }} looseFolder="/home/me" />, { container: windowRoot() })
+    const chip = await screen.findByRole('button', { name: 'Branch unavailable: no git repo' })
+    expect(chip).toHaveAttribute('title', 'The start folder, /home/me, is not a git repository, so this session has no branch or worktree. Pick a project to work on a branch.')
+  })
+
+  it('leaves Bypass permissions for the usual mode on moving from a project to the start folder', async () => {
+    const onStart = vi.fn<(request: NewChatRequest) => Promise<void>>().mockResolvedValue(undefined)
+    render(<NewChatPage machine={0} machines={HERE} projects={PROJECTS} defaultAgent="claude" bypassOff={[]} pickFolder={null} onStart={onStart} onOtherMachine={() => undefined} looseFolder="/home/me" />, { container: windowRoot() })
+    expect(screen.getByRole('button', { name: 'Permission mode: Bypass permissions. Pick another.' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'or start without a project' }))
+    expect(screen.getByRole('button', { name: 'Permission mode: Ask before edits. Pick another.' })).toBeInTheDocument()
+    await userEvent.type(box(), 'go')
+    await userEvent.keyboard('{Control>}{Enter}{/Control}')
+    await waitFor(() => { expect(onStart).toHaveBeenCalledWith(expect.objectContaining({ folder: '/home/me', mode: 'default', bypass: false })) })
+  })
 })
 
 describe('starting from a checkout: sync with origin, branch names and worktree failures', () => {

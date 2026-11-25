@@ -31,6 +31,18 @@ describe('the projects an agent can start in', () => {
     const down = startPlaces([LOCAL_HEAD, { ...DEVBOX, down: true }], machinesOf(SHOP, API))
     expect(down.map((place) => place.down)).toEqual([false, true])
   })
+
+  it('ends with No project, this computer\'s start folder, which is the one picked with no project open', () => {
+    const withLoose = startPlaces(HEADS, machinesOf(SHOP, API), '/home/me')
+    expect(withLoose.map((place) => [place.label, place.loose])).toEqual([['shop', false], ['api · devbox', false], ['No project', true]])
+    const alone = startPlaces(HEADS, [], '/home/me')
+    expect(pickedPlace(alone, null, null, [])).toMatchObject({ label: 'No project', machine: LOCAL_HEAD.machine, project: { machineName: null, folder: '/home/me' } })
+  })
+
+  it('has no No project while the start folder is not known, or is an opened project', () => {
+    expect(startPlaces(HEADS, [], '')).toEqual([])
+    expect(startPlaces(HEADS, machinesOf({ machineName: null, folder: '/home/me' }), '/home/me/').map((place) => place.loose)).toEqual([false])
+  })
 })
 
 describe('the project that is picked', () => {

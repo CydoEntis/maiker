@@ -10,9 +10,9 @@ export function projectOfSession(machines: readonly MachineProjects[], sessionId
 }
 
 /**
- * The project a new session starts in on the machine named `machineName` (null: this computer). A session always starts
- * in an opened project: the one of the session in front, else the one last opened or picked, each only when it is on
- * that machine. Null when neither is, so the caller opens a project first.
+ * The project a new session starts in on the machine named `machineName` (null: this computer): the one of the session
+ * in front, else the one last opened or picked, each only when it is on that machine. The No project group counts as the
+ * project of a session in it. Null when neither is (`draftFolderOn` says what happens then).
  */
 export function startProjectOn(machineName: string | null, machines: readonly MachineProjects[], focusedId: string | null, selected: OpenedProject | null): OpenedProject | null {
   const inFront = focusedId === null ? null : projectOfSession(machines, focusedId)?.project ?? null
@@ -22,4 +22,15 @@ export function startProjectOn(machineName: string | null, machines: readonly Ma
     if (listed !== undefined) return listed.project
   }
   return null
+}
+
+/**
+ * The folder New session opens the draft in: the project's (`startProjectOn`), else on this computer with no project
+ * open there (`localProjectsOpen` false) the start folder (`startFolder`, null or '' while it is not known), where the
+ * draft starts with no project. Null otherwise, so the caller opens a project first: on another machine with no project
+ * in front, on this computer when projects are open but none is in front, and while the start folder is not known.
+ */
+export function draftFolderOn(local: boolean, project: OpenedProject | null, startFolder: string | null, localProjectsOpen: boolean): string | null {
+  if (project !== null) return project.folder
+  return local && !localProjectsOpen && startFolder !== null && startFolder !== '' ? startFolder : null
 }
