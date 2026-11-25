@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { tracksEqual, type SessionTrack } from './tracking'
 
-const track: SessionTrack = { status: 'working', repoRoot: '/repo', changedAt: 10, workingSince: 10, unread: false, movedAt: null }
+const track: SessionTrack = { status: 'working', repoRoot: '/repo', changedAt: 10, workingSince: 10, unread: false, movedAt: null, seenAt: 0 }
 
 describe('tracks equality', () => {
   it('reads two maps with the same entries as the same, so an unchanged list does not re-render', () => {

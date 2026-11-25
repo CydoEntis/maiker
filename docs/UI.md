@@ -413,6 +413,10 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    a folder in git opens its repository's main checkout, any other opens itself, and one the machine cannot read is refused
    with its reason (in the dialog, or a toast over the picker, which stays) and nothing is added. A folder that is already
    open, in any spelling, selects that project and adds nothing.
+   A session whose repository changes (a shell or an agent that went to another checkout) moves to that project, and a
+   note says so ("Session moved to <folder>", or "Session left <folder>"; `trackSessions` in `model/tracking.ts`). A
+   session's first 30 s after the window first lists it are not a move (`START_SETTLE_MS`): a new session is listed before
+   its checkout is read, and one started in its own worktree settles under its main checkout, and neither went anywhere.
    A project heading's menus (`components/projectMenu.tsx`) are its `+` menu and its right-click menu. The `+` menu
    (`projectPlusMenu`) says where it acts, then lists the app's chat agents under **New session**: each opens the
    new-chat draft on the project's machine with its folder and that agent picked (`NewChatSeed.agent`), numbered from 1
