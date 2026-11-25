@@ -1,16 +1,19 @@
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import type { ClosedSession } from '@/api/daemon'
 import type { SavedRead, StandingRead, WorkspaceRow, WorktreeRow, WorktreesRead } from '../model/workspacePanel'
 import { WorkspacePanelDialog } from './WorkspacePanelDialog'
 
 const NOW = 2_000_000_000
 const HOUR = 3600
 const LOGIN: WorkspaceRow = { key: 'session:t1', name: 'Fix the login', agent: 'claude', branch: 'feat/login', at: NOW - HOUR, state: 'running', sessionId: 't1', conversation: null }
-const PARSER: WorkspaceRow = {
-  key: 'saved:codex:p1', name: 'Port the parser', agent: 'codex', branch: 'main', at: NOW - 3 * HOUR, state: 'closed',
-  saved: { agent: 'codex', session: 'p1', cwd: '/code/shop', branch: 'main', title: 'Port the parser', at: NOW - 3 * HOUR, worktree: null, repo: null },
+function closedRow(agent: string, session: string, title: string, branch: string, at: number): WorkspaceRow & { state: 'closed' } {
+  const saved: ClosedSession = { agent, session, cwd: '/code/shop', branch, title, at, folder_present: true, worktree: null, repo: null }
+  return { key: `saved:${agent}:${session}`, name: title, agent, branch, at, state: 'closed', saved }
 }
+const PARSER = closedRow('codex', 'p1', 'Port the parser', 'main', NOW - 3 * HOUR)
+const DOCS = closedRow('claude', 'd1', 'Write the docs', 'docs', NOW - 5 * HOUR)
 const LISTED: SavedRead = { kind: 'listed', list: [] }
 const NO_GIT: WorktreesRead = { kind: 'not-a-repo' }
 
@@ -23,11 +26,17 @@ const DIRTY = linked('dark-mode', { kind: 'read', standing: { ...STANDING, dirty
 const QUIET = linked('old-fix', { kind: 'read', standing: { ...STANDING, inactive_days: 16 } })
 const WORKTREES: WorktreesRead = { kind: 'listed', rows: [MAIN, DIRTY, QUIET] }
 
-function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), worktrees: WorktreesRead = NO_GIT) {
+function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), worktrees: WorktreesRead = NO_GIT, opening = false) {
   const onCancel = vi.fn()
   const onRetryWorktrees = vi.fn()
-  render(<div className="mx-app"><WorkspacePanelDialog name="shop" rows={rows} saved={saved} worktrees={worktrees} now={NOW} onRetry={onRetry} onRetryWorktrees={onRetryWorktrees} onCancel={onCancel} /></div>)
-  return { onCancel, onRetry, onRetryWorktrees }
+  const onOpen = vi.fn()
+  const onClose = vi.fn()
+  render(
+    <div className="mx-app">
+      <WorkspacePanelDialog name="shop" rows={rows} saved={saved} worktrees={worktrees} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRetry={onRetry} onRetryWorktrees={onRetryWorktrees} onCancel={onCancel} />
+    </div>,
+  )
+  return { onCancel, onRetry, onRetryWorktrees, onOpen, onClose }
 }
 
 const ticks = () => screen.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)
@@ -90,6 +99,67 @@ describe('a project’s workspace panel', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Could not read the sessions open when this project was last closed.')
     await user.click(screen.getByRole('button', { name: 'Try again' }))
     expect(onRetry).toHaveBeenCalledTimes(1)
+  })
+
+  it('opens only the ticked closed sessions, and is off while none is ticked', async () => {
+    const user = userEvent.setup()
+    const { onOpen } = show([LOGIN, PARSER, DOCS])
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Fix the login/ }))
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
+
+    await user.click(screen.getByRole('checkbox', { name: /Port the parser/ }))
+    await user.click(screen.getByRole('button', { name: 'Open 1' }))
+    expect(onOpen).toHaveBeenCalledWith([PARSER.saved])
+    expect(ticks()).toEqual([true, false, false])
+  })
+
+  it('opens every closed session with Open everything, nothing ticked', async () => {
+    const user = userEvent.setup()
+    const { onOpen } = show([LOGIN, PARSER, DOCS])
+    await user.click(screen.getByRole('button', { name: 'Open everything' }))
+    expect(onOpen).toHaveBeenCalledWith([PARSER.saved, DOCS.saved])
+  })
+
+  it('keeps both Opens off while a session is starting', async () => {
+    const user = userEvent.setup()
+    show([LOGIN, PARSER], LISTED, vi.fn(), NO_GIT, true)
+    await user.click(screen.getByRole('checkbox', { name: /Port the parser/ }))
+    expect(screen.getByRole('button', { name: 'Opening…' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Open everything' })).toBeDisabled()
+  })
+
+  it('has nothing for Open everything when every session runs', () => {
+    show([LOGIN])
+    expect(screen.getByRole('button', { name: 'Open everything' })).toBeDisabled()
+  })
+
+  it('closes only the ticked sessions in the window, and is off while none is ticked', async () => {
+    const user = userEvent.setup()
+    const ended: WorkspaceRow = { key: 'session:t2', name: 'Old build', agent: 'codex', branch: null, at: null, state: 'ended', sessionId: 't2', conversation: null }
+    const { onClose } = show([LOGIN, ended, PARSER])
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Port the parser/ }))
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Close 2 ticked sessions' }))
+    expect(onClose).toHaveBeenCalledWith(['t1', 't2'])
+  })
+
+  it('leaves ticked worktrees to Remove worktree: Open and Close stay off, and an Open keeps their ticks', async () => {
+    const user = userEvent.setup()
+    const { onOpen, onClose } = show([LOGIN, PARSER], LISTED, vi.fn(), WORKTREES)
+    await user.click(screen.getByRole('checkbox', { name: /dark-mode/ }))
+    expect(screen.getByRole('button', { name: 'Open' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Close ticked sessions' })).toBeDisabled()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Close 1 ticked session' }))
+    expect(onClose).toHaveBeenCalledWith(['t1'])
+    await user.click(screen.getByRole('button', { name: 'Open 1' }))
+    expect(onOpen).toHaveBeenCalledWith([PARSER.saved])
+    expect(screen.getByRole('checkbox', { name: /dark-mode/ })).toBeChecked()
   })
 
   it('lists each worktree with its branch, uncommitted changes, whether it is merged and how long it has been quiet', () => {

@@ -1,10 +1,14 @@
-import { act, renderHook } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
-import type { ClosedSession } from '@/api/daemon'
+import { act, renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { reopenClosedSession, type ClosedSession } from '@/api/daemon'
 import { toast } from '@/lib/toast'
+import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import { useRecentSessions } from './useRecentSessions'
 
-vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: vi.fn(), info: vi.fn() } }))
+vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
+vi.mock('@/api/daemon', () => ({ reopenClosedSession: vi.fn(), closedSessions: vi.fn() }))
+
+beforeEach(() => { vi.clearAllMocks() })
 
 const parser: ClosedSession = { agent: 'claude', session: 'abc-123', cwd: '/dev/app', branch: null, title: 'Fix the parser', at: 1, folder_present: true, worktree: null, repo: null }
 
@@ -29,5 +33,60 @@ describe('reopening from Recent sessions', () => {
     expect(startNewChat).not.toHaveBeenCalled()
     expect(toast.info).toHaveBeenCalledWith('A session is already starting')
     expect(hook.result.current.recentOpen).toBe(true)
+  })
+})
+
+describe('opening a project’s saved sessions', () => {
+  type Start = (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>
+  const saved = (over: Partial<ClosedSession>): ClosedSession => ({ ...parser, ...over })
+  const removed = (over: Partial<ClosedSession> = {}) => saved({ folder_present: false, cwd: '/dev/app-wt', ...over })
+  const remakeable = { worktree: '/dev/app-wt', repo: '/dev/app', branch: 'feat/parser' }
+
+  function opener(starting = false, startNewChat = vi.fn<Start>(() => Promise.resolve())) {
+    const hook = renderHook(() => useRecentSessions(startNewChat, starting))
+    return { hook, startNewChat }
+  }
+
+  it('starts them in the background one after another, and counts the one that failed', async () => {
+    let finishFirst: () => void = () => undefined
+    const startNewChat = vi.fn<Start>()
+      .mockImplementationOnce(() => new Promise((resolve) => { finishFirst = resolve }))
+      .mockImplementationOnce(() => Promise.reject(new Error('it is busy')))
+      .mockImplementationOnce(() => Promise.resolve())
+    const { hook } = opener(false, startNewChat)
+    act(() => { hook.result.current.openSaved([parser, saved({ session: 'def-456' }), saved({ session: 'ghi-789' })], 'shop') })
+    expect(hook.result.current.opening).toBe(true)
+    expect(startNewChat).toHaveBeenCalledTimes(1)
+    expect(startNewChat).toHaveBeenCalledWith(expect.objectContaining({ folder: '/dev/app', resume: 'abc-123' }), { background: true })
+
+    act(() => { finishFirst() })
+    await waitFor(() => { expect(hook.result.current.opening).toBe(false) })
+    expect(startNewChat).toHaveBeenCalledTimes(3)
+    expect(toast.failed).toHaveBeenCalledWith('Opened 2, but 1 could not start', expect.objectContaining({ message: 'it is busy' }), { context: 'shop' })
+  })
+
+  it('has the service make a removed worktree again, and skips one it cannot make, saying why', async () => {
+    vi.mocked(reopenClosedSession).mockResolvedValue(true)
+    const { hook, startNewChat } = opener()
+    act(() => { hook.result.current.openSaved([removed(remakeable), removed()], 'shop') })
+    await waitFor(() => { expect(toast.warning).toHaveBeenCalledWith('Opened 1 session, skipped 1', { context: 'shop', description: 'Skipped “Fix the parser”: folder removed; cannot be made again.' }) })
+    expect(reopenClosedSession).toHaveBeenCalledWith('claude', 'abc-123')
+    expect(startNewChat).not.toHaveBeenCalled()
+  })
+
+  it('skips a chat saved under its ACP agent’s own name, without asking the service', async () => {
+    const { hook, startNewChat } = opener()
+    act(() => { hook.result.current.openSaved([saved({ agent: 'opencode' }), removed({ agent: 'opencode', ...remakeable })], 'shop') })
+    await waitFor(() => { expect(toast.warning).toHaveBeenCalledWith('Could not open 2 sessions', expect.objectContaining({ description: expect.stringContaining('cannot be reopened here') as unknown })) })
+    expect(reopenClosedSession).not.toHaveBeenCalled()
+    expect(startNewChat).not.toHaveBeenCalled()
+  })
+
+  it('starts nothing, and says so, while another session is starting', () => {
+    const { hook, startNewChat } = opener(true)
+    act(() => { hook.result.current.openSaved([parser], 'shop') })
+    expect(startNewChat).not.toHaveBeenCalled()
+    expect(hook.result.current.opening).toBe(false)
+    expect(toast.info).toHaveBeenCalledWith('A session is already starting')
   })
 })

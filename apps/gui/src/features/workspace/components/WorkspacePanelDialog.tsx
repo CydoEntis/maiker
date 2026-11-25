@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
-import { rowWhen, rowWhere, tickableWorktrees, worktreeWhen, worktreeWhere, type SavedRead, type WorkspaceRow, type WorktreeRow, type WorktreesRead } from '../model/workspacePanel'
+import type { ClosedSession } from '@/api/daemon'
+import { closeTargets, openTargets, rowWhen, rowWhere, tickableWorktrees, worktreeWhen, worktreeWhere, type SavedRead, type WorkspaceRow, type WorktreeRow, type WorktreesRead } from '../model/workspacePanel'
 import { AppIcon, Icon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -18,6 +19,12 @@ type Props = {
   worktrees: WorktreesRead
   /** When the panel opened (unix seconds): each row's age counts from it. */
   now: number
+  /** An Open is under way, or another session is starting: Open and Open everything wait for it. */
+  opening: boolean
+  /** Opens these saved sessions again, one after another (`useRecentSessions().openSaved`). */
+  onOpen: (saved: readonly ClosedSession[]) => void
+  /** Ends these sessions of the window, asking first as Close project does (`useClosing().closeSessions`). */
+  onClose: (sessionIds: readonly string[]) => void
   onRetry: () => void
   onRetryWorktrees: () => void
   onCancel: () => void
@@ -65,6 +72,25 @@ function SavedLine({ read, onRetry }: { read: SavedRead; onRetry: () => void }) 
     )
   }
   return null
+}
+
+/** The Open button's words: how many it opens, so a person sees which of the ticked rows it starts before pressing it. */
+function openLabel(count: number, opening: boolean): string {
+  if (opening) return 'Opening…'
+  return count === 0 ? 'Open' : `Open ${String(count)}`
+}
+
+/** The Close button's words, counting what it ends, as Open's do. */
+function closeLabel(count: number): string {
+  return count === 0 ? 'Close' : `Close ${String(count)}`
+}
+
+/**
+ * The Close button's accessible name: its words and what they close, so it is not a second "Close" beside the panel's
+ * own × (which closes the panel), and still starts with what it shows.
+ */
+function closeName(count: number): string {
+  return `${closeLabel(count)} ticked ${count === 1 ? 'session' : 'sessions'}`
 }
 
 /** A worktree's row: a tick for a linked one, none for the main checkout, which is the project and never removed. */
@@ -126,7 +152,7 @@ function WorktreesSection({ name, read, ticked, onToggle, onRetry }: WorktreesPr
   )
 }
 
-function WorkspaceBody({ name, rows, saved, worktrees, now, onRetry, onRetryWorktrees, onCancel }: Props) {
+function WorkspaceBody({ name, rows, saved, worktrees, now, opening, onOpen, onClose, onRetry, onRetryWorktrees, onCancel }: Props) {
   // Keys of the ticked rows. A row that leaves the list (a session that ends and is closed) simply stops counting.
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set())
   const toggle = (key: string) => {
@@ -140,6 +166,19 @@ function WorkspaceBody({ name, rows, saved, worktrees, now, onRetry, onRetryWork
   const tickable = [...rows.map((row) => row.key), ...tickableWorktrees(worktrees).map((row) => row.key)]
   const tickedCount = tickable.filter((key) => ticked.has(key)).length
   const empty = rows.length === 0 && saved.kind === 'listed'
+  // The ticked session rows. Open and Close act on these only: a ticked worktree is Remove worktree's.
+  const chosen = rows.filter((row) => ticked.has(row.key))
+  // Open starts only closed rows: a running one ticked beside them is left as it is.
+  const toOpen = openTargets(chosen)
+  const closedRows = openTargets(rows)
+  // Close ends only sessions in the window: a closed row ticked beside them has nothing to end.
+  const toClose = closeTargets(chosen)
+  // Either Open sends every ticked closed row, so those are unticked and the ticks left are the ones nothing was done to.
+  const open = (list: readonly ClosedSession[]) => {
+    onOpen(list)
+    const closedKeys = new Set(rows.filter((row) => row.state === 'closed').map((row) => row.key))
+    setTicked((current) => new Set([...current].filter((key) => !closedKeys.has(key))))
+  }
   return (
     <>
       <ModalBody>
@@ -178,6 +217,9 @@ function WorkspaceBody({ name, rows, saved, worktrees, now, onRetry, onRetryWork
       </ModalBody>
       <ModalFoot left={tickable.length > 0 ? <span className="mx-workspace-count" role="status">{`${String(tickedCount)} of ${String(tickable.length)} ticked`}</span> : undefined}>
         <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Done</Button>
+        <Button type="button" variant="danger" size="lg" disabled={toClose.length === 0} aria-label={closeName(toClose.length)} onClick={() => { onClose(toClose) }}>{closeLabel(toClose.length)}</Button>
+        <Button type="button" variant="ghost" size="lg" disabled={closedRows.length === 0 || opening} onClick={() => { open(closedRows) }}>Open everything</Button>
+        <Button type="button" variant="primary" size="lg" disabled={toOpen.length === 0 || opening} onClick={() => { open(toOpen) }}>{openLabel(toOpen.length, opening)}</Button>
       </ModalFoot>
     </>
   )

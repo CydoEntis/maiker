@@ -760,7 +760,8 @@ async fn save_workspace(
 }
 
 /// The sessions this computer's daemon kept as open in `project` when it was last parked or closed, for the project's
-/// Workspace panel; null when the service running is older. This computer's daemon only, like `closed_sessions`.
+/// Workspace panel, each saying whether its folder is still there; null when the service running is older. This
+/// computer's daemon only, like `closed_sessions`.
 #[tauri::command]
 async fn saved_workspace(project: PathBuf) -> Result<serde_json::Value, String> {
     maitty_desktop_client::workspace(project)

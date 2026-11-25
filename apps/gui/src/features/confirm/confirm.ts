@@ -25,8 +25,11 @@ export type ClosingSession = {
   worktree: string | null
 }
 
-/** What a close asks about: one session, or how many when several close together. */
-export type ClosingSessions = ClosingSession | { count: number }
+/**
+ * What a close asks about: one session, how many when several close together, or two or more by the names their rows
+ * show (a project's Workspace panel, which names them as Close project does).
+ */
+export type ClosingSessions = ClosingSession | { count: number } | { names: readonly string[] }
 
 /** A project about to be closed: what its heading calls it, and the sessions still running in it, as their rows name them. */
 export type ClosingProject = { name: string; running: readonly string[] }
@@ -77,6 +80,9 @@ const VIEW_NAME: Readonly<Record<View, string>> = { chat: 'Chat', terminal: 'Ter
 function closingSessionCopy(closing: ClosingSessions): ConfirmCopy {
   if ('count' in closing) {
     return { title: `Close ${String(closing.count)} sessions?`, body: 'Closing stops any agent that is still working. The sessions leave the sidebar.', note: 'Their branches and any changes stay on disk.', confirmLabel: 'Close sessions', danger: true }
+  }
+  if ('names' in closing) {
+    return { title: `Close ${String(closing.names.length)} sessions?`, body: `${listed(closing.names)} stop, and they leave the sidebar.`, note: 'Their branches and any changes stay on disk.', confirmLabel: 'Close sessions', danger: true }
   }
   const interrupts = closing.state === 'working'
     ? `${closing.agent} is still working. Closing stops it mid-turn. `
