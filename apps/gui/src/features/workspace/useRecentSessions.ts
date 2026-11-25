@@ -5,15 +5,17 @@ import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPa
 import type { SessionView } from './model/session'
 import { importStart } from './model/importChats'
 import { endedResume, reopenRequest, savedStart } from './model/recentSessions'
+import type { WorkspaceFor } from './model/workspacePanel'
 
 /**
- * The Recent sessions list, the Resume a saved chat dialog and Bring in your chats: whether each is open, and starting a
- * pick from any of them through the new chat's resume start.
+ * The Recent sessions list, the Resume a saved chat dialog, Bring in your chats and a project's Workspace panel: whether
+ * each is open, and starting a pick from any of them through the new chat's resume start.
  */
 export function useRecentSessions(startNewChat: (request: NewChatRequest, options?: NewChatStartOptions) => Promise<void>, starting: boolean) {
   const [recentOpen, setRecentOpen] = useState(false)
   const [savedOpen, setSavedOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [workspaceFor, setWorkspaceFor] = useState<WorkspaceFor | null>(null)
   const begin = useCallback((request: NewChatRequest, close: () => void) => {
     // A start already under way would drop this one without a word, so the list stays and says why.
     if (starting) {
@@ -60,5 +62,5 @@ export function useRecentSessions(startNewChat: (request: NewChatRequest, option
     if (resume.kind === 'refused') toast.info(resume.why)
     else begin(resume.request, () => undefined)
   }, [begin])
-  return { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, importOpen, setImportOpen, importChats }
+  return { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, importOpen, setImportOpen, importChats, workspaceFor, setWorkspaceFor }
 }

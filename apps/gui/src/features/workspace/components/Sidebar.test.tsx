@@ -35,7 +35,7 @@ function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened:
   const grouping = groupByProject(sessions, opened, startFolder)
   const projectActions = {
     onNewSession: vi.fn(), onNewWorktree: vi.fn(), onNewTerminal: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onShowFiles: vi.fn(),
-    onClose: vi.fn(),
+    onWorkspace: vi.fn(), onClose: vi.fn(),
   } satisfies ProjectActions
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, opened: grouping.opened, sort: 'recent', onSort: none, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
@@ -283,7 +283,11 @@ describe('a project heading', () => {
     const { projectActions } = show([onDevbox(1, 'There', { status: 'working', repo: 'api', branch: 'main' })], { machines: [LOCAL_HEAD, DEVBOX] })
     fireEvent.contextMenu(heading('api'))
     await screen.findByRole('menu', { name: 'api' })
-    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Close project…'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Workspace…', 'Close project…'])
+    // The saved set is this computer's daemon's, so another machine's project says why it has no Workspace yet.
+    const workspace = screen.getByRole('menuitem', { name: 'Workspace…' })
+    expect(workspace).toHaveAttribute('aria-disabled', 'true')
+    expect(workspace).toHaveAttribute('title', 'Workspace is local-only in v1: this project is on devbox, not on this computer.')
     await user.click(screen.getByRole('menuitem', { name: /New session/ }))
     expect(projectActions.onNewSession).toHaveBeenLastCalledWith(4, API)
     fireEvent.contextMenu(heading('api'))
@@ -310,6 +314,17 @@ describe('a project heading', () => {
     await user.click(screen.getByRole('button', { name: 'New session or worktree in shop' }))
     await screen.findByRole('menu', { name: 'New in shop' })
     expect(menuItems()).toEqual(['Claude', 'Codex', 'Gemini', 'Terminal'])
+  })
+
+  it('opens a project’s Workspace panel from its menu, whether or not a session runs in it', async () => {
+    const user = userEvent.setup()
+    const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'notes, no sessions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Workspace…' }))
+    expect(projectActions.onWorkspace).toHaveBeenCalledWith(NOTES, 'notes')
+    fireEvent.contextMenu(heading('shop'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Workspace…' }))
+    expect(projectActions.onWorkspace).toHaveBeenLastCalledWith(SHOP, 'shop')
   })
 
   it('closes a project from its menu, whether or not a session runs in it', async () => {

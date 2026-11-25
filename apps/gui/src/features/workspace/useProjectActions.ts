@@ -60,7 +60,7 @@ function saveOpenSet(project: OpenedProject, name: string, sessions: readonly Se
  * overlay sidebar of a narrow window gets out of the way.
  */
 export function useProjectActions(): (afterPick: () => void) => ProjectActions {
-  const { setProjectWorktreeFrom, setOpenWorktreeFor, openedProjects, chatView, newTerminal, confirm, copyText, showFilesOf, endSessions } = useWorkspace()
+  const { setProjectWorktreeFrom, setOpenWorktreeFor, setWorkspaceFor, openedProjects, chatView, newTerminal, confirm, copyText, showFilesOf, endSessions } = useWorkspace()
   const draftIn = useDraftIn()
   const { close, closeOnceEmpty, machines } = openedProjects
   return useCallback((afterPick: () => void): ProjectActions => ({
@@ -74,6 +74,7 @@ export function useProjectActions(): (afterPick: () => void) => ProjectActions {
     onOpenWorktree: (machine, project, name) => { afterPick(); setOpenWorktreeFor({ machine, project, name }) },
     onCopyPath: (project) => { copyText(project.folder, 'Path') },
     onShowFiles: (sessionId) => { afterPick(); showFilesOf(sessionId) },
+    onWorkspace: (project, name) => { afterPick(); setWorkspaceFor({ project, name }) },
     // One question for the whole project: its running sessions are named in it and stop with it. Ended ones close too,
     // since a listed session would open the project again.
     onClose: (project, name) => {
@@ -89,7 +90,7 @@ export function useProjectActions(): (afterPick: () => void) => ProjectActions {
         closeOnceEmpty(project)
       })
     },
-  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, close, closeOnceEmpty, machines, endSessions, confirm, chatView, newTerminal, copyText, showFilesOf])
+  }), [draftIn, setProjectWorktreeFrom, setOpenWorktreeFor, setWorkspaceFor, close, closeOnceEmpty, machines, endSessions, confirm, chatView, newTerminal, copyText, showFilesOf])
 }
 
 /**

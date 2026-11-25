@@ -1,8 +1,12 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, renderHook, screen, waitFor, within } from '@testing-library/react'
 import { invoke, isTauri } from '@tauri-apps/api/core'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SearchHit } from '@/features/find/api'
+import { readSettingsPreferences } from '@/features/settings/preferences'
+import { EMPTY_LAYOUT } from '../model/layout'
 import type { PaletteItem } from '../model/palette'
+import type { WorkspaceFor } from '../model/workspacePanel'
+import { usePaletteItems } from '../usePaletteItems'
 import { CommandPalette } from './CommandPalette'
 
 vi.mock('@tauri-apps/api/core', () => ({ invoke: vi.fn(), isTauri: vi.fn() }))
@@ -96,5 +100,37 @@ describe('Command palette output search', () => {
     await waitFor(() => { expect(invoke).toHaveBeenCalled() })
     expect(options()).toEqual(['Build the docs'])
     expect(screen.queryByRole('alert')).toBeNull()
+  })
+})
+
+/** The window's palette items with nothing open and no session, and `workspaceTarget` as the project Workspace… opens. */
+function windowItems(workspaceTarget: WorkspaceFor | null, setWorkspaceFor: (target: WorkspaceFor) => void): PaletteItem[] {
+  const none = vi.fn()
+  const { result } = renderHook(() => usePaletteItems({
+    workspaceTarget, setWorkspaceFor, setGetFileId: none, paletteOpen: true, platform: 'linux', layout: EMPTY_LAYOUT, sessions: [], projectOf: new Map(),
+    showSessionById: none, home: '/home/me', newSession: none, chatView: true, focusedMachineNumber: 0, newTerminal: none, focusedSession: undefined,
+    addAgentTerminal: none, runShortcut: none, heads: [], online: true, preferences: readSettingsPreferences(), setPreferences: none, split: none,
+    setSettingsSection: none, inspectRefusal: null, setInspectOpen: none, showPanelView: none, setFindOpen: none, setFocusMode: none,
+    setShortcutsOpen: none, setLayout: none, startAgent: none, setRecentOpen: none, openFolder: none, setSavedOpen: none, setImportOpen: none,
+    setOpenProject: none,
+  }))
+  return result.current.paletteItems
+}
+
+describe('Command palette Workspace…', () => {
+  const SHOP: WorkspaceFor = { project: { machineName: null, folder: '/home/me/shop' }, name: 'shop' }
+
+  it('opens the Workspace panel of the project in front', () => {
+    const setWorkspaceFor = vi.fn()
+    render(<CommandPalette items={windowItems(SHOP, setWorkspaceFor)} outputItem={() => null} onClose={() => undefined} />)
+    fireEvent.change(screen.getByLabelText('Search the palette'), { target: { value: 'Workspace' } })
+    const entry = screen.getByRole('option', { name: /Workspace…/ })
+    expect(entry).toHaveTextContent('shop')
+    fireEvent.click(entry)
+    expect(setWorkspaceFor).toHaveBeenCalledWith(SHOP)
+  })
+
+  it('is not offered while no project on this computer is in front or picked', () => {
+    expect(windowItems(null, vi.fn()).some((item) => item.id === 'workspace')).toBe(false)
   })
 })
