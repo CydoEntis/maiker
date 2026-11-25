@@ -1642,8 +1642,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   (`startDirectChat` in `useSessionStarts`); "Start a chat" on a shell's empty chat card does the same. No agent is
   started ahead of the first message, and nothing the agent draws on a terminal can stand in the chat's way. The chat is
   listed in the sidebar like any session (`isInSidebar` in `useSessionList`) and its pane is the chat, with no terminal
-  log. The page stays until the daemon has answered, then closes in the update that opens the chat; the first message is
-  an ordinary send, and a send that fails puts the words in the chat's box. A start that fails leaves the page open with
+  log. The page stays until the daemon has answered, then closes in the update that opens the chat, and the start ends
+  only once the chat's pane is in place (`placePanes`), so the page never shows its empty draft again during the glide. The
+  first message is an ordinary send; the chat draws it from its first frame as the page did (`holdSentFirstMessage`:
+  the bubble and the working line, never the reading skeleton) until its history has it, and a send that fails puts the
+  words in the chat's box. A start that fails leaves the page open with
   the daemon's reason.
   - **Claude Code and Codex** run through their own adapters (the host's `start_chat_session`). The first message carries
     the model and effort picked, and the mode picked becomes the daemon's posture (`chatPermissions` in
