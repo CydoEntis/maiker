@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, tildePath, toSessionView, truncatePrompt } from './session'
 import { markSeen, trackSessions } from './tracking'
-import { resolveStartFolder } from './startFolder'
+import { bypassFor, knownStartFolder, resolveStartFolder } from './startFolder'
 
 vi.mock('@/api/daemon', () => ({
   terminalOf: (id: string) => Number(id.slice(1)),
@@ -151,6 +151,21 @@ describe('start folder', () => {
     expect(resolveStartFolder('~/code', HOME)).toBe(`${HOME}/code`)
     expect(resolveStartFolder('~\\dev', 'C:\\Users\\casey')).toBe('C:\\Users\\casey\\dev')
     expect(resolveStartFolder('/srv', HOME)).toBe('/srv')
+  })
+
+  it('is not known while it names the home folder and that has not been read', () => {
+    expect(knownStartFolder('', '', false)).toBeNull()
+    expect(knownStartFolder('~/code', '', false)).toBeNull()
+    expect(knownStartFolder('/srv', '', false)).toBe('/srv')
+    expect(knownStartFolder('~/code', HOME, true)).toBe(`${HOME}/code`)
+  })
+
+  it('starts a session there in the agent\'s usual mode unless one was picked for it', () => {
+    expect(bypassFor(undefined, HOME, HOME)).toBe(false)
+    expect(bypassFor(undefined, 'c:/Users/Me/', 'C:\\Users\\me')).toBe(false)
+    expect(bypassFor(true, HOME, HOME)).toBe(true)
+    expect(bypassFor(undefined, `${HOME}/shop`, HOME)).toBeUndefined()
+    expect(bypassFor(undefined, HOME, '')).toBeUndefined()
   })
 
   it('strips markup an agent quotes and collapses whitespace in a quoted line', () => {

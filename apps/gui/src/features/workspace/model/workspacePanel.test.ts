@@ -69,4 +69,11 @@ describe('the project Workspace… opens from the palette', () => {
     expect(workspaceTargetOf(machines, null, SHOP)).toEqual({ project: SHOP, name: 'shop' })
     expect(workspaceTargetOf(machines, 't2', null)).toBeNull()
   })
+
+  it('is never the No project group, which is no project', () => {
+    const loose = session(1, 'Loose', { cwd: '/home/me', repo: null })
+    const { machines } = groupByProject([loose], [], '/home/me')
+    expect(machines[0]?.projects[0]?.loose).toBe(true)
+    expect(workspaceTargetOf(machines, 't1', null)).toBeNull()
+  })
 })

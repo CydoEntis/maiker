@@ -30,9 +30,9 @@ function session(pane: number, title: string, extra: Partial<Conversation> = {})
 const onDevbox = (pane: number, title: string, extra: Partial<Conversation> = {}) => session(pane, title, { machine: 4, machineName: 'devbox', cwd: API.folder, ...extra })
 const startedBy = (id: string): Partial<Conversation> => ({ details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, startedBy: id } })
 
-function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened: readonly OpenedProject[] = []) {
+function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened: readonly OpenedProject[] = [], startFolder = '') {
   const none = vi.fn()
-  const grouping = groupByProject(sessions, opened)
+  const grouping = groupByProject(sessions, opened, startFolder)
   const projectActions = {
     onNewSession: vi.fn(), onNewWorktree: vi.fn(), onNewTerminal: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onShowFiles: vi.fn(),
     onWorkspace: vi.fn(), onClose: vi.fn(),
@@ -336,6 +336,20 @@ describe('a project heading', () => {
     fireEvent.contextMenu(heading('shop'))
     await user.click(await screen.findByRole('menuitem', { name: 'Close project…' }))
     expect(projectActions.onClose).toHaveBeenLastCalledWith(SHOP, 'shop')
+  })
+
+  it('lists sessions in the start folder last under No project, with a plain mark and nothing to close', async () => {
+    const user = userEvent.setup()
+    const { projectActions } = show([session(1, 'Loose', { cwd: '/home/me' }), session(2, 'One')], {}, [SHOP], '/home/me')
+    expect(Array.from(document.querySelectorAll('.mx-sb-head-name'), (name) => name.textContent)).toEqual(['shop', 'No project'])
+    const loose = heading('No project')
+    expect(loose.querySelector('.mx-sb-badge.is-loose')).not.toBeNull()
+    expect(loose.querySelector('.mx-sb-badge')?.textContent).toBe('')
+    fireEvent.contextMenu(loose)
+    await screen.findByRole('menu', { name: 'No project' })
+    expect(menuItems()).toEqual(['New session', 'Copy path', 'Show files'])
+    await user.click(screen.getByRole('menuitem', { name: 'New session' }))
+    expect(projectActions.onNewSession).toHaveBeenCalledWith(0, { machineName: null, folder: '/home/me' })
   })
 })
 

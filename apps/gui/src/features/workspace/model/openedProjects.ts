@@ -6,7 +6,11 @@ import { inCreationOrder, type SessionView } from './session'
  */
 export type OpenedProject = { readonly machineName: string | null; readonly folder: string }
 
-export type ProjectSessions = { readonly project: OpenedProject; readonly sessions: readonly SessionView[] }
+/**
+ * A project with its sessions. `loose` marks the one group that is no project: this computer's sessions in the start
+ * folder (Settings), which belong to no opened project and are never saved as one (`groupByProject`).
+ */
+export type ProjectSessions = { readonly project: OpenedProject; readonly sessions: readonly SessionView[]; readonly loose?: true }
 
 export type MachineProjects = { readonly machineName: string | null; readonly projects: readonly ProjectSessions[] }
 
@@ -96,15 +100,32 @@ export function openProject(opened: readonly OpenedProject[], project: OpenedPro
 }
 
 /**
+ * Whether a session that fits no opened project sits in this computer's start folder (`looseFolder`, '' when it is not
+ * known): the folder that usually holds every repository, so opening it as a project would gather them all in one.
+ */
+function isLoose(session: SessionView, place: OpenedProject, looseFolder: string): boolean {
+  if (looseFolder === '' || session.machineName !== null) return false
+  return samePath(place.folder, looseFolder) || samePath(session.cwd, looseFolder)
+}
+
+/**
  * Every session under exactly one project of its machine, adding a project for a session that fits none. Sessions are
  * placed in creation order, so the first session in a new folder decides what is opened for it, whatever order the list
- * came in; each project's sessions are in creation order too. A project with no session stays listed.
+ * came in; each project's sessions are in creation order too. A project with no session stays listed. A session of this
+ * computer in the start folder (`looseFolder`) that no opened project holds opens nothing: it is listed in the one
+ * `loose` group, after this computer's projects, which is there only while it has sessions.
  */
-export function groupByProject(sessions: readonly SessionView[], saved: readonly OpenedProject[]): ProjectGrouping {
+export function groupByProject(sessions: readonly SessionView[], saved: readonly OpenedProject[], looseFolder = ''): ProjectGrouping {
   let opened = saved
   const placed = new Map<OpenedProject, SessionView[]>()
+  const loose: SessionView[] = []
   for (const session of inCreationOrder(sessions)) {
-    const added = openProject(opened, placeOf(session, opened))
+    const place = placeOf(session, opened)
+    if (!opened.includes(place) && isLoose(session, place, looseFolder)) {
+      loose.push(session)
+      continue
+    }
+    const added = openProject(opened, place)
     opened = added.opened
     const members = placed.get(added.project) ?? []
     members.push(session)
@@ -116,6 +137,11 @@ export function groupByProject(sessions: readonly SessionView[], saved: readonly
     const machine = machines.get(key) ?? { machineName: project.machineName, projects: [] }
     machine.projects.push({ project, sessions: placed.get(project) ?? [] })
     machines.set(key, machine)
+  }
+  if (loose.length > 0) {
+    const here = machines.get(null) ?? { machineName: null, projects: [] }
+    here.projects.push({ project: { machineName: null, folder: looseFolder }, sessions: loose, loose: true })
+    machines.set(null, here)
   }
   return { machines: [...machines.values()].sort(byMachine), opened }
 }

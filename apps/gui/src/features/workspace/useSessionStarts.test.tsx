@@ -52,7 +52,7 @@ function starts(watch: Watch = {}) {
   const props = {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
-    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'], openSessionsIn: openSessionsIn ?? 'terminal' }, setExpectedAgents: setter,
+    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'], openSessionsIn: openSessionsIn ?? 'terminal', startFolder: '' }, setExpectedAgents: setter,
     setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
@@ -79,6 +79,13 @@ describe('starting a new chat that resumes a saved conversation', () => {
     expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app', 'codex', ['--dangerously-bypass-approvals-and-sandbox', 'resume', ID, '-c', 'model_reasoning_effort=medium'])
     await starts({ bypassOff: ['codex'] }).startNewChat(request({ agent: 'claude' }))
     expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/dev/app', 'claude', ['--dangerously-skip-permissions', '--effort', 'medium'])
+  })
+
+  it('starts in the start folder with no Bypass flag when the start made no choice, even with the switch on', async () => {
+    await starts({ bypassOff: [] }).startNewChat(request({ folder: '/home/me' }))
+    expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/home/me', 'claude', ['--effort', 'medium'])
+    await starts({ bypassOff: [] }).startNewChat(request({ folder: '/home/me', bypass: true }))
+    expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/home/me', 'claude', ['--dangerously-skip-permissions', '--effort', 'medium'])
   })
 
   it('puts Codex\'s resume subcommand first, then the picked flags', async () => {

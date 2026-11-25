@@ -27,7 +27,7 @@ import { galleryParams } from './galleryParams'
 
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
- * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-loading, workspace-empty, workspace-older, workspace-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-loading, workspace-empty, workspace-older, workspace-failed); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -230,7 +230,8 @@ function Show({ what }: { what: string }): ReactNode {
   const long = what === 'new-long'
   if (what === 'new' || what.startsWith('new-')) {
     const start = what === 'new-fail' ? () => Promise.reject(new Error(FAILED_START)) : NOTHING
-    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} looseFolder="/home/you" /></div></ScriptedNew>
+    const seed = what === 'new-loose' ? { folder: '/home/you', message: '' } : null
+    return <ScriptedNew what={what}><div style={{ position: 'relative', height: '100vh' }}><NewChatPage machines={MACHINES} machine={0} projects={long ? LONG_PROJECTS : PROJECTS} defaultAgent="claude" pickFolder={() => NEVER()} onStart={start} onOtherMachine={() => undefined} onCancel={() => undefined} looseFolder="/home/you" seed={seed} /></div></ScriptedNew>
   }
   if (what === 'open' || what.startsWith('open-')) return <PaletteShown what={what} />
   if (what === 'add' || what.startsWith('add-')) {

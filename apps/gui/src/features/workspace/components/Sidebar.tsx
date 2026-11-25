@@ -202,6 +202,7 @@ function Expanded(props: SidebarProps) {
     canStart: props.canStart && !group.head.down,
     online: props.online,
     installed: props.installedAgents,
+    loose: group.loose,
   })
   /** A heading's parts that open a menu: its `+`, its right-click and its machine tag. Null where the window gave no actions. */
   const headOf = (group: ProjectGroup): HeadMenus => {
@@ -367,7 +368,7 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
   const state = group.mark === null || group.mark === 'idle' ? null : group.mark
   const name = (
     <>
-      <ProjectBadge name={group.name} />
+      <ProjectBadge name={group.name} loose={group.loose} />
       <span className="mx-sb-head-name">{group.name}</span>
     </>
   )

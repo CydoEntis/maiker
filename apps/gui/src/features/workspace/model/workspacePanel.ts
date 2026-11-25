@@ -87,13 +87,13 @@ export function rowWhen(row: WorkspaceRow, now: number): string {
 /**
  * The project the palette's Workspace… opens: this computer's project of the session in front, else the one last opened
  * or picked, as New session finds it (`startProjectOn`). Null when neither is on this computer, since the saved set is
- * this computer's daemon's.
+ * this computer's daemon's, and for the No project group, which is no project and has no workspace.
  */
 export function workspaceTargetOf(machines: readonly MachineProjects[], focusedId: string | null, selected: OpenedProject | null): WorkspaceFor | null {
   const project = startProjectOn(null, machines, focusedId, selected)
   if (project === null) return null
   const placed = machines.flatMap((machine) => machine.projects).find((entry) => sameProject(entry.project, project))
-  return placed === undefined ? null : { project: placed.project, name: projectName(placed) }
+  return placed === undefined || placed.loose === true ? null : { project: placed.project, name: projectName(placed) }
 }
 
 /** The sessions the window places in `project` (`useOpenedProjects().machines`); none once it is closed. */
