@@ -466,6 +466,13 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    (`loadFolderBranches`, since a remote pane's repository questions are not asked), shows no existing-worktrees section
    (removing and merging stay this computer's), and the host sends the request to that machine's daemon; a machine that
    is down or needs an update is refused by name (`<machine> is not connected`) under the field, and nothing is made.
+   **Create worktree** opens its session where the view lists it (`useNewWorktree`). In the Terminal view the pane's
+   daemon makes the worktree and opens its `[worktree] command`, else a shell, in it (`new_worktree_session`). The Chat
+   view lists no plain shell, so there the worktree is made as the draft's Own worktree makes one (`add_branch_worktree`
+   from the session's folder, so the current commit is that session's) and a chat with that session's agent, or the
+   default agent when it runs none with a chat, opens in it in the agent's usual mode (`worktreeChatRequest` in
+   `model/worktreeChat.ts`). A failure, such as a worktree folder that is already there, stays under the branch name
+   with the daemon's words, and the dialog stays open for another name.
    Opened from a project the dialog suggests no name from that session's task and offers no move of its chat
    (`useProjectActions`). The **No project** heading has the same menus with no **Close project…**: it is no opened
    project and leaves the sidebar with its last session. **Close project…** asks once, by the project's name (*close-project*), naming up to three of

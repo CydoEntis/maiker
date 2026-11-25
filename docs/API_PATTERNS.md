@@ -235,7 +235,9 @@ answer. It is this computer's daemon only. Structured runtimes may not ask for i
 
 A project heading's New worktree (`new_worktree_session(machine?, term, branch, base)`, `maitty_desktop_client::new_worktree_session`)
 asks the daemon that owns the pane: `Query::List` for the pane's workspace, then `Command::NewWorktree { ws, branch, base }`
-with no command, agent or split, so that daemon makes the worktree and opens a session in it. For a pane of another machine
+with no command, agent or split, so that daemon makes the worktree and opens a session in it. That is the Terminal
+view's New worktree; the Chat view's uses `add_branch_worktree` from the pane's folder and starts a chat there, since the
+shell `NewWorktree` opens is not listed in that view (UI › *desktop window sizes and sidebar order*). For a pane of another machine
 the host routes both over a request line (`Wire::new_worktree_daemon`) and takes only a `List`, cleaned like a snapshot,
 and `Ok` (`remote_chat::vet_new_worktree_reply`); a machine that takes no requests (down, needing an update, or turned
 away) is refused before anything is sent, as `<machine> is not connected`. The new session reaches the window in that

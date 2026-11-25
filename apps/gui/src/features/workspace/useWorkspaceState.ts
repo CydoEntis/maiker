@@ -57,6 +57,7 @@ import { useSessionSync } from './useSessionSync'
 import { useSessionActions } from './useSessionActions'
 import { useSessionReplies } from './useSessionReplies'
 import { useMoveToWorktree } from './useMoveToWorktree'
+import { useNewWorktree } from './useNewWorktree'
 import { useServiceReads } from './useServiceReads'
 import { useSessionList } from './useSessionList'
 import { usePaneFiles } from './usePaneFiles'
@@ -234,7 +235,8 @@ export function useWorkspaceState() {
 
   useEffect(() => { writeLayout(layout) }, [layout])
   const { refetchSessions, retryAt, tracks } = useSessionSync({ sessionsQuery, retryDelay, queryClient, setFailures, sessions, setLayout, machinesRef, visibleKey, flash })
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, runStart, startRemoteShell, newTerminal, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree } = useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef })
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, runStart, startRemoteShell, newTerminal, startChatHere, handoffSession, newChatWithSummary, startNewChat, warmNewChat, createWorktree: worktreeInTerminal } = useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLayout, flash, focusedSession, setNewChatOpen, online, starting, setStarting, setStartedFrom, sessionMap, preferences, setExpectedAgents, setSettingsSection, setNewChatMachine, setNewChatSeed, home, machinesRef })
+  const createWorktree = useNewWorktree({ chatView, inTerminal: worktreeInTerminal, startNewChat, defaultAgent: preferences.defaultAgent, setWorktreeFrom, flash })
   const { recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, resumeEnded, importOpen, setImportOpen, importChats, workspaceFor, setWorkspaceFor, openSaved, opening } = useRecentSessions(startNewChat, starting)
   const [openProject, setOpenProject] = useOpenProjectState()
   // This computer's start folder (Settings), where a session with no project runs; null until the home folder is read.
