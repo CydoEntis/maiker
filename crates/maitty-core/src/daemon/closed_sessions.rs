@@ -139,13 +139,13 @@ impl ClosedSessions {
         };
         *lock(&self.unsaved) = Some(bytes);
         let (unsaved, writing) = (self.unsaved.clone(), self.writing.clone());
-        tokio::task::spawn_blocking(move || write_latest(&path, &unsaved, &writing));
+        tokio::task::spawn_blocking(move || write_latest(&path, &unsaved, &writing, "closed sessions"));
     }
 
     /// Write what is not on disk yet, on the caller's thread, for when the daemon is about to exit.
     pub fn save_now(&self) {
         if let Some(path) = &self.path {
-            write_latest(path, &self.unsaved, &self.writing);
+            write_latest(path, &self.unsaved, &self.writing, "closed sessions");
         }
     }
 
@@ -157,26 +157,31 @@ impl ClosedSessions {
     }
 }
 
-fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+pub(super) fn lock<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
 }
 
 /// Write the latest unsaved list, if any. A failed write puts it back unless a newer one came,
-/// so the next write, or the one at exit, tries again. Blocks.
-fn write_latest(path: &Path, unsaved: &Mutex<Option<Vec<u8>>>, writing: &Mutex<()>) {
+/// so the next write, or the one at exit, tries again. Blocks. `what` names the list in the warning.
+pub(super) fn write_latest(
+    path: &Path,
+    unsaved: &Mutex<Option<Vec<u8>>>,
+    writing: &Mutex<()>,
+    what: &str,
+) {
     let _one_at_a_time = lock(writing);
     let Some(bytes) = lock(unsaved).take() else {
         return;
     };
     if let Err(error) = write_file(path, &bytes) {
-        tracing::warn!("couldn't save the closed sessions: {error:#}");
+        tracing::warn!("couldn't save the {what}: {error:#}");
         lock(unsaved).get_or_insert(bytes);
     }
 }
 
 /// `session` as it may be kept: one clean line per name, cut short, and a title cleaned as a
 /// conversation's is. None when there is no agent or conversation id left to resume by.
-fn cleaned(session: ClosedSession) -> Option<ClosedSession> {
+pub(super) fn cleaned(session: ClosedSession) -> Option<ClosedSession> {
     let line = |text: &str, max: usize| -> String {
         crate::hidden::sanitize(text, false)
             .trim()

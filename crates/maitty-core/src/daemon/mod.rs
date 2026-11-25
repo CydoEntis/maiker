@@ -14,6 +14,7 @@ mod check_source;
 mod check_stale;
 mod claude_transcript;
 mod closed_sessions;
+mod workspaces;
 mod clone;
 mod commit;
 mod commands;
@@ -602,6 +603,8 @@ struct Daemon {
     usage_store: usage_store::UsageStore,
     /// Agent sessions that closed for good or crashed, kept on disk.
     closed_sessions: closed_sessions::ClosedSessions,
+    /// The set of sessions open in each project when it was parked or closed.
+    saved_workspaces: workspaces::Workspaces,
     /// What a pane whose output ended would record if its process turns out to have failed.
     unreaped: HashMap<TermId, ClosedSession>,
     codex_busy: bool,
@@ -1168,6 +1171,10 @@ impl Daemon {
                 anyhow::bail!("reopening a closed session is yours to do, not a pane's")
             }
             Command::ReopenClosedSession { .. } => self.may(client, Grant::Start, None),
+            Command::SaveWorkspace { .. } if self.client_is_agent(client) => {
+                anyhow::bail!("saving a project's open sessions is yours to do, not a pane's")
+            }
+            Command::SaveWorkspace { .. } => Ok(()),
             Command::NewWorkspace { .. }
             | Command::NewTab { .. }
             | Command::NewFleet { .. }
@@ -1462,6 +1469,11 @@ impl Daemon {
                     closed_sessions::ClosedSessions::default_path(),
                 )
             },
+            saved_workspaces: if cfg!(test) {
+                workspaces::Workspaces::in_memory()
+            } else {
+                workspaces::Workspaces::open(workspaces::Workspaces::default_path())
+            },
             unreaped: HashMap::new(),
             codex_busy: false,
             last_codex: Instant::now() - Duration::from_secs(3600),
@@ -1551,6 +1563,7 @@ impl Daemon {
                 persist::forget();
                 self.usage_store.save_now(term::unix_now());
                 self.closed_sessions.save_now();
+                self.saved_workspaces.save_now();
                 self.broadcast(|_| true, ServerMsg::Bye);
                 tokio::time::sleep(Duration::from_millis(100)).await;
                 let _ = std::fs::remove_file(ipc::pid_file());
@@ -3141,6 +3154,12 @@ impl Daemon {
                     }
                     Query::ClosedSessions => {
                         ServerMsg::Reply(Reply::ClosedSessions(self.closed_sessions.list().to_vec()))
+                    }
+                    Query::Workspace { .. } if self.client_is_agent(client) => {
+                        ServerMsg::Error("Only a human client can read a project's open sessions".into())
+                    }
+                    Query::Workspace { project } => {
+                        ServerMsg::Reply(Reply::Workspace(self.saved_workspaces.get(&project)))
                     }
                     Query::AllowedCommands if self.client_is_agent(client) => {
                         ServerMsg::Error("Only a human client can read the approved commands".into())

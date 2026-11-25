@@ -181,6 +181,7 @@ impl Daemon {
                 self.reopen_closed_session(client, &agent, &session)?;
                 return Ok(false);
             }
+            Command::SaveWorkspace { project, sessions } => self.saved_workspaces.save(project, sessions)?,
             Command::CloseWorkspace { ws } => {
                 let terms = self.workspace_panes(ws);
                 let tops = self.worktrees_of(&terms);
@@ -1246,10 +1247,11 @@ impl Daemon {
                 } else {
                     self.save_outputs(true);
                 }
-                // Usage and closed sessions are history, not session state: they are kept even
+                // Usage, closed sessions and saved workspaces are history, not session state: they are kept even
                 // with --forget.
                 self.usage_store.save_now(term::unix_now());
                 self.closed_sessions.save_now();
+                self.saved_workspaces.save_now();
                 for t in self.terms.values_mut() {
                     t.kill_tree();
                 }

@@ -832,6 +832,16 @@ never follows a link: a link, or something of the wrong kind, is left in place a
 logged once with the path and the error, never a file's contents, and never stops the daemon. The
 system keychain is never touched.
 
+## Project-specific: saved workspaces
+
+`Command::SaveWorkspace` and `Query::Workspace` are for human clients only: a pane or structured runtime is refused,
+since the set names the folders of other work. Everything in a save comes from the client and is untrusted: the project
+and each session's folder must be absolute, free of control characters and at most 4096 bytes, each name is cleaned to
+one short line, a worktree is kept only as a pair that holds together (both absolute, the folder inside it), and the
+counts are capped (50 and 50), so a client cannot grow the file without bound or put an escape sequence where it
+will later be drawn. Saving runs nothing; a later reopen of a saved session must follow the closed session rules below. The file
+is private to the user like the closed-sessions file. Another machine's answer to `Query::Workspace` is ignored.
+
 ## Project-specific: closed sessions
 
 The closed-sessions list (`closed-sessions-<socket>.json`, DATABASE "closed sessions") holds each

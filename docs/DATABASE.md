@@ -161,6 +161,22 @@ ignored and missing ones default, so a field can be added without a version bump
 names on start (`daemon/leftover_tickets.rs`); not finding them is success, so the removal is
 idempotent and needs no marker. Nothing else in the data folder is removed by it.
 
+## Project-specific: saved workspaces
+
+`daemon/workspaces.rs` keeps, per project, the agent sessions that were open when the project was
+parked or closed, in `workspaces-<socket>.json` in the data folder: `{"version": 1, "projects":
+[{"path": ..., "sessions": [...]}]}`, the project saved last first, at most 50 projects
+(`WORKSPACE_PROJECTS_MAX`) and 50 sessions each (`WORKSPACE_SESSIONS_MAX`); the oldest drop off. A
+session is the same record as a closed session and is cleaned the same way (`closed_sessions::cleaned`), and
+its folder must be absolute, with no control character, at most 4096 bytes; a project path must be too, else the save is
+refused. One entry per conversation. `Command::SaveWorkspace` replaces a project's set, and an empty set removes the
+project. It holds no message, prompt or terminal output. It is separate from the closed-sessions list, which keeps
+its own cap and file, so a saved set is never evicted by sessions closing elsewhere.
+
+Writing and reading are as for closed sessions: private, synced and renamed over the old file off the loop, once more
+at exit; a file that does not parse or is from a newer version is renamed to `<file>.bak` and the store starts empty
+with a logged warning; every stored entry is checked as a new one is.
+
 ## Project-specific: closed sessions
 
 `daemon/closed_sessions.rs` keeps the agent sessions that closed for good or whose agent exited
