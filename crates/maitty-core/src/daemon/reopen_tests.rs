@@ -84,6 +84,32 @@ fn a_closed_session_whose_worktree_is_gone_gets_it_back_on_its_branch_and_resume
 }
 
 #[test]
+fn a_saved_session_that_left_the_closed_list_gets_its_worktree_back_and_resumes_there() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, mut rx) = daemon_with(Config::default());
+    let (root, repo, top) = repo_with_worktree("reopen-saved");
+    d.command(0, Command::SaveWorkspace { project: repo.clone(), sessions: vec![record(&repo, &top, &top)] }).unwrap();
+    assert!(d.closed_sessions.list().is_empty(), "only the project's saved set knows it");
+    git(&repo, &["worktree", "remove", &top.to_string_lossy()]);
+    assert!(!top.exists());
+
+    let (tx, mut client_rx) = mpsc::channel(64);
+    d.handle(Ev::Connected(1, tx, false, crate::protocol::Surface::Terminal, true));
+    let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc-123".into() };
+    d.handle(Ev::Msg(1, ClientMsg::Command(reopen)));
+    let reply = answer(&mut d, &mut rx, &mut client_rx);
+    assert!(matches!(reply, ServerMsg::Reply(Reply::Ok)), "{reply:?}");
+
+    assert_eq!(branch_at(&top).as_deref(), Some("feat"));
+    let started = d.terms.values().find(|t| t.cmd.as_deref().is_some_and(|c| c.ends_with(" --resume abc-123")));
+    assert!(started.is_some_and(|t| same(&t.cwd, &top)), "the agent resumes its conversation in the worktree");
+    assert_eq!(d.pending_ops, 0);
+    close_all(&mut d);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_worktree_folder_deleted_by_hand_is_made_again_and_other_missing_ones_stay_registered() {
     let (root, repo, top) = repo_with_worktree("reopen-by-hand");
     let unplugged = root.join("unplugged");

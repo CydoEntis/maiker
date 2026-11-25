@@ -1,7 +1,9 @@
 //! Reopening a closed session (`Command::ReopenClosedSession`): its conversation resumed in a new
-//! session, in the folder it worked in. A linked worktree whose folder is gone is made again first,
-//! only at the recorded path, from the recorded branch, in the recorded repository. Whatever is
-//! already at that path is left alone.
+//! session, in the folder it worked in. The session is one the daemon keeps a record of: in the
+//! closed sessions list, or in a project's saved set (`Command::SaveWorkspace`) once it has dropped
+//! out of that list. A linked worktree whose folder is gone is made again first, only at the
+//! recorded path, from the recorded branch, in the recorded repository. Whatever is already at that
+//! path is left alone.
 
 use super::worktrees::trust_like_repo;
 use super::*;
@@ -158,13 +160,7 @@ impl Daemon {
     /// Reopen the closed session kept for `agent` and `session`: ready its folder off the loop, then
     /// start it (`closed_session_ready`).
     pub(super) fn reopen_closed_session(&mut self, client: ClientId, agent: &str, session: &str) -> Result<()> {
-        let closed = self
-            .closed_sessions
-            .list()
-            .iter()
-            .find(|c| c.agent == agent && c.session == session)
-            .cloned()
-            .ok_or_else(|| anyhow::anyhow!("that session is not in the closed sessions list"))?;
+        let closed = self.kept_record(agent, session)?;
         let cmd = self.resume_closed(&closed)?;
         let tx = self.tx.clone();
         self.pending_ops += 1;
@@ -173,6 +169,18 @@ impl Daemon {
             let _ = tx.blocking_send(Ev::ClosedSessionReady { client, cmd, result });
         });
         Ok(())
+    }
+
+    /// The record the daemon keeps for `agent`'s conversation `session`: the closed sessions list
+    /// first, then the projects' saved sets, which keep a session the 50-entry list has let go of.
+    fn kept_record(&self, agent: &str, session: &str) -> Result<ClosedSession> {
+        self.closed_sessions
+            .list()
+            .iter()
+            .find(|c| c.agent == agent && c.session == session)
+            .cloned()
+            .or_else(|| self.saved_workspaces.find(agent, session))
+            .ok_or_else(|| anyhow::anyhow!("that session is not in the closed sessions list or a project's saved sessions"))
     }
 
     /// The agent's own resume command for a closed session's conversation.

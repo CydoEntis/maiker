@@ -859,7 +859,8 @@ private to the user (0600 in a 0700 folder on Unix). `Query::ClosedSessions` is 
 only: an agent pane or a structured runtime cannot read where other work was done.
 
 `Command::ReopenClosedSession { agent, session }` is for human clients only, the same way: a pane,
-a structured runtime or a rejected client is refused. It names an entry the daemon keeps, never a
+a structured runtime or a rejected client is refused. It names an entry the daemon keeps (in the
+closed list, else in a project's saved set, whose entries were cleaned as they were saved), never a
 path, branch or command: the folder, branch and repository come from that entry, and the command
 typed is the agent's own resume template with the entry's conversation id, which must start with a
 letter or digit and hold only letters, digits, `_` and `-`, at most 128. Making a worktree again

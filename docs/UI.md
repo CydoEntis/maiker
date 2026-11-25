@@ -239,7 +239,7 @@ ticked or not; both are off while nothing applies and while an Open or any other
 (`openSaved` in `useRecentSessions`, the way Bring in your chats starts its picks), so the panel stays and its rows turn
 to running as they start, by Recent sessions' rules (`reopenPlan`): in place through the resume start, or, for a folder
 that is gone but was a worktree with a known repository and branch, through the service, which makes it again
-(`reopen_closed_session`); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
+(`reopen_closed_session`; the service finds the session in the project's saved set when it has left the closed list); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
 saved under its agent's own name and resumes by no id. One toast with the project as its context ends it: "Opened 3
 sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1 session") with a line naming each skipped
 one and why; or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is
