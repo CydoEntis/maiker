@@ -26,17 +26,26 @@ const reducedMotion = (): boolean =>
  * down on Hyprland in 0.72.0, so if that comes back, this is the first place to look.
  */
 export function movePanes(update: () => void): void {
+  void placePanes(update)
+}
+
+/**
+ * `movePanes` for a caller that goes on once the panes are in their new places: it resolves when the glide is over, or
+ * at once when there is none. The browser runs a glide's change a frame later, so whatever the caller does next (say a
+ * start it is done with) would otherwise land while the old window is still drawn.
+ */
+export function placePanes(update: () => void): Promise<void> {
   const doc = document as Document & Transitions
   if (typeof doc.startViewTransition !== 'function' || reducedMotion() || panesNow().length < MIN_PANES) {
     update()
-    return
+    return Promise.resolve()
   }
   namePanes()
   const transition = doc.startViewTransition(() => {
     flushSync(update)
     namePanes()
   })
-  void transition.finished.finally(() => {
+  return transition.finished.then(() => undefined).finally(() => {
     for (const pane of panesNow()) pane.style.removeProperty('view-transition-name')
   })
 }

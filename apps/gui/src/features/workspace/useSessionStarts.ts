@@ -1,4 +1,4 @@
-import { movePanes } from './components/paneTransition'
+import { movePanes, placePanes } from './components/paneTransition'
 import { type Dispatch, type RefObject, type SetStateAction, useCallback, useRef, useState } from 'react'
 import type { QueryClient } from '@tanstack/react-query'
 import { type RemoteMachine, remoteStartRefusal, remoteTargetOf } from './model/machines'
@@ -15,7 +15,7 @@ import { newWorktreeSession } from '@/features/worktrees/api'
 import { rememberConversationPermissions } from '@/data/conversationPermissions'
 import { reserveOperation } from '@/features/chat/sendOperation'
 import { updateComposer } from '@/features/chat/composerStore'
-import { entrustFirstMessage, holdFirstMessage, holdStartChoice } from '@/features/chat/firstMessage'
+import { entrustFirstMessage, holdFirstMessage, holdSentFirstMessage, holdStartChoice, releaseFirstMessage } from '@/features/chat/firstMessage'
 import { connectAgentOnce } from './model/agentHooks'
 import type { WarmAgent } from './useWarmAgent'
 import { nameFromMessage } from './model/newSession'
@@ -276,27 +276,36 @@ export function useSessionStarts({ queryClient, sessions, setWorktreeFrom, setLa
           await new Promise((resolve) => { setTimeout(resolve, REMOTE_START_POLL_MS) })
         }
       }
+      // The chat draws the message sent from its first frame, as the page did, with the working line under it, until its
+      // history has it: no skeleton and no empty chat in between, and nothing moves when the history comes.
+      if (request.message !== '') holdSentFirstMessage(id, request.message)
       // The page closes in the same update as the pane opens, so nothing shows in between (see `startAgentSession`).
       const settle = () => {
         if (!background) setNewChatOpen(false)
         onPlaced?.(id)
       }
+      let placed = Promise.resolve()
       if (background) {
         setStartedFrom((current) => (current === null ? null : new Set([...current, id])))
         settle()
       } else {
-        movePanes(() => {
+        placed = placePanes(() => {
           setLayout((current) => openArrangement(current, id, makeId))
           settle()
         })
       }
-      if (request.message === '') return
-      const operation = reserveOperation(key, { receipt: null, queued: [] })
-      // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
-      await submitMessage({ id: String(key), generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
-        updateComposer(key, (state) => ({ ...state, draft: request.message }))
-        toast.failed(`The chat started, but ${request.acp ?? agentLabel(agent)} did not take the first message`, error)
-      })
+      if (request.message !== '') {
+        const operation = reserveOperation(key, { receipt: null, queued: [] })
+        // The chat is open by now, so a send that fails is said there and the words go back into its box, not into a page that has closed.
+        await submitMessage({ id: String(key), generation: started.generation }, operation, request.message, Object.keys(choice).length === 0 ? undefined : choice).catch((error: unknown) => {
+          releaseFirstMessage(id)
+          updateComposer(key, (state) => ({ ...state, draft: request.message }))
+          toast.failed(`The chat started, but ${request.acp ?? agentLabel(agent)} did not take the first message`, error)
+        })
+      }
+      // The start is not over until the pane is in place: the page that asked would otherwise go back to its empty draft
+      // for the frames the glide still showed it.
+      await placed
     } finally {
       endStart(mode)
     }
