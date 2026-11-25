@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import { savedWorkspace, type SavedSession } from '@/api/daemon'
+import type { FolderBranchList } from '@/api/folderGit'
+import type { WorktreeStanding } from '@/features/worktrees/api'
+import { ageWords, changesAndMerged } from '@/features/worktrees/worktreeAdvice'
 import { agentName } from './agentMessage'
+import { baseName } from './folderPick'
 import { ageOf } from './newChatHost'
 import { sameProject, type MachineProjects, type OpenedProject } from './openedProjects'
 import type { SessionView } from './session'
@@ -82,6 +86,51 @@ export function rowWhere(row: WorkspaceRow): string {
 /** What a row says at its right: whether it runs, and how long since anything happened to it. */
 export function rowWhen(row: WorkspaceRow, now: number): string {
   return row.at === null ? row.state : `${row.state} · ${ageOf(row.at, now)} ago`
+}
+
+/** Where a linked worktree stands while the daemon reads it in the background: not yet, read, or why it could not be. */
+export type StandingRead = { readonly kind: 'checking' } | { readonly kind: 'read'; readonly standing: WorktreeStanding } | { readonly kind: 'failed'; readonly why: string }
+
+/**
+ * One row of the panel's Worktrees section, keyed `worktree:<path>`. The main checkout is the project's own folder: it
+ * is listed but never ticked, since removing it would remove the project; a linked worktree carries its standing.
+ */
+export type WorktreeRow = { readonly key: string; readonly path: string; readonly name: string } & (
+  | { readonly main: true }
+  | { readonly main: false; readonly standing: StandingRead }
+)
+
+/** What the panel knows of the project's worktrees: nothing yet, the rows, a folder outside git, or a failed read. */
+export type WorktreesRead = { kind: 'loading' } | { kind: 'listed'; rows: readonly WorktreeRow[] } | { kind: 'not-a-repo' } | { kind: 'failed' }
+
+/**
+ * The Worktrees section's rows in the order git lists them (the main checkout first), each linked one with its standing
+ * as far as it is read. A worktree on no branch is named by its folder.
+ */
+export function worktreeRows(worktrees: FolderBranchList['worktrees'], standingOf: (path: string) => StandingRead): WorktreeRow[] {
+  return worktrees.map((worktree): WorktreeRow => {
+    const base = { key: `worktree:${worktree.path}`, path: worktree.path, name: worktree.branch ?? baseName(worktree.path) }
+    return worktree.main ? { ...base, main: true } : { ...base, main: false, standing: standingOf(worktree.path) }
+  })
+}
+
+/** The worktree rows a tick can go on: every linked worktree, never the main checkout. */
+export function tickableWorktrees(read: WorktreesRead): WorktreeRow[] {
+  return read.kind === 'listed' ? read.rows.filter((row) => !row.main) : []
+}
+
+/** What a worktree row says under its name: what is on it that is nowhere else, or why that is not known yet. */
+export function worktreeWhere(row: WorktreeRow): string {
+  if (row.main) return 'main checkout · stays'
+  if (row.standing.kind === 'checking') return 'checking…'
+  if (row.standing.kind === 'failed') return 'could not check where it stands'
+  return changesAndMerged(row.standing.standing)
+}
+
+/** What a worktree row says at its right: how long it has been quiet, once its standing is read. */
+export function worktreeWhen(row: WorktreeRow): string {
+  if (row.main || row.standing.kind !== 'read' || row.standing.standing.missing) return ''
+  return ageWords(row.standing.standing)
 }
 
 /**
