@@ -76,7 +76,9 @@ of the exact session (it recalled the first turn) and the result frames with `us
 are ignored. Two shapes, also seen on 2.1.325: `system`/`init` arrives after the user message,
 not before the initialize answer, so the adapter checks its session during the turn too; and an
 interrupted turn ends with `is_error: true`, `subtype: "error_during_execution"`, which the adapter
-reports as `interrupted` once Claude acknowledged the interrupt.
+reports as `interrupted` once Claude acknowledged the interrupt. Any other `is_error: true` result
+is a failed turn: its `result` text (or, without one, its `errors` list joined) is the turn's
+error, capped at 1024 characters, and never the answer, which keeps what was streamed.
 Claude Code 2.1.330 passed on Linux on 2026-11-20 (`--model haiku`, a scratch project) through the
 adapter's launch arguments, parser and turn projector, not through a daemon: three processes on one
 session, a Bash `can_use_tool` request approved (the file was written), one denied after

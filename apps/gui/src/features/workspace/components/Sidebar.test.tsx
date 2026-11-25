@@ -5,6 +5,7 @@ import type { Conversation } from '@/data/preview'
 import { resetToasts } from '@/lib/toast'
 import { LOCAL_HEAD, type MachineHead } from '../model/machines'
 import { groupByProject, type OpenedProject } from '../model/openedProjects'
+import { switchTargetsOf } from '../model/projectActions'
 import { toSessionView, type SessionView } from '../model/session'
 import type { ProjectActions } from './projectMenu'
 import { Sidebar, type SidebarProps } from './Sidebar'
@@ -30,12 +31,12 @@ function session(pane: number, title: string, extra: Partial<Conversation> = {})
 const onDevbox = (pane: number, title: string, extra: Partial<Conversation> = {}) => session(pane, title, { machine: 4, machineName: 'devbox', cwd: API.folder, ...extra })
 const startedBy = (id: string): Partial<Conversation> => ({ details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null }, startedBy: id } })
 
-function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened: readonly OpenedProject[] = []) {
+function show(sessions: SessionView[], more: Partial<SidebarProps> = {}, opened: readonly OpenedProject[] = [], startFolder = '') {
   const none = vi.fn()
-  const grouping = groupByProject(sessions, opened)
+  const grouping = groupByProject(sessions, opened, startFolder)
   const projectActions = {
     onNewSession: vi.fn(), onNewWorktree: vi.fn(), onNewTerminal: vi.fn(), onOpenWorktree: vi.fn(), onCopyPath: vi.fn(), onShowFiles: vi.fn(),
-    onClose: vi.fn(),
+    onWorkspace: vi.fn(), switchTargets: switchTargetsOf(grouping.machines), onSwitch: vi.fn(), onClose: vi.fn(),
   } satisfies ProjectActions
   const props: SidebarProps = {
     sessions, listed: true, machines: [LOCAL_HEAD], projects: grouping.machines, opened: grouping.opened, sort: 'recent', onSort: none, selectedProject: null, installedAgents: ['claude', 'codex', 'gemini'], focusedId: null, mode: 'docked', online: true, canStart: true, portalContainer: null,
@@ -283,7 +284,11 @@ describe('a project heading', () => {
     const { projectActions } = show([onDevbox(1, 'There', { status: 'working', repo: 'api', branch: 'main' })], { machines: [LOCAL_HEAD, DEVBOX] })
     fireEvent.contextMenu(heading('api'))
     await screen.findByRole('menu', { name: 'api' })
-    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Close project…'])
+    expect(menuItems()).toEqual(['New session', 'New worktree…', 'Copy path', 'Show files', 'Workspace…', 'Close project…'])
+    // The saved set is this computer's daemon's, so another machine's project says why it has no Workspace yet.
+    const workspace = screen.getByRole('menuitem', { name: 'Workspace…' })
+    expect(workspace).toHaveAttribute('aria-disabled', 'true')
+    expect(workspace).toHaveAttribute('title', 'Workspace is local-only in v1: this project is on devbox, not on this computer.')
     await user.click(screen.getByRole('menuitem', { name: /New session/ }))
     expect(projectActions.onNewSession).toHaveBeenLastCalledWith(4, API)
     fireEvent.contextMenu(heading('api'))
@@ -312,6 +317,17 @@ describe('a project heading', () => {
     expect(menuItems()).toEqual(['Claude', 'Codex', 'Gemini', 'Terminal'])
   })
 
+  it('opens a project’s Workspace panel from its menu, whether or not a session runs in it', async () => {
+    const user = userEvent.setup()
+    const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES])
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'notes, no sessions' }))
+    await user.click(await screen.findByRole('menuitem', { name: 'Workspace…' }))
+    expect(projectActions.onWorkspace).toHaveBeenCalledWith(NOTES, 'notes')
+    fireEvent.contextMenu(heading('shop'))
+    await user.click(await screen.findByRole('menuitem', { name: 'Workspace…' }))
+    expect(projectActions.onWorkspace).toHaveBeenLastCalledWith(SHOP, 'shop')
+  })
+
   it('closes a project from its menu, whether or not a session runs in it', async () => {
     const user = userEvent.setup()
     const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES])
@@ -321,6 +337,44 @@ describe('a project heading', () => {
     fireEvent.contextMenu(heading('shop'))
     await user.click(await screen.findByRole('menuitem', { name: 'Close project…' }))
     expect(projectActions.onClose).toHaveBeenLastCalledWith(SHOP, 'shop')
+  })
+
+  it('offers Switch to… listing the other opened projects, and switches to the one picked', async () => {
+    const user = userEvent.setup()
+    const DOCS: OpenedProject = { machineName: null, folder: '/home/me/docs' }
+    const { projectActions } = show([session(1, 'One', { status: 'working' })], {}, [NOTES, DOCS])
+    fireEvent.contextMenu(heading('shop'))
+    await screen.findByRole('menu', { name: 'shop' })
+    expect(menuItems()).toEqual(['New session', 'Copy path', 'Show files', 'Workspace…', 'Switch to…', 'Close project…'])
+    // From the keyboard: the arrow opens the projects beside the row and moves into them.
+    act(() => { screen.getByRole('menuitem', { name: 'Switch to…' }).focus() })
+    await user.keyboard('{ArrowRight}')
+    await waitFor(() => { expect(screen.getByRole('menuitem', { name: 'notes' })).toHaveFocus() })
+    expect(menuItems().slice(-2)).toEqual(['notes', 'docs'])
+    await user.keyboard('{ArrowDown}{Enter}')
+    expect(projectActions.onSwitch).toHaveBeenCalledWith(SHOP, 'shop', { project: DOCS, name: 'docs' })
+  })
+
+  it('offers Switch to… off, saying why, while no other project is open on this computer', async () => {
+    show([session(1, 'One', { status: 'working' })])
+    fireEvent.contextMenu(heading('shop'))
+    const switchTo = await screen.findByRole('menuitem', { name: 'Switch to…' })
+    expect(switchTo).toHaveAttribute('aria-disabled', 'true')
+    expect(switchTo).toHaveAttribute('title', 'Open another project on this computer to switch to it')
+  })
+
+  it('lists sessions in the start folder last under No project, with a plain mark and nothing to close', async () => {
+    const user = userEvent.setup()
+    const { projectActions } = show([session(1, 'Loose', { cwd: '/home/me' }), session(2, 'One')], {}, [SHOP], '/home/me')
+    expect(Array.from(document.querySelectorAll('.mx-sb-head-name'), (name) => name.textContent)).toEqual(['shop', 'No project'])
+    const loose = heading('No project')
+    expect(loose.querySelector('.mx-sb-badge.is-loose')).not.toBeNull()
+    expect(loose.querySelector('.mx-sb-badge')?.textContent).toBe('')
+    fireEvent.contextMenu(loose)
+    await screen.findByRole('menu', { name: 'No project' })
+    expect(menuItems()).toEqual(['New session', 'Copy path', 'Show files'])
+    await user.click(screen.getByRole('menuitem', { name: 'New session' }))
+    expect(projectActions.onNewSession).toHaveBeenCalledWith(0, { machineName: null, folder: '/home/me' })
   })
 })
 

@@ -124,6 +124,50 @@ describe('grouping sessions by opened project', () => {
   })
 })
 
+describe('sessions in the start folder', () => {
+  const loose = (grouping: ProjectGrouping) => grouping.machines.flatMap((machine) => machine.projects).filter((entry) => entry.loose === true)
+
+  it('are one No project group after this computer\'s projects, and open no project', () => {
+    const sessions = sessionsOf([{ id: 1, cwd: HOME }, { id: 2, cwd: '/code/shop', root: '/code/shop' }, { id: 3, cwd: HOME }])
+
+    const grouping = groupByProject(sessions, [here('/code/shop')], HOME)
+
+    expect(grouping.opened).toEqual([here('/code/shop')])
+    expect(grouping.machines[0]?.projects.map((entry) => [entry.project.folder, entry.sessions.map((session) => session.id), entry.loose === true])).toEqual([
+      ['/code/shop', ['t2'], false],
+      [HOME, ['t1', 't3'], true],
+    ])
+  })
+
+  it('count a git start folder\'s worktrees in, and a Windows start folder in any spelling', () => {
+    const tree = sessionsOf([{ id: 1, cwd: '/home/me/.maiker/worktrees/me/fix', root: HOME, linked: true }])
+    expect(loose(groupByProject(tree, [], HOME))[0]?.sessions.map((session) => session.id)).toEqual(['t1'])
+
+    const windows = sessionsOf([{ id: 2, cwd: 'c:/users/me' }])
+    expect(loose(groupByProject(windows, [], 'C:\\Users\\me'))[0]?.sessions.map((session) => session.id)).toEqual(['t2'])
+  })
+
+  it('stay in an opened project that holds them, and there is no group while none is left', () => {
+    const sessions = sessionsOf([{ id: 1, cwd: HOME }])
+
+    expect(shape(groupByProject(sessions, [here(HOME)], HOME))).toEqual({ here: { [HOME]: ['t1'] } })
+    expect(loose(groupByProject([], [], HOME))).toEqual([])
+  })
+
+  it('are only this computer\'s: another machine\'s home folder is a project there', () => {
+    const sessions = sessionsOf([{ id: 1, cwd: HOME }], { id: 1, name: 'box' })
+
+    const grouping = groupByProject(sessions, [], HOME)
+
+    expect(loose(grouping)).toEqual([])
+    expect(grouping.opened).toEqual([{ machineName: 'box', folder: HOME }])
+  })
+
+  it('open a project as before while the start folder is not known', () => {
+    expect(groupByProject(sessionsOf([{ id: 1, cwd: HOME }]), []).opened).toEqual([here(HOME)])
+  })
+})
+
 describe('opening a project', () => {
   it('adds a folder that is not open yet', () => {
     expect(openProject([here('/a')], here('/b'))).toEqual({ opened: [here('/a'), here('/b')], project: here('/b') })

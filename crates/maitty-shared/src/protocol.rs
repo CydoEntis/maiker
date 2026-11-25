@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 127;
+pub const PROTOCOL_VERSION: u32 = 130;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -577,19 +577,17 @@ pub struct ConversationSummary {
     /// does not say.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub interrupted: bool,
+    /// The agent's own conversation id, which its resume takes, for a chat session; a pane's
+    /// conversation leaves it out, since its pane says it (`TermInfo.session`). A client keeps it
+    /// in a project's saved open set (`Command::SaveWorkspace`). Absent from an older daemon.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session: Option<String>,
 }
 
 impl ConversationSummary {
     /// The agent's name as a person reads it: the provider's, or an ACP agent's own.
     pub fn agent_label(&self) -> String {
-        use crate::conversation::Provider;
-        match (self.provider, &self.agent) {
-            (Provider::Codex, _) => "Codex".into(),
-            (Provider::Claude, _) => "Claude".into(),
-            (Provider::Gemini, _) => "Gemini".into(),
-            (Provider::Acp, Some(agent)) => agent.clone(),
-            (Provider::Acp, None) => "Agent".into(),
-        }
+        self.provider.agent_label(self.agent.as_deref())
     }
 }
 
@@ -1103,9 +1101,14 @@ pub enum Command {
     },
     /// Remove these worktrees, none of which has anything running in it: each a folder and
     /// whether to go ahead with uncommitted changes in it (they are lost). A branch is kept
-    /// unless it's already merged.
+    /// unless it's already merged. Answered once the removing is done: with a notice and `Ok`,
+    /// or, when `answer_each` is set, with `Reply::WorktreesTidied`, so a list can say on each
+    /// row why one stayed. A daemon before `WORKTREES_TIDIED_SINCE` ignores `answer_each` and
+    /// answers `Ok`.
     TidyWorktrees {
         items: Vec<(PathBuf, bool)>,
+        #[serde(default)]
+        answer_each: bool,
     },
     /// Close a worktree workspace and `git worktree remove` its checkout.
     /// `delete_branch`: also delete the worktree's branch (discarding a task).
@@ -1290,6 +1293,15 @@ pub enum Command {
     /// gone is made again first, at the recorded path, from the recorded branch, in the recorded
     /// repository; nothing a client sends names a path or a branch.
     ReopenClosedSession {
+        agent: String,
+        session: String,
+    },
+    /// Make the folder of the closed or saved session the daemon keeps for `agent` and its
+    /// conversation `session` ready, as `ReopenClosedSession` does, and start nothing (human
+    /// clients only): a worktree that is gone is made again from the record. Answered with
+    /// `Reply::ClosedFolderReady`, so the client starts the session there itself, as a chat or in
+    /// its terminal.
+    ReadyClosedFolder {
         agent: String,
         session: String,
     },
@@ -1734,6 +1746,13 @@ pub enum Reply {
     Worktrees(Vec<WorktreeEntry>),
     /// None: git still lists the worktree but its folder is gone.
     WorktreeStanding(Option<WorktreeStanding>),
+    /// How a `Command::TidyWorktrees` with `answer_each` ended, by the folders as they were asked
+    /// for: the ones removed, and the ones kept with one line saying why ("something is running in
+    /// it", git's own refusal).
+    WorktreesTidied {
+        removed: Vec<PathBuf>,
+        kept: Vec<(PathBuf, String)>,
+    },
     Repo {
         tag: u64,
         reply: crate::repo::RepoReply,
@@ -1835,6 +1854,11 @@ pub enum Reply {
     ClosedSessions(Vec<ClosedSession>),
     /// The sessions kept for a project, in the order they were saved; empty when none.
     Workspace(Vec<ClosedSession>),
+    /// The folder a `Command::ReadyClosedFolder` made ready: the one the session worked in, or the
+    /// top of its worktree when that subfolder is not on the branch any more.
+    ClosedFolderReady {
+        folder: PathBuf,
+    },
     HelperRead(HelperRecord),
     Specialists(crate::specialists::SpecialistList),
     SideAnswer {
@@ -2846,6 +2870,8 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ServerMsg::Reply(Reply::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
+            ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
+            ServerMsg::Reply(Reply::ClosedFolderReady { .. }) => READY_CLOSED_FOLDER_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2863,6 +2889,11 @@ impl ClientMsg {
             ClientMsg::Query(Query::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ClientMsg::Query(Query::Workspace { .. })
             | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
+            ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
+            ClientMsg::Command(Command::ConversationStart {
+                target: crate::conversation::StartTarget::AcpSession { .. },
+                ..
+            }) => ACP_SESSION_SINCE,
             ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
@@ -2896,6 +2927,21 @@ pub const CHAT_ACTIVE_AT_SINCE: u32 = 126;
 /// daemon passes the first two over, so a client does not send them, and an older client is never sent
 /// the reply.
 pub const WORKSPACE_SINCE: u32 = 127;
+
+/// The first version with `Reply::WorktreesTidied`, which a daemon sends only for a
+/// `Command::TidyWorktrees` with `answer_each`. An older daemon ignores the flag and answers `Ok`,
+/// and an older client never sets it and is never sent the reply.
+pub const WORKTREES_TIDIED_SINCE: u32 = 128;
+
+/// The first version with `Command::ReadyClosedFolder` and its `Reply::ClosedFolderReady`. An older
+/// daemon passes the command over, so a client asks it to reopen the session itself instead
+/// (`Command::ReopenClosedSession`), and an older client is never sent the reply.
+pub const READY_CLOSED_FOLDER_SINCE: u32 = 129;
+
+/// The first version whose daemon reads a `ConversationStart` with `StartTarget::AcpSession`. An
+/// older daemon cannot decode the start and never answers it, so a client refuses in words instead
+/// of sending it, and starts a new conversation with the agent.
+pub const ACP_SESSION_SINCE: u32 = 130;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3206,6 +3252,11 @@ mod tests {
             }),
             ClientMsg::Command(Command::TidyWorktrees {
                 items: vec![(PathBuf::from("/code/.wt/rate"), false)],
+                answer_each: false,
+            }),
+            ClientMsg::Command(Command::TidyWorktrees {
+                items: vec![(PathBuf::from("/code/.wt/rate"), true)],
+                answer_each: true,
             }),
             ClientMsg::Command(Command::RenamePane {
                 term: 3,
@@ -3282,9 +3333,21 @@ mod tests {
                 agent: "claude".into(),
                 session: "abc".into(),
             }),
+            ClientMsg::Command(Command::ReadyClosedFolder {
+                agent: "claude".into(),
+                session: "abc".into(),
+            }),
             ClientMsg::Command(Command::ConversationStart {
                 target: crate::conversation::StartTarget::Conversation { id, generation: 2 },
                 branch: Some("chat/one".into()),
+            }),
+            ClientMsg::Command(Command::ConversationStart {
+                target: crate::conversation::StartTarget::AcpSession {
+                    agent: "opencode".into(),
+                    cwd: "/code/app".into(),
+                    session: "ses_1".into(),
+                },
+                branch: None,
             }),
             ClientMsg::Command(Command::ConversationSend {
                 id,
@@ -3462,6 +3525,11 @@ mod tests {
                 },
             }),
             ServerMsg::Reply(Reply::Workspace(vec![sample_closed()])),
+            ServerMsg::Reply(Reply::ClosedFolderReady { folder: PathBuf::from("/code/.wt/rate") }),
+            ServerMsg::Reply(Reply::WorktreesTidied {
+                removed: vec![PathBuf::from("/code/.wt/rate")],
+                kept: vec![(PathBuf::from("/code/.wt/auth"), "something is running in it".into())],
+            }),
             ServerMsg::Reply(Reply::ClosedSessions(vec![ClosedSession {
                 agent: "claude".into(),
                 session: "abc".into(),
@@ -3570,6 +3638,11 @@ mod tests {
                 ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
                 ClientMsg::Query(Query::Workspace { .. })
                 | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
+                ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
+                ClientMsg::Command(Command::ConversationStart {
+                    target: crate::conversation::StartTarget::AcpSession { .. },
+                    ..
+                }) => ACP_SESSION_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3578,6 +3651,8 @@ mod tests {
             let since = match m {
                 ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
                 ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
+                ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
+                ServerMsg::Reply(Reply::ClosedFolderReady { .. }) => READY_CLOSED_FOLDER_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3694,6 +3769,92 @@ mod tests {
         let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
         assert!(decode::<Command126>(&encode(&reopen).unwrap()).is_ok());
         assert_eq!(ClientMsg::Command(reopen).introduced_in(), COMPATIBLE_SINCE);
+    }
+
+    /// 128 added a clean-up's answer by folder. A daemon at 127 reads a `TidyWorktrees` that asks
+    /// for it as before and answers `Ok`; a client at 127 sends one without the flag, read as not
+    /// asking, and is never sent the answer it cannot read.
+    #[test]
+    fn a_peer_from_before_tidied_answers_still_tidies_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        enum Command127 {
+            TidyWorktrees { items: Vec<(PathBuf, bool)> },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply127 {
+            Ok,
+        }
+        const { assert!(WORKTREES_TIDIED_SINCE > COMPATIBLE_SINCE && WORKTREES_TIDIED_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(WORKTREES_TIDIED_SINCE - 1, 0));
+
+        let items = vec![(PathBuf::from("/code/.wt/rate"), true)];
+        let asking = Command::TidyWorktrees { items: items.clone(), answer_each: true };
+        assert_eq!(decode::<Command127>(&encode(&asking).unwrap()).unwrap(), Command127::TidyWorktrees { items: items.clone() });
+        assert_eq!(ClientMsg::Command(asking).introduced_in(), COMPATIBLE_SINCE);
+        let old = encode(&Command127::TidyWorktrees { items: items.clone() }).unwrap();
+        assert!(matches!(
+            decode::<Command>(&old).unwrap(),
+            Command::TidyWorktrees { items: read, answer_each: false } if read == items
+        ));
+
+        let reply = Reply::WorktreesTidied { removed: vec!["/code/.wt/rate".into()], kept: Vec::new() };
+        unreadable_before::<Reply127, _>(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKTREES_TIDIED_SINCE);
+    }
+
+    /// 130 added a start that loads an ACP agent's saved conversation by its id. A daemon at 129
+    /// cannot decode it and is never sent one; the start by name it does read is as before.
+    #[test]
+    fn a_daemon_from_before_acp_sessions_is_never_asked_to_load_one() {
+        use crate::conversation::StartTarget;
+        #[derive(Debug, Deserialize)]
+        #[allow(dead_code)]
+        enum StartTarget129 {
+            Create(serde_json::Value),
+            Session { settings: serde_json::Value, thread_id: String },
+            Conversation { id: u64, generation: u64 },
+            Acp { agent: String, cwd: PathBuf },
+            Agent { provider: serde_json::Value, cwd: PathBuf, sandbox: serde_json::Value, approval_policy: serde_json::Value },
+        }
+        const { assert!(ACP_SESSION_SINCE > COMPATIBLE_SINCE && ACP_SESSION_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(ACP_SESSION_SINCE - 1, 0));
+
+        let load = StartTarget::AcpSession { agent: "opencode".into(), cwd: "/code".into(), session: "ses_1".into() };
+        unreadable_before::<StartTarget129, _>(&load);
+        round_trips(&load);
+        let start = |target| ClientMsg::Command(Command::ConversationStart { target, branch: None });
+        assert_eq!(start(load).introduced_in(), ACP_SESSION_SINCE);
+        let by_name = StartTarget::Acp { agent: "opencode".into(), cwd: "/code".into() };
+        assert!(decode::<StartTarget129>(&encode(&by_name).unwrap()).is_ok());
+        assert_eq!(start(by_name).introduced_in(), COMPATIBLE_SINCE);
+    }
+
+    /// 129 added making a closed session's folder ready without starting it, as a command and an
+    /// answer of their own. A peer at 128 still talks to this build, cannot read either, and is
+    /// never sent one; the reopen it does send reads as before.
+    #[test]
+    fn a_peer_from_before_ready_folders_still_talks_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize)]
+        enum Command128 {
+            ReopenClosedSession { agent: String, session: String },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply128 {
+            Workspace(Vec<ClosedSession>),
+        }
+        const { assert!(READY_CLOSED_FOLDER_SINCE > COMPATIBLE_SINCE && READY_CLOSED_FOLDER_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(READY_CLOSED_FOLDER_SINCE - 1, 0));
+
+        let ready = Command::ReadyClosedFolder { agent: "claude".into(), session: "abc".into() };
+        unreadable_before::<Command128, _>(&ready);
+        round_trips(&ready);
+        assert_eq!(ClientMsg::Command(ready).introduced_in(), READY_CLOSED_FOLDER_SINCE);
+        let reply = Reply::ClosedFolderReady { folder: "/code/.wt/rate".into() };
+        unreadable_before::<Reply128, _>(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), READY_CLOSED_FOLDER_SINCE);
+
+        let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
+        assert!(decode::<Command128>(&encode(&reopen).unwrap()).is_ok());
     }
 
     /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124
@@ -4017,6 +4178,14 @@ mod tests {
         assert_eq!(summary.capabilities, None, "an older daemon reports no capabilities");
         assert_eq!(summary.status_since, None, "an older daemon says no status time");
         assert!(!summary.interrupted, "an older daemon says no chat was cut by a restart");
+        assert_eq!(summary.session, None, "an older daemon says no agent conversation id");
+
+        // `session` is written only when known; an older client skips it as a field it does not know.
+        assert!(serde_json::to_value(&summary).unwrap().get("session").is_none());
+        summary.session = Some("0f3c".into());
+        let read: ConversationSummary = decode(&encode(&summary).unwrap()).unwrap();
+        assert_eq!(read.session.as_deref(), Some("0f3c"));
+        summary.session = None;
 
         // `interrupted` is written only when it is true, so an older client's read is the same.
         assert!(serde_json::to_value(&summary).unwrap().get("interrupted").is_none());

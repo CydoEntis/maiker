@@ -36,15 +36,17 @@ export type OpenedProjects = {
 /**
  * The window's one opened-projects state: `useWorkspaceState` owns it, everything else reads it with `useOpenedProjects`.
  * A session whose project is not open opens it, and that is saved too, so a project a session started in is kept after
- * the session ends.
+ * the session ends; one in this computer's start folder (`looseFolder`) opens none and is listed under No project. While
+ * the start folder is not known yet (null: the home folder has not been read), nothing a session needs is saved, so a
+ * session there is never kept as a project for the moment before it is.
  */
-export function useOpenedProjectsState(sessions: readonly SessionView[]): OpenedProjects {
+export function useOpenedProjectsState(sessions: readonly SessionView[], looseFolder: string | null): OpenedProjects {
   const [stored] = useState<readonly OpenedProject[]>(readOpenedProjects)
   const [saved, setSaved] = useState(stored)
   const [selected, setSelected] = useState<OpenedProject | null>(null)
-  const grouping = useMemo(() => groupByProject(sessions, saved), [sessions, saved])
+  const grouping = useMemo(() => groupByProject(sessions, saved, looseFolder ?? ''), [sessions, saved, looseFolder])
   // `groupByProject` gives back the same list when no session needed a project, so this settles after one adjustment.
-  if (grouping.opened !== saved) setSaved(grouping.opened)
+  if (looseFolder !== null && grouping.opened !== saved) setSaved(grouping.opened)
   // Not the list as it was read: a record this version could not read stays untouched until something is opened.
   useEffect(() => { if (saved !== stored) writeOpenedProjects(saved) }, [saved, stored])
   const { opened, machines } = grouping

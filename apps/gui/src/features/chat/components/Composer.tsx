@@ -37,6 +37,7 @@ import { nowSeconds, useInstalledAgents } from '@/features/workspace/model/newCh
 import { IconButton } from '@/components/ui/icon-button'
 import { useKeepTyping } from '../useKeepTyping'
 import { agentLabel } from '@/features/workspace/model/session'
+import { keysAreNowhere } from '@/lib/focus'
 
 /** A key with nothing stored under it, for a composer whose view holds its own draft. */
 const NO_CONVERSATION = -1
@@ -183,10 +184,9 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   const recalled = useRef<Recalled | null>(null)
   useKeepTyping(text, attachments.length)
   // A chat that opens takes the typing, as the terminal under it would, when nothing else on the page has it:
-  // the New session dialog has just closed, or the starting chat's box was replaced by this one.
+  // the New session draft has just closed, or the starting chat's box was replaced by this one.
   useEffect(() => {
-    const active = document.activeElement
-    if (active !== null && active !== document.body) return
+    if (!keysAreNowhere()) return
     const pane = text.current?.closest('.mx-pane')
     if (pane?.classList.contains('is-card') === true && !pane.classList.contains('is-focused')) return
     text.current?.focus({ preventScroll: true })
@@ -199,11 +199,12 @@ export function Composer({ agent, composer, conversation, commandsFrom, problem 
   const asking = question !== null
   useEffect(() => {
     const active = document.activeElement
-    const ours = active === null || active === document.body || active === text.current || (tray.current?.contains(active) ?? false)
+    const nowhere = keysAreNowhere(active)
+    const ours = nowhere || active === text.current || (tray.current?.contains(active) ?? false)
     if (!ours) return
     if (active instanceof HTMLTextAreaElement && active === text.current && !active.disabled && active.value !== '') return
     if (asking) (tray.current?.lastElementChild ?? tray.current)?.querySelector<HTMLElement>(TRAY_FIRST_CONTROL)?.focus({ preventScroll: true })
-    else if (active === null || active === document.body) text.current?.focus({ preventScroll: true })
+    else if (nowhere) text.current?.focus({ preventScroll: true })
   }, [asking])
   // The desktop shell takes file drops for itself, so the composer asks to be told of the ones that land on it.
   const { addPaths } = attach

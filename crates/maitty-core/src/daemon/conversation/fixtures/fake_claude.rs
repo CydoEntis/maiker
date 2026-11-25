@@ -274,6 +274,15 @@ fn main() {
         return;
     }
 
+    // A turn Claude fails on its own: with its reason as the result text, or with none at all.
+    if scenario == "fail-with-reason" || scenario == "fail-silently" {
+        writeln!(output, "{}", r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#).unwrap();
+        let reason = if scenario == "fail-with-reason" { r#","result":"API Error: 400 model not found""# } else { "" };
+        writeln!(output, r#"{{"is_error":true{reason},"session_id":"{session_id}","subtype":"success","type":"result"}}"#).unwrap();
+        output.flush().unwrap();
+        return;
+    }
+
     if scenario == "interrupt" {
         writeln!(output, "{}", r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#).unwrap();
         output.flush().unwrap();

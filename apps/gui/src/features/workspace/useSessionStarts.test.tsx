@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -21,11 +21,13 @@ const daemon = vi.hoisted(() => ({
   sendWhenAgentReady: vi.fn(() => Promise.resolve()),
   sendTerminalInput: vi.fn(() => Promise.resolve()),
   archiveConversationOnDaemon: vi.fn<(session: { id: string }, archived: boolean) => Promise<void>>(() => Promise.resolve()),
-  startAcpChat: vi.fn<(folder: string, agent: string, machine?: number) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
+  startAcpChat: vi.fn<(folder: string, agent: string, machine?: number, session?: string | null) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   resumeChatSession: vi.fn<(folder: string, agent: string, session: string, permissions: string) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string, machine?: number) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string, choice?: { model?: string; effort?: string }) => Promise<null>>(() => Promise.resolve(null)),
   prewarmAgentSession: vi.fn(() => Promise.resolve()),
+  readyClosedFolder: vi.fn<(agent: string, session: string) => Promise<string | null>>(() => Promise.resolve('/dev/app-wt')),
+  reopenClosedSession: vi.fn<(agent: string, session: string) => Promise<boolean>>(() => Promise.resolve(true)),
 }))
 // Another machine: a session started there shows in its next list.
 const remote = vi.hoisted(() => ({ machines: new Map<number, { state?: { name: string }; conversations: { id: string; kind?: 'terminal' }[] }>() }))
@@ -35,11 +37,13 @@ const startSessionOnMachine = vi.hoisted(() => vi.fn<(machine: number, folder: s
 }))
 vi.mock('@/api/machines', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/machines')>()), startSessionOnMachine }))
 vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), ...daemon, loadConversations: () => Promise.resolve([...listed.sessions]) }))
-const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn(), info: vi.fn() }))
+const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 
 import { useSessionStarts } from './useSessionStarts'
+import { useRecentSessions } from './useRecentSessions'
+import type { ClosedSession } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { NewChatRequest } from './components/NewChatPage'
 
@@ -52,7 +56,7 @@ function starts(watch: Watch = {}) {
   const props = {
     queryClient: new QueryClient(), sessions: [], setWorktreeFrom: setter, setLayout: watch.setLayout ?? setter, flash: setter, focusedSession: undefined,
     setNewChatOpen: watch.setNewChatOpen ?? setter, online: true, starting: false, setStarting: setter, setStartedFrom: watch.setStartedFrom ?? setter, sessionMap: new Map([['old', {}]]),
-    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'], openSessionsIn: openSessionsIn ?? 'terminal' }, setExpectedAgents: setter,
+    preferences: { bypassOff: bypassOff ?? ['claude', 'codex', 'gemini'], openSessionsIn: openSessionsIn ?? 'terminal', startFolder: '' }, setExpectedAgents: setter,
     setSettingsSection: setter, setNewChatMachine: setter, setNewChatSeed: setter, home: '/home/me', machinesRef: { current: remote.machines },
   } as unknown as Parameters<typeof useSessionStarts>[0]
   return renderHook(() => useSessionStarts(props)).result.current
@@ -79,6 +83,13 @@ describe('starting a new chat that resumes a saved conversation', () => {
     expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app', 'codex', ['--dangerously-bypass-approvals-and-sandbox', 'resume', ID, '-c', 'model_reasoning_effort=medium'])
     await starts({ bypassOff: ['codex'] }).startNewChat(request({ agent: 'claude' }))
     expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/dev/app', 'claude', ['--dangerously-skip-permissions', '--effort', 'medium'])
+  })
+
+  it('starts in the start folder with no Bypass flag when the start made no choice, even with the switch on', async () => {
+    await starts({ bypassOff: [] }).startNewChat(request({ folder: '/home/me' }))
+    expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/home/me', 'claude', ['--effort', 'medium'])
+    await starts({ bypassOff: [] }).startNewChat(request({ folder: '/home/me', bypass: true }))
+    expect(daemon.startAgentSession).toHaveBeenLastCalledWith('/home/me', 'claude', ['--dangerously-skip-permissions', '--effort', 'medium'])
   })
 
   it('puts Codex\'s resume subcommand first, then the picked flags', async () => {
@@ -250,7 +261,7 @@ describe('starting a chat on another machine in the Chat view', () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(onBuild({ agent: 'gemini', branch: { name: 'quiet-otter', create: true, worktree: true } }))
 
     expect(daemon.addWorktree).toHaveBeenCalledWith('/srv/app', 'quiet-otter', 2, undefined)
-    expect(daemon.startAcpChat).toHaveBeenCalledWith('/srv/app-quiet-otter', 'gemini', 2)
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/srv/app-quiet-otter', 'gemini', 2, null)
     expect(daemon.switchBranch).not.toHaveBeenCalled()
   })
 
@@ -294,7 +305,7 @@ describe('starting a chat from the draft in the Chat view', () => {
   it('starts an agent with no adapter of its own over ACP, by its name, and sends its first message as written', async () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'gemini', model: 'pro', message: 'hello' }))
 
-    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'gemini', 0)
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'gemini', 0, null)
     expect(daemon.startChatSession).not.toHaveBeenCalled()
     expect(daemon.startAgentSession).not.toHaveBeenCalled()
     expect(daemon.submitMessage).toHaveBeenLastCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'hello', undefined)
@@ -303,7 +314,7 @@ describe('starting a chat from the draft in the Chat view', () => {
   it('starts another agent picked for the session over ACP by its id, in place of the draft\'s own', async () => {
     await starts({ openSessionsIn: 'chat' }).startNewChat(request({ agent: 'claude', acp: 'opencode', message: 'hello' }))
 
-    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'opencode', 0)
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app', 'opencode', 0, null)
     expect(daemon.startChatSession).not.toHaveBeenCalled()
     expect(daemon.submitMessage).toHaveBeenLastCalledWith({ id: '44', generation: 1 }, expect.any(Number), 'hello', undefined)
   })
@@ -362,5 +373,68 @@ describe('starting a chat from the draft in the Chat view', () => {
     starts({ openSessionsIn: 'chat' }).warmNewChat({ agent: 'claude', folder: '/dev/app', model: 'default', reasoning: 'default', mode: 'default', bypass: undefined } as never)
 
     expect(daemon.prewarmAgentSession).not.toHaveBeenCalled()
+  })
+})
+
+// The panel's Open (and Recent sessions) has the service make a removed worktree again, then starts the session there
+// through the same start as any resume, so the view Settings picks decides how it opens.
+describe('reopening a saved session whose worktree the service makes again', () => {
+  const saved = (agent: string): ClosedSession => ({ agent, session: ID, cwd: '/dev/app-wt', branch: 'feat/parser', title: 'Fix the parser', at: 1, folder_present: false, worktree: '/dev/app-wt', repo: '/dev/app' })
+
+  async function reopen(openSessionsIn: 'chat' | 'terminal', agent: string) {
+    const { startNewChat } = starts({ openSessionsIn })
+    const opener = renderHook(() => useRecentSessions(startNewChat, false, openSessionsIn === 'chat')).result
+    opener.current.openSaved([saved(agent)], 'app')
+    await waitFor(() => { expect(toast.success).toHaveBeenCalledWith('Opened 1 session', { context: 'app' }) })
+    toast.success.mockClear()
+  }
+
+  it('opens a remade Claude or Codex session as a chat when chats are the default', async () => {
+    await reopen('chat', 'claude')
+    await reopen('chat', 'codex')
+
+    expect(daemon.readyClosedFolder).toHaveBeenCalledWith('claude', ID)
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(1, '/dev/app-wt', 'claude', ID, expect.any(String))
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(2, '/dev/app-wt', 'codex', ID, expect.any(String))
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+    expect(daemon.reopenClosedSession).not.toHaveBeenCalled()
+  })
+
+  it('opens it in its terminal, resuming its conversation, when the terminal is the default', async () => {
+    await reopen('terminal', 'claude')
+
+    expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app-wt', 'claude', expect.arrayContaining(['--resume', ID]))
+    expect(daemon.resumeChatSession).not.toHaveBeenCalled()
+    expect(daemon.reopenClosedSession).not.toHaveBeenCalled()
+  })
+
+  async function reopenWithNote(openSessionsIn: 'chat' | 'terminal', agent: string, note: string) {
+    const { startNewChat } = starts({ openSessionsIn })
+    const opener = renderHook(() => useRecentSessions(startNewChat, false, openSessionsIn === 'chat')).result
+    opener.current.openSaved([saved(agent)], 'app')
+    await waitFor(() => { expect(toast.warning).toHaveBeenCalledWith('Opened 1 session, 1 as a new conversation', { context: 'app', description: `“Fix the parser” started a new conversation: ${note}.` }) })
+  }
+
+  it('loads a chat over ACP by its id, in the folder the service made again', async () => {
+    await reopen('chat', 'opencode')
+
+    expect(daemon.startAcpChat).toHaveBeenCalledWith('/dev/app-wt', 'opencode', 0, ID)
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('starts a new chat with that ACP agent there, and says so, when the agent cannot load its conversation', async () => {
+    daemon.startAcpChat.mockImplementationOnce(() => Promise.reject(new Error('The agent did not continue the saved conversation')))
+
+    await reopenWithNote('chat', 'opencode', 'The agent did not continue the saved conversation')
+
+    expect(daemon.startAcpChat).toHaveBeenNthCalledWith(1, '/dev/app-wt', 'opencode', 0, ID)
+    expect(daemon.startAcpChat).toHaveBeenNthCalledWith(2, '/dev/app-wt', 'opencode', 0, null)
+  })
+
+  it('starts Gemini in its terminal with a new conversation even when chats are the default, and says so', async () => {
+    await reopenWithNote('chat', 'gemini', 'Gemini cannot continue a conversation from here')
+
+    expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app-wt', 'gemini', expect.not.arrayContaining(['--resume']))
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
   })
 })

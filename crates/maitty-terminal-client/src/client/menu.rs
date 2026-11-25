@@ -1122,12 +1122,19 @@ impl App {
             Act::RemoveReference(root, path, name) => self.remove_reference(root, path, name),
             Act::Tidy(machine, items) => {
                 self.notify("Cleaning up worktrees…".into(), false);
-                self.cmd_on(machine, Command::TidyWorktrees { items });
+                self.cmd_on(
+                    machine,
+                    Command::TidyWorktrees {
+                        items,
+                        answer_each: false,
+                    },
+                );
             }
             Act::RemoveKept(path) => {
                 self.notify("Removing the worktree's folder…".into(), false);
                 self.cmd(Command::TidyWorktrees {
                     items: vec![(path, false)],
+                    answer_each: false,
                 });
             }
             Act::RightClicks(t) => {

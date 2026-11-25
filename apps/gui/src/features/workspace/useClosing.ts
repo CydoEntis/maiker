@@ -11,7 +11,7 @@ import { guardDrafts, inPane, ofSessions } from '@/features/documents/draftGuard
 import { isChatSession } from './model/chatSession'
 import { type Layout, removePane, removeSessions } from './model/layout'
 import { agentLabel, displayName, type SessionView } from './model/session'
-import { isShell, keepsRunningUnseen, sessionWords } from './model/sidebar'
+import { isShell, keepsRunningUnseen, rowTitle, sessionWords } from './model/sidebar'
 import type { AgentTerminals } from '@/data/agentTerminals'
 
 /** How long a closing pane shrinks before its session ends (matches `.mx-pane-cell.is-closing` in pane.css), and how long it is kept marked if the close did not happen. */
@@ -37,6 +37,14 @@ export function closeAsk(closing: readonly SessionView[]): ConfirmAsk {
     branch: only.branch,
     worktree: only.worktree && only.checkout !== null ? folderOf(only.checkout) : null,
   })
+}
+
+/**
+ * What to ask before `closing` (sessions that have not ended, at least one) close from a list that names them: one is
+ * asked about as its pane's close asks, several by name as Close project names them, up to three and a count of the rest.
+ */
+export function closeNamedAsk(closing: readonly SessionView[]): ConfirmAsk {
+  return closing.length === 1 ? closeAsk(closing) : confirmAsk('close-session', { names: closing.map(rowTitle) })
 }
 
 /** Closing panes and sessions, asking first (`confirm`) unless nothing in them is still running. */
@@ -99,6 +107,17 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
     else confirm(closeAsk(live), close)
   }, [paneSessions, confirm])
 
+  /**
+   * Ends the sessions in `ids` chosen from a list (a project's Workspace panel): one question naming the running ones
+   * (`closeNamedAsk`), then `endSessions`, so drafts are asked about and each close keeps the service's undo. Ended ones
+   * close without asking.
+   */
+  const closeSessions = useCallback((ids: readonly string[]) => {
+    const live = ids.flatMap((id) => paneSessions.get(id) ?? []).filter((session) => !session.ended)
+    if (live.length === 0) endSessions([...ids])
+    else confirm(closeNamedAsk(live), () => { endSessions([...ids]) })
+  }, [paneSessions, confirm, endSessions])
+
   // A pane that is closing shrinks away first (its neighbours grow into the room as it goes); the session ends
   // when that is done. If the close does not happen it grows back.
   const [closingPanes, setClosingPanes] = useState<ReadonlySet<string>>(() => new Set())
@@ -142,5 +161,5 @@ export function useClosing({ setLayout, queryClient, layout, sessions, flash, pa
     // Ending the session takes its documents with it: ask about their drafts before the pane starts to shrink.
     askToClose([pane.sessionId], () => { guardDrafts(ofSessions(new Set([pane.sessionId])), () => { closePaneNow(paneId) }) })
   }, [layout, paneSessions, setLayout, flash, askToClose, closePaneNow])
-  return { askToClose, endSessions, closePaneById, closingPanes }
+  return { askToClose, closeSessions, endSessions, closePaneById, closingPanes }
 }

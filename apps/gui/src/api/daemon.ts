@@ -60,6 +60,8 @@ const ConversationSummarySchema = z.object({
   status_since: z.number().int().nonnegative().nullable().default(null).catch(null),
   // A service restart cut it mid-reply and nobody has taken it up; absent when not, and from an older daemon.
   interrupted: z.boolean().default(false),
+  // The agent's own conversation id, which its resume takes, for a chat session; absent for a pane's and from an older daemon.
+  session: z.string().nullable().default(null).catch(null),
 })
 // What links a terminal pane to its chat: nothing else in a summary may take the chat away (a field this window does
 // not know yet, another agent's name). The full summary below is only for the list.
@@ -929,8 +931,10 @@ export async function resumeChatSession(folder: string, agent: 'claude' | 'codex
  * Starts a chat with `agent` over ACP in `folder`, on this computer (ADR 0020). Only the agent's name is sent: the
  * daemon picks the program from its own config, and the agent's own settings decide its model and what it may do.
  */
-export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE): Promise<{ id: number; generation: number }> {
-  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }) })
+export async function startAcpChat(folder: string, agent: string, machine: number = LOCAL_MACHINE, session: string | null = null): Promise<{ id: number; generation: number }> {
+  // `session` opens the agent's own saved conversation by its id (`session/load`), on this computer only; an agent that
+  // cannot load one, or a service older than this, refuses the start.
+  return invokeParsed('start_acp_chat', CreatedConversationSchema, { cwd: folder, agent, ...(machine === LOCAL_MACHINE ? {} : { machine }), ...(session === null ? {} : { session }) })
 }
 
 /** Connects an agent's status hooks (`maiker integrate <agent>`), so its chat sees when it works, needs you or is done. */
@@ -1080,6 +1084,35 @@ export async function closedSessions(): Promise<ClosedSession[] | null> {
  */
 export async function reopenClosedSession(agent: string, session: string): Promise<boolean> {
   return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
+}
+
+/**
+ * Has this computer's service make the removed folder of a closed or saved session it keeps again (its worktree, from the
+ * recorded repository and branch), starting nothing; resolves to the folder to start it in. Null when the service
+ * running is older than this and was not asked.
+ */
+export async function readyClosedFolder(agent: string, session: string): Promise<string | null> {
+  return invokeParsed('ready_closed_folder', z.string().nullable(), { agent, session })
+}
+
+/** A session as a project's saved open set keeps it: a closed session's record, with no word on its folder. */
+export type SavedSession = Omit<ClosedSession, 'folder_present'>
+
+/**
+ * Has this computer's service keep `sessions` as the set open in `project` (an absolute folder), replacing the one it
+ * kept; an empty set forgets the project. False when the service running is older than this and was not asked.
+ */
+export async function saveWorkspace(project: string, sessions: readonly SavedSession[]): Promise<boolean> {
+  return invokeParsed('save_workspace', z.boolean(), { project, sessions })
+}
+
+/**
+ * The sessions this computer's service kept as open in `project` when it was last parked or closed, in the order saved,
+ * each saying whether its folder is still there as a closed session does. `project` is the opened project's folder as
+ * the window spells it, since the service matches it exactly. Null when the service running is older than the question.
+ */
+export async function savedWorkspace(project: string): Promise<ClosedSession[] | null> {
+  return invokeParsed('saved_workspace', z.array(ClosedSessionSchema).nullable(), { project })
 }
 
 /**
@@ -1294,7 +1327,7 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
           repo: root === null ? null : (root.split(/[\\/]/).filter(Boolean).at(-1) ?? null),
           agent,
           process: agent,
-          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }), ...(waking ? { waking: true } : {}) },
+          chat: { conversation: key, generation: summary.generation, ...(machine === undefined ? {} : { machine: machine.name }), ...(acp ? { acp: true } : {}), ...(summary.capabilities === null ? {} : { steers: summary.capabilities.steer }), ...(waking ? { waking: true } : {}), ...(summary.session === null ? {} : { session: summary.session }) },
           details: { asking: '', interrupted: null, chatCutOff: summary.interrupted, timeline: [], usage: { context: null, cost: null, tokens: null }, since: summary.status_since ?? 0, helperAsk: summary.helper_ask, subagents: summary.helpers.map(toSubagentDetail), limits: (limitsOf.get(agent) ?? []).map((limit) => ({ name: limit.name, used: limit.used, resetsAt: limit.resets_at })) },
         }
       : {}),

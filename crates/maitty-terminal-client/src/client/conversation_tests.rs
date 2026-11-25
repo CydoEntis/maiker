@@ -26,6 +26,7 @@ fn conversation() -> ConversationSummary {
         agent: None,
         status_since: None,
         interrupted: false,
+        session: None,
     }
 }
 

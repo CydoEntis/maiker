@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { badgeLetters, filterChoices, machineKey, NO_FILTER, orderPlacement, passesFilter, projectFoldKey, projectName, sessionNodes, sidebarOrder, type HeldRow, type ProjectGroup, type SidebarFilter, type SidebarSort } from './sidebarTree'
+import { badgeLetters, filterChoices, machineKey, NO_FILTER, orderPlacement, passesFilter, projectFoldKey, projectName, sessionNodes, SIDEBAR_SORTS, sidebarOrder, type HeldRow, type ProjectGroup, type SidebarFilter, type SidebarSort } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 const HEADS = [LOCAL_HEAD, DEVBOX]
@@ -120,8 +120,36 @@ describe('the session on screen', () => {
   })
 })
 
+describe('the No project group', () => {
+  const START = '/home/me'
+  const looseOrder = (sessions: readonly SessionView[], saved: readonly OpenedProject[], sort: SidebarSort) => {
+    const grouping = groupByProject(sessions, saved, START)
+    return sidebarOrder(HEADS, grouping.machines, NO_FILTER, null, sort, grouping.opened).projects
+  }
+
+  it('holds this computer\'s sessions in the start folder under one heading, after every opened project whatever the sort', () => {
+    const sessions = [session(1, START, { status: 'needs-you' }), session(2, '/home/me/shop'), session(3, START), session(4, '/srv/api', remote)]
+    for (const sort of SIDEBAR_SORTS) {
+      const groups = looseOrder(sessions, [{ machineName: null, folder: '/home/me/shop' }], sort)
+      expect(groups.map((group) => [group.name, group.loose])).toEqual(expect.arrayContaining([['shop', false], ['api', false]]))
+      expect(groups.at(-1)).toMatchObject({ name: 'No project', loose: true, mark: 'needs' })
+      expect(groups.at(-1)?.rows.map((node) => node.session.id)).toEqual(['t1', 't3'])
+      expect(groups.filter((group) => group.loose)).toHaveLength(1)
+    }
+  })
+
+  it('is not listed while it has no session', () => {
+    expect(looseOrder([session(2, '/home/me/shop')], [], 'recent').map((group) => group.name)).toEqual(['shop'])
+  })
+
+  it('is offered by the filter as No project', () => {
+    const grouping = groupByProject([session(1, START), session(2, '/home/me/shop')], [], START)
+    expect(filterChoices(HEADS, grouping.machines).projects).toEqual(expect.arrayContaining([{ name: 'No project', count: 1, loose: true }, { name: 'shop', count: 1, loose: false }]))
+  })
+})
+
 describe('the filter', () => {
-  const sessions = [session(1, '/home/me/shop', { status: 'working' }), session(2, '/home/me/docs'), session(3, '/srv/api', { status: 'working', ...remote })]
+  const sessions =[session(1, '/home/me/shop', { status: 'working' }), session(2, '/home/me/docs'), session(3, '/srv/api', { status: 'working', ...remote })]
 
   it('narrows the list to one project or one machine', () => {
     expect(shape(order(sessions, [], { project: 'docs', machine: null }))).toEqual([['docs', ['t2']]])

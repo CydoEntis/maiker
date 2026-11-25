@@ -9,6 +9,7 @@ import type { SecretAsk, SessionStatus } from '@/features/workspace/model/sessio
 import type { SubagentView } from '@/features/workspace/model/subagents'
 import { hasPendingApproval, runningTurnStartedAt, type ChatFeed } from '../chatFeed'
 import { buildRows, type ChatRow } from '../chatRows'
+import { lastTurnStatus } from '../projection'
 import { findRow, registerChatFind } from '../chatSearch'
 import { useLatest } from '@/lib/useLatest'
 import { useChatFeed } from '../useChatFeed'
@@ -437,9 +438,13 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
   // working line) until it is sent and the history has it, so the chat never says "No messages yet" in between.
   const held = useHeldFirstMessage(sessionId)
   const heldByDaemon = useHeldByDaemon(sessionId)
+  // The daemon types in a message it holds, or was sent it by the start: once the history has what the person said, the
+  // stand-in for it goes, and is not drawn beside the history's own bubble meanwhile.
+  const personSpoke = useMemo(() => events.some((event) => event.kind === 'message' && event.role === 'user'), [events])
+  const shownHeld = heldByDaemon && personSpoke ? null : held
   const sentText = echo !== null && countUserMessages(events, echo.text) <= echo.baseline ? echo.text : null
-  const echoText = sentText ?? held
-  const echoThinking = sentText === null ? held !== null : echo !== null && !echo.quiet
+  const echoText = sentText ?? shownHeld
+  const echoThinking = sentText === null ? shownHeld !== null : echo !== null && !echo.quiet
   // What the history says without the working line or hidden runs: whether the agent has answered what was last asked,
   // and the summary a new chat starts from, which reads the last reply as it was said.
   const bareRows = useMemo(() => buildRows(events, false, root, echoText, false), [events, root, echoText])
@@ -588,8 +593,6 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
     releaseFirstMessage(sessionId)
     void sendText(held).then((delivered) => { if (!delivered) setComposerDraft(held) })
   }, [sessionId, held, heldByDaemon, ready, sending, sendText, setComposerDraft])
-  // The daemon types in a message it holds: once the history has what the person said, the stand-in for it goes.
-  const personSpoke = useMemo(() => events.some((event) => event.kind === 'message' && event.role === 'user'), [events])
   useEffect(() => {
     if (sessionId !== undefined && held !== null && heldByDaemon && personSpoke) releaseFirstMessage(sessionId)
   }, [sessionId, held, heldByDaemon, personSpoke])
@@ -826,7 +829,10 @@ export function ChatSession({ link, agent, online, root = null, onOpenDiff = nul
       ? { title: `Waking ${agentLabel(agent)} up…`, reason: 'This chat rested while Maiker restarted. It picks up where it was in a moment.' }
       : null
   // One element for all three, so a chat moving between them keeps its line (and its spinner) instead of mounting a new one.
-  const readLine = readNotice !== null || feed.error !== null ? <ReadProblemLine error={readNotice === null ? feed.error : null} notice={readNotice} onReconnect={reconnect} /> : null
+  // A turn that ended badly is why the agent stopped, and the error is its reason, not a failed read.
+  const turnEnded = lastTurnStatus(feed.projection)
+  const stoppedAgent = turnEnded === 'failed' || turnEnded === 'interrupted' ? agentLabel(agent) : null
+  const readLine = readNotice !== null || feed.error !== null ? <ReadProblemLine error={readNotice === null ? feed.error : null} notice={readNotice} onReconnect={reconnect} stoppedAgent={stoppedAgent} /> : null
   const dockProblem = problemView.line ?? readLine
 
   return (

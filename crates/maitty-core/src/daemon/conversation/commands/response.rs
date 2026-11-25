@@ -130,6 +130,15 @@ impl Daemon {
                 expected,
             } => {
                 let created_thread = expected.is_none();
+                // A saved conversation of an agent whose history the daemon records itself (one
+                // run over ACP, loaded by its id) brings no past the daemon kept: it opens as an
+                // empty chat, and the agent holds what was said before.
+                let loaded_unrecorded = !created_thread
+                    && !self.conversations.iter().any(|known| known.id == id)
+                    && crate::daemon::providers::adapter(settings.provider)
+                        .structured
+                        .as_ref()
+                        .is_some_and(|structured| structured.history == crate::daemon::providers::HistorySource::Recorded);
                 let thread = match validate_response(&value, &mut settings, expected.as_deref()) {
                     Ok(thread) => thread,
                     Err(error) => {
@@ -165,6 +174,7 @@ impl Daemon {
                     state: RecoveryState::Running,
                     settings: Some(settings),
                     awaiting_first_user_message: created_thread
+                        || loaded_unrecorded
                         || self
                             .conversations
                             .iter()

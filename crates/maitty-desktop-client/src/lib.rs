@@ -1337,11 +1337,25 @@ pub async fn new_worktree_session(
     }
 }
 
-/// Remove worktrees (a folder and whether to go on with uncommitted changes in it, which are lost).
-/// The daemon closes what runs in a worktree before it goes and answers at once; one something
-/// still runs in is left alone.
+/// How long removing worktrees may take: the daemon answers once every folder is gone, and deleting a large
+/// checkout (a `node_modules`, a build folder) is slow, on Windows above all.
+const TIDY_WORKTREES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// Remove worktrees (a folder and whether to go on with uncommitted changes in it, which are lost). The daemon
+/// keeps one something still runs in, and answers once it is done: `{removed: [folder], kept: [{path, why}]}`, by
+/// the folders as they were asked for, or null from a daemon before `WORKTREES_TIDIED_SINCE`, which does not say,
+/// so the caller looks again.
 pub async fn tidy_worktrees(items: Vec<(PathBuf, bool)>, daemon_executable: PathBuf) -> Result<Value> {
-    match request(ClientMsg::Command(Command::TidyWorktrees { items }), daemon_executable).await? {
+    let message = ClientMsg::Command(Command::TidyWorktrees { items, answer_each: true });
+    tidied_json(request_within(message, daemon_executable, TIDY_WORKTREES_TIMEOUT).await?)
+}
+
+fn tidied_json(reply: Reply) -> Result<Value> {
+    match reply {
+        Reply::WorktreesTidied { removed, kept } => Ok(json!({
+            "removed": removed.iter().map(|path| path.to_string_lossy()).collect::<Vec<_>>(),
+            "kept": kept.iter().map(|(path, why)| json!({ "path": path.to_string_lossy(), "why": why })).collect::<Vec<_>>(),
+        })),
         Reply::Ok => Ok(Value::Null),
         _ => bail!("The Maiker service gave an answer this app does not understand (worktree). Restart the service in Settings, or update the app so both are the same version."),
     }
@@ -2143,6 +2157,26 @@ fn reopen_closed_message(agent: String, session: String) -> ClientMsg {
     ClientMsg::Command(Command::ReopenClosedSession { agent, session })
 }
 
+/// Have this computer's daemon make the removed folder of a closed or saved session it keeps again, starting nothing,
+/// so the window starts the session there in the view it shows. The folder as a string, or null when the daemon running
+/// is from before this and was not asked.
+pub async fn ready_closed_folder(agent: String, session: String) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ReadyClosedFolder { agent, session });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("Could not reach the Maiker service")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::ClosedFolderReady { folder } => Ok(Value::String(folder.to_string_lossy().into_owned())),
+            _ => bail!("The Maiker service gave an answer this app does not understand (closed session's folder). Restart the service in Settings, or update the app so both are the same version."),
+        }
+    })
+    .await
+}
+
 /// Have this computer's daemon keep `sessions` as the set open in `project`, replacing what it kept. False when the
 /// daemon running is from before this and was not asked, so the caller carries on without a saved set.
 pub async fn save_workspace(project: PathBuf, sessions: Vec<maitty_shared::protocol::ClosedSession>) -> Result<Value> {
@@ -2154,7 +2188,9 @@ fn save_workspace_message(project: PathBuf, sessions: Vec<maitty_shared::protoco
     ClientMsg::Command(Command::SaveWorkspace { project, sessions })
 }
 
-/// The sessions this computer's daemon kept open in `project`. Null when the daemon running is older than the question.
+/// The sessions this computer's daemon kept open in `project`, each with `folder_present` as `closed_sessions` gives it,
+/// so the window knows which to start in place and which the daemon has to make again. Null when the daemon running is
+/// older than the question.
 pub async fn workspace(project: PathBuf) -> Result<Value> {
     let message = ClientMsg::Query(Query::Workspace { project });
     answered_within(REQUEST_TIMEOUT, async {
@@ -2165,7 +2201,7 @@ pub async fn workspace(project: PathBuf) -> Result<Value> {
             return Ok(Value::Null);
         }
         match ask(&mut connection, &message).await? {
-            Reply::Workspace(list) => Ok(serde_json::to_value(list)?),
+            Reply::Workspace(list) => with_folder_presence(list, FOLDER_LOOK_LIMIT, |path| path.is_dir()).await,
             _ => bail!("The Maiker service gave an answer this app does not understand (saved workspace). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
@@ -2175,7 +2211,7 @@ pub async fn workspace(project: PathBuf) -> Result<Value> {
 /// How long the closed sessions' folders are looked for, all of them together.
 const FOLDER_LOOK_LIMIT: Duration = Duration::from_secs(2);
 
-/// Each closed session as JSON with `folder_present`. The folders are looked at side by side on blocking threads, and
+/// Each closed or saved session as JSON with `folder_present`. The folders are looked at side by side on blocking threads, and
 /// one that has not answered by `limit` (a network share that is gone can hang for a long time) reads as missing.
 async fn with_folder_presence(
     list: Vec<maitty_shared::protocol::ClosedSession>,
@@ -2338,6 +2374,13 @@ pub async fn resume_chat_session(
 /// The start that opens the agent's saved session `session`. The name comes from the window, so it
 /// is checked here: it becomes part of a file name and of the agent's command line.
 fn saved_session_target(settings: LaunchSettings, session: String) -> Result<StartTarget> {
+    check_saved_session_name(&session)?;
+    Ok(StartTarget::Session { settings, thread_id: session })
+}
+
+/// A saved conversation's name as the window gives it: a letter or digit, then letters, digits,
+/// `-` and `_`, at most `MAX_SAVED_SESSION_NAME`.
+fn check_saved_session_name(session: &str) -> Result<()> {
     let mut letters = session.chars();
     let named = letters.next().is_some_and(|first| first.is_ascii_alphanumeric())
         && session.len() <= MAX_SAVED_SESSION_NAME
@@ -2345,7 +2388,7 @@ fn saved_session_target(settings: LaunchSettings, session: String) -> Result<Sta
     if !named {
         bail!("{session:?} is not a saved conversation's name");
     }
-    Ok(StartTarget::Session { settings, thread_id: session })
+    Ok(())
 }
 
 /// The longest name an agent gives a saved session, as the daemon's saved list allows.
@@ -2390,10 +2433,24 @@ async fn start_conversation(target: StartTarget, branch: Option<String>, daemon:
     }
 }
 
-/// Start a chat with `agent` over ACP in `cwd`. Only the agent's name is sent: the daemon picks
-/// its program from its own config, so this app never names a program to run.
-pub async fn start_acp_chat(cwd: PathBuf, agent: String, daemon: impl Into<Daemon>) -> Result<Value> {
+/// Start a chat with `agent` over ACP in `cwd`, or, with `session`, open the agent's own saved
+/// conversation by its id (this computer only, where it was saved). Only the agent's name is sent:
+/// the daemon picks its program from its own config, so this app never names a program to run. A
+/// daemon older than loading one is refused in words, and so is an agent that cannot load one (the
+/// daemon's answer).
+pub async fn start_acp_chat(cwd: PathBuf, agent: String, session: Option<String>, daemon: impl Into<Daemon>) -> Result<Value> {
     let daemon = daemon.into();
+    if let Some(session) = session {
+        if !matches!(daemon, Daemon::Local(_)) {
+            bail!("A saved conversation is resumed on the computer that saved it");
+        }
+        let target = acp_session_target(cwd, agent, session)?;
+        let message = ClientMsg::Command(Command::ConversationStart { target, branch: None });
+        return match ask_running_daemon_if_it_reads(&message).await? {
+            Reply::ConversationStarted { id, generation } => Ok(json!({"id": id, "generation": generation})),
+            _ => bail!("The Maiker service gave an answer this app does not understand (conversation start). Restart the service in Settings, or update the app so both are the same version."),
+        };
+    }
     let target = match &daemon {
         Daemon::Local(_) => acp_start_target(cwd, agent)?,
         Daemon::Remote(_) => remote_acp_target(cwd, agent)?,
@@ -2420,6 +2477,16 @@ fn acp_start_target(cwd: PathBuf, agent: String) -> Result<StartTarget> {
         bail!("The project path is a file, not a folder.");
     }
     Ok(StartTarget::Acp { agent, cwd })
+}
+
+/// `acp_start_target` for the agent's saved conversation `session`, whose id is checked as any
+/// saved conversation's is.
+fn acp_session_target(cwd: PathBuf, agent: String, session: String) -> Result<StartTarget> {
+    check_saved_session_name(&session)?;
+    let StartTarget::Acp { agent, cwd } = acp_start_target(cwd, agent)? else {
+        bail!("An ACP start was not made");
+    };
+    Ok(StartTarget::AcpSession { agent, cwd, session })
 }
 
 #[cfg(test)]
@@ -2459,7 +2526,20 @@ mod remote_start_tests {
 
 #[cfg(test)]
 mod acp_start_tests {
-    use super::{StartTarget, acp_start_target};
+    use super::{StartTarget, acp_session_target, acp_start_target};
+
+    #[test]
+    fn a_saved_acp_conversation_names_the_agent_the_folder_and_a_plain_id() {
+        let folder = std::env::temp_dir().canonicalize().unwrap();
+
+        let target = acp_session_target(folder.clone(), "opencode".into(), "ses_1-a".into()).unwrap();
+
+        assert_eq!(target, StartTarget::AcpSession { agent: "opencode".into(), cwd: folder.clone(), session: "ses_1-a".into() });
+        for id in ["", "-flag", "a b", "a;b"] {
+            assert!(acp_session_target(folder.clone(), "opencode".into(), id.into()).is_err(), "{id:?}");
+        }
+        assert!(acp_session_target(folder, "Not A Name".into(), "ses_1".into()).is_err());
+    }
 
     #[test]
     fn an_acp_start_names_the_agent_and_a_folder_that_is_there() {
@@ -3616,6 +3696,21 @@ mod agent_command_tests {
     }
 
     #[test]
+    fn a_clean_up_answers_by_folder_or_null_from_a_service_that_does_not_say() {
+        use super::{Reply, tidied_json};
+        let answer = Reply::WorktreesTidied {
+            removed: vec!["/code/shop-old".into()],
+            kept: vec![("/code/shop-busy".into(), "something is running in it".into())],
+        };
+        assert_eq!(
+            tidied_json(answer).unwrap(),
+            serde_json::json!({ "removed": ["/code/shop-old"], "kept": [{ "path": "/code/shop-busy", "why": "something is running in it" }] })
+        );
+        assert_eq!(tidied_json(Reply::Ok).unwrap(), serde_json::Value::Null);
+        assert!(tidied_json(Reply::Text("?".into())).is_err());
+    }
+
+    #[test]
     fn the_open_set_is_never_sent_to_a_service_from_before_it() {
         use super::{ClientMsg, Query, daemon_reads, refuse_unless_daemon_reads, safe_to_ask_twice, save_workspace_message};
         use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, WORKSPACE_SINCE};
@@ -3629,6 +3724,18 @@ mod agent_command_tests {
             assert!(daemon_reads(&message, WORKSPACE_SINCE));
             assert!(daemon_reads(&message, PROTOCOL_VERSION));
         }
+    }
+
+    #[test]
+    fn a_folder_is_made_ready_only_by_a_service_that_reads_it_and_an_older_one_reopens_instead() {
+        use super::{ClientMsg, Command, daemon_reads, reopen_closed_message};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, READY_CLOSED_FOLDER_SINCE};
+        let ready = ClientMsg::Command(Command::ReadyClosedFolder { agent: "claude".into(), session: "abc".into() });
+        assert!(!daemon_reads(&ready, READY_CLOSED_FOLDER_SINCE - 1));
+        assert!(daemon_reads(&ready, READY_CLOSED_FOLDER_SINCE));
+        assert!(daemon_reads(&ready, PROTOCOL_VERSION));
+        // What the window falls back to with an older service is as old as the window.
+        assert!(daemon_reads(&reopen_closed_message("claude".into(), "abc".into()), COMPATIBLE_SINCE));
     }
 
     #[test]

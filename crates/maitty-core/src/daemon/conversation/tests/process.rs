@@ -326,7 +326,7 @@ async fn a_codex_helper_is_listed_and_its_own_turn_never_touches_the_conversatio
             let thread = f.record.binding.session_id.clone();
             let before = {
                 let state = &d.conversation_states[&id];
-                (state.status, state.error.clone(), state.history_ready)
+                (state.status, state.shown_error().map(str::to_owned), state.history_ready)
             };
             let started = json!({"type":"subAgentActivity","id":"call_1","kind":"started","agentThreadId":"helper-thread",
                 "agentPath":"/root/probe_helper","model":"gpt-a","reasoningEffort":"low","startedAtMs":1_000});
@@ -345,7 +345,7 @@ async fn a_codex_helper_is_listed_and_its_own_turn_never_touches_the_conversatio
                 d.handle(Ev::Conversation(Event { owner, payload: Payload::Notification { method: method.into(), params } }));
             }
             let state = &d.conversation_states[&id];
-            assert_eq!((state.status, state.error.clone(), state.history_ready), before, "the helper changed nothing of the conversation's");
+            assert_eq!((state.status, state.shown_error().map(str::to_owned), state.history_ready), before, "the helper changed nothing of the conversation's");
             let summary = d.conversation_summaries().into_iter().find(|s| s.id == id).unwrap();
             assert_eq!(summary.helpers.len(), 1);
             let helper = &summary.helpers[0];

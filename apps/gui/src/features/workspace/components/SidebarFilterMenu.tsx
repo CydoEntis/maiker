@@ -56,7 +56,7 @@ export function SidebarFilterMenu({ projects, machines, filter, onFilter, sort, 
         <div className="mx-sbf-list is-projects" role="group" aria-label="Projects">
           {needle === '' && <Choice name="All projects" count={total} on={filter.project === null} onPick={() => { onFilter({ ...filter, project: null }) }} />}
           {matching.map((choice) => (
-            <Choice key={choice.name} name={choice.name} count={choice.count} on={filter.project === choice.name} mark={<ProjectBadge name={choice.name} />} onPick={() => { onFilter({ ...filter, project: choice.name }); setQuery('') }} />
+            <Choice key={choice.name} name={choice.name} count={choice.count} on={filter.project === choice.name} mark={<ProjectBadge name={choice.name} loose={choice.loose} />} onPick={() => { onFilter({ ...filter, project: choice.name }); setQuery('') }} />
           ))}
           {matching.length === 0 && needle !== '' && <div className="mx-sbf-none">No project matches.</div>}
         </div>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { MachineProjects, OpenedProject } from './openedProjects'
 import type { SessionView } from './session'
-import { projectOfSession, startProjectOn } from './startProject'
+import { draftFolderOn, projectOfSession, startProjectOn } from './startProject'
 
 const SHOP: OpenedProject = { machineName: null, folder: '/home/me/shop' }
 const BLOG: OpenedProject = { machineName: null, folder: '/home/me/blog' }
@@ -33,6 +33,31 @@ describe('the project a new session starts in', () => {
   it('is none when nothing is opened there, or the pick was closed since', () => {
     expect(startProjectOn(null, [], null, null)).toBeNull()
     expect(startProjectOn(null, MACHINES, null, { machineName: null, folder: '/home/me/gone' })).toBeNull()
+  })
+})
+
+describe('the folder New session opens the draft in', () => {
+  const START = '/home/me'
+
+  it('is the project in front, on this computer or another machine', () => {
+    expect(draftFolderOn(true, SHOP, START, true)).toBe(SHOP.folder)
+    expect(draftFolderOn(false, THERE, START, false)).toBe(THERE.folder)
+  })
+
+  it('is this computer\'s start folder with no project open there, for the draft\'s No project', () => {
+    expect(draftFolderOn(true, startProjectOn(null, [], null, null), START, false)).toBe(START)
+  })
+
+  it('is none when a project is opened first: another machine with none in front, this computer with projects open but none in front, or the start folder not known', () => {
+    expect(draftFolderOn(false, null, START, false)).toBeNull()
+    expect(draftFolderOn(true, null, START, true)).toBeNull()
+    expect(draftFolderOn(true, null, null, false)).toBeNull()
+    expect(draftFolderOn(true, null, '', false)).toBeNull()
+  })
+
+  it('is the start folder while a session of the No project group is in front', () => {
+    const loose: MachineProjects[] = [{ machineName: null, projects: [{ project: { machineName: null, folder: START }, sessions: [session('t5')], loose: true }] }]
+    expect(draftFolderOn(true, startProjectOn(null, loose, 't5', null), START, false)).toBe(START)
   })
 })
 

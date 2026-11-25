@@ -225,12 +225,11 @@ impl TurnProjector {
                     events.push(self.started(id.clone(), answer(String::new())));
                     events.push(self.ended(id, answer(output.clone()), ItemState::Completed));
                 }
+                // An error result's text is why the turn failed, not the answer: the answer keeps
+                // what was streamed, and the reason goes with the turn's end.
+                let answer_text = result.as_ref().filter(|text| !is_error && !text.is_empty());
                 for (message_id, streamed_text) in std::mem::take(&mut self.assistant_text) {
-                    let text = result
-                        .as_ref()
-                        .filter(|text| !text.is_empty())
-                        .unwrap_or(&streamed_text)
-                        .clone();
+                    let text = answer_text.unwrap_or(&streamed_text).clone();
                     events.push(self.ended(message_id, answer(text), ItemState::Completed));
                 }
                 let state = match (is_error, self.interrupted) {
@@ -238,10 +237,14 @@ impl TurnProjector {
                     (true, false) => ItemState::Failed,
                     (false, _) => ItemState::Completed,
                 };
+                let error = (state == ItemState::Failed)
+                    .then(|| result.as_deref().map(str::trim).filter(|text| !text.is_empty()))
+                    .flatten()
+                    .map(|text| text.chars().take(ERROR_MESSAGE_CHARS).collect());
                 events.push(ProviderEvent::TurnCompleted {
                     turn: self.turn_id.clone(),
                     state,
-                    error: None,
+                    error,
                     started_at_ms: Some(whole_seconds(self.started_at_ms)),
                     completed_at_ms: Some(whole_seconds(now_ms())),
                 });
@@ -309,6 +312,8 @@ fn now_ms() -> u64 {
 }
 
 pub const MAX_PENDING_TOOLS: usize = 64;
+/// The longest reason a failed turn passes on: it is a line under the chat, not a log.
+const ERROR_MESSAGE_CHARS: usize = 1024;
 const MAX_TOOL_INPUT_BYTES: usize = 64 * 1024;
 /// The kind every tool call is kept under: the history shows a tool call as a command step.
 const TOOL_STEP: &str = "commandExecution";
@@ -530,6 +535,44 @@ mod tests {
         assert_eq!(status(true, true), ItemState::Interrupted);
         assert_eq!(status(false, true), ItemState::Failed, "an error nobody asked for is a failure");
         assert_eq!(status(true, false), ItemState::Completed, "a turn that ended before the stop is complete");
+    }
+
+    #[test]
+    fn a_failed_turn_says_why_and_keeps_its_streamed_answer() {
+        let mut projector = projector();
+        projector
+            .project(OutputFrame::MessageStarted { message_id: "message-1".into(), model: "model".into() })
+            .unwrap();
+        projector.project(OutputFrame::TextDelta { block_index: 0, text: "partial".into() }).unwrap();
+
+        let events = projector.project(result(true, Some(" API Error: 529 overloaded \n"))).unwrap();
+
+        let answer: Vec<&str> = events.iter().filter_map(|event| match event {
+            ProviderEvent::Item(Item { content: Content::Message { role: Role::Assistant, text }, state: ItemState::Completed, .. }) => Some(text.as_str()),
+            _ => None,
+        }).collect();
+        assert_eq!(answer, ["partial"], "the reason is not the answer");
+        assert!(matches!(
+            events.last(),
+            Some(ProviderEvent::TurnCompleted { state: ItemState::Failed, error: Some(error), .. }) if error == "API Error: 529 overloaded"
+        ));
+    }
+
+    #[test]
+    fn a_turn_reason_is_given_only_for_a_failure_and_is_bounded() {
+        let error = |interrupted: bool, text: &str| {
+            let mut projector = projector();
+            if interrupted {
+                projector.interrupt_acknowledged();
+            }
+            match projector.project(result(true, Some(text))).unwrap().pop() {
+                Some(ProviderEvent::TurnCompleted { error, .. }) => error,
+                other => panic!("{other:?}"),
+            }
+        };
+        assert_eq!(error(true, "stopped"), None, "a stop a person asked for is no error");
+        assert_eq!(error(false, "  "), None, "a blank reason is none");
+        assert_eq!(error(false, &"x".repeat(5000)).map(|e| e.chars().count()), Some(ERROR_MESSAGE_CHARS));
     }
 
     #[test]

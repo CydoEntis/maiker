@@ -86,11 +86,15 @@ export function helpersFoldKey(leadId: string): string {
   return `helpers:${leadId}`
 }
 
+/** What the group of sessions with no project is called: the words the New session draft's folder chip uses for it. */
+export const NO_PROJECT = 'No project'
+
 /**
  * What a project heading says: the repository's name for a git project, else the folder's last part. A project with no
- * session yet has only its folder to go by.
+ * session yet has only its folder to go by. The group of sessions in the start folder is No project.
  */
-export function projectName({ project, sessions }: ProjectSessions): string {
+export function projectName({ project, sessions, loose }: ProjectSessions): string {
+  if (loose === true) return NO_PROJECT
   return sessions.find((session) => session.repoName !== null)?.repoName ?? baseName(project.folder)
 }
 
@@ -119,6 +123,8 @@ export type ProjectGroup = {
   readonly sessions: readonly SessionView[]
   /** The project's own state, its most urgent row's (needs you, working, done, idle); null with no session in it. */
   readonly mark: StatusMarkKind | null
+  /** The No project group: this computer's sessions in the start folder, drawn with a plain mark and listed last. */
+  readonly loose: boolean
 }
 
 /** What narrows the sidebar: one project by its heading's name, one machine by its `machineKey`; null is all of them. */
@@ -156,7 +162,7 @@ const byName = (a: ProjectGroup, b: ProjectGroup): number => a.name.localeCompar
  * two projects. Each holds all its sessions, the most urgent first (`sessionNodes`), and says its own state on its
  * heading, so nothing moves between sections and a project stays where `sort` puts it whatever its sessions do:
  * `recent` is the one opened last first (`opened` is every opened project in the order it was opened), `name` is A to Z,
- * and `machine` is this computer's first, then each machine's by name. `held` keeps the session on screen where it was
+ * and `machine` is this computer's first, then each machine's by name; the No project group is last in each. `held` keeps the session on screen where it was
  * picked (`placedMark`).
  */
 export function sidebarOrder(heads: readonly MachineHead[], machines: readonly MachineProjects[], filter: SidebarFilter = NO_FILTER, held: HeldRow | null = null, sort: SidebarSort = 'recent', opened: readonly OpenedProject[] = []): SidebarOrder {
@@ -167,10 +173,13 @@ export function sidebarOrder(heads: readonly MachineHead[], machines: readonly M
     const group: ProjectGroup = {
       key: projectFoldKey(entry.project), name, project: entry.project, head, rows, sessions: entry.sessions,
       mark: rows.length === 0 ? null : mostUrgent(rows.map((node) => node.mark)),
+      loose: entry.loose === true,
     }
     return { group, at: openedAt === -1 ? at : openedAt, headAt: heads.indexOf(head) }
   })
+  // No project is not a project the person opened, so it sits after all of them whatever the sort.
   const sorted = [...placed].sort((a, b) => {
+    if (a.group.loose !== b.group.loose) return Number(a.group.loose) - Number(b.group.loose)
     if (sort === 'name') return byName(a.group, b.group) || a.headAt - b.headAt
     if (sort === 'machine') return a.headAt - b.headAt || byName(a.group, b.group)
     return b.at - a.at
@@ -188,7 +197,7 @@ export function orderPlacement(order: SidebarOrder): string {
   return groupsOf(order.projects)
 }
 
-export type ProjectChoice = { readonly name: string; readonly count: number }
+export type ProjectChoice = { readonly name: string; readonly count: number; readonly loose: boolean }
 export type MachineChoice = { readonly key: string; readonly label: string; readonly remote: boolean; readonly down: boolean; readonly count: number }
 
 /**
@@ -198,9 +207,13 @@ export type MachineChoice = { readonly key: string; readonly label: string; read
 export function filterChoices(heads: readonly MachineHead[], machines: readonly MachineProjects[]): { projects: ProjectChoice[]; machines: MachineChoice[] } {
   const listed = listedProjects(heads, machines)
   const counts = new Map<string, number>()
-  for (const { name, entry } of listed) counts.set(name, (counts.get(name) ?? 0) + entry.sessions.length)
+  const loose = new Set<string>()
+  for (const { name, entry } of listed) {
+    counts.set(name, (counts.get(name) ?? 0) + entry.sessions.length)
+    if (entry.loose === true) loose.add(name)
+  }
   return {
-    projects: [...counts.entries()].map(([name, count]) => ({ name, count })),
+    projects: [...counts.entries()].map(([name, count]) => ({ name, count, loose: loose.has(name) })),
     machines: heads.map((head) => ({
       key: machineKey(head.name),
       label: machineTitle(head),

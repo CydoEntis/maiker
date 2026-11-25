@@ -235,7 +235,9 @@ answer. It is this computer's daemon only. Structured runtimes may not ask for i
 
 A project heading's New worktree (`new_worktree_session(machine?, term, branch, base)`, `maitty_desktop_client::new_worktree_session`)
 asks the daemon that owns the pane: `Query::List` for the pane's workspace, then `Command::NewWorktree { ws, branch, base }`
-with no command, agent or split, so that daemon makes the worktree and opens a session in it. For a pane of another machine
+with no command, agent or split, so that daemon makes the worktree and opens a session in it. That is the Terminal
+view's New worktree; the Chat view's uses `add_branch_worktree` from the pane's folder and starts a chat there, since the
+shell `NewWorktree` opens is not listed in that view (UI › *desktop window sizes and sidebar order*). For a pane of another machine
 the host routes both over a request line (`Wire::new_worktree_daemon`) and takes only a `List`, cleaned like a snapshot,
 and `Ok` (`remote_chat::vet_new_worktree_reply`); a machine that takes no requests (down, needing an update, or turned
 away) is refused before anything is sent, as `<machine> is not connected`. The new session reaches the window in that
@@ -1050,7 +1052,9 @@ in `repo`; the standing's git and `gh` run only in a worktree its repository lis
 have their own `introduced_in` arm (`WORKTREE_STANDING_SINCE`); `COMPATIBLE_SINCE` stays 78, since an older daemon
 is simply not asked. The desktop command `worktree_standing { machine, repo, folder }` (this computer only) asks it through
 `maitty_desktop_client::worktree_standing`, which adds `missing` to the JSON, or fails with a line saying to restart
-the service when the daemon running is older than 90.
+the service when the daemon running is older than 90. The worktree manager and a project's Workspace panel ask it
+(`worktreeStanding`), one worktree per request with the main checkout as `repo`, under one shared cache key per
+worktree folder.
 
 `Conversation.worktree_origin` (main checkout, worktree folder, branch) is a defaulted field of the saved conversation, not
 of any message, so `PROTOCOL_VERSION` is unchanged; a test decodes the old shape. The daemon fills it when a chat opens
@@ -1321,6 +1325,50 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 130 adds `StartTarget::AcpSession { agent, cwd, session }` (`ACP_SESSION_SINCE`, with an arm in
+`ClientMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon is never sent it). It opens an ACP
+agent's own saved conversation by its id: the daemon picks the program by the agent's name as `StartTarget::Acp` does,
+and opens the session with `session/load` when the agent advertised `loadSession`; else the start is refused with
+`ServerMsg::Error` ("The agent did not continue the saved conversation …") and no chat is kept. A loaded one starts as
+an empty chat (the daemon recorded none of its past; the agent holds it). Human clients only, this computer only: the
+desktop host's `start_acp_chat { …, session }` refuses one for another machine, checks the id as any saved
+conversation's (`check_saved_session_name`) and asks a daemon before 130 nothing (an error in words). The workspace
+panel's Open starts a new chat with that agent in the same folder when the load is refused, and says so in its toast.
+Tests: `a_daemon_from_before_acp_sessions_is_never_asked_to_load_one`,
+`a_saved_acp_conversation_is_loaded_by_its_id_when_the_agent_can_load_one`,
+`a_saved_acp_conversation_whose_agent_cannot_load_one_is_refused_saying_why`,
+`a_saved_acp_conversation_names_the_agent_the_folder_and_a_plain_id`.
+
+Protocol 129 adds `Command::ReadyClosedFolder { agent, session }` and `Reply::ClosedFolderReady { folder }`
+(`READY_CLOSED_FOLDER_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays 122, since an older daemon
+is never sent the command and an older client is never sent the reply). It makes the folder of a session the daemon
+keeps (its closed list, then the saved sets) ready as `ReopenClosedSession` does, worktree made again by the same
+rules, hook run and listed with the checkouts the app made, and starts nothing: the answer is the folder (the one it
+worked in, or its worktree's top when that subfolder is gone), else `ServerMsg::Error` with the reason. No resume
+template is needed, since nothing is typed. Human clients only; another machine's answer is ignored (`remote_policy`).
+The desktop host's `ready_closed_folder { agent, session }` (`maitty_desktop_client::ready_closed_folder`, this
+computer only, on a connection of its own) gives the window the folder, or null without asking from a daemon before
+129. The window then starts the session there through `startNewChat` with `resume` (`reopenRemoved`), so a remade
+session opens as a chat or in its terminal as Settings › Open sessions in says; from an older daemon it falls back to
+`reopen_closed_session`, which starts it in its terminal. Tests:
+`a_peer_from_before_ready_folders_still_talks_and_is_never_sent_one`,
+`a_folder_made_ready_is_answered_with_and_nothing_is_started_there`,
+`a_folder_is_made_ready_only_by_a_service_that_reads_it_and_an_older_one_reopens_instead`.
+
+Protocol 128 adds `Command::TidyWorktrees.answer_each` (`#[serde(default)]`) and `Reply::WorktreesTidied { removed,
+kept }` (`WORKTREES_TIDIED_SINCE`, with an arm in `ServerMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122). A clean-up
+answers once the removing is done; with `answer_each` it answers `WorktreesTidied` instead of the notice and `Ok`:
+`removed` the folders it removed and `kept` each folder it kept with one line saying why ("it isn't a worktree",
+"something is running in it", or git's own first line), both by the folder exactly as it was asked for, so a list finds
+its own rows. The daemon's rules for what it removes do not change (`tidy_plan`, `runs_in`). A daemon at 127 ignores the
+flag and answers `Ok`; a client at 127 never sets it and is never sent the reply; another machine's answer is ignored
+(`remote_policy`). The terminal app's clean-up sends it unset and keeps its notice. The desktop host's
+`remove_worktrees { machine, items }` (this computer only) sends it set through `maitty_desktop_client::tidy_worktrees`,
+waiting up to ten minutes (`TIDY_WORKTREES_TIMEOUT`, since deleting a large checkout is slow), and gives the window
+`{removed: [folder], kept: [{path, why}]}`, or null from a daemon before 128. Tests:
+`a_peer_from_before_tidied_answers_still_tidies_and_is_never_sent_one`, `a_clean_up_only_takes_worktrees_nothing_runs_in`,
+`a_clean_up_answers_by_folder_or_null_from_a_service_that_does_not_say`.
+
 Protocol 127 adds `Command::SaveWorkspace { project, sessions }`, `Query::Workspace { project }` and
 `Reply::Workspace(Vec<ClosedSession>)` (`WORKSPACE_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays
 122, since an older daemon is never sent the command or the question and an older client is never sent the reply). The
@@ -1333,7 +1381,18 @@ control-character project is refused with an error. `Reply::Workspace` is the se
 another machine's answer is ignored (`remote_policy`). The desktop client sends them through `save_workspace` (false
 without asking from an older daemon) and `workspace` (null from an older daemon); tests:
 `a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one`,
-`the_open_set_is_never_sent_to_a_service_from_before_it`.
+`the_open_set_is_never_sent_to_a_service_from_before_it`. The window saves through the host's `save_workspace` command
+(`saveWorkspace` in `api/daemon.ts`) when a project is closed, and reads through `saved_workspace { project }`
+(`savedWorkspace`, `maitty_desktop_client::workspace`: the list, each record with `folder_present` added as
+`closed_sessions` adds it, or null without asking from a daemon older than 127) for the project's Workspace panel,
+whose Open starts a record in place or, when its folder is gone, asks `ready_closed_folder` (129) to make it again and starts it there (the
+daemon looks it up in its closed list, then in the projects' saved sets, so one that has left the 50-entry list is
+still made again: `a_saved_session_that_left_the_closed_list_gets_its_worktree_back_and_resumes_there`); both ask this computer's daemon only, each on a connection of its own. The daemon
+matches the folder exactly, so both name a project by its opened project's `folder` as the sidebar spells it. The window
+builds each saved record itself (`model/openSet.ts`): a terminal's agent conversation id is its pane's
+`TermInfo.session`, and a chat's is `ConversationSummary.session` (`#[serde(default)]`, written only when known, so it
+needs no bump: the 126 shape decodes in `conversation_summary_from_an_older_daemon_defaults_to_structured_execution`),
+the chat's `binding.session_id`, set for a chat session only, since a pane's conversation has its pane to say it.
 
 Protocol 126 adds `SavedConversation.title` (`#[serde(default)]`, so it needs no bump of its own: a test decodes the
 125 shape) and `Command::ConversationActiveAt { id, at }` (`CHAT_ACTIVE_AT_SINCE`, with an arm in `ClientMsg::introduced_in`;
@@ -1607,6 +1666,11 @@ They carry no transcripts, launch environment, configuration roots or credential
 Explicit read replies carry the same checkpoint-gated status and checkpoint
 summaries. Provider error notifications and failed/interrupted native turns stay
 blocked with an explicit error reason; they cannot report successful completion.
+That reason belongs to the turn (`turn_error`): sending the next message, or the
+next turn starting or completing without a reason of its own, clears it. A problem
+that outlives turns (a history that is incomplete or holds unsupported content, an
+unanswered provider request) is kept apart (`error`), so a turn neither clears nor
+hides it; while both are set, a read reports that one.
 Failures answer the owning pending request and notify attached observers, without
 injecting unrelated errors into other one-shot clients.
 

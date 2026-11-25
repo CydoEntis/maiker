@@ -33,6 +33,8 @@ export function useServiceReads({ failures, setFailures }: {
   })
   const homeQuery = useQuery({ queryKey: ['home-folder'], queryFn: defaultSessionFolder, staleTime: Infinity, retry: false })
   const home = homeQuery.data ?? ''
+  // Asked once: after an answer or a failure it is settled, and a failure leaves the home folder unknown ('').
+  const homeRead = !homeQuery.isPending
   const mismatch = sessionsQuery.isError ? daemonProtocolMismatch(sessionsQuery.error) : null
   // One read that failed while the sessions are known is tried again a second later before anything is called
   // unreachable: a single lost read is not an outage, and marking every session unknown for it is a false alarm.
@@ -42,5 +44,5 @@ export function useServiceReads({ failures, setFailures }: {
   // A service newer than this app cannot be restarted into agreement; only updating the app helps.
   const serviceNewer = mismatch !== null && mismatch.daemonProtocol > mismatch.guiProtocol
   const restartStatusQuery = useQuery({ queryKey: ['daemon-restart-status', mismatch?.daemonProtocol], queryFn: loadDaemonRestartStatus, enabled: Boolean(mismatch), retry: false })
-  return { sessionsQuery, online, home, retryDelay, serviceNewer, mismatch, restartStatusQuery }
+  return { sessionsQuery, online, home, homeRead, retryDelay, serviceNewer, mismatch, restartStatusQuery }
 }

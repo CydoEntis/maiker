@@ -30,7 +30,7 @@ async fn ending_a_chat_stops_its_agent_and_leaves_it_stopped_not_failed() {
         assert_eq!(record.state, crate::conversation::RecoveryState::Stopped);
         let state = &session.daemon.conversation_states[&id];
         assert_eq!(state.status, crate::protocol::Status::Idle);
-        assert!(state.error.is_none(), "stopping on purpose is not an error");
+        assert!(state.shown_error().is_none(), "stopping on purpose is not an error");
         assert!(!session.daemon.conversation_ending.contains(&id));
 
         // A stale generation is refused.
@@ -175,7 +175,7 @@ async fn turn_cancellation_uses_only_the_acknowledged_active_turn_id() {
         assert_eq!(requests[0]["params"]["threadId"], "exact-thread");
         assert_eq!(requests[0]["params"]["turnId"], "turn-1");
         assert_eq!(session.daemon.conversation_states[&id].status, crate::protocol::Status::Idle);
-        assert_eq!(session.daemon.conversation_states[&id].error, None);
+        assert_eq!(session.daemon.conversation_states[&id].shown_error(), None);
 
         let read = exchange(
             &mut session,

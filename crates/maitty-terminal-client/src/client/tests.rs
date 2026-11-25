@@ -4000,7 +4000,7 @@ mod screen_tests {
             std::iter::from_fn(|| rx.try_recv().map(|o| o.msg).ok())
                 .filter_map(|m| match m {
                     crate::protocol::ClientMsg::Command(
-                        crate::protocol::Command::TidyWorktrees { items },
+                        crate::protocol::Command::TidyWorktrees { items, .. },
                     ) => Some(items),
                     _ => None,
                 })

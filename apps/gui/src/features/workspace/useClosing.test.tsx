@@ -10,6 +10,7 @@ import { registerDraft, type DraftHandle } from '@/features/documents/draftGuard
 import { openArrangement, openDocumentBeside, splitPane, visibleSessionIds, type Layout } from './model/layout'
 import type { Conversation } from '@/data/preview'
 import { toSessionView, type SessionView } from './model/session'
+import type { ConfirmAsk } from '@/features/confirm/confirm'
 import { closeAsk, useClosing } from './useClosing'
 
 vi.mock('@/api/daemon', () => ({ closeSession: vi.fn() }))
@@ -32,6 +33,38 @@ describe('closing several sessions', () => {
     await waitFor(() => { expect(visibleSessionIds(layout)).toEqual(new Set(['b'])) })
     expect(wasClosed('b')).toBe(false)
     expect(wasClosed('a')).toBe(true)
+  })
+})
+
+describe('closing the sessions a Workspace panel ticked', () => {
+  const agent = (id: string, name: string, ended = false) => ({ ...session(id), name, process: 'claude', ended }) as SessionView
+  const setup = (live: SessionView[], ended: SessionView[] = []) => {
+    vi.mocked(closeSession).mockClear().mockResolvedValue(undefined)
+    const confirm = vi.fn<(ask: ConfirmAsk, run: () => void) => void>()
+    const setLayout = vi.fn()
+    const paneSessions = new Map([...live, ...ended].map((entry) => [entry.id, entry]))
+    const { result } = renderHook(() => useClosing({ setLayout, queryClient: new QueryClient(), layout: { arrangements: [], activeId: null }, sessions: live, flash: vi.fn(), paneSessions, agentTerminals: new Map(), confirm }))
+    return { result, confirm, setLayout }
+  }
+
+  it('asks once, naming the running ones as Close project does, then ends them through the close with undo', async () => {
+    const { result, confirm } = setup([agent('a', 'Fix tests'), agent('b', 'Port the parser')], [agent('c', 'Old build', true)])
+    act(() => { result.current.closeSessions(['a', 'b', 'c']) })
+    expect(confirm).toHaveBeenCalledTimes(1)
+    const [ask, run] = confirm.mock.calls[0] ?? []
+    expect(ask).toMatchObject({ kind: 'close-session', title: 'Close 2 sessions?', body: 'Fix tests and Port the parser stop, and they leave the sidebar.' })
+    expect(closeSession).not.toHaveBeenCalled()
+
+    act(() => { run?.() })
+    await waitFor(() => { expect(closeSession).toHaveBeenCalledTimes(2) })
+    expect(wasClosed('c')).toBe(true)
+  })
+
+  it('closes sessions that already ended without asking', () => {
+    const { result, confirm, setLayout } = setup([], [agent('d', 'Old build', true)])
+    act(() => { result.current.closeSessions(['d']) })
+    expect(confirm).not.toHaveBeenCalled()
+    expect(setLayout).toHaveBeenCalled()
   })
 })
 

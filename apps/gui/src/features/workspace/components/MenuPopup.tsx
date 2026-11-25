@@ -1,6 +1,6 @@
 import { useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { EDGE_PX } from './menuPoint'
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuPortal, DropdownMenuSeparator, DropdownMenuSub, DropdownMenuSubContent, DropdownMenuSubTrigger, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 
 /** A row that can be chosen. */
 export type MenuItem = {
@@ -17,6 +17,8 @@ export type MenuItem = {
   disabled?: boolean
   /** Why it is disabled, as its tooltip. */
   why?: string
+  /** The rows of a menu this row opens beside it (`Switch to…`'s projects); such a row runs nothing of its own. */
+  items?: readonly MenuItem[]
 }
 
 /** One row of a menu, a separator line between groups of rows, or a dim heading over a group. */
@@ -89,20 +91,47 @@ export function MenuPopup({ title, at, items, context, portalContainer, onClose 
           ? <DropdownMenuSeparator key={`sep-${String(index)}`} className="mx-ctx-sep" />
           : !isItem(entry)
             ? <DropdownMenuLabel key={`head-${entry.heading}`} className="mx-ctx-heading">{entry.heading}</DropdownMenuLabel>
-            : (
-            <DropdownMenuItem
-              key={entry.label}
-              className={`mx-ctx-item${entry.danger === true ? ' is-danger' : ''}`}
-              disabled={entry.disabled === true}
-              title={entry.disabled === true ? entry.why : undefined}
-              onSelect={() => { choose(entry) }}
-            >
-              {entry.icon !== undefined && <span className="mx-ctx-icon" aria-hidden="true">{entry.icon}</span>}
-              <span className="mx-ctx-label">{entry.label}</span>
-              {entry.hint !== undefined && <span className="mx-ctx-hint" aria-hidden="true">{entry.hint}</span>}
-            </DropdownMenuItem>
-          ))}
+            : entry.items === undefined
+              ? <Row key={entry.label} entry={entry} onChoose={choose} />
+              : (
+              <DropdownMenuSub key={entry.label}>
+                <DropdownMenuSubTrigger className="mx-ctx-item" disabled={entry.disabled === true} title={entry.disabled === true ? entry.why : undefined}>
+                  <RowText entry={entry} />
+                </DropdownMenuSubTrigger>
+                {/* In the app root as the menu is, so it reads the theme and no scrolling menu clips it. */}
+                <DropdownMenuPortal container={portalContainer ?? document.querySelector<HTMLElement>('.mx-app')}>
+                  <DropdownMenuSubContent className="mx-ctx" style={{ position: 'static' }} collisionPadding={EDGE_PX} onContextMenu={(event) => { event.preventDefault() }}>
+                    {entry.items.map((item, at) => <Row key={`${item.label}-${String(at)}`} entry={item} onChoose={choose} />)}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+              ))}
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+/** A row's mark, label and key. */
+function RowText({ entry }: { entry: MenuItem }) {
+  return (
+    <>
+      {entry.icon !== undefined && <span className="mx-ctx-icon" aria-hidden="true">{entry.icon}</span>}
+      <span className="mx-ctx-label">{entry.label}</span>
+      {entry.hint !== undefined && <span className="mx-ctx-hint" aria-hidden="true">{entry.hint}</span>}
+    </>
+  )
+}
+
+/** A row that runs when chosen. */
+function Row({ entry, onChoose }: { entry: MenuItem; onChoose: (entry: MenuItem) => void }) {
+  return (
+    <DropdownMenuItem
+      className={`mx-ctx-item${entry.danger === true ? ' is-danger' : ''}`}
+      disabled={entry.disabled === true}
+      title={entry.disabled === true ? entry.why : undefined}
+      onSelect={() => { onChoose(entry) }}
+    >
+      <RowText entry={entry} />
+    </DropdownMenuItem>
   )
 }

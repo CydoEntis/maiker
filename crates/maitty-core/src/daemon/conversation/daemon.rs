@@ -5,7 +5,7 @@ use super::{
 };
 #[cfg(test)]
 use super::{Launch, transport::LaunchIdentity};
-use crate::conversation::{ConversationId, Provider, RecoveryState};
+use crate::conversation::{ConversationId, RecoveryState};
 use crate::daemon::{Daemon, Ev, ServerMsg};
 use crate::protocol::Status;
 use anyhow::{Result, bail};
@@ -21,11 +21,21 @@ fn cache_write_result(result: Result<bool>) -> Result<()> {
 fn reset_state_after_provider_ready(state: &mut super::State) {
     state.status = Status::Idle;
     state.blocked = false;
-    state.error = None;
+    state.clear_errors();
     state.approvals.clear();
     state.file_change_previews.clear();
     state.unsupported_requests.clear();
     state.cancelling = None;
+}
+
+/// What a conversation says when its turn failed or was cut short and its agent gave no reason,
+/// naming the agent the person is talking to.
+fn turn_failure(agent: &str, state: &super::history::ItemState) -> Option<String> {
+    match state {
+        super::history::ItemState::Failed => Some(format!("{agent}'s turn failed; it gave no reason")),
+        super::history::ItemState::Interrupted => Some(format!("{agent}'s turn was interrupted")),
+        _ => None,
+    }
 }
 
 /// What the daemon needs to know about a reported event beside its history update.
@@ -38,18 +48,18 @@ struct Reported {
 
 impl Daemon {
     /// The name of the agent a conversation runs, for the errors it reports.
-    fn conversation_agent(&self, id: ConversationId) -> &'static str {
+    fn conversation_agent(&self, id: ConversationId) -> String {
         self.conversations
             .iter()
             .find(|c| c.id == id)
-            .map(|c| c.binding.provider)
-            .or_else(|| self.pending_starts.iter().find(|p| p.id == id).map(|p| p.settings.provider))
-            .map_or("Chat", |provider| match provider {
-                Provider::Codex => "Codex",
-                Provider::Claude => "Claude",
-                Provider::Gemini => "Gemini",
-                Provider::Acp => "Agent",
+            .map(|c| (c.binding.provider, c.binding.agent.as_deref()))
+            .or_else(|| {
+                self.pending_starts
+                    .iter()
+                    .find(|p| p.id == id)
+                    .map(|p| (p.settings.provider, p.settings.agent.as_deref()))
             })
+            .map_or_else(|| "Chat".into(), |(provider, agent)| provider.agent_label(agent))
     }
 
     pub(in crate::daemon) async fn initialize_conversation_cache(&mut self) -> Result<()> {
@@ -224,7 +234,7 @@ impl Daemon {
                     state.cancelling = None;
                     state.blocked = false;
                     state.status = Status::Idle;
-                    state.error = None;
+                    state.clear_errors();
                     state.history_ready = false;
                     self.conversation_history.reconnect(id)?;
                     return Ok(());
@@ -404,13 +414,19 @@ impl Daemon {
                 }
             }
         }
+        let failure = match &update {
+            Ok(Some(super::history::Update::SetTurnStatus { state, .. })) => {
+                turn_failure(&self.conversation_agent(id), state)
+            }
+            _ => None,
+        };
         let state = self.conversation_states.entry(id).or_default();
         if let Ok(Some(super::history::Update::ProviderError {
             message,
             will_retry,
         })) = &update
         {
-            state.error = Some(message.clone());
+            state.turn_error = Some(message.clone());
             state.status = if *will_retry {
                 Status::Working
             } else {
@@ -439,24 +455,18 @@ impl Daemon {
         {
             let cancelled_turn = reported.cancellation_finished
                 && *turn_state == super::history::ItemState::Interrupted;
-            let failure = match turn_state {
-                super::history::ItemState::Failed => Some("Codex turn failed"),
-                super::history::ItemState::Interrupted => {
-                    Some("Codex turn was interrupted")
-                }
-                _ => None,
-            };
             if cancelled_turn {
-                state.error = None;
+                state.clear_errors();
                 state.status = Status::Idle;
             } else {
-                if let Some(failure) = failure {
-                    state.error = Some(turn_error()?.unwrap_or_else(|| failure.into()));
-                } else if let Some(error) = turn_error()? {
-                    state.error = Some(error);
-                }
+                // A turn that starts, or ends well, is past what went wrong in the one before;
+                // only `turn_error` goes, so a lasting problem stays in `error`.
+                state.turn_error = match &failure {
+                    Some(failure) => Some(turn_error()?.unwrap_or_else(|| failure.clone())),
+                    None => turn_error()?,
+                };
                 state.status =
-                    if state.blocked || failure.is_some() || state.error.is_some() {
+                    if state.blocked || failure.is_some() || state.shown_error().is_some() {
                         Status::Blocked
                     } else if *turn_state == super::history::ItemState::Running {
                         Status::Working
@@ -516,6 +526,8 @@ impl Daemon {
                 {
                     state.error = None;
                 }
+                // The turn goes on to ask: whatever its provider reported going wrong was got past.
+                state.turn_error = None;
                 Some(request_id)
             }
             Err((request_id, method)) => {
@@ -616,7 +628,7 @@ impl Daemon {
         state.file_change_previews.clear();
         state.unsupported_requests.clear();
         state.blocked = false;
-        state.error = None;
+        state.clear_errors();
     }
 
     /// Keeps the conversation's helpers (ADR 0010) from what its provider reports, and takes a
@@ -703,6 +715,20 @@ impl Daemon {
 }
 
 #[cfg(test)]
+mod turn_failure_tests {
+    use super::super::history::ItemState;
+    use super::turn_failure;
+
+    #[test]
+    fn a_turn_that_ended_badly_names_the_agent_it_ran_on() {
+        assert_eq!(turn_failure("Claude", &ItemState::Failed).as_deref(), Some("Claude's turn failed; it gave no reason"));
+        assert_eq!(turn_failure("opencode", &ItemState::Interrupted).as_deref(), Some("opencode's turn was interrupted"));
+        assert_eq!(turn_failure("Codex", &ItemState::Completed), None);
+        assert_eq!(turn_failure("Codex", &ItemState::Running), None);
+    }
+}
+
+#[cfg(test)]
 mod cache_write_tests {
     use super::cache_write_result;
     use crate::protocol::Status;
@@ -720,6 +746,7 @@ mod cache_write_tests {
             status: Status::Blocked,
             blocked: true,
             error: Some("Codex stdout closed".into()),
+            turn_error: Some("Codex's turn was interrupted".into()),
             ..Default::default()
         };
 
@@ -727,7 +754,7 @@ mod cache_write_tests {
 
         assert_eq!(state.status, Status::Idle);
         assert!(!state.blocked);
-        assert!(state.error.is_none());
+        assert!(state.shown_error().is_none());
         assert!(!state.history_ready);
     }
 }

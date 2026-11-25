@@ -25,6 +25,8 @@ import { RenameDialog, RenameMachineDialog } from './RenameDialog'
 import { RecentSessionsDialog } from './RecentSessionsDialog'
 import { ResumeSavedDialog } from './ResumeSavedDialog'
 import { ImportChats } from './ImportChats'
+import { WorkspacePanel } from './WorkspacePanel'
+import { sessionsOfProject } from '../model/workspacePanel'
 import { CutOffDialog } from './CutOffDialog'
 import { machineProjects } from '../model/newSession'
 import { resolveStartFolder } from '../model/startFolder'
@@ -46,7 +48,7 @@ import { projectOf as projectNameOf, rowTitle } from '../model/sidebar'
 
 /** What opens over or beside the panes: Inspect, the palette, Settings and each dialog. */
 export function WorkspaceDialogs() {
-  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, importOpen, setImportOpen, importChats, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen, openAsk, setOpenAsk, paneSessions, cutOff, cutOffOpen, continueCutOff, notNowCutOff } = useWorkspace()
+  const { signInGitHub, gitHubSignInsEnded, signInAgent, sessionsQuery, mismatch, focusMode, projectOf, shortcutsOpen, platform, root, setShortcutsOpen, welcomeOpen, preferences, setPreferences, setWelcomeOpen, paletteOpen, paletteItems, paletteOutputItem, setPaletteOpen, focusedId, sessionMap, needsElsewhere, setFocusMode, focusModeChord, worktreeFrom, createWorktree, moveToWorktree, setWorktreeFrom, projectWorktreeFrom, setProjectWorktreeFrom, heads, sessions, getFileId, setGetFileId, getFile, updateAsk, setUpdateAsk, updateNamed, pendingConfirm, renamingMachine, machineNicknames, setMachineNicknames, setRenamingMachine, renameId, saveName, setRenameId, settingsSection, setSettingsSection, systemReducedMotion, systemDark, previewThemeSoon, showTestNotice, updater, restartNow, setPreviewTheme, online, runningVersion, machinesKnown, retryNamed, removeNamed, grantNamed, copyCommand, addNamed, openLoginNamed, cancelAdding, reducedMotion, usageInfo, chooseStartFolder, updatedTo, setUpdatedTo, restarting, home, recentOpen, setRecentOpen, reopenSession, savedOpen, setSavedOpen, resumeSaved, importOpen, setImportOpen, importChats, workspaceFor, setWorkspaceFor, openSaved, opening, startNewChat, closeSessions, canStart, focusedSession, specialistsId, setSpecialistsId, starting, afterAppUpdate, openProject, setOpenProject, openedProjects, sidebarMachineHeads, setNewChatSeed, setNewChatMachine, setNewChatOpen, openAsk, setOpenAsk, paneSessions, cutOff, cutOffOpen, continueCutOff, notNowCutOff } = useWorkspace()
   // The session whose request is open, while it still asks: an answer from anywhere closes the dialog with it.
   const asker = openAsk === null ? undefined : paneSessions.get(openAsk.sessionId)
   const askedSecret = openAsk?.kind === 'secret' ? asker?.secretAsk.find((ask) => ask.id === openAsk.askId) : undefined
@@ -180,7 +182,8 @@ export function WorkspaceDialogs() {
             )}
             {importOpen && <ImportChats locked={!canStart} onImport={importChats} onCancel={() => { setImportOpen(false) }} />}
             {cutOffOpen && <CutOffDialog sessions={cutOff} onContinue={continueCutOff} onNotNow={notNowCutOff} />}
-            {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
+            {workspaceFor !== null && <WorkspacePanel target={workspaceFor} sessions={sessionsOfProject(openedProjects.machines, workspaceFor.project)} windowSessions={sessions} chatView={preferences.openSessionsIn === 'chat'} opening={opening || starting} onOpen={openSaved} onClose={closeSessions} onCancel={() => { setWorkspaceFor(null) }} />}
+            {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onStart={startNewChat} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
             {renameId !== null && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />
             )}

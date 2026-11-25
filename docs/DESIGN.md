@@ -279,8 +279,9 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   columns, or down the left of a nested list (sessions under a project, steps under a turn), is structure and stays.
   `leftEdge.test.ts` fails on an `inset Npx 0 0` shadow or a left border wider than 1px.
 - **The tree.** Machine › project › session › helper or split. A project is a folder on a machine, so the same folder
-  on two machines is two projects. There is no session without a project: open a project, then start sessions and
-  worktrees from its `+`. A **helper** is a session its lead started; it nests one level under the lead while the lead
+  on two machines is two projects. A session starts in a project (open one, then start sessions and worktrees from its
+  `+`), or on this computer with no project, in the start folder (Settings), where its sessions are listed under
+  **No project**. A **helper** is a session its lead started; it nests one level under the lead while the lead
   exists. A **split** is a plain shell that belongs to its session, in the Terminal view only: it is not in the sidebar
   and it closes with the session. A session holds six panes at most, its own among them.
 - **Four states, and only four.** There is no failed, error, starting or waiting state in the window.
@@ -335,7 +336,11 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   looks the same everywhere**, the sidebar's selected-row fill: no check marks and no accent outline for "selected".
 - **Confirm only what is destructive or surprising.** One confirm dialog, used for: close a session, close a terminal
   or split, switch the view, discard changes, remove a project, pull when the branch has diverged. Each has **Don't ask
-  again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. Nothing else confirms.
+  again**, stored per kind, except a discard that deletes a file no commit has, which asks every time. The one
+  exception is removing several things that can each lose different work (a project's Workspace panel's Remove
+  worktrees): it confirms inside its own panel as a list, a row per item saying what it would lose and a tick of its own
+  for each that loses work, with no **Don't ask again** (the worktree manager's second press, "Lose …? Remove", is the
+  same for one row). Nothing else confirms.
 - **The window.** Title bar: the Maiker logo and name; at the right **one side-panel button** and the window controls.
   Under it: sidebar | main pane | optional file pane | optional side panel; the sidebar sits flat on the window ground and the others are cards with gaps; the side panel
   takes its own room beside a file pane too (it floats only in a narrow window). The **status bar**: version and `Update to …` at the
@@ -345,7 +350,10 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   were made, so a row stays put while its state changes, with idle rows dropped below the rest; folded, its heading
   says its own state, the most urgent of them. A project
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
-  opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). There
+  opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). The
+  **No project** group (this computer's sessions in the start folder that no opened project holds) is last in each
+  sort; it is listed only while it has sessions, and its badge is a plain folder in `--muted`, not two letters in a
+  project colour, since it is no project. There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
   project carries a machine tag (the server mark and name in that machine's own colour, `machineColor`, one of the five
   project colours picked from its name), amber while that machine is offline. A project's sessions are set in under its badge
@@ -664,8 +672,10 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   **Terminal** (Terminal view only), a divider, **New worktree…** and **Open worktree…** (both open their dialogs).
   Keys shown are the binding table's. **Project right-click menu**: the project's name (and machine when it is
   remote), **New session**, **New worktree…**, a divider, **Copy path**, **Show files** (the side panel's Files beside
-  a session of the project; off while it has none), a divider, **Close project…** (the confirm dialog, which names the
-  sessions still running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
+  a session of the project; off while it has none), **Workspace…**, **Switch to…** (a row with a chevron whose submenu
+  lists this computer's other opened projects by name; a pick asks Close project's question, then opens that
+  project's Workspace panel), a divider, **Close project…** (the confirm dialog, which names the sessions still
+  running in it; they stop and the project leaves the sidebar). **One word for it**: closing a session,
   a terminal or a project stops what runs in it and takes it off the sidebar, and every menu, toast and question says
   **Close session**, **Close terminal** or **Close project**; nothing says Remove for it.
   **Session rows** sit under their project set in 16px, with 6px and a 1px rule (the ink at 8%) down their left edge.
@@ -774,9 +784,11 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   no New session draft, once the service has listed its sessions (before that, "Looking for your sessions…"). One centred
   column, 460px at most, with no card of its own: the Maiker mark (54×42, the text colour at 16%), the heading **Nothing
   running**, then "Start an agent in" and the **project picker**, a quiet chip with the project's badge and name that
-  opens the one menu material listing every opened project (another machine's as `name · machine`) and **Open a
-  project…**. It shows the project picked here, else the one selected in the sidebar, else the one opened most recently;
-  with no project open the chip is **Open a project…** itself and no agent is listed. Under it is one 44px row per agent
+  opens the one menu material listing every opened project (another machine's as `name · machine`), then **No project**
+  (this computer's start folder, with the plain folder badge), and **Open a project…**. It shows the project picked
+  here, else the one selected in the sidebar, else the one opened most recently; with no project open it is **No
+  project**, so the agents start in the start folder. Only while the start folder is not known yet is the chip **Open a
+  project…** itself, with no agent listed. Under it is one 44px row per agent
   installed on this computer (every agent for a project on another machine, where that is not read): the agent's mark,
   its name and its number as a key hint, `1` first. A row, or its number key, starts that agent in the picked project the
   way the project's `+` menu does: the New session draft with that agent picked. The rows are off while nothing can start
@@ -784,7 +796,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   quiet text buttons, **Open a project** with its key from the binding table and **Add a remote machine** (the palette's
   New machine level), and the fine print "Sessions keep running when you close this window." While sessions exist and
   none is open the same screen is headed **No session open**, never "Nothing running".
-- **Starting a session.** A session is started from an opened project, never on its own, so there is no start menu; the empty state's agent rows start in the project its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked) and, with no project open on that machine, open a project first. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`), on the model and effort that agent was last started with or last given in a chat (`startChoiceFor`), so the two views agree. Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
+- **Starting a session.** A session is started from an opened project or, on this computer, from no project in the start folder; there is no start menu, and the empty state's agent rows start in the place its picker shows. The sidebar header's **Open a project** button (the rail's, at its foot, when the sidebar is the rail) is **Open a project**, the one palette for every machine; it adds the folder as a project with no session (UI › *Opened projects*). A project heading then starts things in it: its `+` menu lists the agents under **New session** (each opens the New session draft on the project's machine with its folder and that agent picked, where **Own worktree** can be switched on), then **Terminal** (Terminal view only), **New worktree…** and **Open worktree…**; a session's right-click menu has the two worktree rows for its own project. The keyboard's New session and the palette's "New session…" open the draft in the project in front (that of the session in front, else the one last opened or picked; a session under No project puts the start folder in front). With no project open on this computer they open the draft in the start folder, in its **No project** state (the folder chip says No project and the heading "What are we building today?"); with projects open there but none in front, and on another machine with no project in front, they open a project there first. A session started in the start folder, which usually holds every repository, starts in the agent's usual permission mode, never Bypass permissions, even while Bypass Permissions is on; the draft's shield can still pick Bypass permissions for that one session. When the start folder is no git repository the draft's branch chip says "no git repo", and its tooltip says the start folder is not a git repository, so the session has no branch or worktree. An agent with no chat (OpenCode, Cursor) is started from the palette's "Start <agent>", typed into a new shell. **In the Terminal view there is no draft**: a session there is the agent's own CLI, so every one of these starts opens the agent's terminal in the project's folder at once (the default agent when none is picked; `openDraft`), on the model and effort that agent was last started with or last given in a chat (`startChoiceFor`), so the two views agree. Only a start with something to set up first (New worktree with no session to make it from) keeps the draft.
 - **The running turn is drawn as it happens.** While the agent works, its steps (folded into runs as they come), its
   thoughts (the folded Thought row) and its reply appear in the chat as each read of the history brings them, above the
   working line (*The live box*, below). Steps and thoughts show as fast as the history has them. A reply is typed in a few
@@ -801,8 +813,9 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
 - **Panes change places with a glide.** Every change that moves panes (a split, a pane closed, a saved arrangement,
   maximize, a swap by drag) goes through a View Transition (`movePanes` in `paneTransition.ts`): only
   the browser's pictures of the panes move, cropped and never stretched, so text never reflows on the way; a pane that leaves
-  fades out and one that arrives fades in. Without View Transitions, with Reduce motion, or on the Linux web view (where a swap
-  by drag was reported to take the window down in 0.72.0), the change just happens. Picking a session to show (the sidebar, the palette, a
+  fades out and one that arrives fades in. Without View Transitions, or with Reduce motion, the change just happens. The Linux
+  web view glides too, by request; a swap by drag was reported to take the window down there in 0.72.0 (Hyprland), so if
+  that comes back, `paneTransition.ts` is the first place to look. Picking a session to show (the sidebar, the palette, a
   notice) is not a move: it shows at once, since it is the most frequent thing done in the window and a cross-fade on
   each pick made switching feel slow.
 - **Toasts are one design** (see *Errors*): bottom right, 380px, the status mark, the title with its context, the reason, the actions on their own row (a note keeps its one action on its line).
@@ -1417,7 +1430,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   session open in it". The body is the **Branch name** field (mono, a free two-word name offered and selected once the
   branch lists arrive, a problem shown as a `FieldError` once the field is left or the form is sent) and **Start from**, the
   themed Select (the current commit, then each branch; an existing branch is checked out instead and the picker gives way to a
-  line saying so). It opens a session in the new folder in a new tab. A
+  line saying so). It opens a session in the new folder in a new tab: a chat with the same agent in the Chat view, the
+  pane's worktree command or a shell in the Terminal view (UI › *desktop window sizes and sidebar order*). A
   project's right-click menu has a **Worktrees** submenu that opens a shell in any of the repo's
   worktrees, and a **New worktree…** row. Under the fields, a folded **Other worktrees of <repo>** line with a count (collapsed
   until opened; a line about two checkouts that changed one file stays visible) lists the project's other worktrees one line
@@ -1606,7 +1620,7 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `filter` or `backdrop-filter` ([PERFORMANCE](PERFORMANCE.md)). The working spinner steps every 160 ms and
   holds while the window is in the background.
 - **Working loader.** A wait in a list or a row is the running light (`StatusIcon`) with a word beside it ("Listing <folder>"), shown only after 160 ms; a chat being read is skeleton lines on the same delay. There is no spinner setting. The working badge on a tile and row keeps its own small mark.
-- **Desktop dialogs.** The Open a project palette, the command palette, Recent sessions, Resume a saved chat and the service card share one float: the page colour, a hairline, the panel radius, the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus (a field takes a full accent border). Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
+- **Desktop dialogs.** The Open a project palette, the command palette, Recent sessions, Resume a saved chat, a project's Workspace panel (Recent sessions' rows, each with a tick) and the service card share one float: the page colour, a hairline, the panel radius, the shared dialog shadow, a 160ms scale from .96 in, and the 2px accent underline for focus (a field takes a full accent border). Lists opened from a token or the machine name grow from their anchor (160ms, `cubic-bezier(.2,.8,.2,1)`, from .9). Reduce motion turns the movement off. The **switch** is 26x14 with a 1px `--line2` border (`--fg2` when on), an 8px knob, and a faint fill when on; it is the one control for an on/off setting (a per-file tick that selects what to commit stays a checkbox).
 - **Notices** (toasts, dialogs and lines; see *Errors*): flat floats in the same colours. A safety signal keeps its colour and words: the offline dialog and chip stay red, a needs-you toast keeps its amber mark edge.
 - **Process icons** are generic tiles, never a product's mark: `>_` shell, `✻` codex, `rs` cargo.
 - **Theme depth (desktop app)**: every generated dark theme puts its panel at the design panel's lightness (`#151517`) in the theme's own hue, and the window ground, card, hairline and selected row step from there. A theme changes hue and accents, never the depth of the surfaces. Light themes keep their own ground. Every theme, built-in or generated, keeps its window ground at least a step of lightness below its cards (`separatedGround`, OKLab L 0.04 dark, 0.03 light), so the sidebar, the panes and the chat box read as separate surfaces; a card is 9% toward the text, a selected row 16%, and a dark theme's float 12%, never lower than a card even when the theme names its own float.

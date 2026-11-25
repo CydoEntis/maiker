@@ -1,10 +1,11 @@
 import { CHAT_AGENTS, type ChatAgent } from '../model/chatView'
 import { agentIsOffered } from '../model/emptyStart'
-import type { OpenedProject } from '../model/openedProjects'
+import { sameProject, type OpenedProject } from '../model/openedProjects'
 import { worktreeSourceOf } from '../model/projectActions'
 import { offersOpenWorktree } from '../model/projectWorktrees'
 import { agentLabel, type SessionView } from '../model/session'
 import type { ShortcutAction } from '../model/shortcuts'
+import type { WorkspaceFor } from '../model/workspacePanel'
 import { AppIcon, Icon } from './glyphs'
 import type { MenuEntry, MenuItem } from './MenuPopup'
 
@@ -28,6 +29,15 @@ export type ProjectActions = {
   onCopyPath: (project: OpenedProject) => void
   /** Shows a session of the project with the side panel's Files beside it: the files are read through a session. */
   onShowFiles: (sessionId: string) => void
+  /** Opens the project's Workspace panel: its sessions, running and closed. `name` is the heading's. */
+  onWorkspace: (project: OpenedProject, name: string) => void
+  /** The projects Switch to… can go to (`switchTargetsOf`): this computer's opened ones, the project itself among them. */
+  switchTargets: readonly WorkspaceFor[]
+  /**
+   * Parks the project and opens `to`'s Workspace panel, once the person confirms as Close project asks: its open set is
+   * saved first, and a save that fails stops the switch before any session ends. `name` is the heading's.
+   */
+  onSwitch: (project: OpenedProject, name: string, to: WorkspaceFor) => void
   /**
    * Closes the project once the person confirms: its sessions stop and it leaves the sidebar. `name` is the heading's,
    * for the question.
@@ -51,6 +61,8 @@ export type ProjectTarget = {
   online: boolean
   /** The agent programs on this computer; null while that is unknown. Nothing is known of another machine's. */
   installed: readonly string[] | null
+  /** The No project group (this computer's sessions in the start folder): no project, so there is nothing to close. */
+  loose?: boolean
 }
 
 /** The key the binding table gives an action on this platform, '' when it has none. */
@@ -100,10 +112,32 @@ export function projectPlusMenu(actions: ProjectActions, target: ProjectTarget, 
   }
 }
 
-/** A project heading's right-click menu: what starts in it, what shows it, then taking it off the sidebar. */
+/**
+ * Switch to…, opening the other projects it can go to, for a project of this computer; off while there is none. Another
+ * machine's project and the No project group have none: their sets are not kept here.
+ */
+function switchRows(actions: ProjectActions, target: ProjectTarget): MenuEntry[] {
+  if (target.remote || target.loose === true) return []
+  const others = actions.switchTargets.filter((to) => !sameProject(to.project, target.project))
+  return [{
+    label: 'Switch to…',
+    disabled: others.length === 0,
+    why: 'Open another project on this computer to switch to it',
+    items: others.map((to) => ({ label: to.name, run: () => { actions.onSwitch(target.project, target.name, to) } })),
+  }]
+}
+
+/**
+ * A project heading's right-click menu: what starts in it, what shows it and its workspace, switching to another project,
+ * then taking it off the sidebar. The No project group is no project: it leaves the sidebar when its last session does,
+ * so it has no Close, and has no workspace to show or switch from.
+ */
 export function projectContextMenu(actions: ProjectActions, target: ProjectTarget, keys: KeysOf): MenuEntry[] {
   const worktrees = worktreeRows(actions, target, keys)
   const shown = target.sessions[0]
+  const closing: MenuEntry[] = target.loose === true ? [] : ['separator', { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } }]
+  // The saved set is kept by this computer's daemon, so another machine's project has none to show yet.
+  const workspace: MenuEntry[] = target.loose === true ? [] : [{ label: 'Workspace…', disabled: target.remote, why: `Workspace is local-only in v1: this project is on ${target.machineLabel}, not on this computer.`, run: () => { actions.onWorkspace(target.project, target.name) } }]
   return [
     { heading: target.remote ? `${target.name} · ${target.machineLabel}` : target.name },
     withKeys({ label: 'New session', disabled: !target.canStart, run: () => { actions.onNewSession(target.machine, target.project) } }, keys('new-session')),
@@ -111,7 +145,8 @@ export function projectContextMenu(actions: ProjectActions, target: ProjectTarge
     'separator',
     { label: 'Copy path', run: () => { actions.onCopyPath(target.project) } },
     { label: 'Show files', disabled: shown === undefined, why: 'Start a session here first: the files are read through one', run: () => { if (shown !== undefined) actions.onShowFiles(shown.id) } },
-    'separator',
-    { label: 'Close project…', danger: true, run: () => { actions.onClose(target.project, target.name) } },
+    ...workspace,
+    ...switchRows(actions, target),
+    ...closing,
   ]
 }

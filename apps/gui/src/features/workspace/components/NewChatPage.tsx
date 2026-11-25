@@ -27,6 +27,7 @@ import { discardDraft, parkDraft, parkedDraft } from '../model/newSessionDraft'
 import { FolderMark, Icon } from './glyphs'
 import { type ChipItem } from './NewChatMenus'
 import { NEW_SESSION } from '../model/sidebar'
+import { NO_PROJECT } from '../model/sidebarTree'
 import { Tag } from '@/components/ui/tag'
 import { loadAcpAgents } from '@/api/acpAgents'
 import { failedStartLabel, useBackgroundStarts } from '../useBackgroundStarts'
@@ -60,7 +61,7 @@ export type NewChatSeed = {
 }
 
 /** How a start is asked for: `background` starts the session without opening it, and the page stays for the next; `onPlaced` hears its id. */
-export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void }
+export type NewChatStartOptions = { background?: boolean; /** Told the new session's id once it is in the sidebar (this computer's sessions only). */ onPlaced?: (id: string) => void; /** Starts it in its terminal whatever view Settings picks: a reopened Gemini session keeps its terminal. */ terminal?: boolean }
 
 /** A computer a session could start on. `down` is why it cannot, in words, when it cannot. */
 export type NewChatMachine = { machine: number; /** What the machine is called on screen. */ label: string; /** What the daemon calls it; null for this computer. */ name?: string | null; local: boolean; down?: string | null }
@@ -118,7 +119,10 @@ type Props = {
   leading?: ReactNode
   /** The Chat view is on, so a session on this computer can start another agent over ACP (ADR 0021). */
   otherAgents?: boolean
-  /** Where a session with no project runs on this machine (Settings' start folder); without it there is no such choice. */
+  /**
+   * Where a session with no project runs on this machine (Settings' start folder); without it there is no such choice.
+   * A session there starts in the agent's usual permission mode, not Bypass permissions, unless the shield picks it.
+   */
   looseFolder?: string
 }
 
@@ -178,10 +182,13 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const [agent, setAgent] = useState<ChatAgent>(seed?.agent ?? last?.agent ?? defaultAgent)
   useEffect(() => { onAgentChange?.(agent) }, [agent, onAgentChange])
   const bypassOn = (which: ChatAgent) => !bypassOff.includes(which)
+  // The start folder with no project: the folder chip says No project.
+  const isLoose = (where: string) => looseFolder !== undefined && looseFolder !== '' && where === looseFolder
   // The mode the session starts in. Bypass Permissions (Settings) starts Claude in Bypass permissions and Codex in Full access; the
-  // permission control changes it for this session, and it is kept until another agent is picked.
-  const modeAtStart = (which: ChatAgent) => (bypassOn(which) ? skipMode(which) : START_MODE[which])
-  const [mode, setMode] = useState(() => modeAtStart(seed?.agent ?? last?.agent ?? defaultAgent))
+  // permission control changes it for this session, and it is kept until another agent or place is picked. In the start
+  // folder, which usually holds every repository, it starts in the agent's usual mode whatever the switch says.
+  const modeAtStart = (which: ChatAgent, loose: boolean) => (!loose && bypassOn(which) ? skipMode(which) : START_MODE[which])
+  const [mode, setMode] = useState(() => modeAtStart(seed?.agent ?? last?.agent ?? defaultAgent, isLoose(seed?.folder ?? projects[0]?.folder ?? '')))
   // Each agent keeps its own model and effort while the page is open, so going back to one finds what it was left at.
   const [choices, setChoices] = useState<Partial<Record<ChatAgent, AgentChoice>>>(() => last?.choices ?? {})
   const choice = choices[agent] ?? FIRST_CHOICE
@@ -217,6 +224,13 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const shown = added === null || projects.some((project) => project.folder === added.folder) ? projects : [...projects, added]
   const current = shown.find((project) => project.folder === folder)
   const folderName = current?.name ?? (folder === '' ? 'Choose a project' : lastPart(folder))
+  const loose = isLoose(folder)
+  // Moving into the start folder or out of it starts the mode again from what that place starts in.
+  const [modeLoose, setModeLoose] = useState(loose)
+  if (modeLoose !== loose) {
+    setModeLoose(loose)
+    setMode(modeAtStart(agent, loose))
+  }
   const installed = useInstalledAgents()
   const [branches, reloadBranches, branchesRead] = useFolderBranches(remote ? '' : folder)
   const { sync, read: syncRead, reload: reloadSync } = useFolderSync(remote ? '' : folder)
@@ -274,7 +288,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const pickAgent = (next: ChatAgent) => {
     setAgent(next)
     // Whether it skips permission prompts is the agent's own setting too.
-    setMode(modeAtStart(next))
+    setMode(modeAtStart(next, loose))
   }
   const modes = abilitiesOf(agent).permissionModes?.modes ?? []
   const bypass = DANGER_MODES.includes(mode)
@@ -468,6 +482,7 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
     ? { label: 'not read here', tip: `${targetLabel}'s branches are not read from here, so the session starts on what is checked out there. Set Work in to New worktree to start on a new branch instead.` }
     : folder === '' ? { label: 'no project', tip: 'Pick a project first, then its branch.' }
     : !branchesRead ? { label: 'reading…', tip: `Reading ${folderName}'s branches…` }
+    : loose ? { label: 'no git repo', tip: `The start folder, ${folder}, is not a git repository, so this session has no branch or worktree. Pick a project to work on a branch.` }
     : { label: 'no git repo', tip: `${folderName} is not a git repository, so there is no branch to pick. Pick a project folder that is, or clone one.` }
 
   const folderRows = (shown.map(folderItem))
@@ -566,10 +581,10 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             // The question and where the session runs, over the box and centred with it: the machine and the project are the
             // two choices a new session most often needs changed, so they are large here and not only in the row under the box.
             <div className="mx-nc-hero">
-              <h1 className="mx-chat-hello">{folder === '' || folder === looseFolder ? 'What are we building today?' : `What should we build in ${folderName}?`}</h1>
+              <h1 className="mx-chat-hello">{folder === '' || loose ? 'What are we building today?' : `What should we build in ${folderName}?`}</h1>
               <div className="mx-nc-hero-where">
                 <MachineChip machine={picking.machine} hero />
-                <FolderChip folder={folder} text={folder === '' ? 'Choose a project' : folder === looseFolder ? 'No project' : folderName} machine={machine} projects={[]} onNewSessionIn={openFolder} picking={picking.folder} hero />
+                <FolderChip folder={folder} text={folder === '' ? 'Choose a project' : loose ? NO_PROJECT : folderName} machine={machine} projects={[]} onNewSessionIn={openFolder} picking={picking.folder} hero />
                 {looseFolder !== undefined && looseFolder !== '' && folder !== looseFolder && (
                   <button type="button" className="mx-nc-hero-loose" disabled={starting} title={`Runs in ${looseFolder}`} onClick={() => { openFolder(looseFolder) }}>or start without a project</button>
                 )}

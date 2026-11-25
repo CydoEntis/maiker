@@ -89,6 +89,8 @@ vi.mock('./TerminalView', () => ({
 }))
 
 const HOME = '/home/casey'
+/** About one frame: when the web view runs a glide's change. */
+const GLIDE_FRAME_MS = 20
 
 function term(pane: number, cwd: string, extra: Partial<Conversation> = {}): Conversation {
   return {
@@ -156,7 +158,27 @@ describe('desktop terminal multiplexer', () => {
     expect(screen.getByRole('region', { name: /^Terminal 1: ~/ })).toBeInTheDocument()
   })
 
-  it('opens a project first from New session (Ctrl+Shift+T) when none is open: no draft page, and nothing starts', async () => {
+  it('opens the draft in the start folder as No project from New session (Ctrl+Shift+T) when no project is open, and starts nothing', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const user = userEvent.setup()
+    renderDesktopApp()
+    await screen.findByRole('heading', { name: 'Nothing running' })
+
+    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+
+    const draft = await screen.findByRole('region', { name: 'New session' })
+    expect(await within(draft).findByRole('button', { name: 'Project: No project' })).toBeInTheDocument()
+    expect(within(draft).getByRole('heading', { name: 'What are we building today?' })).toBeInTheDocument()
+    expect(screen.queryByRole('dialog', { name: 'Open a project' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
+    expect(daemon.startShellSession).not.toHaveBeenCalled()
+    expect(daemon.startAcpChat).not.toHaveBeenCalled()
+    expect(daemon.startChatSession).not.toHaveBeenCalled()
+  })
+
+  it('opens a project first from New session (Ctrl+Shift+T) while projects are open but none is in front, as before', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    window.localStorage.setItem('maiker.gui.opened-projects.v1', JSON.stringify({ 'this computer': [`${HOME}/shop`] }))
     const user = userEvent.setup()
     renderDesktopApp()
     await screen.findByRole('heading', { name: 'Nothing running' })
@@ -164,9 +186,6 @@ describe('desktop terminal multiplexer', () => {
     await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
 
     expect(await screen.findByRole('dialog', { name: 'Open a project' })).toBeInTheDocument()
-    expect(screen.queryByRole('menu', { name: 'Start' })).not.toBeInTheDocument()
-    expect(daemon.startShellSession).not.toHaveBeenCalled()
-    expect(daemon.startAcpChat).not.toHaveBeenCalled()
     expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument()
   })
 
@@ -1229,6 +1248,116 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
     await waitFor(() => { expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument() })
     expect(await screen.findByRole('button', { name: /^fix the cart, claude/ })).toBeInTheDocument()
     expect(screen.getByRole('textbox', { name: 'Message Claude' })).toBeInTheDocument()
+  })
+
+  // A chat the daemon lists once it has started it from the draft: a conversation of its own, with no pane.
+  const startedChat = (id: number, folder: string): Conversation => ({ id: String(id), generation: 1, execution: 'Structured', title: 'fix the cart', named: true, project: 'a', folder, cwd: folder, repo: null, branch: 'working tree', provider: 'Claude', status: 'working', updated: null, model: '', permission: '', context: null, nativePane: null, hasDiff: false, agent: 'claude', process: 'claude', chat: { conversation: id, generation: 1 }, details: { asking: '', interrupted: null, timeline: [], usage: { context: null, cost: null, tokens: null } } })
+  /**
+   * Panes glide as in the desktop web view: the browser runs the change a frame after it was asked for, and the glide ends
+   * after that. Returns the undo.
+   */
+  const glideLikeTheWebView = () => {
+    // Only the part of a View Transition that `movePanes` reads.
+    const doc = document as unknown as { startViewTransition?: (update: () => void) => { finished: Promise<void> } }
+    // The glide asks whether motion is reduced, which this test window cannot answer on its own.
+    const before = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }) })
+    doc.startViewTransition = (update) => ({ finished: new Promise((resolve) => { setTimeout(() => { update(); resolve() }, GLIDE_FRAME_MS) }) })
+    return () => {
+      delete doc.startViewTransition
+      if (before === undefined) delete (window as { matchMedia?: unknown }).matchMedia
+      else Object.defineProperty(window, 'matchMedia', before)
+    }
+  }
+  /** Opens the draft beside a running session and sends it; the daemon starts chat 6 and lists it from then on. */
+  const sendFromDraft = async (user: ReturnType<typeof userEvent.setup>) => {
+    daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+    renderDesktopApp()
+    await screen.findByRole('button', { name: 'a, 1 session' })
+    await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+    const draft = await screen.findByRole('region', { name: 'New session' })
+    daemon.startChatSession.mockImplementation(() => {
+      daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`), startedChat(6, `${HOME}/a`)])
+      return Promise.resolve({ id: 6, generation: 1 })
+    })
+    daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
+    daemon.submitMessage.mockResolvedValue(null)
+    await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart{Enter}')
+    await waitFor(() => { expect(screen.queryByRole('region', { name: 'New session' })).not.toBeInTheDocument() })
+    const pane = document.querySelector<HTMLElement>('.mx-pane[data-session-id="6"]')
+    if (pane === null) throw new Error('the started chat has no pane')
+    return pane
+  }
+
+  it('keeps the message sent from the draft where it was when the chat takes over, with no skeleton before the history has it', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const pane = await sendFromDraft(userEvent.setup())
+
+    // The draft drew the message and the working line; the chat draws the same at once, not a skeleton and then the message.
+    expect(within(pane).getByLabelText('Sending')).toHaveTextContent('fix the cart')
+    await new Promise((resolve) => { setTimeout(resolve, 300) })
+    expect(within(pane).queryByRole('status', { name: 'Reading the conversation' })).not.toBeInTheDocument()
+    expect(within(pane).getByLabelText('Sending')).toHaveTextContent('fix the cart')
+    // The start sent it once; the chat does not send it again.
+    expect(daemon.submitMessage).toHaveBeenCalledTimes(1)
+  })
+
+  it('gives the keys to the draft\'s box when it opens, and to the started chat\'s box once it is shown', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const undo = glideLikeTheWebView()
+    try {
+      const user = userEvent.setup()
+      daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+      renderDesktopApp()
+      await screen.findByRole('button', { name: 'a, 1 session' })
+      await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+      const draft = await screen.findByRole('region', { name: 'New session' })
+      await waitFor(() => { expect(within(draft).getByRole('textbox', { name: /^Message / })).toHaveFocus() })
+      daemon.startChatSession.mockImplementation(() => {
+        daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`), startedChat(6, `${HOME}/a`)])
+        return Promise.resolve({ id: 6, generation: 1 })
+      })
+      daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
+      daemon.submitMessage.mockResolvedValue(null)
+      await user.keyboard('fix the cart{Enter}')
+      await waitFor(() => { expect(document.querySelector('.mx-pane[data-session-id="6"]')).not.toBeNull() })
+      const pane = document.querySelector<HTMLElement>('.mx-pane[data-session-id="6"]')
+      if (pane === null) throw new Error('the started chat has no pane')
+      await waitFor(() => { expect(within(pane).getByRole('textbox', { name: 'Message Claude' })).toHaveFocus() })
+      await user.keyboard('and the tests')
+      expect(within(pane).getByRole('textbox', { name: 'Message Claude' })).toHaveValue('and the tests')
+    } finally {
+      undo()
+    }
+  })
+
+  it('does not show the empty draft again while the started chat glides in', async () => {
+    setSettings({ openSessionsIn: 'chat' })
+    const undo = glideLikeTheWebView()
+    try {
+      let emptyAgain = false
+      const watch = new MutationObserver(() => { if (screen.queryByRole('heading', { name: 'What should we build in a?' }) !== null) emptyAgain = true })
+      const user = userEvent.setup()
+      daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`)])
+      renderDesktopApp()
+      await screen.findByRole('button', { name: 'a, 1 session' })
+      await user.keyboard('{Control>}{Shift>}t{/Shift}{/Control}')
+      const draft = await screen.findByRole('region', { name: 'New session' })
+      daemon.startChatSession.mockImplementation(() => {
+        daemon.loadConversations.mockResolvedValue([claude(5, `${HOME}/a`), startedChat(6, `${HOME}/a`)])
+        return Promise.resolve({ id: 6, generation: 1 })
+      })
+      daemon.renameConversationOnDaemon.mockResolvedValue(undefined)
+      daemon.submitMessage.mockResolvedValue(null)
+      await user.type(within(draft).getByRole('textbox', { name: /^Message / }), 'fix the cart')
+      watch.observe(document.body, { childList: true, subtree: true })
+      await user.keyboard('{Enter}')
+      await waitFor(() => { expect(document.querySelector('.mx-pane[data-session-id="6"]')).not.toBeNull() })
+      watch.disconnect()
+      expect(emptyAgain).toBe(false)
+    } finally {
+      undo()
+    }
   })
 
   it('runs an agent without a chat, OpenCode, in a new shell, typed and entered, from the palette', async () => {

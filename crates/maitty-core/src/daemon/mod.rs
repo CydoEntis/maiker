@@ -247,11 +247,12 @@ pub enum Ev {
         gone: Vec<PathBuf>,
     },
     /// A clean-up you asked for is done: what went (and whether its merged branch went
-    /// too), and what stayed and why.
+    /// too), and what stayed and why; `answer_each` is the request's own.
     WorktreesTidied {
         client: ClientId,
-        removed: Vec<(String, bool)>,
-        kept: Vec<(String, String)>,
+        removed: Vec<TidyGone>,
+        kept: Vec<TidyStay>,
+        answer_each: bool,
     },
     WorktreeList {
         client: ClientId,
@@ -297,11 +298,12 @@ pub enum Ev {
         tag: u64,
         listing: crate::protocol::FolderListing,
     },
-    /// A closed session's folder is ready to start it in, its worktree made again if it was gone
-    /// (`Command::ReopenClosedSession`).
+    /// A closed session's folder is ready to start it in, its worktree made again if it was gone:
+    /// `cmd` is the agent's resume command to start there (`Command::ReopenClosedSession`), or None
+    /// when the client starts it itself and is told the folder (`Command::ReadyClosedFolder`).
     ClosedSessionReady {
         client: ClientId,
-        cmd: String,
+        cmd: Option<String>,
         result: Result<reopen::Ready, String>,
     },
     HelperReadReady {
@@ -869,10 +871,10 @@ fn skips_unreadable(theirs: u32, error: &anyhow::Error) -> bool {
 }
 
 /// "removed 3 worktrees (1 merged branch went too); kept rate: it has uncommitted changes".
-pub(super) fn tidied_note(removed: &[(String, bool)], kept: &[(String, String)]) -> String {
+pub(super) fn tidied_note(removed: &[TidyGone], kept: &[TidyStay]) -> String {
     let mut parts = Vec::new();
     if !removed.is_empty() {
-        let also = match removed.iter().filter(|(_, branch)| *branch).count() {
+        let also = match removed.iter().filter(|gone| gone.branch_went).count() {
             0 => String::new(),
             1 => " (1 merged branch went too)".to_string(),
             n => format!(" ({n} merged branches went too)"),
@@ -883,11 +885,19 @@ pub(super) fn tidied_note(removed: &[(String, bool)], kept: &[(String, String)])
             if removed.len() == 1 { "" } else { "s" }
         ));
     }
-    parts.extend(kept.iter().map(|(name, why)| format!("kept {name}: {why}")));
+    parts.extend(kept.iter().map(|stay| format!("kept {}: {}", stay.name, stay.why)));
     if parts.is_empty() {
         "nothing to clean up".into()
     } else {
         parts.join("; ")
+    }
+}
+
+/// A clean-up's answer by the folders as they were asked for, for a client that shows it on each row.
+fn tidied_answer(removed: Vec<TidyGone>, kept: Vec<TidyStay>) -> Reply {
+    Reply::WorktreesTidied {
+        removed: removed.into_iter().map(|gone| gone.asked).collect(),
+        kept: kept.into_iter().map(|stay| (stay.asked, stay.why)).collect(),
     }
 }
 
@@ -1167,10 +1177,10 @@ impl Daemon {
                 anyhow::bail!("Only an app window can keep an agent warm")
             }
             Command::Prewarm { .. } | Command::DropPrewarm => Ok(()),
-            Command::ReopenClosedSession { .. } if self.client_is_agent(client) => {
+            Command::ReopenClosedSession { .. } | Command::ReadyClosedFolder { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("reopening a closed session is yours to do, not a pane's")
             }
-            Command::ReopenClosedSession { .. } => self.may(client, Grant::Start, None),
+            Command::ReopenClosedSession { .. } | Command::ReadyClosedFolder { .. } => self.may(client, Grant::Start, None),
             Command::SaveWorkspace { .. } if self.client_is_agent(client) => {
                 anyhow::bail!("saving a project's open sessions is yours to do, not a pane's")
             }
@@ -2740,10 +2750,15 @@ impl Daemon {
                 client,
                 removed,
                 kept,
+                answer_each,
             } => {
                 self.pending_ops -= 1;
-                self.send(client, ServerMsg::Notice(tidied_note(&removed, &kept)));
-                self.send(client, ServerMsg::Reply(Reply::Ok));
+                if answer_each {
+                    self.send(client, ServerMsg::Reply(tidied_answer(removed, kept)));
+                } else {
+                    self.send(client, ServerMsg::Notice(tidied_note(&removed, &kept)));
+                    self.send(client, ServerMsg::Reply(Reply::Ok));
+                }
                 self.poll_git_soon();
                 self.dirty = true;
             }

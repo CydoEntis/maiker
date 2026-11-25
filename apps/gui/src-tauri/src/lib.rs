@@ -745,10 +745,44 @@ async fn reopen_closed_session(agent: String, session: String) -> Result<serde_j
         .map_err(|error| format!("{error:#}"))
 }
 
-/// Removes worktrees of the project with the daemon, which closes what runs in them first: each folder with
-/// whether to go on when it holds uncommitted changes (they are lost). A branch is kept unless it is already
-/// merged. The daemon answers at once and does the removing in the background; a worktree something still runs
-/// in is left, so the caller looks again.
+/// Makes the removed folder of a closed or saved session again, from the record the daemon keeps, and starts nothing:
+/// the window then starts the session there in the view Settings picks. The folder, or null when the service running is
+/// older. This computer's daemon only, like `closed_sessions`.
+#[tauri::command]
+async fn ready_closed_folder(agent: String, session: String) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::ready_closed_folder(agent, session)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Has this computer's daemon keep `sessions` as the set open in `project` when the project is closed, replacing the
+/// one it kept. False when the service running is older and was not asked. The daemon refuses a project that is not an
+/// absolute folder and cleans and caps every record, so nothing is trusted here. This computer's daemon only, like
+/// `closed_sessions`.
+#[tauri::command]
+async fn save_workspace(
+    project: PathBuf,
+    sessions: Vec<maitty_shared::protocol::ClosedSession>,
+) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::save_workspace(project, sessions)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// The sessions this computer's daemon kept as open in `project` when it was last parked or closed, for the project's
+/// Workspace panel, each saying whether its folder is still there; null when the service running is older. This
+/// computer's daemon only, like `closed_sessions`.
+#[tauri::command]
+async fn saved_workspace(project: PathBuf) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::workspace(project)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
+/// Removes worktrees of the project with the daemon: each folder with whether to go on when it holds uncommitted
+/// changes (they are lost). A branch is kept unless it is already merged, and a worktree something still runs in is
+/// kept. Answers once it is done with what went and why each other one stayed (`maitty_desktop_client::tidy_worktrees`),
+/// or null from an older service, so the caller looks again.
 #[tauri::command]
 async fn remove_worktrees(
     app: tauri::AppHandle,
@@ -1381,6 +1415,7 @@ async fn resume_chat_session(
 }
 
 /// A chat with `agent` over ACP in `cwd`, on this computer or on `machine`. That machine's daemon picks the agent's program.
+/// With `session`, the agent's own saved conversation is loaded by its id instead, on this computer only.
 #[tauri::command]
 async fn start_acp_chat(
     app: tauri::AppHandle,
@@ -1388,8 +1423,9 @@ async fn start_acp_chat(
     machine: Option<u16>,
     cwd: PathBuf,
     agent: String,
+    session: Option<String>,
 ) -> Result<serde_json::Value, String> {
-    maitty_desktop_client::start_acp_chat(cwd, agent, wire.start_daemon(machine, || daemon_executable(&app))?)
+    maitty_desktop_client::start_acp_chat(cwd, agent, session, wire.start_daemon(machine, || daemon_executable(&app))?)
         .await
         .map_err(|error| format!("{error:#}"))
 }
@@ -1491,6 +1527,9 @@ pub fn run() {
             side_answer,
             closed_sessions,
             reopen_closed_session,
+            ready_closed_folder,
+            saved_workspace,
+            save_workspace,
             new_chat::git_sync_state,
             new_chat::git_pull,
             new_chat::open_agent_docs,

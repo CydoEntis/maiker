@@ -100,21 +100,39 @@ pub fn parse_output_frame(line: &str) -> Result<OutputFrame> {
                 .cloned()
                 .context("Claude control response has no response body")?,
         }),
-        "result" => Ok(OutputFrame::Result {
-            session_id: required_text(&frame, "session_id")?,
-            is_error: frame
+        "result" => {
+            let is_error = frame
                 .get("is_error")
                 .and_then(Value::as_bool)
-                .context("Claude result has no error status")?,
-            result: frame
-                .get("result")
-                .and_then(Value::as_str)
-                .map(str::to_owned),
-        }),
+                .context("Claude result has no error status")?;
+            Ok(OutputFrame::Result {
+                session_id: required_text(&frame, "session_id")?,
+                is_error,
+                result: frame
+                    .get("result")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned)
+                    .or_else(|| is_error.then(|| result_errors(&frame)).flatten()),
+            })
+        }
         "user" => parse_user_frame(&frame),
         "assistant" | "system" | "rate_limit_event" | "tool_progress" => Ok(OutputFrame::Other),
         _ => bail!("Unsupported Claude output frame type: {kind}"),
     }
+}
+
+/// An error result's reasons: Claude Code lists them in `errors` when it has no `result` text,
+/// as when a turn fails during execution.
+fn result_errors(frame: &Value) -> Option<String> {
+    let reasons: Vec<&str> = frame
+        .get("errors")?
+        .as_array()?
+        .iter()
+        .filter_map(Value::as_str)
+        .map(str::trim)
+        .filter(|reason| !reason.is_empty())
+        .collect();
+    (!reasons.is_empty()).then(|| reasons.join("; "))
 }
 
 fn parse_stream_event(frame: &Value) -> Result<OutputFrame> {
@@ -488,6 +506,31 @@ mod tests {
             OutputFrame::TextDelta { block_index: 2, text: "hello".into() }
         );
         assert!(parse_output_frame(r#"{"type":"unknown_future_event"}"#).is_err());
+    }
+
+    #[test]
+    fn an_error_result_carries_its_reason_from_result_or_errors() {
+        let result = |line: &str| match parse_output_frame(line).unwrap() {
+            OutputFrame::Result { result, .. } => result,
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            result(r#"{"type":"result","subtype":"success","session_id":"s","is_error":true,"result":"API Error: 400 model not found"}"#).as_deref(),
+            Some("API Error: 400 model not found")
+        );
+        assert_eq!(
+            result(r#"{"type":"result","subtype":"error_during_execution","session_id":"s","is_error":true,"errors":["first", " ", "second"]}"#).as_deref(),
+            Some("first; second")
+        );
+        assert_eq!(
+            result(r#"{"type":"result","subtype":"error_during_execution","session_id":"s","is_error":true}"#),
+            None
+        );
+        assert_eq!(
+            result(r#"{"type":"result","session_id":"s","is_error":false,"errors":["ignored"]}"#),
+            None,
+            "a turn that did not fail has no reasons to give"
+        );
     }
 
     #[test]

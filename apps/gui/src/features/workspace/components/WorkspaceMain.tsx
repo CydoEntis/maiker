@@ -36,16 +36,17 @@ const noop = () => undefined
 
 /**
  * The main area with no tab and no draft in it: the empty state once the service has listed its sessions. An agent
- * picked there starts the way a project heading's `+` menu starts it (`useProjectActions`), so the two never differ.
+ * picked there starts the way a project heading's `+` menu starts it (`useProjectActions`), so the two never differ;
+ * with no project open it starts in the start folder, as No project.
  */
 function MainEmpty() {
-  const { sessionsListed, sessions, sidebarMachineHeads, openedProjects, canStart, modalOpen, welcomeOpen, shortcutsOpen, pendingConfirm, root, setOpenProject } = useWorkspace()
+  const { sessionsListed, sessions, sidebarMachineHeads, openedProjects, startFolder, canStart, modalOpen, welcomeOpen, shortcutsOpen, pendingConfirm, root, setOpenProject } = useWorkspace()
   const installed = useInstalledAgents()
   const shortcutText = useShortcutText()
   const actions = useProjectActions()(noop)
   const [picked, setPicked] = useState<OpenedProject | null>(null)
   if (!sessionsListed) return <LookingForSessions />
-  const places = startPlaces(sidebarMachineHeads, openedProjects.machines)
+  const places = startPlaces(sidebarMachineHeads, openedProjects.machines, startFolder ?? '')
   return (
     <EmptyStart
       running={sessions.length > 0}

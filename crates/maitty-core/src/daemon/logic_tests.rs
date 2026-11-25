@@ -999,7 +999,8 @@ fn with_no_window_open_finished_waits_and_a_helper_stays_quiet() {
 
 #[test]
 fn a_clean_up_only_takes_worktrees_nothing_runs_in() {
-    let (mut d, _rx) = daemon();
+    let (rt, (mut d, mut rx)) = (runtime(), daemon());
+    let _in_rt = rt.enter();
     let root = std::env::temp_dir().join(format!(
         concat!(env!("APP_COMMAND"), "-tidy-plan-{}"),
         std::process::id()
@@ -1056,8 +1057,9 @@ fn a_clean_up_only_takes_worktrees_nothing_runs_in() {
         (root.join("nowhere"), false),
     ]);
     assert_eq!(go.len(), 1, "only the idle one goes: {go:?}");
-    assert!(same_path(&go[0].0, &idle) && !go[0].1);
-    let why: Vec<(&str, &str)> = stay.iter().map(|(n, w)| (n.as_str(), w.as_str())).collect();
+    assert!(same_path(&go[0].top, &idle) && go[0].asked == idle && !go[0].force);
+    assert_eq!(stay[0].asked, busy, "what stays is named by the folder it was asked for by");
+    let why: Vec<(&str, &str)> = stay.iter().map(|s| (s.name.as_str(), s.why.as_str())).collect();
     assert_eq!(
         why,
         [
@@ -1067,6 +1069,25 @@ fn a_clean_up_only_takes_worktrees_nothing_runs_in() {
         ],
         "the main folder is never one"
     );
+    // Asked to answer by folder, the daemon says which went and why each other one stayed, and
+    // nothing else; the idle one is gone from disk.
+    let (tx, mut person) = mpsc::channel(16);
+    d.handle(Ev::Connected(7, tx, false, crate::protocol::Surface::Terminal, true));
+    d.message(
+        7,
+        ClientMsg::Command(Command::TidyWorktrees {
+            items: vec![(idle.clone(), false), (busy.clone(), true)],
+            answer_each: true,
+        }),
+    );
+    tidied(&mut d, &mut rx);
+    let replies: Vec<_> = std::iter::from_fn(|| person.try_recv().ok()).collect();
+    let [ServerMsg::Reply(Reply::WorktreesTidied { removed, kept })] = replies.as_slice() else {
+        panic!("one answer by folder, no notice: {replies:?}");
+    };
+    assert_eq!(removed, std::slice::from_ref(&idle));
+    assert_eq!(kept, &[(busy.clone(), "something is running in it".to_string())]);
+    assert!(!idle.exists());
     let sibling = d
         .spawn(None, &busy, 80, 24)
         .expect("a second pane in the checkout");
@@ -1086,6 +1107,19 @@ fn a_clean_up_only_takes_worktrees_nothing_runs_in() {
     );
     close(&mut d, &[sibling]);
     let _ = std::fs::remove_dir_all(&root);
+}
+
+/// Handle daemon events until a clean-up someone asked for reports.
+fn tidied(d: &mut Daemon, rx: &mut mpsc::Receiver<Ev>) {
+    let until = Instant::now() + Duration::from_secs(60);
+    while Instant::now() < until {
+        match rx.try_recv() {
+            Ok(ev @ Ev::WorktreesTidied { .. }) => return d.handle(ev),
+            Ok(ev) => d.handle(ev),
+            Err(_) => std::thread::sleep(Duration::from_millis(20)),
+        }
+    }
+    panic!("no clean-up reported");
 }
 
 /// Handle daemon events until a worktree's automatic removal reports, and return how it went.

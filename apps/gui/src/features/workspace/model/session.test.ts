@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Conversation } from '@/data/preview'
 import { displayName, folderNameOf, helpersOnly, inCreationOrder, keepLabels, limitedWord, nextResumeAt, processName, tildePath, toSessionView, truncatePrompt } from './session'
-import { markSeen, trackSessions } from './tracking'
-import { resolveStartFolder } from './startFolder'
+import { markSeen, START_SETTLE_MS, trackSessions } from './tracking'
+import { bypassFor, knownStartFolder, resolveStartFolder } from './startFolder'
 
 vi.mock('@/api/daemon', () => ({
   terminalOf: (id: string) => Number(id.slice(1)),
@@ -132,9 +132,23 @@ describe('session tracking', () => {
 
   it('notices a shell moving to another repo', () => {
     const first = trackSessions(new Map(), view('idle'), new Set(), 0)
-    const moved = trackSessions(first.tracks, [toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker`), HOME)], new Set(), 5)
+    const later = START_SETTLE_MS + 5
+    const moved = trackSessions(first.tracks, [toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker`), HOME)], new Set(), later)
     expect(moved.moves).toEqual([{ id: 't1', from: null, to: `${HOME}/maiker` }])
-    expect(moved.tracks.get('t1')?.movedAt).toBe(5)
+    expect(moved.tracks.get('t1')?.movedAt).toBe(later)
+  })
+
+  it('does not take a new session settling into its folder, its own worktree included, for a move', () => {
+    const seen = 1_000
+    const first = trackSessions(new Map(), view('idle'), new Set(), seen)
+    const inWorktree = [toSessionView(repo(1, `${HOME}/maiker-hi`, `${HOME}/maiker-hi`), HOME)]
+    const settling = trackSessions(first.tracks, inWorktree, new Set(), seen + 2_000)
+    const settled = trackSessions(settling.tracks, [toSessionView(repo(1, `${HOME}/maiker`, `${HOME}/maiker-hi`), HOME)], new Set(), seen + 4_000)
+    expect([...settling.moves, ...settled.moves]).toEqual([])
+    expect(settled.tracks.get('t1')).toMatchObject({ repoRoot: `${HOME}/maiker`, movedAt: null })
+    // Once it has settled, going elsewhere is a move again.
+    const away = trackSessions(settled.tracks, [toSessionView(repo(1, `${HOME}/shop`, `${HOME}/shop`), HOME)], new Set(), seen + START_SETTLE_MS)
+    expect(away.moves).toEqual([{ id: 't1', from: `${HOME}/maiker`, to: `${HOME}/shop` }])
   })
 
   it('keeps what it last saw while the daemon is disconnected', () => {
@@ -151,6 +165,21 @@ describe('start folder', () => {
     expect(resolveStartFolder('~/code', HOME)).toBe(`${HOME}/code`)
     expect(resolveStartFolder('~\\dev', 'C:\\Users\\casey')).toBe('C:\\Users\\casey\\dev')
     expect(resolveStartFolder('/srv', HOME)).toBe('/srv')
+  })
+
+  it('is not known while it names the home folder and that has not been read', () => {
+    expect(knownStartFolder('', '', false)).toBeNull()
+    expect(knownStartFolder('~/code', '', false)).toBeNull()
+    expect(knownStartFolder('/srv', '', false)).toBe('/srv')
+    expect(knownStartFolder('~/code', HOME, true)).toBe(`${HOME}/code`)
+  })
+
+  it('starts a session there in the agent\'s usual mode unless one was picked for it', () => {
+    expect(bypassFor(undefined, HOME, HOME)).toBe(false)
+    expect(bypassFor(undefined, 'c:/Users/Me/', 'C:\\Users\\me')).toBe(false)
+    expect(bypassFor(true, HOME, HOME)).toBe(true)
+    expect(bypassFor(undefined, `${HOME}/shop`, HOME)).toBeUndefined()
+    expect(bypassFor(undefined, HOME, '')).toBeUndefined()
   })
 
   it('strips markup an agent quotes and collapses whitespace in a quoted line', () => {

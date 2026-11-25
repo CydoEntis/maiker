@@ -50,6 +50,17 @@ export function entrustFirstMessage(sessionId: string, text: string, hand: (sess
   })
 }
 
+/**
+ * A first message the start sends itself, straight to the daemon (a chat the daemon owns): the chat shows it as held from
+ * its first frame, the way the New session draft showed it, and never sends it again. It goes once the history has it,
+ * or with `releaseFirstMessage` when the send fails.
+ */
+export function holdSentFirstMessage(sessionId: string, text: string): void {
+  heldMessages.set(sessionId, text)
+  heldByDaemon.add(sessionId)
+  notify()
+}
+
 /** Whether the session's daemon has the held message, and will send it. */
 export function useHeldByDaemon(sessionId: string | undefined): boolean {
   return useSyncExternalStore(subscribe, () => sessionId !== undefined && heldByDaemon.has(sessionId), () => false)
