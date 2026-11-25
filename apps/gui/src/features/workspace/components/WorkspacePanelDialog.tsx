@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { ModalBody, ModalFoot, ModalHead } from '@/components/ui/modal'
 import { RestartServiceButton } from '@/features/updates/RestartServiceButton'
-import { rowWhen, rowWhere, type SavedRead, type WorkspaceRow } from '../model/workspacePanel'
+import type { ClosedSession } from '@/api/daemon'
+import { openTargets, rowWhen, rowWhere, type SavedRead, type WorkspaceRow } from '../model/workspacePanel'
 import { AppIcon } from './glyphs'
 import { windowRoot } from './windowRoot'
 
@@ -16,6 +17,10 @@ type Props = {
   saved: SavedRead
   /** When the panel opened (unix seconds): each row's age counts from it. */
   now: number
+  /** An Open is under way, or another session is starting: Open and Open everything wait for it. */
+  opening: boolean
+  /** Opens these saved sessions again, one after another (`useRecentSessions().openSaved`). */
+  onOpen: (saved: readonly ClosedSession[]) => void
   onRetry: () => void
   onCancel: () => void
 }
@@ -63,7 +68,13 @@ function SavedLine({ read, onRetry }: { read: SavedRead; onRetry: () => void }) 
   return null
 }
 
-function WorkspaceBody({ name, rows, saved, now, onRetry, onCancel }: Props) {
+/** The Open button's words: how many it opens, so a person sees which of the ticked rows it starts before pressing it. */
+function openLabel(count: number, opening: boolean): string {
+  if (opening) return 'Opening…'
+  return count === 0 ? 'Open' : `Open ${String(count)}`
+}
+
+function WorkspaceBody({ name, rows, saved, now, opening, onOpen, onRetry, onCancel }: Props) {
   // Keys of the ticked rows. A row that leaves the list (a session that ends and is closed) simply stops counting.
   const [ticked, setTicked] = useState<ReadonlySet<string>>(() => new Set())
   const toggle = (key: string) => {
@@ -75,6 +86,14 @@ function WorkspaceBody({ name, rows, saved, now, onRetry, onCancel }: Props) {
   }
   const chosen = rows.filter((row) => ticked.has(row.key))
   const empty = rows.length === 0 && saved.kind === 'listed'
+  // Open starts only closed rows: a running one ticked beside them is left as it is.
+  const toOpen = openTargets(chosen)
+  const closedRows = openTargets(rows)
+  // Either Open sends every ticked closed row, so those are unticked and the ticks left are the ones nothing was done to.
+  const open = (list: readonly ClosedSession[]) => {
+    onOpen(list)
+    setTicked(new Set(chosen.filter((row) => row.state !== 'closed').map((row) => row.key)))
+  }
   return (
     <>
       <ModalBody>
@@ -108,6 +127,8 @@ function WorkspaceBody({ name, rows, saved, now, onRetry, onCancel }: Props) {
       </ModalBody>
       <ModalFoot left={rows.length > 0 ? <span className="mx-workspace-count" role="status">{`${String(chosen.length)} of ${String(rows.length)} ticked`}</span> : undefined}>
         <Button type="button" variant="ghost" size="lg" onClick={onCancel}>Done</Button>
+        <Button type="button" variant="ghost" size="lg" disabled={closedRows.length === 0 || opening} onClick={() => { open(closedRows) }}>Open everything</Button>
+        <Button type="button" variant="primary" size="lg" disabled={toOpen.length === 0 || opening} onClick={() => { open(toOpen) }}>{openLabel(toOpen.length, opening)}</Button>
       </ModalFoot>
     </>
   )

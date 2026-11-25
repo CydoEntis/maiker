@@ -1335,8 +1335,10 @@ without asking from an older daemon) and `workspace` (null from an older daemon)
 `a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one`,
 `the_open_set_is_never_sent_to_a_service_from_before_it`. The window saves through the host's `save_workspace` command
 (`saveWorkspace` in `api/daemon.ts`) when a project is closed, and reads through `saved_workspace { project }`
-(`savedWorkspace`, `maitty_desktop_client::workspace`: the list, or null without asking from a daemon older than 127)
-for the project's Workspace panel; both ask this computer's daemon only, each on a connection of its own. The daemon
+(`savedWorkspace`, `maitty_desktop_client::workspace`: the list, each record with `folder_present` added as
+`closed_sessions` adds it, or null without asking from a daemon older than 127) for the project's Workspace panel,
+whose Open starts a record in place or, when its folder is gone, asks `reopen_closed_session` to make it again (the
+daemon looks it up in its closed list, so one that has left that list fails and is counted as such); both ask this computer's daemon only, each on a connection of its own. The daemon
 matches the folder exactly, so both name a project by its opened project's `folder` as the sidebar spells it. The window
 builds each saved record itself (`model/openSet.ts`): a terminal's agent conversation id is its pane's
 `TermInfo.session`, and a chat's is `ConversationSummary.session` (`#[serde(default)]`, written only when known, so it

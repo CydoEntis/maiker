@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { SavedSession } from '@/api/daemon'
+import type { ClosedSession } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { rowWhen, rowWhere, workspaceRows, workspaceTargetOf } from './workspacePanel'
+import { openTargets, openWords, rowWhen, rowWhere, workspaceRows, workspaceTargetOf } from './workspacePanel'
 
 const NOW = 2_000_000_000
 const HOUR = 3600
@@ -23,8 +23,8 @@ function session(pane: number, title: string, extra: Partial<Conversation> = {},
   }
 }
 
-function saved(id: string, at: number, extra: Partial<SavedSession> = {}): SavedSession {
-  return { agent: 'claude', session: id, cwd: SHOP.folder, branch: 'feat/login', title: `Saved ${id}`, at, worktree: null, repo: null, ...extra }
+function saved(id: string, at: number, extra: Partial<ClosedSession> = {}): ClosedSession {
+  return { agent: 'claude', session: id, cwd: SHOP.folder, branch: 'feat/login', title: `Saved ${id}`, at, folder_present: true, worktree: null, repo: null, ...extra }
 }
 
 describe('the workspace rows', () => {
@@ -57,6 +57,26 @@ describe('the workspace rows', () => {
     expect(closed.name).toBe('Codex session')
     expect(rowWhere(closed)).toBe('Codex')
     expect(rowWhen(closed, NOW)).toBe('closed · 1h ago')
+  })
+})
+
+describe('what Open opens and what it says after', () => {
+  it('opens only the closed rows, never a session already in the window', () => {
+    const parser = saved('p', NOW - HOUR)
+    const rows = workspaceRows([session(1, 'Running'), session(2, 'Ended', {}, { ended: true })], [parser])
+    expect(openTargets(rows)).toEqual([parser])
+  })
+
+  it('counts what opened, what failed and what was skipped, naming each skip and why', () => {
+    const skip = { name: 'Port the parser', why: 'folder removed; cannot be made again' }
+    const cases: [Parameters<typeof openWords>[0], ReturnType<typeof openWords>][] = [
+      [{ opened: 3, failed: 0, lastError: null, skipped: [] }, { kind: 'success', title: 'Opened 3 sessions', note: null }],
+      [{ opened: 0, failed: 2, lastError: null, skipped: [] }, { kind: 'failed', title: 'Could not open the 2 sessions', note: null }],
+      [{ opened: 2, failed: 1, lastError: null, skipped: [skip] }, { kind: 'failed', title: 'Opened 2, but 1 could not start, and 1 was skipped', note: null }],
+      [{ opened: 1, failed: 0, lastError: null, skipped: [skip] }, { kind: 'warning', title: 'Opened 1 session, skipped 1', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
+      [{ opened: 0, failed: 0, lastError: null, skipped: [skip] }, { kind: 'warning', title: 'Could not open 1 session', note: 'Skipped “Port the parser”: folder removed; cannot be made again.' }],
+    ]
+    for (const [outcome, words] of cases) expect(openWords(outcome)).toEqual(words)
   })
 })
 

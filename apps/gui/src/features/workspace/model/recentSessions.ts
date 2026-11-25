@@ -54,6 +54,21 @@ export function reopenRequest(closed: ClosedSession): NewChatRequest | null {
 }
 
 /**
+ * How a closed or saved session is opened again: started here with its conversation, made again by the service when its
+ * folder is gone (`reopenClosedSession`), or skipped with why, by the same rules Recent sessions picks by. An agent that
+ * is not Claude or Codex is skipped: a chat run over ACP is saved under its agent's own name ("opencode") and resumes by
+ * no id, so neither a start nor the service's closed list (which says "acp") could bring its conversation back.
+ */
+export type ReopenPlan = { kind: 'start'; request: NewChatRequest } | { kind: 'remake' } | { kind: 'skip'; why: string }
+
+export function reopenPlan(closed: ClosedSession): ReopenPlan {
+  const why = reopenRefusal(closed)
+  if (why !== null) return { kind: 'skip', why }
+  const request = reopenRequest(closed)
+  return request === null ? { kind: 'remake' } : { kind: 'start', request }
+}
+
+/**
  * The start that resumes an ended session's own conversation in its folder, or why it cannot be: only Claude and Codex
  * resume, only from this computer, and only with the conversation id the daemon reported before the session ended.
  */

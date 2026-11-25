@@ -1085,8 +1085,7 @@ export async function reopenClosedSession(agent: string, session: string): Promi
 }
 
 /** A session as a project's saved open set keeps it: a closed session's record, with no word on its folder. */
-const SavedSessionSchema = ClosedSessionSchema.omit({ folder_present: true })
-export type SavedSession = z.infer<typeof SavedSessionSchema>
+export type SavedSession = Omit<ClosedSession, 'folder_present'>
 
 /**
  * Has this computer's service keep `sessions` as the set open in `project` (an absolute folder), replacing the one it
@@ -1097,12 +1096,12 @@ export async function saveWorkspace(project: string, sessions: readonly SavedSes
 }
 
 /**
- * The sessions this computer's service kept as open in `project` when it was last parked or closed, in the order saved.
- * `project` is the opened project's folder as the window spells it, since the service matches it exactly. Null when
- * the service running is older than the question.
+ * The sessions this computer's service kept as open in `project` when it was last parked or closed, in the order saved,
+ * each saying whether its folder is still there as a closed session does. `project` is the opened project's folder as
+ * the window spells it, since the service matches it exactly. Null when the service running is older than the question.
  */
-export async function savedWorkspace(project: string): Promise<SavedSession[] | null> {
-  return invokeParsed('saved_workspace', z.array(SavedSessionSchema).nullable(), { project })
+export async function savedWorkspace(project: string): Promise<ClosedSession[] | null> {
+  return invokeParsed('saved_workspace', z.array(ClosedSessionSchema).nullable(), { project })
 }
 
 /**

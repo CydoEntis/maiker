@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { savedWorkspace, type SavedSession } from '@/api/daemon'
+import { savedWorkspace, type ClosedSession } from '@/api/daemon'
 import { agentName } from './agentMessage'
 import { ageOf } from './newChatHost'
 import { sameProject, type MachineProjects, type OpenedProject } from './openedProjects'
@@ -12,7 +12,7 @@ import { startProjectOn } from './startProject'
 export type WorkspaceFor = { readonly project: OpenedProject; readonly name: string }
 
 /** What the panel knows of the project's saved set: nothing yet, the set, or why there is none. */
-export type SavedRead = { kind: 'loading' } | { kind: 'listed'; list: readonly SavedSession[] } | { kind: 'older' } | { kind: 'failed' }
+export type SavedRead = { kind: 'loading' } | { kind: 'listed'; list: readonly ClosedSession[] } | { kind: 'older' } | { kind: 'failed' }
 
 /**
  * One row of the panel. A session listed in the window is `running`, or `ended` once its agent has gone while its row
@@ -27,7 +27,7 @@ export type WorkspaceRow = {
   readonly at: number | null
 } & (
   | { readonly state: 'running' | 'ended'; readonly sessionId: string; readonly conversation: string | null }
-  | { readonly state: 'closed'; readonly saved: SavedSession }
+  | { readonly state: 'closed'; readonly saved: ClosedSession }
 )
 
 const MS_PER_SECOND = 1000
@@ -45,10 +45,15 @@ function liveRow(session: SessionView): WorkspaceRow {
   }
 }
 
-function savedRow(saved: SavedSession): WorkspaceRow {
+/** What a saved session is called: the name it was saved with, else "<Agent> session". */
+export function savedName(saved: ClosedSession): string {
+  return saved.title ?? `${agentName(saved.agent)} session`
+}
+
+function savedRow(saved: ClosedSession): WorkspaceRow {
   return {
     key: `saved:${saved.agent}:${saved.session}`,
-    name: saved.title ?? `${agentName(saved.agent)} session`,
+    name: savedName(saved),
     agent: saved.agent,
     branch: saved.branch,
     at: saved.at,
@@ -62,16 +67,50 @@ function savedRow(saved: SavedSession): WorkspaceRow {
  * newest first. A plain terminal is left out (the workspace is the agents' work), and so is a saved session whose
  * conversation runs again in the window, so one piece of work is one row.
  */
-export function workspaceRows(sessions: readonly SessionView[], saved: readonly SavedSession[]): WorkspaceRow[] {
+export function workspaceRows(sessions: readonly SessionView[], saved: readonly ClosedSession[]): WorkspaceRow[] {
   const live = sessions.filter((session) => !isShell(session)).map(liveRow)
-  const running = (entry: SavedSession) => live.some((row) => row.state !== 'closed' && row.agent === entry.agent && row.conversation === entry.session)
+  const running = (entry: ClosedSession) => live.some((row) => row.state !== 'closed' && row.agent === entry.agent && row.conversation === entry.session)
   const closed = saved.filter((entry) => !running(entry)).sort((a, b) => b.at - a.at).map(savedRow)
   return [...live, ...closed]
 }
 
 /** The saved set's rows, once it is read; none while it loads or when it could not be read. */
-export function savedOf(read: SavedRead): readonly SavedSession[] {
+export function savedOf(read: SavedRead): readonly ClosedSession[] {
   return read.kind === 'listed' ? read.list : []
+}
+
+/** The saved sessions among `rows` that Open starts again: the closed ones, since a session in the window already runs. */
+export function openTargets(rows: readonly WorkspaceRow[]): ClosedSession[] {
+  return rows.flatMap((row) => (row.state === 'closed' ? [row.saved] : []))
+}
+
+/** How an Open went: how many started, how many failed and the last reason why, and each one skipped with why. */
+export type OpenOutcome = {
+  readonly opened: number
+  readonly failed: number
+  readonly lastError: unknown
+  readonly skipped: readonly { readonly name: string; readonly why: string }[]
+}
+
+/** The one toast an Open ends with: its kind, its title, and the line naming what was skipped, if anything was. */
+export type OpenWords = { readonly kind: 'success' | 'warning' | 'failed'; readonly title: string; readonly note: string | null }
+
+const sessionsWord = (count: number): string => (count === 1 ? '1 session' : `${String(count)} sessions`)
+
+/**
+ * What the toast after an Open says. A failure is an error toast whose line under the title is the failure's own reason,
+ * so the title counts the skipped ones too; a skip alone is a warning, which stays until dismissed, with a line naming
+ * each skipped session and why.
+ */
+export function openWords({ opened, failed, skipped }: OpenOutcome): OpenWords {
+  if (failed > 0) {
+    if (opened === 0 && skipped.length === 0) return { kind: 'failed', title: failed === 1 ? 'Could not open the session' : `Could not open the ${String(failed)} sessions`, note: null }
+    const skips = skipped.length === 0 ? '' : `, and ${String(skipped.length)} ${skipped.length === 1 ? 'was' : 'were'} skipped`
+    return { kind: 'failed', title: `Opened ${String(opened)}, but ${String(failed)} could not start${skips}`, note: null }
+  }
+  const note = `Skipped ${skipped.map(({ name, why }) => `“${name}”: ${why}`).join('; ')}.`
+  if (skipped.length > 0) return { kind: 'warning', title: opened === 0 ? `Could not open ${sessionsWord(skipped.length)}` : `Opened ${sessionsWord(opened)}, skipped ${String(skipped.length)}`, note }
+  return { kind: 'success', title: `Opened ${sessionsWord(opened)}`, note: null }
 }
 
 /** What a row says under its name: the agent, then the branch it was on. */

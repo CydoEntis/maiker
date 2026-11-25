@@ -2154,7 +2154,9 @@ fn save_workspace_message(project: PathBuf, sessions: Vec<maitty_shared::protoco
     ClientMsg::Command(Command::SaveWorkspace { project, sessions })
 }
 
-/// The sessions this computer's daemon kept open in `project`. Null when the daemon running is older than the question.
+/// The sessions this computer's daemon kept open in `project`, each with `folder_present` as `closed_sessions` gives it,
+/// so the window knows which to start in place and which the daemon has to make again. Null when the daemon running is
+/// older than the question.
 pub async fn workspace(project: PathBuf) -> Result<Value> {
     let message = ClientMsg::Query(Query::Workspace { project });
     answered_within(REQUEST_TIMEOUT, async {
@@ -2165,7 +2167,7 @@ pub async fn workspace(project: PathBuf) -> Result<Value> {
             return Ok(Value::Null);
         }
         match ask(&mut connection, &message).await? {
-            Reply::Workspace(list) => Ok(serde_json::to_value(list)?),
+            Reply::Workspace(list) => with_folder_presence(list, FOLDER_LOOK_LIMIT, |path| path.is_dir()).await,
             _ => bail!("The Maiker service gave an answer this app does not understand (saved workspace). Restart the service in Settings, or update the app so both are the same version."),
         }
     })
@@ -2175,7 +2177,7 @@ pub async fn workspace(project: PathBuf) -> Result<Value> {
 /// How long the closed sessions' folders are looked for, all of them together.
 const FOLDER_LOOK_LIMIT: Duration = Duration::from_secs(2);
 
-/// Each closed session as JSON with `folder_present`. The folders are looked at side by side on blocking threads, and
+/// Each closed or saved session as JSON with `folder_present`. The folders are looked at side by side on blocking threads, and
 /// one that has not answered by `limit` (a network share that is gone can hang for a long time) reads as missing.
 async fn with_folder_presence(
     list: Vec<maitty_shared::protocol::ClosedSession>,
