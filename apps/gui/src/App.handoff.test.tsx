@@ -1257,14 +1257,16 @@ describe('the Chat view, agent starts and the terminal under a chat', () => {
    * after that. Returns the undo.
    */
   const glideLikeTheWebView = () => {
-    const doc = document as Document & { startViewTransition?: (update: () => void) => { finished: Promise<void> } }
-    const matchMedia = window.matchMedia as typeof window.matchMedia | undefined
-    window.matchMedia = ((query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined })) as unknown as typeof window.matchMedia
+    // Only the part of a View Transition that `movePanes` reads.
+    const doc = document as unknown as { startViewTransition?: (update: () => void) => { finished: Promise<void> } }
+    // The glide asks whether motion is reduced, which this test window cannot answer on its own.
+    const before = Object.getOwnPropertyDescriptor(window, 'matchMedia')
+    Object.defineProperty(window, 'matchMedia', { configurable: true, writable: true, value: (query: string) => ({ matches: false, media: query, addEventListener: () => undefined, removeEventListener: () => undefined }) })
     doc.startViewTransition = (update) => ({ finished: new Promise((resolve) => { setTimeout(() => { update(); resolve() }, GLIDE_FRAME_MS) }) })
     return () => {
       delete doc.startViewTransition
-      if (matchMedia === undefined) delete (window as { matchMedia?: unknown }).matchMedia
-      else window.matchMedia = matchMedia
+      if (before === undefined) delete (window as { matchMedia?: unknown }).matchMedia
+      else Object.defineProperty(window, 'matchMedia', before)
     }
   }
   /** Opens the draft beside a running session and sends it; the daemon starts chat 6 and lists it from then on. */

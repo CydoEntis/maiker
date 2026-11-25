@@ -72,17 +72,16 @@ describe('the keys when the chat opens', () => {
   it('takes them while the web view still names a field that just left the page, as the New session draft\'s box does', async () => {
     // The web view moves the focus off a removed field only at its next frame; until then it still names it.
     const removedDraftBox = document.createElement('textarea')
-    const named = Object.getOwnPropertyDescriptor(Document.prototype, 'activeElement')?.get
-    if (named === undefined) throw new Error('no activeElement to follow')
-    const stale = vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => {
-      const now = named.call(document) as Element | null
-      return now === document.body ? removedDraftBox : now
-    })
+    let focused: Element | null = null
+    const follow = (event: FocusEvent) => { focused = event.target instanceof Element ? event.target : null }
+    document.addEventListener('focusin', follow)
+    const stale = vi.spyOn(document, 'activeElement', 'get').mockImplementation(() => focused ?? removedDraftBox)
     try {
       const { box } = await open()
       expect(box).toHaveFocus()
     } finally {
       stale.mockRestore()
+      document.removeEventListener('focusin', follow)
     }
   })
 
