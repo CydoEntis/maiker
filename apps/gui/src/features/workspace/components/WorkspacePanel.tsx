@@ -9,6 +9,8 @@ import { WorkspacePanelDialog } from './WorkspacePanelDialog'
 type Props = {
   target: WorkspaceFor
   sessions: readonly SessionView[]
+  /** Every session of the window, on any project: a worktree one of them runs in cannot be removed. */
+  windowSessions: readonly SessionView[]
   /** An Open is under way, or another session is starting. */
   opening: boolean
   /** Opens saved sessions again (`useRecentSessions().openSaved`), naming the project in its toast. */
@@ -22,9 +24,9 @@ type Props = {
  * A project's Workspace panel: its sessions in the window as they change, its saved set, read once as it opens, and its
  * worktrees, each with its standing as it arrives.
  */
-export function WorkspacePanel({ target, sessions, opening, onOpen, onClose, onCancel }: Props) {
+export function WorkspacePanel({ target, sessions, windowSessions, opening, onOpen, onClose, onCancel }: Props) {
   const { read, retry } = useSavedWorkspace(target.project.folder)
-  const worktrees = useWorkspaceWorktrees(target.project.folder)
+  const worktrees = useWorkspaceWorktrees(target.project.folder, windowSessions)
   const [now] = useState(nowSeconds)
   return (
     <WorkspacePanelDialog
@@ -36,6 +38,7 @@ export function WorkspacePanel({ target, sessions, opening, onOpen, onClose, onC
       opening={opening}
       onOpen={(saved) => { onOpen(saved, target.name) }}
       onClose={onClose}
+      onRemove={worktrees.remove}
       onRetry={retry}
       onRetryWorktrees={worktrees.retry}
       onCancel={onCancel}

@@ -182,7 +182,7 @@ export function WorkspaceDialogs() {
             )}
             {importOpen && <ImportChats locked={!canStart} onImport={importChats} onCancel={() => { setImportOpen(false) }} />}
             {cutOffOpen && <CutOffDialog sessions={cutOff} onContinue={continueCutOff} onNotNow={notNowCutOff} />}
-            {workspaceFor !== null && <WorkspacePanel target={workspaceFor} sessions={sessionsOfProject(openedProjects.machines, workspaceFor.project)} opening={opening || starting} onOpen={openSaved} onClose={closeSessions} onCancel={() => { setWorkspaceFor(null) }} />}
+            {workspaceFor !== null && <WorkspacePanel target={workspaceFor} sessions={sessionsOfProject(openedProjects.machines, workspaceFor.project)} windowSessions={sessions} opening={opening || starting} onOpen={openSaved} onClose={closeSessions} onCancel={() => { setWorkspaceFor(null) }} />}
             {recentOpen && <RecentSessionsDialog home={home} onPick={reopenSession} onReopened={() => { setRecentOpen(false) }} onCancel={() => { setRecentOpen(false) }} />}
             {renameId !== null && sessionMap.get(renameId) && (
               <RenameDialog session={sessionMap.get(renameId) as SessionView} onSave={(name) => { saveName(renameId, name) }} onCancel={() => { setRenameId(null) }} />

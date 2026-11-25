@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 127;
+pub const PROTOCOL_VERSION: u32 = 128;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -1108,9 +1108,14 @@ pub enum Command {
     },
     /// Remove these worktrees, none of which has anything running in it: each a folder and
     /// whether to go ahead with uncommitted changes in it (they are lost). A branch is kept
-    /// unless it's already merged.
+    /// unless it's already merged. Answered once the removing is done: with a notice and `Ok`,
+    /// or, when `answer_each` is set, with `Reply::WorktreesTidied`, so a list can say on each
+    /// row why one stayed. A daemon before `WORKTREES_TIDIED_SINCE` ignores `answer_each` and
+    /// answers `Ok`.
     TidyWorktrees {
         items: Vec<(PathBuf, bool)>,
+        #[serde(default)]
+        answer_each: bool,
     },
     /// Close a worktree workspace and `git worktree remove` its checkout.
     /// `delete_branch`: also delete the worktree's branch (discarding a task).
@@ -1739,6 +1744,13 @@ pub enum Reply {
     Worktrees(Vec<WorktreeEntry>),
     /// None: git still lists the worktree but its folder is gone.
     WorktreeStanding(Option<WorktreeStanding>),
+    /// How a `Command::TidyWorktrees` with `answer_each` ended, by the folders as they were asked
+    /// for: the ones removed, and the ones kept with one line saying why ("something is running in
+    /// it", git's own refusal).
+    WorktreesTidied {
+        removed: Vec<PathBuf>,
+        kept: Vec<(PathBuf, String)>,
+    },
     Repo {
         tag: u64,
         reply: crate::repo::RepoReply,
@@ -2851,6 +2863,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ServerMsg::Reply(Reply::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
+            ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2901,6 +2914,11 @@ pub const CHAT_ACTIVE_AT_SINCE: u32 = 126;
 /// daemon passes the first two over, so a client does not send them, and an older client is never sent
 /// the reply.
 pub const WORKSPACE_SINCE: u32 = 127;
+
+/// The first version with `Reply::WorktreesTidied`, which a daemon sends only for a
+/// `Command::TidyWorktrees` with `answer_each`. An older daemon ignores the flag and answers `Ok`,
+/// and an older client never sets it and is never sent the reply.
+pub const WORKTREES_TIDIED_SINCE: u32 = 128;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3211,6 +3229,11 @@ mod tests {
             }),
             ClientMsg::Command(Command::TidyWorktrees {
                 items: vec![(PathBuf::from("/code/.wt/rate"), false)],
+                answer_each: false,
+            }),
+            ClientMsg::Command(Command::TidyWorktrees {
+                items: vec![(PathBuf::from("/code/.wt/rate"), true)],
+                answer_each: true,
             }),
             ClientMsg::Command(Command::RenamePane {
                 term: 3,
@@ -3467,6 +3490,10 @@ mod tests {
                 },
             }),
             ServerMsg::Reply(Reply::Workspace(vec![sample_closed()])),
+            ServerMsg::Reply(Reply::WorktreesTidied {
+                removed: vec![PathBuf::from("/code/.wt/rate")],
+                kept: vec![(PathBuf::from("/code/.wt/auth"), "something is running in it".into())],
+            }),
             ServerMsg::Reply(Reply::ClosedSessions(vec![ClosedSession {
                 agent: "claude".into(),
                 session: "abc".into(),
@@ -3583,6 +3610,7 @@ mod tests {
             let since = match m {
                 ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
                 ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
+                ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3699,6 +3727,37 @@ mod tests {
         let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
         assert!(decode::<Command126>(&encode(&reopen).unwrap()).is_ok());
         assert_eq!(ClientMsg::Command(reopen).introduced_in(), COMPATIBLE_SINCE);
+    }
+
+    /// 128 added a clean-up's answer by folder. A daemon at 127 reads a `TidyWorktrees` that asks
+    /// for it as before and answers `Ok`; a client at 127 sends one without the flag, read as not
+    /// asking, and is never sent the answer it cannot read.
+    #[test]
+    fn a_peer_from_before_tidied_answers_still_tidies_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize, PartialEq, Debug)]
+        enum Command127 {
+            TidyWorktrees { items: Vec<(PathBuf, bool)> },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply127 {
+            Ok,
+        }
+        const { assert!(WORKTREES_TIDIED_SINCE > COMPATIBLE_SINCE && WORKTREES_TIDIED_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(WORKTREES_TIDIED_SINCE - 1, 0));
+
+        let items = vec![(PathBuf::from("/code/.wt/rate"), true)];
+        let asking = Command::TidyWorktrees { items: items.clone(), answer_each: true };
+        assert_eq!(decode::<Command127>(&encode(&asking).unwrap()).unwrap(), Command127::TidyWorktrees { items: items.clone() });
+        assert_eq!(ClientMsg::Command(asking).introduced_in(), COMPATIBLE_SINCE);
+        let old = encode(&Command127::TidyWorktrees { items: items.clone() }).unwrap();
+        assert!(matches!(
+            decode::<Command>(&old).unwrap(),
+            Command::TidyWorktrees { items: read, answer_each: false } if read == items
+        ));
+
+        let reply = Reply::WorktreesTidied { removed: vec!["/code/.wt/rate".into()], kept: Vec::new() };
+        unreadable_before::<Reply127, _>(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKTREES_TIDIED_SINCE);
     }
 
     /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124

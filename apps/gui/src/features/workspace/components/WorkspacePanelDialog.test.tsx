@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
 import type { ClosedSession } from '@/api/daemon'
+import type { WorktreesRemoved } from '@/features/worktrees/api'
 import type { SavedRead, StandingRead, WorkspaceRow, WorktreeRow, WorktreesRead } from '../model/workspacePanel'
 import { WorkspacePanelDialog } from './WorkspacePanelDialog'
 
@@ -18,25 +19,29 @@ const LISTED: SavedRead = { kind: 'listed', list: [] }
 const NO_GIT: WorktreesRead = { kind: 'not-a-repo' }
 
 const MAIN: WorktreeRow = { key: 'worktree:/code/shop', path: '/code/shop', name: 'main', main: true }
-function linked(branch: string, standing: StandingRead): WorktreeRow {
-  return { key: `worktree:/code/shop-${branch}`, path: `/code/shop-${branch}`, name: branch, main: false, standing }
+function linked(branch: string, standing: StandingRead, running = false): WorktreeRow {
+  return { key: `worktree:/code/shop-${branch}`, path: `/code/shop-${branch}`, name: branch, main: false, standing, running }
 }
 const STANDING = { dirty: 0, branch: 'b', merged: true, last_commit: '2 days ago', inactive_days: null, missing: false }
 const DIRTY = linked('dark-mode', { kind: 'read', standing: { ...STANDING, dirty: 3, merged: false } })
 const QUIET = linked('old-fix', { kind: 'read', standing: { ...STANDING, inactive_days: 16 } })
 const WORKTREES: WorktreesRead = { kind: 'listed', rows: [MAIN, DIRTY, QUIET] }
+const UNMERGED = linked('spike', { kind: 'read', standing: { ...STANDING, merged: false } })
+const BUSY = linked('busy', { kind: 'read', standing: STANDING }, true)
 
-function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), worktrees: WorktreesRead = NO_GIT, opening = false) {
+type Remove = (items: readonly { path: string; force: boolean }[]) => Promise<WorktreesRemoved>
+
+function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry = vi.fn(), worktrees: WorktreesRead = NO_GIT, opening = false, onRemove = vi.fn<Remove>(() => Promise.resolve({ removed: [], kept: [] }))) {
   const onCancel = vi.fn()
   const onRetryWorktrees = vi.fn()
   const onOpen = vi.fn()
   const onClose = vi.fn()
   render(
     <div className="mx-app">
-      <WorkspacePanelDialog name="shop" rows={rows} saved={saved} worktrees={worktrees} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRetry={onRetry} onRetryWorktrees={onRetryWorktrees} onCancel={onCancel} />
+      <WorkspacePanelDialog name="shop" rows={rows} saved={saved} worktrees={worktrees} now={NOW} opening={opening} onOpen={onOpen} onClose={onClose} onRemove={onRemove} onRetry={onRetry} onRetryWorktrees={onRetryWorktrees} onCancel={onCancel} />
     </div>,
   )
-  return { onCancel, onRetry, onRetryWorktrees, onOpen, onClose }
+  return { onCancel, onRetry, onRetryWorktrees, onOpen, onClose, onRemove }
 }
 
 const ticks = () => screen.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)
@@ -225,6 +230,102 @@ describe('a project’s workspace panel', () => {
 
     show([LOGIN], LISTED, vi.fn(), NO_GIT)
     expect(screen.queryByRole('region', { name: 'Worktrees' })).toBeNull()
+  })
+
+  it('gives a worktree a session runs in no tick to take, and leaves it out of Select all and Remove', async () => {
+    const user = userEvent.setup()
+    show([], LISTED, vi.fn(), { kind: 'listed', rows: [MAIN, BUSY, QUIET] })
+    const busy = screen.getByRole('checkbox', { name: /busy/ })
+    expect(busy).toBeDisabled()
+    expect(busy).toHaveAccessibleName(/a session runs in it/)
+    expect(screen.getByText('0 of 1 ticked')).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(busy).not.toBeChecked()
+    expect(screen.getByRole('button', { name: 'Remove 1 ticked worktree' })).toBeEnabled()
+  })
+
+  it('asks before removing, naming each ticked worktree by branch, folder and standing, and sends a clean merged one as it is', async () => {
+    const user = userEvent.setup()
+    const { onRemove } = show([LOGIN], LISTED, vi.fn(), WORKTREES)
+    expect(screen.getByRole('button', { name: 'Remove ticked worktrees' })).toBeDisabled()
+    await user.click(screen.getByRole('checkbox', { name: /Fix the login/ }))
+    expect(screen.getByRole('button', { name: 'Remove ticked worktrees' })).toBeDisabled()
+
+    await user.click(screen.getByRole('checkbox', { name: /old-fix/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    expect(screen.getByRole('heading', { name: 'Remove this worktree?' })).toHaveFocus()
+    const [only] = within(screen.getByRole('list', { name: 'Worktrees to remove' })).getAllByRole('listitem')
+    expect(only).toHaveTextContent('old-fix')
+    expect(only).toHaveTextContent('/code/shop-old-fix')
+    expect(only).toHaveTextContent('nothing uncommitted · merged')
+    expect(only).toHaveTextContent('loses nothing')
+    expect(within(only ?? document.body).queryByRole('checkbox')).toBeNull()
+    expect(onRemove).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    expect(onRemove).toHaveBeenCalledWith([{ path: '/code/shop-old-fix', force: false }])
+  })
+
+  it('asks on its own about each worktree that would lose something, saying what, and sends only the confirmed ones', async () => {
+    const user = userEvent.setup()
+    const { onRemove } = show([], LISTED, vi.fn(), { kind: 'listed', rows: [MAIN, DIRTY, QUIET, UNMERGED, linked('new', { kind: 'checking' })] })
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 4 ticked worktrees' }))
+    expect(screen.getByRole('heading', { name: 'Remove these 4 worktrees?' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Remove 1 ticked worktree' })).toBeEnabled()
+    const dirty = screen.getByRole('checkbox', { name: 'Lose its 3 uncommitted changes? Remove it too' })
+    const unmerged = screen.getByRole('checkbox', { name: 'Lose commits that are on no other branch (the branch is kept, the folder goes)? Remove it too' })
+    expect(screen.getByRole('checkbox', { name: 'Lose whatever is in it: where it stands is not known? Remove it too' })).not.toBeChecked()
+    expect(unmerged).not.toBeChecked()
+
+    await user.click(dirty)
+    await user.click(screen.getByRole('button', { name: 'Remove 2 ticked worktrees' }))
+    expect(onRemove).toHaveBeenCalledWith([{ path: '/code/shop-dark-mode', force: true }, { path: '/code/shop-old-fix', force: false }])
+    // Back on the list, the ones sent are unticked and the ones not confirmed stay ticked.
+    expect(await screen.findByRole('checkbox', { name: /spike/ })).toBeChecked()
+    expect(screen.getByRole('checkbox', { name: /dark-mode/ })).not.toBeChecked()
+    expect(screen.getByRole('region', { name: 'Worktrees' })).toHaveFocus()
+  })
+
+  it('goes back to the list with Keep them, removing nothing and keeping the ticks', async () => {
+    const user = userEvent.setup()
+    const { onRemove } = show([], LISTED, vi.fn(), WORKTREES)
+    await user.click(screen.getByRole('checkbox', { name: /dark-mode/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    await user.click(screen.getByRole('button', { name: 'Keep them' }))
+    expect(onRemove).not.toHaveBeenCalled()
+    expect(screen.getByRole('checkbox', { name: /dark-mode/ })).toBeChecked()
+  })
+
+  it('shows the daemon’s reason on the row of each worktree it kept, and says how the removal went', async () => {
+    const user = userEvent.setup()
+    const onRemove = vi.fn<Remove>(() => Promise.resolve({ removed: ['/code/shop-spike'], kept: [{ path: '/code/shop-old-fix', why: 'something is running in it' }] }))
+    show([], LISTED, vi.fn(), { kind: 'listed', rows: [MAIN, QUIET, linked('spike', { kind: 'read', standing: STANDING })] }, false, onRemove)
+    await user.click(screen.getByRole('button', { name: 'Select all' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 2 ticked worktrees' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 2 ticked worktrees' }))
+
+    expect(await screen.findByText('Removed 1 worktree. 1 worktree stayed: the reason is on its row.')).toBeInTheDocument()
+    expect(screen.getByRole('checkbox', { name: /old-fix/ })).toHaveAccessibleName(/Not removed: something is running in it/)
+    expect(screen.getByRole('checkbox', { name: /spike/ })).not.toHaveAccessibleName(/Not removed/)
+  })
+
+  it('says why a removal could not be asked, and what an older service leaves to the list', async () => {
+    const user = userEvent.setup()
+    const failing = vi.fn<Remove>(() => Promise.reject(new Error('The Maiker service did not answer.')))
+    show([], LISTED, vi.fn(), WORKTREES, false, failing)
+    await user.click(screen.getByRole('checkbox', { name: /old-fix/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    expect(await screen.findByText(/^Could not remove the worktrees\. The Maiker service did not answer/)).toBeInTheDocument()
+    cleanup()
+
+    show([], LISTED, vi.fn(), WORKTREES, false, vi.fn<Remove>(() => Promise.resolve(null)))
+    await user.click(screen.getByRole('checkbox', { name: /old-fix/ }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    await user.click(screen.getByRole('button', { name: 'Remove 1 ticked worktree' }))
+    expect(await screen.findByText(/^Asked the service to remove them\./)).toBeInTheDocument()
   })
 
   it('closes with Done', async () => {

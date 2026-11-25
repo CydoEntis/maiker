@@ -1337,11 +1337,25 @@ pub async fn new_worktree_session(
     }
 }
 
-/// Remove worktrees (a folder and whether to go on with uncommitted changes in it, which are lost).
-/// The daemon closes what runs in a worktree before it goes and answers at once; one something
-/// still runs in is left alone.
+/// How long removing worktrees may take: the daemon answers once every folder is gone, and deleting a large
+/// checkout (a `node_modules`, a build folder) is slow, on Windows above all.
+const TIDY_WORKTREES_TIMEOUT: Duration = Duration::from_secs(10 * 60);
+
+/// Remove worktrees (a folder and whether to go on with uncommitted changes in it, which are lost). The daemon
+/// keeps one something still runs in, and answers once it is done: `{removed: [folder], kept: [{path, why}]}`, by
+/// the folders as they were asked for, or null from a daemon before `WORKTREES_TIDIED_SINCE`, which does not say,
+/// so the caller looks again.
 pub async fn tidy_worktrees(items: Vec<(PathBuf, bool)>, daemon_executable: PathBuf) -> Result<Value> {
-    match request(ClientMsg::Command(Command::TidyWorktrees { items }), daemon_executable).await? {
+    let message = ClientMsg::Command(Command::TidyWorktrees { items, answer_each: true });
+    tidied_json(request_within(message, daemon_executable, TIDY_WORKTREES_TIMEOUT).await?)
+}
+
+fn tidied_json(reply: Reply) -> Result<Value> {
+    match reply {
+        Reply::WorktreesTidied { removed, kept } => Ok(json!({
+            "removed": removed.iter().map(|path| path.to_string_lossy()).collect::<Vec<_>>(),
+            "kept": kept.iter().map(|(path, why)| json!({ "path": path.to_string_lossy(), "why": why })).collect::<Vec<_>>(),
+        })),
         Reply::Ok => Ok(Value::Null),
         _ => bail!("The Maiker service gave an answer this app does not understand (worktree). Restart the service in Settings, or update the app so both are the same version."),
     }
@@ -3615,6 +3629,21 @@ mod agent_command_tests {
             let refused = refuse_unless_daemon_reads(&message, older).unwrap_err();
             assert!(format!("{refused:#}").contains("older than this app"), "{refused:#}");
         }
+    }
+
+    #[test]
+    fn a_clean_up_answers_by_folder_or_null_from_a_service_that_does_not_say() {
+        use super::{Reply, tidied_json};
+        let answer = Reply::WorktreesTidied {
+            removed: vec!["/code/shop-old".into()],
+            kept: vec![("/code/shop-busy".into(), "something is running in it".into())],
+        };
+        assert_eq!(
+            tidied_json(answer).unwrap(),
+            serde_json::json!({ "removed": ["/code/shop-old"], "kept": [{ "path": "/code/shop-busy", "why": "something is running in it" }] })
+        );
+        assert_eq!(tidied_json(Reply::Ok).unwrap(), serde_json::Value::Null);
+        assert!(tidied_json(Reply::Text("?".into())).is_err());
     }
 
     #[test]

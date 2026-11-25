@@ -1323,6 +1323,20 @@ them through `github_repos(machine, owner, search, tag)` and `github_owners(mach
 (`routing::answer_window`), which covers the daemon's two `gh` runs. In the window, a question whose
 answer is an event with the same tag goes through `apps/gui/src/api/taggedAnswers.ts`.
 
+Protocol 128 adds `Command::TidyWorktrees.answer_each` (`#[serde(default)]`) and `Reply::WorktreesTidied { removed,
+kept }` (`WORKTREES_TIDIED_SINCE`, with an arm in `ServerMsg::introduced_in`; `COMPATIBLE_SINCE` stays 122). A clean-up
+answers once the removing is done; with `answer_each` it answers `WorktreesTidied` instead of the notice and `Ok`:
+`removed` the folders it removed and `kept` each folder it kept with one line saying why ("it isn't a worktree",
+"something is running in it", or git's own first line), both by the folder exactly as it was asked for, so a list finds
+its own rows. The daemon's rules for what it removes do not change (`tidy_plan`, `runs_in`). A daemon at 127 ignores the
+flag and answers `Ok`; a client at 127 never sets it and is never sent the reply; another machine's answer is ignored
+(`remote_policy`). The terminal app's clean-up sends it unset and keeps its notice. The desktop host's
+`remove_worktrees { machine, items }` (this computer only) sends it set through `maitty_desktop_client::tidy_worktrees`,
+waiting up to ten minutes (`TIDY_WORKTREES_TIMEOUT`, since deleting a large checkout is slow), and gives the window
+`{removed: [folder], kept: [{path, why}]}`, or null from a daemon before 128. Tests:
+`a_peer_from_before_tidied_answers_still_tidies_and_is_never_sent_one`, `a_clean_up_only_takes_worktrees_nothing_runs_in`,
+`a_clean_up_answers_by_folder_or_null_from_a_service_that_does_not_say`.
+
 Protocol 127 adds `Command::SaveWorkspace { project, sessions }`, `Query::Workspace { project }` and
 `Reply::Workspace(Vec<ClosedSession>)` (`WORKSPACE_SINCE`, with an arm in both `introduced_in`; `COMPATIBLE_SINCE` stays
 122, since an older daemon is never sent the command or the question and an older client is never sent the reply). The

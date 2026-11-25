@@ -224,12 +224,15 @@ changes and whether its work is merged ("3 uncommitted changes · not merged", "
 folder is gone"), and at its right "inactive N days" (`worktree.inactive_days`) or its last commit's age. Each
 standing is asked on its own in the background (`worktree_standing`, sharing the worktree manager's cache), and the row
 says "checking…" until it arrives, or "could not check where it stands" with the reason as its tooltip; a row can be
-ticked meanwhile. The section says "Looking for the worktrees of <project>…" while it lists them, "Could not read the
+ticked meanwhile. A linked worktree a session of the window runs in (any project's, on this computer, matched by its
+checkout as Open worktree matches it: `worktreesInUse`) adds "· a session runs in it" and its tick is off, with "Close the
+session running in it first." in its tooltip; Select all leaves it out. The section says "Looking for the worktrees of <project>…" while it lists them, "Could not read the
 worktrees of <project>." with **Try again** when it cannot, and is left out for a folder outside git. Nothing is ticked
 when it opens; **Select all** and **Select none** sit at the right above the first section and cover every row a tick
 can go on (sessions and linked worktrees), each off when it would change nothing, and the foot says "N of M ticked" of
-those with **Done**, **Close N**, **Open everything** and **Open N** at the right. Open and Close act on session rows
-only and ignore ticked worktrees (Remove worktree is still to join the foot). **Open N** opens the ticked closed rows
+those with **Done**, **Remove N**, **Close N**, **Open everything** and **Open N** at the right; when they do not fit
+beside the count the foot wraps, keeping them at the right. Open and Close act on session rows only and ignore ticked
+worktrees; Remove acts on worktree rows only. **Open N** opens the ticked closed rows
 (N counts only those: a running row ticked beside them is left as it is) and **Open everything** every closed row,
 ticked or not; both are off while nothing applies and while an Open or any other start is under way (Open reads
 "Opening…"), and pressing either unticks the closed rows it sent. Each starts one after another in the background
@@ -247,7 +250,27 @@ is not a second "Close" beside the panel's ×. It asks first as Close project do
 ("Close 2 sessions?", "Fix tests and Port the parser stop, and they leave the sidebar."), under the `close-session`
 kind, so its "Don't ask again" holds here too; ended ones close without a question. Confirmed, they end through
 `endSessions`: a draft in one of their documents is asked about first, and each close keeps the service's undo window.
-It closes neither the project nor its saved set. The running rows show at once; the saved ones say
+It closes neither the project nor its saved set. **Remove N** (a danger button; its accessible name "Remove N ticked
+worktrees", N counting the ticked linked worktrees no session runs in) is off while none is ticked, and asks first in the
+panel itself (`RemoveWorktreesStep`): "Remove this worktree?" or "Remove these N worktrees?" takes focus, then "Each
+folder is deleted for good. A branch stays unless its work is already merged." and a row per worktree with its branch,
+its folder and its standing. A clean worktree whose work is merged (or whose folder is already gone) says "loses
+nothing" and goes as it is; any other has a tick of its own in the worktree manager's words, "Lose its 3 uncommitted
+changes? Remove it too", "Lose commits that are on no other branch (the branch is kept, the folder goes)? Remove it
+too", or, while its standing is checking or could not be read, "Lose whatever is in it: where it stands is not known?
+Remove it too" (`removalCheck`), and goes only with that tick ("One whose loss is not ticked stays."); a tick counts
+only for the loss it named, so a standing that changes meanwhile asks again. Its foot is **Keep them** (back to the
+list, nothing removed, the ticks as they were) and **Remove N**, N counting what will go (`removalItems`), reading
+"Removing…" while the daemon works. Only a confirmed worktree with uncommitted changes, or one whose standing is not
+known, is sent with `go_even_if_dirty` (`remove_worktrees`, `Command::TidyWorktrees` with `answer_each`, API_PATTERNS),
+and the daemon's own rules still decide: it keeps one something runs in. When it answers, the list is read again with
+the standings of what was sent, the panel is back on the list with focus on the Worktrees section, what was sent is
+unticked (one not confirmed stays ticked), and the section says how it went ("Removed 2 worktrees.", "Removed 1
+worktree. 1 worktree stayed: the reason is on its row."), each kept row saying "Not removed: <the daemon's reason>"
+under its standing until the next removal. A removal that could not be asked says "Could not remove the worktrees."
+with the reason; an older service, which does not say what it kept, gets the worktree manager's line ("Asked the
+service to remove them. If one is still listed, something is running in it: close that first."). The main checkout
+and a worktree a session runs in cannot be ticked, so they are never sent. The running rows show at once; the saved ones say
 "Looking for the sessions open when this project was last closed…" while they are read, "Could not read …" with **Try
 again** when the read fails, and "The Maiker service needs a restart to show the sessions open when this project was
 last closed." with the restart button from an older service. A project with no session and nothing saved says "No
@@ -255,7 +278,8 @@ sessions here yet. The ones you start in <project>, and the ones open when it is
 click outside closes it. It is this computer's only: on another machine's project the menu row is off with "Workspace
 is local-only in v1: this project is on <machine>, not on this computer." The gallery shows it at
 `#dialogs?show=workspace` (and `workspace-ticked`, `-opening`, `-opened` with the toasts an Open ends with, `-close`
-with Close's question, `-loading`, `-empty`, `-older`, `-failed`, `-checking`, `-worktrees-failed`).
+with Close's question, `-loading`, `-empty`, `-older`, `-failed`, `-checking`, `-worktrees-failed`, `-busy` with a
+worktree a session runs in, `-remove` with Remove's question, `-removed` with the reason on each row the daemon kept).
 
 **Desktop service states** (`ServiceStatus.tsx`, `useServiceStage.ts`, `model/serviceState.ts`; DESIGN › *Errors*). While the service does not answer, every status reads Unknown, spinners stop and input waits. For the first 3 seconds (`OFFLINE_AFTER_MS`) it is a blip: only the title bar's chip says **Reconnecting…**, and nothing dims. After that the whole window dims under one dialog, **Maiker can’t reach its background service** ("Nothing works until it is back, but your chats are safe and will reconnect on their own…"), with **Start service**, **Not now**, **Copy details** (the connection's own error) and "Trying again in Ns"; the window tries again after 2, 4, 8, then every 15 seconds (`RETRY_DELAYS_MS`). The desktop's connection starts the service itself on every try (`open_or_spawn_for_user`), so Start service is a try now, showing "Starting…" while it runs. **Not now** leaves a red **× Offline** chip in the title bar that opens the dialog again. When the service answers after an outage the dialog (or the chip) turns green, "Reconnecting…" / "Found the service. Picking your chats back up.", for 1.2 s (`FOUND_FOR_MS`), then a **Back online** toast says "All chats reconnected. Nothing was lost.", unless the restart cut replies: then the cut-off dialog below asks instead and no toast shows. Back after a blip says nothing. Toasts raised while the window is offline are held and show once it is back (`holdToasts`). A running service of another protocol gets the same window dialog in caution, **Restart Maiker to finish updating**, "The app updated, but the service behind it is still the older one.", the list of what a restart keeps and stops (sessions that reopen, agents that will offer Resume, shells that stop; a line with a count of 0 is left out) and a restart button that asks for a second click (`restart_mismatched_daemon`, then "Service restarted · N sessions back"), with `protocol 75 → 76` beside it (protocol numbers are never written as app versions); a service newer than the app asks **Update Maiker to reconnect**. **Later** leaves a caution **Restart needed** (or **Update needed**) chip in the title bar. The sidebar foot never repeats any of this. No needs-you toast shows while the service is not connected, and a failed action whose only reason is that the window has no line to the service (`lib/serviceLine.ts`) shows no error toast either (`lib/toast.ts`): the chip and the dialog already say it. **After a restart** (`CutOffDialog.tsx`, `model/cutOff.ts`) the sessions it cut mid-reply, on every machine (a terminal agent's `TermInfo.interrupted`, a chat's `ConversationSummary.interrupted`), are one dialog, **Pick up where you left off**, once the service answers and no other dialog is up: a row each, all ticked, with **Resume N chats** (N is the ticked count; **Resume N sessions** when a terminal agent is among them) and **Not now**. Nothing starts until Resume is pressed. A session that joins while it is up (another machine coming back) joins ticked. Resume runs a terminal agent's resume command in its pane, and starts a chat again on its own session (`resume_conversation`) then sends it `Continue where you left off.` as a message (`continueCutChat.ts`); a failure is a toast naming the session. Either button takes every listed session off the list for this window, and each still offers **Restart** over its own chat until it is taken up. Sessions that were idle never show here: a chat comes back asleep, listed idle, and starts when it is opened; until its agent is up its dock reads **Waking Claude up…** (the running mark, "This chat rested while Maiker restarted. It picks up where it was in a moment."), from the chat link's `waking` (`toConversation`: a summary that needs recovery but is listed idle, or an existing chat stopped and working while it starts). Nothing resumes by itself.
 

@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useState } from 'react'
 import { savedWorkspace, type ClosedSession } from '@/api/daemon'
 import type { FolderBranchList } from '@/api/folderGit'
-import type { WorktreeStanding } from '@/features/worktrees/api'
-import { ageWords, changesAndMerged } from '@/features/worktrees/worktreeAdvice'
+import type { WorktreeStanding, WorktreesRemoved } from '@/features/worktrees/api'
+import { ageWords, changesAndMerged, lossOfRemoving } from '@/features/worktrees/worktreeAdvice'
 import { agentName } from './agentMessage'
 import { baseName } from './folderPick'
 import { ageOf } from './newChatHost'
 import { sameProject, type MachineProjects, type OpenedProject } from './openedProjects'
+import { worktreeChoices } from './projectWorktrees'
 import type { SessionView } from './session'
 import { isShell, rowTitle } from './sidebar'
 import { projectName } from './sidebarTree'
@@ -137,38 +138,102 @@ export type StandingRead = { readonly kind: 'checking' } | { readonly kind: 'rea
 
 /**
  * One row of the panel's Worktrees section, keyed `worktree:<path>`. The main checkout is the project's own folder: it
- * is listed but never ticked, since removing it would remove the project; a linked worktree carries its standing.
+ * is listed but never ticked, since removing it would remove the project; a linked worktree carries its standing, and
+ * whether a session of the window runs in it, which keeps it from being ticked too.
  */
 export type WorktreeRow = { readonly key: string; readonly path: string; readonly name: string } & (
   | { readonly main: true }
-  | { readonly main: false; readonly standing: StandingRead }
+  | { readonly main: false; readonly standing: StandingRead; readonly running: boolean }
 )
+
+/** A linked worktree's row: one Remove can act on. */
+export type LinkedWorktreeRow = Extract<WorktreeRow, { main: false }>
 
 /** What the panel knows of the project's worktrees: nothing yet, the rows, a folder outside git, or a failed read. */
 export type WorktreesRead = { kind: 'loading' } | { kind: 'listed'; rows: readonly WorktreeRow[] } | { kind: 'not-a-repo' } | { kind: 'failed' }
 
 /**
  * The Worktrees section's rows in the order git lists them (the main checkout first), each linked one with its standing
- * as far as it is read. A worktree on no branch is named by its folder.
+ * as far as it is read and whether a session runs in it (its folder is in `inUse`). A worktree on no branch is named by
+ * its folder.
  */
-export function worktreeRows(worktrees: FolderBranchList['worktrees'], standingOf: (path: string) => StandingRead): WorktreeRow[] {
+export function worktreeRows(worktrees: FolderBranchList['worktrees'], standingOf: (path: string) => StandingRead, inUse: ReadonlySet<string>): WorktreeRow[] {
   return worktrees.map((worktree): WorktreeRow => {
     const base = { key: `worktree:${worktree.path}`, path: worktree.path, name: worktree.branch ?? baseName(worktree.path) }
-    return worktree.main ? { ...base, main: true } : { ...base, main: false, standing: standingOf(worktree.path) }
+    return worktree.main ? { ...base, main: true } : { ...base, main: false, standing: standingOf(worktree.path), running: inUse.has(worktree.path) }
   })
 }
 
-/** The worktree rows a tick can go on: every linked worktree, never the main checkout. */
-export function tickableWorktrees(read: WorktreesRead): WorktreeRow[] {
-  return read.kind === 'listed' ? read.rows.filter((row) => !row.main) : []
+/**
+ * The folders of the linked worktrees a session of the window on `machine` runs in, matched by its checkout as Open
+ * worktree matches them (`worktreeChoices`). The daemon keeps such a worktree when asked to remove it; the panel does
+ * not offer it.
+ */
+export function worktreesInUse(worktrees: FolderBranchList['worktrees'], sessions: readonly SessionView[], machine: number): ReadonlySet<string> {
+  const linked = worktrees.filter((worktree) => !worktree.main).map((worktree) => ({ path: worktree.path, branch: worktree.branch, present: true }))
+  return new Set(worktreeChoices(linked, sessions, machine).flatMap((choice) => (choice.kind === 'running' ? [choice.worktree.path] : [])))
 }
 
-/** What a worktree row says under its name: what is on it that is nowhere else, or why that is not known yet. */
+/** The worktree rows a tick can go on: every linked worktree no session runs in, never the main checkout. */
+export function tickableWorktrees(read: WorktreesRead): LinkedWorktreeRow[] {
+  if (read.kind !== 'listed') return []
+  return read.rows.filter((row): row is LinkedWorktreeRow => !row.main && !row.running)
+}
+
+/** What a worktree's standing says under its name: what is on it that is nowhere else, or why that is not known yet. */
+function standingWhere(standing: StandingRead): string {
+  if (standing.kind === 'checking') return 'checking…'
+  if (standing.kind === 'failed') return 'could not check where it stands'
+  return changesAndMerged(standing.standing)
+}
+
+/** What a worktree row says under its name: its standing, and why it stays when it cannot be removed. */
 export function worktreeWhere(row: WorktreeRow): string {
   if (row.main) return 'main checkout · stays'
-  if (row.standing.kind === 'checking') return 'checking…'
-  if (row.standing.kind === 'failed') return 'could not check where it stands'
-  return changesAndMerged(row.standing.standing)
+  return row.running ? `${standingWhere(row.standing)} · a session runs in it` : standingWhere(row.standing)
+}
+
+/**
+ * A ticked worktree as Remove asks about it: what removing it would lose, and whether the daemon may go on past
+ * uncommitted changes. `loss` is null only for a clean worktree whose work is merged, or one whose folder is already
+ * gone: those go without a question of their own, as the daemon's clean-up rule has it. Anything else, a standing still
+ * being checked or one that could not be read included, has to be confirmed on its own.
+ */
+export type RemovalCheck = { readonly row: LinkedWorktreeRow; readonly loss: string | null; readonly force: boolean }
+
+const UNKNOWN_LOSS = 'whatever is in it: where it stands is not known'
+
+export function removalCheck(row: LinkedWorktreeRow): RemovalCheck {
+  if (row.standing.kind !== 'read') return { row, loss: UNKNOWN_LOSS, force: true }
+  const standing = row.standing.standing
+  if (standing.missing) return { row, loss: null, force: false }
+  return { row, loss: lossOfRemoving(standing), force: standing.dirty > 0 }
+}
+
+/**
+ * What Remove sends: each worktree that loses nothing, as it is, and each that would lose something only when its own
+ * question was confirmed (`sure` holds its key with the loss its question named, which must still be its loss), the only
+ * way `force` goes on. One not confirmed is not sent.
+ */
+export function removalItems(checks: readonly RemovalCheck[], sure: ReadonlyMap<string, string>): { path: string; force: boolean }[] {
+  return checks.flatMap(({ row, loss, force }) => {
+    if (loss === null) return [{ path: row.path, force: false }]
+    return sure.get(row.key) === loss ? [{ path: row.path, force }] : []
+  })
+}
+
+const worktreesWord = (count: number): string => (count === 1 ? '1 worktree' : `${String(count)} worktrees`)
+
+/**
+ * The line the Worktrees section says after a removal: how many went and how many stayed, whose reasons are on their
+ * rows. A service too old to say gets the worktree manager's line, since the list read again is all there is to go on.
+ */
+export function removedWords(outcome: WorktreesRemoved): string {
+  if (outcome === null) return 'Asked the service to remove them. If one is still listed, something is running in it: close that first.'
+  const { removed, kept } = outcome
+  if (kept.length === 0) return `Removed ${worktreesWord(removed.length)}.`
+  const stayed = `${worktreesWord(kept.length)} stayed: the reason is on ${kept.length === 1 ? 'its row' : 'each row'}.`
+  return removed.length === 0 ? `Removed nothing. ${stayed}` : `Removed ${worktreesWord(removed.length)}. ${stayed}`
 }
 
 /** What a worktree row says at its right: how long it has been quiet, once its standing is read. */

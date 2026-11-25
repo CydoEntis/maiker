@@ -3,7 +3,7 @@ import type { ClosedSession } from '@/api/daemon'
 import type { Conversation } from '@/data/preview'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { openTargets, openWords, rowWhen, rowWhere, tickableWorktrees, workspaceRows, workspaceTargetOf, worktreeRows, worktreeWhen, worktreeWhere, type WorktreeRow } from './workspacePanel'
+import { openTargets, openWords, removalCheck, removalItems, removedWords, rowWhen, rowWhere, tickableWorktrees, workspaceRows, workspaceTargetOf, worktreeRows, worktreesInUse, worktreeWhen, worktreeWhere, type LinkedWorktreeRow, type StandingRead, type WorktreeRow } from './workspacePanel'
 
 const NOW = 2_000_000_000
 const HOUR = 3600
@@ -103,9 +103,10 @@ describe('the workspace worktree rows', () => {
   const MAIN = { path: '/code/shop', branch: 'main', main: true, when: null }
   const FIX = { path: '/code/shop-fix', branch: 'fix', main: false, when: null }
   const DETACHED = { path: '/code/shop-detached', branch: null, main: false, when: null }
+  const NONE: ReadonlySet<string> = new Set()
 
   it('keeps git’s order, keys each by its folder, and names one on no branch by its folder', () => {
-    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }))
+    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }), NONE)
     expect(rows.map((row) => [row.key, row.name, row.main])).toEqual([
       ['worktree:/code/shop', 'main', true],
       ['worktree:/code/shop-fix', 'fix', false],
@@ -114,20 +115,81 @@ describe('the workspace worktree rows', () => {
   })
 
   it('never offers the main checkout a tick', () => {
-    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }))
+    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'checking' }), NONE)
     expect(tickableWorktrees({ kind: 'listed', rows }).map((row) => row.name)).toEqual(['fix', 'shop-detached'])
     expect(tickableWorktrees({ kind: 'loading' })).toEqual([])
   })
 
   it('says what is on a worktree once its standing is read, and checking until then', () => {
     const says = (rows: readonly WorktreeRow[]) => rows.map((row) => [worktreeWhere(row), worktreeWhen(row)])
-    expect(says(worktreeRows([MAIN, FIX], () => ({ kind: 'read', standing: { ...READ, dirty: 1, inactive_days: 1 } })))).toEqual([
+    expect(says(worktreeRows([MAIN, FIX], () => ({ kind: 'read', standing: { ...READ, dirty: 1, inactive_days: 1 } }), NONE))).toEqual([
       ['main checkout · stays', ''],
       ['1 uncommitted change · merged', 'inactive 1 day'],
     ])
-    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, merged: false } })))).toEqual([['nothing uncommitted · not merged', '2 days ago']])
-    expect(says(worktreeRows([FIX], () => ({ kind: 'checking' })))).toEqual([['checking…', '']])
-    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, missing: true } })))).toEqual([['its folder is gone', '']])
-    expect(says(worktreeRows([FIX], () => ({ kind: 'failed', why: 'No answer.' })))).toEqual([['could not check where it stands', '']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, merged: false } }), NONE))).toEqual([['nothing uncommitted · not merged', '2 days ago']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'checking' }), NONE))).toEqual([['checking…', '']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'read', standing: { ...READ, missing: true } }), NONE))).toEqual([['its folder is gone', '']])
+    expect(says(worktreeRows([FIX], () => ({ kind: 'failed', why: 'No answer.' }), NONE))).toEqual([['could not check where it stands', '']])
+  })
+
+  it('marks a worktree a session of the window runs in, by its checkout, and gives it no tick', () => {
+    const inFix = session(1, 'Fix', { cwd: '/code/shop-fix/src' }, { checkout: '/code/shop-fix' })
+    const inMain = session(2, 'Main', { cwd: '/code/shop' }, { checkout: '/code/shop' })
+    const elsewhere = session(3, 'Remote', { cwd: '/code/shop-detached' }, { machine: 4 })
+    const gone = session(4, 'Ended', { cwd: '/code/shop-detached' }, { ended: true })
+    const inUse = worktreesInUse([MAIN, FIX, DETACHED], [inFix, inMain, elsewhere, gone], 0)
+    expect([...inUse]).toEqual(['/code/shop-fix'])
+
+    const rows = worktreeRows([MAIN, FIX, DETACHED], () => ({ kind: 'read', standing: READ }), inUse)
+    expect(tickableWorktrees({ kind: 'listed', rows }).map((row) => row.name)).toEqual(['shop-detached'])
+    expect(rows.map(worktreeWhere)).toEqual(['main checkout · stays', 'nothing uncommitted · merged · a session runs in it', 'nothing uncommitted · merged'])
+  })
+})
+
+describe('removing worktrees from the workspace panel', () => {
+  const READ = { dirty: 0, branch: 'b', merged: true, last_commit: '2 days ago', inactive_days: null, missing: false }
+  const row = (name: string, standing: StandingRead): LinkedWorktreeRow => ({ key: `worktree:/code/shop-${name}`, path: `/code/shop-${name}`, name, main: false, standing, running: false })
+  const CLEAN = row('clean', { kind: 'read', standing: READ })
+  const DIRTY = row('dirty', { kind: 'read', standing: { ...READ, dirty: 2, merged: false } })
+  const UNMERGED = row('unmerged', { kind: 'read', standing: { ...READ, merged: false } })
+  const CHECKING = row('checking', { kind: 'checking' })
+  const FAILED = row('failed', { kind: 'failed', why: 'No answer.' })
+  const GONE = row('gone', { kind: 'read', standing: { ...READ, missing: true } })
+
+  it('lets only a clean, merged worktree (or one whose folder is gone) go without a question of its own', () => {
+    expect([CLEAN, GONE].map((one) => removalCheck(one).loss)).toEqual([null, null])
+    expect(removalCheck(DIRTY).loss).toBe('its 2 uncommitted changes')
+    expect(removalCheck(UNMERGED).loss).toBe('commits that are on no other branch (the branch is kept, the folder goes)')
+    expect(removalCheck(CHECKING).loss).toBe('whatever is in it: where it stands is not known')
+    expect(removalCheck(FAILED).loss).toBe('whatever is in it: where it stands is not known')
+  })
+
+  it('sends one that would lose something only once its own question is confirmed, and only then lets it go past changes', () => {
+    const checks = [CLEAN, DIRTY, UNMERGED, CHECKING].map(removalCheck)
+    expect(removalItems(checks, new Map())).toEqual([{ path: '/code/shop-clean', force: false }])
+    const sure = new Map([
+      [DIRTY.key, 'its 2 uncommitted changes'],
+      [UNMERGED.key, 'commits that are on no other branch (the branch is kept, the folder goes)'],
+      [CHECKING.key, 'whatever is in it: where it stands is not known'],
+    ])
+    expect(removalItems(checks, sure)).toEqual([
+      { path: '/code/shop-clean', force: false },
+      { path: '/code/shop-dirty', force: true },
+      { path: '/code/shop-unmerged', force: false },
+      { path: '/code/shop-checking', force: true },
+    ])
+  })
+
+  it('does not send one whose loss changed after its question was confirmed', () => {
+    const confirmedClean = new Map([[UNMERGED.key, 'commits that are on no other branch (the branch is kept, the folder goes)']])
+    const nowDirty = row('unmerged', { kind: 'read', standing: { ...READ, dirty: 1, merged: false } })
+    expect(removalItems([removalCheck(nowDirty)], confirmedClean)).toEqual([])
+  })
+
+  it('says how a removal went, and what an older service leaves to the list', () => {
+    expect(removedWords({ removed: ['/a', '/b'], kept: [] })).toBe('Removed 2 worktrees.')
+    expect(removedWords({ removed: ['/a'], kept: [{ path: '/b', why: 'something is running in it' }] })).toBe('Removed 1 worktree. 1 worktree stayed: the reason is on its row.')
+    expect(removedWords({ removed: [], kept: [{ path: '/a', why: 'x' }, { path: '/b', why: 'y' }] })).toBe('Removed nothing. 2 worktrees stayed: the reason is on each row.')
+    expect(removedWords(null)).toMatch(/^Asked the service to remove them\./)
   })
 })
