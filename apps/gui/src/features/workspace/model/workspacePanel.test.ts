@@ -32,6 +32,7 @@ describe('the workspace rows', () => {
     const rows = workspaceRows(
       [session(1, 'Fix the login', {}, { statusSince: (NOW - HOUR) * MS_PER_SECOND }), session(2, 'Port the parser', {}, { ended: true })],
       [saved('old', NOW - 3 * HOUR), saved('new', NOW - HOUR)],
+      true,
     )
     expect(rows.map((row) => [row.name, row.state])).toEqual([
       ['Fix the login', 'running'],
@@ -45,12 +46,13 @@ describe('the workspace rows', () => {
     const rows = workspaceRows(
       [session(1, 'Again', {}, { agentSession: 'abc' }), session(2, 'A shell', {}, { process: 'shell' })],
       [saved('abc', NOW - HOUR), saved('abc', NOW - HOUR, { agent: 'codex', title: 'Same id, other agent' })],
+      true,
     )
     expect(rows.map((row) => row.name)).toEqual(['Again', 'Same id, other agent'])
   })
 
   it('says the agent and branch, and the state with how long ago', () => {
-    const [running, closed] = workspaceRows([session(1, 'Fix', {}, { statusSince: (NOW - 2 * HOUR) * MS_PER_SECOND })], [saved('a', NOW - HOUR, { agent: 'codex', branch: null, title: null })])
+    const [running, closed] = workspaceRows([session(1, 'Fix', {}, { statusSince: (NOW - 2 * HOUR) * MS_PER_SECOND })], [saved('a', NOW - HOUR, { agent: 'codex', branch: null, title: null })], true)
     if (running === undefined || closed === undefined) throw new Error('two rows expected')
     expect(rowWhere(running)).toBe('Claude · main')
     expect(rowWhen(running, NOW)).toBe('running · 2h ago')
@@ -63,8 +65,21 @@ describe('the workspace rows', () => {
 describe('what Open opens and what it says after', () => {
   it('opens only the closed rows, never a session already in the window', () => {
     const parser = saved('p', NOW - HOUR)
-    const rows = workspaceRows([session(1, 'Running'), session(2, 'Ended', {}, { ended: true })], [parser])
+    const rows = workspaceRows([session(1, 'Running'), session(2, 'Ended', {}, { ended: true })], [parser], true)
     expect(openTargets(rows)).toEqual([parser])
+  })
+
+  it('marks the saved rows Open would skip with why, and leaves them out of what it opens', () => {
+    const parser = saved('p', NOW - HOUR)
+    const gone = saved('g', NOW - HOUR, { folder_present: false })
+    const acp = saved('o', NOW - HOUR, { agent: 'opencode' })
+    const gemini = saved('m', NOW - HOUR, { agent: 'gemini' })
+    const inTerminals = workspaceRows([], [parser, gone, acp, gemini], false)
+    const inChats = workspaceRows([], [parser, gone, acp, gemini], true)
+
+    expect(inTerminals.map((row) => rowWhen(row, NOW))).toEqual(['closed · 1h ago', 'closed · folder removed; cannot be made again', 'closed · its agent runs only in the Chat view', 'closed · 1h ago'])
+    expect(openTargets(inTerminals)).toEqual([parser, gemini])
+    expect(openTargets(inChats)).toEqual([parser, acp, gemini])
   })
 
   it('counts what opened, what failed, what was skipped and what started anew, naming each skip and new one and why', () => {

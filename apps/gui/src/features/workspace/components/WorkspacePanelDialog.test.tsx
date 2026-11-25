@@ -9,9 +9,9 @@ import { WorkspacePanelDialog } from './WorkspacePanelDialog'
 const NOW = 2_000_000_000
 const HOUR = 3600
 const LOGIN: WorkspaceRow = { key: 'session:t1', name: 'Fix the login', agent: 'claude', branch: 'feat/login', at: NOW - HOUR, state: 'running', sessionId: 't1', conversation: null }
-function closedRow(agent: string, session: string, title: string, branch: string, at: number): WorkspaceRow & { state: 'closed' } {
+function closedRow(agent: string, session: string, title: string, branch: string, at: number, skip: string | null = null): WorkspaceRow & { state: 'closed' } {
   const saved: ClosedSession = { agent, session, cwd: '/code/shop', branch, title, at, folder_present: true, worktree: null, repo: null }
-  return { key: `saved:${agent}:${session}`, name: title, agent, branch, at, state: 'closed', saved }
+  return { key: `saved:${agent}:${session}`, name: title, agent, branch, at, state: 'closed', saved, skip }
 }
 const PARSER = closedRow('codex', 'p1', 'Port the parser', 'main', NOW - 3 * HOUR)
 const DOCS = closedRow('claude', 'd1', 'Write the docs', 'docs', NOW - 5 * HOUR)
@@ -47,6 +47,31 @@ function show(rows: readonly WorkspaceRow[], saved: SavedRead = LISTED, onRetry 
 const ticks = () => screen.getAllByRole('checkbox').map((box) => (box as HTMLInputElement).checked)
 
 describe('a project’s workspace panel', () => {
+  it('marks a row Open would skip with why, in the toast’s words, and leaves it out of the ticks, Open N and Open everything', async () => {
+    const gone = closedRow('claude', 'g1', 'Sketch the pricing page', 'pricing', NOW - 2 * HOUR, 'folder removed; cannot be made again')
+    const { onOpen } = show([LOGIN, PARSER, gone])
+
+    const list = screen.getByRole('list', { name: 'Sessions' })
+    const box = within(list).getByRole('checkbox', { name: /Sketch the pricing page/ })
+    expect(box).toHaveAccessibleName(/closed · folder removed; cannot be made again/)
+    expect(box).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('0 of 2 ticked')
+    await userEvent.click(screen.getByRole('button', { name: 'Select all' }))
+    expect(box).not.toBeChecked()
+    expect(screen.getByRole('status')).toHaveTextContent('2 of 2 ticked')
+    await userEvent.click(screen.getByRole('button', { name: 'Open 1' }))
+    expect(onOpen).toHaveBeenLastCalledWith([PARSER.saved])
+    await userEvent.click(screen.getByRole('button', { name: 'Open everything' }))
+    expect(onOpen).toHaveBeenLastCalledWith([PARSER.saved])
+  })
+
+  it('offers no Open everything when every closed row would be skipped', () => {
+    show([LOGIN, closedRow('opencode', 'o1', 'Ask about the cache', 'cache', NOW - HOUR, 'its agent runs only in the Chat view')])
+
+    expect(screen.getByRole('checkbox', { name: /Ask about the cache/ })).toHaveAccessibleName(/closed · its agent runs only in the Chat view/)
+    expect(screen.getByRole('button', { name: 'Open everything' })).toBeDisabled()
+  })
+
   it('lists each session with its agent, branch, whether it runs and when, and ticks none', () => {
     show([LOGIN, PARSER])
 
