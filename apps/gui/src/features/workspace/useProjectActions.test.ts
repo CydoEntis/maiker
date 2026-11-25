@@ -12,7 +12,7 @@ const workspace = vi.hoisted(() => {
 vi.mock('./workspaceContext', () => ({ useWorkspace: () => workspace.current }))
 const service = vi.hoisted(() => ({ saveWorkspace: vi.fn<(project: string, sessions: readonly unknown[]) => Promise<boolean>>() }))
 vi.mock('@/api/daemon', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/daemon')>(), saveWorkspace: service.saveWorkspace }))
-const toast = vi.hoisted(() => ({ failed: vi.fn() }))
+const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 
 const SHOP: OpenedProject = { machineName: null, folder: '/home/me/shop' }
@@ -168,5 +168,67 @@ describe('closing a project keeps what was open in it', () => {
     service.saveWorkspace.mockClear()
     closeShop([onMain({ id: 't3', nativePane: 3, agent: null, process: 'bash' })])
     expect(service.saveWorkspace).not.toHaveBeenCalled()
+  })
+})
+
+describe('switching from one project to another', () => {
+  const NOTES: OpenedProject = { machineName: null, folder: '/home/me/notes' }
+  const TO_NOTES = { project: NOTES, name: 'notes' }
+  /** An agent on the shop's main checkout with a conversation to resume, so a switch has a set to keep. */
+  const resumable = () => onMain({ details: { asking: '', interrupted: null, agentSession: 'claude-1', timeline: [], usage: { context: null, cost: null, tokens: null } } })
+  beforeEach(() => { service.saveWorkspace.mockReset(); toast.failed.mockReset(); toast.error.mockReset() })
+
+  /** Switch from the shop, holding `sessions`, to the notes, answered yes; the window's parts, each a spy. */
+  function switchFromShop(sessions: readonly SessionView[]) {
+    const confirm = vi.fn((_ask: unknown, run: () => void) => { run() })
+    const parts = { confirm, endSessions: vi.fn(), setWorkspaceFor: vi.fn(), close: vi.fn(), closeOnceEmpty: vi.fn(), select: vi.fn() }
+    const projects = [{ project: SHOP, sessions }, { project: NOTES, sessions: [] }]
+    workspace.current = { ...windowWith(null, []), ...parts, openedProjects: { machines: [{ machineName: null, projects }], close: parts.close, closeOnceEmpty: parts.closeOnceEmpty, select: parts.select } }
+    const actions = renderHook(() => useProjectActions()).result.current(vi.fn())
+    expect(actions.switchTargets).toEqual([{ project: SHOP, name: sessions[0]?.repoName ?? 'shop' }, TO_NOTES])
+    actions.onSwitch(SHOP, 'shop', TO_NOTES)
+    return parts
+  }
+
+  it('asks as Close project does, saves the open set, then ends the sessions and opens the other project\'s panel', async () => {
+    service.saveWorkspace.mockResolvedValue(true)
+    const running = resumable()
+    const parts = switchFromShop([running])
+    const [ask] = parts.confirm.mock.calls[0] as unknown as [{ kind: string; title: string; confirmLabel: string; body: string }]
+    expect(ask).toMatchObject({ kind: 'close-project', title: 'Close shop?', confirmLabel: 'Close project' })
+    expect(ask.body).toContain('On main')
+    expect(service.saveWorkspace).toHaveBeenCalledExactlyOnceWith(SHOP.folder, [expect.objectContaining({ agent: 'claude', session: 'claude-1' })])
+    expect(parts.endSessions).not.toHaveBeenCalled()
+    await waitFor(() => { expect(parts.setWorkspaceFor).toHaveBeenCalledWith(TO_NOTES) })
+    expect(parts.endSessions).toHaveBeenCalledWith([running.id])
+    expect(parts.closeOnceEmpty).toHaveBeenCalledWith(SHOP)
+    expect(parts.select).toHaveBeenCalledWith(NOTES)
+  })
+
+  it('stops before ending anything when the save fails, and says why', async () => {
+    service.saveWorkspace.mockRejectedValue(new Error('disk full'))
+    const parts = switchFromShop([resumable()])
+    await waitFor(() => { expect(toast.failed).toHaveBeenCalledTimes(1) })
+    expect(toast.failed).toHaveBeenCalledWith('shop stays open: its sessions could not be saved', expect.objectContaining({ message: 'disk full' }))
+    expect(parts.endSessions).not.toHaveBeenCalled()
+    expect(parts.closeOnceEmpty).not.toHaveBeenCalled()
+    expect(parts.setWorkspaceFor).not.toHaveBeenCalled()
+  })
+
+  it('stops too when the service is from before saved sets, which cannot keep the set', async () => {
+    service.saveWorkspace.mockResolvedValue(false)
+    const parts = switchFromShop([resumable()])
+    await waitFor(() => { expect(toast.error).toHaveBeenCalledTimes(1) })
+    expect(toast.error.mock.calls[0]?.[0]).toBe('shop stays open: its sessions could not be saved')
+    expect(parts.endSessions).not.toHaveBeenCalled()
+    expect(parts.setWorkspaceFor).not.toHaveBeenCalled()
+  })
+
+  it('closes a project with nothing to keep without asking the service, and opens the other\'s panel', async () => {
+    const parts = switchFromShop([])
+    await waitFor(() => { expect(parts.setWorkspaceFor).toHaveBeenCalledWith(TO_NOTES) })
+    expect(service.saveWorkspace).not.toHaveBeenCalled()
+    expect(parts.close).toHaveBeenCalledWith(SHOP)
+    expect(parts.endSessions).not.toHaveBeenCalled()
   })
 })
