@@ -4,6 +4,7 @@ import {
   applyApprovals,
   applyHistoryEntries,
   createChatProjection,
+  lastTurnStatus,
   projectConversation,
   recordApprovalAnswer,
   selectChatEvents,
@@ -317,6 +318,18 @@ describe('turns', () => {
       message('b', 'User', 'two', 'turn-b'),
     ])
     expect(events.map((event) => event.kind === 'turn' ? `end:${event.turnId}` : event.id)).toEqual(['turn-a:a', 'end:turn-a', 'turn-b:b'])
+  })
+
+  it('reads how the latest turn stands, not an earlier one', () => {
+    const state = (entries: unknown[]) => applyHistoryEntries(createChatProjection('claude'), entries, NOW)
+    expect(lastTurnStatus(createChatProjection('claude'))).toBeNull()
+    expect(lastTurnStatus(state([message('u', 'User', 'go')]))).toBeNull()
+    expect(lastTurnStatus(state([message('a', 'User', 'one', 'turn-a'), turnStatus('turn-a', 'Failed')]))).toBe('failed')
+    expect(lastTurnStatus(state([
+      turnStatus('turn-a', 'Failed'),
+      message('b', 'User', 'two', 'turn-b'),
+      turnStatus('turn-b', 'Completed'),
+    ]))).toBe('completed')
   })
 })
 

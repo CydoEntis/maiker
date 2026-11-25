@@ -240,6 +240,12 @@ export function recordApprovalAnswer(state: ChatProjection, requestId: number | 
   }
 }
 
+/** How the latest turn stands by its own status entry; `null` before any turn or before the daemon sent its status. */
+export function lastTurnStatus(state: ChatProjection): ItemStatus | null {
+  const last = state.turnOrder.at(-1)
+  return last === undefined ? null : state.turns.get(last)?.status ?? null
+}
+
 /**
  * The events in reading order: each turn's items as first seen, then that turn's approvals, then
  * its divider once the turn has ended. Approvals that name no known turn come last.

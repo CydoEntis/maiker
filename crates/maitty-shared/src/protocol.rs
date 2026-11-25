@@ -587,14 +587,7 @@ pub struct ConversationSummary {
 impl ConversationSummary {
     /// The agent's name as a person reads it: the provider's, or an ACP agent's own.
     pub fn agent_label(&self) -> String {
-        use crate::conversation::Provider;
-        match (self.provider, &self.agent) {
-            (Provider::Codex, _) => "Codex".into(),
-            (Provider::Claude, _) => "Claude".into(),
-            (Provider::Gemini, _) => "Gemini".into(),
-            (Provider::Acp, Some(agent)) => agent.clone(),
-            (Provider::Acp, None) => "Agent".into(),
-        }
+        self.provider.agent_label(self.agent.as_deref())
     }
 }
 

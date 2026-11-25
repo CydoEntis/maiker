@@ -360,6 +360,18 @@ impl Provider {
             Provider::Acp => "acp",
         }
     }
+
+    /// The agent's name as a person reads it: the provider's, or for [`Provider::Acp`] the
+    /// conversation's own `agent`.
+    pub fn agent_label(self, agent: Option<&str>) -> String {
+        match (self, agent) {
+            (Provider::Codex, _) => "Codex".into(),
+            (Provider::Claude, _) => "Claude".into(),
+            (Provider::Gemini, _) => "Gemini".into(),
+            (Provider::Acp, Some(agent)) => agent.into(),
+            (Provider::Acp, None) => "Agent".into(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
