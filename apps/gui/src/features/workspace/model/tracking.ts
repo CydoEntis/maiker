@@ -12,12 +12,14 @@ export type SessionTrack = {
   workingSince: number | null
   unread: boolean
   movedAt: number | null
+  /** When this window first saw the session: a folder change soon after is where it settled as it started, not a move. */
+  seenAt: number
 }
 
 export type SessionMove = { id: string; from: string | null; to: string | null }
 
 function sameTrack(a: SessionTrack, b: SessionTrack): boolean {
-  return a.status === b.status && a.repoRoot === b.repoRoot && a.changedAt === b.changedAt && a.workingSince === b.workingSince && a.unread === b.unread && a.movedAt === b.movedAt
+  return a.status === b.status && a.repoRoot === b.repoRoot && a.changedAt === b.changedAt && a.workingSince === b.workingSince && a.unread === b.unread && a.movedAt === b.movedAt && a.seenAt === b.seenAt
 }
 
 /** Whether two track maps say the same, so an unchanged list need not re-render what shows them. */
@@ -34,6 +36,12 @@ export function tracksEqual(a: ReadonlyMap<string, SessionTrack>, b: ReadonlyMap
 const ATTENTION: ReadonlySet<SessionStatus> = new Set(['done', 'needs', 'error'])
 /** What a session is when its plan limit ends and nothing else happened to it. */
 const RESTS_AFTER_LIMIT: ReadonlySet<SessionStatus> = new Set(['done', 'idle', 'working'])
+/**
+ * How long after the window first sees a session its folder may still settle without that being a move. A new session is
+ * listed before the daemon has read its checkout, and one started in its own worktree is listed first by that folder, then
+ * under its main checkout; neither is the session going anywhere.
+ */
+export const START_SETTLE_MS = 30_000
 
 export function trackSessions(
   previous: ReadonlyMap<string, SessionTrack>,
@@ -51,14 +59,14 @@ export function trackSessions(
       continue
     }
     if (!before) {
-      tracks.set(session.id, { status: session.status, repoRoot: session.repoRoot, changedAt: null, workingSince: null, unread: false, movedAt: null })
+      tracks.set(session.id, { status: session.status, repoRoot: session.repoRoot, changedAt: null, workingSince: null, unread: false, movedAt: null, seenAt: now })
       continue
     }
     const statusChanged = before.status !== session.status
     // A limit that ends puts the session back where it was: nothing new happened to read or to time.
     // One that starts asking or fails while limited is new.
     const fresh = statusChanged && !(before.status === 'limited' && RESTS_AFTER_LIMIT.has(session.status))
-    const moved = before.repoRoot !== session.repoRoot
+    const moved = before.repoRoot !== session.repoRoot && now - before.seenAt >= START_SETTLE_MS
     if (moved) moves.push({ id: session.id, from: before.repoRoot, to: session.repoRoot })
     const visible = visibleIds.has(session.id)
     tracks.set(session.id, {
@@ -68,6 +76,7 @@ export function trackSessions(
       workingSince: session.status !== 'working' ? null : statusChanged ? now : before.workingSince,
       unread: visible ? false : fresh ? ATTENTION.has(session.status) || before.unread : before.unread,
       movedAt: moved ? now : before.movedAt,
+      seenAt: before.seenAt,
     })
   }
   return { tracks, moves }

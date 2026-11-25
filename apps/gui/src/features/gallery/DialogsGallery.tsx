@@ -16,7 +16,10 @@ import { RecentSessionsDialog } from '@/features/workspace/components/RecentSess
 import { ResumeSavedDialog } from '@/features/workspace/components/ResumeSavedDialog'
 import { AcpAgentsDialog } from '@/features/workspace/components/AcpAgentsDialog'
 import { WorkspacePanelDialog } from '@/features/workspace/components/WorkspacePanelDialog'
-import type { OpenOutcome, SavedRead, StandingRead, WorkspaceRow, WorktreeRow, WorktreesRead } from '@/features/workspace/model/workspacePanel'
+import type { OpenOutcome, SavedRead, StandingRead, WorkspaceFor, WorkspaceRow, WorktreeRow, WorktreesRead } from '@/features/workspace/model/workspacePanel'
+import { MenuPopup } from '@/features/workspace/components/MenuPopup'
+import { projectContextMenu, type ProjectActions, type ProjectTarget } from '@/features/workspace/components/projectMenu'
+import { toast } from '@/lib/toast'
 import type { WorktreeStanding, WorktreesRemoved } from '@/features/worktrees/api'
 import { toastOpened } from '@/features/workspace/useRecentSessions'
 import { Toaster } from '@/components/ui/toaster'
@@ -33,6 +36,8 @@ import { galleryParams } from './galleryParams'
 /*
  * The dialogs with mock data, for checking them against the design: `#dialogs?show=new&theme=Maiker%20Night`.
  * `show` is new, new-long, new-more, new-fail (a start that fails with a long reason), new-loose (New session with no project open: the start folder, No project), open (the Open a project palette: open, open-browse, open-remote, open-offline, open-loading, open-empty, open-url, open-pick), palette, recent, resume or workspace (a project's Workspace panel: workspace, workspace-ticked, workspace-opening, workspace-opened, workspace-close, workspace-loading, workspace-empty, workspace-older, workspace-failed, workspace-checking, workspace-worktrees-failed, workspace-busy (a worktree a session runs in), workspace-remove (Remove's question), workspace-removed (a worktree the daemon kept, with its reason)); err-… are the error surfaces (ErrorsGallery). The page shows nothing but the dialog.
+ * `switch` is a project's right-click menu with Switch to… open on the other opened projects, and `switch-failed` the
+ * toast a switch ends with when its project's sessions could not be saved.
  */
 
 const MACHINES = [{ machine: 0, label: 'this computer', local: true }, { machine: 1, label: 'devbox', local: false }]
@@ -298,6 +303,32 @@ function WorkspaceShown({ what }: { what: string }) {
   )
 }
 
+/** The opened projects of switch: the one its menu is opened on, then the ones Switch to… offers. */
+const SWITCH_TARGETS: WorkspaceFor[] = [...PROJECTS, { folder: '/home/dev/billing-api', name: 'billing-api' }].map(({ folder, name }) => ({ project: { machineName: null, folder }, name }))
+const SWITCH_FROM: ProjectTarget = { machine: 0, machineLabel: 'This computer', remote: false, project: { machineName: null, folder: '/home/dev/acme-store' }, name: 'acme-store', sessions: [], canStart: true, online: true, installed: ['claude', 'codex'] }
+const SWITCH_ACTIONS: ProjectActions = { onNewSession: SAME, onNewWorktree: SAME, onOpenWorktree: SAME, onCopyPath: SAME, onShowFiles: SAME, onWorkspace: SAME, switchTargets: SWITCH_TARGETS, onSwitch: SAME, onClose: SAME }
+/** Where switch opens the menu, as a right-click near the sidebar's top would. */
+const SWITCH_MENU_AT = { x: 48, y: 64 }
+const SWITCH_SAVE_FAILED = new Error('The Maiker service could not write the saved sessions: No space left on device (os error 28)')
+
+/** A project's right-click menu with Switch to… opened from the keyboard, or the toast a switch whose save failed ends with. */
+function SwitchShown({ what }: { what: string }) {
+  useEffect(() => {
+    if (what === 'switch-failed') {
+      toast.failed('acme-store stays open: its sessions could not be saved', SWITCH_SAVE_FAILED)
+      return undefined
+    }
+    const timer = window.setTimeout(() => {
+      const trigger = Array.from(document.querySelectorAll<HTMLElement>('.mx-ctx-item')).find((row) => row.textContent.startsWith('Switch to'))
+      trigger?.focus()
+      trigger?.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true }))
+    }, STATE_READ_MS)
+    return () => { window.clearTimeout(timer) }
+  }, [what])
+  if (what === 'switch-failed') return <Toaster />
+  return <MenuPopup title="acme-store" at={SWITCH_MENU_AT} items={projectContextMenu(SWITCH_ACTIONS, SWITCH_FROM, () => '')} portalContainer={null} onClose={SAME} />
+}
+
 /** The Worktrees section of each Workspace state: being listed while the saved set loads, unread, outside git when empty. */
 function workspaceWorktreesRead(what: string): WorktreesRead {
   if (what === 'workspace-empty') return { kind: 'not-a-repo' }
@@ -325,6 +356,7 @@ function Show({ what }: { what: string }): ReactNode {
   if (what === 'agents') return <AcpAgentsDialog onPick={() => undefined} onCancel={() => undefined} />
   if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onReopened={() => undefined} onCancel={() => undefined} />
   if (what === 'workspace' || what.startsWith('workspace-')) return <WorkspaceShown what={what} />
+  if (what === 'switch' || what === 'switch-failed') return <SwitchShown what={what} />
   if (what === 'resume') return <ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} />
   return null
 }

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { Conversation } from '@/data/preview'
-import { worktreeSourceOf } from './projectActions'
+import { groupByProject } from './openedProjects'
+import { switchTargetsOf, worktreeSourceOf } from './projectActions'
 import { toSessionView, type SessionView } from './session'
 
 /** An agent session named `title`, as the daemon reports it; `extra` sets what the daemon says of it. */
@@ -31,5 +32,17 @@ describe('the session a project\'s New worktree is made from', () => {
   it('is a session of another machine in its repository, whose own daemon makes the worktree', () => {
     const there = session(2, 'There', { ...IN_REPO, machine: 4, machineName: 'devbox' })
     expect(worktreeSourceOf([there])).toBe(there)
+  })
+})
+
+describe('the projects Switch to… lists', () => {
+  it('is this computer\'s opened projects by their headings\' names, not another machine\'s or the No project group', () => {
+    const shop = { machineName: null, folder: '/home/me/shop' }
+    const notes = { machineName: null, folder: '/home/me/notes' }
+    const api = { machineName: 'devbox', folder: '/srv/api' }
+    const inShop = session(1, 'In shop', { ...IN_REPO, repo: 'acme-shop' })
+    const loose = session(2, 'Loose', { cwd: '/home/me' })
+    const { machines } = groupByProject([inShop, loose], [shop, notes, api], '/home/me')
+    expect(switchTargetsOf(machines)).toEqual([{ project: shop, name: 'acme-shop' }, { project: notes, name: 'notes' }])
   })
 })

@@ -466,6 +466,10 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    a folder in git opens its repository's main checkout, any other opens itself, and one the machine cannot read is refused
    with its reason (in the dialog, or a toast over the picker, which stays) and nothing is added. A folder that is already
    open, in any spelling, selects that project and adds nothing.
+   A session whose repository changes (a shell or an agent that went to another checkout) moves to that project, and a
+   note says so ("Session moved to <folder>", or "Session left <folder>"; `trackSessions` in `model/tracking.ts`). A
+   session's first 30 s after the window first lists it are not a move (`START_SETTLE_MS`): a new session is listed before
+   its checkout is read, and one started in its own worktree settles under its main checkout, and neither went anywhere.
    A project heading's menus (`components/projectMenu.tsx`) are its `+` menu and its right-click menu. The `+` menu
    (`projectPlusMenu`) says where it acts, then lists the app's chat agents under **New session**: each opens the
    new-chat draft on the project's machine with its folder and that agent picked (`NewChatSeed.agent`), numbered from 1
@@ -474,8 +478,8 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    since what is installed there is not known. Then **Terminal** (only in the Terminal view: a plain shell in the
    project's folder), **New worktree…** and **Open worktree…**. The right-click menu (`projectContextMenu`) offers
    **New session** (the draft with no agent picked), **New worktree…**, **Copy path**, **Show files** (shows a session
-   of the project with the side panel's Files; off while the project has none, since files are read through a session)
-   and **Remove from sidebar…**. An Idle project's heading folds its rows like any project's (`aria-expanded`, its own fold key `idleProjectFoldKey`); one with no session has nothing to fold, so its heading opens the `+` menu on a click. Nothing starts on a machine
+   of the project with the side panel's Files; off while the project has none, since files are read through a session),
+   **Workspace…**, **Switch to…** and **Close project…**. An Idle project's heading folds its rows like any project's (`aria-expanded`, its own fold key `idleProjectFoldKey`); one with no session has nothing to fold, so its heading opens the `+` menu on a click. Nothing starts on a machine
    that is not connected. New worktree opens the New worktree dialog off a live session in the
    project's repository (`worktreeSourceOf`, the main checkout's first), since the dialog and `new_worktree_session` work
    from a session's terminal; a project with no live session opens the new-chat draft with **Own worktree** on instead
@@ -498,7 +502,20 @@ Rules for `apps/gui/` (the look is in [DESIGN](DESIGN.md#desktop-app)).
    repository (`openSetOf`, `model/openSet.ts`). A set with nothing in it is not sent, so the set kept before stays. The
    close never waits on it: a failed save is one toast (`Could not save the sessions open in <name>`), a service from
    before saved sets is not asked and says nothing, and an undone close keeps the set it saved. Another machine's
-   project saves nothing. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
+   project saves nothing. **Switch to…** parks the project and opens another's Workspace panel. It is a row that opens
+   a submenu beside it (`MenuItem.items` in `MenuPopup`) listing this computer's other opened projects by their
+   headings' names, in the order they were opened (`switchTargetsOf`, `model/projectActions.ts`); it is off, with "Open
+   another project on this computer to switch to it" as its tooltip, while there is none, and another machine's project
+   and the No project group have no such row, since their sets are not kept here. Picking a project asks Close project's
+   question, under the same *close-project* kind, so its "Don't ask again" holds here too. On the answer the open set is
+   saved as Close project saves it, but the switch waits for the answer (`parkOpenSet` in `useProjectActions`): a save
+   that fails, or a service too old to keep one, ends nothing and says "<name> stays open: its sessions could not be
+   saved" with the reason (or "The Maiker service needs a restart to keep them."). Once saved (or with nothing to
+   keep), the project closes as Close project closes it, the other project is selected, and its Workspace panel opens.
+   The switch opens none of its sessions: the person ticks them there and presses Open. An undone close of the parked
+   project (the service's undo window) brings its sessions back and keeps the set; the other project's panel, and
+   anything opened from it, is left as it is. The gallery shows the menu at `#dialogs?show=switch` and the failed save's
+   toast at `switch-failed`. **Open worktree…** (`OpenWorktreeDialog`, `useOpenWorktreeDialog`,
    `model/projectWorktrees.ts`) is offered on a project of any machine unless its sessions show it is a plain folder
    (`offersOpenWorktree`; a project with no session is offered it and the dialog says when its folder is not in git). It
    needs no session: the machine's daemon lists the repository's worktrees (`readProjectWorktrees`, through
@@ -805,7 +822,8 @@ See [theme sources](theme-credits.md) for upstream palettes and local UI adaptat
 ## Project-specific: menus drawn to the handoff (desktop)
 
 Right-click and row menus (`MenuPopup`, `.mx-ctx`) are 190px at least with 4px of room and draw no heading; the name is only the
-accessible label. The place chips' menus (branch, sync, folder)
+accessible label. A row with `items` opens them beside it as a submenu of the same rows, marked by a chevron, from a
+hover, a click or the right arrow (a project's **Switch to…**). The place chips' menus (branch, sync, folder)
 use `ChipMenu` variant `place` (298-300px, flat search, no counts, plain labels, `ruled` sections). Their picked row is a ground and
 bold, never a tick. `WorkspacePlaceActions` mounts the `PlaceActionsContext` that feeds the folder menu's projects and its
 Open folder and Clone rows. The model picker is its own float (see *Agent, model and reasoning*).
@@ -1629,7 +1647,7 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   no terminal, still starts from a shell's empty chat card (**Start a Claude chat** / **Start a Codex chat**) and
   stops the agent when closed (`closeChatSession`: end, then put away; if the stop fails it stays open).
 - **Choosing the agent for one session.** A project's **New session** opens the New session draft, where the agent is picked in the message box's foot; the palette's "Start <agent>" opens it with that agent picked.
-- **New session draft is the chat a started session has** (`NewChatPage`, `session-dialogs.css`). It reuses the pane's pieces and draws no second copy: the pane header (`mx-pane-head`: `project / New session` and a × that discards the draft where a way out exists), a centred block of the question ("What should we build in <project>?"), the large machine and project chips (`MachineChip` and `FolderChip` with `hero`) and "or start without a project" (`looseFolder`, the start folder), the one `Composer` (the model button and its picker, the shield, attach, send inside the box) and the one `SessionBar` place row under it. Before the first message the place row's chips **choose** instead of show: `SessionPlace.picking` (`chat/place/picking.ts`) gives the Machine chip (`MachineChip`), the Folder chip (recent projects, Open folder…, Clone a repository…, clone-link rows), the Branch chip (pick, create, and an Own worktree switch, `WorkInSwitch`) and the Sync chip. Nothing starts until the first message; Esc discards. There is no Run on row, Draft tag, n/a chip, Works in line, key-hint footer, extra + or … buttons or red Bypass button; the permission mode is the Composer's shield, with a dot while a mode skips prompts. The draft is a plain region in the main area (`aria-label="New session"`), never a `dialog`; a test fails if it becomes one. Check it by measuring `getBoundingClientRect` of each control across the states (each agent, model, effort, worktree on and off, an error, a long branch name, 360px and 1200px): the differences are 0. `#dialogs?show=new`, `new-long`, `new-more` (the permission menu), and `new-fail` draw the states.
+- **New session draft is the chat a started session has** (`NewChatPage`, `session-dialogs.css`). It reuses the pane's pieces and draws no second copy: the pane header (`mx-pane-head`: `project / New session` and a × that discards the draft where a way out exists), a centred block of the question ("What should we build in <project>?"), the large machine and project chips (`MachineChip` and `FolderChip` with `hero`) and "or start without a project" (`looseFolder`, the start folder), the one `Composer` (the model button and its picker, the shield, attach, send inside the box) and the one `SessionBar` place row under it. Before the first message the place row's chips **choose** instead of show: `SessionPlace.picking` (`chat/place/picking.ts`) gives the Machine chip (`MachineChip`), the Folder chip (recent projects, Open folder…, Clone a repository…, clone-link rows), the Branch chip (pick, create, and an Own worktree switch, `WorkInSwitch`) and the Sync chip. Nothing starts until the first message; Esc discards. Its message box has the keys when it opens, and the started chat's box has them as soon as it is shown: a chat's box takes the keys when it opens and nothing else has them (`Composer`), and a field the web view still names after it left the page or was turned off counts as nothing (`keysAreNowhere`, `lib/focus.ts`), so the draft's own box, removed in the same update, never keeps them from the chat. There is no Run on row, Draft tag, n/a chip, Works in line, key-hint footer, extra + or … buttons or red Bypass button; the permission mode is the Composer's shield, with a dot while a mode skips prompts. The draft is a plain region in the main area (`aria-label="New session"`), never a `dialog`; a test fails if it becomes one. Check it by measuring `getBoundingClientRect` of each control across the states (each agent, model, effort, worktree on and off, an error, a long branch name, 360px and 1200px): the differences are 0. `#dialogs?show=new`, `new-long`, `new-more` (the permission menu), and `new-fail` draw the states.
 - **The model picker** (`AgentPicker`) in the draft is the started chat's own. The draft hands it the installed agents and the agents ready over ACP (`installed`, `others`), and its rail switches the draft's agent (`onAgent`).
 - **Agent, model and reasoning.** The model button names the agent's mark, the model (the one picked, else the one the agent's
   own file says, else just the agent) and the reasoning level in words, and opens the model picker (`AgentPicker`, on
@@ -1691,8 +1709,11 @@ The desktop app's chat view is a second view of a Claude Code or Codex session, 
   (`startDirectChat` in `useSessionStarts`); "Start a chat" on a shell's empty chat card does the same. No agent is
   started ahead of the first message, and nothing the agent draws on a terminal can stand in the chat's way. The chat is
   listed in the sidebar like any session (`isInSidebar` in `useSessionList`) and its pane is the chat, with no terminal
-  log. The page stays until the daemon has answered, then closes in the update that opens the chat; the first message is
-  an ordinary send, and a send that fails puts the words in the chat's box. A start that fails leaves the page open with
+  log. The page stays until the daemon has answered, then closes in the update that opens the chat, and the start ends
+  only once the chat's pane is in place (`placePanes`), so the page never shows its empty draft again during the glide. The
+  first message is an ordinary send; the chat draws it from its first frame as the page did (`holdSentFirstMessage`:
+  the bubble and the working line, never the reading skeleton) until its history has it, and a send that fails puts the
+  words in the chat's box. A start that fails leaves the page open with
   the daemon's reason.
   - **Claude Code and Codex** run through their own adapters (the host's `start_chat_session`). The first message carries
     the model and effort picked, and the mode picked becomes the daemon's posture (`chatPermissions` in
