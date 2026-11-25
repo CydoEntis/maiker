@@ -110,6 +110,33 @@ fn a_saved_session_that_left_the_closed_list_gets_its_worktree_back_and_resumes_
 }
 
 #[test]
+fn a_folder_made_ready_is_answered_with_and_nothing_is_started_there() {
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    let _in_rt = rt.enter();
+    let (mut d, mut rx) = daemon_with(Config::default());
+    let (root, repo, top) = repo_with_worktree("ready-folder");
+    // An agent with no resume template: nothing is typed, so none is needed.
+    let saved = ClosedSession { agent: "gemini".into(), ..record(&repo, &top, &top) };
+    d.command(0, Command::SaveWorkspace { project: repo.clone(), sessions: vec![saved] }).unwrap();
+    git(&repo, &["worktree", "remove", &top.to_string_lossy()]);
+
+    let (tx, mut client_rx) = mpsc::channel(64);
+    d.handle(Ev::Connected(1, tx, false, crate::protocol::Surface::Terminal, true));
+    let ready = Command::ReadyClosedFolder { agent: "gemini".into(), session: "abc-123".into() };
+    d.handle(Ev::Msg(1, ClientMsg::Command(ready)));
+    let reply = answer(&mut d, &mut rx, &mut client_rx);
+
+    let ServerMsg::Reply(Reply::ClosedFolderReady { folder }) = reply else { panic!("{reply:?}") };
+    assert!(same(&folder, &top), "{folder:?}");
+    assert_eq!(branch_at(&top).as_deref(), Some("feat"));
+    assert!(d.terms.is_empty(), "the client starts the session itself");
+    assert!(d.made_worktrees.iter().any(|m| same(m, &top)), "tidy-up offers it like any worktree the app made");
+    assert_eq!(d.pending_ops, 0);
+    close_all(&mut d);
+    let _ = std::fs::remove_dir_all(&root);
+}
+
+#[test]
 fn a_worktree_folder_deleted_by_hand_is_made_again_and_other_missing_ones_stay_registered() {
     let (root, repo, top) = repo_with_worktree("reopen-by-hand");
     let unplugged = root.join("unplugged");

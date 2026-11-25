@@ -1,12 +1,12 @@
 import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { reopenClosedSession, type ClosedSession } from '@/api/daemon'
+import { readyClosedFolder, reopenClosedSession, type ClosedSession } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import { useRecentSessions } from './useRecentSessions'
 
 vi.mock('@/lib/toast', () => ({ toast: { failed: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() } }))
-vi.mock('@/api/daemon', () => ({ reopenClosedSession: vi.fn(), closedSessions: vi.fn() }))
+vi.mock('@/api/daemon', () => ({ readyClosedFolder: vi.fn(), reopenClosedSession: vi.fn(), closedSessions: vi.fn() }))
 
 beforeEach(() => { vi.clearAllMocks() })
 
@@ -65,11 +65,23 @@ describe('opening a project’s saved sessions', () => {
     expect(toast.failed).toHaveBeenCalledWith('Opened 2, but 1 could not start', expect.objectContaining({ message: 'it is busy' }), { context: 'shop' })
   })
 
-  it('has the service make a removed worktree again, and skips one it cannot make, saying why', async () => {
-    vi.mocked(reopenClosedSession).mockResolvedValue(true)
+  it('has the service make a removed worktree again and starts it there, and skips one it cannot make, saying why', async () => {
+    vi.mocked(readyClosedFolder).mockResolvedValue('/dev/app-wt')
     const { hook, startNewChat } = opener()
     act(() => { hook.result.current.openSaved([removed(remakeable), removed()], 'shop') })
     await waitFor(() => { expect(toast.warning).toHaveBeenCalledWith('Opened 1 session, skipped 1', { context: 'shop', description: 'Skipped “Fix the parser”: folder removed; cannot be made again.' }) })
+    expect(readyClosedFolder).toHaveBeenCalledWith('claude', 'abc-123')
+    // Started like any resume, so it opens as a chat or in its terminal as Settings says, never by the service itself.
+    expect(startNewChat).toHaveBeenCalledWith(expect.objectContaining({ agent: 'claude', folder: '/dev/app-wt', resume: 'abc-123' }), { background: true })
+    expect(reopenClosedSession).not.toHaveBeenCalled()
+  })
+
+  it('has an older service, which cannot only make the folder, reopen a removed worktree itself', async () => {
+    vi.mocked(readyClosedFolder).mockResolvedValue(null)
+    vi.mocked(reopenClosedSession).mockResolvedValue(true)
+    const { hook, startNewChat } = opener()
+    act(() => { hook.result.current.openSaved([removed(remakeable)], 'shop') })
+    await waitFor(() => { expect(toast.success).toHaveBeenCalledWith('Opened 1 session', { context: 'shop' }) })
     expect(reopenClosedSession).toHaveBeenCalledWith('claude', 'abc-123')
     expect(startNewChat).not.toHaveBeenCalled()
   })
@@ -78,6 +90,7 @@ describe('opening a project’s saved sessions', () => {
     const { hook, startNewChat } = opener()
     act(() => { hook.result.current.openSaved([saved({ agent: 'opencode' }), removed({ agent: 'opencode', ...remakeable })], 'shop') })
     await waitFor(() => { expect(toast.warning).toHaveBeenCalledWith('Could not open 2 sessions', expect.objectContaining({ description: expect.stringContaining('cannot be reopened here') as unknown })) })
+    expect(readyClosedFolder).not.toHaveBeenCalled()
     expect(reopenClosedSession).not.toHaveBeenCalled()
     expect(startNewChat).not.toHaveBeenCalled()
   })

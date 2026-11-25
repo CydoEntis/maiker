@@ -192,7 +192,9 @@ list and starts that agent in that folder with its conversation, through the new
 with `resume`; the id held to `resumeWords`' rule, model, effort and mode left to the agent); while another start is
 under way the list stays open and a toast says "A session is already starting". A row whose folder is gone but was a
 worktree with a known repository and branch reads "folder removed · closed 1d ago" and can be picked: the service makes
-the worktree again and starts the agent itself (`reopen_closed_session`, API_PATTERNS; never `startNewChat`), while a
+the worktree again (`ready_closed_folder`, API_PATTERNS) and the session starts there through the same resume start
+(`startNewChat`, `reopenRemoved`), so it opens as a chat or in its terminal as Settings › Open sessions in says (a
+service from before 129 is asked to reopen it itself, `reopen_closed_session`, which starts it in its terminal), while a
 line over the list says "Making the folder again and starting the session…" and every row is `aria-disabled` until
 it answers, so no second session starts meanwhile; an answer that comes after the list was closed changes nothing. Once it has, the
 list closes; a refusal (a branch that is gone is named) shows as an alert line over the list, which stays usable, and a
@@ -239,7 +241,8 @@ ticked or not; both are off while nothing applies and while an Open or any other
 (`openSaved` in `useRecentSessions`, the way Bring in your chats starts its picks), so the panel stays and its rows turn
 to running as they start, by Recent sessions' rules (`reopenPlan`): in place through the resume start, or, for a folder
 that is gone but was a worktree with a known repository and branch, through the service, which makes it again
-(`reopen_closed_session`; the service finds the session in the project's saved set when it has left the closed list); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
+(`ready_closed_folder`; the service finds the session in the project's saved set when it has left the closed list), then
+the same resume start there, so it opens in the view Settings › Open sessions in picks (`reopenRemoved`); anything Recent sessions would refuse is skipped, including a chat run over ACP, which is
 saved under its agent's own name and resumes by no id. One toast with the project as its context ends it: "Opened 3
 sessions"; a warning "Opened 2 sessions, skipped 1" (or "Could not open 1 session") with a line naming each skipped
 one and why; or an error "Opened 2, but 1 could not start" with the failure's reason. Nothing opens until a button is

@@ -745,6 +745,16 @@ async fn reopen_closed_session(agent: String, session: String) -> Result<serde_j
         .map_err(|error| format!("{error:#}"))
 }
 
+/// Makes the removed folder of a closed or saved session again, from the record the daemon keeps, and starts nothing:
+/// the window then starts the session there in the view Settings picks. The folder, or null when the service running is
+/// older. This computer's daemon only, like `closed_sessions`.
+#[tauri::command]
+async fn ready_closed_folder(agent: String, session: String) -> Result<serde_json::Value, String> {
+    maitty_desktop_client::ready_closed_folder(agent, session)
+        .await
+        .map_err(|error| format!("{error:#}"))
+}
+
 /// Has this computer's daemon keep `sessions` as the set open in `project` when the project is closed, replacing the
 /// one it kept. False when the service running is older and was not asked. The daemon refuses a project that is not an
 /// absolute folder and cleans and caps every record, so nothing is trusted here. This computer's daemon only, like
@@ -1515,6 +1525,7 @@ pub fn run() {
             side_answer,
             closed_sessions,
             reopen_closed_session,
+            ready_closed_folder,
             saved_workspace,
             save_workspace,
             new_chat::git_sync_state,

@@ -2157,6 +2157,26 @@ fn reopen_closed_message(agent: String, session: String) -> ClientMsg {
     ClientMsg::Command(Command::ReopenClosedSession { agent, session })
 }
 
+/// Have this computer's daemon make the removed folder of a closed or saved session it keeps again, starting nothing,
+/// so the window starts the session there in the view it shows. The folder as a string, or null when the daemon running
+/// is from before this and was not asked.
+pub async fn ready_closed_folder(agent: String, session: String) -> Result<Value> {
+    let message = ClientMsg::Command(Command::ReadyClosedFolder { agent, session });
+    answered_within(REQUEST_TIMEOUT, async {
+        let (mut connection, version) = ipc::open_for_user_knowing_version()
+            .await
+            .context("Could not reach the Maiker service")?;
+        if !daemon_reads(&message, version) {
+            return Ok(Value::Null);
+        }
+        match ask(&mut connection, &message).await? {
+            Reply::ClosedFolderReady { folder } => Ok(Value::String(folder.to_string_lossy().into_owned())),
+            _ => bail!("The Maiker service gave an answer this app does not understand (closed session's folder). Restart the service in Settings, or update the app so both are the same version."),
+        }
+    })
+    .await
+}
+
 /// Have this computer's daemon keep `sessions` as the set open in `project`, replacing what it kept. False when the
 /// daemon running is from before this and was not asked, so the caller carries on without a saved set.
 pub async fn save_workspace(project: PathBuf, sessions: Vec<maitty_shared::protocol::ClosedSession>) -> Result<Value> {
@@ -3660,6 +3680,18 @@ mod agent_command_tests {
             assert!(daemon_reads(&message, WORKSPACE_SINCE));
             assert!(daemon_reads(&message, PROTOCOL_VERSION));
         }
+    }
+
+    #[test]
+    fn a_folder_is_made_ready_only_by_a_service_that_reads_it_and_an_older_one_reopens_instead() {
+        use super::{ClientMsg, Command, daemon_reads, reopen_closed_message};
+        use maitty_shared::protocol::{COMPATIBLE_SINCE, PROTOCOL_VERSION, READY_CLOSED_FOLDER_SINCE};
+        let ready = ClientMsg::Command(Command::ReadyClosedFolder { agent: "claude".into(), session: "abc".into() });
+        assert!(!daemon_reads(&ready, READY_CLOSED_FOLDER_SINCE - 1));
+        assert!(daemon_reads(&ready, READY_CLOSED_FOLDER_SINCE));
+        assert!(daemon_reads(&ready, PROTOCOL_VERSION));
+        // What the window falls back to with an older service is as old as the window.
+        assert!(daemon_reads(&reopen_closed_message("claude".into(), "abc".into()), COMPATIBLE_SINCE));
     }
 
     #[test]

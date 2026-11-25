@@ -181,6 +181,10 @@ impl Daemon {
                 self.reopen_closed_session(client, &agent, &session)?;
                 return Ok(false);
             }
+            Command::ReadyClosedFolder { agent, session } => {
+                self.ready_closed_folder(client, &agent, &session)?;
+                return Ok(false);
+            }
             Command::SaveWorkspace { project, sessions } => self.saved_workspaces.save(project, sessions)?,
             Command::CloseWorkspace { ws } => {
                 let terms = self.workspace_panes(ws);

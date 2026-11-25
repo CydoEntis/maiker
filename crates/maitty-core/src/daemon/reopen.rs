@@ -166,7 +166,22 @@ impl Daemon {
         self.pending_ops += 1;
         tokio::task::spawn_blocking(move || {
             let result = ready_folder(&closed);
-            let _ = tx.blocking_send(Ev::ClosedSessionReady { client, cmd, result });
+            let _ = tx.blocking_send(Ev::ClosedSessionReady { client, cmd: Some(cmd), result });
+        });
+        Ok(())
+    }
+
+    /// Ready the folder of the closed or saved session kept for `agent` and `session` off the loop,
+    /// starting nothing: the client is told the folder (`closed_session_ready`) and starts the
+    /// session there itself, as a chat or in its terminal. No resume template is needed, since
+    /// nothing is typed here.
+    pub(super) fn ready_closed_folder(&mut self, client: ClientId, agent: &str, session: &str) -> Result<()> {
+        let closed = self.kept_record(agent, session)?;
+        let tx = self.tx.clone();
+        self.pending_ops += 1;
+        tokio::task::spawn_blocking(move || {
+            let result = ready_folder(&closed);
+            let _ = tx.blocking_send(Ev::ClosedSessionReady { client, cmd: None, result });
         });
         Ok(())
     }
@@ -198,8 +213,9 @@ impl Daemon {
         Ok(template.replace("{session}", &closed.session))
     }
 
-    /// A closed session's folder is ready (or not): start its agent there in a new session.
-    pub(super) fn closed_session_ready(&mut self, client: ClientId, cmd: String, result: Result<Ready, String>) {
+    /// A closed session's folder is ready (or not): start its agent there in a new session, or, with
+    /// no `cmd`, tell the client the folder to start it in.
+    pub(super) fn closed_session_ready(&mut self, client: ClientId, cmd: Option<String>, result: Result<Ready, String>) {
         self.pending_ops -= 1;
         let ready = match result {
             Ok(ready) => ready,
@@ -212,6 +228,11 @@ impl Daemon {
             self.worktree_hook(&top, true);
             self.made_worktrees.push(top);
         }
+        let Some(cmd) = cmd else {
+            self.send(client, ServerMsg::Reply(Reply::ClosedFolderReady { folder: ready.folder }));
+            self.dirty = true;
+            return;
+        };
         let start = Command::NewWorkspace { cwd: Some(ready.folder), name: None, cmd: Some(cmd) };
         match self.command(client, start) {
             Ok(_) => self.send(client, ServerMsg::Reply(Reply::Ok)),

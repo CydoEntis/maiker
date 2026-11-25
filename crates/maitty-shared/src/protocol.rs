@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 128;
+pub const PROTOCOL_VERSION: u32 = 129;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -1296,6 +1296,15 @@ pub enum Command {
         agent: String,
         session: String,
     },
+    /// Make the folder of the closed or saved session the daemon keeps for `agent` and its
+    /// conversation `session` ready, as `ReopenClosedSession` does, and start nothing (human
+    /// clients only): a worktree that is gone is made again from the record. Answered with
+    /// `Reply::ClosedFolderReady`, so the client starts the session there itself, as a chat or in
+    /// its terminal.
+    ReadyClosedFolder {
+        agent: String,
+        session: String,
+    },
     /// Keep `sessions` as the set open in `project` (an absolute folder), replacing what the daemon
     /// kept for it; an empty set forgets the project (human clients only). The daemon cleans every
     /// record and caps what it keeps (`WORKSPACE_SESSIONS_MAX`, `WORKSPACE_PROJECTS_MAX`).
@@ -1845,6 +1854,11 @@ pub enum Reply {
     ClosedSessions(Vec<ClosedSession>),
     /// The sessions kept for a project, in the order they were saved; empty when none.
     Workspace(Vec<ClosedSession>),
+    /// The folder a `Command::ReadyClosedFolder` made ready: the one the session worked in, or the
+    /// top of its worktree when that subfolder is not on the branch any more.
+    ClosedFolderReady {
+        folder: PathBuf,
+    },
     HelperRead(HelperRecord),
     Specialists(crate::specialists::SpecialistList),
     SideAnswer {
@@ -2857,6 +2871,7 @@ impl ServerMsg {
             ServerMsg::Reply(Reply::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
             ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
+            ServerMsg::Reply(Reply::ClosedFolderReady { .. }) => READY_CLOSED_FOLDER_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2874,6 +2889,7 @@ impl ClientMsg {
             ClientMsg::Query(Query::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
             ClientMsg::Query(Query::Workspace { .. })
             | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
+            ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
             ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
@@ -2912,6 +2928,11 @@ pub const WORKSPACE_SINCE: u32 = 127;
 /// `Command::TidyWorktrees` with `answer_each`. An older daemon ignores the flag and answers `Ok`,
 /// and an older client never sets it and is never sent the reply.
 pub const WORKTREES_TIDIED_SINCE: u32 = 128;
+
+/// The first version with `Command::ReadyClosedFolder` and its `Reply::ClosedFolderReady`. An older
+/// daemon passes the command over, so a client asks it to reopen the session itself instead
+/// (`Command::ReopenClosedSession`), and an older client is never sent the reply.
+pub const READY_CLOSED_FOLDER_SINCE: u32 = 129;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -3303,6 +3324,10 @@ mod tests {
                 agent: "claude".into(),
                 session: "abc".into(),
             }),
+            ClientMsg::Command(Command::ReadyClosedFolder {
+                agent: "claude".into(),
+                session: "abc".into(),
+            }),
             ClientMsg::Command(Command::ConversationStart {
                 target: crate::conversation::StartTarget::Conversation { id, generation: 2 },
                 branch: Some("chat/one".into()),
@@ -3483,6 +3508,7 @@ mod tests {
                 },
             }),
             ServerMsg::Reply(Reply::Workspace(vec![sample_closed()])),
+            ServerMsg::Reply(Reply::ClosedFolderReady { folder: PathBuf::from("/code/.wt/rate") }),
             ServerMsg::Reply(Reply::WorktreesTidied {
                 removed: vec![PathBuf::from("/code/.wt/rate")],
                 kept: vec![(PathBuf::from("/code/.wt/auth"), "something is running in it".into())],
@@ -3595,6 +3621,7 @@ mod tests {
                 ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
                 ClientMsg::Query(Query::Workspace { .. })
                 | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
+                ClientMsg::Command(Command::ReadyClosedFolder { .. }) => READY_CLOSED_FOLDER_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3604,6 +3631,7 @@ mod tests {
                 ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
                 ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
                 ServerMsg::Reply(Reply::WorktreesTidied { .. }) => WORKTREES_TIDIED_SINCE,
+                ServerMsg::Reply(Reply::ClosedFolderReady { .. }) => READY_CLOSED_FOLDER_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3751,6 +3779,34 @@ mod tests {
         let reply = Reply::WorktreesTidied { removed: vec!["/code/.wt/rate".into()], kept: Vec::new() };
         unreadable_before::<Reply127, _>(&reply);
         assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKTREES_TIDIED_SINCE);
+    }
+
+    /// 129 added making a closed session's folder ready without starting it, as a command and an
+    /// answer of their own. A peer at 128 still talks to this build, cannot read either, and is
+    /// never sent one; the reopen it does send reads as before.
+    #[test]
+    fn a_peer_from_before_ready_folders_still_talks_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize)]
+        enum Command128 {
+            ReopenClosedSession { agent: String, session: String },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply128 {
+            Workspace(Vec<ClosedSession>),
+        }
+        const { assert!(READY_CLOSED_FOLDER_SINCE > COMPATIBLE_SINCE && READY_CLOSED_FOLDER_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(READY_CLOSED_FOLDER_SINCE - 1, 0));
+
+        let ready = Command::ReadyClosedFolder { agent: "claude".into(), session: "abc".into() };
+        unreadable_before::<Command128, _>(&ready);
+        round_trips(&ready);
+        assert_eq!(ClientMsg::Command(ready).introduced_in(), READY_CLOSED_FOLDER_SINCE);
+        let reply = Reply::ClosedFolderReady { folder: "/code/.wt/rate".into() };
+        unreadable_before::<Reply128, _>(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), READY_CLOSED_FOLDER_SINCE);
+
+        let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
+        assert!(decode::<Command128>(&encode(&reopen).unwrap()).is_ok());
     }
 
     /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124

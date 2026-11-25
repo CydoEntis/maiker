@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient } from '@tanstack/react-query'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -26,6 +26,8 @@ const daemon = vi.hoisted(() => ({
   startChatSession: vi.fn<(folder: string, agent: string, branch: string | null, permissions: string, machine?: number) => Promise<{ id: number; generation: number }>>(() => Promise.resolve({ id: 44, generation: 1 })),
   submitMessage: vi.fn<(conversation: { id: string; generation: number }, operation: number, text: string, choice?: { model?: string; effort?: string }) => Promise<null>>(() => Promise.resolve(null)),
   prewarmAgentSession: vi.fn(() => Promise.resolve()),
+  readyClosedFolder: vi.fn<(agent: string, session: string) => Promise<string | null>>(() => Promise.resolve('/dev/app-wt')),
+  reopenClosedSession: vi.fn<(agent: string, session: string) => Promise<boolean>>(() => Promise.resolve(true)),
 }))
 // Another machine: a session started there shows in its next list.
 const remote = vi.hoisted(() => ({ machines: new Map<number, { state?: { name: string }; conversations: { id: string; kind?: 'terminal' }[] }>() }))
@@ -35,11 +37,13 @@ const startSessionOnMachine = vi.hoisted(() => vi.fn<(machine: number, folder: s
 }))
 vi.mock('@/api/machines', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/machines')>()), startSessionOnMachine }))
 vi.mock('@/api/daemon', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/api/daemon')>()), ...daemon, loadConversations: () => Promise.resolve([...listed.sessions]) }))
-const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn(), info: vi.fn() }))
+const toast = vi.hoisted(() => ({ failed: vi.fn(), error: vi.fn(), info: vi.fn(), success: vi.fn(), warning: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast }))
 vi.mock('./model/agentHooks', () => ({ connectAgentOnce: () => Promise.resolve() }))
 
 import { useSessionStarts } from './useSessionStarts'
+import { useRecentSessions } from './useRecentSessions'
+import type { ClosedSession } from '@/api/daemon'
 import { LOCAL_MACHINE } from '@/api/machines'
 import type { NewChatRequest } from './components/NewChatPage'
 
@@ -369,5 +373,38 @@ describe('starting a chat from the draft in the Chat view', () => {
     starts({ openSessionsIn: 'chat' }).warmNewChat({ agent: 'claude', folder: '/dev/app', model: 'default', reasoning: 'default', mode: 'default', bypass: undefined } as never)
 
     expect(daemon.prewarmAgentSession).not.toHaveBeenCalled()
+  })
+})
+
+// The panel's Open (and Recent sessions) has the service make a removed worktree again, then starts the session there
+// through the same start as any resume, so the view Settings picks decides how it opens.
+describe('reopening a saved session whose worktree the service makes again', () => {
+  const saved = (agent: string): ClosedSession => ({ agent, session: ID, cwd: '/dev/app-wt', branch: 'feat/parser', title: 'Fix the parser', at: 1, folder_present: false, worktree: '/dev/app-wt', repo: '/dev/app' })
+
+  async function reopen(openSessionsIn: 'chat' | 'terminal', agent: string) {
+    const { startNewChat } = starts({ openSessionsIn })
+    const opener = renderHook(() => useRecentSessions(startNewChat, false)).result
+    opener.current.openSaved([saved(agent)], 'app')
+    await waitFor(() => { expect(toast.success).toHaveBeenCalledWith('Opened 1 session', { context: 'app' }) })
+    toast.success.mockClear()
+  }
+
+  it('opens a remade Claude or Codex session as a chat when chats are the default', async () => {
+    await reopen('chat', 'claude')
+    await reopen('chat', 'codex')
+
+    expect(daemon.readyClosedFolder).toHaveBeenCalledWith('claude', ID)
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(1, '/dev/app-wt', 'claude', ID, expect.any(String))
+    expect(daemon.resumeChatSession).toHaveBeenNthCalledWith(2, '/dev/app-wt', 'codex', ID, expect.any(String))
+    expect(daemon.startAgentSession).not.toHaveBeenCalled()
+    expect(daemon.reopenClosedSession).not.toHaveBeenCalled()
+  })
+
+  it('opens it in its terminal, resuming its conversation, when the terminal is the default', async () => {
+    await reopen('terminal', 'claude')
+
+    expect(daemon.startAgentSession).toHaveBeenCalledWith('/dev/app-wt', 'claude', expect.arrayContaining(['--resume', ID]))
+    expect(daemon.resumeChatSession).not.toHaveBeenCalled()
+    expect(daemon.reopenClosedSession).not.toHaveBeenCalled()
   })
 })

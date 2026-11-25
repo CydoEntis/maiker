@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { closedSessions, reopenClosedSession, type ClosedSession } from '@/api/daemon'
+import { closedSessions, readyClosedFolder, reopenClosedSession, type ClosedSession } from '@/api/daemon'
 import { errorMessage } from '@/lib/error-message'
 import { LOCAL_MACHINE } from '@/api/machines'
 import { DEFAULT_PICK } from '@/features/chat/agentChoice'
@@ -48,16 +48,39 @@ export function reopenRefusal(closed: ClosedSession): string | null {
  * when its folder is gone, since the service then makes the folder again and starts the agent itself.
  */
 export function reopenRequest(closed: ClosedSession): NewChatRequest | null {
+  return closed.folder_present ? resumeIn(closed, closed.cwd) : null
+}
+
+/** The start that resumes a closed session's conversation in `folder`; null when it cannot be resumed at all. */
+function resumeIn(closed: ClosedSession, folder: string): NewChatRequest | null {
   const agent = resumableAgent(closed.agent)
-  if (agent === null || !closed.folder_present || reopenRefusal(closed) !== null) return null
-  return { folder: closed.cwd, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: closed.session }
+  if (agent === null || reopenRefusal(closed) !== null) return null
+  return { folder, agent, model: DEFAULT_PICK, reasoning: DEFAULT_PICK, mode: 'default', message: '', branch: null, machine: LOCAL_MACHINE, machineName: 'This computer', resume: closed.session }
 }
 
 /**
- * How a closed or saved session is opened again: started here with its conversation, made again by the service when its
- * folder is gone (`reopenClosedSession`), or skipped with why, by the same rules Recent sessions picks by. An agent that
- * is not Claude or Codex is skipped: a chat run over ACP is saved under its agent's own name ("opencode") and resumes by
- * no id, so neither a start nor the service's closed list (which says "acp") could bring its conversation back.
+ * Reopens a closed or saved session whose folder is gone: the service makes its worktree again and answers with the
+ * folder, then `start` starts it there like any resume, so it opens as a chat or in its terminal as Settings says. An
+ * older service cannot only make the folder, so it is asked to reopen the session itself, which starts it in its
+ * terminal; one older still says so in `RESTART_TO_REOPEN`.
+ */
+export async function reopenRemoved(closed: ClosedSession, start: (request: NewChatRequest) => Promise<void>): Promise<void> {
+  const folder = await readyClosedFolder(closed.agent, closed.session)
+  if (folder === null) {
+    if (!(await reopenClosedSession(closed.agent, closed.session))) throw new Error(RESTART_TO_REOPEN)
+    return
+  }
+  const request = resumeIn(closed, folder)
+  if (request === null) throw new Error('This session cannot be reopened here')
+  await start(request)
+}
+
+/**
+ * How a closed or saved session is opened again: started here with its conversation, or, when its folder is gone, made
+ * again by the service and then started (`reopenRemoved`), or skipped with why, by the same rules Recent sessions picks
+ * by. An agent that is not Claude or Codex is skipped: a chat run over ACP is saved under its agent's own name
+ * ("opencode") and resumes by no id, so neither a start nor the service's closed list (which says "acp") could bring its
+ * conversation back.
  */
 export type ReopenPlan = { kind: 'start'; request: NewChatRequest } | { kind: 'remake' } | { kind: 'skip'; why: string }
 
@@ -105,8 +128,11 @@ export function useClosedSessions(): { read: RecentRead; retry: () => void } {
 /** Where reopening a session whose folder is gone stands. */
 export type RemakeState = { kind: 'idle' } | { kind: 'working' } | { kind: 'failed'; message: string }
 
-/** Reopening a session whose folder is gone, through the service, which makes it again and starts the agent; `onReopened` runs once it has. */
-export function useReopenRemoved(onReopened: () => void): { state: RemakeState; reopen: (closed: ClosedSession) => void } {
+/**
+ * Reopening a session whose folder is gone: the service makes it again, then `start` starts the session there
+ * (`reopenRemoved`); `onReopened` runs once it has.
+ */
+export function useReopenRemoved(start: (request: NewChatRequest) => Promise<void>, onReopened: () => void): { state: RemakeState; reopen: (closed: ClosedSession) => void } {
   const [state, setState] = useState<RemakeState>({ kind: 'idle' })
   // A second pick before the first answers would start the session twice.
   const busy = useRef(false)
@@ -123,8 +149,8 @@ export function useReopenRemoved(onReopened: () => void): { state: RemakeState; 
     void (async () => {
       let outcome: RemakeState
       try {
-        const asked = await reopenClosedSession(closed.agent, closed.session)
-        outcome = asked ? { kind: 'idle' } : { kind: 'failed', message: RESTART_TO_REOPEN }
+        await reopenRemoved(closed, start)
+        outcome = { kind: 'idle' }
       } catch (error) {
         outcome = { kind: 'failed', message: errorMessage(error, 'Could not reopen the session.') }
       }
@@ -133,6 +159,6 @@ export function useReopenRemoved(onReopened: () => void): { state: RemakeState; 
       setState(outcome)
       if (outcome.kind === 'idle') onReopened()
     })()
-  }, [onReopened])
+  }, [start, onReopened])
   return { state, reopen }
 }

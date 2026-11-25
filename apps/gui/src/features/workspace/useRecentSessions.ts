@@ -1,15 +1,15 @@
 import { useCallback, useRef, useState } from 'react'
-import { reopenClosedSession, type ClosedSession, type ImportableChat } from '@/api/daemon'
+import type { ClosedSession, ImportableChat } from '@/api/daemon'
 import { toast } from '@/lib/toast'
 import type { NewChatRequest, NewChatStartOptions } from './components/NewChatPage'
 import type { SessionView } from './model/session'
 import { importStart } from './model/importChats'
-import { endedResume, reopenPlan, reopenRequest, RESTART_TO_REOPEN, savedStart } from './model/recentSessions'
+import { endedResume, reopenPlan, reopenRemoved, reopenRequest, savedStart } from './model/recentSessions'
 import { openWords, savedName, type OpenOutcome, type WorkspaceFor } from './model/workspacePanel'
 
 /**
- * Opens each of `list` again, one after another: in place through `start`, or, when its folder is gone, through the
- * service, which makes it again and starts the agent itself. One that fails is counted and the rest still open; one
+ * Opens each of `list` again, one after another, through `start`: in place, or, when its folder is gone, once the
+ * service has made it again (`reopenRemoved`), so each opens in the view Settings picks. One that fails is counted and the rest still open; one
  * that cannot be opened is skipped with why.
  */
 async function openEach(list: readonly ClosedSession[], start: (request: NewChatRequest) => Promise<void>): Promise<OpenOutcome> {
@@ -25,7 +25,7 @@ async function openEach(list: readonly ClosedSession[], start: (request: NewChat
     }
     try {
       if (plan.kind === 'start') await start(plan.request)
-      else if (!(await reopenClosedSession(closed.agent, closed.session))) throw new Error(RESTART_TO_REOPEN)
+      else await reopenRemoved(closed, start)
       opened += 1
     } catch (error) {
       failed += 1

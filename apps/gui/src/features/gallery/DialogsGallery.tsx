@@ -354,7 +354,7 @@ function Show({ what }: { what: string }): ReactNode {
   if (what.startsWith('settings')) return <Settings section={(what.split('-')[1] ?? 'appearance') as DesktopSettingsSection} />
   if (what === 'palette') return <CommandPalette items={ITEMS} outputItem={() => null} onClose={() => undefined} />
   if (what === 'agents') return <AcpAgentsDialog onPick={() => undefined} onCancel={() => undefined} />
-  if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onReopened={() => undefined} onCancel={() => undefined} />
+  if (what === 'recent') return <RecentSessionsDialog home="/home/dev" onPick={() => undefined} onStart={() => Promise.resolve()} onReopened={() => undefined} onCancel={() => undefined} />
   if (what === 'workspace' || what.startsWith('workspace-')) return <WorkspaceShown what={what} />
   if (what === 'switch' || what === 'switch-failed') return <SwitchShown what={what} />
   if (what === 'resume') return <ResumeSavedDialog projects={PROJECTS} defaultAgent="claude" locked={false} onPick={() => undefined} onCancel={() => undefined} />

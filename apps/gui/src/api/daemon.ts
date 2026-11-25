@@ -1084,6 +1084,15 @@ export async function reopenClosedSession(agent: string, session: string): Promi
   return invokeParsed('reopen_closed_session', z.boolean(), { agent, session })
 }
 
+/**
+ * Has this computer's service make the removed folder of a closed or saved session it keeps again (its worktree, from the
+ * recorded repository and branch), starting nothing; resolves to the folder to start it in. Null when the service
+ * running is older than this and was not asked.
+ */
+export async function readyClosedFolder(agent: string, session: string): Promise<string | null> {
+  return invokeParsed('ready_closed_folder', z.string().nullable(), { agent, session })
+}
+
 /** A session as a project's saved open set keeps it: a closed session's record, with no word on its folder. */
 export type SavedSession = Omit<ClosedSession, 'folder_present'>
 
