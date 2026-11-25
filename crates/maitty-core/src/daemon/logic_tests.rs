@@ -10511,6 +10511,49 @@ fn a_person_reads_the_closed_sessions_newest_first_and_a_pane_cannot() {
 }
 
 #[test]
+fn a_person_saves_and_reads_a_projects_open_set_and_a_pane_cannot() {
+    let (mut d, _rx) = daemon();
+    let asking = pane(&mut d);
+    // A drive makes it absolute on Windows; the store refuses a project that is not.
+    let project = std::path::PathBuf::from(if cfg!(windows) { r"C:\code\app" } else { "/code/app" });
+    let session = |id: &str| ClosedSession {
+        agent: "claude".into(),
+        session: id.into(),
+        cwd: project.clone(),
+        branch: None,
+        title: None,
+        at: 1,
+        worktree: None,
+        repo: None,
+    };
+
+    let (tx, mut person) = mpsc::channel(16);
+    d.handle(Ev::Connected(7, tx, false, crate::protocol::Surface::Terminal, true));
+    d.message(7, ClientMsg::Command(Command::SaveWorkspace { project: project.clone(), sessions: vec![session("a"), session("b")] }));
+    d.message(7, ClientMsg::Command(Command::SaveWorkspace { project: project.clone(), sessions: vec![session("c")] }));
+    d.message(7, ClientMsg::Query(Query::Workspace { project: project.clone() }));
+    let replies: Vec<_> = std::iter::from_fn(|| person.try_recv().ok()).collect();
+    let Some(ServerMsg::Reply(Reply::Workspace(list))) = replies.last() else {
+        panic!("a person is answered with the set: {replies:?}");
+    };
+    assert_eq!(list.iter().map(|s| s.session.as_str()).collect::<Vec<_>>(), ["c"], "a save replaces the set");
+
+    d.message(7, ClientMsg::Command(Command::SaveWorkspace { project: "relative".into(), sessions: vec![session("x")] }));
+    assert!(matches!(person.try_recv(), Ok(ServerMsg::Error(_))), "a project that is not a folder path is refused");
+
+    let (tx, mut agent) = mpsc::channel(16);
+    d.handle(Ev::Connected(8, tx, false, crate::protocol::Surface::Terminal, true));
+    let token = d.terms[&asking].token.clone();
+    d.handle(Ev::From(8, asking, token));
+    d.message(8, ClientMsg::Command(Command::SaveWorkspace { project: project.clone(), sessions: vec![session("evil")] }));
+    d.message(8, ClientMsg::Query(Query::Workspace { project: project.clone() }));
+    assert!(matches!(agent.try_recv(), Ok(ServerMsg::Error(_))), "a pane cannot save");
+    assert!(matches!(agent.try_recv(), Ok(ServerMsg::Error(_))), "a pane cannot read");
+    assert_eq!(d.saved_workspaces.get(&project).len(), 1);
+    close(&mut d, &[asking]);
+}
+
+#[test]
 fn a_failing_process_is_remembered_once_after_a_close_but_never_while_the_daemon_stops_or_reloads_it() {
     type Before = fn(&mut Daemon, TermId);
     let cases: [(&str, Before, &[&str]); 3] = [

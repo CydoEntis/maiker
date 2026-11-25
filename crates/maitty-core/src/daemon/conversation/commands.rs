@@ -272,6 +272,11 @@ impl Daemon {
         {
             operation.receipt.delivery = Delivery::SubmissionUncertain;
         }
+        // A start that never got an identity is a draft: the person is told, and nothing stays.
+        let draft = matches!(
+            pending,
+            Pending::Validating { .. } | Pending::Launch { .. } | Pending::Opening { .. }
+        ) && !self.conversations.iter().any(|c| c.id == id);
         let client = match pending {
             Pending::Validating { client, .. }
             | Pending::Launch { client, .. }
@@ -293,6 +298,9 @@ impl Daemon {
         }
         if let Some(client) = client {
             self.send(client, ServerMsg::Error(error));
+        }
+        if draft {
+            self.forget_pending_start(id);
         }
         self.dirty = true;
     }

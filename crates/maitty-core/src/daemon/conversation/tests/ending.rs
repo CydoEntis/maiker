@@ -220,3 +220,129 @@ async fn turn_cancellation_uses_only_the_acknowledged_active_turn_id() {
         std::panic::resume_unwind(panic);
     }
 }
+
+fn pending(session: &TestSession, id: u64) -> crate::conversation::PendingStart {
+    crate::conversation::PendingStart {
+        id: crate::conversation::ConversationId(id),
+        generation: 1,
+        settings: settings(session),
+        thread_id: None,
+    }
+}
+
+/// A launch that fails before the chat has an identity leaves nothing behind, and the person who
+/// started it still gets the error.
+#[tokio::test]
+async fn a_launch_that_fails_before_it_has_an_identity_leaves_no_row() {
+    use crate::daemon::conversation::commands::Pending;
+    let mut session = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (real, _) = create(&mut session).await;
+        let (client, mut replies) = mpsc::channel(8);
+        session.daemon.handle(Ev::Connected(440, client, false, crate::protocol::Surface::Terminal, true));
+        let id = crate::conversation::ConversationId(900);
+        let start = pending(&session, 900);
+        session.daemon.pending_starts.push(start.clone());
+        session.daemon.conversation_fail(
+            Pending::Opening { client: 440, id, generation: 1, settings: start.settings, expected: None },
+            "launch failed".into(),
+        );
+
+        let mut told = false;
+        while let Ok(message) = replies.try_recv() {
+            told |= matches!(message, ServerMsg::Error(ref text) if text == "launch failed");
+        }
+        assert!(told, "the new-chat page still gets the error");
+        assert!(session.daemon.pending_starts.is_empty());
+        assert!(!session.daemon.conversation_states.contains_key(&id));
+        assert!(session.daemon.saved().pending_starts.is_empty());
+        let listed: Vec<_> = session.daemon.conversation_summaries().iter().map(|s| s.id).collect();
+        assert_eq!(listed, vec![real], "only the real chat is listed");
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// A restart brings back no pending start: nothing resumes one, and the earlier failed ones that
+/// were saved go with it.
+#[tokio::test]
+async fn a_restart_does_not_bring_back_a_pending_start() {
+    let mut session = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (real, _) = create(&mut session).await;
+        session.daemon.pending_starts.push(pending(&session, 900));
+        let saved = session.daemon.saved();
+        assert_eq!(saved.pending_starts.len(), 1, "the file holds the ghost");
+
+        let (tx, _events) = mpsc::channel(8);
+        let mut restored = Daemon::new(Config::default(), tx, || {});
+        assert!(restored.restore(saved));
+        assert!(restored.pending_starts.is_empty());
+        let kept: Vec<_> = restored.conversations.iter().map(|c| c.id).collect();
+        assert_eq!(kept, vec![real]);
+        assert!(restored.saved().pending_starts.is_empty());
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// A start still in flight (or cut off) is listed as a chat; ending or closing it drops it, and
+/// nothing next to it.
+#[tokio::test]
+async fn a_pending_start_left_by_a_failed_launch_can_be_ended_and_closed() {
+    let mut session = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let (real, _) = create(&mut session).await;
+        for close in [false, true] {
+            let id = crate::conversation::ConversationId(900);
+            session.daemon.pending_starts.push(crate::conversation::PendingStart {
+                id,
+                generation: 1,
+                settings: settings(&session),
+                thread_id: None,
+            });
+            let state = session.daemon.conversation_states.entry(id).or_default();
+            state.status = crate::protocol::Status::Blocked;
+            state.error = Some("launch failed".into());
+            session.daemon.note_conversation_status_times();
+            assert!(session.daemon.conversation_summaries().iter().any(|s| s.id == id));
+
+            let command = if close {
+                crate::protocol::Command::ConversationClose { id, generation: 1 }
+            } else {
+                crate::protocol::Command::ConversationEnd { id, generation: 1 }
+            };
+            let reply = exchange(&mut session, 430 + u64::from(close), crate::protocol::ClientMsg::Command(command), None).await;
+            assert!(matches!(reply, ServerMsg::Reply(crate::protocol::Reply::Ok)), "close={close}: {reply:?}");
+
+            assert!(!session.daemon.conversation_summaries().iter().any(|s| s.id == id), "gone from the list");
+            assert!(!session.daemon.conversation_states.contains_key(&id));
+            session.daemon.note_conversation_status_times();
+            assert!(!session.daemon.conversation_since.contains_key(&id));
+            assert!(session.daemon.saved().pending_starts.is_empty(), "gone from the saved file");
+            assert!(session.daemon.conversation_runtimes.owns(real), "the real chat keeps running");
+            assert!(session.daemon.conversations.iter().any(|c| c.id == real && !c.archived));
+        }
+
+        let saved = session.daemon.saved();
+        let (tx, _events) = mpsc::channel(8);
+        let mut restored = Daemon::new(Config::default(), tx, || {});
+        assert!(restored.restore(saved));
+        assert!(restored.pending_starts.is_empty());
+        assert_eq!(restored.conversations.len(), 1);
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}

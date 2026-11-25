@@ -11,7 +11,7 @@ use std::path::PathBuf;
 /// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
 /// style*). A client and a daemon on different versions talk only inside the window
 /// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 126;
+pub const PROTOCOL_VERSION: u32 = 127;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -120,6 +120,11 @@ pub enum SavedConversations {
 
 /// The most closed sessions the daemon keeps and a list carries; the oldest go first.
 pub const CLOSED_SESSIONS_MAX: usize = 50;
+
+/// The most sessions the daemon keeps for one project's saved set, and the most projects it keeps a
+/// set for; the oldest go first.
+pub const WORKSPACE_SESSIONS_MAX: usize = 50;
+pub const WORKSPACE_PROJECTS_MAX: usize = 50;
 
 /// What a helper did, read from the provider's own file for it (ADR 0010). Display only.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -1288,6 +1293,13 @@ pub enum Command {
         agent: String,
         session: String,
     },
+    /// Keep `sessions` as the set open in `project` (an absolute folder), replacing what the daemon
+    /// kept for it; an empty set forgets the project (human clients only). The daemon cleans every
+    /// record and caps what it keeps (`WORKSPACE_SESSIONS_MAX`, `WORKSPACE_PROJECTS_MAX`).
+    SaveWorkspace {
+        project: PathBuf,
+        sessions: Vec<ClosedSession>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1533,6 +1545,8 @@ pub enum Query {
     /// The agent sessions that closed or crashed, newest first; answered with
     /// `Reply::ClosedSessions`.
     ClosedSessions,
+    /// The set `Command::SaveWorkspace` kept for `project`; answered with `Reply::Workspace`.
+    Workspace { project: PathBuf },
 }
 
 /// What you chose when a session asked to start helpers.
@@ -1819,6 +1833,8 @@ pub enum Reply {
         chats: Vec<ImportableChat>,
     },
     ClosedSessions(Vec<ClosedSession>),
+    /// The sessions kept for a project, in the order they were saved; empty when none.
+    Workspace(Vec<ClosedSession>),
     HelperRead(HelperRecord),
     Specialists(crate::specialists::SpecialistList),
     SideAnswer {
@@ -2829,6 +2845,7 @@ impl ServerMsg {
         match self {
             ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ServerMsg::Reply(Reply::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
+            ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
             _ => COMPATIBLE_SINCE,
         }
     }
@@ -2844,6 +2861,8 @@ impl ClientMsg {
             ClientMsg::Query(Query::DiscardFile { .. }) => DISCARD_FILE_SINCE,
             ClientMsg::Query(Query::PullRequests { .. }) => PULL_REQUESTS_SINCE,
             ClientMsg::Query(Query::ImportableChats { .. }) => IMPORTABLE_CHATS_SINCE,
+            ClientMsg::Query(Query::Workspace { .. })
+            | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
             ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
             ClientMsg::Command(
                 Command::ConversationMarkSeen { .. }
@@ -2872,6 +2891,11 @@ pub const IMPORTABLE_CHATS_SINCE: u32 = 125;
 /// The first version whose daemon reads `Command::ConversationActiveAt`. A daemon before it passes the
 /// command over without an answer, so a client does not send it and the chat's age counts from its start.
 pub const CHAT_ACTIVE_AT_SINCE: u32 = 126;
+
+/// The first version with `Command::SaveWorkspace`, `Query::Workspace` and `Reply::Workspace`. An older
+/// daemon passes the first two over, so a client does not send them, and an older client is never sent
+/// the reply.
+pub const WORKSPACE_SINCE: u32 = 127;
 
 /// The first version whose daemon reads `Query::DiscardFile`. A daemon before it passes the
 /// request over and never answers, so a client refuses in words instead of asking it.
@@ -2939,6 +2963,19 @@ mod tests {
         let bytes = encode(msg).unwrap();
         assert!(decode::<Old>(&bytes).is_err(), "an older peer misread a newer message");
         assert!(decode::<T>(&bytes).is_ok());
+    }
+
+    fn sample_closed() -> ClosedSession {
+        ClosedSession {
+            agent: "claude".into(),
+            session: "abc".into(),
+            cwd: "/code/app".into(),
+            branch: Some("main".into()),
+            title: None,
+            at: 9,
+            worktree: None,
+            repo: None,
+        }
     }
 
     fn every_client_message() -> Vec<ClientMsg> {
@@ -3236,6 +3273,11 @@ mod tests {
             }),
             ClientMsg::Command(Command::KillServer { forget: false }),
             ClientMsg::Command(Command::DropPrewarm),
+            ClientMsg::Command(Command::SaveWorkspace {
+                project: "/code/app".into(),
+                sessions: vec![sample_closed()],
+            }),
+            ClientMsg::Query(Query::Workspace { project: "/code/app".into() }),
             ClientMsg::Command(Command::ReopenClosedSession {
                 agent: "claude".into(),
                 session: "abc".into(),
@@ -3419,6 +3461,7 @@ mod tests {
                     more: false,
                 },
             }),
+            ServerMsg::Reply(Reply::Workspace(vec![sample_closed()])),
             ServerMsg::Reply(Reply::ClosedSessions(vec![ClosedSession {
                 agent: "claude".into(),
                 session: "abc".into(),
@@ -3525,6 +3568,8 @@ mod tests {
                     | Command::BranchWorktree { base: Some(_), .. },
                 ) => CHAT_CONTROLS_SINCE,
                 ClientMsg::Command(Command::ConversationActiveAt { .. }) => CHAT_ACTIVE_AT_SINCE,
+                ClientMsg::Query(Query::Workspace { .. })
+                | ClientMsg::Command(Command::SaveWorkspace { .. }) => WORKSPACE_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3532,6 +3577,7 @@ mod tests {
         for m in every_server_message() {
             let since = match m {
                 ServerMsg::Reply(Reply::PullRequests { .. }) => PULL_REQUESTS_SINCE,
+                ServerMsg::Reply(Reply::Workspace(_)) => WORKSPACE_SINCE,
                 _ => COMPATIBLE_SINCE,
             };
             assert_eq!(m.introduced_in(), since, "{m:?}");
@@ -3613,6 +3659,41 @@ mod tests {
         unreadable_before::<Command125, _>(&active);
         round_trips(&active);
         assert_eq!(ClientMsg::Command(active).introduced_in(), CHAT_ACTIVE_AT_SINCE);
+    }
+
+    /// 127 added a project's saved open set as a command, a question and an answer of their own. A
+    /// peer at 126 still talks to this build, cannot read any of them, and is never sent one; what
+    /// the project sends and reads today decodes as before.
+    #[test]
+    fn a_peer_from_before_the_open_set_still_talks_and_is_never_sent_one() {
+        #[derive(Serialize, Deserialize)]
+        enum Command126 {
+            ReopenClosedSession { agent: String, session: String },
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Query126 {
+            ClosedSessions,
+        }
+        #[derive(Serialize, Deserialize)]
+        enum Reply126 {
+            ClosedSessions(Vec<ClosedSession>),
+        }
+        const { assert!(WORKSPACE_SINCE > COMPATIBLE_SINCE && WORKSPACE_SINCE <= PROTOCOL_VERSION) };
+        assert!(speaks_with(WORKSPACE_SINCE - 1, 0));
+
+        let save = Command::SaveWorkspace { project: "/code/app".into(), sessions: vec![sample_closed()] };
+        unreadable_before::<Command126, _>(&save);
+        assert_eq!(ClientMsg::Command(save).introduced_in(), WORKSPACE_SINCE);
+        let ask = Query::Workspace { project: "/code/app".into() };
+        unreadable_before::<Query126, _>(&ask);
+        assert_eq!(ClientMsg::Query(ask).introduced_in(), WORKSPACE_SINCE);
+        let reply = Reply::Workspace(vec![sample_closed()]);
+        unreadable_before::<Reply126, _>(&reply);
+        assert_eq!(ServerMsg::Reply(reply).introduced_in(), WORKSPACE_SINCE);
+
+        let reopen = Command::ReopenClosedSession { agent: "claude".into(), session: "abc".into() };
+        assert!(decode::<Command126>(&encode(&reopen).unwrap()).is_ok());
+        assert_eq!(ClientMsg::Command(reopen).introduced_in(), COMPATIBLE_SINCE);
     }
 
     /// 125 added the chats to bring in as a question and an answer of their own. A peer at 124

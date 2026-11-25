@@ -115,6 +115,10 @@ impl Daemon {
             bail!("Only a human client can end a conversation");
         }
         self.may(client, Grant::Write, None)?;
+        if self.drop_pending_start(id, generation)? {
+            self.send(client, ServerMsg::Reply(Reply::Ok));
+            return Ok(());
+        }
         let conversation = self
             .conversations
             .iter()
@@ -136,6 +140,43 @@ impl Daemon {
         self.stop_structured(id)?;
         self.send(client, ServerMsg::Reply(Reply::Ok));
         Ok(())
+    }
+
+    /// Drops a start that failed after validation and never got an identity: it is listed as a
+    /// chat but holds no record, history or thread, so nothing the daemon owns is lost. A worktree
+    /// folder it made stays. False when `id` is no pending start.
+    fn drop_pending_start(&mut self, id: ConversationId, generation: u64) -> Result<bool> {
+        let Some(start) = self.pending_starts.iter().find(|p| p.id == id) else {
+            return Ok(false);
+        };
+        if self.conversations.iter().any(|c| c.id == id) {
+            return Ok(false);
+        }
+        if start.generation != generation {
+            bail!("Conversation generation is stale");
+        }
+        if self
+            .conversation_requests
+            .values()
+            .any(|pending| pending.conversation() == id)
+        {
+            bail!("Conversation has a pending operation; try again in a moment");
+        }
+        self.forget_pending_start(id);
+        Ok(true)
+    }
+
+    /// Removes a start that has no identity and everything keyed by it. Its agent, if one came up,
+    /// is stopped; its worktree folder stays.
+    pub(super) fn forget_pending_start(&mut self, id: ConversationId) {
+        if let Err(error) = self.stop_structured(id) {
+            tracing::warn!("stopping the agent of a dropped start: {error:#}");
+        }
+        self.pending_starts.retain(|p| p.id != id);
+        self.conversation_states.remove(&id);
+        self.conversation_since.remove(&id);
+        self.conversation_untested_cli.remove(&id);
+        self.dirty = true;
     }
 
     /// Stops a chat's agent for good and drops what was waiting for it. Its record stays, stopped.
@@ -183,6 +224,10 @@ impl Daemon {
             bail!("Only a human client can close a conversation");
         }
         self.may(client, Grant::Write, None)?;
+        if self.drop_pending_start(id, generation)? {
+            self.send(client, ServerMsg::Reply(Reply::Ok));
+            return Ok(());
+        }
         let conversation = self
             .conversations
             .iter_mut()

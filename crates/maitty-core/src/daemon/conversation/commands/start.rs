@@ -339,13 +339,7 @@ impl Daemon {
         let launch = match result {
             Ok(launch) => launch,
             Err(error) => {
-                // A new chat that was refused before it ran has no record; leave no row for it.
-                let new_chat = self.pending_starts.iter().any(|start| start.id == id);
-                self.pending_starts.retain(|start| start.id != id);
                 self.conversation_fail(pending, error);
-                if new_chat {
-                    self.conversation_states.remove(&id);
-                }
                 return;
             }
         };

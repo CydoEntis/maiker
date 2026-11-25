@@ -410,6 +410,10 @@ The daemon also keeps `closed-sessions-<socket>.json` there: the last 50 agent s
 or crashed ([DATABASE](DATABASE.md#project-specific-closed-sessions)). It adds no setting or variable;
 deleting the file empties the list.
 
+It keeps `workspaces-<socket>.json` there too: each project's sessions that were open when it was parked or closed
+([DATABASE](DATABASE.md#project-specific-saved-workspaces)). It adds no setting or variable; deleting the file
+forgets every saved set.
+
 ## Project-specific: continuing a chat turn after a restart
 
 After a restart no chat starts by itself: each waits, asleep, and starts on its own provider

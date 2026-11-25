@@ -11,14 +11,29 @@ const READ_FAILED = /saved conversation could not be read/i
 const TOO_LONG = /too long to open as a chat/i
 const TOO_LONG_REASON = 'Its saved history is longer than Maiker can open as a chat (over 16 MB). Nothing was lost: the transcript is still on your computer and the agent’s own record is intact. Open this session in the agent’s terminal to carry on, or start a new chat.'
 
+/** A read line that is only news (reconnecting, waking): it takes no action and shows the running light. */
+export type ReadNotice = { title: string; reason: string }
+
 /**
  * The chat's own read when it failed. A chat the service stopped continuing (its history out of step with the agent,
  * as after a service restart) says so plainly and offers Reconnect, which starts its agent again and has the service
  * read the past back; anything else shows the service's reason. Either way the raw words are one Copy details away.
+ * A `notice` takes the same line over, so the chat moving between reconnecting, waking and failed keeps one element: its
+ * running light is not restarted and its rise (which plays when a line first appears) is not replayed.
  */
-export function ReadProblemLine({ error, onReconnect }: { error: string; onReconnect: (() => Promise<void>) | null }) {
+export function ReadProblemLine({ error, notice, onReconnect }: { error: string | null; notice?: ReadNotice | null; onReconnect: (() => Promise<void>) | null }) {
   const [running, setRunning] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
+  const [shownFor, setShownFor] = useState(error)
+  // A new error is a new question: forget the last Reconnect, here rather than by a key, which would remount the line.
+  if (shownFor !== error) {
+    setShownFor(error)
+    setRunning(false)
+    setFailure(null)
+  }
+  if (notice != null || error === null) {
+    return <ProblemLine tone="working" running title={notice?.title ?? ''} reason={notice?.reason ?? ''} />
+  }
   const tooLong = TOO_LONG.test(error)
   const explained = NEEDS_RESUME.test(error)
   const resumable = !tooLong && onReconnect !== null && (explained || READ_FAILED.test(error))

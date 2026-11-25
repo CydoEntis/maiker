@@ -72,3 +72,37 @@ describe('a chat whose read failed', () => {
     expect(screen.getByRole('button', { name: /copy details/i })).toBeInTheDocument()
   })
 })
+
+describe('the chat’s read line as the chat reconnects', () => {
+  const RESUME = 'chat resume is disabled'
+  const spinner = () => document.querySelector('.mx-problem-line [data-slot="status-icon"]')
+  const line = () => document.querySelector('.mx-problem-line')
+
+  it('keeps one line and one spinner from reconnecting to waking to a changed reason, so nothing rises or restarts again', () => {
+    const reconnecting = { title: 'Reconnecting to this chat…', reason: 'What is shown may be out of date.' }
+    const { rerender } = render(<ReadProblemLine error={null} notice={reconnecting} onReconnect={null} />)
+    const first = line()
+    const light = spinner()
+    expect(light).not.toBeNull()
+    rerender(<ReadProblemLine error={null} notice={{ title: 'Reconnecting to this chat…', reason: 'What is shown may be out of date. It timed out.' }} onReconnect={null} />)
+    expect(spinner()).toBe(light)
+
+    rerender(<ReadProblemLine error={RESUME} onReconnect={vi.fn(() => Promise.resolve())} />)
+    expect(screen.getByText('This chat needs to reconnect')).toBeInTheDocument()
+    rerender(<ReadProblemLine error={null} notice={{ title: 'Waking Claude up…', reason: 'It picks up in a moment.' }} onReconnect={null} />)
+    expect(screen.getByText('Waking Claude up…')).toBeInTheDocument()
+    const waking = spinner()
+    rerender(<ReadProblemLine error={null} notice={{ title: 'Waking Claude up…', reason: 'Another reason.' }} onReconnect={null} />)
+
+    expect(line()).toBe(first)
+    expect(spinner()).toBe(waking)
+  })
+
+  it('forgets a failed Reconnect when the chat reports a different error', async () => {
+    const { rerender } = render(<ReadProblemLine error={RESUME} onReconnect={() => Promise.reject(new Error('nope'))} />)
+    await userEvent.click(screen.getByRole('button', { name: 'Reconnect' }))
+    expect(await screen.findByText(/Reconnecting failed: nope/)).toBeInTheDocument()
+    rerender(<ReadProblemLine error="history is incomplete" onReconnect={() => Promise.resolve()} />)
+    expect(screen.queryByText(/Reconnecting failed/)).not.toBeInTheDocument()
+  })
+})

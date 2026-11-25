@@ -91,7 +91,7 @@
 /* A blocking alert is the shared modal's frame: the dialog radius and shadow, a roomy body, and its actions in a foot
    under a hairline, as every other window's are. */
 .mx-app .mx-alert[role="alertdialog"] { position: relative; width: min(460px, 100%); display: flex; flex-direction: column; gap: 10px; padding: 22px 24px 0; border-radius: var(--r-dialog); box-shadow: var(--dialog-sh); animation: mx-fb-fade .18s var(--ease); }
-.mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 1.35; color: var(--fg); }
+.mx-alert-title { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; font-weight: 600; line-height: 20px; color: var(--fg); }
 .mx-alert-reason { margin: 0; font-size: 13px; line-height: 1.6; color: var(--fg2); overflow-wrap: anywhere; }
 .mx-alert-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 8px; }
 .mx-app .mx-alert[role="alertdialog"] .mx-alert-actions { margin: 12px -24px 0; padding: 14px 24px 16px; border-top: 1px solid var(--line); }
@@ -106,7 +106,7 @@
 
 /* ---- the dock's problem line: 40px, above everything else in the dock ---- */
 .mx-app .mx-problem-line { position: relative; z-index: 1; width: 100%; box-sizing: border-box; display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-height: 40px; margin-bottom: 8px; padding: 4px 6px 4px 12px; background: var(--m-card); border: 1px solid var(--line); border-radius: var(--r-panel); animation: mx-fb-rise .18s var(--ease); }
-.mx-problem-line .mx-fb-mark { width: 14px; font-size: 13px; line-height: 1; }
+.mx-problem-line .mx-fb-mark { width: 14px; height: 14px; font-size: 13px; line-height: 1; }
 .mx-problem-words { flex: 1 1 220px; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; }
 .mx-problem-words strong { font-size: 13px; font-weight: 600; color: var(--fg); white-space: nowrap; }
 .mx-problem-words span { min-width: 0; font-size: 12.5px; color: var(--fg2); }

@@ -637,7 +637,10 @@ impl Daemon {
         self.cut_conversations = cut;
         self.turn_continues = std::mem::take(&mut saved.turn_continues);
         self.conversations = std::mem::take(&mut saved.conversations);
-        self.pending_starts = std::mem::take(&mut saved.pending_starts);
+        // Nothing resumes a start that had no identity when the daemon went away, and a failed one
+        // cannot be told from one cut off. A chat the provider did create is still in its own store.
+        self.dirty |= !saved.pending_starts.is_empty();
+        saved.pending_starts.clear();
         self.conversation_operations = std::mem::take(&mut saved.conversation_operations);
         self.made_worktrees = std::mem::take(&mut saved.made_worktrees);
         let check_dir = self.check_dir.clone();
