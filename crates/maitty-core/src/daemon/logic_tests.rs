@@ -1728,6 +1728,27 @@ fn a_permission_ask_settled_without_you_stops_needing_you() {
     close(&mut d, &[t]);
 }
 
+/// Claude's PermissionRequest hook comes only as it shows its dialog. A dialog whose words the
+/// screen rules no longer know (Claude rewords them) still needs you until a hook says otherwise.
+#[test]
+fn a_claude_dialog_its_hook_reported_keeps_needing_you_until_a_hook_says_it_was_answered() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let secret = d.terms[&t].token.clone();
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "UserPromptSubmit"), None, Vec::new());
+    d.apply_hook(report(t, &secret, 0, HookStatus::Blocked, "PermissionRequest"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Blocked);
+    let pane = d.terms.get_mut(&t).unwrap();
+    pane.parser.process(b"\x1b[2J\x1b[H Allow this edit to note.txt?\r\n > Allow  Deny\r\n");
+    pane.blocked_at = Some(Instant::now() - super::status::UNASKED_QUESTION_GONE_AFTER - Duration::from_secs(1));
+    pane.last_output = Instant::now() - Duration::from_secs(30);
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Blocked, "words the rules don't know are no answer");
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "PostToolUse"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working, "its next hook says it was answered");
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn status_reports_apply_in_the_order_they_came() {
     let (mut d, mut rx) = daemon();

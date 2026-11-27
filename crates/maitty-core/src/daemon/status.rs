@@ -70,6 +70,8 @@ pub(super) const CANCELLED_WHY: &str = "progress bar gone, no turn end: cancelle
 /// heard) by the daemon that saw it happen, so it must not ring again on every restart.
 pub(super) const RESTORED_DONE_WHY: &str = "hook: SessionStart, done and unseen before the restart";
 const SCREEN_IDLE_RECOVERY_WHY: &str = "screen: explicit idle prompt recovered a missed turn end";
+/// The reason a Claude permission dialog gives a pane its needs-you (`hook_report`).
+const CLAUDE_DIALOG_WHY: &str = "hook: PermissionRequest";
 const SCREEN_STARTED_IDLE_WHY: &str = "screen: at its prompt, and no turn was started";
 
 /// Whether a reason for working is the agent's title alone, which an agent also turns while it
@@ -1291,9 +1293,17 @@ impl Daemon {
                     }
                 }
                 // A permission ask that auto mode (or the agent) settled by itself also sends
-                // no hook: a while on, with no question on screen at all, it's over.
+                // no hook: a while on, with no question on screen at all, it's over. Not one
+                // Claude's PermissionRequest hook reported for its own turn: that hook comes as
+                // Claude shows its dialog, and a later hook (or your keys) says when it is
+                // answered, so a dialog Claude rewords is not taken for one that went away. A
+                // helper's ask can be settled where no hook reports it, so that one still can.
+                let own_dialog = name == "claude"
+                    && t.status_why == CLAUDE_DIALOG_WHY
+                    && t.blocked_by_helper.is_none();
                 if t.status == Status::Blocked
                     && !NATIVE_PROMPT_LIFECYCLE.contains(&name.as_str())
+                    && !own_dialog
                     && t.blocked_at
                         .is_some_and(|b| b.elapsed() > UNASKED_QUESTION_GONE_AFTER)
                     && !self.questions.iter().any(|(q, ..)| q.term == t.id)
