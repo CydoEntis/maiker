@@ -283,6 +283,22 @@ fn main() {
         return;
     }
 
+    // A newer Claude Code: an output frame and a control request this adapter has never seen.
+    // The frame is skipped, the request is refused with an error, and the turn goes on.
+    if scenario == "newer-release" {
+        for frame in [
+            r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#,
+            r#"{"type":"future_status_frame","detail":"something new"}"#,
+            r#"{"request_id":"future-request","request":{"subtype":"future_request_kind"},"type":"control_request"}"#,
+        ] {
+            writeln!(output, "{frame}").unwrap();
+        }
+        output.flush().unwrap();
+        line.clear();
+        input.read_line(&mut line).unwrap();
+        assert!(line.contains(r#""request_id":"future-request""#) && line.contains(r#""subtype":"error""#), "{line}");
+    }
+
     if scenario == "interrupt" {
         writeln!(output, "{}", r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#).unwrap();
         output.flush().unwrap();

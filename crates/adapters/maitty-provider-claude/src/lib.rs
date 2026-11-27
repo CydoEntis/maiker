@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use maitty_shared::conversation::TurnChoice;
 use std::ffi::OsString;
@@ -15,6 +15,8 @@ pub use hooks::{
 pub use projection::{MAX_PENDING_TOOLS, TurnProjector};
 
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
+/// How much of an unknown frame's type is kept for the log: the name is the provider's, not ours.
+pub const MAX_UNKNOWN_KIND_CHARS: usize = 64;
 const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327", "2.1.330"];
 
 #[derive(Debug, PartialEq)]
@@ -60,6 +62,12 @@ pub enum OutputFrame {
     },
     ToolResults(Vec<ToolResult>),
     Other,
+    /// A frame type this adapter does not know. Claude Code adds output frames between releases;
+    /// a frame that asks nothing is skipped (and logged by the caller), never a reason to end a
+    /// turn. Requests that wait for an answer arrive as `ControlRequest` and stay strict.
+    Unknown {
+        kind: String,
+    },
 }
 
 #[derive(Debug, PartialEq)]
@@ -117,7 +125,9 @@ pub fn parse_output_frame(line: &str) -> Result<OutputFrame> {
         }
         "user" => parse_user_frame(&frame),
         "assistant" | "system" | "rate_limit_event" | "tool_progress" => Ok(OutputFrame::Other),
-        _ => bail!("Unsupported Claude output frame type: {kind}"),
+        _ => Ok(OutputFrame::Unknown {
+            kind: kind.chars().take(MAX_UNKNOWN_KIND_CHARS).collect(),
+        }),
     }
 }
 
@@ -505,7 +515,10 @@ mod tests {
             parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"hello"}}}"#).unwrap(),
             OutputFrame::TextDelta { block_index: 2, text: "hello".into() }
         );
-        assert!(parse_output_frame(r#"{"type":"unknown_future_event"}"#).is_err());
+        assert_eq!(
+            parse_output_frame(r#"{"type":"unknown_future_event"}"#).unwrap(),
+            OutputFrame::Unknown { kind: "unknown_future_event".into() }
+        );
     }
 
     #[test]

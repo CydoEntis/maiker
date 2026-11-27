@@ -251,7 +251,8 @@ impl TurnProjector {
             }
             OutputFrame::Initialized { .. }
             | OutputFrame::ControlResponse { .. }
-            | OutputFrame::Other => {}
+            | OutputFrame::Other
+            | OutputFrame::Unknown { .. } => {}
         }
         Ok(events)
     }
