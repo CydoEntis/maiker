@@ -95,7 +95,30 @@ fn framed(stream: Stream) -> (Reader, Writer) {
 }
 
 pub async fn receive_server(reader: &mut Reader) -> Result<Option<ServerMsg>> {
-    receive(reader).await
+    receive(reader).await.map_err(|error| {
+        if maitty_ipc_transport::is_decode_error(&error) {
+            error.context(UNREADABLE_ANSWER)
+        } else {
+            error
+        }
+    })
+}
+
+/// A message from the service this app cannot read: one a newer service sent.
+pub const UNREADABLE_ANSWER: &str =
+    "The Maiker service sent something this app cannot read. Update the app; if it is already up to date, restart the service in Settings.";
+
+/// The next message on a stream, passing over one this app cannot read: a newer service may push
+/// one added after this app, and the rest of the stream is still good.
+pub async fn receive_pushed(reader: &mut Reader) -> Result<Option<ServerMsg>> {
+    loop {
+        match receive(reader).await {
+            Err(error) if maitty_ipc_transport::is_decode_error(&error) => {
+                tracing::warn!("skipped a message from the service: {error:#}");
+            }
+            other => return other,
+        }
+    }
 }
 
 pub async fn open_for_user() -> Result<(Reader, Writer)> {
@@ -238,6 +261,24 @@ pub async fn send_message(writer: &mut Writer, message: &ClientMsg) -> Result<()
 #[cfg(test)]
 mod tests {
     use super::daemon_command;
+
+    /// A newer service may push a message added after this app: the stream goes on past it, and
+    /// an answer that will not decode says what to do instead of a decoder's words.
+    #[tokio::test]
+    async fn a_pushed_message_this_app_cannot_read_is_passed_over() {
+        let (here, there) = tokio::io::duplex(1024);
+        let (here_read, here_write) = tokio::io::split(here);
+        let (there_read, there_write) = tokio::io::split(there);
+        let (mut reader, _writer) = maitty_ipc_transport::framed_parts(here_read, here_write);
+        let (_their_reader, mut writer) = maitty_ipc_transport::framed_parts(there_read, there_write);
+        for _ in 0..2 {
+            super::send(&mut writer, &"AMessageAddedLater").await.unwrap();
+            super::send(&mut writer, &super::ServerMsg::Bye).await.unwrap();
+        }
+        assert!(matches!(super::receive_pushed(&mut reader).await, Ok(Some(super::ServerMsg::Bye))));
+        let error = super::receive_server(&mut reader).await.unwrap_err();
+        assert!(error.to_string().contains("cannot read"), "{error}");
+    }
 
     #[test]
     fn gui_daemon_drops_pane_and_remote_identity_but_keeps_user_configuration() {

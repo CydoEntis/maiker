@@ -48,6 +48,7 @@ impl State {
             _ if failed => State::Problem,
             Status::Done => State::Done,
             Status::Idle | Status::None => State::Idle,
+            Status::Unknown => State::Unknown,
         }
     }
 }

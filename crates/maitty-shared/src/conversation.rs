@@ -407,6 +407,9 @@ pub enum RecoveryState {
     Running,
     Transferring,
     RecoveryRequired,
+    /// A value a newer peer sent that this build does not know (`crate::protocol::UNKNOWN_VALUES_READ_SINCE`).
+    #[serde(other)]
+    Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

@@ -8,10 +8,19 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 
-/// Bump when a message shape changes incompatibly (docs/API_PATTERNS.md, *Project-specific: API
-/// style*). A client and a daemon on different versions talk only inside the window
-/// `COMPATIBLE_SINCE` opens; outside it they refuse, and so do hooks.
-pub const PROTOCOL_VERSION: u32 = 130;
+/// Bump with every change to a message: it is what a peer checks before it uses something new
+/// (`ServerMsg::introduced_in`, the `*_SINCE` constants). Changes are additive, so most bumps
+/// leave `COMPATIBLE_SINCE` alone (docs/API_PATTERNS.md, *Project-specific: API style*). A
+/// client and a daemon on different versions talk only inside the window `COMPATIBLE_SINCE`
+/// opens; outside it they refuse, and so do hooks.
+pub const PROTOCOL_VERSION: u32 = 131;
+
+/// The first version that reads a value it does not know in `Status`, `SubagentState`,
+/// `TurnKind` or `RecoveryState` as that enum's `Unknown`, instead of failing the whole message.
+/// A new value in one of them leaves `COMPATIBLE_SINCE` alone once `COMPATIBLE_SINCE` is at or
+/// after this; until then it moves `COMPATIBLE_SINCE` here, and no further. Any other enum an
+/// older peer is sent gets an `Unknown` of its own first, so its next value is free too.
+pub const UNKNOWN_VALUES_READ_SINCE: u32 = 131;
 
 /// The longest side question, in characters.
 pub const SIDE_QUESTION_MAX_CHARS: usize = 4000;
@@ -454,11 +463,12 @@ pub struct AllowedCommand {
 }
 
 /// The oldest `PROTOCOL_VERSION` this build still talks to, in either role. It stays behind
-/// `PROTOCOL_VERSION` only across changes an older peer can live with: a new message it is never
-/// sent (`ServerMsg::introduced_in`), or a field it does not need. Set it to the current version
+/// `PROTOCOL_VERSION` across every change an older peer can live with: a new message it is never
+/// sent (`ServerMsg::introduced_in`), a field it does not need (`#[serde(default)]`), or a new
+/// value it reads as `Unknown` (`UNKNOWN_VALUES_READ_SINCE`). Set it to the current version only
 /// in the change that removes, renames or retypes anything an older peer reads or writes, or
-/// that adds a value inside a message it is still sent (a new `Status`, say): such a peer would
-/// misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0019): a peer before
+/// that adds a value to an enum without `Unknown` inside a message it is still sent: such a peer
+/// would misread, and that is refused. 121 added a provider (`Provider::Acp`, ADR 0019): a peer before
 /// it cannot read a list of conversations that holds one. 122 added a start a daemon before it
 /// cannot read (`StartTarget::Agent`), so a client would wait on a chat that never starts.
 pub const COMPATIBLE_SINCE: u32 = 122;
@@ -1637,6 +1647,9 @@ pub enum SubagentState {
     Failed,
     Cancelled,
     ConnectionLost,
+    /// A value a newer peer sent that this build does not know (`UNKNOWN_VALUES_READ_SINCE`).
+    #[serde(other)]
+    Unknown,
 }
 
 impl SubagentState {
@@ -2118,6 +2131,10 @@ pub enum Status {
     Blocked,
     /// Finished a turn and nobody has looked yet.
     Done,
+    /// A status a newer peer sent that this build does not know. Shown as not known, never read
+    /// as any of the others (`UNKNOWN_VALUES_READ_SINCE`).
+    #[serde(other)]
+    Unknown,
 }
 
 impl Status {
@@ -2128,16 +2145,19 @@ impl Status {
             Status::Working => "working",
             Status::Blocked => "blocked",
             Status::Done => "done",
+            Status::Unknown => "unknown",
         }
     }
-    /// Sort order for "what needs me": blocked first, then done, working, idle.
+    /// Sort order for "what needs me": blocked first, then done, working, idle. A status this
+    /// build does not know may be one that needs you, so it sorts ahead of idle.
     pub fn urgency(self) -> u8 {
         match self {
             Status::Blocked => 0,
             Status::Done => 1,
             Status::Working => 2,
-            Status::Idle => 3,
-            Status::None => 4,
+            Status::Unknown => 3,
+            Status::Idle => 4,
+            Status::None => 5,
         }
     }
 }
@@ -2629,6 +2649,9 @@ pub enum TurnKind {
     CommandStarted,
     /// A command finished (OSC 133 D); `detail` is its exit code when it reported one.
     CommandFinished,
+    /// A value a newer peer sent that this build does not know (`UNKNOWN_VALUES_READ_SINCE`).
+    #[serde(other)]
+    Unknown,
 }
 
 pub fn one_or_many_checks<'de, D: serde::Deserializer<'de>>(
@@ -4557,6 +4580,30 @@ mod tests {
             reasons,
             BTreeMap::from([(3, RemovalReason::Exited), (4, RemovalReason::Unknown)])
         );
+    }
+
+    /// A value a newer peer added to one of these enums must not cost the message it is in, and
+    /// must never be read as one of the values this build knows (non-negotiable 5).
+    #[test]
+    fn a_value_from_a_newer_peer_reads_as_unknown_never_as_a_known_one() {
+        fn read<T: serde::de::DeserializeOwned>(value: &str) -> T {
+            decode(&rmp_serde::to_vec_named(value).unwrap()).expect("a new value is not an error")
+        }
+        assert_eq!(read::<Status>("Teleporting"), Status::Unknown);
+        assert_eq!(read::<SubagentState>("Teleporting"), SubagentState::Unknown);
+        assert_eq!(read::<TurnKind>("Teleporting"), TurnKind::Unknown);
+        assert_eq!(read::<crate::conversation::RecoveryState>("Teleporting"), crate::conversation::RecoveryState::Unknown);
+        assert_eq!(read::<Status>("Working"), Status::Working, "known values still read as themselves");
+        assert_eq!(Status::Unknown.label(), "unknown");
+        assert!(Status::Unknown.urgency() < Status::Idle.urgency(), "it may need you, so it sorts ahead of idle");
+        const { assert!(UNKNOWN_VALUES_READ_SINCE <= PROTOCOL_VERSION) };
+    }
+
+    /// The same, inside a pane's info: the rest of it still arrives.
+    #[test]
+    fn a_pane_with_a_status_from_a_newer_daemon_still_arrives() {
+        let read = pane_from(serde_json::json!({ "status": "Teleporting" }));
+        assert_eq!((read.id, read.status), (3, Status::Unknown));
     }
 
     #[test]

@@ -781,7 +781,7 @@ impl Daemon {
             Status::Blocked => Some(TurnKind::NeedsYou),
             Status::Done => Some(TurnKind::Done),
             Status::Idle => Some(TurnKind::Idle),
-            Status::None => None,
+            Status::None | Status::Unknown => None,
         } {
             t.note(kind, why);
         }

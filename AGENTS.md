@@ -113,13 +113,15 @@ has to be right, and sessions survive the UI closing.
    detaching the client must never kill a pane. Anything that touches PTYs or
    process lifetime lives in `crates/maitty-core/src/daemon/`. Only one daemon runs per socket
    (ADR 0001).
-2. **Bump `PROTOCOL_VERSION`** (`crates/maitty-shared/src/protocol.rs`) when a
-   message shape changes incompatibly: a field removed, renamed or retyped, or a new enum variant. An
-   added `#[serde(default)]` field needs no bump when a test decodes the old
-   shape. In the same change, decide `COMPATIBLE_SINCE`: it stays only when an older peer can
-   live with the change (a new message with its own `introduced_in` arm); anything an older
-   peer would misread moves it to the new version. A client and daemon that can't read each other must refuse to talk, not
-   misparse. See [API_PATTERNS](docs/API_PATTERNS.md#project-specific-api-style) and ADR 0002.
+2. **Change the protocol by adding** (`crates/maitty-shared/src/protocol.rs`): a new message
+   with its own `introduced_in` arm, a `#[serde(default)]` field (a test decodes the old shape),
+   or a new value in an enum that reads values it does not know as `Unknown`. Bump
+   `PROTOCOL_VERSION` for anything a peer must check for before using it; `COMPATIBLE_SINCE`
+   stays. Only a real break moves `COMPATIBLE_SINCE` to the new version: a field removed,
+   renamed or retyped, or a new value in an enum without `Unknown` that an older peer is sent.
+   A value a build does not know is shown as not known, never as one it knows, and a client and
+   daemon that can't read each other must refuse to talk, not misparse. See
+   [API_PATTERNS](docs/API_PATTERNS.md#project-specific-api-style) and ADR 0002.
 3. **Windows is a first-class target.** Every change builds and behaves on
    Windows (ConPTY, named pipes, PowerShell) as well as Linux and macOS; the
    cross-checks in the gate are not optional (ADR 0008).

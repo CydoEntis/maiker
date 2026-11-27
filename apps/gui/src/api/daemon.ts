@@ -11,12 +11,12 @@ import { previewConversations, type Conversation, type SessionStatus } from '@/d
 /** One question of an agent's prompt; `multi` when it takes any number of its choices. */
 const AskQuestionSchema = z.object({ question: z.string(), choices: z.array(z.string()), multi: z.boolean().default(false) })
 
-const StatusSchema = z.enum(['None', 'Idle', 'Working', 'Blocked', 'Done'])
+const StatusSchema = z.enum(['None', 'Idle', 'Working', 'Blocked', 'Done', 'Unknown'])
 // A subagent as the daemon reports it (`SubagentActivity`); times are unix seconds.
 const SubagentActivitySchema = z.object({
   id: z.string(),
   name: z.string(),
-  state: z.enum(['Starting', 'Working', 'WaitingForInput', 'AwaitingApproval', 'Completed', 'Failed', 'Cancelled', 'ConnectionLost']),
+  state: z.enum(['Starting', 'Working', 'WaitingForInput', 'AwaitingApproval', 'Completed', 'Failed', 'Cancelled', 'ConnectionLost', 'Unknown']),
   task: z.string().nullable().default(null),
   started_at: z.number().int().nonnegative().nullable().default(null),
   updated_at: z.number().int().nonnegative().default(0),
@@ -42,7 +42,7 @@ const ConversationSummarySchema = z.object({
   agent: z.string().nullable().default(null),
   cwd: z.string(),
   worktree: z.string().nullable(),
-  state: z.enum(['Stopped', 'Running', 'Transferring', 'RecoveryRequired']),
+  state: z.enum(['Stopped', 'Running', 'Transferring', 'RecoveryRequired', 'Unknown']),
   status: StatusSchema,
   native_term: z.number().int().nonnegative().nullable(),
   checks: z.array(z.unknown()),
@@ -151,7 +151,7 @@ const TerminalSessionSchema = z.object({
   exit: z.object({ code: z.number().int().nullable().default(null), at: z.number().default(0) }).nullable().default(null),
   timeline: z.array(z.object({
     at: z.number().int().nonnegative(),
-    kind: z.enum(['Working', 'NeedsYou', 'Done', 'Idle', 'Prompt', 'CommandStarted', 'CommandFinished']),
+    kind: z.enum(['Working', 'NeedsYou', 'Done', 'Idle', 'Prompt', 'CommandStarted', 'CommandFinished', 'Unknown']),
     detail: z.string().default(''),
   })).default([]),
   usage: z.object({
@@ -1191,7 +1191,10 @@ function toTerminalConversation(term: TerminalSession, workspaces: WorkspaceSumm
       ? 'working'
       : term.status === 'Done'
         ? 'done'
-        : 'idle'
+        // A status a newer service sent that this app does not know: never shown as one it knows.
+        : term.status === 'Unknown'
+          ? 'unknown'
+          : 'idle'
   return {
     id: terminalSessionId(term.id, machine?.name ?? null),
     generation: 0,
@@ -1285,7 +1288,9 @@ function toConversation(summary: ConversationSummary, workspaces: WorkspaceSumma
         ? 'working'
         : summary.status === 'Done'
           ? 'done'
-          : 'idle'
+          : summary.status === 'Unknown'
+            ? 'unknown'
+            : 'idle'
   const project = cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? 'Project'
   // A chat session is a conversation the daemon started itself: it has no terminal, and the window writes to it
   // (ADR 0003). A followed pane's conversation is read-only and belongs to that pane, so it is not one.

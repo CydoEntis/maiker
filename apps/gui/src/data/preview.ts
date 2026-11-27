@@ -2,7 +2,8 @@ import type { Check } from '@/features/inspect/checks'
 import type { PullRequest } from '@/features/workspace/model/pullRequest'
 export type SessionStatus = 'working' | 'needs-you' | 'done' | 'idle' | 'recovery' | 'unknown'
 
-export type TurnKind = 'Working' | 'NeedsYou' | 'Done' | 'Idle' | 'Prompt' | 'CommandStarted' | 'CommandFinished'
+/** `Unknown` is a value a newer service sent that this app does not know. */
+export type TurnKind = 'Working' | 'NeedsYou' | 'Done' | 'Idle' | 'Prompt' | 'CommandStarted' | 'CommandFinished' | 'Unknown'
 
 /** The question a permission prompt asks, from the agent's own hook. */
 export type PermissionAsk = { tool: string; detail: string; answerable: boolean; choices?: readonly string[]; /** A prompt that asks several questions at once, each with one answer, in the order the agent shows them. */ questions?: readonly AskedQuestion[]; /** A prompt with a question that takes several answers: every question it asks, in order. */ form?: readonly AskedQuestion[] }
@@ -66,7 +67,8 @@ export type TerminalDetails = {
 }
 
 /** The runtime's states for a subagent (`SubagentState` in the protocol). */
-export type SubagentState = 'Starting' | 'Working' | 'WaitingForInput' | 'AwaitingApproval' | 'Completed' | 'Failed' | 'Cancelled' | 'ConnectionLost'
+/** `Unknown` is a state a newer service sent that this app does not know. */
+export type SubagentState = 'Starting' | 'Working' | 'WaitingForInput' | 'AwaitingApproval' | 'Completed' | 'Failed' | 'Cancelled' | 'ConnectionLost' | 'Unknown'
 
 /** One subagent of a session, as the daemon reports it. Times are unix seconds. */
 export type SubagentActivity = {

@@ -113,10 +113,21 @@ and passes over a request it cannot decode from a newer client; a client checks
 One client is stricter: the desktop window's line to another machine (`Dial::newest_only`)
 refuses a daemon on an older version even inside the window, so the machine shows
 `needs-update` and the window offers its update.
-Bump `PROTOCOL_VERSION` when a message shape changes incompatibly: a field removed, renamed
-or retyped, or a new enum variant (an old decoder rejects it). An added field with
-`#[serde(default)]` is compatible (messages are named msgpack maps and unknown fields
-are ignored) and needs no bump, provided a test decodes the old shape. Hooks say Hello
+Changes are additive, so the window rarely closes. A new message gets its own `introduced_in`
+arm and `*_SINCE` constant. An added field with `#[serde(default)]` is compatible (messages are
+named msgpack maps and unknown fields are ignored), provided a test decodes the old shape. A new
+value in `Status`, `SubagentState`, `TurnKind`, `RecoveryState` or `RemovalReason` is compatible
+too: each ends in `#[serde(other)] Unknown`, which a peer from `UNKNOWN_VALUES_READ_SINCE` (131)
+on reads a value it does not know as, and shows as not known (the terminal app's `┆` and "not
+known", the desktop app's `unknown`), never as one of the others. Bump `PROTOCOL_VERSION` for
+anything a peer checks for; `COMPATIBLE_SINCE` stays. Until `COMPATIBLE_SINCE` reaches 131, a
+new value in one of those enums still moves it to 131, since older peers lack `Unknown`. Any
+other enum an older peer is sent gets an `Unknown` of its own, in a change ahead of its first
+new value. Only a real break moves `COMPATIBLE_SINCE` to the new version: a field removed,
+renamed or retyped, or a new value in an enum without `Unknown`. A client passes over a pushed
+message it cannot decode (`connections::read_until_lost`, the desktop app's
+`ipc::receive_pushed`) and says so when an answer it waited for is one
+(`ipc::UNREADABLE_ANSWER`). Hooks say Hello
 too, but a hook or usage report is also accepted by an older daemon back to
 `REPORTS_READ_SINCE` (`ipc::open_for_report`), so an update does not stop hooked panes
 reporting before the daemon restarts. When `Hook`, `Usage` or `HookStatus` changes in a way an

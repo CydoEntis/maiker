@@ -38,12 +38,17 @@ every client must be able to talk to it, including across versions and over ssh.
 
 ## Consequences
 
-- Adding a variant or retyping a field needs a version bump and a test that decodes the old shape.
-- A bump keeps `COMPATIBLE_SINCE` where it is only when an older peer can live with the change:
-  a new message, given its own arm in `introduced_in`. A field removed, renamed or retyped, or a
-  new value inside a message an older peer is still sent (a new `Status` in a snapshot), moves
-  `COMPATIBLE_SINCE` to the new version: the older peer would misread it, and status must never
-  be misreported (non-negotiable 5).
+- Changes are additive (amended at protocol 131, after the window closed on nearly every
+  release). A new message gets its own arm in `introduced_in`; a new field is
+  `#[serde(default)]`; a new value goes into an enum that reads values it does not know as
+  `Unknown` (`#[serde(other)]`, from `UNKNOWN_VALUES_READ_SINCE`), which a peer shows as not
+  known and never as one of its own values, so status is never misreported (non-negotiable 5).
+  Each bumps `PROTOCOL_VERSION`, so a peer can check for it, and leaves `COMPATIBLE_SINCE`.
+- Only a real break moves `COMPATIBLE_SINCE` to the new version: a field removed, renamed or
+  retyped, or a new value in an enum without `Unknown` inside a message an older peer is still
+  sent. The older peer would misread it.
+- A client passes over a pushed message it cannot decode, as the daemon does a newer client's
+  request, so one new message never costs the connection.
 - The window lets an updated app keep using a daemon that has not restarted yet, and one
   computer keep using a machine that is a release behind or ahead. It costs a decision at every
   bump, and code that must keep reading old shapes until `COMPATIBLE_SINCE` passes them.

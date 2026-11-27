@@ -89,7 +89,12 @@ pub(in crate::client) enum Kind {
     Never,
     Idle,
     Asleep,
+    /// A status a newer server sent that this build does not know.
+    Unknown,
 }
+
+/// A status this build does not know: a broken line, never a shape that claims a state.
+const UNKNOWN_GLYPH: &str = "┆";
 
 /// How a session is marked: its glyph, the colour that backs it, and the word that says it.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -119,6 +124,9 @@ impl Kind {
         if asleep {
             return Kind::Asleep;
         }
+        if status == Status::Unknown {
+            return Kind::Unknown;
+        }
         let shown = reported_check(status, check).map(|c| match c.state {
             CheckState::Checking | CheckState::Pending => Kind::Checking,
             CheckState::NeedsApproval => Kind::Approve,
@@ -134,6 +142,7 @@ impl Kind {
             Status::Blocked => Kind::Needs,
             Status::Done => Kind::Done,
             Status::Idle | Status::None => Kind::Idle,
+            Status::Unknown => Kind::Unknown,
         })
     }
 
@@ -149,6 +158,7 @@ impl Kind {
             Kind::Couldnt | Kind::Never => "not checked",
             Kind::Idle => "idle",
             Kind::Asleep => "asleep",
+            Kind::Unknown => "not known",
         }
     }
 
@@ -163,14 +173,14 @@ impl Kind {
             Kind::Stale | Kind::Over => t.text,
             Kind::Failed => t.err,
             Kind::Couldnt | Kind::Never => t.violet(),
-            Kind::Idle | Kind::Asleep => t.muted,
+            Kind::Idle | Kind::Asleep | Kind::Unknown => t.muted,
         }
     }
 
     /// Its glyph. Working shows the user's spinner frame and checking the ring at `ring_step`.
     pub fn glyph<'a>(self, g: &'static Glyphs, ring_step: usize, working: &'a str) -> &'a str {
         if g.dots && !matches!(self, Kind::Working | Kind::Checking) {
-            return if matches!(self, Kind::Idle | Kind::Asleep) {
+            return if matches!(self, Kind::Idle | Kind::Asleep | Kind::Unknown) {
                 g.idle
             } else {
                 g.needs
@@ -187,6 +197,7 @@ impl Kind {
             Kind::Couldnt | Kind::Never => g.couldnt,
             Kind::Idle => g.idle,
             Kind::Asleep => g.asleep,
+            Kind::Unknown => UNKNOWN_GLYPH,
         }
     }
 }
