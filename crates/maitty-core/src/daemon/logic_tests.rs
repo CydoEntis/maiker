@@ -10776,3 +10776,22 @@ fn a_helpers_record_is_read_only_for_a_helper_the_panes_agent_reported_and_only_
     assert!(matches!(agent.try_recv(), Ok(ServerMsg::Error(_))), "another pane's agent may not read it");
     close(&mut d, &[t, asking]);
 }
+
+/// A background part that panics is turned off and reported once; the daemon, and every session
+/// it owns, carries on.
+#[test]
+fn a_background_part_that_panics_is_turned_off_not_the_daemon() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    d.guarded("Test part", |_| panic!("a bug in a background part"));
+    let mut ran_again = false;
+    d.guarded("Test part", |_| ran_again = true);
+    assert!(!ran_again, "a broken part stays off");
+    assert_eq!(noticed(&heard(&mut seen), "Test part stopped after an internal error"), 1);
+    let mut other_ran = false;
+    d.guarded("Another part", |_| other_ran = true);
+    assert!(other_ran, "other parts still run");
+    assert!(d.terms.contains_key(&t));
+    close(&mut d, &[t]);
+}

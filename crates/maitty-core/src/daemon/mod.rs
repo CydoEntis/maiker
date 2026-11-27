@@ -637,6 +637,8 @@ struct Daemon {
     auto_undo: Option<AutoUndo>,
     /// When a pane's process or a pane's agent last ended on its own (see `LOSS_HOLD`).
     last_loss: Option<Instant>,
+    /// Background parts that panicked and are off until the daemon restarts (`Daemon::guarded`).
+    broken_parts: BTreeSet<&'static str>,
 }
 
 /// The daemon's environment is every session's, and it keeps it across its own restarts. Started
@@ -747,6 +749,15 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
     })
 }
 
+/// What a caught panic said, for the log.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".into())
+}
+
 fn init_logging() {
     let dir = crate::config::data_dir();
     let _ = std::fs::create_dir_all(&dir);
@@ -766,6 +777,13 @@ fn init_logging() {
             )
             .try_init();
     }
+    // The daemon runs detached, so a panic's own report to stderr goes nowhere: the log keeps
+    // where it happened, which `Daemon::guarded` cannot see once it has caught it.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info}");
+        default_hook(info);
+    }));
 }
 
 async fn serve(
@@ -1501,6 +1519,37 @@ impl Daemon {
             repo_index: repo_index::Index::default(),
             last_loss: None,
             auto_undo: None,
+            broken_parts: BTreeSet::new(),
+        }
+    }
+
+    /// Run one background part of the daemon so that a bug in it cannot end the daemon, and with
+    /// it every session it owns. A part that panics is turned off until the daemon restarts (it
+    /// would only panic again each tick), and every window is told once.
+    fn guarded(&mut self, part: &'static str, work: impl FnOnce(&mut Self)) {
+        if self.broken_parts.contains(part) {
+            return;
+        }
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(self)));
+        if let Err(panic) = outcome {
+            tracing::error!("{part} panicked and is off until the service restarts: {}", panic_text(&*panic));
+            self.broken_parts.insert(part);
+            self.broadcast(
+                |_| true,
+                ServerMsg::Notice(format!(
+                    "{part} stopped after an internal error; your sessions are not affected. Restart the service to turn it back on."
+                )),
+            );
+        }
+    }
+
+    /// Handle one event, so that a bug in handling it cannot end the daemon. Unlike a background
+    /// part, event handling is never turned off: the next event may well be handled fine.
+    fn handle_guarded(&mut self, ev: Ev) {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.handle(ev)));
+        if let Err(panic) = outcome {
+            tracing::error!("handling an event panicked; the event was dropped: {}", panic_text(&*panic));
+            self.dirty = true;
         }
     }
 
@@ -1509,10 +1558,10 @@ impl Daemon {
         loop {
             tokio::select! {
                 Some(ev) = rx.recv() => {
-                    self.handle(ev);
+                    self.handle_guarded(ev);
                     // Drain whatever else is queued before broadcasting state once.
                     while let Ok(ev) = rx.try_recv() {
-                        self.handle(ev);
+                        self.handle_guarded(ev);
                     }
                 }
                 _ = tick.tick() => {
@@ -1520,27 +1569,27 @@ impl Daemon {
                     self.finish_closes();
                     self.finish_chat_closes();
                     self.close_ended_agents();
-                    self.start_waiting_helpers();
+                    self.guarded("Starting waiting helpers", Self::start_waiting_helpers);
                     self.expire_warm();
-                    self.wake_snoozed(term::unix_now());
+                    self.guarded("Waking snoozed sessions", |d| d.wake_snoozed(term::unix_now()));
                     self.update_statuses();
                     self.settled_alerts();
-                    self.phone_alerts();
-                    self.auto_continue();
-                    self.poll_codex();
-                    self.poll_effort();
-                    self.follow_tick();
-                    self.hook_watch_tick();
+                    self.guarded("Phone alerts", Self::phone_alerts);
+                    self.guarded("Auto-continue", Self::auto_continue);
+                    self.guarded("Codex session reading", Self::poll_codex);
+                    self.guarded("Effort reading", Self::poll_effort);
+                    self.guarded("Following terminal agents' chats", Self::follow_tick);
+                    self.guarded("Hook watching", Self::hook_watch_tick);
                     self.deliver_queued();
-                    self.usage_store.save_if_due(term::unix_now());
-                    self.poll_git();
-                    self.sweep_secrets();
-                    self.poll_prs();
+                    self.guarded("Usage saving", |d| d.usage_store.save_if_due(term::unix_now()));
+                    self.guarded("Git status", Self::poll_git);
+                    self.guarded("Secret expiry", Self::sweep_secrets);
+                    self.guarded("Pull request polling", Self::poll_prs);
                     if self.last_vanished_check.elapsed() >= VANISHED_CHECK_EVERY {
                         self.last_vanished_check = Instant::now();
-                        self.forget_vanished_worktrees();
+                        self.guarded("Worktree clean-up", Self::forget_vanished_worktrees);
                     }
-                    self.publish_activity();
+                    self.guarded("Activity publishing", Self::publish_activity);
                     if self.last_save.elapsed() > SAVE_EVERY {
                         self.last_save = Instant::now();
                         self.persist(false);

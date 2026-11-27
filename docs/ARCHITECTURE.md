@@ -354,6 +354,13 @@ docs/                             architecture, roadmap and design specs
 
 ## Project-specific: patterns and conventions
 
+**A bug in one daemon feature never ends the daemon.** The daemon owns every session, so its
+death kills every agent. Each background part on the event loop's tick (PR polling, usage, git
+status, secret expiry, phone alerts, …) runs through `Daemon::guarded`: a panic is logged, that
+part is off until the daemon restarts, and every window is told once. Event handling goes through
+`handle_guarded`, which drops the one event that panicked. A new poller on the tick is wrapped the
+same way; the core steps (closes, status, saving) are not, because the daemon cannot run without them.
+
 **The app's names** live in `apps/tui/Cargo.toml` and nowhere else in the code (ADR 0008, 0012): the
 package name is the command, `[package.metadata.brand]` holds the name people see, the daemon's
 name (`maikerd`), the environment prefix (`AGENT`, brand-free) and the names each had before.
