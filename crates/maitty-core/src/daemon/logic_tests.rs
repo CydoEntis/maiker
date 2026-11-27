@@ -4275,6 +4275,27 @@ fn a_late_codex_notify_does_not_end_the_next_turn() {
     close(&mut d, &[id]);
 }
 
+/// A Claude pane restored done and unseen comes back Done, without ringing again: the
+/// finish was announced before the restart, and a pane nobody opens is saved unseen each time.
+#[test]
+fn a_restored_unseen_finish_is_shown_done_but_not_announced_again() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.terms.get_mut(&t).unwrap().agent = Some("claude".into());
+    d.terms.get_mut(&t).unwrap().restore_unseen = true;
+    let mut say = claude_reports(&mut d, t);
+    let mut seen = viewer(&mut d);
+    say(&mut d, HookStatus::Idle, "SessionStart", &[]);
+    assert_eq!(d.terms[&t].status, Status::Done);
+    assert!(!announced(&heard(&mut seen), Status::Done), "no finished sound on restart");
+    assert!(d.terms[&t].alert_due.is_none(), "no desktop notification queued");
+    // Its next real finish still rings.
+    say(&mut d, HookStatus::Working, "UserPromptSubmit", &[]);
+    say(&mut d, HookStatus::Done, "Stop", &[]);
+    assert!(announced(&heard(&mut seen), Status::Done));
+    close(&mut d, &[t]);
+}
+
 /// A Codex pane restored done and unseen: Esc on its next turn is a quiet stop, not a finish.
 #[test]
 fn a_restored_codex_panes_esc_is_not_a_finish() {

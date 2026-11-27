@@ -66,6 +66,9 @@ const CODEX_QUESTION_WHY: &str = "screen: Codex has an unanswered question";
 /// Why a turn that ended without a turn-end report is read as cancelled; nothing was finished,
 /// so nothing is checked.
 pub(super) const CANCELLED_WHY: &str = "progress bar gone, no turn end: cancelled";
+/// A finish restored from before a restart: shown as Done, but it was announced (and maybe
+/// heard) by the daemon that saw it happen, so it must not ring again on every restart.
+pub(super) const RESTORED_DONE_WHY: &str = "hook: SessionStart, done and unseen before the restart";
 const SCREEN_IDLE_RECOVERY_WHY: &str = "screen: explicit idle prompt recovered a missed turn end";
 /// A "done" held while subagents run is let through once none has been heard from for this
 /// long (one died without saying so). Background agents can run, and wait on CI, for a while.
@@ -506,6 +509,7 @@ impl Daemon {
         if agent == "codex" && event == "agent-turn-complete" && t.lifecycle_hooks {
             return;
         }
+        let mut restored_done = false;
         let new = match status {
             HookStatus::Same => {
                 // A subagent finished: if the turn was waiting on it, it's done now.
@@ -545,7 +549,10 @@ impl Daemon {
             // After a restart, a session that was done and unseen comes back done.
             // Only the restored agent's own start says so: Codex reports none, and its first Idle
             // is an Esc, which is no finish.
-            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => Status::Done,
+            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => {
+                restored_done = true;
+                Status::Done
+            }
             HookStatus::Gone => {
                 t.hooked = false;
                 t.lifecycle_hooks = false;
@@ -635,7 +642,9 @@ impl Daemon {
         } else {
             event
         };
-        let why = if paused {
+        let why = if restored_done {
+            RESTORED_DONE_WHY.to_string()
+        } else if paused {
             format!("hook: {why}, waiting on its background work")
         } else {
             format!("hook: {why}")
@@ -827,7 +836,8 @@ impl Daemon {
         }
         // A finish waits for its check: `check_settled` says it once the result is in.
         let held = new == Status::Done && self.terms.get(&term).is_some_and(Term::check_running);
-        if matches!(new, Status::Blocked | Status::Done) && !held && !guessed_blink {
+        let restored = why == RESTORED_DONE_WHY;
+        if matches!(new, Status::Blocked | Status::Done) && !held && !guessed_blink && !restored {
             self.announce(term, new);
         }
     }
