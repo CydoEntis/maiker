@@ -16,6 +16,7 @@ pub(super) fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     d.claude_folder = None;
     // Its own folder (made only if something is written to it), so tests never share check tails.
     d.check_dir = persist::scratch_dir_for_this_thread();
+    d.hook_drops_file = d.check_dir.join("test.hook-drops");
     (d, rx)
 }
 
@@ -1746,6 +1747,28 @@ fn a_claude_dialog_its_hook_reported_keeps_needing_you_until_a_hook_says_it_was_
     assert_eq!(d.terms[&t].status, Status::Blocked, "words the rules don't know are no answer");
     d.apply_hook(report(t, &secret, 0, HookStatus::Working, "PostToolUse"), None, Vec::new());
     assert_eq!(d.terms[&t].status, Status::Working, "its next hook says it was answered");
+    close(&mut d, &[t]);
+}
+
+/// A hook that cannot hand its report over (a busy or restarting server) used to lose it
+/// without a trace: the pane now says its status is unconfirmed until the next report.
+#[test]
+fn a_lost_hook_report_leaves_the_pane_unconfirmed_until_the_next_one() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let secret = d.terms[&t].token.clone();
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "UserPromptSubmit"), None, Vec::new());
+    std::fs::create_dir_all(&d.check_dir).unwrap();
+    crate::hook_drops::record(&d.hook_drops_file, t).unwrap();
+    d.lost_reports_read = Instant::now() - Duration::from_secs(60);
+    d.note_lost_reports();
+    assert_eq!(d.terms[&t].status_why, format!("hook: UserPromptSubmit{}", super::hook_repair::UNCONFIRMED));
+    d.lost_reports_read = Instant::now() - Duration::from_secs(60);
+    d.note_lost_reports();
+    assert!(d.terms[&t].status_why.matches("unconfirmed").count() == 1, "said once");
+    // Its next report, even one that leaves the status as it was, confirms it again.
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "PreToolUse"), None, Vec::new());
+    assert!(!d.terms[&t].status_why.contains("unconfirmed"), "{}", d.terms[&t].status_why);
     close(&mut d, &[t]);
 }
 

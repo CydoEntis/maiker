@@ -2152,6 +2152,15 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
     else {
         return Ok(());
     };
+    let reported = report_hook(term, agent, status, payload);
+    if reported.is_err() {
+        // The hook stays quiet in the agent's turn; the server says the pane lost a report.
+        let _ = maitty_core::hook_drops::record(&maitty_core::hook_drops::file(), term);
+    }
+    reported
+}
+
+fn report_hook(term: TermId, agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<()> {
     let mut payload_json = payload
         .and_then(|raw| serde_json::from_str(raw).ok())
         .unwrap_or(Value::Null);
@@ -2162,8 +2171,12 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
                 Some(p) => serde_json::from_str(p).unwrap_or(Value::Null),
                 None => read_hook_payload(std::io::stdin().lock(), HOOK_PAYLOAD_MAX)?,
             };
+            if payload_json.is_null() && payload.is_some_and(|p| !p.trim().is_empty()) {
+                bail!("the hook's payload could not be read");
+            }
             match status_from_hook(&payload_json) {
                 Some(s) => s,
+                // An event that says nothing about status.
                 None => return Ok(()),
             }
         }

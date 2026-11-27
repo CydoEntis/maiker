@@ -645,6 +645,10 @@ struct Daemon {
     /// An agent a window asked for ahead of its first message (`Command::Prewarm`).
     warm: Option<warm::Warm>,
     last_vanished_check: Instant,
+    /// Where this server's panes' hooks note the reports they could not hand over, and when it
+    /// last read them (`Daemon::note_lost_reports`).
+    hook_drops_file: PathBuf,
+    lost_reports_read: Instant,
     /// The git repositories found on this machine, for a window's folder picker.
     repo_index: repo_index::Index,
     /// The last automatic workspace move, for undo.
@@ -1530,6 +1534,8 @@ impl Daemon {
             adopt: None,
             adopted: None,
             last_vanished_check: crate::clock::ago(VANISHED_CHECK_EVERY - VANISHED_CHECK_FIRST),
+            hook_drops_file: crate::hook_drops::file(),
+            lost_reports_read: Instant::now(),
             repo_index: repo_index::Index::default(),
             last_loss: None,
             auto_undo: None,
@@ -1594,6 +1600,7 @@ impl Daemon {
                     self.guarded("Effort reading", Self::poll_effort);
                     self.guarded("Following terminal agents' chats", Self::follow_tick);
                     self.guarded("Hook watching", Self::hook_watch_tick);
+                    self.guarded("Lost hook reports", Self::note_lost_reports);
                     self.deliver_queued();
                     self.guarded("Usage saving", |d| d.usage_store.save_if_due(term::unix_now()));
                     self.guarded("Git status", Self::poll_git);

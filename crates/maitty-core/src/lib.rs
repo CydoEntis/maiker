@@ -4,6 +4,7 @@ pub mod brand;
 pub mod config;
 mod daemon;
 pub mod gitfs;
+pub mod hook_drops;
 pub mod installed_executable;
 pub mod ipc;
 mod login_path;

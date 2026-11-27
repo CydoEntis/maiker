@@ -143,6 +143,7 @@ src/
   secret_files.rs  a secret handed to an agent as a private file, and clearing the stale ones
   login_path.rs  the daemon host's login-shell PATH, resolved once at start and applied to panes, providers and lookups
   shim.rs        the per-agent launchers on a pane's PATH, and the PATH code `maiker agent-launch` shares
+  hook_drops.rs  the status reports a pane's hook could not hand over, noted beside the socket for the daemon to log and show
 docs/            these docs, the roadmap, design briefs
 config.example.toml
 ```

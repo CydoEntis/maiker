@@ -471,6 +471,10 @@ impl Daemon {
             };
             t.last_hook = Some((name, term::unix_now()));
             t.last_hook_at = Some(Instant::now());
+            // A report that arrived confirms the pane again (`Daemon::note_lost_reports`).
+            if let Some(confirmed) = t.status_why.strip_suffix(super::hook_repair::UNCONFIRMED) {
+                t.status_why = confirmed.to_string();
+            }
             self.dirty = true;
         }
         if matches!(status, HookStatus::Done | HookStatus::Idle)
