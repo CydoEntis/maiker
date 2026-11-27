@@ -70,17 +70,29 @@ export const AnsweredApprovalSchema = z.object({
 })
 export type AnsweredApproval = z.infer<typeof AnsweredApprovalSchema>
 
+/**
+ * Says where an input from the daemon did not match this app's copy of its shape. Only the paths and
+ * reasons are logged, never the values: they hold commands and file contents.
+ */
+function warnRejected(what: string, error: z.ZodError): void {
+  const where = error.issues.slice(0, 3).map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+  console.warn(`Left out a ${what} this app cannot read`, where)
+}
+
 export function parseHistoryEntry(raw: unknown): HistoryEntry | null {
   const parsed = HistoryEntrySchema.safeParse(raw)
+  if (!parsed.success) warnRejected('history entry', parsed.error)
   return parsed.success ? parsed.data : null
 }
 
 export function parseApprovalRequest(raw: unknown): ApprovalRequest | null {
   const parsed = ApprovalRequestSchema.safeParse(raw)
+  if (!parsed.success) warnRejected('pending approval', parsed.error)
   return parsed.success ? parsed.data : null
 }
 
 export function parseAnsweredApproval(raw: unknown): AnsweredApproval | null {
   const parsed = AnsweredApprovalSchema.safeParse(raw)
+  if (!parsed.success) warnRejected('answered approval', parsed.error)
   return parsed.success ? parsed.data : null
 }

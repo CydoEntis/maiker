@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { afterFailure, createFeed, looksTheSame, syncFeed } from './chatFeed'
+import { afterFailure, createFeed, looksTheSame, syncFeed, UNREADABLE_APPROVAL_ERROR } from './chatFeed'
 import { FAKE_CONVERSATION, FakeDaemonHistory } from './fakeDaemonHistory'
 import { selectChatEvents } from './projection'
 import { conversationKey } from '@/api/conversationKey'
@@ -69,6 +69,20 @@ describe('reading a conversation', () => {
     daemon.approvals = []
     const second = await syncFeed(first, daemon.read, now)
     expect(second.projection.approvals).toMatchObject([{ requestId: 7, resolution: { status: 'answered', answer: 'unknown' } }])
+  })
+
+  it('says so when the agent waits on an approval this app cannot read, and stops saying it once it is gone', async () => {
+    const daemon = new FakeDaemonHistory()
+    daemon.upsert(daemon.message(T1, 'u', 'User', 'go'))
+    daemon.approvals = [{ request_id: 8, kind: 'SomethingNewer', turn_id: T1, choices: ['Accept'] }]
+    const first = await syncFeed(newFeed(), daemon.read, now)
+    expect(first.projection.unreadableApprovals).toBe(1)
+    expect(first.error).toBe(UNREADABLE_APPROVAL_ERROR)
+
+    daemon.approvals = []
+    const second = await syncFeed(first, daemon.read, now)
+    expect(second.projection.unreadableApprovals).toBe(0)
+    expect(second.error).toBeNull()
   })
 })
 

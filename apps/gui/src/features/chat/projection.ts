@@ -57,10 +57,15 @@ export type ChatProjection = {
   readonly approvals: readonly ApprovalEvent[]
   /** How many history entries or approvals failed validation and were left out. */
   readonly rejectedInputs: number
+  /**
+   * How many of the daemon's current pending approvals this app cannot read. Unlike a history entry left out,
+   * each one is an agent stopped on a question with no button to answer it, so the chat has to say so.
+   */
+  readonly unreadableApprovals: number
 }
 
 export function createChatProjection(provider: ChatProvider): ChatProjection {
-  return { provider, turnOrder: [], turns: new Map(), approvals: [], rejectedInputs: 0 }
+  return { provider, turnOrder: [], turns: new Map(), approvals: [], rejectedInputs: 0, unreadableApprovals: 0 }
 }
 
 function approvalId(requestId: number | string): string {
@@ -172,7 +177,8 @@ export function applyApprovals(state: ChatProjection, pending: readonly unknown[
   const listed = new Set(requests.map((request) => approvalId(request.request_id)))
   const known = new Set(state.approvals.map((approval) => approval.id))
 
-  let changed = rejectedInputs !== state.rejectedInputs
+  const unreadableApprovals = pending.length - requests.length
+  let changed = rejectedInputs !== state.rejectedInputs || unreadableApprovals !== state.unreadableApprovals
   const approvals: ApprovalEvent[] = state.approvals.map((approval) => {
     if (approval.resolution.status !== 'pending' || listed.has(approval.id)) return approval
     changed = true
@@ -185,7 +191,7 @@ export function applyApprovals(state: ChatProjection, pending: readonly unknown[
   }
   // Every page carries the list; one that changes nothing keeps the projection, so an open chat does not redraw on
   // every read while the agent works.
-  return changed ? { ...state, approvals, rejectedInputs } : state
+  return changed ? { ...state, approvals, rejectedInputs, unreadableApprovals } : state
 }
 
 /**

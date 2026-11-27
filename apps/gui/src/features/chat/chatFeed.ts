@@ -198,5 +198,12 @@ export async function syncFeed(start: ChatFeed, read: ReadPage, now: () => numbe
   const resume = unfinished ? lastPageStart : page.history.resume ?? lastPageStart
   // The approvals come with every page and are the daemon's list of those still waiting: the last one is current.
   const projection = applyAnsweredApprovals(applyApprovals(feed.projection, page.approvals), page.answered_approvals)
-  return { ...feed, projection, resume }
+  // A request with no button would leave the chat waiting with nothing to press: say so, unless the daemon has
+  // something to say itself.
+  const error = feed.error ?? (projection.unreadableApprovals > 0 ? UNREADABLE_APPROVAL_ERROR : null)
+  return { ...feed, projection, resume, error }
 }
+
+/** Shown when the agent waits on a request this app cannot read (its shape is newer than this app). */
+export const UNREADABLE_APPROVAL_ERROR =
+  'The agent is waiting on a request this app cannot show. Update Maiker, or stop the turn and ask again.'
