@@ -3,7 +3,7 @@ import { useWarmAgent, type WarmAgent, type WarmSpec } from '../useWarmAgent'
 import { buildAttachmentMessage } from '@/features/chat/attachmentMessage'
 import { updateComposer, useComposerState } from '@/features/chat/composerStore'
 import { revokePreviews, useAttachmentIntake } from '@/features/chat/useAttachmentIntake'
-import { WorkingMark } from '@/features/chat/components/WorkingMark'
+import { SendingRows } from '@/features/chat/components/ChatItems'
 import { explainError, explainStartFailure, PICK_ANOTHER_BRANCH, type ExplainedError } from '@/lib/error-message'
 import { DEFAULT_PICK, START_REASONING, type AgentChoice } from '@/features/chat/agentChoice'
 import { AGENT_LABEL } from '@/features/chat/modelName'
@@ -198,8 +198,9 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   // A draft left by switching away comes back with its text; a seed (a summary to continue from) replaces it.
   const [message, setMessage] = useState(() => seed?.message ?? parkedDraft())
   useEffect(() => { parkDraft(message) }, [message])
-  // What was sent while the start runs, so the Starting card shows it where the box was.
-  const [sent, setSent] = useState<string | null>(null)
+  // What was sent while the start runs (the message as the chat gets it, and the words typed), so the Starting card shows
+  // it where the box was and the branch keeps the name those words gave it.
+  const [sent, setSent] = useState<{ readonly message: string; readonly task: string } | null>(null)
   const [branchPick, setBranchPick] = useState<{ folder: string; pick: BranchChoice } | null>(null)
   const [workIn, setWorkIn] = useState<WorkIn>(seed?.worktree === true ? 'tree' : 'auto')
   const [starting, setStarting] = useState(false)
@@ -255,7 +256,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   // In a worktree of its own with no branch chosen, the session gets a new branch named for the task in the message
   // (`fix-login-redirect`), or while there is none a two-word name, rolled once per list of names in use.
   const rolled = useMemo(() => (treeMode && (remote || branches !== null) ? suggestBranchName(takenBranches) : null), [treeMode, remote, branches, takenBranches])
-  const suggested = rolled !== null && slugFromTask(message) !== '' ? nameForTask(message, takenBranches) : rolled
+  const naming = sent?.task ?? message
+  const suggested = rolled !== null && slugFromTask(naming) !== '' ? nameForTask(naming, takenBranches) : rolled
   const branch = useMemo<BranchChoice | null>(() => {
     // A worktree of a picked branch is a copy of it on a new branch, so the branch itself stays free for its checkout.
     if (explicit !== null && treeMode && !explicit.create && suggested !== null) return { name: suggested, create: true, worktree: true, base: explicit.name }
@@ -320,9 +322,13 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
   const start = (task: string = message) => {
     if (off) return
     setStarting(true)
-    setSent(task.trim())
-    setError(null)
     const request = requestFor(task)
+    // The message leaves the box the moment it is sent and shows above it, as the chat will show it; a failed start puts it back.
+    setSent({ message: request.message, task })
+    const sentAttachments = attachments
+    setMessage('')
+    updateComposer(NEW_CHAT_DRAFT, (state) => ({ ...state, attachments: [] }))
+    setError(null)
     remember()
     // The draft is being sent: it is no longer one to come back to, unless the start fails.
     discardDraft()
@@ -330,6 +336,9 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
       // Another machine's branches are not read again, so the name it took is kept here and the next start gets another.
       .then(() => { const made = request.branch; if (remote && made !== null) setTakenNames((now) => new Set([...now, made.name])) })
       .catch((failure: unknown) => {
+        // The box is locked while the session starts, so nothing was typed since: the message and its files go back as they were.
+        setMessage(task)
+        updateComposer(NEW_CHAT_DRAFT, (state) => ({ ...state, attachments: sentAttachments }))
         parkDraft(task)
         const explained = explainStartFailure(failure, 'Could not start the session', request.branch)
         // A branch whose worktree folder is in the way is not offered again as the next suggestion.
@@ -592,9 +601,8 @@ export function NewChatPage({ machines, machine, projects, busy: busyBranches = 
             </div>
           ) : (
             // The same rows the session's chat draws until its agent reports in, so the swap to the real pane changes nothing the eye sees.
-            <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto" role="status">
-              <div className="mx-chat-row"><div className="mx-msg-user is-echo" aria-label="Sending"><p>{sent}</p></div></div>
-              <div className="mx-chat-row"><div className="mx-working"><WorkingMark agent={agent} /><span>Working…</span></div></div>
+            <div className="mx-chat-scroller min-h-0 flex-1 overflow-y-auto">
+              <SendingRows text={sent.message} agent={agent} />
             </div>
           )}
           <Composer agent={agent} composer={composer} facts={facts} place={place} problem={notes} hint="Describe the task, or type / for commands" commandsFrom={commandsFrom} />

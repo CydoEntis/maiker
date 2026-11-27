@@ -15,7 +15,9 @@ export function SendProgress({ file, percent, verb = 'Sending' }: { file: string
       >
         <div className="h-full rounded-full bg-primary" style={{ width: `${String(shown)}%` }} />
       </div>
-      <span className="w-9 text-right text-xs tabular-nums text-muted-foreground">{percent === null ? '' : `${String(shown)}%`}</span>
+      {/* Its line is kept while no share is known: the toaster hangs from the window's foot, so a line that came and
+          went with each file would lift the toast and its spinner and drop them again. */}
+      <span className="h-4 w-9 text-right text-xs tabular-nums text-muted-foreground">{percent === null ? '' : `${String(shown)}%`}</span>
     </div>
   )
 }

@@ -98,6 +98,9 @@ describe('what the hover card says', () => {
     const away = hoverCardText(view({ machine: 4, machineName: 'devbox' }), { ...FACTS, machine: { ...DEVBOX, down: true } })
     expect(rowOf(away, 'machine')).toMatchObject({ tone: 'needs' })
     expect(rowOf(away, 'machine')).not.toHaveProperty('detail')
+    expect(rowOf(away, 'machine')).toMatchObject({ text: 'devbox · offline' })
+    const older = hoverCardText(view({ machine: 4, machineName: 'devbox' }), { ...FACTS, machine: { ...DEVBOX, down: true, updateAction: 'update' } })
+    expect(rowOf(older, 'machine')).toMatchObject({ text: 'devbox · needs update', tone: 'needs' })
   })
 
   it('shows a shell by its working directory, with no branch and no activity', () => {

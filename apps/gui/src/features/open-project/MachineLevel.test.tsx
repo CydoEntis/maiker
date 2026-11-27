@@ -22,7 +22,7 @@ const NEW: PaletteMachine = { machine: 7, name: 'server-15', label: 'server-15',
 
 function info(overrides: Partial<MachinesInfo> = {}, add: Partial<MachinesInfo['add']> = {}): MachinesInfo {
   return {
-    known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(() => Promise.resolve(true)), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve(null)),
+    known: true, list: [], onRetry: vi.fn(), onRemove: vi.fn(() => Promise.resolve(true)), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onAskUpdate: vi.fn(), onCheckActivity: vi.fn(() => Promise.resolve(null)),
     onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(),
     add: { loadHosts: () => Promise.resolve([{ alias: 'build', detail: 'me@build.example', added: false }]), onAdd: vi.fn(() => Promise.resolve(added())), onCancel: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn(), ...add },
     ...overrides,
@@ -120,6 +120,21 @@ describe('New machine, after Enter', () => {
     expect(machines.onRename).toHaveBeenCalledWith('server-15', 'Lab')
     expect(onClose).toHaveBeenCalled()
     expect(machines.onRemove).not.toHaveBeenCalled()
+  })
+
+  it('says a machine on another version needs an update, not that it is added and fine, and offers the update there', async () => {
+    const older: MachineHead = { ...head('server-15', 7, 'needs update'), down: true, updateAction: 'update', why: null }
+    const machines = info({ list: [older] }, { onAdd: vi.fn(() => Promise.resolve(added({ reach: 'older' }))) })
+    const { user, field, onClose } = show(machines)
+    await user.type(field(), 'dev@100.78.214.15{Enter}')
+    const name = await screen.findByRole('textbox', { name: 'Name' })
+    await user.clear(name)
+    await user.type(name, 'kingdom')
+    expect(screen.getByRole('alert')).toHaveTextContent('kingdom is added and needs update')
+    await user.click(screen.getByRole('button', { name: 'Update Maiker' }))
+    expect(machines.onRename).toHaveBeenCalledWith('server-15', 'kingdom')
+    expect(machines.onAskUpdate).toHaveBeenCalledWith('server-15', 'update')
+    expect(onClose).toHaveBeenCalled()
   })
 
   it('Enter in the Name field browses the new machine’s folders, and an untouched name renames nothing', async () => {

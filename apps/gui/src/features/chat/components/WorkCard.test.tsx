@@ -1,4 +1,4 @@
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { DiffLine } from '../chatEvents'
 import { commandEvent, editEvent, toolEvent } from '../eventFixtures'
@@ -17,12 +17,22 @@ describe('a run of steps', () => {
     expect(screen.getByText('waiting for you ↓')).toBeInTheDocument()
   })
 
-  it('stays folded when a step failed, and its head says so', () => {
+  it('starts open, so every step stays in view, and its head folds it', () => {
+    render(card([commandEvent('1', { command: 'cargo build' }), commandEvent('2', { command: 'cargo test' })]))
+
+    const head = screen.getByRole('button', { name: /Ran 2 commands/ })
+    expect(head).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByText('cargo test')).toBeInTheDocument()
+    fireEvent.click(head)
+    expect(head).toHaveAttribute('aria-expanded', 'false')
+    expect(screen.queryByText('cargo test')).toBeNull()
+  })
+
+  it('says in its head when a step failed', () => {
     render(card([commandEvent('1', { command: 'pnpm test', exitCode: 1, status: 'failed', output: 'boom' })]))
 
     expect(screen.getByText('failed')).toBeInTheDocument()
     expect(screen.getByRole('group', { name: /a step failed/ })).toBeInTheDocument()
-    expect(screen.queryByRole('group', { name: 'Command pnpm test' })).toBeNull()
   })
 })
 

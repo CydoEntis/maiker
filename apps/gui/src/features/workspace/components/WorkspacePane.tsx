@@ -31,6 +31,7 @@ import { ShowSidebarButton } from './ShowSidebarButton'
 import { placeOf } from '@/features/chat/sessionPlace'
 import type { EndedActions } from '@/features/chat/components/Composer'
 import { endedResume } from '../model/recentSessions'
+import { updateProblem } from '../model/machines'
 
 /** Ctrl+L: a shell clears its screen and keeps what was typed. */
 const CLEAR_SCREEN = '\x0c'
@@ -45,7 +46,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   pane: PaneSlot
   kept: boolean
 }) {
-  const { dismissedRestores, setDismissedRestores, resumeInterrupted, continueCut, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
+  const { dismissedRestores, setDismissedRestores, resumeInterrupted, continueCut, paneSessions, chatOf, openSubagent, ownsTerminals, panelFocused, repoPaneOf, sharedFolderRefusalOf, outsidePanes, dropId, dragId, dropLeaf, dragLeaf, showChanges, online, setOpenSubagent, openPanel, setSettingsSection, setRecentOpen, saveName, preferences, addAgentTerminal, root, look, modalOpen, mirrorInput, openPath, pasteImage, terminalHandles, setLayout, split, closePaneById, sendTo, copyPathOf, restartPane, setRenameId, splitsOf, splitRefusalOf, focusSplit, resizeSplit, closeSplit, sessionMap, heads, retryNamed, setUpdateAsk, newChatWithSummary , resumeEnded, setOpenAsk, showSubagent, dockFocused, sidebarMode, toggleSidebar, focusMode } = useWorkspace()
   const tip = useTipWithKeys()
   // Bound to this pane, so a row opened from a pane without the focus focuses it and shows its own session's changes.
   const openDiff = useCallback((file: string, turn?: TurnSpan | null) => { showChanges(pane.id, pane.sessionId, file, turn) }, [showChanges, pane.id, pane.sessionId])
@@ -83,7 +84,7 @@ export function WorkspacePane({ shown, pane, kept }: {
   // One problem at a time, the one that matters most: a lost machine, then a stopped agent, then a turn a service restart
   // cut, then a full context. Each is what the daemon reports about the session; none is guessed here.
   const problem: ChatProblem | null = head?.down === true && head.name !== null
-    ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') } }
+    ? { kind: 'machine', machine: head.label, since: head.downSince, onRetry: () => { retryNamed(head.name ?? '') }, ...updateProblem(head, (name, action) => { setUpdateAsk({ name, action }) }) }
     : session.status === 'error' && !session.ended && !isShell(session)
       ? { kind: 'stopped', agent: session.process, code: session.conversation.details?.exit?.code ?? null, onRestart: chatOnly ? null : () => { restartPane(pane.id) } }
       : interrupted !== null

@@ -19,22 +19,19 @@ type WorkCardProps = {
 }
 
 /**
- * A run of steps, folded to one quiet line (design: "✓ Read 5 files, searched twice · 7 steps ›"): its mark, what it did, how many steps that was, and a
- * chevron. Opening it lists the steps, each a row that opens to its own detail, and only one of them is open at a time.
- * A failed run stays folded too (its row says "failed" in red, and the step itself shows a red ×); only a run with a step a request waits on starts open, so
- * that step is never folded away.
+ * A run of steps under one quiet line (design: "✓ Read 5 files, searched twice · 7 steps ›"): its mark, what it did, how many steps that was, and a
+ * chevron. It starts open, listing the steps, each a row that opens to its own detail (one at a time), so what the agent is doing never folds out of
+ * sight while it works; the line folds it for whoever wants it shorter.
  */
 export function WorkCard({ steps, root, openDiff, waitingStep, rowKey }: WorkCardProps) {
   const status = workStatus(steps)
-  const waiting = steps.some((step) => isWaitingStep(waitingStep, step.id))
-  const [chosen, setChosen] = useState<boolean | null>(null)
-  const open = chosen ?? waiting
-  useRevealOpen(rowKey, () => { setChosen(true) })
+  const [open, setOpen] = useState(true)
+  useRevealOpen(rowKey, () => { setOpen(true) })
   const [openStep, setOpenStep] = useState<string | null>(null)
   const failed = status === 'failed'
   return (
     <div className="mx-work" data-fold="" role="group" aria-label={`${workSummary(steps)}${SUFFIX[status]}, ${String(steps.length)} steps`}>
-      <button type="button" className="mx-work-head" aria-expanded={open} onClick={() => { setChosen(!open) }}>
+      <button type="button" className="mx-work-head" aria-expanded={open} onClick={() => { setOpen(!open) }}>
         <StepGlyph status={status} />
         <span className="mx-work-text">{workSummary(steps)}{status === 'interrupted' && ', then stopped'}</span>
         {!summaryCountsEverything(steps) && <span className="mx-work-count">{steps.length} {steps.length === 1 ? 'step' : 'steps'}</span>}
