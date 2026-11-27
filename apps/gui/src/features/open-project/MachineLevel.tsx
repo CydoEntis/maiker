@@ -5,7 +5,7 @@ import type { MachinesInfo } from '@/features/settings/components/DesktopSetting
 import { CopyLine } from '@/features/settings/components/StatusBlock'
 import type { AddRequest, AddState } from '@/features/settings/model/addFlow'
 import { Icon } from '@/features/workspace/components/glyphs'
-import { MAX_MACHINE_NICKNAME_LENGTH } from '@/features/workspace/model/machines'
+import { downSentence, MAX_MACHINE_NICKNAME_LENGTH, UPDATE_WORDS, type MachineHead, type UpdateAction } from '@/features/workspace/model/machines'
 import { BackButton, PaletteBody, PaletteFoot, StatusBlock, type Status } from './PaletteBody'
 import { failureTone, hostRequest, machineRows, nicknameOf, stageHints, stageKeyAction, stageOf, typedRequest, type MachineDraft, type MachineStage, type StageAction } from './newMachine'
 import type { RowAction } from './openPalette'
@@ -128,7 +128,8 @@ export function MachineLevel({ adding }: { adding: MachinesInfo }) {
   }
 
   const name = flow.state.kind === 'added' ? flow.state.name : ''
-  const label = adding.list.find((head) => head.name === name)?.label ?? name
+  const head = adding.list.find((each) => each.name === name)
+  const label = head?.label ?? name
   const typedName = nameText ?? label
   // The folders are browsed by the machine's number, which it has once the window lists it.
   const machine = shell.machines.find((candidate) => candidate.name === name) ?? null
@@ -150,10 +151,21 @@ export function MachineLevel({ adding }: { adding: MachinesInfo }) {
         <button type="button" className="mx-op-primary" aria-disabled={machine === null} onClick={() => { finish(true) }}>Browse folders on {calledAs}</button>
       </>}
     >
-      <StatusBlock status={{ tone: 'plain', title: `${name} is added`, detail: 'Its sessions show in the sidebar.' }} />
+      <StatusBlock status={addedStatus(head, calledAs, (action) => { finish(false); adding.onAskUpdate(name, action) })} />
       <NameField value={typedName} onChange={setNameText} />
     </StageFrame>
   )
+}
+
+/**
+ * What the done stage says of the machine just added. One that runs another version of Maiker is added but cannot connect
+ * until it is updated, so it says that and offers the update here, not "offline" later in the sidebar.
+ */
+function addedStatus(head: MachineHead | undefined, calledAs: string, update: (action: UpdateAction) => void): Status {
+  const fix = head?.down === true ? head.updateAction : null
+  if (head?.down === true && head.failure === 'update-here') return { tone: 'offline', title: `${calledAs} is added and runs a newer Maiker`, detail: downSentence(head) }
+  if (head === undefined || fix === null) return { tone: 'plain', title: `${calledAs} is added`, detail: 'Its sessions show in the sidebar.' }
+  return { tone: 'offline', title: `${calledAs} is added and ${UPDATE_WORDS[fix].state}`, detail: downSentence(head), action: { label: `${UPDATE_WORDS[fix].verb} Maiker`, run: () => { update(fix) } } }
 }
 
 function NameField({ value, onChange }: { value: string; onChange: (text: string) => void }) {

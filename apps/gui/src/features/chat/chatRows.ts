@@ -1,3 +1,4 @@
+import { withBackgroundHelpers } from './backgroundHelpers'
 import { parseTaskNotifications } from './taskNotification'
 import type { ApprovalEvent, ChatEvent, CommandEvent, EditEvent, ItemStatus, MessageEvent, SubagentEvent, SummaryEvent, TodoEvent, ToolEvent, TurnEvent } from './chatEvents'
 import { startsTable, streamingText } from './markdown'
@@ -112,7 +113,8 @@ function turnFactsOf(events: readonly ChatEvent[]): Map<string, TurnFacts> {
   return facts
 }
 
-export function buildRows(events: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false, workingPhrase: string | null = null): ChatRow[] {
+export function buildRows(history: readonly ChatEvent[], working: boolean, root: string | null = null, echoText: string | null = null, echoThinking = true, hideSuccessfulTools = false, workingPhrase: string | null = null): ChatRow[] {
+  const events = withBackgroundHelpers(history)
   const rows: ChatRow[] = []
   const edits = new Map<string, EditEvent[]>()
   const turns = turnFactsOf(events)

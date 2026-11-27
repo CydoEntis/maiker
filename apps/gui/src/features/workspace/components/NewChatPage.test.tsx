@@ -324,10 +324,10 @@ describe('the New session draft', () => {
     expect(dev).toBeEnabled()
     await userEvent.click(dev)
     await userEvent.type(box(), 'hello')
+    expect(screen.queryByText('A copy of dev on its own branch, hello. Your checkout stays untouched.')).not.toBeNull()
     await userEvent.click(startButton())
     await waitFor(() => { expect(onStart).toHaveBeenCalled() })
     expect(onStart.mock.calls[0]?.[0].branch).toEqual({ name: 'hello', create: true, worktree: true, base: 'dev' })
-    expect(screen.queryByText('A copy of dev on its own branch, hello. Your checkout stays untouched.')).not.toBeNull()
   })
 
   it('lets Work in put a busy branch back to the folder as it is', async () => {
@@ -513,7 +513,8 @@ describe('starting a session and going on writing', () => {
     await userEvent.keyboard('{Control>}{Enter}{/Control}')
     expect(onStart).toHaveBeenCalledTimes(1)
     expect(onStart.mock.calls[0]).toHaveLength(1)
-    expect(box()).toHaveValue('open it')
+    expect(box()).toHaveValue('')
+    expect(screen.getByLabelText('Sending')).toHaveTextContent('open it')
     expect(screen.getByRole('button', { name: 'Claude is working' })).toBeDisabled()
   })
 
@@ -641,17 +642,18 @@ function fakeCloner(parent = '~/Projects') {
 }
 
 describe('the New session draft as a chat that has not been sent', () => {
-  it('shows the Starting card in the same view while the start runs, then keeps the message if it fails', async () => {
+  it('empties the box and shows the message as the chat will while the start runs, then puts it back if it fails', async () => {
     let fail: (reason: Error) => void = () => undefined
     const onStart = vi.fn(() => new Promise<void>((_, reject) => { fail = reject }))
     dialog(onStart)
     await pickedProject('growth')
     await userEvent.type(box(), 'fix the build{Enter}')
     const view = screen.getByRole('region', { name: 'New session' })
-    expect(within(view).getByText('Working…')).toBeInTheDocument()
-    expect(within(view.querySelector<HTMLElement>('.mx-chat-scroller') as HTMLElement).getByText('fix the build')).toBeInTheDocument()
+    expect(box()).toHaveValue('')
+    expect(within(view).getByText('Working')).toBeInTheDocument()
+    expect(within(view.querySelector<HTMLElement>('.mx-chat-scroller') as HTMLElement).getByLabelText('Sending')).toHaveTextContent('fix the build')
     fail(new Error('no daemon'))
-    await waitFor(() => { expect(screen.queryByText('Working…')).not.toBeInTheDocument() })
+    await waitFor(() => { expect(screen.queryByLabelText('Sending')).not.toBeInTheDocument() })
     expect(box()).toHaveValue('fix the build')
     expect(parkedDraft()).toBe('fix the build')
   })

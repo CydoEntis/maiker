@@ -3,7 +3,8 @@ import { Quote as QuoteIcon } from 'lucide-react'
 import { Icon } from '@/features/workspace/components/glyphs'
 import type { ChatAgent } from '@/features/workspace/model/chatView'
 import type { TurnSpan } from '@/features/inspect/turnRange'
-import { paragraphsOf, splitLead, streamingParagraphs, type ChatRow } from '../chatRows'
+import { ECHO_ROW_KEY, paragraphsOf, splitLead, streamingParagraphs, WORKING_ROW_KEY, type ChatRow } from '../chatRows'
+import { describeWork } from '../workPhase'
 import type { ItemStatus } from '../chatEvents'
 import { KnownRowsContext } from '../knownRows'
 import { isWaitingStep } from '../stepInfo'
@@ -296,5 +297,20 @@ function CompactedLine({ compaction, text }: { compaction: Compaction; text: str
       <span className="mx-compacted-pill"><Icon name="collapse" />Conversation compacted{hooks !== null && <span className="mx-compacted-hooks">· {hooks}</span>}</span>
       <span className="mx-divider-line" />
     </div>
+  )
+}
+
+/**
+ * The message just sent and the working line under it, drawn exactly as the chat draws them before its history has the
+ * message (`buildRows` with an echo and no events). The New session page shows them while the chat starts, so the swap
+ * to the chat moves nothing.
+ */
+export function SendingRows({ text, agent }: { text: string; agent: ChatAgent }) {
+  const context: ChatItemContext = { agent, workingSince: null, root: null, openDiff: null, goToStep: null, waitingStep: null }
+  return (
+    <>
+      <ChatItem row={{ kind: 'echo', key: ECHO_ROW_KEY, text }} {...context} />
+      <ChatItem row={{ kind: 'working', key: WORKING_ROW_KEY, phrase: describeWork([], null), placeholder: true }} {...context} />
+    </>
   )
 }

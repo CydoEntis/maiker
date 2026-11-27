@@ -23,7 +23,7 @@ const head = (name: string, updateAction: MachineHead['updateAction']): MachineH
 })
 
 function machines(list: MachineHead[]): MachinesInfo {
-  return { known: true, list, onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onCheckActivity: vi.fn(() => Promise.resolve({ sessions: 2, busy: 0, current: false })), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(), add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() } }
+  return { known: true, list, onRetry: vi.fn(), onRemove: vi.fn(), onGrant: vi.fn(), onUpdate: vi.fn(() => Promise.resolve()), onAskUpdate: vi.fn(), onCheckActivity: vi.fn(() => Promise.resolve({ sessions: 2, busy: 0, current: false })), onCopyCommand: vi.fn(), onOpenLogin: vi.fn(), onRename: vi.fn(), add: { loadHosts: () => Promise.resolve([]), onAdd: vi.fn(), onCancel: vi.fn(), onProgress: vi.fn(() => Promise.resolve(vi.fn())), open: vi.fn() } }
 }
 
 const updates = (change: Partial<SettingsUpdates> = {}): SettingsUpdates => ({ summary: 'You are on the latest version.', status: 'current', onCheck: vi.fn(), onDownload: vi.fn(), onRestart: vi.fn(), ...change })

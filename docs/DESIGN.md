@@ -199,7 +199,7 @@ dialog radius and shadow, 22px by 24px of body, its facts in a `--m-well` block,
   full, and text actions (Put back, Dismiss, Copy details).
 - **Chat problem** (`ScopedAlert` scope `chat`, `ChatProblem.tsx`). A machine that stopped answering, or a turn a service
   restart cut, dims only the chat column (a flat veil of `--bg` at 72%, nothing blurs) under one 480px dialog: "devbox
-  stopped answering" / the reason / **Try again** (or **Restart**), **Not now**, and **Copy details** at the right. Not
+  stopped answering" (or "devbox needs update", whose fix is **Update Maiker**) / the reason / **Try again** (or **Restart**), **Not now**, and **Copy details** at the right. Not
   now leaves the **problem line** at the top of the dock, a card like the inline note's: the status mark, the title in bold and the reason on one line, the fix
   and Copy details at its right. **A stopped agent is never a dialog**: the session is idle, its problem line is in the
   dock from the start ("Claude stopped", why, **Restart** where the session has a terminal to restart, **Copy details**),
@@ -347,7 +347,7 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   left; at the right a usage bar for every limit of each agent (its 5-hour and weekly ones), then the Commands and Shortcuts keys. **Context is
   always a bar, never a ring.** The side panel holds tabs of four surfaces: Files, Changes, Terminal, Pull requests.
 - **The sidebar's order.** One list of projects, each self-contained: it holds all its sessions in the order they
-  were made, so a row stays put while its state changes, with idle rows dropped below the rest; folded, its heading
+  were made, so a row stays put whatever its state does; folded, its heading
   says its own state, the most urgent of them. A project
   never moves because its sessions changed state; the list is ordered by the sort picked in the filter menu: **Recently
   opened** (the default, the project opened last first), **Name, A to Z**, or **Machine** (this computer first). The
@@ -356,9 +356,10 @@ rebuilds a screen rewrites its bullet. Where a screen bullet and the design lang
   project colour, since it is no project. There
   is no Idle section: a project with nothing going on is drawn grey where it sits. There are no machine headings, no status headings and no pinned needs-you list: a remote
   project carries a machine tag (the server mark and name in that machine's own colour, `machineColor`, one of the five
-  project colours picked from its name), amber while that machine is offline. A project's sessions are set in under its badge
+  project colours picked from its name), amber while that machine is offline. A machine that only needs Maiker updated gets an
+  **Update** button right after its tag: 18px, a 1px amber (`--needs` at 45%) outline, amber 10.5px text. A project's sessions are set in under its badge
   with a rule down their left edge. A session row is its name at the left, then how long it has been as it is (`4m`, when
-  the daemon says) and its status mark at the right; no agent icon. A lead sorts by its most urgent helper. There is no Put
+  the daemon says) and its status mark at the right; no agent icon. A lead shows the state of its most urgent helper. There is no Put
   away section and no snooze in the desktop app: a session the daemon has put away is listed like any other.
 
 ### Decisions that override the handoff
@@ -719,8 +720,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   amber.
   Which headings are folded, projects' and helpers', is kept in this window's storage (`maiker.gui.sidebar-folds.v1`,
   by machine name and folder), so a fold survives a restart.
-  A row whose status changes glides to its new place, and the headings and rows it passes glide with it (`useFlip`);
-  Reduce motion turns it off. A row is never tinted or flashed when its status changes.
+  Rows do not move on their own, so nothing slides or fades into a new place; a row is never tinted or flashed when
+  its status changes.
   A pointer resting on a row for 380ms shows a **hover card** (`RowHoverCard`; its text is `hoverCardText` in
   `model/hoverCard.ts`): 290px, 8px outside the sidebar's edge, its top 8px above the row (a row in the lower half of
   the window stands the card on its bottom instead, so it grows up) and kept inside the window, fading in by opacity
@@ -735,8 +736,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   its text in `--fg2`, in this order, a row with nothing to say left out: **Started by “lead”** (a helper whose lead is
   listed), the **project**, with ` / worktree` when it has a checkout of its own (the folder icon in the project's
   colour; a shell shows its working directory in mono), the **branch** in mono, the **machine** (This computer, or the
-  other machine's name in the accent text colour with how it is reached, dim mono, at the right; `name · offline` in
-  the needs-you colour while it is not connected; left out while only this computer is configured), **agent · model**
+  other machine's name in the accent text colour with how it is reached, dim mono, at the right; `name · offline` (or
+  `name · needs update` when only its Maiker version keeps it out) in the needs-you colour while it is not connected; left out while only this computer is configured), **agent · model**
   with the agent's own mark, **Last active 3m ago** (when its status last changed, on the shared second clock) and, on
   a lead, **N helpers** with `1 needs you` at the right. Last, **Context**: a 4px bar and the percentage in mono, the
   bar in the needs-you colour from 80%; left out when the agent has not said. The card shows no line counts and no
@@ -1521,8 +1522,8 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   `--muted`). A turn ends in one quiet footer line ("✓ Done · 5 steps", Copy and Retry at the right, × red when failed), the files it changed are 26px chips. An
   agent's mark in the chat (model chip, picker) is a flat glyph in its own colour with no tile. A run row has the run's own mark
   (✓ quiet, × red, ■ stopped) and says "failed" in red when a step failed; inside it, steps are ✓ (quiet) or × (red) rows.
-- **A run of steps is one quiet line** (`WorkCard`, no box): "✓ Read 6 files, ran 1 command · 6 steps ›" in `--muted`; opened
-  it lists the steps under a 1px `--line` rule at their left, and only one step is open at a time. There is no "latest 3" and no "+N more".
+- **A run of steps is one quiet line over its steps** (`WorkCard`, no box): "✓ Read 6 files, ran 1 command · 6 steps ›" in `--muted`; it
+  starts open (a click folds it) and lists the steps under a 1px `--line` rule at their left, and only one step is open at a time. There is no "latest 3" and no "+N more".
 - **Action cards** (`WaitingCard`, Needs Card in the design) are floating cards the width of the message box on the one
   float material (`--float-bg`, `--float-line`, `--float-sh`, `--r-panel`), with one amber `!` and their answers as a
   column, rising in over 0.2s. A question card shows one question at a time: tabs with an amber underline, numbered answers
@@ -1532,9 +1533,6 @@ Every session is a shell that maikerd owns. The feature stylesheets beside their
   (0.18 to 0.42s by distance, easing in; `glidePlan`). From far up it starts two screens above the bottom, so a long
   chat is not drawn on the way. The reader's own wheel, key or touch ends the glide where it is, and with motion
   reduced it is a plain jump.
-- **Rows slide, folds fold, never both.** A row that changes place slides there (`useFlip`). A section folding
-  moves what is under it by itself, so while a fold runs nothing slides, and where things
-  are when it ends is where the next slide starts from; the two together made the list bounce.
 - **The update button.** It is the status bar's (the sidebar's foot and rail hold none) and draws nothing until an update needs you, then it is one 20px
   button (`UpdateSlot`) with its words beside the icon: a download icon with a 5px accent dot while a release waits; a running light while it downloads; a restart icon once it is
   downloaded; the icon in `--danger` when the update failed. A card beside it (300px, `role="tooltip"`, opens on hover or focus, grows from the button's corner)

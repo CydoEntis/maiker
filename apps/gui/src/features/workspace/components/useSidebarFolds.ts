@@ -27,8 +27,6 @@ export function useSidebarFolds(revealed: unknown, revealKeys: readonly string[]
     writeSidebarFolds([...folded])
   }, [folded])
   return {
-    /** Which headings are folded: part of what decides when rows are measured to slide. */
-    signature: [...folded].join(','),
     isOpen: (key: string) => !folded.has(key),
     toggle: (key: string) => {
       const next = new Set(folded)

@@ -299,6 +299,39 @@ fn main() {
         assert!(line.contains(r#""request_id":"future-request""#) && line.contains(r#""subtype":"error""#), "{line}");
     }
 
+    // A helper started in the background, as Claude Code 2.1.332 streams it: the turn ends while
+    // the helper runs, then the helper's end and the turn Claude starts by itself to read it.
+    // Input closing before the helper ends would end it, as it does in Claude Code.
+    if scenario == "background-helper" {
+        let task = r#"{"task_id":"a-helper","task_type":"local_agent","description":"Find call sites"}"#;
+        for frame in [
+            r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#.to_owned(),
+            format!(r#"{{"type":"system","subtype":"background_tasks_changed","tasks":[{task}]}}"#),
+            format!(r#"{{"is_error":false,"result":"launched","session_id":"{session_id}","type":"result"}}"#),
+        ] {
+            writeln!(output, "{frame}").unwrap();
+        }
+        output.flush().unwrap();
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        log(&format!("helper done {}", std::process::id()));
+        for frame in [
+            r#"{"type":"system","subtype":"task_notification","task_id":"a-helper","status":"completed","summary":"Found 3 call sites","summary_is_report":true}"#.to_owned(),
+            r#"{"type":"system","subtype":"background_tasks_changed","tasks":[]}"#.to_owned(),
+            format!(r#"{{"type":"system","subtype":"init","session_id":"{session_id}"}}"#),
+            r#"{"event":{"message":{"id":"news-message","model":"fake-model"},"type":"message_start"},"type":"stream_event"}"#.to_owned(),
+            r#"{"event":{"delta":{"text":"The helper found 3.","type":"text_delta"},"index":0,"type":"content_block_delta"},"type":"stream_event"}"#.to_owned(),
+            format!(r#"{{"is_error":false,"result":"The helper found 3.","session_id":"{session_id}","type":"result"}}"#),
+        ] {
+            writeln!(output, "{frame}").unwrap();
+        }
+        output.flush().unwrap();
+        line.clear();
+        if input.read_line(&mut line).unwrap_or_default() == 0 {
+            log(&format!("eof {}", std::process::id()));
+        }
+        return;
+    }
+
     if scenario == "interrupt" {
         writeln!(output, "{}", r#"{"isReplay":true,"message":{"content":[{"text":"hello fake Claude","type":"text"}]},"type":"user"}"#).unwrap();
         output.flush().unwrap();

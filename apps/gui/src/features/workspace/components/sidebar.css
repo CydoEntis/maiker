@@ -57,6 +57,10 @@
 .mx-sb-tag svg { flex: none; }
 .mx-sb-tag-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .mx-sb-tag-progress { flex: none; color: var(--dim); }
+/* A machine that only needs Maiker updated gets its fix beside its tag: a small outlined button in the amber of needing you. */
+.mx-sb-tag-fix { position: relative; z-index: 1; flex: none; height: 18px; padding: 0 6px; border: 1px solid color-mix(in srgb, var(--needs) 45%, transparent); border-radius: var(--r-badge); font-size: 10.5px; font-weight: 500; color: var(--needs); transition: background-color var(--t-fast) var(--ease); }
+.mx-sb-tag-fix:hover { background: color-mix(in srgb, var(--needs) 12%, transparent); }
+.mx-sb-tag-fix:focus-visible { outline: none; box-shadow: var(--focus-edge); }
 
 /* A session: its name at the left, its status mark at the right. */
 /* Set in under the project's badge, with a rule down their left edge from it, so each session reads as that project's. */

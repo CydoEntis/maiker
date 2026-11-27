@@ -65,7 +65,9 @@ a pane (0003). Each provider speaks its own protocol.
   providers add frames between releases and ending the turn broke every chat on each one. A
   request the adapter cannot read is never granted: Claude Code gets an error answer and carries
   on, other providers' requests wait for a person. An unreadable permission request is never
-  allowed, and nothing is ever allowed on the adapter's own say.
+  allowed, and nothing is ever allowed on the adapter's own say. A tool request that arrives
+  while no turn is open (a Claude helper still running in the background) has nobody to ask, so
+  it is denied with a reason the agent reads.
 
 ## Alternatives considered
 

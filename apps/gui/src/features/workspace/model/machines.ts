@@ -204,6 +204,27 @@ function nicknameOf(nicknames: Readonly<Record<string, string>>, name: string): 
 }
 
 /**
+ * What a machine that is down only because of its Maiker version is: "needs update", "not installed" or "newer than this
+ * app". Null for any other machine, which is offline or asking for a login: those are said by the host's sentence.
+ */
+export function versionWord(head: MachineHead): string | null {
+  if (!head.down) return null
+  if (head.updateAction !== null) return UPDATE_WORDS[head.updateAction].state
+  return head.failure === 'update-here' ? 'newer than this app' : null
+}
+
+/**
+ * The part of a chat's machine problem that says the machine only needs its Maiker updated, with the update to ask for
+ * (none when this app is the older one); nothing for a machine that is down for another reason.
+ */
+export function updateProblem(head: MachineHead, ask: (name: string, action: UpdateAction) => void): { update: { word: string; onUpdate: (() => void) | null } } | Record<string, never> {
+  const word = versionWord(head)
+  if (word === null || head.name === null) return {}
+  const { name, updateAction } = head
+  return { update: { word, onUpdate: updateAction === null ? null : () => { ask(name, updateAction) } } }
+}
+
+/**
  * What a machine that is not up says: the host's one sentence for what failed and what to do (ADR 0017), else the plain
  * state when the host gave none.
  */

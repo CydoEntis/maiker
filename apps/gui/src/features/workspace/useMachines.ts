@@ -12,6 +12,7 @@ import { runMachineUpdate, runServiceRestart } from './machineUpdate'
 import { advanceLoginWatch, LOGIN_CHECK_MS, startLoginWatch, type LoginWatch } from './model/loginWatch'
 import { announcementFor, withUnconnected, withoutUnconnected, type RemoteMachine, type UpdateAction } from './model/machines'
 import { copyText } from '@/lib/clipboard'
+import { machineLabel } from '@/data/machineNicknames'
 
 /** The other machines as the host reports them, and what was last said about one for a screen reader. */
 export type RemoteMachines = {
@@ -57,7 +58,7 @@ export function useRemoteMachines(): RemoteMachines {
       change(state.machine, (before) => ({ conversations: before?.conversations ?? [], heard: before?.heard ?? false, listedAt: before?.listedAt ?? 0, state }))
       // Typing the machine could not take while it was down: say so once it is back.
       if (state.state === 'connected' && state.unsent) {
-        toast.info(`${String(state.unsent)} ${state.unsent === 1 ? 'keystroke' : 'keystrokes'} to ${state.name} ${state.unsent === 1 ? 'was' : 'were'} not sent while it was disconnected`)
+        toast.info(`${String(state.unsent)} ${state.unsent === 1 ? 'keystroke' : 'keystrokes'} to ${machineLabel(state.name)} ${state.unsent === 1 ? 'was' : 'were'} not sent while it was disconnected`)
       }
     }
     const list = (id: number, name: string, snapshot: unknown) => {
@@ -173,7 +174,7 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
     )
   }, [])
   const grantNamed = useCallback((name: string, grant: Grant, on: boolean) => {
-    setMachineGrant(name, grant, on).catch((error: unknown) => { toast.failed(`Could not change ${name}`, error) })
+    setMachineGrant(name, grant, on).catch((error: unknown) => { toast.failed(`Could not change ${machineLabel(name)}`, error) })
   }, [])
   // The restarted daemon is dialled again once the update is in: the state moves on by itself.
   // One update per machine at a time: two would race to replace the same file there.
@@ -191,7 +192,7 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   }, [])
   const updateNamed = useCallback(async (name: string, action: UpdateAction, whenIdle: boolean) => {
     if (updatingRef.current.has(name)) {
-      toast.info(`${name} is already being updated.`)
+      toast.info(`${machineLabel(name)} is already being updated.`)
       return
     }
     updatingRef.current.add(name)
@@ -219,11 +220,11 @@ export function useMachineActions(localConversations: readonly Conversation[] | 
   const removeNamed = useCallback((name: string): Promise<boolean> => removeMachine(name).then(
     () => {
       forgetMachine(name)
-      toast.info(`Removed ${name}. Its sessions keep running on ${name}.`)
+      toast.info(`Removed ${machineLabel(name)}. Its sessions keep running there.`)
       return true
     },
     (error: unknown) => {
-      toast.failed(`Could not remove ${name}`, error)
+      toast.failed(`Could not remove ${machineLabel(name)}`, error)
       return false
     },
   ), [forgetMachine])

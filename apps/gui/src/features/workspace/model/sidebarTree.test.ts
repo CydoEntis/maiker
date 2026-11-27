@@ -3,7 +3,7 @@ import type { Conversation } from '@/data/preview'
 import { LOCAL_HEAD, type MachineHead } from './machines'
 import { groupByProject, type OpenedProject } from './openedProjects'
 import { toSessionView, type SessionView } from './session'
-import { badgeLetters, filterChoices, machineKey, NO_FILTER, orderPlacement, passesFilter, projectFoldKey, projectName, sessionNodes, SIDEBAR_SORTS, sidebarOrder, type HeldRow, type ProjectGroup, type SidebarFilter, type SidebarSort } from './sidebarTree'
+import { badgeLetters, filterChoices, machineKey, NO_FILTER, passesFilter, projectFoldKey, projectName, sessionNodes, SIDEBAR_SORTS, sidebarOrder, type HeldRow, type ProjectGroup, type SidebarFilter, type SidebarSort } from './sidebarTree'
 
 const DEVBOX: MachineHead = { ...LOCAL_HEAD, key: 'machine-4', machine: 4, name: 'devbox', label: 'devbox' }
 const HEADS = [LOCAL_HEAD, DEVBOX]
@@ -37,14 +37,14 @@ describe('the order of the sidebar', () => {
     expect(order(sessions, [], NO_FILTER, null, 'machine').map((group) => [group.name, group.head.name])).toEqual([['beta', null], ['Zoo', null], ['api', 'devbox']])
   })
 
-  it('keeps every session of a project under it in the order they were made, idle ones last', () => {
+  it('keeps every session of a project under it in the order they were made, whatever each is doing', () => {
     const projects = order([
       session(1, '/home/me/shop', { status: 'done' }),
       session(2, '/home/me/shop', { status: 'needs-you' }),
       session(3, '/home/me/shop'),
       session(4, '/home/me/shop', { status: 'working' }),
     ])
-    expect(shape(projects)).toEqual([['shop', ['t1', 't2', 't4', 't3']]])
+    expect(shape(projects)).toEqual([['shop', ['t1', 't2', 't3', 't4']]])
   })
 
   it('gives each project its own state, its most urgent session\'s, and none to a project with no session', () => {
@@ -76,7 +76,7 @@ describe('helpers', () => {
     expect(node?.helpers.map((each) => each.id)).toEqual(['t2', 't3'])
   })
 
-  it('rank their lead by the most urgent of them, so a helper that asks lifts the row', () => {
+  it('give their lead the most urgent of their states, and leave its place alone', () => {
     const other = session(5, '/home/me/shop', { status: 'working' })
     const nodes = sessionNodes([other, session(1, '/home/me/shop', { status: 'idle' }), helper(2, { status: 'needs-you' })])
     expect(nodes.map((node) => [node.session.id, node.mark])).toEqual([['t1', 'needs'], ['t5', 'working']])
@@ -97,7 +97,7 @@ describe('helpers', () => {
     expect(order([session(1, '/home/me/shop'), helper(2)]).map((group) => group.mark)).toEqual(['working'])
   })
 
-  it('that have finished rank their lead as done, so it stays above the idle rows', () => {
+  it('that have finished make their idle lead done', () => {
     const nodes = sessionNodes([session(1, '/home/me/shop'), helper(2, { status: 'done' }), session(5, '/home/me/shop', { status: 'working' })])
     expect(nodes.map((node) => [node.session.id, node.mark])).toEqual([['t1', 'done'], ['t5', 'working']])
   })
@@ -197,11 +197,3 @@ describe('a project heading', () => {
   })
 })
 
-describe('what decides when rows are measured to slide', () => {
-  it('is the same while nothing moved, and differs when a row moves', () => {
-    const placement = (sessions: readonly SessionView[]) => orderPlacement({ projects: order(sessions) })
-    const working = [session(1, '/home/me/shop'), session(2, '/home/me/shop', { status: 'working' })]
-    expect(placement(working)).toBe(placement(working.map((each) => ({ ...each }))))
-    expect(placement(working)).not.toBe(placement([session(1, '/home/me/shop', { status: 'working' }), session(2, '/home/me/shop')]))
-  })
-})

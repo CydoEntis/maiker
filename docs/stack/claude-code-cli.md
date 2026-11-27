@@ -93,6 +93,24 @@ Versions the adapter was run against: 2.1.312, 2.1.314, 2.1.316, 2.1.327 and 2.1
 that passes the flag check starts, tagged advertised, and is not refused. Claude Code
 2.1.331 accepted every launch flag the adapter passes and lists `--permission-prompts` in its help,
 naming `--permission-prompt-tool` only in that option's text, so the check accepts either name.
+**Background tasks outlive their turn.** A helper started with `run_in_background` (or a background
+command) keeps running after the turn's result, and closing Claude Code's input ends it. Seen with
+2.1.332 on 2026-11-27 (`claude -p` stream-json, one process, input left open): Claude Code lists what
+runs in a `system` `background_tasks_changed` frame each time the list changes; when a task ends it
+sends `system` `task_notification` (`task_id`, `status`, and `summary` with `summary_is_report` for a
+helper's answer), then the list again, then an `init` and a whole turn of its own with no user
+replay, ending in its own `result`. Its transcript keeps the news as a user message of
+`<task-notification>` blocks. So `claude.rs` keeps the process after a turn while anything runs
+(`Lingering`). Each `task_notification` becomes that block as a user message, so live and read back
+look the same (`task_notification_text`): in the running turn when one is open, otherwise it opens a
+turn Claude started (`TurnProjector::unprompted`, no delivery receipt). The person's next message goes
+to the same process when it needs the same launch arguments. The process is closed once the list is
+empty and no turn is open, and then a process for the next message is started ahead as after any
+turn. It is also closed when a message needs other arguments, when the conversation stops, or after
+`BACKGROUND_TIME_LIMIT` (2 hours). Each of those ends the tasks, so the daemon writes a `stopped`
+notification for each one first. A tool request that arrives between turns has nobody to ask, so it
+is refused (never granted) with a reason the helper reads.
+
 After a daemon restart, a stop, or an agent gone mid-turn or between turns, a Claude chat is taken
 up again by reading its past from Claude Code's own transcript (`begin_saved_history`), which needs
 `restore.output` on. That transcript is what `claude --resume` itself continues from. When the

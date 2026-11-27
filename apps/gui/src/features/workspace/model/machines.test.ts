@@ -3,7 +3,7 @@ import { conversationsFromSnapshot } from '@/api/daemon'
 import { forgetMachines, parseSessionId, registerMachine, type MachineKind, type MachineState } from '@/api/machines'
 import type { Conversation } from '@/data/preview'
 import type { Layout } from './layout'
-import { downSentence, LOCAL_HEAD, machineDrops, idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
+import { downSentence, LOCAL_HEAD, updateProblem, versionWord, machineDrops, idsOfMachinesNotHeard, announcementFor, machineChip, machineHeads, machineTitle, remoteStartRefusal, remoteTargetOf, remoteTerminals, updateActionOf, updateCommandOf, withUnconnected, withoutUnconnected, type MachineHead, type RemoteMachine } from './machines'
 import { folderNameOf, toSessionView } from './session'
 
 afterEach(() => { forgetMachines() })
@@ -307,5 +307,27 @@ describe('saying that a machine is not connected', () => {
     expect(downSentence({ ...down, why: 'devbox refused the key.' })).toBe('devbox refused the key.')
     expect(downSentence(down)).not.toBe('')
     expect(downSentence({ ...down, updateAction: 'install' })).not.toBe(downSentence(down))
+  })
+})
+
+describe('a machine down only because of its version', () => {
+  const down: MachineHead = { ...LOCAL_HEAD, key: 'machine-3', machine: 3, name: 'server-15', label: 'kingdom', down: true }
+
+  it('is said as what it needs, and any other down machine is not', () => {
+    expect(versionWord({ ...down, updateAction: 'update' })).toBe('needs update')
+    expect(versionWord({ ...down, updateAction: 'install' })).toBe('not installed')
+    expect(versionWord({ ...down, failure: 'update-here' })).toBe('newer than this app')
+    expect(versionWord(down)).toBeNull()
+    expect(versionWord({ ...down, down: false, updateAction: 'update' })).toBeNull()
+  })
+
+  it('asks for the update by the machine\'s own name, and offers none when this app is the older one', () => {
+    const asked: [string, string][] = []
+    const problem = updateProblem({ ...down, updateAction: 'update' }, (name, action) => { asked.push([name, action]) })
+    if (!('update' in problem)) throw new Error('the update is offered')
+    problem.update.onUpdate?.()
+    expect(asked).toEqual([['server-15', 'update']])
+    expect(updateProblem({ ...down, failure: 'update-here' }, () => undefined)).toEqual({ update: { word: 'newer than this app', onUpdate: null } })
+    expect(updateProblem(down, () => undefined)).toEqual({})
   })
 })

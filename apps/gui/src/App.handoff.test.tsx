@@ -295,7 +295,7 @@ describe('desktop terminal multiplexer', () => {
     await waitFor(() => { expect(daemon.startShellSession).toHaveBeenCalledWith(`${HOME}/code`) })
   })
 
-  it('lists the project opened last first, each with all its sessions, the most urgent first, each named by its folder', async () => {
+  it('lists the project opened last first, each with all its sessions in the order they were made, each named by its folder', async () => {
     daemon.loadConversations.mockResolvedValue([
       term(9, `${HOME}/Downloads`),
       inRepo(3, `${HOME}/code/maiker`, `${HOME}/code/maiker/crates/maitty-core`, { agent: 'codex', status: 'working' }),
@@ -307,7 +307,7 @@ describe('desktop terminal multiplexer', () => {
     const sidebar = await screen.findByRole('navigation', { name: 'Sessions' })
     await within(sidebar).findByRole('button', { name: 'maiker, shell, idle' })
     const rows = within(sidebar).getAllByRole('button', { name: /, (shell|codex), / }).map((row) => row.getAttribute('aria-label'))
-    expect(rows).toEqual(['Downloads, shell, idle', 'docs, shell, needs you', 'maiker, codex, working', 'maiker, shell, idle'])
+    expect(rows).toEqual(['Downloads, shell, idle', 'docs, shell, needs you', 'maiker, shell, idle', 'maiker, codex, working'])
     expect(within(sidebar).getAllByRole('list').map((list) => list.getAttribute('aria-label'))).toEqual(['Downloads', 'docs', 'maiker'])
     expect(sidebar).not.toHaveTextContent(`${DAEMON_NAME} ·`)
   })

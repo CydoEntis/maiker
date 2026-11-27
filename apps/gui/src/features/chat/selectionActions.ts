@@ -17,12 +17,14 @@ function speakerOf(node: Node | null): PickedText['speaker'] {
 
 /**
  * What a mouse release in the chat selected, or null when it selected nothing to act on: a plain click, a
- * selection that began outside this chat (left behind elsewhere), or one in the message box. `undefined` means
- * the release was on the selection bar, so what is picked stands.
+ * selection that began outside this chat (left behind elsewhere), one in the message box, or a release outside the
+ * chat's own page area. `undefined` means the release was on the selection bar, so what is picked stands.
  */
 export function pickedText(event: MouseEvent<HTMLElement>): PickedText | null | undefined {
   const target = event.target
   if (target instanceof Element && target.closest(SELECTION_BAR) !== null) return undefined
+  // React hands a portal's events to the chat too: a release over a picture opened full size is not in the chat.
+  if (!(target instanceof Node) || !event.currentTarget.contains(target)) return null
   if (target instanceof Element && target.closest(EDITED) !== null) return null
   const selection = window.getSelection()
   if (selection === null || selection.isCollapsed || !event.currentTarget.contains(selection.anchorNode)) return null
