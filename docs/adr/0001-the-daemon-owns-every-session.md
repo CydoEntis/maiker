@@ -31,3 +31,5 @@ session and spawn every pane.
 
 - Anything that touches PTYs or process lifetime lives in `crates/maitty-core/src/daemon/`.
 - A client may create a session only after the daemon reports it has finished restoring.
+- Proposed in 0022: a small pane host holds the PTYs so a daemon update no longer ends a pane;
+  the daemon still owns every session and is the only thing that gives the host orders.
