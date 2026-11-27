@@ -70,12 +70,15 @@ export const AnsweredApprovalSchema = z.object({
 })
 export type AnsweredApproval = z.infer<typeof AnsweredApprovalSchema>
 
+/** How many of an input's mismatches are logged: the first few say where its shape changed. */
+const SHOWN_ISSUES = 3
+
 /**
  * Says where an input from the daemon did not match this app's copy of its shape. Only the paths and
  * reasons are logged, never the values: they hold commands and file contents.
  */
 function warnRejected(what: string, error: z.ZodError): void {
-  const where = error.issues.slice(0, 3).map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
+  const where = error.issues.slice(0, SHOWN_ISSUES).map((issue) => `${issue.path.join('.') || '(root)'}: ${issue.message}`)
   console.warn(`Left out a ${what} this app cannot read`, where)
 }
 
