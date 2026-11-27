@@ -445,6 +445,20 @@ struct Client {
     behind: std::cell::Cell<bool>,
 }
 
+/// A one-shot client (`send`, the MCP tools) types a message as its text, then Enter. An agent
+/// still settling (one just resumed) can read that Enter as a new line, and the message sits in
+/// its box: the Enter is watched as the app's own queued messages are (`Term::enter_again_due`),
+/// unless the text was an agent command, whose menu a second Enter would answer.
+fn watch_typed_enter(t: &mut term::Term, data: &[u8]) {
+    if data == b"\r" {
+        if !std::mem::take(&mut t.enter_after_command) {
+            t.enter_sent = Some(t.last_input);
+        }
+    } else {
+        t.enter_after_command = data.starts_with(b"/");
+    }
+}
+
 /// Messages waiting for one client before it counts as too far behind.
 const CLIENT_QUEUE: usize = 8192;
 
@@ -2965,8 +2979,14 @@ impl Daemon {
                     {
                         t.pending_input = Some((data, Instant::now() + Duration::from_secs(8)));
                     }
-                } else if let Some(t) = self.terms.get_mut(&term) {
-                    t.input(&data);
+                } else {
+                    let one_shot = self.clients.get(&client).is_some_and(|c| !c.attach);
+                    if let Some(t) = self.terms.get_mut(&term) {
+                        t.input(&data);
+                        if one_shot {
+                            watch_typed_enter(t, &data);
+                        }
+                    }
                 }
             }
             ClientMsg::Resize { term, cols, rows } => {

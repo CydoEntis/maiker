@@ -820,6 +820,36 @@ fn enter_is_pressed_again_only_when_a_hooked_agent_never_reported_the_message() 
     close(&mut d, &[t]);
 }
 
+/// `maiker send` (and the MCP tools) type the text, then Enter: an agent still settling after a
+/// resume can take that Enter as a new line, and the message sat in its box unsent.
+#[test]
+fn a_one_shot_clients_message_gets_the_enter_rescue_and_its_command_does_not() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Done);
+    }
+    let (tx, _seen) = mpsc::channel(64);
+    let cli = 77;
+    d.handle(Ev::Connected(cli, tx, false, crate::protocol::Surface::Terminal, false));
+    let typed = |d: &mut Daemon, data: &[u8]| d.handle(Ev::Msg(cli, ClientMsg::Input { term: t, data: data.to_vec() }));
+    typed(&mut d, b"what did you say?");
+    typed(&mut d, b"\r");
+    assert!(d.terms[&t].enter_sent.is_some(), "its Enter is watched");
+    d.terms.get_mut(&t).unwrap().enter_sent = None;
+    typed(&mut d, b"/model");
+    typed(&mut d, b"\r");
+    assert!(d.terms[&t].enter_sent.is_none(), "a second Enter would answer the command's menu");
+    // A window's keys are the person typing: nothing is pressed for them.
+    let mut window = viewer(&mut d);
+    d.handle(Ev::Msg(40, ClientMsg::Input { term: t, data: b"hi".to_vec() }));
+    d.handle(Ev::Msg(40, ClientMsg::Input { term: t, data: b"\r".to_vec() }));
+    assert!(d.terms[&t].enter_sent.is_none());
+    let _ = heard(&mut window);
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_queued_message_of_several_lines_goes_in_as_one_paste() {
     use super::status::queued_as_typed;
