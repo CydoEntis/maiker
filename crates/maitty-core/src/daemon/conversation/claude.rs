@@ -13,8 +13,8 @@ use crate::conversation::TurnChoice;
 use maitty_provider::ProviderEvent;
 use maitty_provider_claude::approvals::approval_request;
 use maitty_provider_claude::{
-    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, MAX_UNKNOWN_KIND_CHARS, OutputFrame, TurnProjector,
-    CliTag, check_cli, command_arguments_for_turn, parse_output_frame, session_id,
+    BackgroundTask, MAX_FRAME_BYTES, MAX_PENDING_TOOLS, MAX_UNKNOWN_KIND_CHARS, OutputFrame, TurnProjector,
+    CliTag, check_cli, command_arguments_for_turn, parse_output_frame, session_id, task_notification_text,
 };
 
 /// Skip an output frame Claude Code added after this adapter was written. It asks for nothing,
@@ -43,6 +43,9 @@ const INITIALIZE_REQUEST_ID: &str = "claude-initialize";
 /// enough to read a reply and write the next message, short enough that idle chats do not each
 /// hold a Claude Code process.
 const WARM_IDLE_LIMIT: Duration = Duration::from_secs(10 * 60);
+/// How long a process kept for its background tasks waits for them before it is closed, which
+/// ends them: a task that runs this long is stuck, and the process holds its memory.
+const BACKGROUND_TIME_LIMIT: Duration = Duration::from_secs(2 * 60 * 60);
 
 struct Client {
     process: super::process::OwnedChild,
@@ -344,6 +347,183 @@ async fn retire(mut client: Client, reason: &str) {
     }
 }
 
+/// A conversation's process kept after its turn because tasks it started still run in the
+/// background (helpers, background commands): closing its input would end them. Claude Code says
+/// when each ends and then starts a turn of its own to read the news; the person's next message
+/// is written to it too when it needs no other launch arguments. It is closed once nothing runs.
+struct Lingering {
+    client: Client,
+    /// The arguments the next message would start a process with.
+    arguments: Vec<OsString>,
+    tasks: Vec<BackgroundTask>,
+    expires: tokio::time::Instant,
+}
+
+/// What became of the kept process after one of its frames.
+enum Tended {
+    // Boxed: the process is far larger than the other outcomes.
+    Kept(Box<Lingering>),
+    /// It was closed. `prewarm` holds the next message's arguments when it closed because its tasks
+    /// were done, so a process can wait for that message as after any turn.
+    Closed { prewarm: Option<Vec<OsString>> },
+    Failed(anyhow::Error),
+}
+
+/// The next frame of the kept process, or `None` once it waited past the time limit.
+async fn next_lingering(lingering: &mut Option<Lingering>) -> Option<Result<OutputFrame>> {
+    let Some(kept) = lingering else {
+        return std::future::pending().await;
+    };
+    tokio::select! {
+        () = tokio::time::sleep_until(kept.expires) => None,
+        frame = kept.client.next() => Some(frame),
+    }
+}
+
+/// Says in the chat that tasks were stopped because their process was closed, in the words Claude
+/// Code uses when a task ends, so each shows as stopped rather than as still running.
+async fn report_stopped(
+    tasks: &[BackgroundTask],
+    session: &str,
+    owner: super::runtime::Owner,
+    events: &tokio::sync::mpsc::Sender<crate::daemon::Ev>,
+) {
+    if tasks.is_empty() {
+        return;
+    }
+    let (turn_id, item) = match (session_id(), session_id()) {
+        (Ok(turn_id), Ok(item)) => (turn_id, item),
+        (Err(error), _) | (_, Err(error)) => {
+            tracing::warn!(error = %format!("{error:#}"), "Could not say in the chat that background tasks were stopped");
+            return;
+        }
+    };
+    let turn = TurnProjector::unprompted(session.to_owned(), turn_id);
+    let text = tasks
+        .iter()
+        .map(|task| task_notification_text(&task.id, Some(task), "stopped", None))
+        .collect::<Vec<_>>()
+        .join("\n");
+    for event in turn.begin().into_iter().chain(turn.note(item, text)).chain(turn.close()) {
+        if let Err(error) = super::runtime::emit(events, owner, super::runtime::Payload::Event(event)).await {
+            tracing::warn!(error = %format!("{error:#}"), "Could not say in the chat that background tasks were stopped");
+            return;
+        }
+    }
+}
+
+/// Closes the kept process before its tasks are done, which ends them, and says so in the chat.
+async fn close_lingering(
+    kept: Lingering,
+    reason: &str,
+    session: &str,
+    owner: super::runtime::Owner,
+    events: &tokio::sync::mpsc::Sender<crate::daemon::Ev>,
+) {
+    tracing::info!(reason, tasks = kept.tasks.len(), "Closing the Claude process kept for background tasks");
+    report_stopped(&kept.tasks, session, owner, events).await;
+    let mut client = kept.client;
+    if let Err(error) = client.stop().await {
+        // The client is dropped next, and its guard ends the process tree.
+        tracing::warn!(error = %format!("{error:#}"), "Claude process kept for background tasks did not stop cleanly");
+    }
+}
+
+/// Closes the kept process once nothing runs in it; until then it is kept.
+async fn settle(kept: Box<Lingering>) -> Tended {
+    if !kept.tasks.is_empty() {
+        return Tended::Kept(kept);
+    }
+    let Lingering { mut client, arguments, .. } = *kept;
+    match client.stop().await {
+        Ok(()) => Tended::Closed { prewarm: Some(arguments) },
+        Err(error) => Tended::Failed(error.context("Claude process cleanup failed")),
+    }
+}
+
+/// Handles what the kept process says between the person's messages: its task list, a task's end
+/// (read in a turn Claude starts itself), or a turn it starts for news it already had.
+async fn tend(
+    mut kept: Box<Lingering>,
+    outcome: Option<Result<OutputFrame>>,
+    channels: &mut Channels<'_>,
+) -> Tended {
+    let (session, owner, events) = (channels.session, channels.owner, channels.events);
+    let frame = match outcome {
+        None => {
+            close_lingering(*kept, "its background tasks ran past the time limit", session, owner, events).await;
+            return Tended::Closed { prewarm: None };
+        }
+        Some(Err(error)) => {
+            // The next message starts a new process, as after any turn.
+            tracing::warn!(error = %format!("{error:#}"), "Claude process kept for background tasks stopped");
+            report_stopped(&kept.tasks, session, owner, events).await;
+            retire(kept.client, "it stopped while it ran background tasks").await;
+            return Tended::Closed { prewarm: None };
+        }
+        Some(Ok(frame)) => frame,
+    };
+    let (note, first) = match frame {
+        OutputFrame::BackgroundTasks(listed) => {
+            kept.tasks = listed;
+            return settle(kept).await;
+        }
+        OutputFrame::TaskEnded { task_id, status, report } => {
+            let text = task_notification_text(&task_id, kept.tasks.iter().find(|task| task.id == task_id), &status, report.as_deref());
+            (Some(text), None)
+        }
+        frame @ OutputFrame::MessageStarted { .. } => (None, Some(frame)),
+        OutputFrame::ControlRequest { request_id, request } => {
+            // A background helper asking for a tool while no turn is open has nobody to ask:
+            // it is refused, never granted, and the helper is told why.
+            let subtype: String = request.get("subtype").and_then(Value::as_str).unwrap_or_default().chars().take(MAX_UNKNOWN_KIND_CHARS).collect();
+            tracing::warn!(conversation = owner.conversation.0, subtype = %subtype, "refused a Claude request made between turns");
+            let answer = if subtype == "can_use_tool" {
+                serde_json::json!({"type":"control_response","response":{"subtype":"success","request_id":request_id,"response":{"behavior":"deny","message":"The person can't be asked while the chat is between turns. Finish without this tool, or report what you need."}}})
+            } else {
+                unsupported_control_response(&request_id, &subtype)
+            };
+            return match kept.client.write(&answer).await {
+                Ok(()) => Tended::Kept(kept),
+                Err(error) => Tended::Failed(error),
+            };
+        }
+        OutputFrame::Unknown { kind } => {
+            log_unknown_frame(&kind);
+            return Tended::Kept(kept);
+        }
+        _ => return Tended::Kept(kept),
+    };
+    let turn_id = match session_id() {
+        Ok(turn_id) => turn_id,
+        Err(error) => return Tended::Failed(error),
+    };
+    let mut projector = TurnProjector::unprompted(session.to_owned(), turn_id.clone());
+    let mut opened = projector.begin();
+    if let Some(text) = note {
+        match session_id() {
+            Ok(item) => opened.extend(projector.note(item, text)),
+            Err(error) => return Tended::Failed(error),
+        }
+    }
+    if let Some(frame) = first {
+        match projector.project(frame) {
+            Ok(projected) => opened.extend(projected),
+            Err(error) => return Tended::Failed(error),
+        }
+    }
+    for event in opened {
+        if let Err(error) = super::runtime::emit(events, owner, super::runtime::Payload::Event(event)).await {
+            return Tended::Failed(error);
+        }
+    }
+    match drive_turn(channels, &mut kept.client, &mut projector, &turn_id, None, &mut kept.tasks).await {
+        Ok(()) => settle(kept).await,
+        Err(TurnFailure::Active { error, .. } | TurnFailure::BeforeStart { error, .. }) => Tended::Failed(error),
+        Err(TurnFailure::Startup { failure, .. }) => Tended::Failed(failure.error),
+    }
+}
+
 pub(super) async fn run(
     launch: super::transport::Launch,
     owner: super::runtime::Owner,
@@ -399,13 +579,18 @@ pub(super) async fn run(
 
     let transcript = transcript_path(&settings.config_root, launch.paths().2, &session);
     let mut warm: Option<Warm> = None;
+    let mut lingering: Option<Lingering> = None;
     loop {
         tokio::select! {
             biased;
             _ = stop.recv() => {
-                let cleanup = match warm.take() {
-                    Some(mut warm) => warm.client.stop().await,
-                    None => Ok(()),
+                if let Some(kept) = &lingering {
+                    report_stopped(&kept.tasks, &session, owner, &events).await;
+                }
+                // At most one of them holds a process.
+                let cleanup = match (warm.take().map(|warm| warm.client), lingering.take().map(|kept| kept.client)) {
+                    (Some(mut client), _) | (None, Some(mut client)) => client.stop().await,
+                    (None, None) => Ok(()),
                 };
                 let (failure, reaped) = match cleanup {
                     Ok(()) => (None, true),
@@ -418,6 +603,9 @@ pub(super) async fn run(
                 let Some(command) = command else {
                     if let Some(warm) = warm.take() {
                         retire(warm.client, "the conversation's commands ended").await;
+                    }
+                    if let Some(kept) = lingering.take() {
+                        close_lingering(kept, "the conversation's commands ended", &session, owner, &events).await;
                     }
                     let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some("Claude command channel closed".into()), reaped: true }).await;
                     return;
@@ -451,19 +639,25 @@ pub(super) async fn run(
                                 requests: &mut requests,
                                 stop: &mut stop,
                                 warm: &mut warm,
+                                lingering: &mut lingering,
                             },
                             command.token,
                             Message { session: target, text, choice },
                         ).await {
-                            Ok((mut client, choice)) => {
+                            Ok((mut client, choice, tasks)) => {
                                 awaiting_first_message = false;
+                                let arguments = command_arguments_for_turn(&session, true, &settings, &choice);
+                                if !tasks.is_empty() {
+                                    // Closing its input now would end what still runs in the background.
+                                    lingering = Some(Lingering { client, arguments, tasks, expires: tokio::time::Instant::now() + BACKGROUND_TIME_LIMIT });
+                                    continue;
+                                }
                                 if let Err(error) = client.stop().await {
                                     let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some(format!("Claude process cleanup failed: {error:#}")), reaped: false }).await;
                                     return;
                                 }
                                 // Started only after the last process exited, so it loads the
                                 // whole transcript; it bets the next message keeps this model and effort.
-                                let arguments = command_arguments_for_turn(&session, true, &settings, &choice);
                                 warm = prewarm(&launch, &settings, transcript.as_deref(), &identity, arguments).await;
                             }
                             Err(TurnFailure::BeforeStart { token, error }) => {
@@ -489,6 +683,8 @@ pub(super) async fn run(
                                         result: Err(super::transport::RpcError::adapter_failure(-32000)),
                                     }).await;
                                 }
+                                // The chat only says the process ended; the log keeps why.
+                                tracing::warn!(conversation = owner.conversation.0, error = %format!("{error:#}"), "Claude turn ended its process");
                                 let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some(format!("{error:#}")), reaped: true }).await;
                                 return;
                             }
@@ -499,6 +695,22 @@ pub(super) async fn run(
                             token: command.token,
                             result: Err(super::transport::RpcError::adapter_failure(-32001)),
                         }).await;
+                    }
+                }
+            }
+            outcome = next_lingering(&mut lingering) => {
+                let Some(kept) = lingering.take().map(Box::new) else { continue };
+                let mut channels = Channels { session: &session, owner, events: &events, requests: &mut requests, stop: &mut stop };
+                match tend(kept, outcome, &mut channels).await {
+                    Tended::Kept(kept) => lingering = Some(*kept),
+                    Tended::Closed { prewarm: Some(arguments) } => {
+                        warm = prewarm(&launch, &settings, transcript.as_deref(), &identity, arguments).await;
+                    }
+                    Tended::Closed { prewarm: None } => {}
+                    Tended::Failed(error) => {
+                        tracing::warn!(conversation = owner.conversation.0, error = %format!("{error:#}"), "Claude turn ended its process");
+                        let _ = super::runtime::emit(&events, owner, super::runtime::Payload::Terminated { failure: Some(format!("{error:#}")), reaped: true }).await;
+                        return;
                     }
                 }
             }
@@ -593,6 +805,8 @@ struct TurnContext<'a> {
     stop: &'a mut tokio::sync::mpsc::Receiver<()>,
     /// Taken only once the message is known to be sendable, so a refused one leaves it waiting.
     warm: &'a mut Option<Warm>,
+    /// Likewise: the process kept for background tasks, which the message goes to when it can.
+    lingering: &'a mut Option<Lingering>,
 }
 
 /// A person's message for a session, with the model and effort picked for it.
@@ -606,7 +820,7 @@ async fn run_turn(
     context: TurnContext<'_>,
     token: u64,
     message: Message,
-) -> std::result::Result<(Client, TurnChoice), TurnFailure> {
+) -> std::result::Result<(Client, TurnChoice, Vec<BackgroundTask>), TurnFailure> {
     let TurnContext {
         launch,
         settings,
@@ -618,6 +832,7 @@ async fn run_turn(
         requests,
         stop,
         warm,
+        lingering,
     } = context;
     let Message { session: target, text, choice } = message;
     if target != session {
@@ -638,27 +853,39 @@ async fn run_turn(
         .validate()
         .map_err(|error| TurnFailure::BeforeStart { token, error: anyhow::Error::msg(error) })?;
     let args = command_arguments_for_turn(session, !awaiting_first_message, settings, &choice);
-    let mut client = match take_warm(warm, &args, session).await {
-        Some(client) => client,
-        None => {
-            let mut client = Client::spawn(
-                executable,
-                cwd,
-                &settings.config_root,
-                &launch.environment,
-                identity,
-                &args,
-            )
-            .await
-            .map_err(|failure| TurnFailure::Startup { token, failure })?;
-            if let Err(error) = client.initialize(session).await {
-                return Err(TurnFailure::Active {
-                    token: Some(token),
-                    error,
-                });
-            }
-            client
+    // The process kept for background tasks takes the message when it can, so they live on.
+    let (kept_client, mut tasks) = match lingering.take() {
+        Some(kept) if kept.arguments == args => (Some(kept.client), kept.tasks),
+        Some(kept) => {
+            close_lingering(kept, "the message needs other launch arguments", session, owner, events).await;
+            (None, Vec::new())
         }
+        None => (None, Vec::new()),
+    };
+    let mut client = match kept_client {
+        Some(client) => client,
+        None => match take_warm(warm, &args, session).await {
+            Some(client) => client,
+            None => {
+                let mut client = Client::spawn(
+                    executable,
+                    cwd,
+                    &settings.config_root,
+                    &launch.environment,
+                    identity,
+                    &args,
+                )
+                .await
+                .map_err(|failure| TurnFailure::Startup { token, failure })?;
+                if let Err(error) = client.initialize(session).await {
+                    return Err(TurnFailure::Active {
+                        token: Some(token),
+                        error,
+                    });
+                }
+                client
+            }
+        },
     };
     let turn_id = session_id().map_err(|error| TurnFailure::Active {
         token: Some(token),
@@ -686,7 +913,34 @@ async fn run_turn(
             error,
         });
     }
-    let mut pending_token = Some(token);
+    let mut channels = Channels { session, owner, events, requests, stop };
+    drive_turn(&mut channels, &mut client, &mut projector, &turn_id, Some(token), &mut tasks).await?;
+    Ok((client, choice, tasks))
+}
+
+/// What a turn talks to besides its process: the conversation's identity and channels.
+struct Channels<'a> {
+    session: &'a str,
+    owner: super::runtime::Owner,
+    events: &'a tokio::sync::mpsc::Sender<crate::daemon::Ev>,
+    requests: &'a mut tokio::sync::mpsc::Receiver<super::runtime::Command>,
+    stop: &'a mut tokio::sync::mpsc::Receiver<()>,
+}
+
+/// Reads one turn to its result: the person's own (`pending_token` answers their send once Claude
+/// shows it took the message) or one Claude Code started itself (no token). Background tasks
+/// that start or end meanwhile are kept in `tasks`, and the news of one that ended is shown in
+/// the turn.
+async fn drive_turn(
+    channels: &mut Channels<'_>,
+    client: &mut Client,
+    projector: &mut TurnProjector,
+    turn_id: &str,
+    mut pending_token: Option<u64>,
+    tasks: &mut Vec<BackgroundTask>,
+) -> std::result::Result<(), TurnFailure> {
+    let Channels { session, owner, events, requests, stop } = channels;
+    let (session, owner, events) = (*session, *owner, *events);
     let mut approvals = BTreeMap::new();
     let mut interrupts = BTreeMap::new();
     loop {
@@ -751,6 +1005,18 @@ async fn run_turn(
                     log_unknown_frame(kind);
                     continue;
                 }
+                if let OutputFrame::BackgroundTasks(listed) = frame {
+                    *tasks = listed;
+                    continue;
+                }
+                if let OutputFrame::TaskEnded { task_id, status, report } = &frame {
+                    let text = task_notification_text(task_id, tasks.iter().find(|task| &task.id == task_id), status, report.as_deref());
+                    let item = session_id().map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                    for event in projector.note(item, text) {
+                        super::runtime::emit(events, owner, super::runtime::Payload::Event(event)).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                    }
+                    continue;
+                }
                 if let OutputFrame::ControlRequest { request_id, request } = &frame {
                     let subtype = request.get("subtype").and_then(Value::as_str).unwrap_or_default();
                     if subtype != "can_use_tool" {
@@ -776,7 +1042,7 @@ async fn run_turn(
                     if approvals.len() >= MAX_PENDING_TOOLS || approvals.insert(request_id.clone(), input.clone()).is_some() {
                         return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude approval request queue overflow or ID reuse") });
                     }
-                    let (request, command_hash) = approval_request(&turn_id, request_id, request, tool_name, &input);
+                    let (request, command_hash) = approval_request(turn_id, request_id, request, tool_name, &input);
                     let asked = ProviderEvent::ApprovalRequested { request: Box::new(request), command_hash };
                     super::runtime::emit(events, owner, super::runtime::Payload::Event(asked)).await.map_err(|error| TurnFailure::Active { token: pending_token, error })?;
                     continue;
@@ -817,7 +1083,7 @@ async fn run_turn(
                         }
                     }
                 }
-                if finished { return Ok((client, choice)); }
+                if finished { return Ok(()); }
             }
         }
     }
