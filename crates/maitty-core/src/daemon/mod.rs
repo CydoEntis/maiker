@@ -2178,6 +2178,7 @@ impl Daemon {
             }
             Ev::Scan(found) => {
                 let mut started = Vec::new();
+                let mut ended_mid_turn = Vec::new();
                 for f in found {
                     let Some(t) = self.terms.get_mut(&f.term) else {
                         continue;
@@ -2296,11 +2297,27 @@ impl Daemon {
                             }
                             started.push(f.term);
                         }
-                        t.status = if f.agent.is_some() {
+                        // An agent gone from its process tree mid-turn crashed or was killed:
+                        // say so, or the pane quietly turns into a shell and nobody is told.
+                        if f.agent.is_none()
+                            && matches!(t.status, Status::Working | Status::Blocked)
+                            && let Some(agent) = t.agent.clone()
+                        {
+                            ended_mid_turn.push((t.id, agent, t.status));
+                        }
+                        let new = if f.agent.is_some() {
                             Status::Idle
                         } else {
                             Status::None
                         };
+                        tracing::info!(
+                            "pane {} ({}): {:?} -> {new:?}: process: agent {}",
+                            t.id,
+                            t.agent.as_deref().or(f.agent.as_deref()).unwrap_or("no agent"),
+                            t.status,
+                            if f.agent.is_some() { "started" } else { "gone" }
+                        );
+                        t.status = new;
                         t.status_since = term::unix_now();
                         t.last_turn_end = Instant::now();
                         t.status_why = if f.agent.is_some() {
@@ -2336,6 +2353,16 @@ impl Daemon {
                         t.hooked = false;
                         self.dirty = true;
                     }
+                }
+                for (term, agent, was) in ended_mid_turn {
+                    let doing = if was == Status::Blocked { "waiting for you" } else { "working" };
+                    tracing::warn!("pane {term}: {agent} exited while it was {doing}");
+                    self.broadcast(
+                        |_| true,
+                        ServerMsg::Notice(format!(
+                            "{agent} in pane {term} exited while it was {doing}: it may have crashed"
+                        )),
+                    );
                 }
                 if self.cfg.auto_workspace {
                     for term in started {

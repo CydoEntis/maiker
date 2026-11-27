@@ -209,7 +209,9 @@ order of trust; how to connect an agent so it reports for itself is in [agent-st
 | Failed | The last command in the session failed (in the terminal app, a failed check too). | A shell reads `exited`, an agent `stopped`; listed under **Needs you**. | Red mark. |
 
 A finished turn stays **done** until you look at it: open the session in the desktop app, or focus its pane in the
-terminal app. Then it becomes **idle**. In the desktop app a finished session's menu also has **Mark as done**, which files it
+terminal app. Then it becomes **idle**. A finish still unseen when Maiker restarts comes back **done**, without its sound or
+alert again. An agent whose process disappears while it is working or waiting for you (a crash, a kill) is reported in a
+notice, `claude in pane 4 exited while it was working`, before its pane becomes a plain shell. In the desktop app a finished session's menu also has **Mark as done**, which files it
 under Idle without opening it. A session you cannot reach (its machine is down) is shown as not known, with its last status,
 until the machine is back.
 

@@ -892,6 +892,39 @@ fn a_pane_started_as_an_agent_keeps_its_name_while_the_agent_starts() {
     close(&mut d, &[t]);
 }
 
+/// An agent whose process is gone while it was working crashed or was killed: the pane becomes a
+/// shell, and every window is told, so the agent is not lost without a word.
+#[test]
+fn an_agent_gone_mid_turn_is_reported_not_silently_turned_into_a_shell() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        p.agent = Some("claude".into());
+        p.born = Instant::now() - super::AGENT_SHOWS_WITHIN - Duration::from_secs(1);
+    }
+    d.set_status(t, Status::Working, "test");
+    // One scan can miss a process for a moment; only several in a row say it is gone.
+    for _ in 0..super::AGENT_MISSING_SCANS {
+        d.handle(Ev::Scan(vec![scan::Found {
+            term: t,
+            process: "bash".into(),
+            agent: None,
+            cwd: None,
+            agent_cwd: None,
+            agent_pid: None,
+            claude_dir: None,
+            mem: 0,
+            cpu: 0.0,
+            remote: None,
+        }]));
+    }
+    assert_eq!(d.terms[&t].agent, None);
+    assert_eq!(noticed(&heard(&mut seen), "exited while it was working"), 1);
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn process_scan_cannot_erase_a_native_conversations_provider_identity() {
     let (mut d, _rx) = daemon();
