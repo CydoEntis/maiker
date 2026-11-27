@@ -445,6 +445,20 @@ struct Client {
     behind: std::cell::Cell<bool>,
 }
 
+/// A one-shot client (`send`, the MCP tools) types a message as its text, then Enter. An agent
+/// still settling (one just resumed) can read that Enter as a new line, and the message sits in
+/// its box: the Enter is watched as the app's own queued messages are (`Term::enter_again_due`),
+/// unless the text was an agent command, whose menu a second Enter would answer.
+fn watch_typed_enter(t: &mut term::Term, data: &[u8]) {
+    if data == b"\r" {
+        if !std::mem::take(&mut t.enter_after_command) {
+            t.enter_sent = Some(t.last_input);
+        }
+    } else {
+        t.enter_after_command = data.starts_with(b"/");
+    }
+}
+
 /// Messages waiting for one client before it counts as too far behind.
 const CLIENT_QUEUE: usize = 8192;
 
@@ -631,12 +645,18 @@ struct Daemon {
     /// An agent a window asked for ahead of its first message (`Command::Prewarm`).
     warm: Option<warm::Warm>,
     last_vanished_check: Instant,
+    /// Where this server's panes' hooks note the reports they could not hand over, and when it
+    /// last read them (`Daemon::note_lost_reports`).
+    hook_drops_file: PathBuf,
+    lost_reports_read: Instant,
     /// The git repositories found on this machine, for a window's folder picker.
     repo_index: repo_index::Index,
     /// The last automatic workspace move, for undo.
     auto_undo: Option<AutoUndo>,
     /// When a pane's process or a pane's agent last ended on its own (see `LOSS_HOLD`).
     last_loss: Option<Instant>,
+    /// Background parts that panicked and are off until the daemon restarts (`Daemon::guarded`).
+    broken_parts: BTreeSet<&'static str>,
 }
 
 /// The daemon's environment is every session's, and it keeps it across its own restarts. Started
@@ -747,6 +767,15 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
     })
 }
 
+/// What a caught panic said, for the log.
+fn panic_text(panic: &(dyn std::any::Any + Send)) -> String {
+    panic
+        .downcast_ref::<&str>()
+        .map(|text| (*text).to_owned())
+        .or_else(|| panic.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "no message".into())
+}
+
 fn init_logging() {
     let dir = crate::config::data_dir();
     let _ = std::fs::create_dir_all(&dir);
@@ -766,6 +795,13 @@ fn init_logging() {
             )
             .try_init();
     }
+    // The daemon runs detached, so a panic's own report to stderr goes nowhere: the log keeps
+    // where it happened, which `Daemon::guarded` cannot see once it has caught it.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        tracing::error!("panic: {info}");
+        default_hook(info);
+    }));
 }
 
 async fn serve(
@@ -1498,9 +1534,42 @@ impl Daemon {
             adopt: None,
             adopted: None,
             last_vanished_check: crate::clock::ago(VANISHED_CHECK_EVERY - VANISHED_CHECK_FIRST),
+            hook_drops_file: crate::hook_drops::file(),
+            lost_reports_read: Instant::now(),
             repo_index: repo_index::Index::default(),
             last_loss: None,
             auto_undo: None,
+            broken_parts: BTreeSet::new(),
+        }
+    }
+
+    /// Run one background part of the daemon so that a bug in it cannot end the daemon, and with
+    /// it every session it owns. A part that panics is turned off until the daemon restarts (it
+    /// would only panic again each tick), and every window is told once.
+    fn guarded(&mut self, part: &'static str, work: impl FnOnce(&mut Self)) {
+        if self.broken_parts.contains(part) {
+            return;
+        }
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(self)));
+        if let Err(panic) = outcome {
+            tracing::error!("{part} panicked and is off until the service restarts: {}", panic_text(&*panic));
+            self.broken_parts.insert(part);
+            self.broadcast(
+                |_| true,
+                ServerMsg::Notice(format!(
+                    "{part} stopped after an internal error; your sessions are not affected. Restart the service to turn it back on."
+                )),
+            );
+        }
+    }
+
+    /// Handle one event, so that a bug in handling it cannot end the daemon. Unlike a background
+    /// part, event handling is never turned off: the next event may well be handled fine.
+    fn handle_guarded(&mut self, ev: Ev) {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| self.handle(ev)));
+        if let Err(panic) = outcome {
+            tracing::error!("handling an event panicked; the event was dropped: {}", panic_text(&*panic));
+            self.dirty = true;
         }
     }
 
@@ -1509,10 +1578,10 @@ impl Daemon {
         loop {
             tokio::select! {
                 Some(ev) = rx.recv() => {
-                    self.handle(ev);
+                    self.handle_guarded(ev);
                     // Drain whatever else is queued before broadcasting state once.
                     while let Ok(ev) = rx.try_recv() {
-                        self.handle(ev);
+                        self.handle_guarded(ev);
                     }
                 }
                 _ = tick.tick() => {
@@ -1520,27 +1589,28 @@ impl Daemon {
                     self.finish_closes();
                     self.finish_chat_closes();
                     self.close_ended_agents();
-                    self.start_waiting_helpers();
+                    self.guarded("Starting waiting helpers", Self::start_waiting_helpers);
                     self.expire_warm();
-                    self.wake_snoozed(term::unix_now());
+                    self.guarded("Waking snoozed sessions", |d| d.wake_snoozed(term::unix_now()));
                     self.update_statuses();
                     self.settled_alerts();
-                    self.phone_alerts();
-                    self.auto_continue();
-                    self.poll_codex();
-                    self.poll_effort();
-                    self.follow_tick();
-                    self.hook_watch_tick();
+                    self.guarded("Phone alerts", Self::phone_alerts);
+                    self.guarded("Auto-continue", Self::auto_continue);
+                    self.guarded("Codex session reading", Self::poll_codex);
+                    self.guarded("Effort reading", Self::poll_effort);
+                    self.guarded("Following terminal agents' chats", Self::follow_tick);
+                    self.guarded("Hook watching", Self::hook_watch_tick);
+                    self.guarded("Lost hook reports", Self::note_lost_reports);
                     self.deliver_queued();
-                    self.usage_store.save_if_due(term::unix_now());
-                    self.poll_git();
-                    self.sweep_secrets();
-                    self.poll_prs();
+                    self.guarded("Usage saving", |d| d.usage_store.save_if_due(term::unix_now()));
+                    self.guarded("Git status", Self::poll_git);
+                    self.guarded("Secret expiry", Self::sweep_secrets);
+                    self.guarded("Pull request polling", Self::poll_prs);
                     if self.last_vanished_check.elapsed() >= VANISHED_CHECK_EVERY {
                         self.last_vanished_check = Instant::now();
-                        self.forget_vanished_worktrees();
+                        self.guarded("Worktree clean-up", Self::forget_vanished_worktrees);
                     }
-                    self.publish_activity();
+                    self.guarded("Activity publishing", Self::publish_activity);
                     if self.last_save.elapsed() > SAVE_EVERY {
                         self.last_save = Instant::now();
                         self.persist(false);
@@ -2178,6 +2248,7 @@ impl Daemon {
             }
             Ev::Scan(found) => {
                 let mut started = Vec::new();
+                let mut ended_mid_turn = Vec::new();
                 for f in found {
                     let Some(t) = self.terms.get_mut(&f.term) else {
                         continue;
@@ -2296,11 +2367,27 @@ impl Daemon {
                             }
                             started.push(f.term);
                         }
-                        t.status = if f.agent.is_some() {
+                        // An agent gone from its process tree mid-turn crashed or was killed:
+                        // say so, or the pane quietly turns into a shell and nobody is told.
+                        if f.agent.is_none()
+                            && matches!(t.status, Status::Working | Status::Blocked)
+                            && let Some(agent) = t.agent.clone()
+                        {
+                            ended_mid_turn.push((t.id, agent, t.status));
+                        }
+                        let new = if f.agent.is_some() {
                             Status::Idle
                         } else {
                             Status::None
                         };
+                        tracing::info!(
+                            "pane {} ({}): {:?} -> {new:?}: process: agent {}",
+                            t.id,
+                            t.agent.as_deref().or(f.agent.as_deref()).unwrap_or("no agent"),
+                            t.status,
+                            if f.agent.is_some() { "started" } else { "gone" }
+                        );
+                        t.status = new;
                         t.status_since = term::unix_now();
                         t.last_turn_end = Instant::now();
                         t.status_why = if f.agent.is_some() {
@@ -2336,6 +2423,16 @@ impl Daemon {
                         t.hooked = false;
                         self.dirty = true;
                     }
+                }
+                for (term, agent, was) in ended_mid_turn {
+                    let doing = if was == Status::Blocked { "waiting for you" } else { "working" };
+                    tracing::warn!("pane {term}: {agent} exited while it was {doing}");
+                    self.broadcast(
+                        |_| true,
+                        ServerMsg::Notice(format!(
+                            "{agent} in pane {term} exited while it was {doing}: it may have crashed"
+                        )),
+                    );
                 }
                 if self.cfg.auto_workspace {
                     for term in started {
@@ -2889,8 +2986,14 @@ impl Daemon {
                     {
                         t.pending_input = Some((data, Instant::now() + Duration::from_secs(8)));
                     }
-                } else if let Some(t) = self.terms.get_mut(&term) {
-                    t.input(&data);
+                } else {
+                    let one_shot = self.clients.get(&client).is_some_and(|c| !c.attach);
+                    if let Some(t) = self.terms.get_mut(&term) {
+                        t.input(&data);
+                        if one_shot {
+                            watch_typed_enter(t, &data);
+                        }
+                    }
                 }
             }
             ClientMsg::Resize { term, cols, rows } => {

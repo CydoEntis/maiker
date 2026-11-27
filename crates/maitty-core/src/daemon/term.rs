@@ -16,6 +16,15 @@ use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
 const MAX_PENDING_MARKS: usize = 64;
+/// How long a spinner in an agent's title may stand still before it no longer says the agent
+/// works: a turning one changes many times a second.
+pub(super) const TITLE_SPINNER_STILL: Duration = Duration::from_secs(10);
+
+/// The glyphs agents turn in their titles while they work: braille dots, and Claude Code's half
+/// circles (2.1.228+).
+fn is_spinner(glyph: char) -> bool {
+    matches!(glyph, '\u{2800}'..='\u{28FF}' | '\u{25D0}'..='\u{25D3}')
+}
 /// How much of the ring a desktop pane is replayed: it keeps about ten thousand lines of scrollback.
 const DESKTOP_REPLAY_BYTES: usize = 1 << 20;
 pub(super) const TIMELINE_KEPT: usize = 60;
@@ -24,6 +33,9 @@ pub(super) const TIMELINE_KEPT: usize = 60;
 pub struct Callbacks {
     pub title: String,
     pub title_changed: bool,
+    /// When the title last changed to a different text: a spinner in it that has stopped
+    /// turning is not a turn under way (`Term::live_title`).
+    pub title_set_at: Option<Instant>,
     /// Text the program copied (OSC 52), waiting to go to the user's clipboard.
     pub copied: Option<String>,
     /// The program rang the bell.
@@ -59,7 +71,11 @@ impl vt100::Callbacks for Callbacks {
         }
     }
     fn set_window_title(&mut self, _: &mut vt100::Screen, title: &[u8]) {
-        self.title = String::from_utf8_lossy(title).trim().to_string();
+        let title = String::from_utf8_lossy(title).trim().to_string();
+        if title != self.title {
+            self.title_set_at = Some(Instant::now());
+        }
+        self.title = title;
         self.title_changed = true;
     }
 
@@ -240,6 +256,10 @@ pub struct Term {
     pub last_working_hook: Option<Instant>,
     /// The last turn-end hook (or pane start), compared to input without wall-clock rounding.
     pub last_turn_end: Instant,
+    /// When Enter was last typed outside a question: what starts a turn in an agent with no
+    /// hooks. A working read off its title alone with none since the last turn end was the agent
+    /// starting up, and ends idle, not done.
+    pub turn_seen_at: Option<Instant>,
     /// This turn's end has been acted on (its check started or declined); the screen and the
     /// hook can both report one turn ending. A new working turn clears it.
     pub turn_end_handled: bool,
@@ -919,12 +939,25 @@ impl Term {
                 cmd.env(key, value);
             }
         }
-        // A plain shell finds the agents' launchers first, whatever shell it is.
-        if spec.direct.is_none() && spec.cmd.is_none_or(|c| c.trim().is_empty()) && !spec.once {
-            match crate::shim::install(&agents, &own_exe()) {
+        // A shell finds the agents' launchers first, whatever shell it is. One started with a
+        // command (an agent the app starts or resumes) finds them too, for the flags some
+        // agents need to report from their own pane, but never asks for a worktree: it was
+        // started where it should run.
+        if spec.direct.is_none() && !spec.once {
+            let plain = spec.cmd.is_none_or(|c| c.trim().is_empty());
+            let mut launched = agents.clone();
+            for agent in crate::shim::always_launched() {
+                if !launched.iter().any(|name| name == agent) {
+                    launched.push(agent.to_string());
+                }
+            }
+            match crate::shim::install(&launched, &own_exe()) {
                 Ok(Some(dir)) => {
                     let path = crate::shim::path_with(&dir, cmd.get_env("PATH"));
                     cmd.env("PATH", path);
+                    if !plain {
+                        cmd.env(crate::shim::DONE_VAR, "1");
+                    }
                 }
                 Ok(None) => {}
                 Err(e) => tracing::warn!("agent launchers not set up: {e}"),
@@ -1063,6 +1096,7 @@ impl Term {
             progress_off: None,
             last_working_hook: None,
             last_turn_end: now,
+            turn_seen_at: None,
             turn_end_handled: false,
             after_snapshot_due: true,
             ended_activity: None,
@@ -1340,6 +1374,10 @@ impl Term {
 
     pub fn input(&mut self, data: &[u8]) {
         self.last_input = Instant::now();
+        // An answer to a question is not a new turn.
+        if self.status != Status::Blocked && data.contains(&b'\r') {
+            self.turn_seen_at = Some(self.last_input);
+        }
         // A pane asking something reads each key as one choice. Keys sent a beat apart can still
         // reach this daemon together (a link that holds small packets back, such as SSH from
         // Windows), and an agent that reads them in one go takes them as typed text: a form's
@@ -1446,6 +1484,21 @@ impl Term {
     /// What the agent last said, as its screen shows it: the lines above its input line.
     pub fn screen_last_lines(&self) -> String {
         super::last_lines::of_screen(&self.tail_text(super::last_lines::ROWS))
+    }
+
+    /// The title as evidence of the agent's state: a spinner leading it that has not turned for
+    /// `TITLE_SPINNER_STILL` is dropped. Codex can leave its startup spinner in the title while it
+    /// sits at its prompt, which read as a turn that never ends.
+    pub fn live_title(&self, now: Instant) -> &str {
+        let callbacks = self.parser.callbacks();
+        let title = callbacks.title.as_str();
+        let still = callbacks
+            .title_set_at
+            .is_none_or(|at| now.duration_since(at) >= TITLE_SPINNER_STILL);
+        match title.chars().next() {
+            Some(glyph) if still && is_spinner(glyph) => title[glyph.len_utf8()..].trim_start(),
+            _ => title,
+        }
     }
 
     /// The bottom `n` rows for status patterns, joining soft wraps but keeping hard newlines.

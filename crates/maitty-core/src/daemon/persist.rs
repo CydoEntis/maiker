@@ -155,7 +155,18 @@ pub fn path() -> PathBuf {
 }
 
 pub fn load() -> Option<Saved> {
-    let s = std::fs::read_to_string(path()).ok()?;
+    let s = match std::fs::read_to_string(path()) {
+        Ok(s) => s,
+        // No file is a fresh start.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return None,
+        // A file that is there but can't be read (its permissions, bad UTF-8) would otherwise be
+        // overwritten by the next save, losing whatever the person had open: keep a copy first.
+        Err(e) => {
+            tracing::warn!("ignoring a session file that can't be read: {e}");
+            keep_unusable_now(&path());
+            return None;
+        }
+    };
     match serde_json::from_str(&s) {
         Ok(saved) => Some(saved),
         Err(e) => {

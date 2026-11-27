@@ -322,7 +322,12 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
         );
         return NOT_FOUND;
     };
-    let mut run = std::process::Command::new(real);
+    let mut run = std::process::Command::new(&real);
+    if let Some(flag) = crate::shim::own_pane_flag(agent, &cmd[1..])
+        && knows_flag(&real, flag)
+    {
+        run.arg(flag);
+    }
     run.args(&cmd[1..])
         .env("PATH", crate::shim::path_without(&shim, &path));
     for name in crate::shim::done_vars() {
@@ -352,6 +357,16 @@ pub fn agent_launch(cmd: &[String]) -> i32 {
             1
         }
     }
+}
+
+/// Whether `program --help` lists `flag`: an older release refuses a flag it does not know.
+fn knows_flag(program: &std::path::Path, flag: &str) -> bool {
+    std::process::Command::new(program)
+        .arg("--help")
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .is_ok_and(|out| String::from_utf8_lossy(&out.stdout).contains(flag))
 }
 
 /// Take Ctrl+C and Ctrl+Break as handled in this process only. A handler of our own, unlike
@@ -2137,6 +2152,15 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
     else {
         return Ok(());
     };
+    let reported = report_hook(term, agent, status, payload);
+    if reported.is_err() {
+        // The hook stays quiet in the agent's turn; the server says the pane lost a report.
+        let _ = maitty_core::hook_drops::record(&maitty_core::hook_drops::file(), term);
+    }
+    reported
+}
+
+fn report_hook(term: TermId, agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<()> {
     let mut payload_json = payload
         .and_then(|raw| serde_json::from_str(raw).ok())
         .unwrap_or(Value::Null);
@@ -2147,8 +2171,12 @@ pub fn hook(agent: &str, status: Option<&str>, payload: Option<&str>) -> Result<
                 Some(p) => serde_json::from_str(p).unwrap_or(Value::Null),
                 None => read_hook_payload(std::io::stdin().lock(), HOOK_PAYLOAD_MAX)?,
             };
+            if payload_json.is_null() && payload.is_some_and(|p| !p.trim().is_empty()) {
+                bail!("the hook's payload could not be read");
+            }
             match status_from_hook(&payload_json) {
                 Some(s) => s,
+                // An event that says nothing about status.
                 None => return Ok(()),
             }
         }

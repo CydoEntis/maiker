@@ -324,6 +324,10 @@ pub(super) fn diff(old: Option<&Reading>, new: &Reading) -> Vec<Change> {
     out
 }
 
+/// The longest one `gh pr view` may take. The poll waits for every read before the next round,
+/// so one `gh` hung on a dead connection stopped pull request polling until the daemon restarted.
+const GH_LIMIT: std::time::Duration = std::time::Duration::from_secs(30);
+
 /// Ask `gh` about the pull request on `place`'s branch. Blocks.
 pub(super) fn read(place: &Place) -> Read {
     let mut cmd = std::process::Command::new("gh");
@@ -338,7 +342,7 @@ pub(super) fn read(place: &Place) -> Read {
     cmd.args(["--json", JSON_FIELDS])
         .env("GH_PROMPT_DISABLED", "1")
         .env("NO_COLOR", "1");
-    match crate::proc::run(&mut cmd) {
+    match crate::proc::run_bounded(&mut cmd, GH_LIMIT) {
         Ok(json) => {
             let after = match place {
                 Place::Branch(top, _) => commits_after_merge(top, &json),

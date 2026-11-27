@@ -88,6 +88,23 @@ its machines stall when several tests start ConPTY shells at once. A test's fold
 `maitty_test_support::TempFolder`, removed when it drops, or `.until_test_ends()` for a helper
 that hands back a plain path. `TEST_TMP_ROOT` must stay short and outside any git checkout.
 
+### Live chats against the real agents
+
+Every chat test in `cargo test` runs a fake agent, so the gate passes while a Claude Code or Codex
+release breaks every real chat. `scripts/live-check.sh` runs the real ones installed on this computer,
+through the daemon as the desktop app drives them (`daemon/conversation/tests/live.rs`, `#[ignore]`d):
+a chat is started, answers, makes a file change approved through the daemon (Claude Code must ask for
+it), and after a daemon restart is resumed with its history and its context. It ends with the agent
+command lists below. Run it after either agent updates, after a change to the chat path, and before a
+release; a failure there is a bug ticket even when the gate is green. It needs both agents signed in
+and spends a few small turns of each plan; `LIVE_ONLY=claude` (or `codex`) runs one.
+
+`scripts/live-terminal-check.sh` does the same for terminal mode: each agent runs in a pane of a
+server of its own (desktop alerts off), and the check follows the pane's status. Its startup
+questions must show as needs you and starting up alone must end idle, not done; a reply ends done;
+a file change must show as needs you by the agent's own hook; after a server restart the pane must
+come back in the same conversation without its finish announced again. Run it with the chat check.
+
 ### Agent command lists
 
 The window pins the commands an agent will not list (`terminalCommands.ts`, `codexCommands.ts`, `geminiCommands.ts`), and each file names

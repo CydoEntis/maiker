@@ -106,20 +106,37 @@ pub fn run(cmd: &mut Command) -> Result<String, String> {
     if out.status.success() {
         Ok(String::from_utf8_lossy(&out.stdout).into_owned())
     } else {
-        let err = String::from_utf8_lossy(&out.stderr);
-        // git says "warning: …" before the "error:" / "fatal:" line that matters.
-        let line = err
-            .lines()
-            .find(|l| l.starts_with("error") || l.starts_with("fatal"))
-            .or_else(|| err.lines().find(|l| !l.trim().is_empty()))
-            .unwrap_or("")
-            .trim()
-            .to_string();
-        Err(if line.is_empty() {
-            format!("{program} failed")
-        } else {
-            line
-        })
+        Err(failure_line(&program, &String::from_utf8_lossy(&out.stderr)))
+    }
+}
+
+/// `run`, stopped at `limit`: for a program that talks to the network and could hang for good
+/// (a `gh` waiting on a dead connection), where whoever waits for it would wait with it.
+pub fn run_bounded(cmd: &mut Command, limit: std::time::Duration) -> Result<String, String> {
+    let program = cmd.get_program().to_string_lossy().into_owned();
+    match run_within(cmd, limit) {
+        Ok(ran) if ran.success => Ok(ran.stdout),
+        Ok(ran) => Err(failure_line(&program, &ran.stderr)),
+        Err(RunError::Missing) => Err(format!("couldn't run {program}: it is not installed")),
+        Err(RunError::Start(e)) => Err(format!("couldn't run {program}: {e}")),
+        Err(RunError::TimedOut) => Err(format!("{program} gave no answer within {} s", limit.as_secs())),
+    }
+}
+
+/// The line of a failed program's error output that says what went wrong.
+fn failure_line(program: &str, err: &str) -> String {
+    // git says "warning: …" before the "error:" / "fatal:" line that matters.
+    let line = err
+        .lines()
+        .find(|l| l.starts_with("error") || l.starts_with("fatal"))
+        .or_else(|| err.lines().find(|l| !l.trim().is_empty()))
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    if line.is_empty() {
+        format!("{program} failed")
+    } else {
+        line
     }
 }
 
@@ -292,6 +309,23 @@ mod tests {
             .output()
             .expect("powershell runs");
         assert_eq!(String::from_utf8_lossy(&out.stdout).trim(), "Normal");
+    }
+
+    #[test]
+    fn a_bounded_run_that_hangs_is_stopped_and_says_so() {
+        let mut hang = if cfg!(windows) {
+            let mut c = Command::new("powershell.exe");
+            c.args(["-NoProfile", "-NonInteractive", "-Command", "Start-Sleep -Seconds 30"]);
+            c
+        } else {
+            let mut c = Command::new("sleep");
+            c.arg("30");
+            c
+        };
+        let started = std::time::Instant::now();
+        let outcome = run_bounded(&mut hang, std::time::Duration::from_millis(300));
+        assert!(started.elapsed() < std::time::Duration::from_secs(10));
+        assert!(outcome.is_err_and(|e| e.contains("gave no answer within")));
     }
 
     fn args(c: &Command) -> Vec<String> {

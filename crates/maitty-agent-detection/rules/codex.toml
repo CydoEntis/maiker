@@ -1,0 +1,34 @@
+# Maiker's own screen rules for Codex, added to the vendored Herdr manifest of the same id
+# (vendor/herdr-detection/codex.toml stays an unmodified snapshot; see its NOTICE.md).
+id = "codex"
+
+# Codex 0.16x asks, before its prompt, whether to trust hooks that are new or changed: Maiker's
+# own status hooks after `integrate` or an update. Left as idle, nobody was told Codex waited,
+# and a "continue without trusting" leaves every later status to the screen. Only the dialog's
+# last lines are read, with its heading and its footer both present, so the words quoted in a
+# conversation do not match.
+[[rules]]
+id = "hooks_review"
+state = "blocked"
+priority = 950
+region = "bottom_non_empty_lines(10)"
+visible_blocker = true
+all = [
+  { contains = ["Hooks need review"] },
+  { regex = ['enter\s+confirm\s+·\s+esc\s+skip\s*\z'] },
+]
+
+# Codex 0.166 draws its folder question inline, under whatever the shell printed before it, so
+# the vendored `trust_directory` (which reads the top of the screen) misses it under a long
+# login banner. This one reads the question from the bottom, with its footer ("esc back" with
+# the shared server, "esc quit" without it).
+[[rules]]
+id = "trust_folder_footer"
+state = "blocked"
+priority = 950
+region = "bottom_non_empty_lines(10)"
+visible_blocker = true
+all = [
+  { contains = ["Trust this folder?", "Trust and continue"] },
+  { regex = ['enter\s+continue\s+·\s+esc\s+(?:back|quit)\s*\z'] },
+]

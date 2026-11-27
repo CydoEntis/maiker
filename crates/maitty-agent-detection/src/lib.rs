@@ -157,7 +157,7 @@ const SOURCES: &[&str] = manifests!(
 
 /// Maiker's own rules, by agent: each file's rules join the vendored manifest of the same id, so
 /// the vendored snapshot is never edited.
-const OWN_SOURCES: &[&str] = &[include_str!("../rules/claude.toml")];
+const OWN_SOURCES: &[&str] = &[include_str!("../rules/claude.toml"), include_str!("../rules/codex.toml")];
 
 static MANIFESTS: LazyLock<Vec<CompiledManifest>> = LazyLock::new(|| {
     let own: Vec<Manifest> = OWN_SOURCES
@@ -237,6 +237,34 @@ mod tests {
         assert_eq!(signal.rule, "live_chooser_footer");
         assert_eq!(signal.status, Some(Status::Blocked));
         assert!(signal.visible_blocker);
+    }
+
+    /// Codex 0.166's question before its prompt, captured from a live pane.
+    const CODEX_HOOKS_REVIEW: &str = "  Hooks need review\n\n  18 hooks are new or changed.\n  Hooks can run outside the sandbox after you trust them.\n\n› 1. Review hooks\n  2. Trust all and continue\n  3. Continue without trusting (hooks won't run)\n\n  enter confirm · esc skip\n";
+
+    #[test]
+    fn codexs_folder_question_under_a_long_login_banner_needs_you() {
+        let banner = "  welcome to this machine\n".repeat(30);
+        let screen = format!("{banner}  Folder access\n  /tmp/project\n  Trust this folder? Codex can read, edit, and run files here, subject to your permission settings.\n  decision will be saved.\n› 1. Trust and continue\n  2. Back to Agent Command Center\n  enter continue · esc back\n");
+        let signal = detect("codex", DetectionInput { screen: &screen, osc_title: "project", osc_progress: "" });
+        assert_eq!(signal.status, Some(Status::Blocked), "rule {}", signal.rule);
+        assert!(signal.visible_blocker);
+        // Without the shared server its second choice quits.
+        let screen = screen.replace("2. Back to Agent Command Center", "2. Quit").replace("esc back", "esc quit");
+        let signal = detect("codex", DetectionInput { screen: &screen, osc_title: "project", osc_progress: "" });
+        assert_eq!(signal.status, Some(Status::Blocked), "rule {}", signal.rule);
+    }
+
+    #[test]
+    fn codexs_hooks_review_needs_you() {
+        let signal = detect("codex", DetectionInput { screen: CODEX_HOOKS_REVIEW, osc_title: "project", osc_progress: "" });
+        assert_eq!(signal.rule, "hooks_review");
+        assert_eq!(signal.status, Some(Status::Blocked));
+        assert!(signal.visible_blocker);
+        // Talked about further up, under Codex's idle prompt, it is no question.
+        let quoted = "• It said \"Hooks need review\" with enter confirm · esc skip under it.\n\n› Ask Codex to do anything\n\n  ? for shortcuts\n";
+        let signal = detect("codex", DetectionInput { screen: quoted, osc_title: "project", osc_progress: "" });
+        assert_ne!(signal.rule, "hooks_review");
     }
 
     #[test]

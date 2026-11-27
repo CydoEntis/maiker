@@ -154,6 +154,18 @@ root loading in
 and profile command selection in
 [`cli/src/main.rs`](https://github.com/openai/codex/blob/fe3b29455488c2e189e43ad5526a107900c5e1b7/codex-rs/cli/src/main.rs).
 
+## Project-specific: Codex in a terminal pane
+
+Codex 0.16x's terminal connects to one shared background server (`codex app-server`, started by
+the first Codex and kept running), and that server runs the hooks. A hook then carries the
+environment of the pane that started the server, not of the pane it reports for: every Codex pane's
+status went to that first pane, or to a Maiker server long gone. So every pane's `codex` goes
+through Maiker's launcher (`shim.rs`, also in panes started with a command), which puts
+`--no-daemon` first when the installed Codex's `--help` lists it, leaving `agents`, `app-server`,
+`remote-control` and `exec-server` alone. Each pane then runs its own embedded server and its hooks
+report from the pane. `scripts/live-terminal-check.sh` checks the status path against the real
+Codex.
+
 ## Project-specific: fixture boundary
 
 `crates/maitty-core/src/daemon/conversation/codex.rs` and its sibling `fixtures/` contain a test-only

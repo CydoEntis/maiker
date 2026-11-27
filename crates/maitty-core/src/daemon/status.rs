@@ -66,7 +66,19 @@ const CODEX_QUESTION_WHY: &str = "screen: Codex has an unanswered question";
 /// Why a turn that ended without a turn-end report is read as cancelled; nothing was finished,
 /// so nothing is checked.
 pub(super) const CANCELLED_WHY: &str = "progress bar gone, no turn end: cancelled";
+/// A finish restored from before a restart: shown as Done, but it was announced (and maybe
+/// heard) by the daemon that saw it happen, so it must not ring again on every restart.
+pub(super) const RESTORED_DONE_WHY: &str = "hook: SessionStart, done and unseen before the restart";
 const SCREEN_IDLE_RECOVERY_WHY: &str = "screen: explicit idle prompt recovered a missed turn end";
+/// The reason a Claude permission dialog gives a pane its needs-you (`hook_report`).
+const CLAUDE_DIALOG_WHY: &str = "hook: PermissionRequest";
+const SCREEN_STARTED_IDLE_WHY: &str = "screen: at its prompt, and no turn was started";
+
+/// Whether a reason for working is the agent's title alone, which an agent also turns while it
+/// starts up: unlike a hook or its live turn on screen, it does not show that a turn began.
+fn title_only(why: &str) -> bool {
+    why.starts_with("screen: ") && why.ends_with(" rule `osc_title_working`")
+}
 /// A "done" held while subagents run is let through once none has been heard from for this
 /// long (one died without saying so). Background agents can run, and wait on CI, for a while.
 /// After a queued follow-up goes in, the agent has this long to say it has started on it
@@ -459,6 +471,10 @@ impl Daemon {
             };
             t.last_hook = Some((name, term::unix_now()));
             t.last_hook_at = Some(Instant::now());
+            // A report that arrived confirms the pane again (`Daemon::note_lost_reports`).
+            if let Some(confirmed) = t.status_why.strip_suffix(super::hook_repair::UNCONFIRMED) {
+                t.status_why = confirmed.to_string();
+            }
             self.dirty = true;
         }
         if matches!(status, HookStatus::Done | HookStatus::Idle)
@@ -506,6 +522,7 @@ impl Daemon {
         if agent == "codex" && event == "agent-turn-complete" && t.lifecycle_hooks {
             return;
         }
+        let mut restored_done = false;
         let new = match status {
             HookStatus::Same => {
                 // A subagent finished: if the turn was waiting on it, it's done now.
@@ -545,7 +562,10 @@ impl Daemon {
             // After a restart, a session that was done and unseen comes back done.
             // Only the restored agent's own start says so: Codex reports none, and its first Idle
             // is an Esc, which is no finish.
-            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => Status::Done,
+            HookStatus::Idle if event == "SessionStart" && std::mem::take(&mut t.restore_unseen) => {
+                restored_done = true;
+                Status::Done
+            }
             HookStatus::Gone => {
                 t.hooked = false;
                 t.lifecycle_hooks = false;
@@ -635,7 +655,9 @@ impl Daemon {
         } else {
             event
         };
-        let why = if paused {
+        let why = if restored_done {
+            RESTORED_DONE_WHY.to_string()
+        } else if paused {
             format!("hook: {why}, waiting on its background work")
         } else {
             format!("hook: {why}")
@@ -827,7 +849,8 @@ impl Daemon {
         }
         // A finish waits for its check: `check_settled` says it once the result is in.
         let held = new == Status::Done && self.terms.get(&term).is_some_and(Term::check_running);
-        if matches!(new, Status::Blocked | Status::Done) && !held && !guessed_blink {
+        let restored = why == RESTORED_DONE_WHY;
+        if matches!(new, Status::Blocked | Status::Done) && !held && !guessed_blink && !restored {
             self.announce(term, new);
         }
     }
@@ -1132,7 +1155,7 @@ impl Daemon {
                     name,
                     maitty_agent_detection::DetectionInput {
                         screen: &screen,
-                        osc_title: &t.parser.callbacks().title,
+                        osc_title: t.live_title(Instant::now()),
                         osc_progress: &t.parser.callbacks().progress,
                     },
                 )
@@ -1205,12 +1228,19 @@ impl Daemon {
                 && !held_on_helpers
                 && t.last_output.elapsed() >= SCREEN_DONE_QUIET
             {
-                let status = if t.status == Status::Working {
-                    Status::Done
-                } else {
-                    t.status
+                let turn_seen = [t.turn_seen_at, t.last_working_hook]
+                    .into_iter()
+                    .flatten()
+                    .any(|at| at >= t.last_turn_end);
+                let (status, why) = match t.status {
+                    // Only its title said it worked, and nothing started a turn: it was starting up.
+                    Status::Working if title_only(&t.status_why) && !turn_seen => {
+                        (Status::Idle, SCREEN_STARTED_IDLE_WHY)
+                    }
+                    Status::Working => (Status::Done, SCREEN_IDLE_RECOVERY_WHY),
+                    other => (other, SCREEN_IDLE_RECOVERY_WHY),
                 };
-                changes.push((t.id, status, SCREEN_IDLE_RECOVERY_WHY.into()));
+                changes.push((t.id, status, why.into()));
                 continue;
             }
             // Any trusted adapter may report child agents without using lifecycle
@@ -1267,9 +1297,17 @@ impl Daemon {
                     }
                 }
                 // A permission ask that auto mode (or the agent) settled by itself also sends
-                // no hook: a while on, with no question on screen at all, it's over.
+                // no hook: a while on, with no question on screen at all, it's over. Not one
+                // Claude's PermissionRequest hook reported for its own turn: that hook comes as
+                // Claude shows its dialog, and a later hook (or your keys) says when it is
+                // answered, so a dialog Claude rewords is not taken for one that went away. A
+                // helper's ask can be settled where no hook reports it, so that one still can.
+                let own_dialog = name == "claude"
+                    && t.status_why == CLAUDE_DIALOG_WHY
+                    && t.blocked_by_helper.is_none();
                 if t.status == Status::Blocked
                     && !NATIVE_PROMPT_LIFECYCLE.contains(&name.as_str())
+                    && !own_dialog
                     && t.blocked_at
                         .is_some_and(|b| b.elapsed() > UNASKED_QUESTION_GONE_AFTER)
                     && !self.questions.iter().any(|(q, ..)| q.term == t.id)

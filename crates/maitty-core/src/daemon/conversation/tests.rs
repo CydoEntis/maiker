@@ -791,6 +791,7 @@ mod branch_chat;
 mod claude_chat;
 mod codex_version;
 mod acp_chat;
+mod live;
 
 mod claude_warm;
 

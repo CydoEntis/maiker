@@ -16,6 +16,7 @@ pub(super) fn daemon() -> (Daemon, mpsc::Receiver<Ev>) {
     d.claude_folder = None;
     // Its own folder (made only if something is written to it), so tests never share check tails.
     d.check_dir = persist::scratch_dir_for_this_thread();
+    d.hook_drops_file = d.check_dir.join("test.hook-drops");
     (d, rx)
 }
 
@@ -820,6 +821,36 @@ fn enter_is_pressed_again_only_when_a_hooked_agent_never_reported_the_message() 
     close(&mut d, &[t]);
 }
 
+/// `maiker send` (and the MCP tools) type the text, then Enter: an agent still settling after a
+/// resume can take that Enter as a new line, and the message sat in its box unsent.
+#[test]
+fn a_one_shot_clients_message_gets_the_enter_rescue_and_its_command_does_not() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        (p.agent, p.hooked, p.status) = (Some("claude".into()), true, Status::Done);
+    }
+    let (tx, _seen) = mpsc::channel(64);
+    let cli = 77;
+    d.handle(Ev::Connected(cli, tx, false, crate::protocol::Surface::Terminal, false));
+    let typed = |d: &mut Daemon, data: &[u8]| d.handle(Ev::Msg(cli, ClientMsg::Input { term: t, data: data.to_vec() }));
+    typed(&mut d, b"what did you say?");
+    typed(&mut d, b"\r");
+    assert!(d.terms[&t].enter_sent.is_some(), "its Enter is watched");
+    d.terms.get_mut(&t).unwrap().enter_sent = None;
+    typed(&mut d, b"/model");
+    typed(&mut d, b"\r");
+    assert!(d.terms[&t].enter_sent.is_none(), "a second Enter would answer the command's menu");
+    // A window's keys are the person typing: nothing is pressed for them.
+    let mut window = viewer(&mut d);
+    d.handle(Ev::Msg(40, ClientMsg::Input { term: t, data: b"hi".to_vec() }));
+    d.handle(Ev::Msg(40, ClientMsg::Input { term: t, data: b"\r".to_vec() }));
+    assert!(d.terms[&t].enter_sent.is_none());
+    let _ = heard(&mut window);
+    close(&mut d, &[t]);
+}
+
 #[test]
 fn a_queued_message_of_several_lines_goes_in_as_one_paste() {
     use super::status::queued_as_typed;
@@ -889,6 +920,39 @@ fn a_pane_started_as_an_agent_keeps_its_name_while_the_agent_starts() {
         Instant::now() - super::AGENT_SHOWS_WITHIN - Duration::from_secs(1);
     d.handle(Ev::Scan(vec![nothing_yet(t)]));
     assert_eq!(d.terms[&t].agent, None);
+    close(&mut d, &[t]);
+}
+
+/// An agent whose process is gone while it was working crashed or was killed: the pane becomes a
+/// shell, and every window is told, so the agent is not lost without a word.
+#[test]
+fn an_agent_gone_mid_turn_is_reported_not_silently_turned_into_a_shell() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        p.agent = Some("claude".into());
+        p.born = Instant::now() - super::AGENT_SHOWS_WITHIN - Duration::from_secs(1);
+    }
+    d.set_status(t, Status::Working, "test");
+    // One scan can miss a process for a moment; only several in a row say it is gone.
+    for _ in 0..super::AGENT_MISSING_SCANS {
+        d.handle(Ev::Scan(vec![scan::Found {
+            term: t,
+            process: "bash".into(),
+            agent: None,
+            cwd: None,
+            agent_cwd: None,
+            agent_pid: None,
+            claude_dir: None,
+            mem: 0,
+            cpu: 0.0,
+            remote: None,
+        }]));
+    }
+    assert_eq!(d.terms[&t].agent, None);
+    assert_eq!(noticed(&heard(&mut seen), "exited while it was working"), 1);
     close(&mut d, &[t]);
 }
 
@@ -1526,6 +1590,55 @@ fn explicit_idle_screen_evidence_recovers_missed_turn_ends_across_agents() {
     }
 }
 
+/// Codex turns a spinner in its title while it starts up, before anyone asked it anything.
+#[test]
+fn an_agent_that_only_spun_its_title_while_starting_ends_idle_not_done() {
+    for typed_a_prompt in [false, true] {
+        let (mut d, _rx) = daemon();
+        let t = pane(&mut d);
+        let mut seen = viewer(&mut d);
+        {
+            let p = d.terms.get_mut(&t).unwrap();
+            p.agent = Some("codex".into());
+            if typed_a_prompt {
+                p.input(b"fix the build\r");
+            }
+            p.parser.process("\x1b]0;\u{2807} project\x07".as_bytes());
+            p.last_output = Instant::now();
+        }
+        d.update_statuses();
+        assert_eq!(d.terms[&t].status, Status::Working, "typed: {typed_a_prompt}: its spinner turns");
+        rests_at_its_idle_prompt(&mut d, t, "project");
+        if typed_a_prompt {
+            assert_eq!(d.terms[&t].status, Status::Done, "a turn it was given ends done");
+        } else {
+            assert_eq!(d.terms[&t].status, Status::Idle, "starting up is no turn to finish");
+            assert!(!told_done(&mut seen), "and no finish rings");
+        }
+        close(&mut d, &[t]);
+    }
+}
+
+/// Codex can leave its startup spinner in the title while it waits at its prompt.
+#[test]
+fn a_title_spinner_that_stopped_turning_is_not_working() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        p.agent = Some("codex".into());
+        p.parser.process("\x1b]0;\u{2807} project\x07".as_bytes());
+        p.last_output = Instant::now() - Duration::from_secs(30);
+    }
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Working, "a spinner just set still says working");
+    let still = Instant::now() - super::term::TITLE_SPINNER_STILL - Duration::from_secs(1);
+    d.terms.get_mut(&t).unwrap().parser.callbacks_mut().title_set_at = Some(still);
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Idle, "one that stopped turning does not");
+    close(&mut d, &[t]);
+}
+
 /// Claude's screen while its turn-end hooks run: the title already says idle and the
 /// spinner reads "(running Stop hooks…", which its working rule doesn't know.
 const CLAUDE_RUNNING_STOP_HOOKS: &str = "\x1b]0;\u{2733} project\x07\x1b[2J\x1b[H\
@@ -1613,6 +1726,49 @@ fn a_permission_ask_settled_without_you_stops_needing_you() {
     assert_eq!(d.terms[&t].status, Status::Working, "nothing asked on screen, the turn goes on");
     d.apply_hook(report(t, &secret, 0, HookStatus::Done, "Stop"), None, Vec::new());
     assert_eq!(d.terms[&t].status, Status::Done, "the agent's own finish");
+    close(&mut d, &[t]);
+}
+
+/// Claude's PermissionRequest hook comes only as it shows its dialog. A dialog whose words the
+/// screen rules no longer know (Claude rewords them) still needs you until a hook says otherwise.
+#[test]
+fn a_claude_dialog_its_hook_reported_keeps_needing_you_until_a_hook_says_it_was_answered() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let secret = d.terms[&t].token.clone();
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "UserPromptSubmit"), None, Vec::new());
+    d.apply_hook(report(t, &secret, 0, HookStatus::Blocked, "PermissionRequest"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Blocked);
+    let pane = d.terms.get_mut(&t).unwrap();
+    pane.parser.process(b"\x1b[2J\x1b[H Allow this edit to note.txt?\r\n > Allow  Deny\r\n");
+    pane.blocked_at = Some(Instant::now() - super::status::UNASKED_QUESTION_GONE_AFTER - Duration::from_secs(1));
+    pane.last_output = Instant::now() - Duration::from_secs(30);
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Blocked, "words the rules don't know are no answer");
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "PostToolUse"), None, Vec::new());
+    assert_eq!(d.terms[&t].status, Status::Working, "its next hook says it was answered");
+    close(&mut d, &[t]);
+}
+
+/// A hook that cannot hand its report over (a busy or restarting server) used to lose it
+/// without a trace: the pane now says its status is unconfirmed until the next report.
+#[test]
+fn a_lost_hook_report_leaves_the_pane_unconfirmed_until_the_next_one() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let secret = d.terms[&t].token.clone();
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "UserPromptSubmit"), None, Vec::new());
+    std::fs::create_dir_all(&d.check_dir).unwrap();
+    crate::hook_drops::record(&d.hook_drops_file, t).unwrap();
+    d.lost_reports_read = Instant::now() - Duration::from_secs(60);
+    d.note_lost_reports();
+    assert_eq!(d.terms[&t].status_why, format!("hook: UserPromptSubmit{}", super::hook_repair::UNCONFIRMED));
+    d.lost_reports_read = Instant::now() - Duration::from_secs(60);
+    d.note_lost_reports();
+    assert!(d.terms[&t].status_why.matches("unconfirmed").count() == 1, "said once");
+    // Its next report, even one that leaves the status as it was, confirms it again.
+    d.apply_hook(report(t, &secret, 0, HookStatus::Working, "PreToolUse"), None, Vec::new());
+    assert!(!d.terms[&t].status_why.contains("unconfirmed"), "{}", d.terms[&t].status_why);
     close(&mut d, &[t]);
 }
 
@@ -4273,6 +4429,27 @@ fn a_late_codex_notify_does_not_end_the_next_turn() {
     d.hook(id, "codex".into(), HookStatus::Done, "agent-turn-complete", &[]);
     assert_eq!(d.terms[&id].status, Status::Working);
     close(&mut d, &[id]);
+}
+
+/// A Claude pane restored done and unseen comes back Done, without ringing again: the
+/// finish was announced before the restart, and a pane nobody opens is saved unseen each time.
+#[test]
+fn a_restored_unseen_finish_is_shown_done_but_not_announced_again() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    d.terms.get_mut(&t).unwrap().agent = Some("claude".into());
+    d.terms.get_mut(&t).unwrap().restore_unseen = true;
+    let mut say = claude_reports(&mut d, t);
+    let mut seen = viewer(&mut d);
+    say(&mut d, HookStatus::Idle, "SessionStart", &[]);
+    assert_eq!(d.terms[&t].status, Status::Done);
+    assert!(!announced(&heard(&mut seen), Status::Done), "no finished sound on restart");
+    assert!(d.terms[&t].alert_due.is_none(), "no desktop notification queued");
+    // Its next real finish still rings.
+    say(&mut d, HookStatus::Working, "UserPromptSubmit", &[]);
+    say(&mut d, HookStatus::Done, "Stop", &[]);
+    assert!(announced(&heard(&mut seen), Status::Done));
+    close(&mut d, &[t]);
 }
 
 /// A Codex pane restored done and unseen: Esc on its next turn is a quiet stop, not a finish.
@@ -10721,4 +10898,23 @@ fn a_helpers_record_is_read_only_for_a_helper_the_panes_agent_reported_and_only_
     ask(&mut d, 8, "a1b2");
     assert!(matches!(agent.try_recv(), Ok(ServerMsg::Error(_))), "another pane's agent may not read it");
     close(&mut d, &[t, asking]);
+}
+
+/// A background part that panics is turned off and reported once; the daemon, and every session
+/// it owns, carries on.
+#[test]
+fn a_background_part_that_panics_is_turned_off_not_the_daemon() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    let mut seen = viewer(&mut d);
+    d.guarded("Test part", |_| panic!("a bug in a background part"));
+    let mut ran_again = false;
+    d.guarded("Test part", |_| ran_again = true);
+    assert!(!ran_again, "a broken part stays off");
+    assert_eq!(noticed(&heard(&mut seen), "Test part stopped after an internal error"), 1);
+    let mut other_ran = false;
+    d.guarded("Another part", |_| other_ran = true);
+    assert!(other_ran, "other parts still run");
+    assert!(d.terms.contains_key(&t));
+    close(&mut d, &[t]);
 }

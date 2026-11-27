@@ -20,6 +20,12 @@ const UNHOOKED_GRACE: Duration = Duration::from_secs(15);
 
 /// How often a folder that still looks wrong is looked at again.
 const RECHECK_EVERY: Duration = Duration::from_secs(60);
+/// How often the server reads the reports its panes' hooks could not hand over
+/// (`crate::hook_drops`).
+const LOST_REPORTS_EVERY: Duration = Duration::from_secs(2);
+/// Said after a pane's status reason while a report its hooks sent was lost, until the next one
+/// arrives: the status may be behind what the agent is doing.
+pub(super) const UNCONFIRMED: &str = " (unconfirmed: a status report from its hooks was lost)";
 
 /// What the client crate knows about hooks: reading and writing an agent's settings file is its
 /// job (the daemon never imports the CLI), so it hands these in when the daemon starts.
@@ -133,6 +139,36 @@ impl Daemon {
     }
 
     /// Starts a background look at the folder of every Claude pane whose hooks never reported.
+    /// Log the reports each pane's hooks lost, and say on the pane that its status is not
+    /// confirmed until its next report arrives (`hook_report` clears it).
+    pub(in crate::daemon) fn note_lost_reports(&mut self) {
+        if self.lost_reports_read.elapsed() < LOST_REPORTS_EVERY {
+            return;
+        }
+        self.lost_reports_read = Instant::now();
+        let lost = match crate::hook_drops::take(&self.hook_drops_file) {
+            Ok(lost) => lost,
+            Err(error) => {
+                tracing::warn!("could not read the hook reports that were lost: {error}");
+                return;
+            }
+        };
+        for (term, count) in lost {
+            let Some(t) = self.terms.get_mut(&term) else {
+                tracing::warn!("{count} status report(s) for pane {term}, now closed, never reached the server");
+                continue;
+            };
+            tracing::warn!(
+                "pane {term} ({}): {count} status report(s) from its hooks never reached the server",
+                t.agent.as_deref().unwrap_or("no agent")
+            );
+            if !t.status_why.ends_with(UNCONFIRMED) {
+                t.status_why.push_str(UNCONFIRMED);
+                self.dirty = true;
+            }
+        }
+    }
+
     pub(in crate::daemon) fn hook_watch_tick(&mut self) {
         if TOOLS.get().is_none() {
             return;

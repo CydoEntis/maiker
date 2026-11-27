@@ -34,6 +34,52 @@ pub fn is_done() -> bool {
         .any(|name| std::env::var_os(name).is_some())
 }
 
+/// Agents whose launcher always puts a flag in front of what was typed, so that what they report
+/// comes from their own pane: (agent, flag, first arguments it is left off for). Codex 0.16x
+/// runs a shared background server by default, which runs every pane's hooks with the
+/// environment of whichever pane started it first, so each Codex pane's status went to that
+/// one pane (or to a server long gone). `--no-daemon` keeps each Codex in its own pane; its
+/// subcommands that only work with the shared server are left alone.
+const OWN_PANE_FLAGS: &[(&str, &str, &[&str])] = &[(
+    "codex",
+    "--no-daemon",
+    &["agents", "app-server", "remote-control", "exec-server"],
+)];
+
+/// The agents that get a launcher whether or not they start in worktrees.
+pub fn always_launched() -> impl Iterator<Item = &'static str> {
+    OWN_PANE_FLAGS.iter().map(|(agent, ..)| *agent)
+}
+
+/// The flag the launcher puts in front of `typed` for `agent`, when there is one and it was
+/// not typed already. The launcher still checks that the agent installed knows it.
+pub fn own_pane_flag(agent: &str, typed: &[String]) -> Option<&'static str> {
+    let (_, flag, left_off) = OWN_PANE_FLAGS.iter().find(|(name, ..)| *name == agent)?;
+    let first = typed.first().map(String::as_str).unwrap_or_default();
+    (!left_off.contains(&first) && !typed.iter().any(|arg| arg == flag)).then_some(*flag)
+}
+
+/// Shell code for `unix_script` that puts the agent's own-pane flag first when its `--help`
+/// lists it: an older release that does not know the flag would refuse to start.
+fn own_pane_snippet(agent: &str) -> String {
+    let Some((_, flag, left_off)) = OWN_PANE_FLAGS.iter().find(|(name, ..)| *name == agent) else {
+        return String::new();
+    };
+    format!(
+        r#"own={flag}
+case "${{1:-}}" in {left_off}) own= ;; esac
+for a in "$@"; do
+  if [ "$a" = "$own" ]; then own=; fi
+done
+if [ -n "$own" ]; then
+  case "$("$real" --help 2>/dev/null </dev/null)" in *"$own"*) set -- "$own" "$@" ;; esac
+fi
+"#,
+        flag = sh_quote(flag),
+        left_off = left_off.join("|"),
+    )
+}
+
 /// First lines of every launcher the app writes: how `install` knows a file is its own to
 /// replace or remove.
 const MARKER: &str = concat!(env!("APP_COMMAND"), "-agent-launcher");
@@ -94,8 +140,9 @@ fi
 unset {done_unset}
 PATH=$clean
 export PATH
-exec "$real" "$@"
+{own_pane}exec "$real" "$@"
 "#,
+        own_pane = own_pane_snippet(agent),
         agent_q = sh_quote(agent),
         exe_q = sh_quote(exe),
         dir_q = sh_quote(dir),
@@ -243,6 +290,18 @@ pub fn keep_first(shell: &str, dir: &Path) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn only_codex_gets_an_own_pane_flag_and_only_once() {
+        let typed = |args: &[&str]| args.iter().map(|a| a.to_string()).collect::<Vec<_>>();
+        assert_eq!(own_pane_flag("codex", &typed(&[])), Some("--no-daemon"));
+        assert_eq!(own_pane_flag("codex", &typed(&["exec", "x"])), Some("--no-daemon"));
+        assert_eq!(own_pane_flag("codex", &typed(&["agents"])), None);
+        assert_eq!(own_pane_flag("codex", &typed(&["--no-daemon"])), None);
+        assert_eq!(own_pane_flag("claude", &typed(&[])), None);
+        assert!(unix_script("claude", "/app", "/d").contains("exec \"$real\" \"$@\""));
+        assert!(!unix_script("claude", "/app", "/d").contains("no-daemon"));
+    }
 
     #[test]
     fn the_unix_launcher_quotes_what_it_embeds() {
@@ -545,6 +604,26 @@ mod tests {
             let here = rig.work.canonicalize().unwrap();
             let out = stdout(&rig.bash("", "", "claude", &[]));
             assert!(out.contains(&format!("in {}", here.display())), "{out}");
+        }
+
+        #[test]
+        fn codex_is_kept_off_its_shared_server_when_it_knows_how() {
+            let Some(rig) = Rig::new("codex") else { return };
+            // A Codex whose help lists the flag only when $KNOWS is set, as a newer release.
+            script(
+                &rig.real.join("codex"),
+                "if [ \"$1\" = --help ]; then [ -n \"$KNOWS\" ] && echo '      --no-daemon'; exit 0; fi\nfor a in \"$@\"; do echo \"arg:$a\"; done",
+            );
+            install_in(&rig.shim, &["claude".into(), "codex".into()], &rig.root.join(env!("APP_COMMAND")).display().to_string()).unwrap();
+            let args = |line: &str, knows: bool| -> Vec<String> {
+                let extra: &[(&str, &str)] = if knows { &[("KNOWS", "1")] } else { &[] };
+                stdout(&rig.bash("", "", line, extra)).lines().filter_map(|l| l.strip_prefix("arg:").map(str::to_string)).collect()
+            };
+            assert_eq!(args("codex 'fix it'", true), ["--no-daemon", "fix it"]);
+            assert_eq!(args("codex resume --last", true), ["--no-daemon", "resume", "--last"]);
+            assert_eq!(args("codex --no-daemon", true), ["--no-daemon"], "typed once, passed once");
+            assert_eq!(args("codex app-server", true), ["app-server"], "the shared server's own commands are left alone");
+            assert_eq!(args("codex 'fix it'", false), ["fix it"], "a release without the flag is not given it");
         }
 
         #[test]
