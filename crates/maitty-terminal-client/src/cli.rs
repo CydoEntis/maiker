@@ -602,7 +602,8 @@ fn turn_over(
 ) -> Option<Waited> {
     let ended = match status {
         Status::Blocked | Status::Done | Status::Idle => seen_working || quiet,
-        Status::None => quiet,
+        // A status this build does not know ends a wait only as a quiet pane would.
+        Status::None | Status::Unknown => quiet,
         Status::Working => false,
     };
     if !ended

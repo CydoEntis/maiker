@@ -310,7 +310,7 @@ async fn a_pending_start_left_by_a_failed_launch_can_be_ended_and_closed() {
                 thread_id: None,
             });
             let state = session.daemon.conversation_states.entry(id).or_default();
-            state.status = crate::protocol::Status::Blocked;
+            state.set_status(id, crate::protocol::Status::Blocked, "test");
             state.error = Some("launch failed".into());
             session.daemon.note_conversation_status_times();
             assert!(session.daemon.conversation_summaries().iter().any(|s| s.id == id));

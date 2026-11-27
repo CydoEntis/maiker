@@ -412,10 +412,10 @@ impl Daemon {
                                         && e.state == history::ItemState::Running
                                 })
                             {
-                                state.status = Status::Idle;
+                                state.set_status(id, Status::Idle, "its history shows no running turn");
                             }
                             if started.is_some() && !state.history_ready {
-                                state.status = Status::Blocked;
+                                state.set_status(id, Status::Blocked, "its history is incomplete");
                                 state.error = Some(
                                     "Codex history is incomplete; chat takeover is disabled".into(),
                                 );

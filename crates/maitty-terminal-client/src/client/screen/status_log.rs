@@ -18,6 +18,7 @@ fn label(kind: TurnKind) -> &'static str {
         TurnKind::Prompt => "Shell prompt",
         TurnKind::CommandStarted => "Command started",
         TurnKind::CommandFinished => "Command finished",
+        TurnKind::Unknown => "Something this version does not know",
     }
 }
 

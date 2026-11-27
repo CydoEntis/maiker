@@ -28,7 +28,7 @@ const FOLLOW_EVERY_ACTIVE: Duration = Duration::from_millis(250);
 fn follow_gap(status: Status) -> Duration {
     match status {
         Status::Working | Status::Blocked => FOLLOW_EVERY_ACTIVE,
-        Status::None | Status::Idle | Status::Done => FOLLOW_EVERY,
+        Status::None | Status::Idle | Status::Done | Status::Unknown => FOLLOW_EVERY,
     }
 }
 /// The most one poll reads.

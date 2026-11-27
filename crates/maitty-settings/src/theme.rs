@@ -1425,7 +1425,7 @@ impl Theme {
             Blocked => self.blocked,
             Done => self.done,
             Idle => self.idle,
-            None => self.muted,
+            None | Unknown => self.muted,
         }
     }
 }

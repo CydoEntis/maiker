@@ -15,7 +15,7 @@
 
 use super::helpers::Starter;
 use super::term::{HeldMessage, Term};
-use super::{ClientId, Daemon, RemovalReason, status::queued_as_typed, term};
+use super::{ClientId, Daemon, RemovalReason, status::queued_as_typed};
 use crate::protocol::{Status, TermId};
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
@@ -158,8 +158,8 @@ impl Daemon {
         t.waiting = Some(waiting);
         // Not through `set_status`: no turn starts here, so there is nothing to snapshot,
         // count or announce.
-        t.status = Status::Working;
-        t.status_since = term::unix_now();
+        let why = t.status_why.clone();
+        t.write_status(Status::Working, &why);
         self.dirty = true;
         self.say_places_in_line();
     }
@@ -272,9 +272,7 @@ impl Daemon {
         // From here it is a session just started: it counts as working until its agent
         // reports, and its agent is given the usual time to show.
         t.born = Instant::now();
-        t.status = Status::None;
-        t.status_since = term::unix_now();
-        t.status_why.clear();
+        t.write_status(Status::None, "");
         t.summary.clear();
         t.first_prompt.clear();
         let mut repair = None;

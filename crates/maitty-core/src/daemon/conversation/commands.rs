@@ -290,7 +290,7 @@ impl Daemon {
             Pending::Hydration { read, started, .. } => read.map(|r| r.client).or(started),
         };
         let state = self.conversation_states.entry(id).or_default();
-        state.status = Status::Blocked;
+        state.set_status(id, Status::Blocked, "a request to it failed");
         state.error = Some(error.clone());
         state.history_ready = false;
         if client == Some(DAEMON_REQUESTER) {

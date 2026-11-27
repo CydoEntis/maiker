@@ -814,7 +814,7 @@ pub struct TerminalStream {
 impl TerminalStream {
     /// The next message, or `None` when the daemon closed the connection.
     pub async fn next(&mut self) -> Result<Option<maitty_shared::protocol::ServerMsg>> {
-        ipc::receive_server(&mut self.reader).await
+        ipc::receive_pushed(&mut self.reader).await
     }
 }
 

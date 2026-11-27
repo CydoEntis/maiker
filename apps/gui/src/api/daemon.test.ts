@@ -274,6 +274,11 @@ describe('terminal sessions shown beside chats', () => {
     ...overrides,
   })
 
+  it('shows a status a newer service sent that this app does not know as not known, never as one it knows', () => {
+    const [shown] = conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '5': term({ status: 'Unknown' }) } })
+    expect(shown?.status).toBe('unknown')
+  })
+
   it('remembers the revision and the sessions the daemon said left, until it lists one again', () => {
     conversationsFromSnapshot({ conversations: [], workspaces: [], terms: { '8': term({ id: 8 }) }, revision: 7, removed: { '3': 'Closed', '4': 'SomethingNewer' } })
     expect(localListRevision()).toBe(7)

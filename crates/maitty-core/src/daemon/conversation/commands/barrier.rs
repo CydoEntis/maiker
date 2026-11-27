@@ -168,7 +168,7 @@ impl Daemon {
                 self.conversation_requests
                     .insert(token, Pending::Sending { client, receipt });
                 let state = self.conversation_states.entry(id).or_default();
-                state.status = Status::Working;
+                state.set_status(id, Status::Working, "a message was sent");
                 state.clear_errors();
                 let permissions = state.new_permissions.take();
                 let sent = self.conversation_runtimes.request(id, generation, token, Rpc::Send { session: thread, text, message: format!("{}-{generation}-{operation}", id.0), choice, permissions }).map_err(|e| (token, e.to_string()));

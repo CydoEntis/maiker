@@ -216,6 +216,7 @@ pub(super) fn sub_state(s: SubagentState) -> State {
         SubagentState::Completed => State::Done,
         SubagentState::Failed | SubagentState::ConnectionLost => State::Problem,
         SubagentState::Cancelled => State::Idle,
+        SubagentState::Unknown => State::Unknown,
     }
 }
 

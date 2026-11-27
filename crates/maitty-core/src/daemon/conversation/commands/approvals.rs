@@ -92,11 +92,11 @@ impl Daemon {
                 state.record_answer(answered, decision);
             }
             state.blocked = !state.approvals.is_empty() || !state.unsupported_requests.is_empty();
-            state.status = if state.blocked {
+            state.set_status(id, if state.blocked {
                 Status::Blocked
             } else {
                 Status::Working
-            };
+            }, "an approval was answered");
             state.error = state.unsupported_requests.values().next().cloned();
         }
         self.dirty = true;
@@ -297,11 +297,11 @@ impl Daemon {
         if let Some(state) = self.conversation_states.get_mut(&id) {
             state.approvals.remove(&request_id);
             state.blocked = !state.approvals.is_empty() || !state.unsupported_requests.is_empty();
-            state.status = if state.blocked {
+            state.set_status(id, if state.blocked {
                 Status::Blocked
             } else {
                 Status::Working
-            };
+            }, "an approval was withdrawn");
             state.error = state.unsupported_requests.values().next().cloned();
         }
         self.send(client, ServerMsg::Reply(Reply::Ok));

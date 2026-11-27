@@ -1265,6 +1265,25 @@ impl Term {
         }
     }
 
+    /// The one place a pane's status changes, with when and why: each change is logged, so a
+    /// wrong status or alert can be traced. `Daemon::set_status` wraps it with a turn's
+    /// bookkeeping (alerts, snapshots, counts); a reset that starts or ends no turn (an agent
+    /// starting or leaving, a held start) calls it alone. A test in `status_writers` keeps every
+    /// other write out.
+    pub(super) fn write_status(&mut self, new: Status, why: &str) {
+        if self.status != new {
+            tracing::info!(
+                "pane {} ({}): {:?} -> {new:?}: {why}",
+                self.id,
+                self.agent.as_deref().unwrap_or("no agent"),
+                self.status
+            );
+        }
+        self.status = new;
+        self.status_why = why.to_string();
+        self.status_since = unix_now();
+    }
+
     /// Put an event on the timeline. The same kind twice in a row (a hook repeating itself) is
     /// one event, and only the latest `TIMELINE_KEPT` are kept.
     pub fn note(&mut self, kind: TurnKind, detail: &str) {

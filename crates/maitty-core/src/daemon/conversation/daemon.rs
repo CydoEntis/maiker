@@ -18,8 +18,8 @@ fn cache_write_result(result: Result<bool>) -> Result<()> {
     result.map(|_| ())
 }
 
-fn reset_state_after_provider_ready(state: &mut super::State) {
-    state.status = Status::Idle;
+fn reset_state_after_provider_ready(id: ConversationId, state: &mut super::State) {
+    state.set_status(id, Status::Idle, "its provider is ready");
     state.blocked = false;
     state.clear_errors();
     state.approvals.clear();
@@ -163,7 +163,7 @@ impl Daemon {
         let result = self.apply_conversation_event(id, generation, event.payload);
         if let Err(error) = result {
             let state = self.conversation_states.entry(id).or_default();
-            state.status = Status::Blocked;
+            state.set_status(id, Status::Blocked, "an event from its provider could not be applied");
             state.history_ready = false;
             state.error = Some(error.to_string());
             self.broadcast(
@@ -189,7 +189,7 @@ impl Daemon {
                     record.state = RecoveryState::Running;
                 }
                 if let Some(state) = self.conversation_states.get_mut(&id) {
-                    reset_state_after_provider_ready(state);
+                    reset_state_after_provider_ready(id, state);
                 }
                 self.conversation_history.reconnect(id)?;
                 self.conversation_ready(id)
@@ -233,7 +233,7 @@ impl Daemon {
                     let state = self.conversation_states.entry(id).or_default();
                     state.cancelling = None;
                     state.blocked = false;
-                    state.status = Status::Idle;
+                    state.set_status(id, Status::Idle, "its provider stopped as asked");
                     state.clear_errors();
                     state.history_ready = false;
                     self.conversation_history.reconnect(id)?;
@@ -268,7 +268,7 @@ impl Daemon {
                 state.file_change_previews.clear();
                 state.unsupported_requests.clear();
                 state.cancelling = None;
-                state.status = Status::Blocked;
+                state.set_status(id, Status::Blocked, "its provider stopped");
                 state.error = Some(reason);
                 state.history_ready = false;
                 if cut {
@@ -427,11 +427,11 @@ impl Daemon {
         })) = &update
         {
             state.turn_error = Some(message.clone());
-            state.status = if *will_retry {
+            state.set_status(id, if *will_retry {
                 Status::Working
             } else {
                 Status::Blocked
-            };
+            }, "its provider reported an error");
         }
         if matches!(
             &update,
@@ -457,7 +457,7 @@ impl Daemon {
                 && *turn_state == super::history::ItemState::Interrupted;
             if cancelled_turn {
                 state.clear_errors();
-                state.status = Status::Idle;
+                state.set_status(id, Status::Idle, "its turn was cancelled");
             } else {
                 // A turn that starts, or ends well, is past what went wrong in the one before;
                 // only `turn_error` goes, so a lasting problem stays in `error`.
@@ -465,14 +465,13 @@ impl Daemon {
                     Some(failure) => Some(turn_error()?.unwrap_or_else(|| failure.clone())),
                     None => turn_error()?,
                 };
-                state.status =
-                    if state.blocked || failure.is_some() || state.shown_error().is_some() {
+                state.set_status(id, if state.blocked || failure.is_some() || state.shown_error().is_some() {
                         Status::Blocked
                     } else if *turn_state == super::history::ItemState::Running {
                         Status::Working
                     } else {
                         Status::Done
-                    };
+                    }, "its turn changed");
             }
             if reported.completed {
                 self.conversation_turn_ended(id, generation, turn.clone());
@@ -511,7 +510,7 @@ impl Daemon {
     ) -> Result<()> {
         let state = self.conversation_states.entry(id).or_default();
         state.blocked = true;
-        state.status = Status::Blocked;
+        state.set_status(id, Status::Blocked, "it asked the person");
         let arrived = match asked {
             Ok((request, command_hash)) => {
                 let request_id = request.request_id.clone();
@@ -750,7 +749,7 @@ mod cache_write_tests {
             ..Default::default()
         };
 
-        super::reset_state_after_provider_ready(&mut state);
+        super::reset_state_after_provider_ready(crate::conversation::ConversationId(1), &mut state);
 
         assert_eq!(state.status, Status::Idle);
         assert!(!state.blocked);

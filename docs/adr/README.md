@@ -46,3 +46,4 @@ holds the history; an ADR states only what is true now.
 | [0019](0019-acp-for-agents-without-an-adapter.md) | ACP is for agents without an adapter, and what it claims is labelled |
 | [0020](0020-the-chat-view-talks-to-the-agent-directly.md) | The chat view talks to the agent directly, never through a terminal |
 | [0021](0021-acp-agents-are-installed-from-the-registry.md) | Agents run over ACP are installed from the ACP registry |
+| [0022](0022-a-pane-host-keeps-terminals-running-across-an-update.md) | A pane host keeps terminals running across a daemon update (proposed) |

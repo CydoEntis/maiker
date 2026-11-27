@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SubagentActivity } from '@/data/preview'
-import { listedSubagents, toSubagentView } from './subagents'
+import { listedSubagents, subagentWord, toSubagentView } from './subagents'
 
 const activity = (extra: Partial<SubagentActivity> = {}): SubagentActivity => ({ id: 'a', name: 'Explore', state: 'Working', task: null, startedAt: 1000, updatedAt: 1100, latest: null, result: null, ...extra })
 
@@ -17,6 +17,12 @@ describe('a subagent as the window shows it', () => {
     expect(toSubagentView(activity({ state: 'WaitingForInput' })).status).toBe('needs')
     expect(toSubagentView(activity({ state: 'Completed' })).status).toBe('done')
     expect(toSubagentView(activity({ state: 'ConnectionLost' })).status).toBe('stopped')
+  })
+
+  it('says a state a newer service sent that this app does not know is not known, and shows no running time for it', () => {
+    const view = toSubagentView(activity({ state: 'Unknown' }))
+    expect(view.status).toBe('unknown')
+    expect(subagentWord(view, 2000)).toBe('not known')
   })
 
   it('is listed while it works or waits for you, and when it stopped only until the agent\'s turn is over', () => {

@@ -2380,21 +2380,12 @@ impl Daemon {
                         } else {
                             Status::None
                         };
-                        tracing::info!(
-                            "pane {} ({}): {:?} -> {new:?}: process: agent {}",
-                            t.id,
-                            t.agent.as_deref().or(f.agent.as_deref()).unwrap_or("no agent"),
-                            t.status,
-                            if f.agent.is_some() { "started" } else { "gone" }
-                        );
-                        t.status = new;
-                        t.status_since = term::unix_now();
+                        // Written while the pane still names the agent that went, and once it
+                        // names the one that started, so the log says which.
+                        if f.agent.is_none() {
+                            t.write_status(new, "");
+                        }
                         t.last_turn_end = Instant::now();
-                        t.status_why = if f.agent.is_some() {
-                            "process: an agent started".into()
-                        } else {
-                            String::new()
-                        };
                         if f.agent.is_none() {
                             t.session = None;
                             t.summary.clear();
@@ -2420,6 +2411,9 @@ impl Daemon {
                             t.queue_sent = None;
                         }
                         t.agent = f.agent;
+                        if t.agent.is_some() {
+                            t.write_status(new, "process: an agent started");
+                        }
                         t.hooked = false;
                         self.dirty = true;
                     }
@@ -4635,6 +4629,8 @@ mod branch_agent_tests;
 mod helper_queue_tests;
 #[cfg(test)]
 mod logic_tests;
+#[cfg(test)]
+mod status_writers;
 #[cfg(test)]
 mod wire_size_tests;
 

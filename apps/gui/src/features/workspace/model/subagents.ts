@@ -4,7 +4,8 @@ import type { SubagentActivity, SubagentState } from '@/data/preview'
 export type OpenSubagent = { sessionId: string; subagentId: string }
 
 /** A subagent's state as the sidebar marks it: a corner shape for each, never colour alone. */
-export type SubagentStatus = 'working' | 'needs' | 'done' | 'stopped'
+/** `unknown` is a state a newer service sent that this app does not know: drawn muted, never as another state. */
+export type SubagentStatus = 'working' | 'needs' | 'done' | 'stopped' | 'unknown'
 
 /** One subagent of a session as the window shows it. Times are unix seconds, as the daemon reports them. */
 export type SubagentView = {
@@ -30,6 +31,7 @@ const STATUS_OF: Record<SubagentState, SubagentStatus> = {
   Failed: 'stopped',
   Cancelled: 'stopped',
   ConnectionLost: 'stopped',
+  Unknown: 'unknown',
 }
 
 /** A task longer than this is cut where it is shown as a name. */
@@ -101,6 +103,7 @@ export function durationWords(seconds: number): string {
 export function subagentWord(subagent: SubagentView, nowSeconds: number): string {
   if (subagent.status === 'needs') return 'needs you'
   if (subagent.status === 'stopped') return 'stopped'
+  if (subagent.status === 'unknown') return 'not known'
   if (subagent.startedAt === null) return subagent.status === 'done' ? 'done' : 'working'
   const end = subagent.status === 'done' ? subagent.updatedAt : nowSeconds
   const took = durationWords(end - subagent.startedAt)

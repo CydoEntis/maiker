@@ -386,6 +386,8 @@ pub(super) fn status_icon(app: &App, s: Status) -> String {
         Status::Done => i.done.clone(),
         Status::Idle => i.idle.clone(),
         Status::None => i.shell.clone(),
+        // Not any state's icon: a status this build does not know claims none of them.
+        Status::Unknown => "?".to_string(),
     }
 }
 

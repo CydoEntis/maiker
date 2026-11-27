@@ -588,9 +588,7 @@ impl Daemon {
                 t.awaiting_background = false;
                 t.background_known.clear();
                 t.summary.clear();
-                t.status = Status::None;
-                t.status_since = term::unix_now();
-                t.status_why.clear();
+                t.write_status(Status::None, "");
                 self.dirty = true;
                 self.last_loss = Some(now);
                 return;
@@ -748,13 +746,6 @@ impl Daemon {
         if t.status == new {
             return;
         }
-        // Only the latest reason is kept on the pane: the log is how a wrong alert is traced.
-        tracing::info!(
-            "pane {term} ({}): {:?} -> {new:?}: {why}",
-            t.agent.as_deref().unwrap_or("no agent"),
-            t.status
-        );
-        t.status_why = why.to_string();
         let guessed_blink = new == Status::Done
             && why.starts_with("screen: ")
             && t.status == Status::Working
@@ -772,7 +763,8 @@ impl Daemon {
             .then(|| t.agent.clone().map(|a| (a, t.cwd.clone())))
             .flatten();
         t.blocked_at = (new == Status::Blocked).then(Instant::now);
-        t.status = new;
+        // Only the latest reason is kept on the pane: the log is how a wrong alert is traced.
+        t.write_status(new, why);
         if new == Status::Working {
             t.exit = None;
         }
@@ -781,11 +773,10 @@ impl Daemon {
             Status::Blocked => Some(TurnKind::NeedsYou),
             Status::Done => Some(TurnKind::Done),
             Status::Idle => Some(TurnKind::Idle),
-            Status::None => None,
+            Status::None | Status::Unknown => None,
         } {
             t.note(kind, why);
         }
-        t.status_since = term::unix_now();
         if new == Status::Working {
             t.turn_end_handled = false;
             t.after_snapshot_due = true;

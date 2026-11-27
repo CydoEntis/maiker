@@ -184,7 +184,7 @@ impl Daemon {
         };
         let id = launch.id();
         let state = self.conversation_states.entry(id).or_default();
-        state.status = Status::Working;
+        state.set_status(id, Status::Working, "it started");
         state.started_by = by.or(state.started_by);
         state.started_at = Some(std::time::Instant::now());
         let token = self.conversation_token(Pending::Validating { client, id })?;
