@@ -13,9 +13,27 @@ use crate::conversation::TurnChoice;
 use maitty_provider::ProviderEvent;
 use maitty_provider_claude::approvals::approval_request;
 use maitty_provider_claude::{
-    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, OutputFrame, TurnProjector,
+    MAX_FRAME_BYTES, MAX_PENDING_TOOLS, MAX_UNKNOWN_KIND_CHARS, OutputFrame, TurnProjector,
     CliTag, check_cli, command_arguments_for_turn, parse_output_frame, session_id,
 };
+
+/// Skip an output frame Claude Code added after this adapter was written. It asks for nothing,
+/// so the turn goes on; the log says what was skipped, so a frame worth showing can be added.
+fn log_unknown_frame(kind: &str) {
+    tracing::warn!(kind = %kind, "skipped a Claude Code output frame this adapter does not know");
+}
+
+/// The answer to a control request this adapter cannot read: an error, so nothing is granted.
+fn unsupported_control_response(request_id: &str, subtype: &str) -> Value {
+    serde_json::json!({
+        "type": "control_response",
+        "response": {
+            "subtype": "error",
+            "request_id": request_id,
+            "error": format!("Maiker's chat does not support the '{subtype}' control request"),
+        }
+    })
+}
 
 const STDERR_CHUNK_BYTES: usize = 8192;
 const PROCESS_EXIT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -142,6 +160,7 @@ impl Client {
                         return Ok(());
                     }
                     OutputFrame::Other => {}
+                    OutputFrame::Unknown { kind } => log_unknown_frame(&kind),
                     _ => {
                         bail!("Claude Code sent an unexpected frame during adapter initialization")
                     }
@@ -728,9 +747,23 @@ async fn run_turn(
                 {
                     return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Claude initialized a different session than the requested identity") });
                 }
+                if let OutputFrame::Unknown { kind } = &frame {
+                    log_unknown_frame(kind);
+                    continue;
+                }
                 if let OutputFrame::ControlRequest { request_id, request } = &frame {
-                    if request.get("subtype").and_then(Value::as_str) != Some("can_use_tool") {
-                        return Err(TurnFailure::Active { token: pending_token, error: anyhow::anyhow!("Unsupported Claude control request") });
+                    let subtype = request.get("subtype").and_then(Value::as_str).unwrap_or_default();
+                    if subtype != "can_use_tool" {
+                        // A request this adapter cannot read is refused, never granted: Claude
+                        // gets an error answer and carries on with its turn, as it does when an
+                        // SDK host lacks a handler. Ending the turn here broke every chat each
+                        // time a Claude Code release added a request kind.
+                        let subtype: String = subtype.chars().take(MAX_UNKNOWN_KIND_CHARS).collect();
+                        tracing::warn!(conversation = owner.conversation.0, subtype = %subtype, "refused a Claude control request this adapter does not know");
+                        client.write(&unsupported_control_response(request_id, &subtype))
+                            .await
+                            .map_err(|error| TurnFailure::Active { token: pending_token, error })?;
+                        continue;
                     }
                     let tool_name = request.get("tool_name").and_then(Value::as_str).unwrap_or_default();
                     let input = request.get("input").filter(|input| input.is_object()).cloned().unwrap_or_else(|| serde_json::json!({}));
@@ -979,6 +1012,9 @@ mod tests {
         assert!(
             parse_output_frame(r#"{"type":"result","session_id":"","is_error":false}"#).is_err()
         );
-        assert!(parse_output_frame(r#"{"type":"unknown_future_event"}"#).is_err());
+        assert_eq!(
+            parse_output_frame(r#"{"type":"unknown_future_event"}"#).unwrap(),
+            OutputFrame::Unknown { kind: "unknown_future_event".into() }
+        );
     }
 }

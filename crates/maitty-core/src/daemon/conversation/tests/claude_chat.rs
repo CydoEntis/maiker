@@ -469,6 +469,43 @@ async fn a_failed_claude_turn_reports_its_reason_and_names_claude() {
     }
 }
 
+/// A Claude Code release newer than the adapter sends a frame and a control request it has never
+/// seen. Neither ends the turn: the frame is skipped, the request refused, and the reply arrives.
+#[tokio::test]
+async fn a_newer_claude_codes_unknown_frames_do_not_end_the_turn() {
+    let mut session = conversation_fixture("conversation-newer-release").await;
+    let outcome = AssertUnwindSafe(async {
+        let (_, id, generation) = start_claude_chat(&mut session, 520, "newer-release").await;
+        let message = ClientMsg::Command(Command::ConversationSend {
+            id,
+            generation,
+            operation: 1,
+            text: "hello fake Claude".into(),
+            choice: None,
+        });
+        let sent = exchange(&mut session, 521, message, None).await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        handle_until(&mut session, "the turn ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| {
+                !state.completed_turns.is_empty() && state.effective_status() == crate::protocol::Status::Done
+            })
+        })
+        .await;
+        let read = exchange(&mut session, 522, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+            panic!("{read:?}");
+        };
+        assert_eq!(page.error, None);
+        assert_eq!(page.status, crate::protocol::Status::Done);
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 /// A turn that goes through after a failed one leaves the failure behind: the chat shows no error
 /// and is done, not waiting on the person. The second message picks another model, as a person
 /// does after a model was refused, so it starts its own Claude process.

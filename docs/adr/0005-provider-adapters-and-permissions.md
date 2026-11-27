@@ -60,9 +60,12 @@ a pane (0003). Each provider speaks its own protocol.
   provider; each adapter keeps a list of what it was run against (`VERIFIED_VERSIONS`) and it is
   only a tag. Any other version that passes its probe starts and is reported
   `Verified::Advertised`, the label for what a provider only says about itself.
-- What stays strict at run time, for every provider: unknown frames, unknown control or server
-  requests and unreadable permission requests end the turn or wait for a person, and nothing is
-  ever allowed on the adapter's own say.
+- At run time, read leniently and grant strictly, for every provider. An output frame the adapter
+  does not know asks for nothing: it is skipped and logged, and the turn goes on, because
+  providers add frames between releases and ending the turn broke every chat on each one. A
+  request the adapter cannot read is never granted: Claude Code gets an error answer and carries
+  on, other providers' requests wait for a person. An unreadable permission request is never
+  allowed, and nothing is ever allowed on the adapter's own say.
 
 ## Alternatives considered
 

@@ -17,8 +17,9 @@
 - Gate structured chat on what the installed Claude Code can do, not on its version
   number (`check_cli`; the policy is in
   [ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
-  Validate each JSONL frame, cap frame and queue sizes, use argument arrays, and reject
-  unknown or ambiguous control messages.
+  Validate each JSONL frame, cap frame and queue sizes and use argument arrays. Skip and log
+  an output frame type the adapter does not know; answer a control request it does not know
+  with an error, never a grant ([ADR 0005](../adr/0005-provider-adapters-and-permissions.md)).
 - Route permission prompts through Claude Code's Agent SDK stdio callback
   channel using `--permission-prompt-tool=stdio`. Keep every offered choice and
   request ID exact; fail closed on unsupported input. The public CLI reference
