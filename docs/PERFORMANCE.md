@@ -652,7 +652,6 @@ What was changed, and how sure we are that it matters:
 | Change | Where | Basis |
 | --- | --- | --- |
 | Hover lives outside React state: `HoverController` (`model/hoverController.ts`) holds the card, the delay timer (`HOVER_CARD_DELAY_MS`) and the warm window; `RowHoverHost` is the only component that follows it. A hover no longer draws the sidebar's rows. | `Sidebar.tsx`, `RowHoverHost.tsx`, `useHoverController.ts` | Read in code: the old state sat in `Expanded`, so each show and hide re-ran every row and `useFlip`'s layout reads. Cost not measured. |
-| `useFlip` measures only when `layoutKey` changes (what can move a row: sessions, status, helpers, grouping, sort, folds), not on every draw. | `useFlip.ts`, `orderPlacement` in `model/sidebarTree.ts` | Read in code. |
 | The card is placed from the row's box alone (`placeHoverCard`: `top` for a row in the upper half, `bottom` for the lower half, `max-height: calc(100vh - 16px)`), once, in the timer callback. It no longer renders hidden, measures itself and moves. | `hoverCard.ts`, `RowHoverCard.tsx` | Read in code. |
 | One card stays mounted while warm: leaving a row hides it (`data-open="false"`), and entering another within `HOVER_CARD_WARM_MS` (250ms) shows it there at once, no wait and no fade. The first card still waits `HOVER_CARD_DELAY_MS`. This is a small behaviour change. | `hoverController.ts` | By design. |
 | The card fades in by opacity only (`mx-hover-in`, 120ms) and has a 1px ring (`--pop-sh-flat`) in place of the blurred shadow, so its clip-path bleed is 4px instead of 48px (`--float-bleed`). Tips take the same ring. | `sidebar.css`, `material.css` | Shadow and clip costs are in the 2026-11-03 tables above; the card's share is a guess. |
@@ -695,6 +694,9 @@ as before, when:
   process while one waited was not seen), and while it waits it only touches the file's time;
 - no transcript is found to check, so none is started;
 - it has waited `WARM_IDLE_LIMIT` (10 minutes), so idle chats do not each keep a Claude Code process.
+
+A turn that leaves background tasks running keeps its own process instead, and no process is
+started ahead until those tasks end (see the stack doc's *Background tasks outlive their turn*).
 
 Its output is read only after a message is handed to it, so a waiting or discarded process never
 reaches status (ADR 0003). One that will not be used is stopped like any other Claude process:

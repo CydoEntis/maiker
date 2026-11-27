@@ -8,13 +8,13 @@ const PERCENT_MAX = 100
  * What is wrong with a chat, if anything (docs/DESIGN.md, Errors). Each comes from what the daemon reports about the
  * session (its status, its exit, its machine's link, its interrupted turn, its context use); the window never guesses.
  * - `stopped`: the agent's process exited with an error;
- * - `machine`: the machine the chat runs on stopped answering;
+ * - `machine`: the machine the chat runs on stopped answering, or (`update`) cannot connect until its Maiker is updated;
  * - `interrupted`: the agent was mid-turn when the service restarted;
  * - `context`: the context is nearly full (a warning that blocks nothing).
  */
 export type ChatProblem =
   | { kind: 'stopped'; agent: string; code: number | null; onRestart: (() => void) | null }
-  | { kind: 'machine'; machine: string; since: number | null; onRetry: () => void }
+  | { kind: 'machine'; machine: string; since: number | null; onRetry: () => void; /** Set when the machine only runs another version of Maiker: its state in words, and the update to ask for (null when this app is the older one). */ update?: { word: string; onUpdate: (() => void) | null } | undefined }
   | { kind: 'interrupted'; agent: string; /** A terminal agent's resume command; empty for a chat, which has none. */ resume: string; onRestart: () => void; onDismiss: () => void }
   | { kind: 'context'; agent: string; percent: number; onCompact: () => void; /** Opens a new chat in the same folder with the summary as its first message. */ onNewWithSummary: (summary: string) => void }
 
@@ -93,6 +93,17 @@ export function problemWords(problem: ChatProblem, now: number): ProblemWords {
       }
     }
     case 'machine': {
+      if (problem.update !== undefined) {
+        const why = problem.update.onUpdate === null
+          ? `${problem.machine} runs a newer Maiker than this app, so it cannot connect until this app is updated.`
+          : `${problem.machine} runs another version of Maiker, so it cannot connect until that is updated.`
+        return {
+          title: `${problem.machine} ${problem.update.word}`,
+          reason: `${why} The chat is paused there and nothing is lost.`,
+          line: 'The chat is paused there. Nothing is lost.',
+          details: `${problem.machine}: ${problem.update.word}.`,
+        }
+      }
       const ago = agoWords(problem.since, now)
       return {
         title: `${problem.machine} stopped answering`,

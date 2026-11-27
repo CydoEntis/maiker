@@ -28,3 +28,19 @@ export function parseTaskNotifications(text: string): string[] | null {
   }
   return lines.length > 0 ? lines : null
 }
+
+/** How a helper ended, as a notification says: the helper's id with its status and its report, when one came back. */
+export type TaskOutcome = { readonly status: string; readonly result: string }
+
+/** Every helper a message of notifications names, by its task id (one notification can name several). */
+export function taskOutcomes(text: string): Map<string, TaskOutcome> {
+  const outcomes = new Map<string, TaskOutcome>()
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('<task-notification>')) return outcomes
+  for (const block of trimmed.matchAll(BLOCK)) {
+    const body = block[1] ?? ''
+    const outcome = { status: tag(body, 'status') ?? '', result: tag(body, 'result') ?? '' }
+    for (const id of body.matchAll(/<task-id>([\s\S]*?)<\/task-id>/g)) outcomes.set((id[1] ?? '').trim(), outcome)
+  }
+  return outcomes
+}

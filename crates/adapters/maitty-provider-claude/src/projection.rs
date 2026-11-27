@@ -59,6 +59,45 @@ impl TurnProjector {
         }
     }
 
+    /// A turn Claude Code starts on its own, between the person's messages: to read that a
+    /// background task ended, or to go on with what such news asked of it. Nobody sent it, so it
+    /// has no delivery receipt; `begin` starts it.
+    pub fn unprompted(thread_id: String, turn_id: String) -> Self {
+        let mut projector = Self::new(thread_id, turn_id, String::new(), String::new());
+        projector.acknowledged = true;
+        projector
+    }
+
+    /// The start of an unprompted turn.
+    pub fn begin(&self) -> Vec<ProviderEvent> {
+        vec![ProviderEvent::TurnStarted {
+            turn: self.turn_id.clone(),
+            started_at_ms: Some(whole_seconds(self.started_at_ms)),
+        }]
+    }
+
+    /// A message Claude Code gives the agent in this turn rather than the person: the news that a
+    /// background task ended. It is kept on the user's side, as Claude Code's transcript keeps it.
+    pub fn note(&self, item_id: String, text: String) -> Vec<ProviderEvent> {
+        let message = Content::Message { role: Role::User, text };
+        vec![
+            self.started(item_id.clone(), message.clone()),
+            self.ended(item_id, message, ItemState::Completed),
+        ]
+    }
+
+    /// Ends a turn that will see no result from Claude: one that only says what became of tasks
+    /// whose process was closed.
+    pub fn close(&self) -> Vec<ProviderEvent> {
+        vec![ProviderEvent::TurnCompleted {
+            turn: self.turn_id.clone(),
+            state: ItemState::Completed,
+            error: None,
+            started_at_ms: Some(whole_seconds(self.started_at_ms)),
+            completed_at_ms: Some(whole_seconds(now_ms())),
+        }]
+    }
+
     #[cfg(test)]
     fn acknowledged(&self) -> bool {
         self.acknowledged
@@ -225,12 +264,11 @@ impl TurnProjector {
                     events.push(self.started(id.clone(), answer(String::new())));
                     events.push(self.ended(id, answer(output.clone()), ItemState::Completed));
                 }
-                // An error result's text is why the turn failed, not the answer: the answer keeps
-                // what was streamed, and the reason goes with the turn's end.
-                let answer_text = result.as_ref().filter(|text| !is_error && !text.is_empty());
+                // Each message keeps what it streamed. The result's text is only the turn's last
+                // message (or, on an error, why it failed), so giving it to every message of a
+                // turn that spoke between tools repeated the last one in place of the others.
                 for (message_id, streamed_text) in std::mem::take(&mut self.assistant_text) {
-                    let text = answer_text.unwrap_or(&streamed_text).clone();
-                    events.push(self.ended(message_id, answer(text), ItemState::Completed));
+                    events.push(self.ended(message_id, answer(streamed_text), ItemState::Completed));
                 }
                 let state = match (is_error, self.interrupted) {
                     (true, true) => ItemState::Interrupted,
@@ -251,7 +289,10 @@ impl TurnProjector {
             }
             OutputFrame::Initialized { .. }
             | OutputFrame::ControlResponse { .. }
-            | OutputFrame::Other => {}
+            | OutputFrame::Other
+            | OutputFrame::BackgroundTasks(_)
+            | OutputFrame::TaskEnded { .. }
+            | OutputFrame::Unknown { .. } => {}
         }
         Ok(events)
     }
@@ -559,6 +600,25 @@ mod tests {
     }
 
     #[test]
+    fn every_message_of_a_turn_keeps_its_own_text_when_the_turn_ends() {
+        let mut projector = projector();
+        for (message_id, text) in [("message-1", "I'll start the helpers."), ("message-2", "Four helpers are running.")] {
+            projector
+                .project(OutputFrame::MessageStarted { message_id: message_id.into(), model: "model".into() })
+                .unwrap();
+            projector.project(OutputFrame::TextDelta { block_index: 0, text: text.into() }).unwrap();
+        }
+
+        let events = projector.project(result(false, Some("Four helpers are running."))).unwrap();
+
+        let ended: Vec<(&str, &str)> = events.iter().filter_map(|event| match event {
+            ProviderEvent::Item(Item { id, content: Content::Message { role: Role::Assistant, text }, state: ItemState::Completed, .. }) => Some((id.as_str(), text.as_str())),
+            _ => None,
+        }).collect();
+        assert_eq!(ended, [("message-1", "I'll start the helpers."), ("message-2", "Four helpers are running.")]);
+    }
+
+    #[test]
     fn a_turn_reason_is_given_only_for_a_failure_and_is_bounded() {
         let error = |interrupted: bool, text: &str| {
             let mut projector = projector();
@@ -599,5 +659,25 @@ mod tests {
         let request = OutputFrame::ControlRequest { request_id: "request-1".into(), request: json!({}) };
 
         assert!(projector().project(request).is_err());
+    }
+
+    #[test]
+    fn a_turn_claude_starts_itself_has_no_receipt_and_carries_the_news_that_started_it() {
+        let mut turn = TurnProjector::unprompted("session-1".into(), "turn-2".into());
+        assert!(matches!(turn.begin().as_slice(), [ProviderEvent::TurnStarted { turn, .. }] if turn == "turn-2"));
+        let note = turn.note("note-1".into(), "<task-notification>x</task-notification>".into());
+        assert!(matches!(&note[1], ProviderEvent::Item(Item { turn, content: Content::Message { role: Role::User, .. }, state: ItemState::Completed, .. }) if turn == "turn-2"));
+        let mut events = Vec::new();
+        for frame in [
+            OutputFrame::UserReplay { text: "anything".into() },
+            OutputFrame::MessageStarted { message_id: "m1".into(), model: "claude".into() },
+            OutputFrame::TextDelta { block_index: 0, text: "Done.".into() },
+            OutputFrame::Result { session_id: "session-1".into(), is_error: false, result: Some("Done.".into()) },
+        ] {
+            events.extend(turn.project(frame).unwrap());
+        }
+        assert!(!events.iter().any(|event| matches!(event, ProviderEvent::Delivered { .. } | ProviderEvent::TurnStarted { .. })));
+        assert!(matches!(events.last(), Some(ProviderEvent::TurnCompleted { state: ItemState::Completed, .. })));
+        assert!(matches!(turn.close().as_slice(), [ProviderEvent::TurnCompleted { turn, .. }] if turn == "turn-2"));
     }
 }

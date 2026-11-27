@@ -33,6 +33,7 @@ function info(overrides: Partial<MachinesInfo> = {}): MachinesInfo {
     onRemove: vi.fn(),
     onGrant: vi.fn(),
     onUpdate: vi.fn(() => Promise.resolve()),
+    onAskUpdate: vi.fn(),
     onCheckActivity: vi.fn(() => Promise.resolve(null)),
     onCopyCommand: vi.fn(),
     onOpenLogin: vi.fn(),

@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { updateMachine } from '@/api/machines'
+import { writeMachineNicknames } from '@/data/machineNicknames'
 import { runMachineUpdate } from './machineUpdate'
 
 const toasts = vi.hoisted(() => ({ failed: vi.fn(), progress: vi.fn(() => 'toast-1'), success: vi.fn(), error: vi.fn() }))
 vi.mock('@/lib/toast', () => ({ toast: toasts }))
 vi.mock('@/api/machines', async (importOriginal) => ({ ...await importOriginal<typeof import('@/api/machines')>(), updateMachine: vi.fn() }))
 
-beforeEach(() => { vi.clearAllMocks() })
+beforeEach(() => { vi.clearAllMocks(); writeMachineNicknames({}) })
 
 describe('installing or updating a machine', () => {
   it('passes --install for a machine with none, says it is running, then how it ended, and dials it again', async () => {
@@ -17,6 +18,15 @@ describe('installing or updating a machine', () => {
     expect(toasts.progress).toHaveBeenCalledWith('Installing Maiker on box…')
     expect(toasts.success).toHaveBeenCalledWith('box: maiker 0.67.0 installed to ~/.local/bin/maiker', { id: 'toast-1' })
     expect(onDone).toHaveBeenCalledTimes(1)
+  })
+
+  it('names the machine in its toasts as its owner named it, and reaches it by its own name', async () => {
+    writeMachineNicknames({ 'server-15': 'kingdom' })
+    vi.mocked(updateMachine).mockRejectedValue('no route')
+    await runMachineUpdate('server-15', 'update', false, { onDone: vi.fn(), onRestartAnyway: vi.fn() })
+    expect(updateMachine).toHaveBeenCalledWith('server-15', false, false)
+    expect(toasts.progress).toHaveBeenCalledWith('Updating Maiker on kingdom…')
+    expect(toasts.error).toHaveBeenCalledWith('Could not update Maiker on kingdom', { id: 'toast-1', description: 'no route' })
   })
 
   it('replaces another version without --install, and keeps the daemon note it gave', async () => {

@@ -469,6 +469,43 @@ async fn a_failed_claude_turn_reports_its_reason_and_names_claude() {
     }
 }
 
+/// A Claude Code release newer than the adapter sends a frame and a control request it has never
+/// seen. Neither ends the turn: the frame is skipped, the request refused, and the reply arrives.
+#[tokio::test]
+async fn a_newer_claude_codes_unknown_frames_do_not_end_the_turn() {
+    let mut session = conversation_fixture("conversation-newer-release").await;
+    let outcome = AssertUnwindSafe(async {
+        let (_, id, generation) = start_claude_chat(&mut session, 520, "newer-release").await;
+        let message = ClientMsg::Command(Command::ConversationSend {
+            id,
+            generation,
+            operation: 1,
+            text: "hello fake Claude".into(),
+            choice: None,
+        });
+        let sent = exchange(&mut session, 521, message, None).await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        handle_until(&mut session, "the turn ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| {
+                !state.completed_turns.is_empty() && state.effective_status() == crate::protocol::Status::Done
+            })
+        })
+        .await;
+        let read = exchange(&mut session, 522, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+            panic!("{read:?}");
+        };
+        assert_eq!(page.error, None);
+        assert_eq!(page.status, crate::protocol::Status::Done);
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
 /// A turn that goes through after a failed one leaves the failure behind: the chat shows no error
 /// and is done, not waiting on the person. The second message picks another model, as a person
 /// does after a model was refused, so it starts its own Claude process.
@@ -504,6 +541,58 @@ async fn a_turn_that_succeeds_after_a_failed_one_clears_its_error() {
         };
         assert_eq!(page.error, None, "the failed turn's reason went with it");
         assert_eq!(page.status, crate::protocol::Status::Done);
+    })
+    .catch_unwind()
+    .await;
+    session.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}
+
+/// A helper started in the background outlives the turn that started it: the process is kept
+/// until the helper ends, the turn Claude starts to read its news shows in the chat with that
+/// news, and only then is the process closed.
+#[tokio::test]
+async fn a_background_helper_outlives_its_turn_and_its_news_is_read_in_a_turn_of_its_own() {
+    let mut session = conversation_fixture("conversation-background-helper").await;
+    let outcome = AssertUnwindSafe(async {
+        let (executable, id, generation) = start_claude_chat(&mut session, 530, "background-helper").await;
+        let message = ClientMsg::Command(Command::ConversationSend {
+            id,
+            generation,
+            operation: 1,
+            text: "hello fake Claude".into(),
+            choice: None,
+        });
+        let sent = exchange(&mut session, 531, message, None).await;
+        assert!(matches!(sent, ServerMsg::Reply(Reply::ConversationSent(_))), "{sent:?}");
+        handle_until(&mut session, "the turn the helper's news started ends", |daemon| {
+            daemon.conversation_states.get(&id).is_some_and(|state| {
+                state.completed_turns.len() >= 2 && state.effective_status() == crate::protocol::Status::Done
+            })
+        })
+        .await;
+        let read = exchange(&mut session, 532, ClientMsg::Query(Query::ConversationRead { id, cursor: None, limit: 128 }), None).await;
+        let ServerMsg::Reply(Reply::ConversationRead(page)) = read else {
+            panic!("{read:?}");
+        };
+        let page = format!("{page:?}");
+        assert!(page.contains("<task-id>a-helper</task-id>") && page.contains("<result>Found 3 call sites</result>"), "{page}");
+        assert!(page.contains("The helper found 3."), "{page}");
+        let log = executable.with_extension("log");
+        let mut closed_after_helper = false;
+        for _ in 0..100 {
+            let text = tokio::fs::read_to_string(&log).await.unwrap_or_default();
+            let helper = text.lines().position(|line| line.starts_with("helper done"));
+            let eof = text.lines().position(|line| line.starts_with("eof"));
+            if let (Some(helper), Some(eof)) = (helper, eof) {
+                closed_after_helper = eof > helper;
+                break;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        }
+        assert!(closed_after_helper, "the process is closed only after the helper ended");
     })
     .catch_unwind()
     .await;

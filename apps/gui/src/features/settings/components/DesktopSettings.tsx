@@ -52,6 +52,8 @@ export type MachinesInfo = {
    * back. Settles when the update ended and has already told the person how it went.
    */
   onUpdate: (name: string, action: UpdateAction, whenIdle: boolean) => Promise<void>
+  /** Asks, in the window's own update question, before installing or updating the app on a machine (the sidebar's Update). */
+  onAskUpdate: (name: string, action: UpdateAction) => void
   /**
    * How many sessions are open on a machine and how many are busy; null when it cannot say (its
    * app is too old, or it cannot be reached). The update question uses it to say what it will interrupt.

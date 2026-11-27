@@ -1,6 +1,7 @@
 import { toast } from '@/lib/toast'
 import { restartMachineService, updateMachine } from '@/api/machines'
 import { errorMessage } from '@/lib/error-message'
+import { machineLabel } from '@/data/machineNicknames'
 import { UPDATE_WORDS, type UpdateAction } from './model/machines'
 
 // The update is the command-line app's, which leads each error it prints with its own name.
@@ -35,7 +36,9 @@ export type UpdateFollowUps = { onDone: () => void; onRestartAnyway: (sessions: 
 
 export async function runMachineUpdate(name: string, action: UpdateAction, whenIdle: boolean, { onDone, onRestartAnyway }: UpdateFollowUps): Promise<void> {
   const words = UPDATE_WORDS[action]
-  const id = toast.progress(words.running(name))
+  // The toasts name the machine as its owner did; the command still reaches it by its own name.
+  const label = machineLabel(name)
+  const id = toast.progress(words.running(label))
   try {
     const result = lines(await updateMachine(name, action === 'install', whenIdle))
     toast.success(result.title, { id, ...(result.description === undefined ? {} : { description: result.description }) })
@@ -43,18 +46,19 @@ export async function runMachineUpdate(name: string, action: UpdateAction, whenI
   } catch (error) {
     const said = errorMessage(error, 'The update did not say why.').replace(CLI_PREFIX, '')
     const restart = isRefusedRestart(said) ? { action: { label: 'Restart anyway…', onClick: () => { onRestartAnyway(keptSessions(said)) } }, duration: Infinity } : {}
-    toast.error(words.failed(name), { id, description: said, ...restart })
+    toast.error(words.failed(label), { id, description: said, ...restart })
   }
 }
 
 /** Restart the service on a machine, ending its sessions, with one toast for how it went; `onDone` dials it again. */
 export async function runServiceRestart(name: string, onDone: () => void): Promise<void> {
-  const id = toast.progress(`Restarting Maiker on ${name}…`)
+  const label = machineLabel(name)
+  const id = toast.progress(`Restarting Maiker on ${label}…`)
   try {
     await restartMachineService(name)
-    toast.success(`Restarted Maiker on ${name}`, { id, description: 'Connecting to the new version.' })
+    toast.success(`Restarted Maiker on ${label}`, { id, description: 'Connecting to the new version.' })
     onDone()
   } catch (error) {
-    toast.error(`Could not restart Maiker on ${name}`, { id, description: errorMessage(error, 'It did not say why.') })
+    toast.error(`Could not restart Maiker on ${label}`, { id, description: errorMessage(error, 'It did not say why.') })
   }
 }

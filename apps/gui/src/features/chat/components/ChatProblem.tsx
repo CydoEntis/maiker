@@ -13,7 +13,9 @@ type Fix = { label: string; running: string; run: () => void }
 function fixOf(problem: ChatProblem): Fix | null {
   switch (problem.kind) {
     case 'stopped': return problem.onRestart === null ? null : { label: 'Restart', running: `Restarting ${problem.agent}…`, run: problem.onRestart }
-    case 'machine': return { label: 'Try again', running: `Reconnecting to ${problem.machine}…`, run: problem.onRetry }
+    case 'machine': return problem.update?.onUpdate != null
+      ? { label: 'Update Maiker', running: `Updating Maiker on ${problem.machine}…`, run: problem.update.onUpdate }
+      : { label: 'Try again', running: `Reconnecting to ${problem.machine}…`, run: problem.onRetry }
     case 'interrupted': return { label: 'Restart', running: `Restarting ${problem.agent}…`, run: problem.onRestart }
     case 'context': return null
   }

@@ -26,4 +26,11 @@ describe('what a mouse release picked', () => {
     const chat = document.createElement('div')
     expect(pickedText({ target: chat, currentTarget: chat, clientX: 0, clientY: 0 } as unknown as MouseEvent<HTMLElement>)).toBeNull()
   })
+
+  it('picks nothing on a release outside the chat, such as over a picture opened full size', () => {
+    const { event } = mouseUpIn('<div class="mx-msg-agent"><p><span>theirs</span></p></div>')
+    const viewer = document.createElement('img')
+    document.body.append(viewer)
+    expect(pickedText({ ...event, target: viewer })).toBeNull()
+  })
 })

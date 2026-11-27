@@ -1,4 +1,4 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use serde_json::Value;
 use maitty_shared::conversation::TurnChoice;
 use std::ffi::OsString;
@@ -15,6 +15,8 @@ pub use hooks::{
 pub use projection::{MAX_PENDING_TOOLS, TurnProjector};
 
 pub const MAX_FRAME_BYTES: usize = 1024 * 1024;
+/// How much of an unknown frame's type is kept for the log: the name is the provider's, not ours.
+pub const MAX_UNKNOWN_KIND_CHARS: usize = 64;
 const VERIFIED_VERSIONS: &[&str] = &["2.1.312", "2.1.314", "2.1.316", "2.1.327", "2.1.330"];
 
 #[derive(Debug, PartialEq)]
@@ -59,7 +61,89 @@ pub enum OutputFrame {
         input: Value,
     },
     ToolResults(Vec<ToolResult>),
+    /// What Claude Code still runs in the background (helpers, background commands), listed again
+    /// each time the list changes. Its process must live while any runs: closing it ends them.
+    BackgroundTasks(Vec<BackgroundTask>),
+    /// A background task ended. Claude Code tells the agent with a `<task-notification>` message
+    /// and, when it is between turns, starts a turn of its own to read it.
+    TaskEnded {
+        task_id: String,
+        status: String,
+        /// The task's own report (a helper's answer), when Claude Code gives one.
+        report: Option<String>,
+    },
     Other,
+    /// A frame type this adapter does not know. Claude Code adds output frames between releases;
+    /// a frame that asks nothing is skipped (and logged by the caller), never a reason to end a
+    /// turn. Requests that wait for an answer arrive as `ControlRequest` and stay strict.
+    Unknown {
+        kind: String,
+    },
+}
+
+/// One task Claude Code runs in the background.
+#[derive(Clone, Debug, PartialEq)]
+pub struct BackgroundTask {
+    pub id: String,
+    pub description: String,
+    /// A helper agent, rather than a background command.
+    pub agent: bool,
+}
+
+/// How much of a background task's words is kept: a task's description and status are a line in
+/// the chat; its report is the helper's answer, bounded like a tool's output.
+const MAX_TASK_LINE_CHARS: usize = 200;
+const MAX_TASK_STATUS_CHARS: usize = 32;
+
+/// The `<task-notification>` message Claude Code shows the agent when a background task ends, in
+/// the shape its transcript keeps, so a chat reads the same live and when read back. `task` is the
+/// task as last listed, for its description.
+pub fn task_notification_text(task_id: &str, task: Option<&BackgroundTask>, status: &str, report: Option<&str>) -> String {
+    let what = match task {
+        Some(task) if task.agent => format!("Agent \"{}\"", task.description),
+        Some(task) => format!("Background command \"{}\"", task.description),
+        None => "Background task".to_owned(),
+    };
+    let ended = if status == "completed" { "finished" } else { status };
+    let result = report.map(|report| format!("<result>{report}</result>\n")).unwrap_or_default();
+    format!("<task-notification>\n<task-id>{task_id}</task-id>\n<status>{status}</status>\n<summary>{what} {ended}</summary>\n{result}</task-notification>")
+}
+
+fn bounded_line(text: &str, limit: usize) -> String {
+    text.chars().filter(|c| !c.is_control()).take(limit).collect()
+}
+
+/// The background task list. Read leniently: an entry with no id is left out, never a reason to
+/// end the turn.
+fn parse_background_tasks(frame: &Value) -> OutputFrame {
+    let tasks = frame
+        .get("tasks")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|task| {
+            Some(BackgroundTask {
+                id: required_text(task, "task_id").ok()?,
+                description: bounded_line(task.get("description").and_then(Value::as_str).unwrap_or_default(), MAX_TASK_LINE_CHARS),
+                agent: task.get("task_type").and_then(Value::as_str) == Some("local_agent"),
+            })
+        })
+        .collect();
+    OutputFrame::BackgroundTasks(tasks)
+}
+
+fn parse_task_ended(frame: &Value) -> OutputFrame {
+    let Ok(task_id) = required_text(frame, "task_id") else {
+        return OutputFrame::Other;
+    };
+    let report = (frame.get("summary_is_report").and_then(Value::as_bool) == Some(true))
+        .then(|| frame.get("summary").map(|summary| bounded_content_text(Some(summary))))
+        .flatten();
+    OutputFrame::TaskEnded {
+        task_id,
+        status: bounded_line(frame.get("status").and_then(Value::as_str).unwrap_or("stopped"), MAX_TASK_STATUS_CHARS),
+        report,
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -86,6 +170,11 @@ pub fn parse_output_frame(line: &str) -> Result<OutputFrame> {
             let session_id = required_text(&frame, "session_id")?;
             Ok(OutputFrame::Initialized { session_id })
         }
+        "system" => Ok(match frame.get("subtype").and_then(Value::as_str) {
+            Some("background_tasks_changed") => parse_background_tasks(&frame),
+            Some("task_notification") => parse_task_ended(&frame),
+            _ => OutputFrame::Other,
+        }),
         "stream_event" => parse_stream_event(&frame),
         "control_request" => Ok(OutputFrame::ControlRequest {
             request_id: required_text(&frame, "request_id")?,
@@ -116,8 +205,10 @@ pub fn parse_output_frame(line: &str) -> Result<OutputFrame> {
             })
         }
         "user" => parse_user_frame(&frame),
-        "assistant" | "system" | "rate_limit_event" | "tool_progress" => Ok(OutputFrame::Other),
-        _ => bail!("Unsupported Claude output frame type: {kind}"),
+        "assistant" | "rate_limit_event" | "tool_progress" => Ok(OutputFrame::Other),
+        _ => Ok(OutputFrame::Unknown {
+            kind: kind.chars().take(MAX_UNKNOWN_KIND_CHARS).collect(),
+        }),
     }
 }
 
@@ -449,7 +540,7 @@ pub fn capabilities() -> maitty_shared::conversation::capabilities::Capabilities
 #[cfg(test)]
 mod tests {
     use super::{
-        OutputFrame, bounded_content_text, command_arguments, parse_output_frame, session_id,
+        BackgroundTask, OutputFrame, bounded_content_text, task_notification_text, command_arguments, parse_output_frame, session_id,
         CliTag, check_cli, verified_version, version_number,
     };
     use maitty_shared::conversation::{ApprovalPolicy, LaunchSettings, Provider, Sandbox};
@@ -505,7 +596,41 @@ mod tests {
             parse_output_frame(r#"{"type":"stream_event","event":{"type":"content_block_delta","index":2,"delta":{"type":"text_delta","text":"hello"}}}"#).unwrap(),
             OutputFrame::TextDelta { block_index: 2, text: "hello".into() }
         );
-        assert!(parse_output_frame(r#"{"type":"unknown_future_event"}"#).is_err());
+        assert_eq!(
+            parse_output_frame(r#"{"type":"unknown_future_event"}"#).unwrap(),
+            OutputFrame::Unknown { kind: "unknown_future_event".into() }
+        );
+    }
+
+    #[test]
+    fn reads_what_runs_in_the_background_and_how_it_ended() {
+        // As Claude Code 2.1.332 sends them.
+        assert_eq!(
+            parse_output_frame(r#"{"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a9ae","run_id":"r","task_type":"local_agent","description":"Pong probe"},{"task_id":"","task_type":"local_bash"},{"task_id":"b1","task_type":"local_bash","description":"Sleep"}]}"#).unwrap(),
+            OutputFrame::BackgroundTasks(vec![
+                BackgroundTask { id: "a9ae".into(), description: "Pong probe".into(), agent: true },
+                BackgroundTask { id: "b1".into(), description: "Sleep".into(), agent: false },
+            ])
+        );
+        assert_eq!(
+            parse_output_frame(r#"{"type":"system","subtype":"task_notification","task_id":"a9ae","status":"completed","summary":"pong","summary_is_report":true}"#).unwrap(),
+            OutputFrame::TaskEnded { task_id: "a9ae".into(), status: "completed".into(), report: Some("pong".into()) }
+        );
+        assert_eq!(
+            parse_output_frame(r#"{"type":"system","subtype":"task_notification","task_id":"b1","status":"failed","summary":"Sleep failed"}"#).unwrap(),
+            OutputFrame::TaskEnded { task_id: "b1".into(), status: "failed".into(), report: None }
+        );
+        assert_eq!(parse_output_frame(r#"{"type":"system","subtype":"task_notification"}"#).unwrap(), OutputFrame::Other);
+    }
+
+    #[test]
+    fn says_a_task_ended_the_way_claude_codes_transcript_does() {
+        let helper = BackgroundTask { id: "a9ae".into(), description: "Pong probe".into(), agent: true };
+        assert_eq!(
+            task_notification_text("a9ae", Some(&helper), "completed", Some("pong")),
+            "<task-notification>\n<task-id>a9ae</task-id>\n<status>completed</status>\n<summary>Agent \"Pong probe\" finished</summary>\n<result>pong</result>\n</task-notification>"
+        );
+        assert!(task_notification_text("b1", None, "stopped", None).contains("<summary>Background task stopped</summary>\n</task-notification>"));
     }
 
     #[test]

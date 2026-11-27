@@ -1,4 +1,4 @@
-import { Fragment, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
+import { Fragment, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import { FolderPlus } from 'lucide-react'
 import { IconButton } from '@/components/ui/icon-button'
 import { useShortcutText, useTipWithKeys } from '@/features/shortcuts/platform'
@@ -8,14 +8,13 @@ import { machineTitle, type MachineHead, type UpdateAction } from '../model/mach
 import { sameProject, type MachineProjects, type OpenedProject } from '../model/openedProjects'
 import type { SessionView } from '../model/session'
 import { rowTitle } from '../model/sidebar'
-import { filterChoices, helpersFoldKey, NO_FILTER, orderPlacement, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter, type SidebarSort } from '../model/sidebarTree'
+import { filterChoices, helpersFoldKey, NO_FILTER, passesFilter, sidebarOrder, type ProjectGroup, type SessionNode, type SidebarFilter, type SidebarSort } from '../model/sidebarTree'
 import { Collapse } from './Collapse'
 import { Icon } from './glyphs'
 import { machineMenuEntries, type MachineActions } from './machineMenu'
 import { MachineTag } from './MachineTag'
 import { MenuPopup, type MenuEntry } from './MenuPopup'
 import { isMenuKey } from './menuPoint'
-import { useReducedMotion } from './motion'
 import { projectContextMenu, projectPlusMenu, type ProjectActions, type ProjectTarget } from './projectMenu'
 import { ProjectBadge } from './ProjectBadge'
 import { RowHoverHost } from './RowHoverHost'
@@ -24,7 +23,6 @@ import { SessionRow } from './SessionRow'
 import { SidebarFilterMenu } from './SidebarFilterMenu'
 import { SidebarRail } from './SidebarRail'
 import { SidebarResizer } from './SidebarResizer'
-import { useFlip } from './useFlip'
 import { useHeldRow } from './useHeldRow'
 import { useHoverController } from './useHoverController'
 import { useSidebarFolds } from './useSidebarFolds'
@@ -139,13 +137,11 @@ function validFilter(filter: SidebarFilter, choices: ReturnType<typeof filterCho
 function Expanded(props: SidebarProps) {
   const tip = useTipWithKeys()
   const shortcutText = useShortcutText()
-  const body = useRef<HTMLDivElement>(null)
   const [menu, setMenu] = useState<OpenMenu | null>(null)
   // The card beside a row the pointer rests on. It follows a controller outside React state, so a hover never draws the rows.
   const hover = useHoverController()
   const endHover = () => { hover.leave() }
   const beginHover = (id: string, element: HTMLElement) => { hover.enter(id, () => cardAnchor(element)) }
-  const reduced = useReducedMotion()
   const choices = filterChoices(props.machines, props.projects)
   const [picked, setPicked] = useState<SidebarFilter>(NO_FILTER)
   const held = useHeldRow(props.focusedId, props.sessions)
@@ -165,8 +161,6 @@ function Expanded(props: SidebarProps) {
   // The project just opened or picked is unfolded, so its sessions show.
   const revealKeys = listedSelected === null ? [] : [listedSelected.key]
   const folds = useSidebarFolds(selected, revealKeys)
-  // Measured to slide only when a row or heading can have moved: its place, its name, or a fold.
-  useFlip(body, reduced, `${orderPlacement(order)}#${folds.signature}#${props.sessions.map((session) => `${session.id}:${rowTitle(session)}`).join('|')}`)
 
   // The session whose name is being typed in its row.
   const [renaming, setRenaming] = useState<string | null>(null)
@@ -217,14 +211,14 @@ function Expanded(props: SidebarProps) {
       onContextMenu: actions === undefined ? undefined : (event) => { openMenu(event, { owner: group.key, title: group.name, at: { x: event.clientX, y: event.clientY }, items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
       onKeyDown: actions === undefined ? undefined : (event) => { if (isMenuKey(event)) openMenu(event, { owner: group.key, title: group.name, at: under(event.currentTarget), items: projectContextMenu(actions, targetOf(group), shortcutText) }) },
       tag: name === null ? null : (
-        <MachineTag head={group.head} progress={props.updateProgress?.[name]} onMenu={(event) => { openMenu(event, { title: machineTitle(group.head), at: under(event.currentTarget), items: machineMenuEntries(group.head, name, machineActions) }) }} />
+        <MachineTag head={group.head} progress={props.updateProgress?.[name]} onMenu={(event) => { openMenu(event, { title: machineTitle(group.head), at: under(event.currentTarget), items: machineMenuEntries(group.head, name, machineActions) }) }} onUpdate={() => { const fix = group.head.updateAction; if (fix !== null) props.onUpdateMachine(name, fix) }} />
       ),
     }
   }
 
   const links = helperLinks(props.sessions)
   const renderRow = (session: SessionView, nested: boolean) => (
-    <div key={session.id} className={`mx-sb-item${nested ? ' is-nested' : ''}`} role="listitem" data-flip={session.id} onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
+    <div key={session.id} className={`mx-sb-item${nested ? ' is-nested' : ''}`} role="listitem" onMouseEnter={(event) => { beginHover(session.id, event.currentTarget); props.onHoverSession?.(session.id) }} onMouseLeave={() => { endHover(); props.onHoverSession?.(null) }} onMouseDown={endHover} onFocus={() => { props.onHoverSession?.(session.id) }} onBlur={() => { props.onHoverSession?.(null) }}>
       <SessionRow
         session={session}
         selected={session.id === props.focusedId}
@@ -264,7 +258,7 @@ function Expanded(props: SidebarProps) {
       </div>
       {/* Search as a field across the sidebar, not a third small icon: on the bare ground it anchors the top. */}
       <button type="button" className="mx-sb-search-button" title={tip('Search', 'palette')} onClick={props.onSearch}><Icon name="search" /><span>Search</span></button>
-      <div ref={body} className="mx-sb-body">
+      <div className="mx-sb-body">
         <div className="mx-sb-list" onScroll={endHover}>
           {!props.listed && props.sessions.length === 0 && <p className="mx-sb-note">Looking for your sessions…</p>}
           {/* With a project open, its own heading says it has no sessions; the card is only for a sidebar with nothing in it. */}
@@ -334,7 +328,7 @@ function HelperGroup({ lead, helpers, open, onToggle, children }: { lead: Sessio
   const leadName = rowTitle(lead)
   return (
     <div className="mx-sb-helpers" role="listitem">
-      <button type="button" className={`mx-sb-helpers-sum is-${summary.state}`} data-flip={`helpers:${lead.id}`} aria-expanded={open} aria-label={`${summarySpoken(summary)}, under ${leadName}`} onClick={onToggle}>
+      <button type="button" className={`mx-sb-helpers-sum is-${summary.state}`} aria-expanded={open} aria-label={`${summarySpoken(summary)}, under ${leadName}`} onClick={onToggle}>
         <span className={`mx-sb-caret${open ? ' is-open' : ''}`} aria-hidden="true"><Icon name="caret" /></span>
         <span className="mx-sb-helpers-count">{count}</span>
         {summary.state !== 'idle' && (
@@ -375,7 +369,7 @@ function Project({ group, open, onToggle, menus, children }: { group: ProjectGro
   return (
     <div className={`mx-sb-group${quiet ? ' is-idle' : ''}`}>
       {/* A row holding the folding button and the buttons beside it: a button cannot hold a button. */}
-      <div className={`mx-sb-head${quiet ? ' is-idle' : ''}`} data-project={group.key} data-flip={`head:${group.key}`} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
+      <div className={`mx-sb-head${quiet ? ' is-idle' : ''}`} data-project={group.key} onContextMenu={menus.onContextMenu} onKeyDown={menus.onKeyDown}>
         {empty ? (
           <button type="button" className="mx-sb-head-main" {...(onPlus === null ? { disabled: true } : { 'aria-haspopup': 'menu' as const, onClick: onPlus })} title={`Start a session or a worktree in ${group.name}`}>
             {name}

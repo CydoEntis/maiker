@@ -39,7 +39,8 @@ export function ImageThumb({ name, path, preview = null, fallback, className = T
   const src = preview ?? kept
   if (src === null) return <>{fallback}{children}</>
   return (
-    <Dialog>
+    // A text selection left in the chat would keep its Copy and Quote bar up over the picture.
+    <Dialog onOpenChange={(open) => { if (open) window.getSelection()?.removeAllRanges() }}>
       <DialogTrigger asChild>
         <button type="button" aria-label={`View ${name}`} title={`View ${name}`} className="flex min-w-0 flex-1 cursor-zoom-in items-center gap-2 overflow-hidden rounded text-left">
           <img src={src} alt="" className={className} />

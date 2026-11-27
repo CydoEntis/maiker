@@ -26,7 +26,7 @@ export type SessionNode = {
   readonly session: SessionView
   /** The sessions its agent started, in the order they were made. */
   readonly helpers: readonly SessionView[]
-  /** What the row is ranked by: the most urgent of its own state and its helpers'. */
+  /** The row's state as its project heading and the rail read it: the most urgent of its own and its helpers'. */
   readonly mark: StatusMarkKind
 }
 
@@ -34,8 +34,8 @@ export type SessionNode = {
 const MAX_STARTER_DEPTH = 8
 
 /**
- * A project's sessions as rows in the order they were made, so a row stays where it is while its state changes (a list
- * that reorders on every status cannot be read or clicked); only an idle row drops below the rest. Each has its helpers
+ * A project's sessions as rows in the order they were made, so a row stays where it is whatever its state does (a list
+ * that reorders on every status cannot be read or clicked). Each has its helpers
  * under it in the order they were made. A helper keeps its place under its lead whatever its own status does: helpers
  * start, finish and ask within seconds, and a list that reorders each time cannot be read or clicked. A helper whose
  * starter is not listed here is an ordinary row.
@@ -66,7 +66,6 @@ export function sessionNodes(sessions: readonly SessionView[], held: HeldRow | n
       const helpers = helpersOf.get(session.id) ?? []
       return { session, helpers, mark: mostUrgent([session, ...helpers].map((each) => placedMark(each, held))) }
     })
-    .sort((a, b) => Number(a.mark === 'idle') - Number(b.mark === 'idle'))
 }
 
 /** What this computer is called in a key: a machine's name never holds a space (`data/openedProjects.ts`). */
@@ -159,7 +158,7 @@ const byName = (a: ProjectGroup, b: ProjectGroup): number => a.name.localeCompar
 
 /**
  * The order the sidebar lists everything in. A project is a folder on a machine, so the same folder on two machines is
- * two projects. Each holds all its sessions, the most urgent first (`sessionNodes`), and says its own state on its
+ * two projects. Each holds all its sessions in the order they were made (`sessionNodes`), and says its own state on its
  * heading, so nothing moves between sections and a project stays where `sort` puts it whatever its sessions do:
  * `recent` is the one opened last first (`opened` is every opened project in the order it was opened), `name` is A to Z,
  * and `machine` is this computer's first, then each machine's by name; the No project group is last in each. `held` keeps the session on screen where it was
@@ -187,15 +186,6 @@ export function sidebarOrder(heads: readonly MachineHead[], machines: readonly M
   return { projects: sorted.map(({ group }) => group) }
 }
 
-/**
- * Where every heading and row sits: when it is the same string a re-render moved nothing, so `useFlip` measures nothing.
- * A focus change that moves no row leaves it alone.
- */
-export function orderPlacement(order: SidebarOrder): string {
-  const groupsOf = (groups: readonly ProjectGroup[]): string =>
-    groups.map((group) => `${group.key}{${group.rows.map((node) => [node.session, ...node.helpers].map((session) => session.id).join('+')).join(',')}}`).join(';')
-  return groupsOf(order.projects)
-}
 
 export type ProjectChoice = { readonly name: string; readonly count: number; readonly loose: boolean }
 export type MachineChoice = { readonly key: string; readonly label: string; readonly remote: boolean; readonly down: boolean; readonly count: number }

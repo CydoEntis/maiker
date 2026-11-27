@@ -98,7 +98,7 @@ describe('the foot\'s pull-request button', () => {
 })
 
 describe('the list', () => {
-  it('lists the project opened last first, its sessions the most urgent first, each with its status in its name', () => {
+  it('lists the project opened last first, its sessions in the order they were made, each with its status in its name', () => {
     show([session(1, 'Tidy up', { status: 'working', cwd: '/home/me/docs' }), session(2, 'Which key?', { status: 'needs-you' }), session(3, 'Shipped', { status: 'done' })])
     const lists = screen.getAllByRole('list').map((list) => list.getAttribute('aria-label'))
     expect(lists).toEqual(['shop', 'docs'])
@@ -412,7 +412,7 @@ describe('a project on another machine', () => {
     const onUpdateMachine = vi.fn()
     const onCopyCommand = vi.fn()
     const { again } = show([onDevbox(1, 'There')], { machines: [LOCAL_HEAD, { ...DEVBOX_DOWN, updateAction: 'update' }], onUpdateMachine, onCopyCommand })
-    await user.click(screen.getByRole('button', { name: 'devbox, not connected' }))
+    await user.click(screen.getByRole('button', { name: 'devbox, needs update' }))
     expect(screen.queryByRole('menuitem', { name: 'Retry' })).toBeNull()
     await user.click(screen.getByRole('menuitem', { name: 'Update Maiker' }))
     expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'update')
@@ -421,6 +421,19 @@ describe('a project on another machine', () => {
     expect(screen.getByRole('menuitem', { name: 'Sign in in a terminal' })).toBeTruthy()
     await user.click(screen.getByRole('menuitem', { name: 'Copy the command' }))
     expect(onCopyCommand).toHaveBeenCalledWith('ssh-keygen -R devbox')
+  })
+
+  it('puts the Update a machine needs right beside its tag, and takes it away while the update runs', async () => {
+    const user = userEvent.setup()
+    const onUpdateMachine = vi.fn()
+    const needsUpdate = { ...DEVBOX_DOWN, updateAction: 'update' as const }
+    const { again } = show([onDevbox(1, 'There')], { machines: [LOCAL_HEAD, needsUpdate], onUpdateMachine })
+    await user.click(screen.getByRole('button', { name: 'Update Maiker on devbox' }))
+    expect(onUpdateMachine).toHaveBeenCalledWith('devbox', 'update')
+    again({ machines: [LOCAL_HEAD, needsUpdate], updateProgress: { devbox: 10 } })
+    expect(screen.queryByRole('button', { name: 'Update Maiker on devbox' })).toBeNull()
+    again({ machines: [LOCAL_HEAD, DEVBOX_DOWN] })
+    expect(screen.queryByRole('button', { name: /^Update Maiker/ })).toBeNull()
   })
 
   it('shows how far an update has got on the tag', () => {

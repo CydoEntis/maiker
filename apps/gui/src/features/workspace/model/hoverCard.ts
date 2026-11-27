@@ -1,7 +1,7 @@
 import { machineLabel } from '@/data/machineNicknames'
 import { messagePreview } from '@/features/chat/messagePreview'
 import type { StatusMarkKind } from '@/lib/statusMark'
-import type { MachineHead } from './machines'
+import { versionWord, type MachineHead } from './machines'
 import { agentLabel, askWords, SHELL_PROCESS, STATUS_WORD, type SessionView } from './session'
 import { happenedLine, projectOf, sectionOf } from './sidebar'
 import { helpersWord, WAITING_FOR_SLOT, waitingOnHelpers, type HelperCount } from './helpers'
@@ -82,7 +82,7 @@ export function lastActiveWords(ms: number): string {
 function machineRow(session: SessionView, head: MachineHead | null): HoverRow {
   if (session.machineName === null) return { kind: 'machine', text: 'This computer' }
   const label = machineLabel(session.machineName)
-  if (head?.down === true) return { kind: 'machine', text: `${label} · offline`, tone: 'needs' }
+  if (head?.down === true) return { kind: 'machine', text: `${label} · ${versionWord(head) ?? 'offline'}`, tone: 'needs' }
   return { kind: 'machine', text: label, tone: 'remote', ...(head?.target ? { detail: head.target } : {}) }
 }
 
