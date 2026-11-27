@@ -212,3 +212,38 @@ async fn a_running_claude_conversation_is_taken_up_for_resume_too() {
         std::panic::resume_unwind(panic);
     }
 }
+
+/// A window keeps reading a chat while the daemon wakes it after a restart. A read that comes
+/// before the start has read the chat's past back says loading: it was refused ("runtime is not
+/// ready"), or for Claude failed the chat for good with an empty history.
+#[tokio::test]
+async fn a_read_while_a_woken_chat_is_starting_says_loading_and_fails_nothing() {
+    let mut s = conversation_fixture("conversation").await;
+    let outcome = AssertUnwindSafe(async {
+        let id = crate::conversation::ConversationId(66);
+        s.daemon.cfg.restore.enabled = true;
+        assert!(s.daemon.restore(crate::daemon::persist::Saved {
+            conversations: vec![running_record(&s, 66)],
+            ..Default::default()
+        }));
+        s.daemon.resume_conversations();
+        s.daemon.wake_conversation(id);
+        assert!(s.daemon.conversation_starting(id), "the wake's start is under way");
+        // No event handled yet: the start cannot have read anything back, and nothing was kept
+        // from before the restart to show meanwhile.
+        s.daemon.conversation_histories.remove(&id);
+        s.daemon
+            .read_conversation_history(7_000, id, None, 64)
+            .expect("a read during the start is answered, not refused");
+        let state = s.daemon.conversation_states.get(&id);
+        assert!(state.is_none_or(|state| state.shown_error().is_none()), "the chat is not failed");
+        let history = s.daemon.conversation_history.get(7_000).expect("the reader is attached");
+        assert_ne!(history.completeness, super::history::Completeness::Complete, "shown as not read yet");
+    })
+    .catch_unwind()
+    .await;
+    s.cleanup().await;
+    if let Err(panic) = outcome {
+        std::panic::resume_unwind(panic);
+    }
+}

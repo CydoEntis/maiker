@@ -195,6 +195,20 @@ impl Daemon {
         Ok(())
     }
 
+    /// Whether a start of `id` is under way: its agent being launched, opened or identified, or
+    /// its past being read back in for that start.
+    pub(in crate::daemon) fn conversation_starting(&self, id: ConversationId) -> bool {
+        self.saved_reads.contains(&id)
+            || self.conversation_requests.values().any(|pending| match pending {
+                Pending::Validating { id: starting, .. }
+                | Pending::Opening { id: starting, .. }
+                | Pending::Identity { id: starting, .. }
+                | Pending::Hydration { id: starting, started: Some(_), .. } => *starting == id,
+                Pending::Launch { launch, .. } => launch.id() == id,
+                _ => false,
+            })
+    }
+
     /// Whether the conversation's saved history is the transcript file its agent writes.
     pub(super) fn keeps_its_history_in_a_transcript(&self, id: ConversationId) -> bool {
         self.conversations.iter().any(|conversation| {
@@ -349,7 +363,7 @@ impl Daemon {
         read
     }
 
-    fn read_conversation_history(
+    pub(in crate::daemon) fn read_conversation_history(
         &mut self,
         client: ClientId,
         id: ConversationId,
@@ -420,8 +434,11 @@ impl Daemon {
         }
         // A chat a restart left asleep has no runtime to read from until this read starts it
         // (`conversation_read`), and a refusal would show as a failure: it reads as still loading,
-        // and the start's own read of its past follows.
-        if self.is_asleep(id) {
+        // and the start's own read of its past follows. So does a chat whose start is under way
+        // (woken, reconnected): read before its start had read its past back, a Codex chat was
+        // refused ("runtime is not ready") and a Claude chat was failed for good with an empty
+        // history, so a window open across an update broke every chat it showed.
+        if self.is_asleep(id) || self.conversation_starting(id) {
             let mut history = History::new(id);
             history.set_completeness(Completeness::Loading)?;
             self.conversation_history.hydrate_cached(client, history)?;
