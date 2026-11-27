@@ -278,6 +278,16 @@ impl Launch {
     /// whether the schema declares `turn/steer`.
     async fn preflight(&self) -> Result<Preflight, StartupFailure> {
         let directory = PreflightDirectory::create().await?;
+        // Removed here on every outcome, a failed check too: `Drop` is only the fallback for a
+        // cancelled one, and its background removal may never run once the runtime stops.
+        let checked = self.preflight_in(&directory).await;
+        let removed = directory.remove().await;
+        let passed = checked?;
+        removed?;
+        Ok(passed)
+    }
+
+    async fn preflight_in(&self, directory: &PreflightDirectory) -> Result<Preflight, StartupFailure> {
         let home = directory.0.join("home");
         let schema = directory.0.join("schema");
         let mut version = self.command(&home);
@@ -292,7 +302,6 @@ impl Launch {
         // is a different key and is checked in full.
         let key = (self.paths().1.to_path_buf(), version.to_owned());
         if let Some(passed) = preflight_already_passed(&key) {
-            directory.remove().await?;
             return Ok(passed);
         }
         let mut generate = self.command(&home);
@@ -318,7 +327,6 @@ impl Launch {
             maitty_provider_codex::CodexTag::Untested(version) => Some(version),
         };
         let passed = Preflight { turn_steer: maitty_provider_codex::supports_turn_steer(&inventory), untested };
-        directory.remove().await?;
         remember_preflight_passed(key, passed.clone());
         Ok(passed)
     }
