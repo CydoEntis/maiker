@@ -37,7 +37,7 @@ impl Daemon {
         if let Some(state) = self.conversation_states.get_mut(&id)
             && state.status == Status::Done
         {
-            state.status = Status::Idle;
+            state.set_status(id, Status::Idle, "its finish was seen");
             self.dirty = true;
         }
     }
@@ -285,7 +285,7 @@ mod tests {
         let (tx, _rx) = tokio::sync::mpsc::channel(1);
         let mut d = Daemon::new(crate::config::Config::default(), tx, || {});
         d.conversations.push(c);
-        d.conversation_states.entry(id).or_default().status = Status::Working;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Working, "test");
         (d, id)
     }
 
@@ -303,7 +303,7 @@ mod tests {
         d.note_conversation_status_times();
         assert_eq!(since(&d, id), Some(LONG_AGO), "the same status keeps its time");
 
-        d.conversation_states.entry(id).or_default().status = Status::Done;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Done, "test");
         d.note_conversation_status_times();
         assert!(since(&d, id).is_some_and(|at| at > LONG_AGO), "a new status is stamped now");
     }
@@ -311,7 +311,7 @@ mod tests {
     #[test]
     fn a_chat_opened_on_a_saved_session_counts_its_age_from_when_that_was_last_used() {
         let (mut d, id) = daemon_with_chat();
-        d.conversation_states.entry(id).or_default().status = Status::Idle;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Idle, "test");
         d.note_conversation_status_times();
 
         d.conversation_active_at(id, LONG_AGO);
@@ -319,7 +319,7 @@ mod tests {
         d.note_conversation_status_times();
         assert_eq!(since(&d, id), Some(LONG_AGO), "kept while its status holds");
 
-        d.conversation_states.entry(id).or_default().status = Status::Working;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Working, "test");
         d.note_conversation_status_times();
         assert!(since(&d, id).is_some_and(|at| at > LONG_AGO), "a new status is stamped now");
     }
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn a_time_in_the_future_or_for_no_chat_is_not_taken() {
         let (mut d, id) = daemon_with_chat();
-        d.conversation_states.entry(id).or_default().status = Status::Idle;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Idle, "test");
         d.note_conversation_status_times();
         let now = crate::daemon::term::unix_now();
 

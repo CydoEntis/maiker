@@ -82,6 +82,21 @@ pub(super) struct State {
 const MAX_ANSWERED_APPROVALS: usize = 64;
 
 impl State {
+    /// The one place a chat's status changes: each change is logged with its reason, so a wrong
+    /// status or alert can be traced (the pane's is `Term::write_status`). A test in
+    /// `status_writers` keeps every other write out.
+    pub(super) fn set_status(
+        &mut self,
+        id: crate::conversation::ConversationId,
+        new: crate::protocol::Status,
+        why: &str,
+    ) {
+        if self.status != new {
+            tracing::info!("chat {}: {:?} -> {new:?}: {why}", id.0, self.status);
+        }
+        self.status = new;
+    }
+
     /// Remembers that `request` was answered with `decision`.
     pub(super) fn record_answer(
         &mut self,

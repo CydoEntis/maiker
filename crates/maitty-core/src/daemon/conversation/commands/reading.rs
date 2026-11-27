@@ -161,7 +161,7 @@ impl Daemon {
         let state = self.conversation_states.entry(id).or_default();
         state.history_ready = is_complete && history.completeness == Completeness::Complete;
         if !state.history_ready {
-            state.status = Status::Blocked;
+            state.set_status(id, Status::Blocked, "its history is incomplete");
             // A reason already kept (why a saved history could not be read) is the real one.
             state.error.get_or_insert_with(|| if recorded {
                 "No history was kept for this conversation, so it cannot be continued; chat resume is disabled".into()
@@ -283,7 +283,7 @@ impl Daemon {
                 // so Reconnect starts it again and a later read can retry the wake.
                 self.abandon_structured(id);
                 let state = self.conversation_states.entry(id).or_default();
-                state.status = Status::Blocked;
+                state.set_status(id, Status::Blocked, "its agent is up but the chat cannot use it");
                 state.error = Some(error.clone());
                 state.history_ready = false;
                 if client == DAEMON_REQUESTER && self.wake_retried.insert(id) {
@@ -315,7 +315,7 @@ impl Daemon {
         // The whole past is read and nothing runs yet: neither working nor waiting on the person,
         // whatever an earlier refusal or a stopped agent left.
         if matches!(state.status, Status::Working | Status::Blocked) {
-            state.status = Status::Idle;
+            state.set_status(id, Status::Idle, "its history is read and nothing runs");
         }
         self.conversation_histories.insert(id, history);
         self.cache_conversation(id);
@@ -337,7 +337,7 @@ impl Daemon {
         state.blocked = false;
         state.clear_errors();
         if state.status == Status::Working {
-            state.status = Status::Idle;
+            state.set_status(id, Status::Idle, "its history is read");
         }
         if self.cfg.restore.enabled && self.cfg.restore.output {
             self.conversation_histories.insert(id, history);

@@ -427,6 +427,9 @@ offers to replace a running server of another version (`main.rs` calls it; the r
 `vendor/herdr-detection/` using agent-owned screen regions, OSC fields, priorities
 and nested gates. It performs no I/O. `daemon/status.rs` arbitrates that evidence
 against trusted lifecycle reports; custom screen regex overrides remain supported.
+Whatever decides it, a pane's status is written only by `Term::write_status` (through
+`Daemon::set_status` when a turn starts or ends) and a chat's only by `State::set_status`, so
+each change is logged with its reason; the test `status_writers` fails on any other write.
 Source provenance and redistribution terms are in the vendor NOTICE and LICENSE.
 
 `cli/integrations.rs` installs Pi/OMP extensions, OpenCode server/TUI bridges,

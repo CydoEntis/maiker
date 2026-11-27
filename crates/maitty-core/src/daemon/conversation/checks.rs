@@ -39,7 +39,7 @@ impl Daemon {
         self.snapshot_conversation_turn(id, "after");
         let state = self.conversation_states.entry(id).or_default();
         let Some(turn) = state.checks.turn.checked_add(1) else {
-            state.status = Status::Blocked;
+            state.set_status(id, Status::Blocked, "its checks ran out of turn numbers");
             state.error = Some("Conversation checkpoint turn counter exhausted".into());
             self.dirty = true;
             return;
@@ -49,7 +49,7 @@ impl Daemon {
             return;
         }
         if state.checks.run == u64::MAX {
-            state.status = Status::Blocked;
+            state.set_status(id, Status::Blocked, "its checks ran out of run numbers");
             state.error = Some("Conversation checkpoint run counter exhausted".into());
             self.dirty = true;
             return;
@@ -274,7 +274,7 @@ mod tests {
         let (tx, rx) = tokio::sync::mpsc::channel(32);
         let mut d = Daemon::new(cfg, tx, || {});
         d.conversations.push(c);
-        d.conversation_states.entry(id).or_default().status = Status::Done;
+        d.conversation_states.entry(id).or_default().set_status(id, Status::Done, "test");
         (d, rx, dir, id)
     }
 

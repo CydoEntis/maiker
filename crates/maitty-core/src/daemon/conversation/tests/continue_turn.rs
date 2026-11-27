@@ -150,12 +150,11 @@ async fn the_session_file_names_only_conversations_with_a_turn_in_flight() {
         let record = running_record(&s, id.0);
         s.daemon.conversations.push(record);
         let state = s.daemon.conversation_states.entry(id).or_default();
-        state.status = crate::protocol::Status::Idle;
+        state.set_status(id, crate::protocol::Status::Idle, "test");
         state.history_ready = true;
         assert!(s.daemon.saved().turns_in_flight.is_empty(), "an idle chat");
 
-        s.daemon.conversation_states.entry(id).or_default().status =
-            crate::protocol::Status::Working;
+        s.daemon.conversation_states.entry(id).or_default().set_status(id, crate::protocol::Status::Working, "test");
         assert_eq!(s.daemon.saved().turns_in_flight, [id], "a chat mid-turn");
 
         s.daemon.conversation_states.entry(id).or_default().history_ready = false;
