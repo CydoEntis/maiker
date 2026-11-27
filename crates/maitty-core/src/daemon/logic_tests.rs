@@ -1559,6 +1559,55 @@ fn explicit_idle_screen_evidence_recovers_missed_turn_ends_across_agents() {
     }
 }
 
+/// Codex turns a spinner in its title while it starts up, before anyone asked it anything.
+#[test]
+fn an_agent_that_only_spun_its_title_while_starting_ends_idle_not_done() {
+    for typed_a_prompt in [false, true] {
+        let (mut d, _rx) = daemon();
+        let t = pane(&mut d);
+        let mut seen = viewer(&mut d);
+        {
+            let p = d.terms.get_mut(&t).unwrap();
+            p.agent = Some("codex".into());
+            if typed_a_prompt {
+                p.input(b"fix the build\r");
+            }
+            p.parser.process("\x1b]0;\u{2807} project\x07".as_bytes());
+            p.last_output = Instant::now();
+        }
+        d.update_statuses();
+        assert_eq!(d.terms[&t].status, Status::Working, "typed: {typed_a_prompt}: its spinner turns");
+        rests_at_its_idle_prompt(&mut d, t, "project");
+        if typed_a_prompt {
+            assert_eq!(d.terms[&t].status, Status::Done, "a turn it was given ends done");
+        } else {
+            assert_eq!(d.terms[&t].status, Status::Idle, "starting up is no turn to finish");
+            assert!(!told_done(&mut seen), "and no finish rings");
+        }
+        close(&mut d, &[t]);
+    }
+}
+
+/// Codex can leave its startup spinner in the title while it waits at its prompt.
+#[test]
+fn a_title_spinner_that_stopped_turning_is_not_working() {
+    let (mut d, _rx) = daemon();
+    let t = pane(&mut d);
+    {
+        let p = d.terms.get_mut(&t).unwrap();
+        p.agent = Some("codex".into());
+        p.parser.process("\x1b]0;\u{2807} project\x07".as_bytes());
+        p.last_output = Instant::now() - Duration::from_secs(30);
+    }
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Working, "a spinner just set still says working");
+    let still = Instant::now() - super::term::TITLE_SPINNER_STILL - Duration::from_secs(1);
+    d.terms.get_mut(&t).unwrap().parser.callbacks_mut().title_set_at = Some(still);
+    d.update_statuses();
+    assert_eq!(d.terms[&t].status, Status::Idle, "one that stopped turning does not");
+    close(&mut d, &[t]);
+}
+
 /// Claude's screen while its turn-end hooks run: the title already says idle and the
 /// spinner reads "(running Stop hooks…", which its working rule doesn't know.
 const CLAUDE_RUNNING_STOP_HOOKS: &str = "\x1b]0;\u{2733} project\x07\x1b[2J\x1b[H\

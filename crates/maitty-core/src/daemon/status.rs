@@ -70,6 +70,13 @@ pub(super) const CANCELLED_WHY: &str = "progress bar gone, no turn end: cancelle
 /// heard) by the daemon that saw it happen, so it must not ring again on every restart.
 pub(super) const RESTORED_DONE_WHY: &str = "hook: SessionStart, done and unseen before the restart";
 const SCREEN_IDLE_RECOVERY_WHY: &str = "screen: explicit idle prompt recovered a missed turn end";
+const SCREEN_STARTED_IDLE_WHY: &str = "screen: at its prompt, and no turn was started";
+
+/// Whether a reason for working is the agent's title alone, which an agent also turns while it
+/// starts up: unlike a hook or its live turn on screen, it does not show that a turn began.
+fn title_only(why: &str) -> bool {
+    why.starts_with("screen: ") && why.ends_with(" rule `osc_title_working`")
+}
 /// A "done" held while subagents run is let through once none has been heard from for this
 /// long (one died without saying so). Background agents can run, and wait on CI, for a while.
 /// After a queued follow-up goes in, the agent has this long to say it has started on it
@@ -1142,7 +1149,7 @@ impl Daemon {
                     name,
                     maitty_agent_detection::DetectionInput {
                         screen: &screen,
-                        osc_title: &t.parser.callbacks().title,
+                        osc_title: t.live_title(Instant::now()),
                         osc_progress: &t.parser.callbacks().progress,
                     },
                 )
@@ -1215,12 +1222,19 @@ impl Daemon {
                 && !held_on_helpers
                 && t.last_output.elapsed() >= SCREEN_DONE_QUIET
             {
-                let status = if t.status == Status::Working {
-                    Status::Done
-                } else {
-                    t.status
+                let turn_seen = [t.turn_seen_at, t.last_working_hook]
+                    .into_iter()
+                    .flatten()
+                    .any(|at| at >= t.last_turn_end);
+                let (status, why) = match t.status {
+                    // Only its title said it worked, and nothing started a turn: it was starting up.
+                    Status::Working if title_only(&t.status_why) && !turn_seen => {
+                        (Status::Idle, SCREEN_STARTED_IDLE_WHY)
+                    }
+                    Status::Working => (Status::Done, SCREEN_IDLE_RECOVERY_WHY),
+                    other => (other, SCREEN_IDLE_RECOVERY_WHY),
                 };
-                changes.push((t.id, status, SCREEN_IDLE_RECOVERY_WHY.into()));
+                changes.push((t.id, status, why.into()));
                 continue;
             }
             // Any trusted adapter may report child agents without using lifecycle
