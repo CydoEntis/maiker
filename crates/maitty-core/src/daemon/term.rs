@@ -939,12 +939,25 @@ impl Term {
                 cmd.env(key, value);
             }
         }
-        // A plain shell finds the agents' launchers first, whatever shell it is.
-        if spec.direct.is_none() && spec.cmd.is_none_or(|c| c.trim().is_empty()) && !spec.once {
-            match crate::shim::install(&agents, &own_exe()) {
+        // A shell finds the agents' launchers first, whatever shell it is. One started with a
+        // command (an agent the app starts or resumes) finds them too, for the flags some
+        // agents need to report from their own pane, but never asks for a worktree: it was
+        // started where it should run.
+        if spec.direct.is_none() && !spec.once {
+            let plain = spec.cmd.is_none_or(|c| c.trim().is_empty());
+            let mut launched = agents.clone();
+            for agent in crate::shim::always_launched() {
+                if !launched.iter().any(|name| name == agent) {
+                    launched.push(agent.to_string());
+                }
+            }
+            match crate::shim::install(&launched, &own_exe()) {
                 Ok(Some(dir)) => {
                     let path = crate::shim::path_with(&dir, cmd.get_env("PATH"));
                     cmd.env("PATH", path);
+                    if !plain {
+                        cmd.env(crate::shim::DONE_VAR, "1");
+                    }
                 }
                 Ok(None) => {}
                 Err(e) => tracing::warn!("agent launchers not set up: {e}"),

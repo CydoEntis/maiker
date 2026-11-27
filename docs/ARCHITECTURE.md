@@ -142,7 +142,7 @@ src/
   cli/machine_update.rs (`machine update <name>`: probe, decide, send, swap, ask the daemon; with `machine_update/binary.rs` for this computer's own build or a fetched, verified release; its ssh line runs through `maitty-machines`' `ssh_run`)
   secret_files.rs  a secret handed to an agent as a private file, and clearing the stale ones
   login_path.rs  the daemon host's login-shell PATH, resolved once at start and applied to panes, providers and lookups
-  shim.rs        the per-agent launchers on a shell pane's PATH, and the PATH code `maiker agent-launch` shares
+  shim.rs        the per-agent launchers on a pane's PATH, and the PATH code `maiker agent-launch` shares
 docs/            these docs, the roadmap, design briefs
 config.example.toml
 ```
@@ -404,7 +404,12 @@ agent first on its `PATH` (`shim.rs`, written to `<data>/shell/bin/`; only files
 replaced or removed): `claude` there runs `maiker agent-dir claude â€¦`, goes to the folder it
 prints, and execs the next `claude` on `PATH` with the launcher folder taken off (a `.cmd`
 calling `maiker agent-launch` on Windows). The agents are the built-in four plus the programs the quick
-agents run (the first word of a plain-named `command`, so an agent named `work` that runs `claude` adds nothing), and only when `worktree.per_agent` is on. `daemon/term.rs` also defines a shell
+agents run (the first word of a plain-named `command`, so an agent named `work` that runs `claude` adds nothing), and only when `worktree.per_agent` is on.
+A launcher can also put a flag first so the agent reports from its own pane (`OWN_PANE_FLAGS`:
+Codex's `--no-daemon`, see [codex-app-server](stack/codex-app-server.md#project-specific-codex-in-a-terminal-pane)).
+Those agents get a launcher whatever `worktree.per_agent` says, and a pane started with a command
+(an agent the app starts or resumes) has the launchers too, with `AGENT_DIR_DONE` set so they
+never ask for a worktree. `daemon/term.rs` also defines a shell
 function per agent (bash `--rcfile`, zsh `ZDOTDIR`, fish `-C`, PowerShell's startup script) and
 keeps the launcher folder first on `PATH` before each prompt or command, since a manager like
 mise puts its own shims in front. The function sets `AGENT_DIR_DONE` for the one command
