@@ -99,6 +99,12 @@ command lists below. Run it after either agent updates, after a change to the ch
 release; a failure there is a bug ticket even when the gate is green. It needs both agents signed in
 and spends a few small turns of each plan; `LIVE_ONLY=claude` (or `codex`) runs one.
 
+`scripts/live-terminal-check.sh` does the same for terminal mode: each agent runs in a pane of a
+server of its own (desktop alerts off), and the check follows the pane's status. Its startup
+questions must show as needs you and starting up alone must end idle, not done; a reply ends done;
+a file change must show as needs you by the agent's own hook; after a server restart the pane must
+come back in the same conversation without its finish announced again. Run it with the chat check.
+
 ### Agent command lists
 
 The window pins the commands an agent will not list (`terminalCommands.ts`, `codexCommands.ts`, `geminiCommands.ts`), and each file names
