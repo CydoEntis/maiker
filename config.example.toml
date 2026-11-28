@@ -78,6 +78,7 @@ conversations = true        # resume chat conversations that were running, on th
 continue_turn = false       # then tell each one "Continue where you left off." (at most 3 times in 5 minutes)
 commands = true             # re-run commands panes were started with
 output = true               # keep each pane's recent output on disk (may hold secrets; false deletes it)
+keep_running = false        # a pane host keeps panes running while the server restarts (kill-server --forget ends them)
 
 [quick]
 place = "worktree"          # right | down | tab | worktree | here

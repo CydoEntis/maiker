@@ -344,6 +344,12 @@ per-user Unix socket elsewhere, `maitty-<user>-<label>.sock`), which stays limit
 started it. Status reports (`maiker hook`) are accepted only from a process inside the pane or one
 carrying that pane's `AGENT_PANE_TOKEN`. Remote work goes over the user's own `ssh`.
 
+With `restore.keep_running` on, the pane host's socket (`<socket_id>-panes`) is limited to the user
+the same way. The host takes orders from whoever connects and does none of the daemon's per-pane
+checks: it starts, writes to and ends panes on request. Only the daemon should connect, but a
+program running as the user, a pane's included, can reach it, as it can reach the user's own files
+and processes. The host passes no handle out, reads no config, and logs no pane input or output.
+
 Every query below is for a person's client only; a pane, an agent or a structured runtime is refused.
 git runs with `GIT_TERMINAL_PROMPT=0` and `gh` with prompts off, so neither asks for a credential; the
 daemon reads, stores and logs no token.

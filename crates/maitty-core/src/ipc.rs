@@ -196,6 +196,69 @@ fn socket_dir_for(app: &str) -> Result<std::path::PathBuf> {
     )
 }
 
+/// The pane host's socket (ADR 0022), beside the daemon's and as private: the daemon's id with
+/// `-panes` after it.
+pub fn pane_host_name() -> Result<Name<'static>> {
+    let id = format!("{}-panes", socket_id());
+    #[cfg(unix)]
+    let directory = Some(socket_dir_for(APP_COMMAND)?);
+    #[cfg(windows)]
+    let directory: Option<std::path::PathBuf> = None;
+    maitty_ipc_transport::socket_name(&id, directory.as_deref())
+}
+
+/// Where the pane host's socket file is, so a stale one can be removed before binding.
+#[cfg(unix)]
+pub fn pane_host_path() -> Result<std::path::PathBuf> {
+    Ok(socket_dir_for(APP_COMMAND)?.join(format!("{}-panes", socket_id())))
+}
+
+/// Start `exe pane-host` detached, as the daemon is: its own session on Unix, and on Windows a
+/// hidden console of its own, out of the starter's job when the job allows it.
+pub fn spawn_pane_host(exe: &std::path::Path) -> Result<()> {
+    let command = || {
+        let mut cmd = std::process::Command::new(exe);
+        cmd.arg("pane-host")
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            // SAFETY: setsid only detaches the child from this session; it allocates nothing.
+            unsafe {
+                cmd.pre_exec(|| {
+                    libc::setsid();
+                    Ok(())
+                });
+            }
+        }
+        cmd
+    };
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let mut away = command();
+        away.creation_flags(DAEMON_FLAGS | CREATE_BREAKAWAY_FROM_JOB);
+        match away.spawn() {
+            Ok(_) => return Ok(()),
+            Err(e) if e.raw_os_error() == Some(ERROR_ACCESS_DENIED) => {
+                tracing::warn!("the pane host could not leave the daemon's job, so it ends with the daemon");
+            }
+            Err(e) => return Err(e).context("starting the pane host"),
+        }
+        let mut within = command();
+        within.creation_flags(DAEMON_FLAGS);
+        within.spawn().context("starting the pane host")?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        command().spawn().context("starting the pane host")?;
+        Ok(())
+    }
+}
+
 /// No daemon runs here and `proxy --attach-only` was asked not to start one.
 #[derive(Debug)]
 pub struct NoDaemonHere;

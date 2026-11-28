@@ -988,6 +988,12 @@ and per agent with `resume` / `resume_last`. Each pane's recent output is kept o
 there after a restart; it can hold secrets that were on screen, so `output = false` (Settings ›
 Sessions › Keep each pane's recent output) stops saving it and deletes what was saved.
 
+With `keep_running = true` (Settings › Sessions › Keep panes running) a restart ends nothing: a small
+pane host holds every pane's terminal while the server is down, so an agent mid-turn keeps working and
+a shell's running command goes on, and the next server picks each pane up where it is. It applies from
+the next server start. `maiker kill-server` leaves those panes running for the next server;
+`maiker kill-server --forget` ends them.
+
 ## The desktop chat
 
 In the desktop app an agent has a chat view as well as its terminal. For an agent that runs in a

@@ -472,6 +472,13 @@ pub const SETTINGS: &[Setting] = &[
         help: "Saved to disk so it's there after a restart. May include secrets shown on screen; off deletes it.",
     },
     Setting {
+        path: "restore.keep_running",
+        label: "Keep panes running",
+        kind: Kind::Bool,
+        cat: Cat::Sessions,
+        help: "Panes live on while the server restarts (an update, a crash). From the next start; kill-server --forget ends them.",
+    },
+    Setting {
         path: "scrollback",
         label: "Scrollback lines",
         kind: Kind::Int {

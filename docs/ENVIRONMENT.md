@@ -431,6 +431,20 @@ The message is sent once per daemon start, after the resume has succeeded, and a
 ([DATABASE](DATABASE.md#project-specific-entities)), so it holds across restarts. It adds no
 environment variable.
 
+## Project-specific: keeping panes running through a restart
+
+`restore.keep_running` (default `false`; Settings › Sessions › *Keep panes running*) starts panes
+in a pane host (ADR 0022) instead of the daemon, so a server that stops (an update, a crash,
+`kill-server`) leaves them running and the next server takes them up with their id, secret, screen
+and output. It takes effect when the server next starts. The host is `<app> pane-host`, run from a
+copy of the build in `<data_dir>/pane-host/` (one file per release, so an update can replace the
+installed binary), listens on `<socket_id>-panes` beside the daemon's socket, and logs to
+`<data_dir>/pane-host.log`. It ends 30 s after it holds no pane and no server is attached.
+`kill-server --forget` ends it and its panes, with or without a server running. A server of another
+release replaces the host only while it holds no pane; a build changed without a version change
+keeps the running host until `kill-server --forget`. Without a host (it could not start, or it went
+away) panes start in the daemon as with the option off. It adds no environment variable.
+
 ## Project-specific: structured history retention foundation
 
 The structured cache derives `session-<socket>.history/` beside the

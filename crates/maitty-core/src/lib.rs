@@ -7,6 +7,7 @@ pub mod gitfs;
 pub mod hook_drops;
 pub mod installed_executable;
 pub mod ipc;
+pub mod pane_host;
 mod login_path;
 pub use maitty_machines::machine_probe;
 pub mod proc;
@@ -27,6 +28,7 @@ pub mod version;
 
 pub use daemon::hook_repair::{HookTools, install_hook_tools};
 pub use daemon::run as run_daemon;
+pub(crate) use daemon::contain_children;
 pub use daemon::{first_failing_line, forget_session};
 pub use maitty_machines::link_failure;
 pub use maitty_settings::{keys, theme};

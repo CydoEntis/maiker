@@ -34,7 +34,8 @@ survive is small: a pseudo-terminal, the program in it, and its recent output.
 - **The host's protocol is frozen and tiny, and versioned apart from `PROTOCOL_VERSION`.** An
   update replaces the binary while the old host keeps running, so a new daemon must speak to
   hosts back to the host protocol's first version. A host is replaced only when it holds no
-  pane: the daemon starts a new one for new panes and lets the old one end with its last pane.
+  pane: a daemon of another release starts its panes in a host that holds some, and replaces a
+  host that holds none when it starts. One host runs per socket.
 - The daemon still owns sessions as 0001 says: the host takes orders only from the daemon,
   never from a client, and a client still only draws and sends input.
 

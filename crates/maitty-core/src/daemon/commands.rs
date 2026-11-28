@@ -1259,8 +1259,13 @@ impl Daemon {
                 self.usage_store.save_now(term::unix_now());
                 self.closed_sessions.save_now();
                 self.saved_workspaces.save_now();
-                for t in self.terms.values_mut() {
+                // The pane host keeps its panes for the next daemon (ADR 0022); --forget ends
+                // them with it.
+                for t in self.terms.values_mut().filter(|t| forget || !t.hosted()) {
                     t.kill_tree();
+                }
+                if forget && let Some(link) = &self.pane_host {
+                    link.send(crate::pane_host::ToHost::Shutdown);
                 }
                 // The process ends below without dropping the daemon, so a provider's process
                 // tree is stopped here, on purpose, and waited for.
