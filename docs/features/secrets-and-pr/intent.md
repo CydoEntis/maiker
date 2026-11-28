@@ -2,7 +2,7 @@
 
 Type: feature
 Author: the user · Status: accepted
-Date: 2026-10-29 · Plan: [phase 33](../../ROADMAP.md#33--secrets-and-pr-tracking--proposed-2026-10-29)
+Date: 2026-10-29 · Plan: phase 33
 
 ## Problem
 
@@ -13,7 +13,7 @@ reviews."
 Today an agent that needs a key asks for it in chat, so the key lands in the transcript.
 Maiker also knows nothing about a pane's pull request, so a failing check or a new review goes
 unseen until someone looks. The `#PR` tag in the status line shipped as "no data yet"
-([phase 14](../../ROADMAP.md)).
+(phase 14).
 
 ## Proposed outcome
 
@@ -48,7 +48,7 @@ protocol, the client prompt, the status line and sidebar, and the `maiker` CLI.
 ## Out of scope
 
 - Delegating a task to another agent or provider, in its own thread or worktree, with the
-  result returned. Deferred; see [Later](../../ROADMAP.md#later).
+  result returned. Deferred; see Later.
 - A GUI or chat view, and structured agent protocols (the Codex work in #197–#207 is separate).
 - Secrets at rest, or syncing them between machines.
 - Posting to, approving or merging a pull request.

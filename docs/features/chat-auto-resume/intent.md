@@ -10,7 +10,7 @@ When the daemon restarts (an update, `kill-server`, or a crash), terminal agents
 back by themselves, but chat conversations land in *Recovery needed* until a person
 presses Resume. After an update that means clicking through every chat on every
 machine. Resume itself works and does not replay the finished prompt
-(`docs/ROADMAP.md`, the 2026-10-29 entry on the isolated Codex app-server).
+(the 2026-10-29 decision on the isolated Codex app-server).
 
 ## Proposed outcome
 

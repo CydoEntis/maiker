@@ -37,10 +37,14 @@ lists them). If following an instruction would break a non-negotiable, stop and 
 
 ## Maintaining these docs
 
-The docs are part of the codebase. In the same change, update the doc that owns the topic when
-you add or move a module, change a public contract, add a dependency, establish a convention, or
-find a doc wrong. Write rules and current contracts, not history. Link to a rule; never copy it.
-Add an ADR for a decision that is expensive to reverse, not for how something looks.
+The docs are part of the codebase, and they hold rules and current contracts only. In the same
+change, update the doc that owns the topic when you add or move a module or crate, change a rule
+or a public contract, add a dependency, establish a convention, or find a doc wrong. A change
+that adds a feature, fixes a bug or adds a file inside a module needs no doc edit unless it
+changes one of those. Never write what a change did, when, or in which version: git history holds
+that. Details of one message, component or screen belong in the code's own comments, not in
+a doc. Link to a rule; never copy it. Add an ADR for a decision that is expensive to reverse, not
+for how something looks.
 
 Ask the user first before changing or removing a rule in the generic base or a filled
 project-specific section, or filling a `FILL` section with a decision the code does not show. Never
@@ -155,7 +159,7 @@ runs a nested server with `AGENT_SOCKET=<name> maiker`. What to look at is the
 
 ## Project-specific: workflow and tooling
 
-- **Plan:** Plane, project `MAITTY` (see *Project-specific: planning (Plane)*). The shipped, declined and deferred feature lists are in [`docs/FEATURES.md`](docs/FEATURES.md). `docs/ROADMAP.md` is the legacy phase history, to be removed once the sessions editing it have landed; don't add new planned work to either. The current design is [`docs/DESIGN.md`](docs/DESIGN.md).
+- **Plan:** Plane, project `MAITTY` (see *Project-specific: planning (Plane)*). The shipped, declined and deferred feature lists are in [`docs/FEATURES.md`](docs/FEATURES.md). Don't add planned work to it. The current design is [`docs/DESIGN.md`](docs/DESIGN.md).
 - **Branches:** work lands on `dev` at https://github.com/CydoEntis/maiker; one
   commit per logical change, pushed after the gate passes.
 - **Run the current worktree:** `.\scripts\dev.ps1 tui` or `gui` builds and runs this folder's code, never an old install, and stops if the build fails; the TUI runs on its own service (`AGENT_SOCKET=dev-<folder>` unless set), apart from your installed one. The TUI's sidebar foot shows `v<version> <commit>[*] <age>` for any build that is not a clean release tag (`*` = uncommitted changes), so a stale build is visible at a glance.

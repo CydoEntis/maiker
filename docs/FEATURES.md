@@ -1,8 +1,7 @@
 # Features: shipped, declined, later
 
 What Maiker has, what was cut or declined on purpose, and what is deferred. A cut item stays
-out until the user re-approves it. Planned work lives in Plane, not here. Moved from the old
-roadmap; the phase history stays in `docs/ROADMAP.md` until that file is retired.
+out until the user re-approves it. Planned work lives in Plane, not here.
 
 ## In scope
 
@@ -36,7 +35,7 @@ conversation continuity are planned in phases 34–37:
 - A commander running a fleet (shipped in v0.20.0, #32–#38): removed in phase 19; old `[fleet]` and `[team]` tables are read and ignored
 
 **The TUI (one shared session layout)**
-- The redesign: a 34-column sidebar of machines and their sessions (colour-only status marks, `■ project branch`, the current turn's subagents), boxed panes with title chips and `files` / `changes` / `×`, Files and Changes sliding in inside the pane, a `PANE` / `KEYS` status bar, `Ctrl+Space` key mode, a three-column keys help, Usage and cost, Settings with sections down the left, menus with their keys, "No pane open"; it replaced the fleets and ships sidebar, the tab row and the collapsed column — built on `tui-redesign` — `crates/maitty-terminal-client/src/client/screen/side.rs`, `workspace.rs`, `mode_bar.rs`, `usage.rs`; see `FLAT-SESSIONS-PLAN.md` section 9
+- The redesign: a 34-column sidebar of machines and their sessions (colour-only status marks, `■ project branch`, the current turn's subagents), boxed panes with title chips and `files` / `changes` / `×`, Files and Changes sliding in inside the pane, a `PANE` / `KEYS` status bar, `Ctrl+Space` key mode, a three-column keys help, Usage and cost, Settings with sections down the left, menus with their keys, "No pane open"; it replaced the fleets and ships sidebar, the tab row and the collapsed column — built on `tui-redesign` — `crates/maitty-terminal-client/src/client/screen/side.rs`, `workspace.rs`, `mode_bar.rs`, `usage.rs`
 - Flat rendering style: square, full-bleed sidebar, tabs, panes and sheets; sidebar/pane focus zones, no global footer; shipped in v0.36.0; `crates/maitty-terminal-client/src/client/screen/draw.rs`
 - Floating look: rounded cards with gaps, title and state in the border, unfocused cards faded, pill tabs, no app footer; floating or tiled, corners, gap, dim, focus border, pill ends in Settings — shipped by v0.30.1 — `crates/maitty-terminal-client/src/client/screen/card.rs`, `screen.rs`
 - Sidebar card: projects → sessions, one-line rows (mark, name in its state's colour, agent, uncommitted lines, age), a second line only when it says more, attention sort, keyboard and mouse, `+ New` / `Menu` foot — shipped — `crates/maitty-terminal-client/src/client/screen/side.rs` `draw_side`
@@ -136,7 +135,7 @@ conversation continuity are planned in phases 34–37:
 
 - Features cut 2026-10-09 remain out unless re-approved: open project, go to, next agent that needs you, arrange panes, undo automatic workspace, the map, ideas, races, run a preset as a list (presets stay in the new-agent dialog), past chats, agent tools, extensions, and the tmux stand-in for Claude agent teams. Memory per session later returned as the load line under a busy session. Items explicitly restored since the cut are listed in In scope; races remain cut.
 - Desktop notifications while a maiker window is open, the terminal bell on an alert, and choosing among system sounds (or your own sound file) — cut 2026-10-11 (the user's call: three overlapping alerts, two of them the Windows error ding). Bringing one back needs a new decision.
-- Other structural terminal layouts (workspaces, tree, dock, alternate sidebar) — declined 2026-10-03. Superseded 2026-11-06: the sidebar becomes one flat list of sessions, with folder and machine as badges on each row, and a window layout is app-local state (see `FLAT-SESSIONS-PLAN.md`).
+- Other structural terminal layouts (workspaces, tree, dock, alternate sidebar) — declined 2026-10-03. Superseded 2026-11-06: the sidebar becomes one flat list of sessions, with folder and machine as badges on each row, and a window layout is app-local state.
 - Phase 7 proposals canceled 2026-10-17: named hosts and remote panes/agents (#23, reopened 2026-11-03 by ADR 0007); terminal graphics and Kitty keyboard protocol (#27); launcher, templates, recording/replay, screenshots and key display (#29); web terminal and SSH server mode (#30); package-manager distribution (#31). Revisit only through a new proposal. This does not remove shipped SSH remote-client support.
 - Claude Code's own fork list showing forks that are not running (seen 2026-10-28): the `main / fork …` block with token counts is drawn by Claude inside the pane; Maiker only shows it. Not fixed, the user's call. A subagent whose stop was missed clears at the agent's next turn end (`crates/maitty-core/src/daemon/status.rs`); one missed while the agent's turn carries on stays listed until then.
 - Fleet work declined 2026-10-24 (the fleet was removed in phase 19): the phase 9 live fleet check, the designed team view, pause the fleet, stop all, cost per fleet.

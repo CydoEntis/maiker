@@ -37,6 +37,6 @@ grid, Files, Changes, the branch view, saved UI state. No protocol change.
 
 ## Links
 
-- Plan: [phase 26](../../ROADMAP.md#26--the-inspector-drawer--shipped-in-v0430-live-checks-open)
+- Plan: phase 26
 - Spec: [spec.md](spec.md)
 - Tickets: [#172](https://github.com/CydoEntis/maiker/issues/172), [#173](https://github.com/CydoEntis/maiker/issues/173), [#174](https://github.com/CydoEntis/maiker/issues/174), [#175](https://github.com/CydoEntis/maiker/issues/175), [#176](https://github.com/CydoEntis/maiker/issues/176)

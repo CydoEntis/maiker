@@ -47,5 +47,5 @@ these came later, in phase 18.
 
 ## Links
 
-- Plan: [phase 15](../../ROADMAP.md#15--checks-maitty-runs-itself--shipped-in-v0370)
+- Plan: phase 15
 - Tickets: #94–#103
