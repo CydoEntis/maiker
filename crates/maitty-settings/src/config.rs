@@ -410,6 +410,10 @@ pub struct Restore {
     /// Keep each pane's recent output on disk so it is there after a restart. It can hold
     /// secrets that were on screen; off deletes what is saved.
     pub output: bool,
+    /// Keep panes running while the server restarts (an update, a crash): a small pane host
+    /// holds their terminals and the next server takes them up again (ADR 0022). Off, a restart
+    /// ends every pane and brings it back from what was saved.
+    pub keep_running: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -491,6 +495,7 @@ impl Default for Restore {
             continue_turn: false,
             commands: true,
             output: true,
+            keep_running: false,
         }
     }
 }

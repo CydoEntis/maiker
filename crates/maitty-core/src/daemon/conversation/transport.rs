@@ -417,15 +417,14 @@ impl PreflightDirectory {
 }
 impl Drop for PreflightDirectory {
     fn drop(&mut self) {
-        let path = self.0.clone();
-        // Cancellation must not leak isolated generated files or block a daemon loop.
-        tokio::task::spawn_blocking(move || {
-            if let Err(error) = std::fs::remove_dir_all(path)
-                && error.kind() != std::io::ErrorKind::NotFound
-            {
-                tracing::warn!(%error, "Cannot clean Codex preflight folder");
-            }
-        });
+        // Only a cancelled check gets here with the folder still there. Removed at once: a
+        // removal handed to the runtime never runs once the runtime stops, which left the
+        // folder behind. It holds a few small files, so this is quick.
+        if let Err(error) = std::fs::remove_dir_all(&self.0)
+            && error.kind() != std::io::ErrorKind::NotFound
+        {
+            tracing::warn!(%error, "Cannot clean Codex preflight folder");
+        }
     }
 }
 

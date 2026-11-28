@@ -12,6 +12,7 @@ use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtySize, native_pty_s
 use std::collections::VecDeque;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 
@@ -125,10 +126,9 @@ fn base64_decode(s: &[u8]) -> Option<Vec<u8>> {
 pub struct Term {
     pub id: TermId,
     pub conversation_id: Option<crate::conversation::ConversationId>,
-    master: Box<dyn MasterPty + Send>,
+    pty: Pty,
     /// To the pane's input thread (see `input_thread`).
     writer: std::sync::mpsc::SyncSender<InputChunk>,
-    killer: Box<dyn ChildKiller + Send + Sync>,
     pub pid: Option<u32>,
     pub process_exited: bool,
     /// The daemon stopped its process on purpose (`kill_tree`), so a failed exit is no crash.
@@ -363,8 +363,40 @@ pub struct Term {
     pub model: String,
 }
 
+/// Where a pane's terminal is: in this daemon, or in the pane host, which keeps it running
+/// while the daemon restarts (ADR 0022).
+enum Pty {
+    Local {
+        master: Box<dyn MasterPty + Send>,
+        killer: Box<dyn ChildKiller + Send + Sync>,
+    },
+    Hosted(Arc<crate::pane_host::Link>),
+}
+
+/// A hosted pane's input, written through the host.
+struct HostInput {
+    link: Arc<crate::pane_host::Link>,
+    id: TermId,
+}
+
+impl Write for HostInput {
+    fn write(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        if !self.link.alive() {
+            return Err(std::io::ErrorKind::BrokenPipe.into());
+        }
+        self.link.send(crate::pane_host::ToHost::Write { id: self.id, data: data.to_vec() });
+        Ok(data.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
 pub struct SpawnSpec<'a> {
     pub id: TermId,
+    /// The pane host to start it in; none starts it in this daemon.
+    pub host: Option<&'a Arc<crate::pane_host::Link>>,
     pub cmd: Option<&'a str>,
     pub direct: Option<DirectCommand>,
     pub cwd: &'a Path,
@@ -835,14 +867,12 @@ impl Term {
 
     pub fn spawn(cfg: &Config, spec: SpawnSpec, tx: mpsc::Sender<Ev>) -> Result<Term> {
         let token = new_secret()?;
-        let pty = native_pty_system();
         let size = PtySize {
             rows: spec.rows.max(2),
             cols: spec.cols.max(2),
             pixel_width: 0,
             pixel_height: 0,
         };
-        let pair = pty.openpty(size).context("opening pty")?;
 
         let shell_args = spec
             .direct
@@ -964,45 +994,8 @@ impl Term {
             }
         }
 
-        let mut child = pair
-            .slave
-            .spawn_command(cmd)
-            .map_err(|error| spawn_failed(direct_label.as_deref(), shell_args.as_deref().unwrap_or_default(), &error))?;
-        drop(pair.slave);
-        let pid = child.process_id();
-        let killer = child.clone_killer();
-        let mut reader = pair.master.try_clone_reader()?;
-        let writer = input_thread(pair.master.take_writer()?);
         let id = spec.id;
-
-        let out_tx = tx.clone();
-        std::thread::Builder::new()
-            .name(format!("pty-read-{id}"))
-            .spawn(move || {
-                let mut buf = vec![0u8; 64 * 1024];
-                loop {
-                    match reader.read(&mut buf) {
-                        Ok(0) | Err(_) => break,
-                        Ok(n) => {
-                            if out_tx
-                                .blocking_send(Ev::Output(id, buf[..n].to_vec()))
-                                .is_err()
-                            {
-                                break;
-                            }
-                        }
-                    }
-                }
-                let _ = out_tx.blocking_send(Ev::Exited(id));
-            })?;
-        // ConPTY keeps the output pipe open after the child exits, so wait on the child too.
-        std::thread::Builder::new()
-            .name(format!("pty-wait-{id}"))
-            .spawn(move || {
-                let failed = child.wait().is_ok_and(|status| !status.success());
-                let _ = tx.blocking_send(Ev::ProcessExited(id, failed));
-            })?;
-
+        let ring_cap = cfg.replay_bytes.max(64 * 1024);
         let process_executable = spec
             .direct
             .as_ref()
@@ -1012,12 +1005,107 @@ impl Term {
             .file_stem()
             .map(|s| s.to_string_lossy().into_owned())
             .unwrap_or_default();
+        let (pty, pid, writer) = if let Some(link) = spec.host {
+            let keep = crate::pane_host::Keep { token: token.clone(), process: process.clone() };
+            let pid = link
+                .spawn(id, &cmd, size.rows, size.cols, ring_cap, &keep)
+                .map_err(|error| spawn_failed(direct_label.as_deref(), shell_args.as_deref().unwrap_or_default(), &error))?;
+            let writer = input_thread(Box::new(HostInput { link: link.clone(), id }));
+            (Pty::Hosted(link.clone()), pid, writer)
+        } else {
+            let pair = native_pty_system().openpty(size).context("opening pty")?;
+            let mut child = pair
+                .slave
+                .spawn_command(cmd)
+                .map_err(|error| spawn_failed(direct_label.as_deref(), shell_args.as_deref().unwrap_or_default(), &error))?;
+            drop(pair.slave);
+            let pid = child.process_id();
+            let killer = child.clone_killer();
+            let mut reader = pair.master.try_clone_reader()?;
+            let writer = input_thread(pair.master.take_writer()?);
+            let out_tx = tx.clone();
+            std::thread::Builder::new()
+                .name(format!("pty-read-{id}"))
+                .spawn(move || {
+                    let mut buf = vec![0u8; 64 * 1024];
+                    loop {
+                        match reader.read(&mut buf) {
+                            Ok(0) | Err(_) => break,
+                            Ok(n) => {
+                                if out_tx
+                                    .blocking_send(Ev::Output(id, buf[..n].to_vec()))
+                                    .is_err()
+                                {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                    let _ = out_tx.blocking_send(Ev::Exited(id));
+                })?;
+            // ConPTY keeps the output pipe open after the child exits, so wait on the child too.
+            std::thread::Builder::new()
+                .name(format!("pty-wait-{id}"))
+                .spawn(move || {
+                    let failed = child.wait().is_ok_and(|status| !status.success());
+                    let _ = tx.blocking_send(Ev::ProcessExited(id, failed));
+                })?;
+            (Pty::Local { master: pair.master, killer }, pid, writer)
+        };
+        let mut t = Term::with(cfg, id, pty, writer, pid, size, process, token, spec.cwd);
+        t.cmd = spec
+            .cmd
+            .filter(|c| !c.trim().is_empty())
+            .map(str::to_string)
+            .or(direct_label);
+        Ok(t)
+    }
+
+    /// A pane the pane host kept running while the daemon restarted (ADR 0022), its screen
+    /// rebuilt from the output the host kept. Its id and secret are the ones it was started
+    /// with: the program in it still has them.
+    pub fn adopt(
+        cfg: &Config,
+        link: &Arc<crate::pane_host::Link>,
+        hosted: crate::pane_host::HostedPane,
+        cwd: &Path,
+    ) -> Result<Term> {
+        let keep: crate::pane_host::Keep =
+            rmp_serde::from_slice(&hosted.keep).context("reading what the pane host kept")?;
+        let size = PtySize { rows: hosted.rows.max(2), cols: hosted.cols.max(2), pixel_width: 0, pixel_height: 0 };
+        let id = hosted.id;
+        let writer = input_thread(Box::new(HostInput { link: link.clone(), id }));
+        let mut t = Term::with(cfg, id, Pty::Hosted(link.clone()), writer, hosted.pid, size, keep.process, keep.token, cwd);
+        t.replay_kept(&hosted.output);
+        Ok(t)
+    }
+
+    /// Feed output that was already answered (a hosted pane's, kept while no daemon ran) to the
+    /// screen and the ring, answering none of its queries: their answers went long ago.
+    fn replay_kept(&mut self, data: &[u8]) {
+        self.parser.process(data);
+        self.ring.extend(data);
+        let excess = self.ring.len().saturating_sub(self.ring_cap);
+        self.ring.drain(..excess);
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn with(
+        cfg: &Config,
+        id: TermId,
+        pty: Pty,
+        writer: std::sync::mpsc::SyncSender<InputChunk>,
+        pid: Option<u32>,
+        size: PtySize,
+        process: String,
+        token: String,
+        cwd: &Path,
+    ) -> Term {
         let now = Instant::now();
-        Ok(Term {
+        Term {
             id,
-            master: pair.master,
+            pty,
             writer,
-            killer,
             pid,
             process_exited: false,
             killed: false,
@@ -1061,19 +1149,15 @@ impl Term {
             last_output: now,
             last_input: now,
             began_as_agent: false,
-            cmd: spec
-                .cmd
-                .filter(|c| !c.trim().is_empty())
-                .map(str::to_string)
-                .or(direct_label),
+            cmd: None,
             session: None,
             effort: None,
             runs_with: crate::conversation::TurnChoice::default(),
-            cwd: spec.cwd.to_path_buf(),
+            cwd: cwd.to_path_buf(),
             summary: String::new(),
             said: String::new(),
             last_lines: String::new(),
-            head: crate::gitfs::head(spec.cwd),
+            head: crate::gitfs::head(cwd),
             subagents: Vec::new(),
             subagent_hooks_seen: false,
             subagent_activity: Vec::new(),
@@ -1140,7 +1224,7 @@ impl Term {
             snoozed_until: None,
             model: String::new(),
             colors: crate::theme::Theme::named(&cfg.theme).terminal_foreground_background_rgb(),
-        })
+        }
     }
 
     /// Returns true when the reported working directory changed.
@@ -1415,12 +1499,17 @@ impl Term {
         }
         self.cols = cols;
         self.rows = rows;
-        let _ = self.master.resize(PtySize {
-            rows,
-            cols,
-            pixel_width: 0,
-            pixel_height: 0,
-        });
+        match &self.pty {
+            Pty::Local { master, .. } => {
+                let _ = master.resize(PtySize {
+                    rows,
+                    cols,
+                    pixel_width: 0,
+                    pixel_height: 0,
+                });
+            }
+            Pty::Hosted(link) => link.send(crate::pane_host::ToHost::Resize { id: self.id, rows, cols }),
+        }
         self.parser.screen_mut().set_size(rows, cols);
     }
 
@@ -1444,56 +1533,36 @@ impl Term {
     /// on its own thread so nothing waits on it.
     pub fn kill_tree(&mut self) {
         self.killed = true;
-        let mut killer = self.killer.clone_killer();
+        let mut killer = match &self.pty {
+            Pty::Local { killer, .. } => killer.clone_killer(),
+            Pty::Hosted(link) => {
+                link.send(crate::pane_host::ToHost::Kill { id: self.id });
+                return;
+            }
+        };
         let pid = self.pid;
         std::thread::spawn(move || {
-            let result: Result<(), String> = if let Some(pid) = pid {
-                #[cfg(windows)]
-                {
-                    use std::os::windows::process::CommandExt;
-                    match std::process::Command::new("taskkill")
-                        .args(["/PID", &pid.to_string(), "/T", "/F"])
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .creation_flags(crate::proc::CREATE_NO_WINDOW)
-                        .status()
-                    {
-                        Ok(status) if status.success() => Ok(()),
-                        Ok(status) => Err(format!("taskkill exited with {status}")),
-                        Err(error) => Err(format!("could not run taskkill: {error}")),
-                    }
-                }
-                #[cfg(not(windows))]
-                {
-                    // The pane's shell leads its own process group. Not `kill -KILL -<pid>`:
-                    // util-linux's kill reads the bare negative pid as an option and signals
-                    // every process the user owns (pid -1).
-                    match libc::pid_t::try_from(pid) {
-                        Ok(group) if group > 1 => {
-                            // SAFETY: signals only the process group the pane's shell leads.
-                            let result = unsafe { libc::kill(-group, libc::SIGKILL) };
-                            if result == 0 {
-                                Ok(())
-                            } else {
-                                let error = std::io::Error::last_os_error();
-                                if error.raw_os_error() == Some(libc::ESRCH) {
-                                    Ok(())
-                                } else {
-                                    Err(format!("could not stop pane process group: {error}"))
-                                }
-                            }
-                        }
-                        _ => Err("pane process has no valid process group".into()),
-                    }
-                }
-            } else {
-                Err("pane process ID is unavailable".into())
-            };
+            let result = crate::pane_host::kill_tree(pid);
             // The tree kill's own result has no reader: the pane is going either way, so the
             // shell's handle is killed too.
             drop(result);
             let _ = killer.kill();
         });
+    }
+
+    /// Whether the pane host holds its terminal, so it outlives this daemon.
+    pub fn hosted(&self) -> bool {
+        matches!(self.pty, Pty::Hosted(_))
+    }
+
+    /// Let the pane go for good: a hosted one is ended and forgotten by the host; a local one
+    /// ends as its terminal closes. Closing a terminal can block on Windows until its programs
+    /// let go, so it is dropped on a thread of its own.
+    pub fn close(self) {
+        if let Pty::Hosted(link) = &self.pty {
+            link.send(crate::pane_host::ToHost::Forget { id: self.id });
+        }
+        std::thread::spawn(move || drop(self));
     }
 
     pub fn title(&self) -> &str {

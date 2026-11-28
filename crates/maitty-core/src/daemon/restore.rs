@@ -603,6 +603,48 @@ impl Daemon {
         }
     }
 
+    /// Hold the pane host for new panes, and the panes it kept running for the restore. Their
+    /// ids stay theirs (the programs in them were started with them), so new ids start above.
+    pub(super) fn take_up_host(&mut self, link: crate::pane_host::Link, panes: Vec<crate::pane_host::HostedPane>) {
+        let top = panes.iter().map(|p| p.id).max().unwrap_or(0);
+        self.next_id = self.next_id.max(top.saturating_add(1));
+        tracing::info!("pane host holds {} pane(s) from before", panes.len());
+        self.hosted = panes.into_iter().map(|p| (p.id, p)).collect();
+        self.pane_host = Some(std::sync::Arc::new(link));
+    }
+
+    /// Take up the pane the host kept running as saved pane `old`, when it still runs.
+    fn adopt_hosted(&mut self, old: TermId, cwd: &std::path::Path) -> Option<TermId> {
+        let link = self.pane_host.clone()?;
+        let hosted = self.hosted.remove(&old)?;
+        if hosted.exited.is_some() || self.terms.contains_key(&old) {
+            link.send(crate::pane_host::ToHost::Forget { id: old });
+            return None;
+        }
+        match Term::adopt(&self.cfg, &link, hosted, cwd) {
+            Ok(t) => {
+                self.terms.insert(old, t);
+                self.had_terms = true;
+                Some(old)
+            }
+            Err(error) => {
+                tracing::warn!("taking up pane {old} from the pane host: {error:#}");
+                link.send(crate::pane_host::ToHost::Forget { id: old });
+                None
+            }
+        }
+    }
+
+    /// End the panes the host kept that no saved pane claimed (a session saved before they
+    /// started, or restore turned off): nothing would show them.
+    pub(super) fn end_unclaimed_hosted(&mut self) {
+        let Some(link) = &self.pane_host else { return };
+        for id in std::mem::take(&mut self.hosted).into_keys() {
+            tracing::info!("pane host: pane {id} is in no saved session; ended");
+            link.send(crate::pane_host::ToHost::Forget { id });
+        }
+    }
+
     /// Whether the saved session was accepted. A refused one leaves the daemon empty, so the
     /// caller keeps the file before the next save replaces it.
     pub(super) fn restore(&mut self, mut saved: persist::Saved) -> bool {
@@ -687,7 +729,13 @@ impl Daemon {
                         .unwrap_or_else(|| sw.cwd.clone());
                     let began_as_agent = pane.began_as_agent
                         || pane.cmd.as_deref().is_some_and(|c| self.agent_in_cmd(c).is_some());
-                    let cmd = self.restore_cmd_once(&mut pane, &cwd, &mut resuming);
+                    // Kept running by the pane host: the program in it never stopped, so nothing
+                    // is resumed and no turn was cut.
+                    let adopted = self.adopt_hosted(old, &cwd);
+                    let cmd = match adopted {
+                        Some(_) => None,
+                        None => self.restore_cmd_once(&mut pane, &cwd, &mut resuming),
+                    };
                     // An agent that died mid-turn is not started again on its own, whichever app
                     // owns the session: resumed, it would sit at its prompt as if it had finished,
                     // and nothing would say its turn was cut. The pane comes back as a shell and
@@ -699,11 +747,17 @@ impl Daemon {
                         .map(|(agent, resume)| Interrupted { agent, resume })
                         .or_else(|| pane.interrupted.clone());
                     let cmd = cmd.filter(|_| interrupted.is_none());
-                    match self.spawn(cmd.as_deref(), &cwd, 120, 32) {
+                    let spawned = match adopted {
+                        Some(id) => Ok(id),
+                        None => self.spawn(cmd.as_deref(), &cwd, 120, 32),
+                    };
+                    match spawned {
                         Ok(new) => {
                             if let Some(t) = self.terms.get_mut(&new) {
+                                // A pane taken up has its own output, from the host.
                                 if self.cfg.restore.output
                                     && let Some(out) = persist::take_output(old)
+                                    && adopted.is_none()
                                 {
                                     t.seed_output(&out);
                                 }
@@ -746,6 +800,10 @@ impl Daemon {
                             started.extend(pane.started_by.map(|by| (new, by)));
                             started_by_chat.extend(pane.started_by_chat.map(|chat| (new, chat)));
                             owned.extend(pane.tab_of.map(|owner| (new, owner)));
+                            // Its turn went on while no daemon ran; the next hook says how it ended.
+                            if adopted.is_some() && pane.was_working && pane.agent.is_some() {
+                                self.set_status(new, Status::Working, "kept running by the pane host through a server restart, mid-turn");
+                            }
                             restored += 1;
                         }
                         Err(e) => tracing::warn!("restoring pane in {}: {e:#}", cwd.display()),
@@ -916,9 +974,8 @@ impl Daemon {
         }
         self.takes_over_helpers(old, new);
         self.note_ended(old, RemovalReason::Closed);
-        // Closing a terminal can block on Windows until its programs let go; never here.
         if let Some(t) = self.terms.remove(&old) {
-            std::thread::spawn(move || drop(t));
+            t.close();
         }
         if let Some((ws, tab)) = self.locate(new) {
             if let Ok(w) = self.ws_mut(ws) {

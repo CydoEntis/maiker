@@ -19,6 +19,7 @@ mod clone;
 mod commit;
 mod commands;
 mod contain;
+pub(crate) use contain::children_die_with_us as contain_children;
 mod conversation;
 mod discard;
 mod extensions;
@@ -477,6 +478,11 @@ struct Daemon {
     /// that a saved session has a conversation.
     claude_folder: Option<PathBuf>,
     terms: HashMap<TermId, Term>,
+    /// The pane host new panes start in, with `restore.keep_running` on (ADR 0022).
+    pane_host: Option<Arc<crate::pane_host::Link>>,
+    /// Panes the host kept running from before this daemon started, until the restore takes
+    /// them up; what is left after it is ended.
+    hosted: HashMap<TermId, crate::pane_host::HostedPane>,
     workspaces: Vec<WorkspaceInfo>,
     active_ws: Option<WsId>,
     next_id: u32,
@@ -741,7 +747,21 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
             tracing::warn!("config: {e}");
         }
         machine_updates::start_after_update(&cfg, &crate::config::data_dir());
+        // Before the daemon ties its children to itself (`Daemon::new`), so a host it starts
+        // is not one of them.
+        let pane_host = if cfg.restore.keep_running {
+            let tx = tx.clone();
+            tokio::task::spawn_blocking(move || open_pane_host(tx)).await.unwrap_or_else(|e| {
+                tracing::warn!("opening the pane host: {e}");
+                None
+            })
+        } else {
+            None
+        };
         let mut d = Daemon::new(cfg, tx, on_start);
+        if let Some((link, panes)) = pane_host {
+            d.take_up_host(link, panes);
+        }
         match approvals::Approvals::load(&d.approvals_file) {
             Ok(a) => d.approvals = a,
             Err(e) => tracing::warn!("check approvals: {e:#}; every repo check asks again"),
@@ -760,11 +780,40 @@ pub fn run(on_start: impl FnOnce()) -> Result<()> {
         {
             d.restore_startup(saved);
         }
+        d.end_unclaimed_hosted();
         d.initialize_conversation_cache().await?;
         d.resume_conversations();
         d.run(rx).await;
         Ok(())
     })
+}
+
+/// Reach the pane host, starting it if none runs. Without it panes start in the daemon, as
+/// with `restore.keep_running` off.
+fn open_pane_host(tx: mpsc::Sender<Ev>) -> Option<(crate::pane_host::Link, Vec<crate::pane_host::HostedPane>)> {
+    use crate::pane_host::Event;
+    let exe = match std::env::current_exe() {
+        Ok(exe) => exe,
+        Err(error) => {
+            tracing::warn!("no pane host, panes end with the server: {error}");
+            return None;
+        }
+    };
+    let opened = crate::pane_host::Link::open(&exe, move |event| {
+        let ev = match event {
+            Event::Output(id, data) => Ev::Output(id, data),
+            Event::OutputEnded(id) => Ev::Exited(id),
+            Event::Exited(id, failed) => Ev::ProcessExited(id, failed),
+        };
+        let _ = tx.blocking_send(ev);
+    });
+    match opened {
+        Ok(opened) => Some(opened),
+        Err(error) => {
+            tracing::warn!("no pane host, panes end with the server: {error:#}");
+            None
+        }
+    }
 }
 
 /// What a caught panic said, for the log.
@@ -1413,6 +1462,8 @@ impl Daemon {
             agents,
             claude_folder: hook_repair::default_claude_folder(),
             terms: HashMap::new(),
+            pane_host: None,
+            hosted: HashMap::new(),
             workspaces: Vec::new(),
             active_ws: None,
             next_id: 1,
@@ -4365,6 +4416,7 @@ impl Daemon {
             &self.cfg,
             SpawnSpec {
                 id,
+                host: self.pane_host.as_ref().filter(|link| link.alive()),
                 cmd,
                 direct: None,
                 cwd,
@@ -4550,9 +4602,8 @@ impl Daemon {
     /// Drop a terminal and prune the tree: empty tabs and workspaces disappear.
     fn remove_term(&mut self, term: TermId, reason: RemovalReason) {
         self.note_ended(term, reason);
-        // Closing a terminal can block on Windows until its programs let go; never here.
         if let Some(t) = self.terms.remove(&term) {
-            std::thread::spawn(move || drop(t));
+            t.close();
         }
         self.detach(term);
         if self.terms.is_empty() {

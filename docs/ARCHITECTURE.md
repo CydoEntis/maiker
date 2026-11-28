@@ -144,6 +144,7 @@ src/
   login_path.rs  the daemon host's login-shell PATH, resolved once at start and applied to panes, providers and lookups
   shim.rs        the per-agent launchers on a pane's PATH, and the PATH code `maiker agent-launch` shares
   hook_drops.rs  the status reports a pane's hook could not hand over, noted beside the socket for the daemon to log and show
+  pane_host/     the pane host (ADR 0022): `host.rs` the process that holds hosted panes' terminals, `link.rs` the daemon's end, `wire.rs` the frozen contract between them
 docs/            these docs, the roadmap, design briefs
 config.example.toml
 ```

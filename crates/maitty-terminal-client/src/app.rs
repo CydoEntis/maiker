@@ -46,6 +46,10 @@ enum Cmd {
     Attach { path: Option<PathBuf> },
     /// Run the server in the foreground (normally started automatically).
     Daemon,
+    /// Hold the panes' terminals while the server restarts (started by the server, with
+    /// `restore.keep_running` on).
+    #[command(hide = true)]
+    PaneHost,
     /// List workspaces, tabs and panes.
     Ls {
         #[arg(long)]
@@ -211,6 +215,7 @@ enum Cmd {
         force: bool,
     },
     /// Stop the server and every pane. The session is kept for restore unless --forget.
+    /// With `restore.keep_running` on, the panes keep running for the next server unless --forget.
     /// On another machine (--on) it stops all of that machine's sessions, so it needs --yes.
     KillServer {
         #[arg(long)]
@@ -583,6 +588,7 @@ pub(crate) fn run() {
     let result = match args.cmd {
         None => open_client(args.path),
         Some(Cmd::Attach { path }) => open_client(path),
+        Some(Cmd::PaneHost) => maitty_core::pane_host::run(),
         Some(Cmd::Daemon) => maitty_core::run_daemon(|| {
             maitty_core::install_hook_tools(maitty_core::HookTools {
                 check: cli::claude_hook_problem,

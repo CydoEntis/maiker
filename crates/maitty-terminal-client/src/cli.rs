@@ -1195,6 +1195,11 @@ pub fn kill_server(t: &Target, forget: bool) -> Result<()> {
     if !remote && !server_running() {
         if forget {
             maitty_core::forget_session();
+            // Panes a pane host kept for a server that never came back (ADR 0022).
+            if maitty_core::pane_host::end_running_host() {
+                println!("ended the panes kept running for the next server");
+                return Ok(());
+            }
         }
         println!(concat!(
             "no ",

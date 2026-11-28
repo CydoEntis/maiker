@@ -618,6 +618,7 @@ fn authenticated_pane(session: &mut TestSession) -> (u32, String) {
         &cfg,
         crate::daemon::term::SpawnSpec {
             id,
+            host: None,
             cmd: None,
             direct: None,
             cwd: &session.fixture.record.binding.cwd,
