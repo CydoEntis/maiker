@@ -53,12 +53,27 @@ fn output_of(seen: &Seen, id: u32) -> String {
     String::from_utf8_lossy(&bytes).into_owned()
 }
 
-fn wait_until(what: &str, done: impl Fn() -> bool) {
+fn wait_until(what: &str, mut done: impl FnMut() -> bool) {
     let started = Instant::now();
     while !done() {
         assert!(started.elapsed() < WITHIN, "timed out waiting for {what}");
         std::thread::sleep(Duration::from_millis(20));
     }
+}
+
+/// Wait for `text` in the pane's output, answering its cursor queries as the daemon does:
+/// ConPTY asks where the cursor is when it starts and waits for the answer.
+fn wait_for_output(link: &Link, seen: &Seen, id: u32, text: &str) {
+    let mut answered = 0;
+    wait_until(text, || {
+        let output = output_of(seen, id);
+        let asked = output.matches("\x1b[6n").count();
+        for _ in answered..asked {
+            link.send(ToHost::Write { id, data: b"\x1b[1;1R".to_vec() });
+        }
+        answered = asked;
+        output.contains(text)
+    });
 }
 
 /// Prints `first`, reads a line, prints `got-<line>`, and ends.
@@ -80,7 +95,7 @@ fn a_pane_outlives_its_daemon_and_the_next_one_gets_its_output_and_input() {
     let (first, panes, seen_first) = attach(&host);
     assert!(panes.is_empty());
     first.spawn(7, &echo_back(), 24, 80, 64 * 1024, &keep()).unwrap();
-    wait_until("the first line", || output_of(&seen_first, 7).contains("first"));
+    wait_for_output(&first, &seen_first, 7, "first");
     // The daemon goes; the host keeps the pane and hands it to the next one.
     drop(first);
     let (next, panes, seen_next) = attach(&host);
@@ -90,7 +105,7 @@ fn a_pane_outlives_its_daemon_and_the_next_one_gets_its_output_and_input() {
     let kept: Keep = rmp_serde::from_slice(&pane.keep).unwrap();
     assert_eq!(kept, keep());
     next.send(ToHost::Write { id: 7, data: b"yes\r".to_vec() });
-    wait_until("the answer", || output_of(&seen_next, 7).contains("got-yes"));
+    wait_for_output(&next, &seen_next, 7, "got-yes");
     wait_until("the exit", || {
         seen_next.lock().unwrap().contains(&Event::Exited(7, false))
     });
@@ -102,7 +117,7 @@ fn a_forgotten_pane_is_ended_and_gone_from_the_list() {
     let host = host();
     let (link, _, seen) = attach(&host);
     link.spawn(3, &echo_back(), 24, 80, 1024, &keep()).unwrap();
-    wait_until("the first line", || output_of(&seen, 3).contains("first"));
+    wait_for_output(&link, &seen, 3, "first");
     link.send(ToHost::Forget { id: 3 });
     drop(link);
     let started = Instant::now();
@@ -131,7 +146,7 @@ fn a_pane_id_already_running_is_refused() {
     let host = host();
     let (link, _, seen) = attach(&host);
     link.spawn(9, &echo_back(), 24, 80, 1024, &keep()).unwrap();
-    wait_until("the first line", || output_of(&seen, 9).contains("first"));
+    wait_for_output(&link, &seen, 9, "first");
     assert!(link.spawn(9, &echo_back(), 24, 80, 1024, &keep()).is_err());
     link.send(ToHost::Forget { id: 9 });
 }
