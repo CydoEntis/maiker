@@ -79,7 +79,8 @@ fn wait_for_output(link: &Link, seen: &Seen, id: u32, text: &str) {
 /// Prints `first`, reads a line, prints `got-<line>`, and ends.
 fn echo_back() -> portable_pty::CommandBuilder {
     #[cfg(windows)]
-    let argv = ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", "Write-Output first; $l = Read-Host; Write-Output \"got-$l\""];
+    // Not -NonInteractive: it turns reading a line into an error.
+    let argv = ["powershell.exe", "-NoProfile", "-Command", "Write-Output first; $l = [Console]::In.ReadLine(); Write-Output \"got-$l\""];
     #[cfg(not(windows))]
     let argv = ["sh", "-c", "echo first; read l; echo got-$l"];
     portable_pty::CommandBuilder::from_argv(argv.iter().map(Into::into).collect())
