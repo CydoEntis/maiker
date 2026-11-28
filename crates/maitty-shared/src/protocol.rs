@@ -1018,8 +1018,6 @@ pub enum Command {
         dir: Dir,
         delta: f32,
     },
-    /// Trade the places of two panes of one tab; each takes the other's size. An error when
-    /// they are in different tabs.
     /// Put the checkout `term` is in back as it was in a snapshot the daemon took (one that
     /// `RepoRequest::Snapshots` listed), after saving what is there now. Only you can, and not
     /// while the pane's agent works. The answer is `Reply::Repo { tag, Restored }`.
@@ -1028,6 +1026,8 @@ pub enum Command {
         tag: u64,
         commit: String,
     },
+    /// Trade the places of two panes of one tab; each takes the other's size. An error when
+    /// they are in different tabs.
     SwapPanes {
         a: TermId,
         b: TermId,
