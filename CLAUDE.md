@@ -42,7 +42,7 @@ this repository. This file holds only what is specific to Claude Code.
 
 - Skills in use here: `/starter` (these docs), `/plan-pull` (read, claim and close
   Plane tickets; the rules are in `AGENTS.md` under *Planning*), `/roadmap`
-  (planning new work; its tickets go to Plane, not to `docs/ROADMAP.md`).
+  (planning new work; its tickets go to Plane, not to a repo file).
 - The user prefers short, plain-language summaries with exact install steps at the
   end of a change.
 - Large edits to `src/client/*.rs` are easiest as small anchored patches; keep

@@ -39,5 +39,5 @@ server (`crates/maitty-terminal-client/src/cli/mcp.rs`), the repo's `.maitty/` f
 
 ## Links
 
-- Plan: [phase 28](../../ROADMAP.md#28--references--shipped-in-v0440)
+- Plan: phase 28
 - Tickets: none yet; filled in when the phase is ticketed.

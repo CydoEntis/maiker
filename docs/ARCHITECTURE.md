@@ -469,8 +469,7 @@ outside Maiker, which shows them (0010).
 
 ## Project-specific: planned structured conversations
 
-[Phases 32â€“35](ROADMAP.md#32--shared-conversations-and-codex-handoff--active)
-add daemon-owned structured agent runtimes and an optional chat GUI.
+Daemon-owned structured agent runtimes back the optional chat GUI.
 [The spec](features/chat-gui/spec.md) owns the target conversation/history/handoff
 contract. Structured Codex CLI admission is implemented; the current terminal path remains supported.
 Codex is first, Claude follows before release. Desktop framework selection and

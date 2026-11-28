@@ -302,8 +302,7 @@ but one sample cannot show that. If it appears in the app, compare `webProcessCp
 ## Input latency: v0.65.0 runs one step behind (2026-11-05)
 
 The v0.65.0 desktop app is withdrawn (the update manifest on the release names v0.64.0 and the
-release page warns against its desktop installers) until this is fixed. Ticket 35 in
-[TICKETS-TO-FILE](TICKETS-TO-FILE.md) holds the bug; this section holds how it is to be found.
+release page warns against its desktop installers) until this is fixed. This section holds how it is to be found.
 
 ### What was seen
 

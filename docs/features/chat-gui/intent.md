@@ -2,7 +2,7 @@
 
 Type: feature
 Author: Cody · Status: accepted · Date: 2026-10-27
-Plan: [phases 34–37](../../ROADMAP.md#34--shared-conversations-and-codex-handoff--active)
+Plan: phases 34–37
 
 ## Problem
 

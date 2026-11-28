@@ -1,7 +1,7 @@
 # Intent: a working agent that repeats itself says so
 
 Type: feature · Author: Cody · Status: accepted · Date: 2026-11-06
-Plan: phase 5 in [TICKETS-TO-FILE](../../TICKETS-TO-FILE.md)
+Plan: phase 5 (tickets in Plane)
 
 ## Problem
 
@@ -37,4 +37,4 @@ Mastracode, Kilo, OpenCode, Pi, OMP).
 
 ## Links
 
-- Tickets: P5-6, P5-7, P5-8 in [TICKETS-TO-FILE](../../TICKETS-TO-FILE.md)
+- Tickets: P5-6, P5-7, P5-8, filed in Plane

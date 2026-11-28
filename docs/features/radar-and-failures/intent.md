@@ -37,7 +37,7 @@ the message box.
 
 ## Links
 
-- Plan: [phase 27](../../ROADMAP.md#27--radar-and-sending-failures--shipped-in-v0440)
+- Plan: phase 27
 - Tickets: none; built as two slices on `feat/radar-failures` (radar on the row; `m` on a
   failed check). Behaviour: [UI › sidebar check result](../../UI.md#project-specific-sidebar-check-result)
   and *Sending a failure* under the check evidence sheet.
